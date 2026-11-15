@@ -10,6 +10,9 @@
     one.  The same operators on int and softint locals are controls.  Each check prints
     "name=<error>|<description>|<type> <value>", or "name=none|<type> <value>" if no error was raised.
 
+    An lvalue with no value is left without one.  An EI value assigned from a variable of no type is assigned as it
+    is; a plain int assigned from one is refused.
+
     The element of a hash<string, EI> is read with a key given at run time: the IR reads a constant key of a hash
     whose value type returns int as a plain int, also for an enum value type, which is not what these checks test.
 */
@@ -35,6 +38,9 @@ class Holder {
         EI ei = EI::Seven;
         EF ef = EF::Half;
         EN en = EN::OneHalf;
+        EI einv;
+        *EI eionv;
+        EF efnv;
     }
 }
 
@@ -47,6 +53,9 @@ hashdecl HolderHash {
 our EI g_ei;
 our EF g_ef;
 our EN g_en;
+our EI g_einv;
+our *EI g_eionv;
+our EF g_efnv;
 
 #! returns the result of a check that raised no error: the type and value of the lvalue afterwards
 string sub ok(auto v) {
@@ -1950,6 +1959,1137 @@ hash<string, string> sub softint_loop() {
     return rv;
 }
 
+#! each operator on an lvalue of type EI with no value (local) in a try block
+hash<string, string> sub einv_local_in() {
+    hash<string, string> rv;
+    {
+        EI v;
+        try { v += 1; rv.pe = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v -= 1; rv.me = ok(v); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v *= 2; rv.te = ok(v); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v /= 1; rv.de = ok(v); } catch (hash<ExceptionInfo> ex) { rv.de = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v %= 4; rv.mo = ok(v); } catch (hash<ExceptionInfo> ex) { rv.mo = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v |= 8; rv.oe = ok(v); } catch (hash<ExceptionInfo> ex) { rv.oe = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v &= 3; rv.ae = ok(v); } catch (hash<ExceptionInfo> ex) { rv.ae = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v ^= 1; rv.xe = ok(v); } catch (hash<ExceptionInfo> ex) { rv.xe = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v <<= 1; rv.sl = ok(v); } catch (hash<ExceptionInfo> ex) { rv.sl = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v >>= 1; rv.sr = ok(v); } catch (hash<ExceptionInfo> ex) { rv.sr = err(ex, v); }
+    }
+    {
+        EI v;
+        try { ++v; rv.pri = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v++; rv.poi = ok(v); } catch (hash<ExceptionInfo> ex) { rv.poi = err(ex, v); }
+    }
+    {
+        EI v;
+        try { --v; rv.prd = ok(v); } catch (hash<ExceptionInfo> ex) { rv.prd = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v--; rv.pod = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, v); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type EI with no value (closure) in a try block
+hash<string, string> sub einv_closure_in() {
+    hash<string, string> rv;
+    {
+        EI v;
+        code get = auto sub () { return v; };
+        try { v += 1; rv.pe = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, get()); }
+    }
+    {
+        EI v;
+        code get = auto sub () { return v; };
+        try { v -= 1; rv.me = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, get()); }
+    }
+    {
+        EI v;
+        code get = auto sub () { return v; };
+        try { v *= 2; rv.te = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, get()); }
+    }
+    {
+        EI v;
+        code get = auto sub () { return v; };
+        try { v /= 1; rv.de = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.de = err(ex, get()); }
+    }
+    {
+        EI v;
+        code get = auto sub () { return v; };
+        try { v %= 4; rv.mo = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.mo = err(ex, get()); }
+    }
+    {
+        EI v;
+        code get = auto sub () { return v; };
+        try { v |= 8; rv.oe = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.oe = err(ex, get()); }
+    }
+    {
+        EI v;
+        code get = auto sub () { return v; };
+        try { v &= 3; rv.ae = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.ae = err(ex, get()); }
+    }
+    {
+        EI v;
+        code get = auto sub () { return v; };
+        try { v ^= 1; rv.xe = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.xe = err(ex, get()); }
+    }
+    {
+        EI v;
+        code get = auto sub () { return v; };
+        try { v <<= 1; rv.sl = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.sl = err(ex, get()); }
+    }
+    {
+        EI v;
+        code get = auto sub () { return v; };
+        try { v >>= 1; rv.sr = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.sr = err(ex, get()); }
+    }
+    {
+        EI v;
+        code get = auto sub () { return v; };
+        try { ++v; rv.pri = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, get()); }
+    }
+    {
+        EI v;
+        code get = auto sub () { return v; };
+        try { v++; rv.poi = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.poi = err(ex, get()); }
+    }
+    {
+        EI v;
+        code get = auto sub () { return v; };
+        try { --v; rv.prd = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.prd = err(ex, get()); }
+    }
+    {
+        EI v;
+        code get = auto sub () { return v; };
+        try { v--; rv.pod = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, get()); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type EI with no value (global) in a try block
+hash<string, string> sub einv_global_in() {
+    hash<string, string> rv;
+    {
+        try { g_einv += 1; rv.pe = ok(g_einv); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, g_einv); }
+    }
+    {
+        try { g_einv -= 1; rv.me = ok(g_einv); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, g_einv); }
+    }
+    {
+        try { g_einv *= 2; rv.te = ok(g_einv); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, g_einv); }
+    }
+    {
+        try { g_einv /= 1; rv.de = ok(g_einv); } catch (hash<ExceptionInfo> ex) { rv.de = err(ex, g_einv); }
+    }
+    {
+        try { g_einv %= 4; rv.mo = ok(g_einv); } catch (hash<ExceptionInfo> ex) { rv.mo = err(ex, g_einv); }
+    }
+    {
+        try { g_einv |= 8; rv.oe = ok(g_einv); } catch (hash<ExceptionInfo> ex) { rv.oe = err(ex, g_einv); }
+    }
+    {
+        try { g_einv &= 3; rv.ae = ok(g_einv); } catch (hash<ExceptionInfo> ex) { rv.ae = err(ex, g_einv); }
+    }
+    {
+        try { g_einv ^= 1; rv.xe = ok(g_einv); } catch (hash<ExceptionInfo> ex) { rv.xe = err(ex, g_einv); }
+    }
+    {
+        try { g_einv <<= 1; rv.sl = ok(g_einv); } catch (hash<ExceptionInfo> ex) { rv.sl = err(ex, g_einv); }
+    }
+    {
+        try { g_einv >>= 1; rv.sr = ok(g_einv); } catch (hash<ExceptionInfo> ex) { rv.sr = err(ex, g_einv); }
+    }
+    {
+        try { ++g_einv; rv.pri = ok(g_einv); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, g_einv); }
+    }
+    {
+        try { g_einv++; rv.poi = ok(g_einv); } catch (hash<ExceptionInfo> ex) { rv.poi = err(ex, g_einv); }
+    }
+    {
+        try { --g_einv; rv.prd = ok(g_einv); } catch (hash<ExceptionInfo> ex) { rv.prd = err(ex, g_einv); }
+    }
+    {
+        try { g_einv--; rv.pod = ok(g_einv); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, g_einv); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type EI with no value (member) in a try block
+hash<string, string> sub einv_member_in() {
+    hash<string, string> rv;
+    {
+        Holder o();
+        try { o.einv += 1; rv.pe = ok(o.einv); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, o.einv); }
+    }
+    {
+        Holder o();
+        try { o.einv -= 1; rv.me = ok(o.einv); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, o.einv); }
+    }
+    {
+        Holder o();
+        try { o.einv *= 2; rv.te = ok(o.einv); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, o.einv); }
+    }
+    {
+        Holder o();
+        try { o.einv /= 1; rv.de = ok(o.einv); } catch (hash<ExceptionInfo> ex) { rv.de = err(ex, o.einv); }
+    }
+    {
+        Holder o();
+        try { o.einv %= 4; rv.mo = ok(o.einv); } catch (hash<ExceptionInfo> ex) { rv.mo = err(ex, o.einv); }
+    }
+    {
+        Holder o();
+        try { o.einv |= 8; rv.oe = ok(o.einv); } catch (hash<ExceptionInfo> ex) { rv.oe = err(ex, o.einv); }
+    }
+    {
+        Holder o();
+        try { o.einv &= 3; rv.ae = ok(o.einv); } catch (hash<ExceptionInfo> ex) { rv.ae = err(ex, o.einv); }
+    }
+    {
+        Holder o();
+        try { o.einv ^= 1; rv.xe = ok(o.einv); } catch (hash<ExceptionInfo> ex) { rv.xe = err(ex, o.einv); }
+    }
+    {
+        Holder o();
+        try { o.einv <<= 1; rv.sl = ok(o.einv); } catch (hash<ExceptionInfo> ex) { rv.sl = err(ex, o.einv); }
+    }
+    {
+        Holder o();
+        try { o.einv >>= 1; rv.sr = ok(o.einv); } catch (hash<ExceptionInfo> ex) { rv.sr = err(ex, o.einv); }
+    }
+    {
+        Holder o();
+        try { ++o.einv; rv.pri = ok(o.einv); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, o.einv); }
+    }
+    {
+        Holder o();
+        try { o.einv++; rv.poi = ok(o.einv); } catch (hash<ExceptionInfo> ex) { rv.poi = err(ex, o.einv); }
+    }
+    {
+        Holder o();
+        try { --o.einv; rv.prd = ok(o.einv); } catch (hash<ExceptionInfo> ex) { rv.prd = err(ex, o.einv); }
+    }
+    {
+        Holder o();
+        try { o.einv--; rv.pod = ok(o.einv); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, o.einv); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type EI with no value (hash) in a try block
+hash<string, string> sub einv_hash_in() {
+    hash<string, string> rv;
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k += 1; rv.pe = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k -= 1; rv.me = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k *= 2; rv.te = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k /= 1; rv.de = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.de = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k %= 4; rv.mo = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.mo = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k |= 8; rv.oe = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.oe = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k &= 3; rv.ae = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.ae = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k ^= 1; rv.xe = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.xe = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k <<= 1; rv.sl = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.sl = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k >>= 1; rv.sr = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.sr = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { ++h.k; rv.pri = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k++; rv.poi = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.poi = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { --h.k; rv.prd = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.prd = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k--; rv.pod = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, h{key}); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type EI with no value (list) in a try block
+hash<string, string> sub einv_list_in() {
+    hash<string, string> rv;
+    {
+        list<EI> l = ();
+        try { l[0] += 1; rv.pe = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0] -= 1; rv.me = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0] *= 2; rv.te = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0] /= 1; rv.de = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.de = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0] %= 4; rv.mo = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.mo = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0] |= 8; rv.oe = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.oe = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0] &= 3; rv.ae = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.ae = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0] ^= 1; rv.xe = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.xe = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0] <<= 1; rv.sl = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.sl = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0] >>= 1; rv.sr = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.sr = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { ++l[0]; rv.pri = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0]++; rv.poi = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.poi = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { --l[0]; rv.prd = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.prd = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0]--; rv.pod = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, l[0]); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type *EI with no value (local) in a try block
+hash<string, string> sub eionv_local_in() {
+    hash<string, string> rv;
+    {
+        *EI v;
+        try { v += 1; rv.pe = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, v); }
+    }
+    {
+        *EI v;
+        try { v -= 1; rv.me = ok(v); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, v); }
+    }
+    {
+        *EI v;
+        try { v *= 2; rv.te = ok(v); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, v); }
+    }
+    {
+        *EI v;
+        try { v |= 8; rv.oe = ok(v); } catch (hash<ExceptionInfo> ex) { rv.oe = err(ex, v); }
+    }
+    {
+        *EI v;
+        try { ++v; rv.pri = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, v); }
+    }
+    {
+        *EI v;
+        try { v--; rv.pod = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, v); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type *EI with no value (closure) in a try block
+hash<string, string> sub eionv_closure_in() {
+    hash<string, string> rv;
+    {
+        *EI v;
+        code get = auto sub () { return v; };
+        try { v += 1; rv.pe = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, get()); }
+    }
+    {
+        *EI v;
+        code get = auto sub () { return v; };
+        try { v -= 1; rv.me = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, get()); }
+    }
+    {
+        *EI v;
+        code get = auto sub () { return v; };
+        try { v *= 2; rv.te = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, get()); }
+    }
+    {
+        *EI v;
+        code get = auto sub () { return v; };
+        try { v |= 8; rv.oe = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.oe = err(ex, get()); }
+    }
+    {
+        *EI v;
+        code get = auto sub () { return v; };
+        try { ++v; rv.pri = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, get()); }
+    }
+    {
+        *EI v;
+        code get = auto sub () { return v; };
+        try { v--; rv.pod = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, get()); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type *EI with no value (global) in a try block
+hash<string, string> sub eionv_global_in() {
+    hash<string, string> rv;
+    {
+        try { g_eionv += 1; rv.pe = ok(g_eionv); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, g_eionv); }
+    }
+    {
+        try { g_eionv -= 1; rv.me = ok(g_eionv); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, g_eionv); }
+    }
+    {
+        try { g_eionv *= 2; rv.te = ok(g_eionv); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, g_eionv); }
+    }
+    {
+        try { g_eionv |= 8; rv.oe = ok(g_eionv); } catch (hash<ExceptionInfo> ex) { rv.oe = err(ex, g_eionv); }
+    }
+    {
+        try { ++g_eionv; rv.pri = ok(g_eionv); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, g_eionv); }
+    }
+    {
+        try { g_eionv--; rv.pod = ok(g_eionv); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, g_eionv); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type *EI with no value (member) in a try block
+hash<string, string> sub eionv_member_in() {
+    hash<string, string> rv;
+    {
+        Holder o();
+        try { o.eionv += 1; rv.pe = ok(o.eionv); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, o.eionv); }
+    }
+    {
+        Holder o();
+        try { o.eionv -= 1; rv.me = ok(o.eionv); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, o.eionv); }
+    }
+    {
+        Holder o();
+        try { o.eionv *= 2; rv.te = ok(o.eionv); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, o.eionv); }
+    }
+    {
+        Holder o();
+        try { o.eionv |= 8; rv.oe = ok(o.eionv); } catch (hash<ExceptionInfo> ex) { rv.oe = err(ex, o.eionv); }
+    }
+    {
+        Holder o();
+        try { ++o.eionv; rv.pri = ok(o.eionv); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, o.eionv); }
+    }
+    {
+        Holder o();
+        try { o.eionv--; rv.pod = ok(o.eionv); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, o.eionv); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type *EI with no value (hash) in a try block
+hash<string, string> sub eionv_hash_in() {
+    hash<string, string> rv;
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k += 1; rv.pe = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k -= 1; rv.me = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k *= 2; rv.te = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k |= 8; rv.oe = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.oe = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { ++h.k; rv.pri = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, h{key}); }
+    }
+    {
+        hash<string, EI> h = {};
+        string key = "k";
+        try { h.k--; rv.pod = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, h{key}); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type *EI with no value (list) in a try block
+hash<string, string> sub eionv_list_in() {
+    hash<string, string> rv;
+    {
+        list<EI> l = ();
+        try { l[0] += 1; rv.pe = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0] -= 1; rv.me = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0] *= 2; rv.te = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0] |= 8; rv.oe = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.oe = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { ++l[0]; rv.pri = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, l[0]); }
+    }
+    {
+        list<EI> l = ();
+        try { l[0]--; rv.pod = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, l[0]); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type EF with no value (local) in a try block
+hash<string, string> sub efnv_local_in() {
+    hash<string, string> rv;
+    {
+        EF v;
+        try { v += 0.5; rv.pe = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, v); }
+    }
+    {
+        EF v;
+        try { v -= 0.5; rv.me = ok(v); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, v); }
+    }
+    {
+        EF v;
+        try { v *= 2.0; rv.te = ok(v); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, v); }
+    }
+    {
+        EF v;
+        try { ++v; rv.pri = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, v); }
+    }
+    {
+        EF v;
+        try { v--; rv.pod = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, v); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type EF with no value (closure) in a try block
+hash<string, string> sub efnv_closure_in() {
+    hash<string, string> rv;
+    {
+        EF v;
+        code get = auto sub () { return v; };
+        try { v += 0.5; rv.pe = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, get()); }
+    }
+    {
+        EF v;
+        code get = auto sub () { return v; };
+        try { v -= 0.5; rv.me = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, get()); }
+    }
+    {
+        EF v;
+        code get = auto sub () { return v; };
+        try { v *= 2.0; rv.te = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, get()); }
+    }
+    {
+        EF v;
+        code get = auto sub () { return v; };
+        try { ++v; rv.pri = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, get()); }
+    }
+    {
+        EF v;
+        code get = auto sub () { return v; };
+        try { v--; rv.pod = ok(get()); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, get()); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type EF with no value (global) in a try block
+hash<string, string> sub efnv_global_in() {
+    hash<string, string> rv;
+    {
+        try { g_efnv += 0.5; rv.pe = ok(g_efnv); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, g_efnv); }
+    }
+    {
+        try { g_efnv -= 0.5; rv.me = ok(g_efnv); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, g_efnv); }
+    }
+    {
+        try { g_efnv *= 2.0; rv.te = ok(g_efnv); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, g_efnv); }
+    }
+    {
+        try { ++g_efnv; rv.pri = ok(g_efnv); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, g_efnv); }
+    }
+    {
+        try { g_efnv--; rv.pod = ok(g_efnv); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, g_efnv); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type EF with no value (member) in a try block
+hash<string, string> sub efnv_member_in() {
+    hash<string, string> rv;
+    {
+        Holder o();
+        try { o.efnv += 0.5; rv.pe = ok(o.efnv); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, o.efnv); }
+    }
+    {
+        Holder o();
+        try { o.efnv -= 0.5; rv.me = ok(o.efnv); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, o.efnv); }
+    }
+    {
+        Holder o();
+        try { o.efnv *= 2.0; rv.te = ok(o.efnv); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, o.efnv); }
+    }
+    {
+        Holder o();
+        try { ++o.efnv; rv.pri = ok(o.efnv); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, o.efnv); }
+    }
+    {
+        Holder o();
+        try { o.efnv--; rv.pod = ok(o.efnv); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, o.efnv); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type EF with no value (hash) in a try block
+hash<string, string> sub efnv_hash_in() {
+    hash<string, string> rv;
+    {
+        hash<string, EF> h = {};
+        string key = "k";
+        try { h.k += 0.5; rv.pe = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, h{key}); }
+    }
+    {
+        hash<string, EF> h = {};
+        string key = "k";
+        try { h.k -= 0.5; rv.me = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, h{key}); }
+    }
+    {
+        hash<string, EF> h = {};
+        string key = "k";
+        try { h.k *= 2.0; rv.te = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, h{key}); }
+    }
+    {
+        hash<string, EF> h = {};
+        string key = "k";
+        try { ++h.k; rv.pri = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, h{key}); }
+    }
+    {
+        hash<string, EF> h = {};
+        string key = "k";
+        try { h.k--; rv.pod = ok(h{key}); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, h{key}); }
+    }
+    return rv;
+}
+
+#! each operator on an lvalue of type EF with no value (list) in a try block
+hash<string, string> sub efnv_list_in() {
+    hash<string, string> rv;
+    {
+        list<EF> l = ();
+        try { l[0] += 0.5; rv.pe = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, l[0]); }
+    }
+    {
+        list<EF> l = ();
+        try { l[0] -= 0.5; rv.me = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, l[0]); }
+    }
+    {
+        list<EF> l = ();
+        try { l[0] *= 2.0; rv.te = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, l[0]); }
+    }
+    {
+        list<EF> l = ();
+        try { ++l[0]; rv.pri = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, l[0]); }
+    }
+    {
+        list<EF> l = ();
+        try { l[0]--; rv.pod = ok(l[0]); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, l[0]); }
+    }
+    return rv;
+}
+
+#! applies an operator to an EI parameter
+string sub ei_param_pe(EI v) {
+    try { v += 1; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+
+#! applies an operator to an EI lvalue through a reference, with no try block
+sub ei_ref_pe(reference<EI> r) {
+    r += 1;
+}
+
+#! applies an operator to an EI parameter
+string sub ei_param_me(EI v) {
+    try { v -= 1; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+
+#! applies an operator to an EI lvalue through a reference, with no try block
+sub ei_ref_me(reference<EI> r) {
+    r -= 1;
+}
+
+#! applies an operator to an EI parameter
+string sub ei_param_te(EI v) {
+    try { v *= 2; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+
+#! applies an operator to an EI lvalue through a reference, with no try block
+sub ei_ref_te(reference<EI> r) {
+    r *= 2;
+}
+
+#! applies an operator to an EI parameter
+string sub ei_param_de(EI v) {
+    try { v /= 1; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+
+#! applies an operator to an EI lvalue through a reference, with no try block
+sub ei_ref_de(reference<EI> r) {
+    r /= 1;
+}
+
+#! applies an operator to an EI parameter
+string sub ei_param_mo(EI v) {
+    try { v %= 4; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+
+#! applies an operator to an EI lvalue through a reference, with no try block
+sub ei_ref_mo(reference<EI> r) {
+    r %= 4;
+}
+
+#! applies an operator to an EI parameter
+string sub ei_param_oe(EI v) {
+    try { v |= 8; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+
+#! applies an operator to an EI lvalue through a reference, with no try block
+sub ei_ref_oe(reference<EI> r) {
+    r |= 8;
+}
+
+#! applies an operator to an EI parameter
+string sub ei_param_ae(EI v) {
+    try { v &= 3; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+
+#! applies an operator to an EI lvalue through a reference, with no try block
+sub ei_ref_ae(reference<EI> r) {
+    r &= 3;
+}
+
+#! applies an operator to an EI parameter
+string sub ei_param_xe(EI v) {
+    try { v ^= 1; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+
+#! applies an operator to an EI lvalue through a reference, with no try block
+sub ei_ref_xe(reference<EI> r) {
+    r ^= 1;
+}
+
+#! applies an operator to an EI parameter
+string sub ei_param_sl(EI v) {
+    try { v <<= 1; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+
+#! applies an operator to an EI lvalue through a reference, with no try block
+sub ei_ref_sl(reference<EI> r) {
+    r <<= 1;
+}
+
+#! applies an operator to an EI parameter
+string sub ei_param_sr(EI v) {
+    try { v >>= 1; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+
+#! applies an operator to an EI lvalue through a reference, with no try block
+sub ei_ref_sr(reference<EI> r) {
+    r >>= 1;
+}
+
+#! applies an operator to an EI parameter
+string sub ei_param_pri(EI v) {
+    try { ++v; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+
+#! applies an operator to an EI lvalue through a reference, with no try block
+sub ei_ref_pri(reference<EI> r) {
+    ++r;
+}
+
+#! applies an operator to an EI parameter
+string sub ei_param_poi(EI v) {
+    try { v++; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+
+#! applies an operator to an EI lvalue through a reference, with no try block
+sub ei_ref_poi(reference<EI> r) {
+    r++;
+}
+
+#! applies an operator to an EI parameter
+string sub ei_param_prd(EI v) {
+    try { --v; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+
+#! applies an operator to an EI lvalue through a reference, with no try block
+sub ei_ref_prd(reference<EI> r) {
+    --r;
+}
+
+#! applies an operator to an EI parameter
+string sub ei_param_pod(EI v) {
+    try { v--; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+
+#! applies an operator to an EI lvalue through a reference, with no try block
+sub ei_ref_pod(reference<EI> r) {
+    r--;
+}
+
+#! EI lvalues of other kinds, and operands of no type
+hash<string, string> sub ei_extra() {
+    hash<string, string> rv;
+    rv."param-pe" = ei_param_pe(EI::Seven);
+    {
+        EI v = EI::Seven;
+        try { ei_ref_pe(\v); rv."reference-pe" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."reference-pe" = err(ex, v); }
+    }
+    {
+        thread_local EI t_pe = EI::Seven;
+        try { t_pe += 1; rv."thread-local-pe" = ok(t_pe); }
+        catch (hash<ExceptionInfo> ex) { rv."thread-local-pe" = err(ex, t_pe); }
+    }
+    rv."param-me" = ei_param_me(EI::Seven);
+    {
+        EI v = EI::Seven;
+        try { ei_ref_me(\v); rv."reference-me" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."reference-me" = err(ex, v); }
+    }
+    {
+        thread_local EI t_me = EI::Seven;
+        try { t_me -= 1; rv."thread-local-me" = ok(t_me); }
+        catch (hash<ExceptionInfo> ex) { rv."thread-local-me" = err(ex, t_me); }
+    }
+    rv."param-te" = ei_param_te(EI::Seven);
+    {
+        EI v = EI::Seven;
+        try { ei_ref_te(\v); rv."reference-te" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."reference-te" = err(ex, v); }
+    }
+    {
+        thread_local EI t_te = EI::Seven;
+        try { t_te *= 2; rv."thread-local-te" = ok(t_te); }
+        catch (hash<ExceptionInfo> ex) { rv."thread-local-te" = err(ex, t_te); }
+    }
+    rv."param-de" = ei_param_de(EI::Seven);
+    {
+        EI v = EI::Seven;
+        try { ei_ref_de(\v); rv."reference-de" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."reference-de" = err(ex, v); }
+    }
+    {
+        thread_local EI t_de = EI::Seven;
+        try { t_de /= 1; rv."thread-local-de" = ok(t_de); }
+        catch (hash<ExceptionInfo> ex) { rv."thread-local-de" = err(ex, t_de); }
+    }
+    rv."param-mo" = ei_param_mo(EI::Seven);
+    {
+        EI v = EI::Seven;
+        try { ei_ref_mo(\v); rv."reference-mo" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."reference-mo" = err(ex, v); }
+    }
+    {
+        thread_local EI t_mo = EI::Seven;
+        try { t_mo %= 4; rv."thread-local-mo" = ok(t_mo); }
+        catch (hash<ExceptionInfo> ex) { rv."thread-local-mo" = err(ex, t_mo); }
+    }
+    rv."param-oe" = ei_param_oe(EI::Seven);
+    {
+        EI v = EI::Seven;
+        try { ei_ref_oe(\v); rv."reference-oe" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."reference-oe" = err(ex, v); }
+    }
+    {
+        thread_local EI t_oe = EI::Seven;
+        try { t_oe |= 8; rv."thread-local-oe" = ok(t_oe); }
+        catch (hash<ExceptionInfo> ex) { rv."thread-local-oe" = err(ex, t_oe); }
+    }
+    rv."param-ae" = ei_param_ae(EI::Seven);
+    {
+        EI v = EI::Seven;
+        try { ei_ref_ae(\v); rv."reference-ae" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."reference-ae" = err(ex, v); }
+    }
+    {
+        thread_local EI t_ae = EI::Seven;
+        try { t_ae &= 3; rv."thread-local-ae" = ok(t_ae); }
+        catch (hash<ExceptionInfo> ex) { rv."thread-local-ae" = err(ex, t_ae); }
+    }
+    rv."param-xe" = ei_param_xe(EI::Seven);
+    {
+        EI v = EI::Seven;
+        try { ei_ref_xe(\v); rv."reference-xe" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."reference-xe" = err(ex, v); }
+    }
+    {
+        thread_local EI t_xe = EI::Seven;
+        try { t_xe ^= 1; rv."thread-local-xe" = ok(t_xe); }
+        catch (hash<ExceptionInfo> ex) { rv."thread-local-xe" = err(ex, t_xe); }
+    }
+    rv."param-sl" = ei_param_sl(EI::Seven);
+    {
+        EI v = EI::Seven;
+        try { ei_ref_sl(\v); rv."reference-sl" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."reference-sl" = err(ex, v); }
+    }
+    {
+        thread_local EI t_sl = EI::Seven;
+        try { t_sl <<= 1; rv."thread-local-sl" = ok(t_sl); }
+        catch (hash<ExceptionInfo> ex) { rv."thread-local-sl" = err(ex, t_sl); }
+    }
+    rv."param-sr" = ei_param_sr(EI::Seven);
+    {
+        EI v = EI::Seven;
+        try { ei_ref_sr(\v); rv."reference-sr" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."reference-sr" = err(ex, v); }
+    }
+    {
+        thread_local EI t_sr = EI::Seven;
+        try { t_sr >>= 1; rv."thread-local-sr" = ok(t_sr); }
+        catch (hash<ExceptionInfo> ex) { rv."thread-local-sr" = err(ex, t_sr); }
+    }
+    rv."param-pri" = ei_param_pri(EI::Seven);
+    {
+        EI v = EI::Seven;
+        try { ei_ref_pri(\v); rv."reference-pri" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."reference-pri" = err(ex, v); }
+    }
+    {
+        thread_local EI t_pri = EI::Seven;
+        try { ++t_pri; rv."thread-local-pri" = ok(t_pri); }
+        catch (hash<ExceptionInfo> ex) { rv."thread-local-pri" = err(ex, t_pri); }
+    }
+    rv."param-poi" = ei_param_poi(EI::Seven);
+    {
+        EI v = EI::Seven;
+        try { ei_ref_poi(\v); rv."reference-poi" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."reference-poi" = err(ex, v); }
+    }
+    {
+        thread_local EI t_poi = EI::Seven;
+        try { t_poi++; rv."thread-local-poi" = ok(t_poi); }
+        catch (hash<ExceptionInfo> ex) { rv."thread-local-poi" = err(ex, t_poi); }
+    }
+    rv."param-prd" = ei_param_prd(EI::Seven);
+    {
+        EI v = EI::Seven;
+        try { ei_ref_prd(\v); rv."reference-prd" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."reference-prd" = err(ex, v); }
+    }
+    {
+        thread_local EI t_prd = EI::Seven;
+        try { --t_prd; rv."thread-local-prd" = ok(t_prd); }
+        catch (hash<ExceptionInfo> ex) { rv."thread-local-prd" = err(ex, t_prd); }
+    }
+    rv."param-pod" = ei_param_pod(EI::Seven);
+    {
+        EI v = EI::Seven;
+        try { ei_ref_pod(\v); rv."reference-pod" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."reference-pod" = err(ex, v); }
+    }
+    {
+        thread_local EI t_pod = EI::Seven;
+        try { t_pod--; rv."thread-local-pod" = ok(t_pod); }
+        catch (hash<ExceptionInfo> ex) { rv."thread-local-pod" = err(ex, t_pod); }
+    }
+    {
+        EI v = EI::Seven;
+        auto a = 1;
+        try { v += a; rv."local-pe-auto" = ok(v); } catch (hash<ExceptionInfo> ex) { rv."local-pe-auto" = err(ex, v); }
+    }
+    {
+        EI v = EI::Seven;
+        auto a = 1;
+        try { v -= a; rv."local-me-auto" = ok(v); } catch (hash<ExceptionInfo> ex) { rv."local-me-auto" = err(ex, v); }
+    }
+    {
+        EI v = EI::Seven;
+        auto a = 8;
+        try { v = a; rv."local-assign-auto" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."local-assign-auto" = err(ex, v); }
+    }
+    {
+        EI v = EI::Seven;
+        auto a = EI::Eight;
+        try { v = a; rv."local-assign-enum" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."local-assign-enum" = err(ex, v); }
+    }
+    {
+        EI v = EI::Seven;
+        code get = auto sub () { return v; };
+        auto a = 1;
+        try { v += a; rv."closure-pe-auto" = ok(get()); }
+        catch (hash<ExceptionInfo> ex) { rv."closure-pe-auto" = err(ex, get()); }
+    }
+    {
+        EI v = EI::Seven;
+        code get = auto sub () { return v; };
+        auto a = 1;
+        try { v -= a; rv."closure-me-auto" = ok(get()); }
+        catch (hash<ExceptionInfo> ex) { rv."closure-me-auto" = err(ex, get()); }
+    }
+    {
+        EI v = EI::Seven;
+        code get = auto sub () { return v; };
+        auto a = 8;
+        try { v = a; rv."closure-assign-auto" = ok(get()); }
+        catch (hash<ExceptionInfo> ex) { rv."closure-assign-auto" = err(ex, get()); }
+    }
+    {
+        EI v = EI::Seven;
+        code get = auto sub () { return v; };
+        auto a = EI::Eight;
+        try { v = a; rv."closure-assign-enum" = ok(get()); }
+        catch (hash<ExceptionInfo> ex) { rv."closure-assign-enum" = err(ex, get()); }
+    }
+    {
+        g_ei = EI::Seven;
+        auto a = 1;
+        try { g_ei += a; rv."global-pe-auto" = ok(g_ei); }
+        catch (hash<ExceptionInfo> ex) { rv."global-pe-auto" = err(ex, g_ei); }
+    }
+    {
+        g_ei = EI::Seven;
+        auto a = 1;
+        try { g_ei -= a; rv."global-me-auto" = ok(g_ei); }
+        catch (hash<ExceptionInfo> ex) { rv."global-me-auto" = err(ex, g_ei); }
+    }
+    {
+        g_ei = EI::Seven;
+        auto a = 8;
+        try { g_ei = a; rv."global-assign-auto" = ok(g_ei); }
+        catch (hash<ExceptionInfo> ex) { rv."global-assign-auto" = err(ex, g_ei); }
+    }
+    {
+        g_ei = EI::Seven;
+        auto a = EI::Eight;
+        try { g_ei = a; rv."global-assign-enum" = ok(g_ei); }
+        catch (hash<ExceptionInfo> ex) { rv."global-assign-enum" = err(ex, g_ei); }
+    }
+    {
+        Holder o();
+        auto a = 1;
+        try { o.ei += a; rv."member-pe-auto" = ok(o.ei); }
+        catch (hash<ExceptionInfo> ex) { rv."member-pe-auto" = err(ex, o.ei); }
+    }
+    {
+        Holder o();
+        auto a = 1;
+        try { o.ei -= a; rv."member-me-auto" = ok(o.ei); }
+        catch (hash<ExceptionInfo> ex) { rv."member-me-auto" = err(ex, o.ei); }
+    }
+    {
+        Holder o();
+        auto a = 8;
+        try { o.ei = a; rv."member-assign-auto" = ok(o.ei); }
+        catch (hash<ExceptionInfo> ex) { rv."member-assign-auto" = err(ex, o.ei); }
+    }
+    {
+        Holder o();
+        auto a = EI::Eight;
+        try { o.ei = a; rv."member-assign-enum" = ok(o.ei); }
+        catch (hash<ExceptionInfo> ex) { rv."member-assign-enum" = err(ex, o.ei); }
+    }
+    return rv;
+}
+
 #! the checks in functions
 print_results("ei-local-in", ei_local_in());
 print_results("ei-closure-in", ei_closure_in());
@@ -1989,6 +3129,25 @@ print_results("int-loop", int_loop());
 print_results("softint-local-in", softint_local_in());
 print_results("softint-closure-in", softint_closure_in());
 print_results("softint-loop", softint_loop());
+print_results("einv-local-in", einv_local_in());
+print_results("einv-closure-in", einv_closure_in());
+print_results("einv-global-in", einv_global_in());
+print_results("einv-member-in", einv_member_in());
+print_results("einv-hash-in", einv_hash_in());
+print_results("einv-list-in", einv_list_in());
+print_results("eionv-local-in", eionv_local_in());
+print_results("eionv-closure-in", eionv_closure_in());
+print_results("eionv-global-in", eionv_global_in());
+print_results("eionv-member-in", eionv_member_in());
+print_results("eionv-hash-in", eionv_hash_in());
+print_results("eionv-list-in", eionv_list_in());
+print_results("efnv-local-in", efnv_local_in());
+print_results("efnv-closure-in", efnv_closure_in());
+print_results("efnv-global-in", efnv_global_in());
+print_results("efnv-member-in", efnv_member_in());
+print_results("efnv-hash-in", efnv_hash_in());
+print_results("efnv-list-in", efnv_list_in());
+print_results("ei-extra", ei_extra());
 
 #! the checks in top-level code
 {
@@ -2240,4 +3399,116 @@ print_results("softint-loop", softint_loop());
         try { v -= src; rv."me-src" = ok(v); } catch (hash<ExceptionInfo> ex) { rv."me-src" = err(ex, v); }
     }
     print_results("softint-toplevel", rv);
+}
+{
+    hash<string, string> rv;
+    {
+        EI v;
+        try { v += 1; rv.pe = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v -= 1; rv.me = ok(v); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v *= 2; rv.te = ok(v); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v /= 1; rv.de = ok(v); } catch (hash<ExceptionInfo> ex) { rv.de = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v %= 4; rv.mo = ok(v); } catch (hash<ExceptionInfo> ex) { rv.mo = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v |= 8; rv.oe = ok(v); } catch (hash<ExceptionInfo> ex) { rv.oe = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v &= 3; rv.ae = ok(v); } catch (hash<ExceptionInfo> ex) { rv.ae = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v ^= 1; rv.xe = ok(v); } catch (hash<ExceptionInfo> ex) { rv.xe = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v <<= 1; rv.sl = ok(v); } catch (hash<ExceptionInfo> ex) { rv.sl = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v >>= 1; rv.sr = ok(v); } catch (hash<ExceptionInfo> ex) { rv.sr = err(ex, v); }
+    }
+    {
+        EI v;
+        try { ++v; rv.pri = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v++; rv.poi = ok(v); } catch (hash<ExceptionInfo> ex) { rv.poi = err(ex, v); }
+    }
+    {
+        EI v;
+        try { --v; rv.prd = ok(v); } catch (hash<ExceptionInfo> ex) { rv.prd = err(ex, v); }
+    }
+    {
+        EI v;
+        try { v--; rv.pod = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, v); }
+    }
+    print_results("einv-toplevel", rv);
+}
+{
+    hash<string, string> rv;
+    {
+        *EI v;
+        try { v += 1; rv.pe = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, v); }
+    }
+    {
+        *EI v;
+        try { v -= 1; rv.me = ok(v); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, v); }
+    }
+    {
+        *EI v;
+        try { v *= 2; rv.te = ok(v); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, v); }
+    }
+    {
+        *EI v;
+        try { v |= 8; rv.oe = ok(v); } catch (hash<ExceptionInfo> ex) { rv.oe = err(ex, v); }
+    }
+    {
+        *EI v;
+        try { ++v; rv.pri = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, v); }
+    }
+    {
+        *EI v;
+        try { v--; rv.pod = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, v); }
+    }
+    print_results("eionv-toplevel", rv);
+}
+{
+    hash<string, string> rv;
+    {
+        EF v;
+        try { v += 0.5; rv.pe = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pe = err(ex, v); }
+    }
+    {
+        EF v;
+        try { v -= 0.5; rv.me = ok(v); } catch (hash<ExceptionInfo> ex) { rv.me = err(ex, v); }
+    }
+    {
+        EF v;
+        try { v *= 2.0; rv.te = ok(v); } catch (hash<ExceptionInfo> ex) { rv.te = err(ex, v); }
+    }
+    {
+        EF v;
+        try { ++v; rv.pri = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pri = err(ex, v); }
+    }
+    {
+        EF v;
+        try { v--; rv.pod = ok(v); } catch (hash<ExceptionInfo> ex) { rv.pod = err(ex, v); }
+    }
+    print_results("efnv-toplevel", rv);
 }

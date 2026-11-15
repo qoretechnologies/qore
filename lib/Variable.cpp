@@ -3219,9 +3219,13 @@ int LValueHelper::makeIntVal(const char* desc) {
 int LValueHelper::makeIntQv(const char* desc) {
     member_lvalue_modified = true;
     assert(qv);
+    // an inline int, the common case, is checked without the type lookup
+    if (qv->isInt()) {
+        return 0;
+    }
     // a member of an int enum has the base type int, but it is an enum value, which the operation replaces with a
     // plain int: the lvalue's type is checked for it, as an enum type refuses a plain int (qore#6197)
-    if (qv->getType() == NT_INT && !qv->isEnum()) {
+    if (!qv->isEnum() && qv->getType() == NT_INT) {
         return 0;
     }
 
@@ -3262,9 +3266,9 @@ int LValueHelper::makeFloat(const char* desc) {
 
         saveTemp(val->makeFloat());
     } else {
-        // a member of a float enum is an enum value, which the operation replaces with a plain float (see
-        // makeIntQv())
-        if (!qv->hasNode() && !qv->isEnum() && qv->getType() == NT_FLOAT) {
+        // an inline float; a member of a float enum is an enum value, which the operation replaces with a plain float
+        // (see makeIntQv())
+        if (qv->isFloat()) {
            return 0;
         }
 

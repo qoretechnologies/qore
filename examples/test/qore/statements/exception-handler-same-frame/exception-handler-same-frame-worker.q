@@ -289,7 +289,8 @@ list<string> sub ref_foreach_return_list(auto v) {
 }
 
 #! the write-back of a foreach statement over a reference releases the list it replaces, whose only element is an
-#! object whose destructor raises
+#! object whose destructor raises; this case also passes without the write-back's exception target (qore#6197) and is
+#! kept as coverage
 string sub ref_foreach_dtor() {
     list l = (new DtorThrow(),);
     try {

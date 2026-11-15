@@ -22220,6 +22220,23 @@ static const QoreTypeInfo* get_compound_default_type(const QoreTypeInfo* ti) {
     return plain != ti && has_compound_default_value(plain) ? plain : ti;
 }
 
+//! returns the base type of the numeric enum type of an lvalue (NT_INT, NT_FLOAT or NT_NUMBER), else NT_NOTHING
+/** += and -= give an lvalue with no value the default value of its type before the operation; an enum lvalue, whose
+    type refuses the plain value the operation computes, is left without a value, as the AST interpreter's int
+    operators leave it (QoreIntPlusEqualsOperatorNode::evalImpl(), which raises from LValueHelper::makeIntVal()
+    before it writes): the operation is made on the lvalue with no value as on a value of the enum's base type, which
+    raises the type error (qore#6197).  A string enum keeps the default value, as its string operation would change
+    the member's value in place (qore#6164, qore#6195).
+*/
+static qore_type_t qore_numeric_enum_lvalue_base_type(const QoreTypeInfo* ti) {
+    const QoreEnumDecl* ed = QoreTypeInfo::getReturnEnum(ti);
+    if (!ed) {
+        return NT_NOTHING;
+    }
+    qore_type_t t = QoreTypeInfo::getBaseType(ed->getBaseTypeInfo());
+    return t == NT_INT || t == NT_FLOAT || t == NT_NUMBER ? t : NT_NOTHING;
+}
+
 bool qore_is_int_lvalue_type(const QoreTypeInfo* ti) {
     const QoreTypeInfo* plain = get_or_nothing_base_type(ti);
     return QoreTypeInfo::isType(plain, NT_INT) && !QoreTypeInfo::equal(plain, timeoutTypeInfo);
@@ -22316,7 +22333,14 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
     // operation differs for a char replace it with the string (qore_plus_equals_replace_char()); the string, char,
     // binary and hash branches convert or ignore a char as they do its string, so the common string case is unchanged
 
-    if (vtype == NT_NOTHING || vtype == NT_NULL) {
+    qore_type_t enum_base;
+    if ((vtype == NT_NOTHING || vtype == NT_NULL)
+            && (enum_base = qore_numeric_enum_lvalue_base_type(v.getTypeInfo())) != NT_NOTHING
+            && !(qore_value_is_nothing(right) && get_or_nothing_base_type(v.getTypeInfo()) != v.getTypeInfo())) {
+        // a numeric enum lvalue with no value gets no default value: the operation raises the type error (see
+        // qore_numeric_enum_lvalue_base_type()); an or-nothing enum lvalue is left unchanged by NOTHING, as below
+        vtype = enum_base;
+    } else if (vtype == NT_NOTHING || vtype == NT_NULL) {
         const QoreTypeInfo* typeInfo = v.getTypeInfo();
         // an or-nothing lvalue (*T) with no value takes the default value of T for an operand with a value
         const QoreTypeInfo* plain_default_ti = get_compound_default_type(typeInfo);
@@ -22589,7 +22613,12 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
 
     qore_type_t vtype = v.getType();
 
-    if (vtype == NT_NOTHING) {
+    qore_type_t enum_base;
+    if (vtype == NT_NOTHING && (enum_base = qore_numeric_enum_lvalue_base_type(v.getTypeInfo())) != NT_NOTHING) {
+        // a numeric enum lvalue with no value gets no default value: the operation raises the type error (see
+        // qore_numeric_enum_lvalue_base_type())
+        vtype = enum_base;
+    } else if (vtype == NT_NOTHING) {
         const QoreTypeInfo* typeInfo = v.getTypeInfo();
         // an or-nothing lvalue (*T) takes the default value of T
         const QoreTypeInfo* default_ti = get_compound_default_type(typeInfo);
