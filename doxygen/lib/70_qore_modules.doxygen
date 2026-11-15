@@ -230,7 +230,10 @@
 
     Debug builds of the library count the module namespaces that still hold values when the types are freed;
     with the \c QORE_TEARDOWN_REPORT environment variable set, the count and each such namespace are printed on
-    \c stderr, and a registered namespace destroyed with content after that point fails an assertion.
+    \c stderr, and a registered namespace destroyed with content after that point fails an assertion.  The report
+    also prints \c "[TEARDOWN] declarations of Programs left after qore_cleanup(): N", the number of class, hashdecl and
+    enum declarations of deleted Programs that were not freed when the library cleanup ended (N must be 0 unless a value
+    or a Program held at static scope references them).
 
     @subsection module_cpp_api_dev Sharing a C++ API Between Modules
 
