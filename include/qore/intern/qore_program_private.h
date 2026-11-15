@@ -2866,10 +2866,17 @@ public:
     }
 
     DLLLOCAL int parseRollback(ExceptionSink* xsink) {
-        ProgramRuntimeParseContextHelper pch(xsink, pgm);
         assert(xsink);
-        if (*xsink)
+        // a sandboxed caller stays the caller of what the rollback runs in the Program, as for the other parse
+        // entry points (see QoreCallerSandboxHelper; issue #6149)
+        QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
+        if (*xsink) {
             return -1;
+        }
+        ProgramRuntimeParseContextHelper pch(xsink, pgm);
+        if (*xsink) {
+            return -1;
+        }
 
         // back out all pending changes
         internParseRollback(xsink);
