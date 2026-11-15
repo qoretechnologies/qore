@@ -68,6 +68,7 @@ class Test inherits QUnit::Test {
         addTestCase("LoggerAppenderFile lifecycle markers", \testLifecycleMarkers());
         addTestCase("LoggerSearchUtil", \testLoggerSearchUtil());
         addTestCase("LoggerSearchUtil scan budget", \testLoggerSearchScanBudget());
+        addTestCase("LoggerSearchUtil v3 cursor", \testLoggerSearchV3Cursor());
         addTestCase("Logger", \testLogger());
         set_return_value(main());
     }
@@ -1043,6 +1044,295 @@ class Test inherits QUnit::Test {
         return {"entries": entries, "scanned": scanned, "calls": calls};
     }
 
+    #! writes the given text to a file, replacing its data but keeping its inode
+    private static rewriteInPlace(string fn, string text) {
+        File f();
+        f.open2(fn, O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+
+    #! the v3 cursor: a call reads about its budget, a write after the cursor does not make it stale, and a source
+    #! that was replaced, truncated or rewritten is reported (issue #5856)
+    testLoggerSearchV3Cursor() {
+        string fn = tmp_location() + DirSep + unique_name + "-search-v3.log";
+        unlink(fn);
+        on_exit unlink(fn);
+
+        LoggerAppenderFile la("V3", new LoggerLayoutPattern("%m%n"), fn);
+        Logger logger("SearchV3Test", LoggerLevel::getLevelDebug());
+        logger.addAppender(la);
+        la.open();
+        for (int i = 0; i < 20000; ++i) {
+            logger.info(sprintf("line %06d: %s%s", i, strmul("x", 80), i == 10 ? " JI 5856: early" : ""));
+        }
+        la.close();
+        int size = hstat(fn).size;
+        assertTrue(size > 1800000, sprintf("%d", size));
+
+        # a call reads its budget and the blocks around it, not the source: the first backward call counts the lines
+        # of the source once
+        int budget = 16384;
+        # the reader reads blocks of 64 KiB (LoggerSearchLineReader::BlockSize, internal to the module)
+        int max_read = budget + 4 * 65536;
+        foreach string dir in ("backward", "forward") {
+            *string cursor;
+            int scanned = 0;
+            int calls = 0;
+            list<hash<auto>> found = ();
+            while (True) {
+                hash<auto> req = {"text": "JI 5856:", "direction": dir, "max_scanned_bytes": budget};
+                if (cursor) {
+                    req.cursor = cursor;
+                }
+                hash<auto> res = LoggerSearchUtil::searchRenderedEvents(la, req);
+                ++calls;
+                scanned += res.scanned_bytes;
+                found += res.entries;
+                if (calls > 1 || dir == "forward") {
+                    assertTrue(res.read_bytes <= max_read, sprintf("%s call %d read %d", dir, calls,
+                        res.read_bytes));
+                } else {
+                    assertTrue(res.read_bytes >= size, sprintf("first backward call read %d", res.read_bytes));
+                }
+                if (!res.next_cursor) {
+                    break;
+                }
+                assertTrue(res.next_cursor =~ /^v3:0:[0-9]+:[0-9]+:/, res.next_cursor);
+                cursor = res.next_cursor;
+                if (calls > 200) {
+                    assertTrue(False, dir + ": the chain did not end");
+                    break;
+                }
+            }
+            # every byte is scanned exactly once, and the match has its line number
+            assertEq(size, scanned, dir);
+            assertEq(1, found.size(), dir);
+            assertEq(11, found[0].line, dir);
+            assertTrue(calls > 100, sprintf("%s: %d calls", dir, calls));
+        }
+
+        # a write after the cursor does not make it stale; a forward chain finds the lines written later
+        string small_fn = tmp_location() + DirSep + unique_name + "-search-v3-active.log";
+        unlink(small_fn);
+        on_exit unlink(small_fn);
+        LoggerAppenderFile sa("V3ACTIVE", new LoggerLayoutPattern("%m%n"), small_fn);
+        Logger slogger("SearchV3ActiveTest", LoggerLevel::getLevelDebug());
+        slogger.addAppender(sa);
+        sa.open();
+        for (int i = 0; i < 100; ++i) {
+            slogger.info(sprintf("active %04d: %s", i, strmul("a", 40)));
+        }
+        hash<auto> res = LoggerSearchUtil::searchRenderedEvents(sa, {"text": "JI later:", "direction": "forward",
+            "max_scanned_bytes": 1024});
+        assertEq("partial", res.status);
+        string cursor = res.next_cursor;
+        slogger.info("JI later: written after the cursor");
+        res = LoggerSearchUtil::searchRenderedEvents(sa, {"text": "JI later:", "direction": "forward",
+            "max_scanned_bytes": LoggerSearchUtil::UnlimitedScannedBytes, "cursor": cursor});
+        assertEq("ok", res.status, res.reason);
+        assertEq(1, res.result_count);
+        assertEq(101, res.entries[0].line);
+        # a backward cursor into a source that is written to stays usable as well
+        res = LoggerSearchUtil::searchRenderedEvents(sa, {"text": "active 0001:", "max_scanned_bytes": 1024});
+        cursor = res.next_cursor;
+        slogger.info("one more line");
+        res = LoggerSearchUtil::searchRenderedEvents(sa, {"text": "active 0001:",
+            "max_scanned_bytes": LoggerSearchUtil::UnlimitedScannedBytes, "cursor": cursor});
+        assertEq("ok", res.status, res.reason);
+        assertEq(2, res.entries[0].line);
+        sa.close();
+
+        # an active file-ring source that is written to keeps its cursor too
+        string ring_fn = tmp_location() + DirSep + unique_name + "-search-v3-ring-%n.log";
+        LoggerAppenderFileRing ra("V3RING", new LoggerLayoutPattern("%m%n"), ring_fn, 3);
+        on_exit map unlink(ra.getFileNameForIndex($1)), xrange(0, 3);
+        Logger rlogger("SearchV3RingTest", LoggerLevel::getLevelDebug());
+        rlogger.addAppender(ra);
+        ra.open();
+        for (int i = 0; i < 100; ++i) {
+            rlogger.info(sprintf("ring %04d: %s", i, strmul("r", 40)));
+        }
+        res = LoggerSearchUtil::searchRenderedEvents(ra, {"text": "ring 0002:", "max_scanned_bytes": 1024});
+        assertEq("partial", res.status);
+        cursor = res.next_cursor;
+        rlogger.info("a line written after the cursor");
+        res = LoggerSearchUtil::searchRenderedEvents(ra, {"text": "ring 0002:",
+            "max_scanned_bytes": LoggerSearchUtil::UnlimitedScannedBytes, "cursor": cursor});
+        assertEq("ok", res.status, res.reason);
+        assertEq(1, res.result_count);
+        assertEq(3, res.entries[0].line);
+        ra.close();
+
+        # a source replaced by another file (a new inode), rewritten from the start, or truncated before the offset
+        # of the cursor is reported, not paged
+        string raw_fn = tmp_location() + DirSep + unique_name + "-search-v3-raw.log";
+        on_exit unlink(raw_fn);
+        string raw = foldl $1 + $2, (map sprintf("raw %04d %s\n", $1, strmul("q", 30)), xrange(0, 999));
+        File f();
+        f.open2(raw_fn, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(raw);
+        f.close();
+        LoggerAppenderFile raw_la("V3RAW", new LoggerLayoutPattern("%m%n"), raw_fn);
+        code get_cursor = string sub (string dir) {
+            # a budget that puts the offset of the cursor past the first bytes of the identity in both directions
+            hash<auto> r = LoggerSearchUtil::searchRenderedEvents(raw_la, {"text": "nothing", "direction": dir,
+                "max_scanned_bytes": 8192});
+            return r.next_cursor;
+        };
+        code use_cursor = hash<auto> sub (string dir, string c) {
+            return LoggerSearchUtil::searchRenderedEvents(raw_la, {"text": "nothing", "direction": dir,
+                "max_scanned_bytes": 8192, "cursor": c});
+        };
+        string new_fn = raw_fn + ".new";
+        on_exit unlink(new_fn);
+        foreach string dir in ("backward", "forward") {
+            # the device, inode and first bytes are the identity of the source: after a rewrite in place with the same
+            # data, the cursor continues where it did before
+            cursor = get_cursor(dir);
+            hash<auto> before = use_cursor(dir, cursor);
+            assertEq("partial", before.status, dir + " same identity");
+            assertEq("max-scanned-bytes", before.reason, dir + " same identity");
+            rewriteInPlace(raw_fn, raw);
+            res = use_cursor(dir, cursor);
+            assertEq("partial", res.status, dir + " rewritten with the same data");
+            assertEq(before.scanned_bytes, res.scanned_bytes, dir + " rewritten with the same data");
+            assertEq(before.next_cursor, res.next_cursor, dir + " rewritten with the same data");
+
+            # the same data in a new file created after the source was deleted: once the last reference to a deleted
+            # file is gone, the filesystem can give its inode number to the next file (ext4 does), which then has the
+            # identity of the source, and the cursor is valid for it, as for the source rewritten in place; with
+            # another inode number, the cursor is stale
+            int deleted_inode = hstat(raw_fn).inode;
+            unlink(raw_fn);
+            f.open2(raw_fn, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(raw);
+            f.close();
+            res = use_cursor(dir, cursor);
+            if (hstat(raw_fn).inode == deleted_inode) {
+                assertEq("partial", res.status, dir + " recreated at the same inode");
+                assertEq(before.next_cursor, res.next_cursor, dir + " recreated at the same inode");
+            } else {
+                assertEq("invalid", res.status, dir + " recreated at another inode");
+                assertEq("stale-cursor", res.reason, dir + " recreated at another inode");
+            }
+
+            # the same data in a new file, which replaces the source while it still exists (renamed over it), so
+            # that it has another inode number: the cursor is stale
+            cursor = get_cursor(dir);
+            int old_inode = hstat(raw_fn).inode;
+            f.open2(new_fn, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(raw);
+            f.close();
+            rename(new_fn, raw_fn);
+            assertNeq(old_inode, hstat(raw_fn).inode, dir + " replaced: another inode");
+            res = use_cursor(dir, cursor);
+            assertEq("invalid", res.status, dir + " replaced");
+            assertEq("stale-cursor", res.reason, dir + " replaced");
+
+            # rewritten from the start in the same file
+            cursor = get_cursor(dir);
+            rewriteInPlace(raw_fn, "X" + raw.substr(1));
+            res = use_cursor(dir, cursor);
+            assertEq("stale-cursor", res.reason, dir + " rewritten");
+            # truncated before the offset of the cursor (the first bytes are unchanged)
+            rewriteInPlace(raw_fn, raw);
+            cursor = get_cursor(dir);
+            int offset = int((cursor =~ x/^v3:[0-9]+:([0-9]+):/)[0]);
+            rewriteInPlace(raw_fn, raw.substr(0, offset - 10));
+            res = use_cursor(dir, cursor);
+            assertEq("source-truncated", res.reason, dir + " truncated");
+            # the offset is no longer on a line boundary
+            rewriteInPlace(raw_fn, raw.substr(0, offset - 5) + "zz" + raw.substr(offset - 5));
+            res = use_cursor(dir, cursor);
+            assertEq("source-truncated", res.reason, dir + " moved");
+            rewriteInPlace(raw_fn, raw);
+        }
+
+        # a v2 cursor is still accepted
+        list<hash<auto>> sources = LoggerSearchUtil::getAppenderSearchSources(raw_la, {});
+        res = LoggerSearchUtil::searchRenderedEvents(raw_la, {"text": "raw 0003 ",
+            "cursor": sprintf("v2:0:%d:backward:%s", 10, sources[0].source_fingerprint)});
+        assertEq("ok", res.status, res.reason);
+        assertEq(1, res.result_count);
+        assertEq(4, res.entries[0].line);
+        res = LoggerSearchUtil::searchRenderedEvents(raw_la, {"text": "raw 0150 ", "direction": "forward",
+            "cursor": sprintf("v2:0:%d:forward:%s", 100, sources[0].source_fingerprint)});
+        assertEq(1, res.result_count);
+        assertEq(151, res.entries[0].line);
+
+        # the default budget: a call reads about the budget (in chunks and blocks), not the source
+        *string dcursor;
+        int dcalls = 0;
+        while (True) {
+            hash<auto> dreq = {"text": "never matches"};
+            if (dcursor) {
+                dreq.cursor = dcursor;
+            }
+            res = LoggerSearchUtil::searchRenderedEvents(la, dreq);
+            if (++dcalls > 1) {
+                assertTrue(res.read_bytes <= LoggerSearchUtil::DefaultMaxScannedBytes + 8 * 65536,
+                    sprintf("default budget call %d read %d", dcalls, res.read_bytes));
+            }
+            if (!res.next_cursor) {
+                break;
+            }
+            dcursor = res.next_cursor;
+        }
+        assertEq(2, dcalls);
+
+        # context lines across the calls of a v3 chain have the line numbers of the lines they show
+        hash<auto> cr = followSearch(la, {"text": "JI 5856:", "context_before": 2, "context_after": 2}, 4096, 1000);
+        assertEq((9, 10, 11, 12, 13), (map $1.line, cr.entries));
+        assertEq(("before", "before", "match", "after", "after"), (map $1.context, cr.entries));
+        assertEq(size, cr.scanned);
+
+        # forward, the last line of an active source without a terminator is not scanned until it is complete, so
+        # that the cursor after it is not in the middle of a line once the writer completes it
+        string part_fn = tmp_location() + DirSep + unique_name + "-search-v3-partial.log";
+        on_exit unlink(part_fn);
+        f.open2(part_fn, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("m1 needle\nm2 needle\nm3 partial");
+        f.close();
+        LoggerAppenderFile part_la("V3PART", new LoggerLayoutPattern("%m%n"), part_fn);
+        res = LoggerSearchUtil::searchRenderedEvents(part_la, {"text": "needle", "direction": "forward",
+            "max_scanned_bytes": LoggerSearchUtil::UnlimitedScannedBytes});
+        assertEq(2, res.result_count);
+        assertEq(20, res.scanned_bytes);
+        f.open2(part_fn, O_WRONLY | O_APPEND);
+        f.write(" needle\n");
+        f.close();
+        res = LoggerSearchUtil::searchRenderedEvents(part_la, {"text": "needle", "direction": "forward",
+            "limit": 2});
+        string pcursor = res.next_cursor;
+        res = LoggerSearchUtil::searchRenderedEvents(part_la, {"text": "needle", "direction": "forward",
+            "cursor": pcursor});
+        assertEq("ok", res.status, res.reason);
+        assertEq(1, res.result_count);
+        assertEq("m3 partial needle", res.entries[0].message);
+
+        # an inactive source (a rotated file) whose last line has no terminator: a cursor after it, at the end of the
+        # source, is a valid end of its scan
+        string rot_fn = tmp_location() + DirSep + unique_name + "-search-v3-rotated.log";
+        LoggerAppenderFileRotate rota("V3ROT", new LoggerLayoutPattern("%m%n"), rot_fn, 2);
+        list<string> rot_files = (rot_fn, rota.getArchiveFileName(1), rota.getArchiveFileName(2));
+        on_exit map unlink($1), rot_files;
+        f.open2(rota.getArchiveFileName(1), O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("r1 needle\nr2 needle");
+        f.close();
+        f.open2(rot_fn, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("a1 other\n");
+        f.close();
+        list<hash<auto>> rsources = LoggerSearchUtil::getAppenderSearchSources(rota, {"direction": "forward"});
+        assertEq(rota.getArchiveFileName(1), rsources[0].path);
+        res = LoggerSearchUtil::searchRenderedEvents(rota, {"text": "needle", "direction": "forward", "limit": 2});
+        assertEq(2, res.result_count);
+        assertEq("r2 needle", res.entries[1].message);
+        res = LoggerSearchUtil::searchRenderedEvents(rota, {"text": "needle", "direction": "forward",
+            "cursor": res.next_cursor});
+        assertEq("ok", res.status, res.reason);
+        assertEq(0, res.result_count);
+    }
+
     #! issue #5817: a file larger than max_scanned_bytes is searched within the budget, and next_cursor gets further
     testLoggerSearchScanBudget() {
         string fn = tmp_location() + DirSep + unique_name + "-search-budget.log";
@@ -1135,7 +1425,7 @@ class Test inherits QUnit::Test {
         assertEq("max-scanned-bytes", res.reason);
         assertEq(active_size, res.scanned_bytes);
         assertEq(0, res.result_count);
-        assertTrue(res.next_cursor =~ /^v2:1:-1:backward:/, res.next_cursor);
+        assertTrue(res.next_cursor =~ /^v3:1:-1:-1:backward:/, res.next_cursor);
         res = LoggerSearchUtil::searchRenderedEvents(ra, {"text": "JI 99:", "max_scanned_bytes": active_size,
             "cursor": res.next_cursor});
         assertEq(1, res.result_count);
@@ -1151,7 +1441,7 @@ class Test inherits QUnit::Test {
         assertEq("max-scanned-bytes", res.reason);
         assertEq(0, res.result_count);
         assertEq(rotated_size, res.scanned_bytes);
-        assertTrue(res.next_cursor =~ /^v2:1:0:forward:/, res.next_cursor);
+        assertTrue(res.next_cursor =~ /^v3:1:0:0:forward:/, res.next_cursor);
         res = LoggerSearchUtil::searchRenderedEvents(ra, {"text": "new 0199", "direction": "forward",
             "max_scanned_bytes": LoggerSearchUtil::UnlimitedScannedBytes, "cursor": res.next_cursor});
         assertEq(1, res.result_count);
@@ -1172,7 +1462,9 @@ class Test inherits QUnit::Test {
             r = followSearch(raw_la, {"text": "needle", "direction": dir}, 5, 10);
             assertEq(1, r.entries.size(), dir);
             assertEq(4, r.entries[0].line, dir);
-            assertEq(raw.size(), r.scanned, dir);
+            # forward, the last line of the active file, which has no terminator, is still being written and is not
+            # scanned (issue #5856)
+            assertEq(dir == "forward" ? raw.size() - "last".size() : raw.size(), r.scanned, dir);
         }
         # context lines are returned with a match and are not counted in the budget
         r = followSearch(raw_la, {"text": "needle", "context_before": 1, "context_after": 1}, 5, 10);

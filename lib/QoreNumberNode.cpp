@@ -903,6 +903,10 @@ bool QoreNumberNode::nan() const {
     return priv->nan();
 }
 
+void QoreNumberNode::appendExactKey(std::string& key) const {
+    priv->appendExactKey(key);
+}
+
 bool QoreNumberNode::inf() const {
     return priv->inf();
 }

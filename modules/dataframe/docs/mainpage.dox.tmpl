@@ -46,7 +46,10 @@
     size); storing a date outside that range, from a list or hash, a Parquet file (a timestamp in seconds or
     milliseconds), @ref Qore::DataFrame::DataFrame::fillna() "DataFrame::fillna()" or any other operation, raises
     \c DATAFRAME-DATE-RANGE-ERROR, and the date is not stored.  A column that holds any value (\c auto) holds any
-    date.
+    date.  A \c date column holds either absolute dates or relative dates (durations): a list or the records of
+    durations make a column of durations, whose cells are returned as relative dates and exported as Arrow durations,
+    and a list or records of absolute dates and durations make a column that holds any value, as a concatenation of
+    the two does.
 
     String values and column names are kept whole, including any NUL characters: a NUL character is data, and it
     is kept through every operation, CSV, Parquet and Arrow IPC, and conversion back to %Qore values.  A column name

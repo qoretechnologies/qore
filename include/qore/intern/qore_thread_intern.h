@@ -749,6 +749,16 @@ private:
 */
 DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref();
 
+//! Returns true if every sandbox that governs the current thread's code allows uncontrolled APIs, or if none does
+/** Visits the managers that qore_find_thread_sandbox_policy_manager_ref() (\a policy true) or
+    qore_find_thread_sandbox_manager_ref() (\a policy false) would combine, with the same resolution rules, without
+    combining them: it allocates nothing and returns as soon as one of them refuses uncontrolled APIs.  It runs on
+    every call of an uncontrolled API by code that a sandbox governs (qore#5741).
+
+    @since Qore 3.0
+*/
+DLLLOCAL bool qore_thread_sandbox_allows_uncontrolled_apis(bool policy);
+
 //! Pushes a sandbox policy barrier on the current thread; returns 0 for OK, -1 for no thread data
 DLLLOCAL int qore_push_sandbox_policy_barrier();
 
@@ -949,9 +959,10 @@ static inline bool qore_compiled_code_strict_args() {
     This helper sets the runtime parse options to the given options of the code being loaded and suspends any such
     override for its lifetime, which makes load-time resolution what parse-time resolution is for the same source.
     It must only be used around the loading of AOT-compiled code (deserialization, slot-map context construction and
-    module initialization), never around the evaluation of code on behalf of a caller: a variant resolved when code is
-    evaluated is checked against the options in effect for that evaluation, including the restrictions of the
-    Program it runs in.
+    module initialization, including the constant initializers of compiled modules and scripts, eager or run when a
+    constant is first read: qore#6189), never around the evaluation of code on behalf of a caller: a variant resolved
+    when code is evaluated is checked against the options in effect for that evaluation, including the restrictions
+    of the Program it runs in.
 */
 class LoadTimeParseOptionsHelper {
 public:
