@@ -1,0 +1,225 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../../TestCertificates.qm
+
+%exec-class HttpClientIdleReservedTest
+
+#! Answers every request, and records the client port of each, so that requests on one connection can be told apart
+class PortHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the client ports of the requests, in order
+        list<int> ports;
+        Mutex m();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        m.lock();
+        on_exit m.unlock();
+        ports += cx."peer-info".port;
+        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+    }
+}
+
+#! The idle timeout of an HTTP client connection and a request that has reserved its stream (#6184)
+/** The idle timeout of the HTTP/1 and HTTP/2 client operations closed a connection when it had no active stream,
+    including one that a request had reserved and not yet submitted on: the request then failed on a closed
+    connection (a POST, which is not repeated).  The request is held between its reservation and its submission with
+    dbg_http_client_hold_after_reserve(), while the idle timeout, shortened with dbg_http_client_idle_timeout(),
+    expires; both only exist in debug builds.
+*/
+public class HttpClientIdleReservedTest inherits QUnit::Test {
+    public {
+        #! the idle timeout of the connections
+        const IdleTimeout = 500;
+    }
+
+    private {
+        # the HTTP/1 server: a raw socket server that counts its connections
+        Socket listener();
+        int port;
+        Counter accepted();
+        Counter running();
+        bool stop;
+
+        # the HTTP/2 server
+        HttpServer h2_server;
+        PortHandler h2_handler();
+        int h2_port;
+    }
+
+    constructor() : Test("HttpClientIdleReservedTest", "1.0", \ARGV) {
+        addTestCase("an HTTP/1 idle timeout leaves a connection with a reserved stream", \h1Test());
+        addTestCase("an HTTP/2 idle timeout leaves a connection with a reserved stream", \h2Test());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+
+        h2_server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        h2_server.setDefaultHandler("ports", h2_handler);
+        h2_port = h2_server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": False,
+        }).port;
+        h2_server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        stop = True;
+        listener.shutdown();
+        listener.close();
+        running.waitForZero();
+        if (h2_server) {
+            h2_server.stop();
+            delete h2_server;
+        }
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (!stop) {
+            *Socket s;
+            try {
+                s = listener.accept(100ms);
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+            if (!s) {
+                continue;
+            }
+            accepted.inc();
+            running.inc();
+            background serve(s);
+        }
+    }
+
+    #! answers the requests of a connection until the client closes it or the test ends
+    private serve(Socket s) {
+        on_exit {
+            s.close();
+            running.dec();
+        }
+        while (!stop) {
+            try {
+                if (!s.isDataAvailable(100ms)) {
+                    if (!s.isOpen()) {
+                        break;
+                    }
+                    continue;
+                }
+                hash<auto> hdr = s.readHTTPHeader(5s);
+                if (!hdr.method) {
+                    break;
+                }
+                if (hdr."content-length") {
+                    s.recvBinary(hdr."content-length".toInt(), 5s);
+                }
+                s.send("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: text/plain\r\n\r\nok");
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+        }
+    }
+
+    private skipIfNoDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build (dbg_http_client_hold_after_reserve(), dbg_http_client_idle_timeout())");
+        }
+    }
+
+    #! returns a client whose connection manager has the short idle timeout
+    private HTTPClient getClient(hash<auto> opts) {
+        call_function("dbg_http_client_idle_timeout", IdleTimeout);
+        on_exit call_function("dbg_http_client_idle_timeout", 0);
+        HTTPClient hc(opts);
+        # the connection manager takes its options when the client connects
+        hc.connect();
+        return hc;
+    }
+
+    #! holds a POST of \a hc after its reservation while the idle timeout of its connection expires, and returns the
+    #! exception that the POST raised, if any
+    private *hash<ExceptionInfo> postAcrossIdleTimeout(HTTPClient hc) {
+        call_function("dbg_http_client_hold_after_reserve", True);
+        Counter done(1);
+        # the POST's thread ends before the test does, whatever fails
+        on_exit {
+            call_function("dbg_http_client_hold_after_reserve", False);
+            call_function("dbg_http_client_release_after_reserve");
+            done.waitForZero(30s);
+        }
+        *hash<ExceptionInfo> post_ex;
+        *string post_rv;
+        background sub () {
+            on_exit done.dec();
+            try {
+                post_rv = hc.post("/", "body");
+            } catch (hash<ExceptionInfo> ex) {
+                post_ex = ex;
+            }
+        }();
+        assertTrue(call_function("dbg_http_client_wait_held_after_reserve", 20s), "the POST is held");
+        # the idle timeout expires while the POST holds its reservation (the POST is held: the wait has no race); the
+        # POST is released in the middle of the next idle period, away from its deadline
+        usleep(IdleTimeout * 1500);
+        call_function("dbg_http_client_release_after_reserve");
+        assertEq(0, done.waitForZero(20s), "the POST ends");
+        if (!post_ex) {
+            assertEq("ok", post_rv);
+        }
+        return post_ex;
+    }
+
+    h1Test() {
+        skipIfNoDebug();
+        HTTPClient hc = getClient({"url": "http://127.0.0.1:" + port});
+        # the count is read only after an answer: the accept loop counts the connection that getClient() opens
+        # asynchronously, but always before the connection is answered
+        assertEq("ok", hc.get("/"));
+        assertEq(1, accepted.getCount(), "one connection");
+        *hash<ExceptionInfo> ex = postAcrossIdleTimeout(hc);
+        assertNothing(ex, "the POST did not fail on a connection closed for its idle timeout");
+        assertEq(1, accepted.getCount(), "the POST was sent on its reserved connection");
+    }
+
+    h2Test() {
+        skipIfNoDebug();
+        HTTPClient hc = getClient({
+            "url": sprintf("https://localhost:%d", h2_port),
+            "http_version": "2.0",
+            "http3_mode": "disabled",
+            "ssl_verify_cert": False,
+        });
+        h2_handler.ports = ();
+        assertEq("ok", hc.get("/"));
+        assertTrue(hc.isHttp2Active(), "HTTP/2");
+        *hash<ExceptionInfo> ex = postAcrossIdleTimeout(hc);
+        assertNothing(ex, "the POST did not fail on a connection closed for its idle timeout");
+        assertEq(2, h2_handler.ports.size(), "two requests");
+        assertEq(h2_handler.ports[0], h2_handler.ports[1], "the POST was sent on its reserved connection");
+    }
+}

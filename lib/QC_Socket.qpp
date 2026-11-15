@@ -2857,11 +2857,10 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int s
         result->append(body_ptr, body_size);
     }
 
-    // Compute idle deadline in milliseconds from epoch
+    // Compute the idle deadline in milliseconds
     // Note: the 'timeout' parameter type provides values in milliseconds
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     int64 deadline_ms = now_ms + idle_timeout;
 
     // Create the fused poll operation
@@ -2944,10 +2943,9 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHe
     SimpleRefHolder<BinaryNode> result(new BinaryNode);
     result->append(hdr.c_str(), hdr.size());
 
-    // Compute idle deadline in milliseconds from epoch
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // Compute the idle deadline in milliseconds
+    // on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     int64 deadline_ms = now_ms + idle_timeout;
 
     // The InputStream may already be unassigned (from doResponse async capture); reassign it to this thread so
@@ -3046,9 +3044,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeade
     SimpleRefHolder<BinaryNode> result(new BinaryNode);
     result->append(hdr_str.c_str(), hdr_str.size());
 
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     int64 deadline_ms = now_ms + idle_timeout;
 
     // The InputStream may already be unassigned (from doResponse async capture); reassign it to this thread so
@@ -6933,9 +6930,8 @@ AbstractPollOperation<auto> Socket::startPollIdleAndReadHttpHeader(timeout idle_
     // an empty response: the operation starts in its idle phase
     SimpleRefHolder<BinaryNode> nothing_to_send(new BinaryNode);
 
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 deadline_ms = now_s * 1000 + us / 1000 + idle_timeout;
+    // on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 deadline_ms = q_get_monotonic_us() / 1000 + idle_timeout;
 
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(

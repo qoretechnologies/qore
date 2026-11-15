@@ -209,13 +209,16 @@ QORE_JIT_MAX_IR_INSTRUCTIONS=50000 qore --exec-mode=jit script.qr
     @note Set \c QORE_JIT_TIMING to report each skipped native compilation along
     with the function's IR instruction count and the budget in effect.
 
-    A function with many \c on_exit, \c on_success or \c on_error handlers and many locals has a second budget: the
-    native code that runs the pending handlers publishes every local to the runtime and reloads it afterwards, so its
-    size is the product of the handlers and the locals, and a function with 200 try statements whose catch blocks have
-    a local and a handler, though it has far fewer IR instructions than the first budget, took tens of minutes to
-    compile.  The estimated size of that code is limited to 120000 LLVM instructions by default, which a function whose
-    catch blocks have a local and a handler reaches with about 56 of them; \c QORE_JIT_MAX_HANDLER_COST sets it, and
-    \c 0 means "no limit".  A function over it stays on the IR tier like one over the first budget.
+    The native code that runs the pending \c on_exit, \c on_success and \c on_error handlers of a function publishes
+    the locals of the function to the runtime before they run and reloads them afterwards.  Written at each place
+    that runs handlers, that code has a size in the product of the handlers and the locals, and a function with 200
+    try statements whose catch blocks have a local and a handler took tens of minutes to compile.  A function whose
+    estimated size for that code is over 8192 LLVM instructions (\c QORE_JIT_OBE_TABLE_BUDGET sets the limit; \c 0
+    uses the tables for every function that has handlers) calls runtime helpers with tables of its locals instead,
+    which takes a number of instructions for each place that does not depend on the locals: that function compiles in
+    a time that grows with its size.  A second budget, \c QORE_JIT_MAX_HANDLER_COST (120000 estimated instructions by
+    default, \c 0 for no limit), keeps a function that is expensive in spite of that on the IR tier like one over the
+    first budget; with the tables it is reached by more than 900 handlers.
 
     @section exec_mode_tiered Tiered Execution Mode
 
