@@ -41,6 +41,11 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/QC_FutureImpl.h"
+#include "qore/intern/ThreadPool.h"
+
+// the ThreadPool class (QC_ThreadPool.qpp), for qore_test_thread_pool_hold_dispatch()
+DLLLOCAL extern qore_classid_t CID_THREADPOOL;
+DLLLOCAL extern QoreClass* QC_THREADPOOL;
 #include "qore/intern/QC_Promise.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/FastRouteGuard.h"
@@ -2368,6 +2373,21 @@ auto channel_select(list<auto> cases, timeout timeout = 0) [flags=NAMED_ARGS,CUR
     waiter->deref();
 
     return result_val;
+}
+
+//! Test support (not documented as API): holds the dispatch of the queued tasks of a thread pool
+/** In a debug build, while \a hold is set, the pool does not give its queued tasks to workers, so that they stay
+    queued until the pool stops and their cancel callbacks run (qore#6208)
+
+    @return True in a debug build, False otherwise (where it does nothing)
+*/
+bool qore_test_thread_pool_hold_dispatch(ThreadPool[ThreadPool] pool, bool hold) {
+#ifdef DEBUG
+    pool->dbgHoldDispatch(hold);
+    return true;
+#else
+    return false;
+#endif
 }
 
 // Test support for the HTTP fast routes (design/http-server-fast-routes.md); not documented as API.

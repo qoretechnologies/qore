@@ -267,6 +267,9 @@ public:
 
 class ThreadPool : public AbstractPrivateData {
 protected:
+    //! see dbgHoldDispatch()
+    bool dbg_hold_dispatch = false;
+
     int max,        // maximum number of threads in pool (if <= 0 then unlimited)
         minidle,     // minimum number of idle threads
         maxidle,     // maximum number of idle threads
@@ -558,6 +561,14 @@ public:
         }
 
         str.concat(']');
+    }
+
+    //! test support (qore_test_thread_pool_hold_dispatch()): in a debug build, the pool does not give its queued tasks
+    //! to workers while \a hold is set, so that they stay queued until it stops and their cancel callbacks run
+    DLLLOCAL void dbgHoldDispatch(bool hold) {
+        AutoLocker al(m);
+        dbg_hold_dispatch = hold;
+        cond.signal();
     }
 
     // does not return until the thread pool has been stopped

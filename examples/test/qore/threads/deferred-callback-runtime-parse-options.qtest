@@ -20,7 +20,7 @@
     options of the thread that ran it: a call reference to builtin code, which sets no options of its own, ran without
     the restriction of the code that registered it.  Each case runs in a process of its own, in every execution mode,
     with a restriction (the builtin code is refused) and without one (it runs):
-    - a thread pool task
+    - a thread pool task and a thread pool cancel callback (debug builds, whose test hook keeps a task queued)
     - the thread initialization code (set_thread_init()), entered by a thread pool worker and by another thread
     - a thread entry handler (Program::setThreadEntryHandler()), set by restricted code and entered by another thread
     - the completion callback of a poll operation, which the async I/O controller's callback worker calls in the
@@ -28,8 +28,9 @@
     - a signal handler (Linux: the order of pending signals is the lowest first)
     - an exit hook that runs at the end of the process
 
-    A thread that module code starts for a caller does not take the caller's application: a timer that it adds for
-    another caller cannot be cancelled by the first one.
+    A timer belongs to the application of the call that adds it; a thread that module code starts keeps the
+    caller's restrictions but serves no application: the timers that it adds belong to none, and it cannot cancel
+    the timers of an application.
 */
 class DeferredCallbackRuntimeParseOptionsTest inherits QUnit::Test {
     private {
@@ -48,6 +49,16 @@ nothing sub pool(File f, Queue q) {
     tp.submit(\\f.sync());
     tp.submit(sub () { q.push(\"pool: done\"); });
     tp.stopWait();
+}
+
+nothing sub cancel(File f, Queue q) {
+    ThreadPool tp(1);
+    # test hook of debug builds: the tasks stay queued, so that they are cancelled when the pool stops
+    qore_test_thread_pool_hold_dispatch(tp, True);
+    tp.submit(sub () {}, \\f.sync());
+    # the cancel callbacks run in order, each with a sink of its own: this one runs after the builtin one
+    tp.submit(sub () {}, sub () { q.push(\"cancel: done\"); });
+    tp.stop();
 }
 
 nothing sub thread_init(File f, Queue q) {
@@ -143,6 +154,7 @@ Queue q();
 *Program dp;
 switch (ARGV[0]) {
     case \"pool\":
+    case \"cancel\":
     case \"thread_init\":
         p.callFunction(ARGV[0], stdout, q);
         break;
@@ -187,11 +199,11 @@ switch (ARGV[0]) {
 printf(\"%s\\n\", q.get(30000));
 ";
 
-        #! a module whose worker thread, started for one caller, adds timers for others
+        #! a module whose worker thread, started for one caller, adds and cancels timers for others
         const ModuleSource = "%modern
 module DeferredAppMod {
     version = \"1.0\";
-    desc = \"qore#6208: the application of the timers of a module's worker thread\";
+    desc = \"qore#6208: the application of timers and of a module's worker thread\";
     author = \"Qore\";
     license = \"MIT\";
 }
@@ -204,12 +216,16 @@ class DeferredAppWorker {
 
     static run() {
         while (True) {
-            string r = DeferredAppWorker::requests.get();
+            auto r = DeferredAppWorker::requests.get();
             if (r == \"stop\") {
                 return;
             }
-            # the worker's own code adds the timer, for no caller of its own
-            DeferredAppWorker::replies.push(AsyncIoController::addTimerDelay(1h, sub () {}));
+            # the worker's own code adds and cancels the timers, for no caller of its own
+            if (r == \"add\") {
+                DeferredAppWorker::replies.push(AsyncIoController::addTimerDelay(1h, sub () {}));
+            } else {
+                DeferredAppWorker::replies.push(AsyncIoController::cancelTimer(r));
+            }
         }
     }
 }
@@ -218,12 +234,22 @@ public namespace DeferredAppMod {
     public nothing sub start_worker() {
         background DeferredAppWorker::run();
     }
+    #! adds a timer in the call: it belongs to the caller's application
     public int sub add_timer() {
+        return AsyncIoController::addTimerDelay(1h, sub () {});
+    }
+    #! has the worker add a timer: it belongs to no application
+    public int sub worker_add_timer() {
         DeferredAppWorker::requests.push(\"add\");
         return DeferredAppWorker::replies.get();
     }
     public bool sub cancel(int id) {
         return AsyncIoController::cancelTimer(id);
+    }
+    #! has the worker cancel a timer
+    public bool sub worker_cancel(int id) {
+        DeferredAppWorker::requests.push(id);
+        return DeferredAppWorker::replies.get();
     }
     public nothing sub stop() {
         DeferredAppWorker::requests.push(\"stop\");
@@ -231,7 +257,7 @@ public namespace DeferredAppMod {
 }
 ";
 
-        #! application A starts the worker, application B gets a timer from it, A cannot cancel it, the host can
+        #! application A starts the worker; B adds a timer in its call and one through the worker
         const AppScript = "%modern
 %no-child-restrictions
 %requires DeferredAppMod
@@ -239,14 +265,24 @@ public namespace DeferredAppMod {
 Program a(PO_NO_TERMINAL_IO);
 a.setSandboxManager(new SandboxManager());
 a.parse(\"%modern\\n%requires DeferredAppMod\\nnothing sub start() { DeferredAppMod::start_worker(); }\\n\"
-    \"bool sub cancel(int id) { return DeferredAppMod::cancel(id); }\\n\", \"a\");
+    \"bool sub cancel(int id) { return DeferredAppMod::cancel(id); }\\n\"
+    \"bool sub worker_cancel(int id) { return DeferredAppMod::worker_cancel(id); }\\n\", \"a\");
 Program b(PO_NO_TERMINAL_IO);
 b.setSandboxManager(new SandboxManager());
-b.parse(\"%modern\\n%requires DeferredAppMod\\nint sub add() { return DeferredAppMod::add_timer(); }\\n\", \"b\");
+b.parse(\"%modern\\n%requires DeferredAppMod\\nint sub add() { return DeferredAppMod::add_timer(); }\\n\"
+    \"int sub worker_add() { return DeferredAppMod::worker_add_timer(); }\\n\"
+    \"bool sub cancel(int id) { return DeferredAppMod::cancel(id); }\\n\", \"b\");
 a.callFunction(\"start\");
-int id = b.callFunction(\"add\");
-printf(\"a cancels: %y\\n\", a.callFunction(\"cancel\", id));
-printf(\"host cancels: %y\\n\", DeferredAppMod::cancel(id));
+int b1 = b.callFunction(\"add\");
+int b2 = b.callFunction(\"add\");
+int w = b.callFunction(\"worker_add\");
+printf(\"a cancels b's: %y\\n\", a.callFunction(\"cancel\", b1));
+printf(\"a has the worker cancel b's: %y\\n\", a.callFunction(\"worker_cancel\", b1));
+printf(\"b cancels its own: %y\\n\", b.callFunction(\"cancel\", b1));
+printf(\"b cancels the worker's: %y\\n\", b.callFunction(\"cancel\", w));
+printf(\"a cancels the worker's: %y\\n\", a.callFunction(\"cancel\", w));
+printf(\"host cancels the worker's: %y\\n\", DeferredAppMod::cancel(w));
+printf(\"host cancels b's: %y\\n\", DeferredAppMod::cancel(b2));
 DeferredAppMod::stop();
 ";
     }
@@ -278,10 +314,17 @@ DeferredAppMod::stop();
         write(code, ChildCode);
         write(delegating, DelegatingCode);
         write(script, CaseScript);
-        # the cancel callbacks of thread pool tasks run when the pool stops, after its running workers have ended,
-        # which leaves no deterministic way to keep a task queued until then; they run as the tasks do (ThreadTask)
         list<string> cases = ("pool", "thread_init", "thread_init_parent", "entry_handler", "delegating",
             "exit_hook_end");
+        # the cancel callbacks of thread pool tasks run when the pool stops; a test hook of debug builds keeps the
+        # tasks queued until then
+        {
+            ThreadPool tp(1);
+            on_exit tp.stop();
+            if (qore_test_thread_pool_hold_dispatch(tp, False)) {
+                cases += "cancel";
+            }
+        }
         if (PlatformOS == "Linux") {
             cases += "signal";
         }
@@ -308,7 +351,13 @@ DeferredAppMod::stop();
         TmpDir tmp("qore-deferred-po-app-");
         string script = tmp.path + "/app.q";
         write(script, AppScript);
-        assertEq("a cancels: False\nhost cancels: True\n", backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
-            env(), mods.path, qore_bin, script)));
+        assertEq("a cancels b's: False\n"
+            "a has the worker cancel b's: False\n"
+            "b cancels its own: True\n"
+            "b cancels the worker's: False\n"
+            "a cancels the worker's: False\n"
+            "host cancels the worker's: True\n"
+            "host cancels b's: True\n", backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b %s 2>&1", env(), mods.path,
+            qore_bin, script)));
     }
 }

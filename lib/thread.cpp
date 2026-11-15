@@ -6407,8 +6407,10 @@ qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* caller_pgm) 
 
 bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id) {
     ThreadData* td = thread_data.get();
-    // no application: the code of a thread that module code started runs for no caller of its own (qore#6208)
-    if (!td->runtime_po_module_pgm || td->runtime_po_module_pgm != td->current_pgm || !td->runtime_po_app_pgm_id) {
+    // module code running for a restricted caller, or for none (application 0): the code of a thread that module
+    // code started, which serves no caller of its own; its timers are untagged, and it can cancel only untagged
+    // timers, so that it cannot be used to cancel the timers of an application (qore#6208)
+    if (!td->runtime_po_module_pgm || td->runtime_po_module_pgm != td->current_pgm) {
         return false;
     }
     app_pgm_id = td->runtime_po_app_pgm_id;
