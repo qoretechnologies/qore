@@ -229,11 +229,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_make_opaque_value", reinterpret_cast<void*>(&qore_rt_make_opaque_value) },
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
     { "qore_rt_take_param", reinterpret_cast<void*>(&qore_rt_take_param) },
-    { "qore_rt_take_param_raw", reinterpret_cast<void*>(&qore_rt_take_param_raw) },
     { "qore_rt_take_param_aot", reinterpret_cast<void*>(&qore_rt_take_param_aot) },
-    { "qore_rt_take_param_raw_aot", reinterpret_cast<void*>(&qore_rt_take_param_raw_aot) },
-    { "qore_rt_return_param", reinterpret_cast<void*>(&qore_rt_return_param) },
-    { "qore_rt_return_param_aot", reinterpret_cast<void*>(&qore_rt_return_param_aot) },
     { "qore_rt_load_local_raw", reinterpret_cast<void*>(&qore_rt_load_local_raw) },
     { "qore_rt_value_is_reference", reinterpret_cast<void*>(&qore_rt_value_is_reference) },
     { "qore_rt_strip_any_param", reinterpret_cast<void*>(&qore_rt_strip_any_param) },
@@ -21299,11 +21295,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct_with_inst_co
 //! AST interpreter's call moves its evaluated arguments into the parameters (issues #5882, #5958)
 static QoreValue qore_rt_invoke_call_ref_given_list(const ResolvedCallReferenceNode* callref, QoreListNode* args,
         ExceptionSink* xsink) {
-    QoreSandboxProvenanceHelper provenance(callref);
+    // the call runs with the sandbox provenance of the reference: a closure's execValueTmpArgs() and invoke() apply
+    // it themselves, while the default ResolvedCallReferenceNodeIntern::execValueTmpArgs() calls execValue(), which
+    // does not, so it is applied here for that branch only, as in qore_class_eval_member_code_given_args()
     if (callref->getType() == NT_RUNTIME_CLOSURE) {
         return static_cast<const QoreClosureBase*>(callref)->execValueTmpArgs(args, xsink);
     }
     if (auto* rcr = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(callref)) {
+        QoreSandboxProvenanceHelper provenance(callref);
         return rcr->execValueTmpArgs(args, xsink);
     }
     return callref->invoke(args, xsink);
@@ -24807,45 +24806,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_take_param(LocalVar* var, ExceptionSink* x
 }
 
 // documented in JITRuntime.h
-extern "C" DLLEXPORT uint64_t qore_rt_take_param_raw(LocalVar* var, ExceptionSink* xsink) {
-    uint64_t rv = qore_rt_load_local_raw(var, xsink);
-    if (!(xsink && *xsink)) {
-        qore_rt_release_param_var_intern(var, xsink);
-    }
-    return rv;
-}
-
-// documented in JITRuntime.h
 extern "C" DLLEXPORT uint64_t qore_rt_take_param_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     return qore_rt_take_param(ctx->locals[idx], xsink);
 }
 
-// documented in JITRuntime.h
-extern "C" DLLEXPORT uint64_t qore_rt_take_param_raw_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
-    assert(ctx && idx >= 0 && idx < ctx->num_locals);
-    return qore_rt_take_param_raw(ctx->locals[idx], xsink);
-}
-
-// documented in JITRuntime.h
-extern "C" DLLEXPORT void qore_rt_return_param(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
-    QoreValue v = fromBits(value);
-    LocalVarValue* lvv = var && !var->closureUse() ? thread_try_find_lvar(var) : nullptr;
-    if (!lvv || lvv->val.assigned) {
-        v.discard(xsink);
-        return;
-    }
-    // the variable, emptied by qore_rt_take_param(), takes the value back (a node that a variable of a fixed type
-    // converted is released)
-    if (AbstractQoreNode* n = lvv->val.assignInitial(v)) {
-        n->deref(xsink);
-    }
-}
-
-// documented in JITRuntime.h
-extern "C" DLLEXPORT void qore_rt_return_param_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value,
-        ExceptionSink* xsink) {
-    assert(ctx && idx >= 0 && idx < ctx->num_locals);
-    qore_rt_return_param(ctx->locals[idx], value, xsink);
-}
 #endif // QORE_JIT_RUNTIME_TAKE_OVER_UNIT

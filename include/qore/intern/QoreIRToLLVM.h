@@ -568,8 +568,8 @@ private:
     std::vector<llvm::AllocaInst*> preinstantiated_entry_cleanup_allocas;
     std::unordered_map<const void*, llvm::AllocaInst*> preinstantiated_entry_cleanup_by_local;
     //! the parameters that take their arguments over and that the normal entry took from their runtime variables
-    //! (qore_rt_take_param()), with their LocalVar and the cleanup slot that owns the value (issue #5958): the
-    //! deoptimization exit gives the values back to the variables (qore_rt_return_param())
+    //! (qore_rt_take_param()), with their LocalVar and the cleanup slot that owns the value (issue #5958): a function
+    //! that can deoptimize takes none (the deoptimization exit asserts it)
     std::vector<std::pair<LocalVar*, llvm::AllocaInst*>> taken_param_cleanups;
 
     // Allocas for fast entry param locals (Approach B).
