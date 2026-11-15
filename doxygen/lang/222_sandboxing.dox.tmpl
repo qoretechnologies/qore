@@ -1285,6 +1285,43 @@ hash<auto> fs_config = sm.getFilesystemConfiguration();
 hash<auto> net_config = sm.getNetworkConfiguration();
     @endcode
 
+    @subsection sandbox_restricts Asking Whether a Sandbox Restricts Anything
+
+    A sandbox manager that allows everything and sets no limit restricts nothing, also when it is attached to a
+    %Program.  The following methods answer from the state of the manager (the parse options and functional domains of
+    a %Program are not part of it):
+
+    |!Method|!True if
+    |@ref Qore::SandboxManager::networkRestricts() "networkRestricts()"|the default network policy denies, or there are allowed or denied IP ranges (blockPrivateNetworks() adds denied ranges) or allowed ports; allowed host patterns alone do not count
+    |@ref Qore::SandboxManager::filesystemRestricts() "filesystemRestricts()"|the default filesystem policy denies, or there are allowed or denied paths or a sandbox root
+    |@ref Qore::SandboxManager::limitsRestrict() "limitsRestrict()"|the thread, wall time, CPU time, stack size or memory limit is greater than 0
+    |@ref Qore::SandboxManager::restricts() "restricts()"|any of the above
+    |@ref Qore::SandboxManager::trustsUncontrolledApis() "trustsUncontrolledApis()"|the policy allows uncontrolled APIs (setUncontrolledApiPolicy()); for a combination of sandboxes, every member allows them
+
+    @code{.py}
+SandboxManager sm();
+sm.setFilesystemDefaultPolicy(True);
+sm.setNetworkDefaultPolicy(True);
+assert(!sm.restricts());
+sm.setMaxThreads(4);
+assert(sm.limitsRestrict() && !sm.networkRestricts());
+    @endcode
+
+    Binary modules use the C++ equivalents, QoreSandboxManager::restricts() and its relatives, instead of testing
+    whether a manager is attached or reading <tt>network().getConfiguration()</tt>, which is empty for the combination
+    of the sandboxes of several callers; for such a combination each predicate is true if any member's is.  The feature
+    macro \c _QORE_HAS_SANDBOX_RESTRICTS_API is defined by the headers that declare them.
+
+    A module that refuses an operation that only an unrestricted caller may use refuses it if and only if
+    <tt>!trustsUncontrolledApis() && restricts()</tt> on the governing manager (resolved with
+    QoreSandboxManagerHelper::Policy): a sandbox that restricts nothing, or whose host trusts its code to use
+    uncontrolled APIs, does not make the caller untrusted.  Unlike the other predicates, a combination of sandboxes
+    trusts only if every member does (the AND over the members), because one member that does not trust is enough.
+
+    The predicates are a snapshot of the current configuration: concurrent reconfiguration of a shared manager is not
+    synchronized (as for the other readers of the manager), and the interrupt state (requestInterrupt()) is not a
+    policy and is not reported.
+
     @section sandbox_exceptions Security Exceptions
 
     The following exceptions may be raised by the sandbox system:
