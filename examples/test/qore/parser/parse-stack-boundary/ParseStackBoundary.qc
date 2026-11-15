@@ -3,6 +3,8 @@
 # Copyright (c) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 
+%requires ../../../TestBuildTools.qm
+
 #! The cases of the ParseStackBoundary-<n>.qtest tests: each runs one part of them, so that each takes a short time,
 #! and together they run every case (see addPartCase()); parts 1 and 3 parse code in a single Program, part 2 loads
 #! modules
@@ -95,34 +97,15 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         return dir;
     }
 
-    #! Returns True if the command (the first word of a command line, such as that of CXX) can be run: an executable
-    #! file, or one found in the PATH
-    private static bool haveCommand(string cmd) {
-        string name = (cmd =~ x/^\s*(\S+)/)[0] ?? "";
-        if (!name) {
-            return False;
-        }
-        if (name =~ /\//) {
-            return is_executable(name);
-        }
-        foreach string dir in ((ENV.PATH ?? "").split(":")) {
-            if (dir && is_executable(dir + "/" + name)) {
-                return True;
-            }
-        }
-        return False;
-    }
-
     #! builds the fixture in the given directory and returns the path of the executable
     private string build(string dir, string root, string libdir) {
-        string cxx = ENV.CXX ?? "c++";
+        # CXX can be a command line, such as "ccache c++": its words are the first arguments
+        list<string> args = TestBuildTools::command_words(ENV.CXX, "c++");
         # only a missing compiler skips the test: a compiler that cannot build the fixture is a failure
-        if (!haveCommand(cxx)) {
-            testSkip(sprintf("no C++ compiler to build the fixture: %y is not available", cxx));
+        if (!TestBuildTools::find_command(args[0])) {
+            testSkip(sprintf("no C++ compiler to build the fixture: %y is not available", args[0]));
         }
         string exe = dir + "/parse-stack-boundary";
-        # CXX can be a command line, such as "ccache c++": its words are the first arguments
-        list<string> args = (select cxx.split(" "), $1.val());
         args += ("-std=c++17", "-pthread", "-g", "-O2", "-I" + root + "/include",
             "-I" + libdir + "/include", get_script_dir() + "/parse_stack_boundary.cpp", "-L" + libdir,
             "-Wl,-rpath," + libdir, "-lqore", "-o", exe);
@@ -446,15 +429,13 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
 
     #! Returns the qcc that compiles the AOT modules: QCC, QORE_QCC, that of the build tree or that of the PATH
     private string getQcc(string libdir) {
-        *string qcc = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libdir + "/qcc") ? libdir + "/qcc" : NOTHING);
+        *string qcc = ENV.QCC ?: ENV.QORE_QCC;
+        if (!qcc && is_file(libdir + "/qcc")) {
+            qcc = libdir + "/qcc";
+        }
         if (!qcc) {
-            # the qcc of the PATH, if any
-            foreach string dir in ((ENV.PATH ?? "").split(":")) {
-                if (dir && is_executable(dir + "/qcc")) {
-                    qcc = dir + "/qcc";
-                    break;
-                }
-            }
+            # the qcc of the shell's search path, if any
+            qcc = TestBuildTools::find_command("qcc");
         }
         if (!qcc) {
             testSkip("qcc is not available");

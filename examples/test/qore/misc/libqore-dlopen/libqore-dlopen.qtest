@@ -10,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../../TestBuildTools.qm
 
 %exec-class LibqoreDlopenTest
 
@@ -63,24 +64,6 @@ public class LibqoreDlopenTest inherits QUnit::Test {
         }
     }
 
-    #! Returns True if the command (the first word of a command line, such as that of CC) can be run: an executable
-    #! file, or one found in the PATH
-    private static bool haveCommand(string cmd) {
-        string name = (cmd =~ x/^\s*(\S+)/)[0] ?? "";
-        if (!name) {
-            return False;
-        }
-        if (name =~ /\//) {
-            return is_executable(name);
-        }
-        foreach string dir in ((ENV.PATH ?? "").split(":")) {
-            if (dir && is_executable(dir + "/" + name)) {
-                return True;
-            }
-        }
-        return False;
-    }
-
     private string getLibrary() {
         *string lib = findLibrary();
         if (!lib) {
@@ -94,13 +77,14 @@ public class LibqoreDlopenTest inherits QUnit::Test {
         string lib = getLibrary();
         TmpDir dir("qore-libqore-dlopen-");
         string exe = dir.path + "/libqore-dlopen";
-        string cc = ENV.CC ?? "cc";
+        # CC can be a command line, such as "ccache cc": its words are the first arguments
+        list<string> cc = TestBuildTools::command_words(ENV.CC, "cc");
         # only a missing compiler skips the test: a compiler that cannot build the program is a failure
-        if (!haveCommand(cc)) {
-            testSkip(sprintf("no C compiler to build the program: %y is not available", cc));
+        if (!TestBuildTools::find_command(cc[0])) {
+            testSkip(sprintf("no C compiler to build the program: %y is not available", cc[0]));
         }
         int status;
-        string output = backquote(sprintf("%s -o %s %s -ldl 2>&1", cc, quote(exe),
+        string output = backquote(sprintf("%s -o %s %s -ldl 2>&1", (map quote($1), cc).join(" "), quote(exe),
             quote(get_script_dir() + "/libqore_dlopen.c")), \status);
         assertEq(0, status, output);
         output = backquote(quote(exe) + " " + quote(lib) + " 2>&1", \status);
@@ -113,7 +97,7 @@ public class LibqoreDlopenTest inherits QUnit::Test {
         if (PlatformOS != "Linux") {
             testSkip("STATIC_TLS is an ELF flag");
         }
-        if (!haveCommand("readelf")) {
+        if (!TestBuildTools::find_command("readelf")) {
             testSkip("readelf is not available");
         }
         int status;
