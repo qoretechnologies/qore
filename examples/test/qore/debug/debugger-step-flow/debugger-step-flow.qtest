@@ -37,6 +37,11 @@
     block's exit and with handlers that run out of line.  A return requested while a return leaves the function, a
     thread_exit or an exception raised by a handler or a destructor while it does, are taken as with the AST
     interpreter.
+
+    A return requested in a callee that native code calls directly, whose code never returns no value, returns no
+    value to its caller as with the AST interpreter: the native code of the caller does not rely on the callee's
+    return facts (that its value is not NOTHING, or of a type) there, unless the callee's declared return type
+    requires a value, where the return raises the error of a missing return value (#6201).
 */
 class DebuggerStepFlowTest inherits QUnit::Test {
     public {
@@ -53,6 +58,9 @@ class DebuggerStepFlowTest inherits QUnit::Test {
             - \c flow2, \c tag2, \c hit2: a second request, at the hit2-th step event of the statement after the
               first request
             - \c handler: the case of a request in a handler, or of a request while a return leaves the function
+            - \c facts: the function calls a callee whose return facts (a value that is not NOTHING, its type, the
+              shape of a hash) the native code of the function relies on, and the request is made in the callee
+              (#6201)
             - \c promoted: the function has locals that the IR keeps in native registers (SSA promotion), which the
               run checks with the optimization statistics of the IR (QORE_IR_OPT_STATS)
             - \c calls: the function calls code of StepFlowTarget.q while the debugger is attached, which runs on the
@@ -335,6 +343,51 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "log": (),
                 "steps": (432, 433, 434, "b435", 435, 436, "b435", 435, 436, 439),
             },
+            # the return facts of a callee that the native code of the caller relies on (#6201)
+            {"function": "facts_argument", "flow": "return", "tag": "facts_string_first", "hit": 1, "block": False,
+                "facts": True,
+                "result": "16",
+                "log": ("RUNTIME-OVERLOAD-ERROR",),
+                "steps": (451, "b494", 494, 496, "b497", 497),
+            },
+            {"function": "facts_value", "flow": "return", "tag": "facts_string_first", "hit": 1, "block": False,
+                "facts": True,
+                "result": "[4, 4, 0, 4, 4]",
+                "log": ("\"abcd\"", "\"abcd\"", "null", "\"abcd\"", "\"abcd\""),
+                "steps": (451, 508, 509, 510, "b511", 511),
+            },
+            {"function": "facts_typed_caller", "flow": "return", "tag": "facts_typed_first", "hit": 1, "block": False,
+                "facts": True,
+                "result": "RUNTIME-TYPE-ERROR: <block return> expects type 'string', but got no value instead: "
+                    + "block missing return statement",
+                "log": (),
+                "steps": (460, "b519", 519),
+            },
+            {"function": "facts_int_caller", "flow": "return", "tag": "facts_int_first", "hit": 1, "block": False,
+                "facts": True,
+                "result": "RUNTIME-TYPE-ERROR: <block return> expects type 'int', but got no value instead: "
+                    + "block missing return statement",
+                "log": (),
+                "steps": (469, "b529", 529),
+            },
+            {"function": "facts_projection", "flow": "return", "tag": "facts_hash_first", "hit": 1, "block": False,
+                "facts": True,
+                "result": "[1, 1, null, 1, 1]",
+                "log": (),
+                "steps": (478, 542, "b543", 543),
+            },
+            {"function": "facts_argument", "flow": "break", "tag": "facts_string_first", "hit": 1, "block": False,
+                "facts": True,
+                "result": "16",
+                "log": ("RUNTIME-OVERLOAD-ERROR",),
+                "steps": (451, "b494", 494, 496, "b497", 497),
+            },
+            {"function": "facts_value", "flow": "continue", "tag": "facts_string_first", "hit": 1, "block": False,
+                "facts": True,
+                "result": "[4, 4, 0, 4, 4]",
+                "log": ("\"abcd\"", "\"abcd\"", "null", "\"abcd\"", "\"abcd\""),
+                "steps": (451, 508, 509, 510, "b511", 511),
+            },
         );
     }
 
@@ -351,6 +404,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
         addTestCase("a break at a step event", \testBreak());
         addTestCase("a continue at a step event", \testContinue());
         addTestCase("a request in a handler and the requests of a return", \testHandler());
+        addTestCase("a return in a callee whose return facts its native caller relies on", \testReturnFacts());
         set_return_value(main());
     }
 
@@ -420,7 +474,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
 
     testReturn() {
         foreach hash<auto> c in (Cases) {
-            if (c.flow == "return" && !c.handler) {
+            if (c.flow == "return" && !c.handler && !c.facts) {
                 checkCase(c);
             }
         }
@@ -428,7 +482,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
 
     testBreak() {
         foreach hash<auto> c in (Cases) {
-            if (c.flow == "break" && !c.handler) {
+            if (c.flow == "break" && !c.handler && !c.facts) {
                 checkCase(c);
             }
         }
@@ -436,7 +490,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
 
     testContinue() {
         foreach hash<auto> c in (Cases) {
-            if (c.flow == "continue" && !c.handler) {
+            if (c.flow == "continue" && !c.handler && !c.facts) {
                 checkCase(c);
             }
         }
@@ -445,6 +499,14 @@ class DebuggerStepFlowTest inherits QUnit::Test {
     testHandler() {
         foreach hash<auto> c in (Cases) {
             if (c.handler) {
+                checkCase(c);
+            }
+        }
+    }
+
+    testReturnFacts() {
+        foreach hash<auto> c in (Cases) {
+            if (c.facts) {
                 checkCase(c);
             }
         }

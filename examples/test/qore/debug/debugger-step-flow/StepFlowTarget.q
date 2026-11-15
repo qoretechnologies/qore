@@ -438,3 +438,110 @@ auto sub promoted_float(int n, code attach, code detach, code log) {
     # no call after the loop: a call that the values of the locals are live across keeps them in memory
     return sprintf("f=%y total=%y", f, total);
 }
+
+# the return facts of a callee that the native code of its caller relies on (#6201): the code of each callee below
+# never returns no value, while the path of a debugger's return request does, unless the declared return type of the
+# callee requires a value; each caller calls the callee directly as native code, and detaches the debugger after the
+# call that attaches it
+# - a callee whose declared return type (auto) accepts no value, and whose code returns a string
+auto sub facts_string(bool a, code attach) {
+    if (a) {
+        attach();
+    }
+    string s = "abc";                               ### facts_string_first
+    return s + "d";
+}
+
+# - a callee whose declared return type requires a value: the return path raises the error of a missing return value
+string sub facts_typed(bool a, code attach) {
+    if (a) {
+        attach();
+    }
+    string s = "abc";                               ### facts_typed_first
+    return s + "d";
+}
+
+# - a callee with a native int return
+int sub facts_int(bool a, code attach) {
+    if (a) {
+        attach();
+    }
+    int v = 40;                                     ### facts_int_first
+    return v + 2;
+}
+
+# - a callee whose code returns a hash of a fixed shape
+auto sub facts_hash(bool a, code attach) {
+    if (a) {
+        attach();
+    }
+    int v = 1;                                      ### facts_hash_first
+    return {"x": v, "y": 2};
+}
+
+int sub facts_take_string(string s) {
+    return s.size();
+}
+
+# the argument of a parameter that rejects no value: the check of the argument depends on the callee's return facts
+auto sub facts_argument(int n, code attach, code detach, code log) {
+    on_exit detach();
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        try {
+            total += facts_take_string(facts_string(i == 2, attach));
+        } catch (hash<ExceptionInfo> ex) {
+            log(ex.err);
+        }
+        if (i == 2) {
+            detach();
+        }
+    }
+    return total;
+}
+
+# the value of a callee whose code returns a string
+auto sub facts_value(int n, code attach, code detach, code log) {
+    list<auto> l = ();
+    for (int i = 0; i < n; ++i) {
+        auto v = facts_string(i == 2, attach);
+        push l, v.size();
+        log(sprintf("%y", v));
+        if (i == 2) {
+            detach();
+        }
+    }
+    return l;
+}
+
+# a callee whose declared return type requires a value
+auto sub facts_typed_caller(int n, code attach, code detach, code log) {
+    on_exit detach();
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        total += facts_typed(i == 2, attach).size();
+    }
+    return total;
+}
+
+# a native int return
+auto sub facts_int_caller(int n, code attach, code detach, code log) {
+    on_exit detach();
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        total += facts_int(i == 2, attach);
+    }
+    return total;
+}
+
+# a key of the value of a callee whose code returns a hash of a fixed shape
+auto sub facts_projection(int n, code attach, code detach, code log) {
+    list<auto> l = ();
+    for (int i = 0; i < n; ++i) {
+        push l, facts_hash(i == 2, attach).x;
+        if (i == 2) {
+            detach();
+        }
+    }
+    return l;
+}
