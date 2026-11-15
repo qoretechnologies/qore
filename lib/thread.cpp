@@ -5188,8 +5188,9 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
     // the managers of a Program (its own and the sandbox of the code that created it, the policy manager of that code
     // for a policy check) are visited while their references are held.  The first Program found with a manager of its
     // own governs alone, as before, and the walk ends there; the sandbox that a Program keeps of the code that created
-    // it only adds to the sandbox of its callers, so the walk goes on (a stricter caller still governs the code that
-    // it calls).  Returns true if the walk ends, with its result in \a rv
+    // it, and a manager of its own that code a sandbox governs set, only add to the sandbox of its callers, so the walk
+    // goes on (a stricter caller still governs the code that it calls).  Returns true if the walk ends, with its
+    // result in \a rv
     //
     // the cache of the thread's context (see sandboxChainClear()) is shared by policy and other lookups, so a Program
     // with a manager for the other kind of lookup counts as well: a Program created for sandboxed code under a
@@ -5220,7 +5221,8 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
             rv = false;
             return true;
         }
-        if (own) {
+        // a manager that code a sandbox governs set adds to the sandbox of the callers, as a kept sandbox does
+        if (own && !pp->own_manager_additive.load(std::memory_order_acquire)) {
             rv = true;
             return true;
         }

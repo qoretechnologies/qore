@@ -30,9 +30,7 @@ class SandboxCreatorContextTest inherits QUnit::Test {
     }
 
     #! the code parsed in the Programs that the tests create; probe() reports the sandbox checks of its code
-    const ProbeSource = "%new-style
-%require-types
-%strict-args
+    const ProbeSource = "%modern
 hash<auto> sub probe(string path) {
     hash<auto> h = {};
     try {
@@ -105,9 +103,7 @@ Program sub mk(string src) {
 ";
 
     #! the code of the sandboxed Program
-    const SandboxedSource = "%new-style
-%require-types
-%strict-args
+    const SandboxedSource = "%modern
 Program sub mk(string src) {
     Program c(PO_NEW_STYLE);
     c.parse(src, \"child\");
@@ -149,6 +145,9 @@ sub use_capability(code c) {
 Program sub mk_empty() {
     return new Program(PO_NEW_STYLE | PO_ALLOW_REPARSE);
 }
+sub call_setter(code setter, Program p, Qore::SandboxManager sm) {
+    setter(p, sm);
+}
 hash<auto> sub call_probe(Program p, string path) {
     return p.callFunction(\"probe\", path);
 }
@@ -177,6 +176,10 @@ sub export_net_to(Program h) {
     h.importFunction(\"net\", \"net2\");
 }
 ";
+
+    #! the bound in ms of the code that spins until an interrupt stops it: it only ends a run in which no interrupt
+    #! arrives, so it is far longer than the time an interrupt takes even under valgrind
+    const SpinBoundMs = 300000;
 
     #! what code governed by the sandbox gets
     const Governed = {
@@ -337,7 +340,7 @@ sub export_net_to(Program h) {
             Queue result();
             background sub () {
                 try {
-                    result.push(host.callFunction("spin2", started, 20000));
+                    result.push(host.callFunction("spin2", started, SpinBoundMs));
                 } catch (hash<ExceptionInfo> ex) {
                     result.push(ex.err);
                 }
@@ -437,8 +440,8 @@ sub export_net_to(Program h) {
             background sub () {
                 try {
                     result.push(f == "spin2"
-                        ? host.callFunction(f, started, 20000)
-                        : host.callFunction(f, DeniedFile, started, 20000));
+                        ? host.callFunction(f, started, SpinBoundMs)
+                        : host.callFunction(f, DeniedFile, started, SpinBoundMs));
                 } catch (hash<ExceptionInfo> ex) {
                     result.push(ex.err);
                 }
@@ -542,7 +545,9 @@ sub export_net_to(Program h) {
         assertThrows("PARSE-EXCEPTION", "cannot be defined in an expression", sub () {
             Expression e(t, "1); class Evil {} #", "trusted expression");
         });
-        t.parse(ProbeSource, "trusted");
+        # a global variable declared in an expression is not left pending either
+        assertEq("PARSE-EXCEPTION", sandboxed.callFunction("inject_expression", t, "1); our int Injected; #"));
+        t.parse(ProbeSource + "our int Injected = 1;", "trusted");
         assertThrows("NO-FUNCTION", \t.callFunction(), "evil");
         assertEq(Ungoverned, t.callFunction("probe", DeniedFile));
         # an expression still works
@@ -560,9 +565,23 @@ sub export_net_to(Program h) {
         lax.setUncontrolledApiPolicy(True);
         sandboxed.callFunction("set_manager", t, lax);
         assertEq(Governed, sandboxed.callFunction("call_probe", t, DeniedFile));
-        # the Program keeps the sandbox of the code that gave it the manager, so trusted code's calls are governed by
-        # it too
-        assertEq(Governed, t.callFunction("probe", DeniedFile));
+        # the manager only adds to the sandbox of the code that calls the Program: trusted code's calls are governed by
+        # the manager alone
+        assertEq({"fs": "read:secret", "governed": True}, t.callFunction("probe", DeniedFile));
+
+        # also when trusted code that the sandboxed code calls sets the manager
+        Program t2(PO_NEW_STYLE);
+        t2.parse(ProbeSource, "trusted");
+        code setter = sub (Program p, SandboxManager sm) {
+            p.setSandboxManager(sm);
+        };
+        sandboxed.callFunction("call_setter", setter, t2, lax);
+        assertEq(Governed, sandboxed.callFunction("call_probe", t2, DeniedFile));
+        # trusted code that no sandbox governs sets a manager as before
+        Program t3(PO_NEW_STYLE);
+        t3.parse(ProbeSource, "trusted");
+        setter(t3, lax);
+        assertEq("read:secret", t3.callFunction("probe", DeniedFile).fs);
     }
 
     #! calls the reference in a thread that trusted code starts and returns its result

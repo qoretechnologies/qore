@@ -1066,7 +1066,14 @@ public:
     QoreSandboxManagerHelper(Purpose purpose);
 
     //! Acquires a ref'd sandbox manager for the given program
-    /** @param pgm the program to get the sandbox manager from; if nullptr, no reference is acquired
+    /** The manager is the sandbox of the program's own code: its own manager (QoreProgram::setSandboxManager())
+        combined with the sandbox that it keeps of the code that created it or added code to it, when it was created or
+        changed by sandboxed code (a composition is made only if it has both and they differ); a program's callers can
+        add their own sandbox to it when they call it
+
+        @param pgm the program to get the sandbox manager from; if nullptr, no reference is acquired
+
+        @throw std::bad_alloc the composition of the two managers could not be allocated
     */
     QoreSandboxManagerHelper(QoreProgram* pgm);
 

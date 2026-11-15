@@ -4026,10 +4026,10 @@ static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram*
     if (trusted || !parent_pgm || &module_pgm == parent_pgm) {
         return;
     }
-    // the loading Program's own manager: the sandbox that it keeps of the code that created it governs the module's
-    // callers through the walk of their call stack, and a Program that trusted code created in a system-policy
-    // capability keeps no policy (see qore_program_private::creator_sandbox_manager); the code that loads the module
-    // is judged below
+    // the loading Program's own manager, not the sandbox that it keeps of the code that created it (see
+    // qore_program_private::creator_sandbox_manager), which governs the module's callers through the walk of their
+    // call stack; a module that sandboxed code, or code acting for it, loads gets the sandbox of that code below (all
+    // purposes, as before: also in a Program that trusted code created in a system-policy capability)
     QoreSandboxManager* sm = qore_program_private::get(*parent_pgm)->getOwnSandboxManagerRef();
     // loaded by library code for code that is not trusted: governed by the sandbox of that code
     if (!sm) {

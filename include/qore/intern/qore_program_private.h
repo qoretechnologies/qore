@@ -1091,6 +1091,17 @@ public:
     */
     std::atomic<QoreSandboxManager*> creator_sandbox_manager{nullptr};
 
+    //! true if \c sandbox_manager adds to the sandbox of the Program's callers instead of governing its code alone
+    /** Set when code that a sandbox governs sets the manager with Program::setSandboxManager() (see
+        qore_program_private::setSandboxManager()): the walk of the thread's sandbox stack visits the manager and goes
+        on to the callers, as for \c creator_sandbox_manager, so that the manager never governs the calling code's own
+        calls into the Program alone.  A manager that trusted code that no sandbox governs sets (and one set with the C++
+        API) governs the Program's code alone, as before.  An additive manager is never laxer than the same manager
+        governing alone, so the flag is set before an additive manager is published and cleared after an authoritative
+        one is.
+    */
+    std::atomic<bool> own_manager_additive{false};
+
     //! the policy sandbox of the code that created the Program or added code to it (referenced), or nullptr
     /** The manager for policy checks (filesystem, network, uncontrolled APIs) of the same code as
         \c creator_sandbox_manager, resolved as a policy check resolves it (qore_find_thread_sandbox_policy_manager_ref()):
@@ -1997,6 +2008,22 @@ public:
 
     //! Returns a ref'd pointer to the sandbox manager set with QoreProgram::setSandboxManager(), or nullptr
     DLLLOCAL QoreSandboxManager* getOwnSandboxManagerRef();
+
+    //! Sets the Program's own sandbox manager for Program::setSandboxManager()
+    /** @param pgm the Program
+        @param sm the manager, or nullptr
+        @param additive true if the manager adds to the sandbox of the Program's callers (see \c own_manager_additive)
+    */
+    DLLLOCAL static void setSandboxManager(QoreProgram& pgm, QoreSandboxManager* sm, bool additive) {
+        qore_program_private* pp = pgm.priv;
+        if (additive) {
+            pp->own_manager_additive.store(true, std::memory_order_release);
+            pgm.setSandboxManager(sm);
+        } else {
+            pgm.setSandboxManager(sm);
+            pp->own_manager_additive.store(false, std::memory_order_release);
+        }
+    }
 
     //! Returns true if the Program has a sandbox manager of its own or the sandbox of the code that created it
     /** Reads the pointers without the lock, for the checks made on every entry into the Program

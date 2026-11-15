@@ -62,9 +62,12 @@ result hides it. In the walk, only a Program's own manager ends the lookup (the 
 its own governs alone, as before); the kept sandbox only adds to the sandbox of the callers, and the walk goes on, so
 a stricter caller still governs the code that it calls in a Program that a laxer sandbox created. Reflection
 (`QoreReflectionCaller::checkProgramAccess()`) compares the Program's own manager only: the kept sandbox gives the
-code that created it no privileges in the Program. Sandboxed code that gives a Program a manager
-(`Program::setSandboxManager()`) attaches its own sandbox too, as a Program's own manager would otherwise govern the
-calling code's own calls into it alone. An expression cannot define code: it is parsed as `return (<expression>);`,
+code that created it no privileges in the Program. A manager that code a sandbox governs gives a Program
+(`Program::setSandboxManager()`, also through trusted code that it calls) is additive
+(`qore_program_private::own_manager_additive`): the walk visits it and goes on to the callers, as for the kept
+sandbox, because a Program's own manager otherwise governs its code alone and a laxer manager would govern the calling
+code's own calls into the Program; the host's own calls are governed by that manager alone, as before. A manager that
+trusted code that no sandbox governs sets, and one set with the C++ API, governs alone. An expression cannot define code: it is parsed as `return (<expression>);`,
 which code that closes the parenthesis could extend with definitions left pending for the next commit, so a
 definition in an expression is a parse error (`check_expression_definition()` in lib/parser.ypp) and the expression's
 pending code is rolled back (with any pending code that the Program had). Parse directives on a line of their own in
