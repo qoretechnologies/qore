@@ -1505,6 +1505,11 @@ public:
     // references of its temporary arguments to the callee (see IRConsumedCallArgs in QoreIRInterpreter.cpp, issue
     // #5882); set with the interpreter's analysis of the function, before the function runs
     bool interpreter_gives_call_args = false;
+    // Transient: EqAny / NeAny / LtAny / LeAny / GtAny / GeAny (or an Invoke of one) whose operands have a type, such
+    // as an or-nothing or a union type, that may hold a value of a plugin operation's type: it dispatches to the
+    // plugin operation for such a value, whose result need not be a boolean; set by the lowering with
+    // qore_plugin_operation_may_apply() (qore#5911)
+    bool plugin_comparison = false;
     AOTStringCaseComparisonKind aot_string_case_comparison =
         AOTStringCaseComparisonKind::None;
     uint8_t aot_string_case_comparison_operand = 0;

@@ -691,6 +691,37 @@ static QoreValue getBorrowedListElement(const QoreListNode* l, size_t i) {
     return getWeakReferenceTarget(l->retrieveEntry(i));
 }
 
+QoreValue QoreIRInterpreter::evalPluginComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
+        ExceptionSink* xsink) {
+    // the AST operator applies a buffer operation first, then a plugin operation (qore#5911); the types are those
+    // that qore_buffer_binary_op_applies() and qore_plugin_value_may_have_operation() check
+    qore_type_t left_type = left.getType();
+    qore_type_t right_type = right.getType();
+    if (left_type != NT_BUFFER && right_type != NT_BUFFER
+            && (left_type == NT_OBJECT || left_type == NT_PLUGIN_VALUE
+                || right_type == NT_OBJECT || right_type == NT_PLUGIN_VALUE)) {
+        const char* operation_name;
+        switch (op) {
+            case QoreIROpcode::EqAny: operation_name = "eq"; break;
+            case QoreIROpcode::NeAny: operation_name = "ne"; break;
+            case QoreIROpcode::LtAny: operation_name = "lt"; break;
+            case QoreIROpcode::LeAny: operation_name = "le"; break;
+            case QoreIROpcode::GtAny: operation_name = "gt"; break;
+            case QoreIROpcode::GeAny: operation_name = "ge"; break;
+            default:
+                assert(false);
+                return evalComparison(op, left, right, xsink);
+        }
+        bool matched = false;
+        QoreValue result = qore_plugin_try_dispatch_binary(getProgram(), operation_name,
+            QorePluginHelperAbi::BinaryValue, left, right, matched, xsink);
+        if (matched || (xsink && *xsink)) {
+            return result;
+        }
+    }
+    return evalComparison(op, left, right, xsink);
+}
+
 QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
         ExceptionSink* xsink) {
     switch (op) {
@@ -4964,8 +4995,11 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
                 ret = static_cast<const QoreIRReturnInstruction*>(inst_ptr.get());
                 break;
             default:
+                // a comparison that may dispatch to a plugin returns its result, which need not be a boolean
+                // (qore#5911)
                 if (!isSupportedBinary(inst_ptr->opcode) || binary || inst_ptr->exception_target
-                        || !inst_ptr->result.isValid() || inst_ptr->operands.size() != 2) {
+                        || !inst_ptr->result.isValid() || inst_ptr->operands.size() != 2
+                        || inst_ptr->plugin_comparison) {
                     return reject();
                 }
                 binary = inst_ptr.get();
@@ -7043,7 +7077,9 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::RangeDate: {
             QoreValue left = inv->operands.size() > 0 ? getIRValue(values, inv->operands[0]) : QoreValue();
             QoreValue right = inv->operands.size() > 1 ? getIRValue(values, inv->operands[1]) : QoreValue();
-            return QoreIRInterpreter::evalBinary(op, left, right, xsink);
+            return inv->plugin_comparison
+                ? QoreIRInterpreter::evalPluginComparison(op, left, right, xsink)
+                : QoreIRInterpreter::evalBinary(op, left, right, xsink);
         }
         // Ternary computation opcodes.  These can be emitted as Invoke
         // instructions inside try/on_error regions so exceptions branch to the
@@ -17164,7 +17200,9 @@ load_local_done:
                 }
                 QoreValue left = getIRValue(values, inst->operands[0]);
                 QoreValue right = getIRValue(values, inst->operands[1]);
-                QoreValue res = QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
+                QoreValue res = inst->plugin_comparison
+                    ? QoreIRInterpreter::evalPluginComparison(inst->opcode, left, right, xsink)
+                    : QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
                 if (xsink && *xsink) {
                     res.discard(xsink);
                     // an operation with a handler in this frame - such as a compound assignment to an element of a

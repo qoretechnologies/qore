@@ -94,6 +94,24 @@ Implemented execution-tier support includes:
 - conservative fast-math gating through both operation metadata and the
   Program-level `%fp-fast-math` parse option
 
+An operation is resolved at parse time, and lowered to a plugin-dispatch
+opcode, only when the operand types match the operation's types for every
+value.  When they can hold a value of the operation's types only for some of
+their values (an or-nothing type, a union type that includes the plugin's
+type, `auto`, or no type), `qore_plugin_operation_may_apply()` reports it, and
+a comparison operator (`==`, `!=`, `<`, `<=`, `>`, `>=`) dispatches at runtime
+as the AST operator does: its parse type is `auto` rather than `bool`, and its
+IR instruction is marked `plugin_comparison`, so the IR interpreter calls
+`QoreIRInterpreter::evalPluginComparison()` and JIT and AOT code call
+`qore_rt_plugin_comparison_op()` instead of the scalar comparison; the result
+of a marked comparison is never a native boolean and is excluded from the
+scalar comparison fusions.  The mark is not serialized: IR read from a qmod
+(closures run as IR, debug IR) marks its dynamic comparisons when the Program
+uses a plugin comparison operation
+(`qore_plugin_program_has_comparison_operations()`).  Comparisons whose
+operands cannot hold a plugin value are lowered and compiled as without
+plugins (qore#5911).
+
 ## DataFrame and DataProvider Integration
 
 The dataframe module keeps the public DataFrame class/private-data ownership

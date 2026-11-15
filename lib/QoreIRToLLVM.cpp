@@ -14069,6 +14069,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     std::unordered_set<uint32_t> dot_eval_base_candidates;
     std::unordered_set<uint32_t> non_dot_eval_uses;
     std::unordered_map<uint32_t, int> to_bool_uses;
+    // the results of comparisons that may dispatch to a plugin, which need not be booleans (qore#5911)
+    std::unordered_set<uint32_t> plugin_comparison_results;
     std::unordered_map<uint32_t, const QoreIRCreateClosureInstruction*> closure_definitions;
     std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>
         function_call_ref_definitions;
@@ -14281,6 +14283,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (inst_ptr->opcode == QoreIROpcode::ToBool
                     && inst_ptr->operands.size() == 1) {
                 to_bool_uses[inst_ptr->operands[0].id]++;
+            }
+            if (inst_ptr->plugin_comparison && inst_ptr->result.isValid()) {
+                plugin_comparison_results.insert(inst_ptr->result.id);
             }
             if (inst_ptr->opcode == QoreIROpcode::StoreLocal
                     || inst_ptr->opcode == QoreIROpcode::StoreClosure) {
@@ -15394,7 +15399,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 return false;
             }
             auto total = operand_remaining_uses.find(id);
-            if (total != operand_remaining_uses.end() && total->second == count) {
+            if (total != operand_remaining_uses.end() && total->second == count
+                    && !plugin_comparison_results.count(id)) {
                 native_boolean_result_values.insert(id);
             }
         }
@@ -20470,7 +20476,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* rhs_boxed = boxValue(rhs, inv->operands[1].id);
                 llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
                         static_cast<int>(inv->invoke_opcode));
-                auto helper = module.getOrInsertFunction("qore_rt_binary_op",
+                // a comparison that may dispatch to a plugin calls the helper that does so (qore#5911)
+                auto helper = module.getOrInsertFunction(inv->plugin_comparison
+                        ? "qore_rt_plugin_comparison_op" : "qore_rt_binary_op",
                         llvm::FunctionType::get(i64_type,
                             {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false));
                 result = builder->CreateCall(helper,
@@ -37597,9 +37605,12 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
     llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), opcode);
     auto cmp_ft = llvm::FunctionType::get(i64_type,
             {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false);
-    auto helper = module.getOrInsertFunction("qore_rt_comparison_op", cmp_ft);
-    auto helper_throwing = module.getOrInsertFunction(
-            "qore_rt_comparison_op_throwing", cmp_ft);
+    // a comparison that may dispatch to a plugin calls the helper that does so (qore#5911)
+    const bool plugin_comparison = inst && inst->plugin_comparison;
+    auto helper = module.getOrInsertFunction(plugin_comparison
+        ? "qore_rt_plugin_comparison_op" : "qore_rt_comparison_op", cmp_ft);
+    auto helper_throwing = module.getOrInsertFunction(plugin_comparison
+        ? "qore_rt_plugin_comparison_op_throwing" : "qore_rt_comparison_op_throwing", cmp_ft);
     llvm::Value* slow_result = emitMaybeInvoke(helper, helper_throwing,
             {opcode_val, lhs, rhs, xsink_arg}, module, llvm_func, inst);
     if (native_result) {

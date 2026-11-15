@@ -230,6 +230,15 @@ int QoreLogicalEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
         return err;
     }
 
+    // a plugin operation that applies to some values of the operands is dispatched at runtime, and its result can be
+    // the plugin's (qore#5911)
+    if (qore_plugin_binary_operation_may_apply(parse_context.pgm, lti, rti, getPluginOperationName())) {
+        typeInfo = autoTypeInfo;
+        parse_context.typeInfo = autoTypeInfo;
+        set_binary_analysis_eq(parse_context, left_analysis, right_analysis);
+        return err;
+    }
+
     // see if both arguments are constants, then eval immediately and substitute this node with the result
     if (!err && left.isValue() && right.isValue()) {
         SimpleRefHolder<QoreLogicalEqualsOperatorNode> del(this);

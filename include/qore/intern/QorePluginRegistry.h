@@ -155,6 +155,28 @@ DLLLOCAL int qore_plugin_get_type_info(const char* module_name, uint16_t local_t
 DLLLOCAL int qore_plugin_get_llvm_codegen_info(uint32_t global_operation_id,
     QorePluginLLVMCodegenInfo& info, ExceptionSink* xsink);
 DLLLOCAL bool qore_plugin_has_registered_operations();
+
+//! Returns true if a plugin operation of a module that the Program uses can apply to operands of the given types
+//! only for some of their values (an or-nothing or a union type that includes the plugin's type; qore#5911)
+/** An operation that applies to every value of the types is resolved at parse time
+    (qore_plugin_resolve_program_operation_info()); one that may apply is dispatched at runtime, so an operator
+    for such operands is not specialized for the other types, and its result type is not only that of the
+    operator without plugins.
+*/
+DLLLOCAL bool qore_plugin_operation_may_apply(QoreProgram* pgm, const QoreTypeInfo* lhs_type,
+        const QoreTypeInfo* rhs_type, const char* operation_name, QorePluginHelperAbi helper_abi);
+
+//! Returns true if a binary plugin operation can apply to operands of the given parse types (qore#5911)
+/** an operand without type information can have a value of any type
+*/
+DLLLOCAL bool qore_plugin_binary_operation_may_apply(QoreProgram* pgm, const QoreTypeInfo* lhs_type,
+        const QoreTypeInfo* rhs_type, const char* operation_name);
+
+//! Returns true if a module that the Program uses has a plugin comparison operation (eq, ne, lt, le, gt or ge)
+/** IR read from a qmod does not keep QoreIRInstruction::plugin_comparison, so a comparison in such IR may dispatch to
+    a plugin when this is true (qore#5911); also true when the modules of the Program cannot be determined
+*/
+DLLLOCAL bool qore_plugin_program_has_comparison_operations(QoreProgram* pgm);
 DLLLOCAL int qore_plugin_get_lowering_infos(QoreProgram* pgm, qore_type_t node_type,
     std::vector<QorePluginLoweringInfo>& infos, ExceptionSink* xsink);
 DLLLOCAL int qore_plugin_resolve_program_operation_info(QoreProgram* pgm, const QoreTypeInfo* lhs_type,

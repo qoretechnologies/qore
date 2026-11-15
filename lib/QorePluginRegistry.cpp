@@ -1805,6 +1805,88 @@ int qore_plugin_resolve_program_operation_info(QoreProgram* pgm, const QoreTypeI
     return 1;
 }
 
+bool qore_plugin_operation_may_apply(QoreProgram* pgm, const QoreTypeInfo* lhs_type, const QoreTypeInfo* rhs_type,
+        const char* operation_name, QorePluginHelperAbi helper_abi) {
+    if (!qore_plugin_has_registered_operations() || !lhs_type || !operation_name || !*operation_name) {
+        return false;
+    }
+    ExceptionSink xsink;
+    std::set<std::string> active_modules;
+    if (pgm) {
+        active_modules = getActivePluginModuleSet(pgm, &xsink);
+        if (xsink) {
+            xsink.clear();
+            return false;
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    for (const auto& module_pair : plugin_modules) {
+        const RegisteredPluginModule& module = module_pair.second;
+        if (pgm && active_modules.find(module.module_name) == active_modules.end()) {
+            continue;
+        }
+        for (const RegisteredPluginOperation& op : module.operations) {
+            if (op.operation_name != operation_name || op.signature.helper_abi != helper_abi
+                    || op.signature.arity != (rhs_type ? 2 : 1)) {
+                continue;
+            }
+            // the operands can have values of the operation's types: the operation is found when they have them
+            bool may_not_match = false;
+            if (!qore_type_is_assignable_from(op.signature.primary_type, lhs_type, may_not_match)) {
+                continue;
+            }
+            if (rhs_type && !qore_type_is_assignable_from(op.signature.secondary_type, rhs_type, may_not_match)) {
+                continue;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+bool qore_plugin_binary_operation_may_apply(QoreProgram* pgm, const QoreTypeInfo* lhs_type,
+        const QoreTypeInfo* rhs_type, const char* operation_name) {
+    return qore_plugin_has_registered_operations()
+        && qore_plugin_operation_may_apply(pgm, lhs_type ? lhs_type : autoTypeInfo,
+            rhs_type ? rhs_type : autoTypeInfo, operation_name, QorePluginHelperAbi::BinaryValue);
+}
+
+bool qore_plugin_program_has_comparison_operations(QoreProgram* pgm) {
+    if (!qore_plugin_has_registered_operations()) {
+        return false;
+    }
+    ExceptionSink xsink;
+    std::set<std::string> active_modules;
+    if (pgm) {
+        active_modules = getActivePluginModuleSet(pgm, &xsink);
+        if (xsink) {
+            // a marked comparison gives the result of the comparison for a value that is not a plugin value; it is
+            // only not optimized as a scalar comparison
+            xsink.clear();
+            return true;
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
+    for (const auto& module_pair : plugin_modules) {
+        const RegisteredPluginModule& module = module_pair.second;
+        if (pgm && active_modules.find(module.module_name) == active_modules.end()) {
+            continue;
+        }
+        for (const RegisteredPluginOperation& op : module.operations) {
+            if (op.signature.helper_abi != QorePluginHelperAbi::BinaryValue) {
+                continue;
+            }
+            const std::string& name = op.operation_name;
+            if (name == "eq" || name == "ne" || name == "lt" || name == "le" || name == "gt" || name == "ge") {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static int resolveProgramOperationInfoForValues(QoreProgram* pgm, QoreValue lhs, const QoreValue* rhs,
         const char* operation_name, QorePluginHelperAbi helper_abi, QorePluginResolvedOperationInfo& info,
         ExceptionSink* xsink) {
