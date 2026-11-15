@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fork() reopen of an inherited connection and lock reinitialization after fork
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
