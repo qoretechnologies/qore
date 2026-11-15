@@ -3344,6 +3344,9 @@ add_custom_command(
     VERBATIM
 )
 add_custom_target(qcc-format-source-qmod-clean DEPENDS ${QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP})
+# the stamp is a byproduct of the qcc-format-version target: only CMake 3.16 and later add the target dependency for a
+# byproduct named in DEPENDS by themselves, and the build requires 3.14
+add_dependencies(qcc-format-source-qmod-clean qcc-format-version)
 
 # Ensure the installed qore binary can resolve @rpath/libqore.20.dylib.
 set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
