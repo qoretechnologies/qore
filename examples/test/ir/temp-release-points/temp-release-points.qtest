@@ -50,7 +50,7 @@ class TempReleasePointsTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(65, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
+        assertEq(68, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
         assertTrue(out =~ /^list literal:\n  dtor lit\n  mark lit\n/, "list literal");
         assertTrue(out =~ /\nmember:\n  dtor mem\n  mark mem\n/, "member");
         assertTrue(out =~ /\nno write:\n  mark nw\n  dtor nw\n/, "no write");
@@ -80,6 +80,10 @@ class TempReleasePointsTest inherits QUnit::Test {
         assertTrue(out =~ /\nclass cast default argument:\n  dtor cda\n  mark cda\n/,
             "class cast in a default argument");
         assertTrue(out =~ /\nclass cast member:\n  mark cmi\n  dtor cmi\n/, "class cast in a member initializer");
+        # unary plus of an int node whose value is used after the scope of its expression
+        assertTrue(out =~ /\nunary plus element:\n  value 4611686018427400249\n/, "unary plus assigned to an element");
+        assertTrue(out =~ /\nunary plus push:\n  value 4611686018427387911\n/, "unary plus pushed to a list");
+        assertTrue(out =~ /\nunary plus variable:\n  value 1\.5 <time: 3 hours>\n/, "unary plus of variables");
         assertTrue(out =~ /\nkeys source object:\n  mark kso\n  dtor kso\n/, "keys of an object as a functional source");
         assertTrue(out =~ /\noperand of float compare:\n  mark lt\n  dtor lt\n/, "operand of a float comparison");
         assertTrue(out =~ /\nfloat compare exception:\n  dtor arg\n  dtor gt\n  ! X\n/, "float comparison and an exception");

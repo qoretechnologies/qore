@@ -94,6 +94,11 @@ list<E> sub mkl(string n) {
     return (new E(n),);
 }
 
+#! an int outside the inline range, computed at runtime: a node
+auto sub bigi(int i) {
+    return (1 << 62) + i;
+}
+
 #! a class cast in a default argument (qore#5712)
 string sub cast_default_arg(E e = cast<E>(mke("cda"))) {
     return e.n;
@@ -308,6 +313,17 @@ sub main() {
     t("class cast element", auto sub () { hash<auto> h = {}; h.x = cast<E>(mke("cel")); string s = h.x.n + mark("cel"); });
     t("class cast default argument", auto sub () { string s = cast_default_arg() + mark("cda"); });
     t("class cast member", auto sub () { CastMember c(); string s = c.e.n + mark("cmi"); });
+    # unary plus of an int node, assigned to an element and pushed to a list
+    t("unary plus element", auto sub () { hash<auto> h = {}; h.x = +bigi(12345); printf("  value %d\n", h.x); });
+    t("unary plus push", auto sub () { list<auto> l = (); push l, +bigi(7); printf("  value %d\n", l[0]); });
+    t("unary plus variable", auto sub () {
+        number n = 1.5n;
+        date d = 3h;
+        hash<auto> h = {};
+        h.x = +n;
+        h.y = +d;
+        printf("  value %y %y\n", h.x, h.y);
+    });
     t("float compare exception", auto sub () { string s = g3(new E("arg"), mke("gt") > 1.0, raise()); });
     # the condition of ?:
     t("condition", auto sub () { string s = f1(1) + ((new E("q")) ? mark("q") : ""); });
