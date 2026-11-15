@@ -189,8 +189,10 @@ public:
 
         @note
         - for the filesystem manager of a composition of sandbox managers, the result is the OR over the members
-        - the state is read directly and cannot fail; a state that cannot be read must be counted as restricting by
-          callers that read it in another way (fail closed)
+        - there is no unreadable state in this predicate; callers that obtain the state another way (for example a
+          configuration hash with a missing or mistyped key) must treat it as restricting (fail closed)
+        - the result is a snapshot of the current configuration: concurrent reconfiguration of a shared manager is
+          not synchronized (as for the other readers of the manager)
 
         @since Qore 3.0
     */
@@ -387,7 +389,12 @@ public:
         Allowed host patterns alone do not count: with the default policy "allow" they restrict nothing, and with
         "deny" the default policy already counts
 
-        @note for the network manager of a composition of sandbox managers, the result is the OR over the members
+        @note
+        - for the network manager of a composition of sandbox managers, the result is the OR over the members
+        - there is no unreadable state in this predicate; callers that obtain the state another way must treat it as
+          restricting (fail closed)
+        - the result is a snapshot of the current configuration: concurrent reconfiguration of a shared manager is
+          not synchronized (as for the other readers of the manager)
 
         @since Qore 3.0
     */
@@ -848,8 +855,13 @@ public:
         part of it.  A binary module should use this method, or the one for the kind of access it provides, to decide
         whether a sandbox constrains the code it serves, and not whether a manager is attached or what
         network().getConfiguration() holds: a manager that allows everything restricts nothing, and the
-        configuration of a composition of sandbox managers is empty.  When the state cannot be determined, treat the
-        sandbox as restricting (fail closed).
+        configuration of a composition of sandbox managers is empty.  There is no unreadable state in these
+        predicates; when the state is obtained another way and cannot be determined (for example a configuration hash
+        with a missing or mistyped key), treat the sandbox as restricting (fail closed).
+
+        The result is a snapshot of the current configuration: concurrent reconfiguration of a shared manager is not
+        synchronized (as for the other readers of the manager).  The interrupt state (requestInterrupt()) is not a
+        policy and is not reported.
 
         @since Qore 3.0
     */

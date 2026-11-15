@@ -23,7 +23,7 @@ class SandboxRestrictsTest inherits QUnit::Test {
         addTestCase("each limit alone", \testLimits());
         addTestCase("a limits-only sandbox restricts", \testLimitsOnly());
         addTestCase("presets restrict", \testPresets());
-        addTestCase("a copy and a reset keep the answers consistent", \testCopyAndReset());
+        addTestCase("a copy is independent of the original", \testCopy());
         addTestCase("an attached manager that allows everything does not restrict", \testAttached());
         set_return_value(main());
     }
@@ -156,7 +156,7 @@ class SandboxRestrictsTest inherits QUnit::Test {
         check(SandboxManager::createWebSafe(), True, True, True, "web safe");
     }
 
-    testCopyAndReset() {
+    testCopy() {
         SandboxManager sm = allowAll();
         sm.setWallTimeLimit(500);
         SandboxManager c = sm.copy();

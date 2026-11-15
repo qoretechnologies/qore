@@ -1270,6 +1270,10 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     of the sandboxes of several callers; for such a combination each predicate is true if any member's is.  The feature
     macro \c _QORE_HAS_SANDBOX_RESTRICTS_API is defined by the headers that declare them.
 
+    The predicates are a snapshot of the current configuration: concurrent reconfiguration of a shared manager is not
+    synchronized (as for the other readers of the manager), and the interrupt state (requestInterrupt()) is not a
+    policy and is not reported.
+
     @section sandbox_exceptions Security Exceptions
 
     The following exceptions may be raised by the sandbox system:

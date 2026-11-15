@@ -157,6 +157,17 @@ static std::shared_ptr<QoreSandboxCapture> sb_capture_get(int64 handle, Exceptio
 }
 
 // stores a capture and returns its handle
+// fills a hash with the restriction predicates of the resolved manager
+static void sb_fill_restricts(QoreHashNode& rv, const QoreSandboxManagerHelper& sm, ExceptionSink* xsink) {
+    rv.setKeyValue("sandboxed", static_cast<bool>(sm), xsink);
+    if (sm) {
+        rv.setKeyValue("restricts", sm->restricts(), xsink);
+        rv.setKeyValue("network", sm->networkRestricts(), xsink);
+        rv.setKeyValue("filesystem", sm->filesystemRestricts(), xsink);
+        rv.setKeyValue("limits", sm->limitsRestrict(), xsink);
+    }
+}
+
 static int64 sb_capture_add(std::shared_ptr<QoreSandboxCapture> capture) {
     std::lock_guard<std::mutex> lock(sb_capture_lock);
     sb_captures[++sb_capture_next] = std::move(capture);
@@ -1685,19 +1696,77 @@ nothing sb_mem_free(int handle) {
     their composition), and reports QoreSandboxManager::restricts(), networkRestricts(), filesystemRestricts() and
     limitsRestrict()
 
+    @param policy if @ref True "True", resolves the manager with QoreSandboxManagerHelper::Policy (the purpose of a
+    filesystem, network or process policy check, which honors a policy barrier); otherwise with
+    QoreSandboxManagerHelper::All
+
     @return a hash with the keys \c sandboxed, \c restricts, \c network, \c filesystem and \c limits; only
     \c sandboxed is present if no sandbox governs the thread
 */
-hash<auto> sb_governing_restricts() {
+hash<auto> sb_governing_restricts(bool policy = False) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
-    QoreSandboxManagerHelper sm(QoreSandboxManagerHelper::All);
-    rv->setKeyValue("sandboxed", static_cast<bool>(sm), xsink);
-    if (sm) {
-        rv->setKeyValue("restricts", sm->restricts(), xsink);
-        rv->setKeyValue("network", sm->networkRestricts(), xsink);
-        rv->setKeyValue("filesystem", sm->filesystemRestricts(), xsink);
-        rv->setKeyValue("limits", sm->limitsRestrict(), xsink);
+    QoreSandboxManagerHelper sm(policy ? QoreSandboxManagerHelper::Policy : QoreSandboxManagerHelper::All);
+    sb_fill_restricts(**rv, sm, xsink);
+    return rv.release();
+}
+
+//! Resolves the governing manager, calls a callback, and reports the predicates before and after it
+/** The resolved manager (a composition of the members' managers when several sandboxes govern the thread) is held
+    across the callback, so that a change that the callback makes to a member is seen by the same composition object
+
+    @param mutate the callback that changes a manager
+    @param policy as for sb_governing_restricts()
+
+    @return a hash with the keys \c before and \c after, each as returned by sb_governing_restricts()
+*/
+hash<auto> sb_governing_restricts_around(code mutate, bool policy = False) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    QoreSandboxManagerHelper sm(policy ? QoreSandboxManagerHelper::Policy : QoreSandboxManagerHelper::All);
+    ReferenceHolder<QoreHashNode> before(new QoreHashNode(autoTypeInfo), xsink);
+    sb_fill_restricts(**before, sm, xsink);
+    rv->setKeyValue("before", before.release(), xsink);
+    ValueHolder res(mutate->execValue(nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
     }
+    ReferenceHolder<QoreHashNode> after(new QoreHashNode(autoTypeInfo), xsink);
+    sb_fill_restricts(**after, sm, xsink);
+    rv->setKeyValue("after", after.release(), xsink);
+    return rv.release();
+}
+
+//! Returns the predicates of QoreSandboxManager objects built in C++ that are reset with reset()
+/** Builds a manager that allows everything and sets a rule in each of the network and filesystem managers, resets
+    both with their reset() methods, and reports the predicates before and after; also reports a second allow-all
+    manager that was copied from the first before the reset with copyFrom()
+
+    @return a hash with the keys \c before, \c after and \c copy, each a hash with \c network, \c filesystem and \c default_allow (both default policies allow)
+*/
+hash<auto> sb_reset_restricts() {
+    QoreSandboxManager sm;
+    sm.network().setDefaultPolicy(true);
+    sm.filesystem().setDefaultPolicy(true);
+    sm.network().addAllowedPort(443, QSEC_NET_TCP);
+    sm.filesystem().addDeniedPath("/etc", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreSandboxManager copy;
+    copy.network().copyFrom(sm.network());
+    copy.filesystem().copyFrom(sm.filesystem());
+    auto fill = [&](const char* key, const QoreSandboxManager& m, QoreHashNode& rv) {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("network", m.networkRestricts(), xsink);
+        h->setKeyValue("filesystem", m.filesystemRestricts(), xsink);
+        h->setKeyValue("default_allow", m.network().getDefaultPolicy() && m.filesystem().getDefaultPolicy(), xsink);
+        rv.setKeyValue(key, h.release(), xsink);
+    };
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    fill("before", sm, **rv);
+    sm.network().reset();
+    sm.filesystem().reset();
+    fill("after", sm, **rv);
+    fill("copy", copy, **rv);
     return rv.release();
 }
 
