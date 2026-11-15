@@ -17,7 +17,7 @@
 #! A parameter's write releases the value that the caller passed and no longer holds, at the write
 /** The AST interpreter's parameter takes the caller's temporary argument over (UserVariantBase::setupCall()), so
     the destructor of an object passed as a temporary runs when the parameter is assigned another value, removed or
-    its element replaced, before the function continues (QoreIRFunction::takes_over_args).  The script
+    its element replaced, before the function continues (QoreIRFunction::param_take_over).  The script
     (ParamReassignRelease.qr) logs the constructions and destructions of parameters of every kind (a class, object,
     untyped, optional, hash and list parameters, typed containers, elements of containers, native scalar parameters
     beside an object parameter, reference parameters, functions with fast entries, default and excess arguments,

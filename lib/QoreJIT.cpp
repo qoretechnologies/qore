@@ -728,15 +728,6 @@ bool qore_ir_fast_entry_param_is_private(
     if (qore_ir_local_may_hold_reference(local) && qore_ir_local_is_written(ir_func, local)) {
         return false;
     }
-    // A written parameter that can hold an object releases the value it held at the write, as in the AST
-    // interpreter, whose parameter takes the caller's temporary argument over: the destructor of an object that the
-    // caller passed and no longer holds runs at the write.  A fast entry takes a reference of its own to its
-    // argument, which the caller keeps until the call returns, so the write could not release it; such a parameter
-    // stays on the runtime stack, whose variable holds the only reference once the call has released the one that
-    // the caller gave it (QoreIRFunction::param_take_over, issue #5958)
-    if (qore_ir_param_write_releases_arg(ir_func, local)) {
-        return false;
-    }
     const void* key = reinterpret_cast<const void*>(local);
     if (ir_func.ir_only_locals.count(key)) {
         return true;

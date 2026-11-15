@@ -109,30 +109,38 @@ DLLLOCAL bool qore_ir_local_may_hold_reference(const LocalVar* lv);
 */
 DLLLOCAL bool qore_ir_local_is_written(const QoreIRFunction& ir_func, const LocalVar* lv);
 
-//! Returns true if \a param is a parameter whose write in \a ir_func can release an object that the caller passed
+//! Sets QoreIRFunction::param_take_over of \a ir_func for the \a num_params parameters \a params of its signature
 /** The AST interpreter's parameter takes the caller's temporary argument over (UserVariantBase::setupCall()), so a
     write to the parameter releases the argument, and the destructor of an object that the caller no longer holds runs
-    at the write.  A parameter that can hold an object (directly or in a container) and that the function writes needs
-    a variable of its own that holds the only reference to the argument (QoreIRFunction::param_take_over).  A write that
-    the IR of the function does not record counts as well: one in a closure that captures the parameter
-    (LocalVar::closureUse()), one through a reference to the parameter that the function creates, and one in a handler
-    of the function (on_exit, on_error, on_success), which is a function of its own
-    (QoreIROnBlockExitInstruction::handler_ir; qore#6004).
-*/
-DLLLOCAL bool qore_ir_param_write_releases_arg(const QoreIRFunction& ir_func, const LocalVar* param);
-
-//! Sets QoreIRFunction::param_take_over of \a ir_func for the \a num_params parameters \a params of its signature
-/** Defined in QoreIRTakeOver.cpp, which is compiled outside the single compilation unit of libqore, as are the
-    other functions of the analysis (see qore_ir_param_write_releases_arg())
+    at the write.  A parameter takes its argument over in this sense if it can hold an object (directly or in a
+    container) and the function writes it; a write that the IR of the function does not record counts as well: one in
+    a closure that captures the parameter (LocalVar::closureUse()), one through a reference to the parameter that the
+    function creates, and one in a handler of the function (on_exit, on_error, on_success), which is a function of its
+    own (QoreIROnBlockExitInstruction::handler_ir; qore#6004).  The function is walked once, for all of its
+    parameters.  Defined in QoreIRTakeOver.cpp, which is compiled outside the single compilation unit of libqore
 */
 DLLLOCAL void qore_ir_compute_param_take_over(QoreIRFunction& ir_func, LocalVar* const* params, unsigned num_params);
 
-//! Returns true if \a inst is a range slice (also in an exception region, as an Invoke)
-/** Its value is a new list or string, a temporary that a call that takes it as an argument consumes as it consumes a
+//! Returns true if a parameter of \a params takes its argument over (see qore_ir_compute_param_take_over()); if
+//! \a take_over is not null, the keys of all such parameters are added to it
+/** Called once per function by the IR interpreter's analysis and by native code generation, whose binding of such a
+    parameter from the runtime stack takes the value over (see design/param-take-over.md); defined in
+    QoreIRTakeOver.cpp
+*/
+DLLLOCAL bool qore_ir_collect_take_over_params(const QoreIRFunction& ir_func, const LocalVar* const* params,
+        unsigned num_params, std::unordered_set<const void*>* take_over);
+
+//! As qore_ir_collect_take_over_params() for the parameters of QoreIRFunction::param_local_vars, which every build of
+//! an IR function sets, also those of the AOT compiler, which do not set QoreIRFunction::param_take_over
+DLLLOCAL bool qore_ir_collect_take_over_params(const QoreIRFunction& ir_func,
+        std::unordered_set<const void*>* take_over);
+
+//! Returns true if \a inst is a range slice or an extract (also in an exception region, as an Invoke)
+/** Its value is a new list, string or binary, a temporary that a call that takes it as an argument consumes as it consumes a
     call's result, so that a parameter that takes it over releases it when it is written, as in the AST interpreter
     (issue #5958); defined in QoreIRTakeOver.cpp
 */
-DLLLOCAL bool qore_ir_is_range_slice(const QoreIRInstruction* inst);
+DLLLOCAL bool qore_ir_is_sequence_temp(const QoreIRInstruction* inst);
 
 DLLLOCAL bool qore_plugin_get_value_profile_info(const AbstractQoreNode* node, std::string& module_name,
     uint16_t& local_type_id, const QoreTypeInfo*& type_info);
@@ -1360,6 +1368,11 @@ class QoreIRBasicBlock;
 struct QoreIRPhiIncoming;
 
 //! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
+//! QoreIRInstruction::interpreter_gives_call_args: the call gives the references of arguments that it consumes
+static constexpr uint8_t QORE_IR_GIVES_CALL_ARGS = 1;
+//! QoreIRInstruction::interpreter_gives_call_args: one of them can be taken over observably by a parameter (#5958)
+static constexpr uint8_t QORE_IR_GIVES_CALL_TEMPS = 2;
+
 enum class QoreIRFusedCallTargetCheck : uint8_t {
     None,           //!< no check
     MethodCall,     //!< the call is a method call: a valid object needs no other check
@@ -1529,8 +1542,12 @@ public:
     bool exception_cleanup_release = false;
     // Transient: a call with an argument that the IR interpreter's analysis found it can consume, which gives the
     // references of its temporary arguments to the callee (see IRConsumedCallArgs in QoreIRInterpreter.cpp, issue
-    // #5882); set with the interpreter's analysis of the function, before the function runs
-    bool interpreter_gives_call_args = false;
+    // #5882): QORE_IR_GIVES_CALL_ARGS, with QORE_IR_GIVES_CALL_TEMPS if one of them is a value that a parameter of the
+    // callee can take over observably (anything but a read of a plain local, which holds the value for the whole call;
+    // issue #5958, see design/param-take-over.md); 0 for a call that gives nothing; set with the interpreter's analysis
+    // of the function, before the function runs.  A byte with bits, not two bools: the next member follows it without
+    // padding, so a second bool would change the layout of every instruction
+    uint8_t interpreter_gives_call_args = 0;
     AOTStringCaseComparisonKind aot_string_case_comparison =
         AOTStringCaseComparisonKind::None;
     uint8_t aot_string_case_comparison_operand = 0;
@@ -4376,14 +4393,13 @@ public:
     //! not closure-captured, not reference-typed) AND no argvid is needed.
     //! When true, callers can use IRDirectParams to skip TLS entirely.
     bool direct_params_eligible = false;
-    //! True if a parameter's write can release an object that the caller passed (qore_ir_param_write_releases_arg())
-    /** Such a parameter is not IR-only (computeIROnlyLocals()) and the function has no fast entry
-        (qore_ir_fast_entry_param_is_private()): the parameter's variable on the runtime stack holds the only reference
-        to the argument once the call path has released the reference that the caller gave it (IRGivenCallArgs, issue
-        #5882), so a write releases the argument, as in the AST interpreter (issue #5958); the IR interpreter does not
-        inline a call of such a function, which the call path makes.  Set by qore_ir_compute_param_take_over().
-        Declared after direct_params_eligible, in the padding before the next member, so that the layout of the
-        function does not change
+    //! True if a parameter of the function takes its argument over (qore_ir_compute_param_take_over())
+    /** The storage of such a parameter is as for any other parameter (IR-only, a fast entry): a call that gives none
+        of its arguments is made as before.  The IR interpreter does not inline a call of such a function from a call
+        that can give it a temporary argument (QoreIRInstruction::interpreter_gives_call_args; the code instantiated
+        for GIVEN for closures): the call path makes it, whose binding of the parameters takes the given references
+        over (issue #5958; see design/param-take-over.md).  Declared after direct_params_eligible, in the padding
+        before the next member, so that the layout of the function does not change
     */
     bool param_take_over = false;
 

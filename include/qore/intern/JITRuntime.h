@@ -1883,6 +1883,21 @@ uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, int nargs, E
 uint64_t qore_rt_call_with_args_consume_args(uint64_t expr_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs,
     ExceptionSink* xsink);
 
+//! Loads the value of a parameter that takes its argument over for the cache of its normal entry and releases the
+//! reference of its runtime variable, which leaves the cache with the only reference that the call gave (#5958)
+uint64_t qore_rt_take_param(LocalVar* var, ExceptionSink* xsink);
+//! as qore_rt_take_param(), for a variable whose cache keeps a reference that it holds (see qore_rt_load_local_raw())
+uint64_t qore_rt_take_param_raw(LocalVar* var, ExceptionSink* xsink);
+//! AOT variant of qore_rt_take_param()
+uint64_t qore_rt_take_param_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+//! AOT variant of qore_rt_take_param_raw()
+uint64_t qore_rt_take_param_raw_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+//! Gives the runtime variable of a parameter that qore_rt_take_param() emptied the value of its cache back, for the
+//! AST interpreter's run of the function after a deoptimization; takes the reference of \a value
+void qore_rt_return_param(LocalVar* var, uint64_t value, ExceptionSink* xsink);
+//! AOT variant of qore_rt_return_param()
+void qore_rt_return_param_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value, ExceptionSink* xsink);
+
 //! AOT variant: resolve expression from context slot, then delegate to qore_rt_call_with_args
 uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
     ExceptionSink* xsink);

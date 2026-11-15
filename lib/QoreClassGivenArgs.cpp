@@ -77,11 +77,14 @@ bool qore_class_eval_member_code_given_args(const qore_class_private& qcp, QoreO
     if (!ref) {
         return false;
     }
-    // the parameters of a closure or of a reference to user code take the values of the argument list over
-    QoreSandboxProvenanceHelper provenance(ref);
+    // the parameters of a closure or of a reference to user code take the values of the argument list over; the call
+    // runs with the sandbox provenance of the reference: a closure's execValueTmpArgs() and invoke() apply it
+    // themselves, while the default ResolvedCallReferenceNodeIntern::execValueTmpArgs() calls execValue(), which does
+    // not, so it is applied here for that branch only
     if (ref->getType() == NT_RUNTIME_CLOSURE) {
         rv = static_cast<const QoreClosureBase*>(ref)->execValueTmpArgs(args, xsink);
     } else if (auto* rcr = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(ref)) {
+        QoreSandboxProvenanceHelper provenance(ref);
         rv = rcr->execValueTmpArgs(args, xsink);
     } else {
         rv = ref->invoke(args, xsink);

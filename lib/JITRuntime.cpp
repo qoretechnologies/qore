@@ -223,6 +223,12 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_make_weak_value", reinterpret_cast<void*>(&qore_rt_make_weak_value) },
     { "qore_rt_make_opaque_value", reinterpret_cast<void*>(&qore_rt_make_opaque_value) },
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
+    { "qore_rt_take_param", reinterpret_cast<void*>(&qore_rt_take_param) },
+    { "qore_rt_take_param_raw", reinterpret_cast<void*>(&qore_rt_take_param_raw) },
+    { "qore_rt_take_param_aot", reinterpret_cast<void*>(&qore_rt_take_param_aot) },
+    { "qore_rt_take_param_raw_aot", reinterpret_cast<void*>(&qore_rt_take_param_raw_aot) },
+    { "qore_rt_return_param", reinterpret_cast<void*>(&qore_rt_return_param) },
+    { "qore_rt_return_param_aot", reinterpret_cast<void*>(&qore_rt_return_param_aot) },
     { "qore_rt_load_local_raw", reinterpret_cast<void*>(&qore_rt_load_local_raw) },
     { "qore_rt_value_is_reference", reinterpret_cast<void*>(&qore_rt_value_is_reference) },
     { "qore_rt_strip_any_param", reinterpret_cast<void*>(&qore_rt_strip_any_param) },
@@ -24175,3 +24181,74 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_mod_any_throwing
     return result;
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+
+#ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
+//! Releases the reference that the runtime variable of a parameter holds once native code loaded its value
+/** Called by the normal entry of native code for a parameter that takes its argument over and has IR storage (see
+    design/param-take-over.md): the entry's cleanup slot then holds the only reference that the call gave, so that a
+    write to the parameter releases a temporary argument, as in the AST interpreter.  A variable that holds a
+    reference or a static assignment keeps its value
+*/
+static void qore_rt_release_param_var_intern(LocalVar* var, ExceptionSink* xsink) {
+    if (!var || var->closureUse()) {
+        return;
+    }
+    LocalVarValue* lvv = thread_try_find_lvar(var);
+    if (!lvv || lvv->isRef() || lvv->val.static_assignment) {
+        return;
+    }
+    lvv->val.removeValue(false).discard(xsink);
+}
+
+// documented in JITRuntime.h
+extern "C" DLLEXPORT uint64_t qore_rt_take_param(LocalVar* var, ExceptionSink* xsink) {
+    uint64_t rv = qore_rt_load_local(var, xsink);
+    if (!(xsink && *xsink)) {
+        qore_rt_release_param_var_intern(var, xsink);
+    }
+    return rv;
+}
+
+// documented in JITRuntime.h
+extern "C" DLLEXPORT uint64_t qore_rt_take_param_raw(LocalVar* var, ExceptionSink* xsink) {
+    uint64_t rv = qore_rt_load_local_raw(var, xsink);
+    if (!(xsink && *xsink)) {
+        qore_rt_release_param_var_intern(var, xsink);
+    }
+    return rv;
+}
+
+// documented in JITRuntime.h
+extern "C" DLLEXPORT uint64_t qore_rt_take_param_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_take_param(ctx->locals[idx], xsink);
+}
+
+// documented in JITRuntime.h
+extern "C" DLLEXPORT uint64_t qore_rt_take_param_raw_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_take_param_raw(ctx->locals[idx], xsink);
+}
+
+// documented in JITRuntime.h
+extern "C" DLLEXPORT void qore_rt_return_param(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
+    QoreValue v = fromBits(value);
+    LocalVarValue* lvv = var && !var->closureUse() ? thread_try_find_lvar(var) : nullptr;
+    if (!lvv || lvv->val.assigned) {
+        v.discard(xsink);
+        return;
+    }
+    // the variable, emptied by qore_rt_take_param(), takes the value back (a node that a variable of a fixed type
+    // converted is released)
+    if (AbstractQoreNode* n = lvv->val.assignInitial(v)) {
+        n->deref(xsink);
+    }
+}
+
+// documented in JITRuntime.h
+extern "C" DLLEXPORT void qore_rt_return_param_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_return_param(ctx->locals[idx], value, xsink);
+}
+#endif // QORE_JIT_RUNTIME_TAKE_OVER_UNIT

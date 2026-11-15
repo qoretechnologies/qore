@@ -1,0 +1,129 @@
+# Parameters that take their arguments over
+
+Copyright (C) 2026 Qore Technologies, s.r.o.
+
+The AST interpreter moves a call's evaluated arguments into the callee's parameters (`UserVariantBase::setupCall()`):
+a temporary argument (`f(new T())`, `f({"o": new T()})`) is then held by the parameter only, and a write to the
+parameter (`a = NOTHING`, `remove a`, `h.o = x`) runs the destructor of the object at the write, before the callee
+continues.  Every execution mode must do the same (issue #5958; handlers: #6004), and a call that gives the callee no
+temporary must cost exactly what it costs on develop, in every mode (David, 2026-11-15).
+
+`qore_ir_compute_param_take_over()` (`lib/QoreIRVerifier.cpp`, compiled in `lib/QoreIRTakeOver.cpp` outside the
+single compilation unit) sets `QoreIRFunction::param_take_over` when a parameter that can hold an object is written:
+a write that the IR records, one in a closure that captures it, one through a reference that the function creates and
+one in an `on_exit`/`on_error`/`on_success` handler.  The function is walked once for all of its parameters.
+
+## Whether a call gives a temporary: per instruction or per execution
+
+Both, at two levels; the code is in `lib/QoreIRInterpreter.cpp`:
+
+- `QoreIRInstruction::interpreter_gives_call_args` is fixed for the instruction when the caller's IR is prepared
+  (the loop after `buildValueUseCounts()`): it is set if an argument is in `consumed_call_args`, the temporaries whose
+  release at the call's return can be observed (call results, list and hash literals and other observable temporaries,
+  reads of variables that the statement can write later).  An instruction without it never gives a temporary whose
+  release can be observed.
+- Which executor runs is decided for each execution.  `CallDirect` tests `has_last_use_args =
+  hasLastUseCallArgSlots()` (use counts and `needsRef()`, not the flag) and runs `irCallDirectGiven()`, which gives
+  every last-use slot (`giveLastUseCallArgSlots()`), including the frame's own reference of a read of an IR-only
+  local: `fh(h, i)` with a variable `h` runs the code instantiated for `GIVEN`, although nothing it gives can be
+  observed (the variable holds the value for the whole call; an IR-only local cannot be written through a reference or
+  a closure).  The other calls test `interpreter_gives_call_args && hasConsumedCallArgs()`.
+- The inline state of a call site (`inline_ir_state` and its `cached_*` payload) is per instruction, whichever
+  executor computes it first (`ensureInterpreterInlineIRFunctionState()`,
+  `ensureInterpreterResolvedInlineIRCallState()`); the inline cache of closures is a `thread_local` of each
+  instantiation of `tryExecuteInterpreterInlineIRClosure<GIVEN>()`.
+
+So a rule keyed on the per-instruction flag inside the computation of the per-instruction state is deterministic, and
+one keyed on the `GIVEN` code is not: e317abfe88 rejected inlining for every caller of a function with
+`param_take_over`; restricting that to the given unit's code was wrong because the given unit also computes the state
+for executions that give nothing observable (`fh(h, i)`).
+
+## The IR interpreter's inline calls
+
+`interpreter_gives_call_args` is a byte: `QORE_IR_GIVES_CALL_ARGS` for a call that gives consumed arguments, with
+`QORE_IR_GIVES_CALL_TEMPS` if one of them is not a read of a plain local (not through a reference, not closure-bound,
+in a function that creates no reference) that nothing writes from the read to the call in its block (`f(o, o =
+NOTHING)` writes it).  Such a local holds the value for the whole call, as no callee can write it, so a parameter that takes the read over cannot release the value observably: the reads of top-level locals, which
+are not IR-only and so are consumed (`read_needs_release_at_return()`), give the bit 0 only.  A call site is not
+inlined if `callee_ir->param_take_over && (inst->interpreter_gives_call_args & QORE_IR_GIVES_CALL_TEMPS)` (closures,
+whose inline cache has no instruction: `GIVEN && callee_ir->param_take_over`).  A site that gives no such temporary is
+inlined exactly as on develop; only the decision of the state, made once per site, changes.  A giving site is made by
+the call path, which must then bind the parameter so that it holds the only reference (below).
+
+## The storage of the parameter
+
+On develop, a written parameter that can hold an object is IR-only (an interpreter slot or a native alloca) and has a
+fast entry and the batch direct ABI (`qore_ir_fast_entry_param_is_private()`).  e317abfe88 moved it to the runtime
+stack and removed its fast entry for every caller; that is what cost the callers that give nothing (review of
+e317abfe88: `fh(hash<auto>)` +33% per call in IR mode, `fa(auto)` +47%).  With the storage as on develop, a parameter
+holds the only reference to a given temporary when its binding takes the caller's reference over:
+
+- the direct parameters of `QoreIRInterpreter::execute()` with `IRDirectParams::arg_cleanups` (the consume path of
+  `qore_rt_call_fast_t<true>()` in `lib/JITRuntime.cpp`): the slot takes a reference, then the caller's is released
+  (`qore_rt_clear_arg_cleanups()`): the slot holds the only one;
+- the binding from the runtime stack does not: `setupCall()` and `instantiateFastCallParams()` move the argument into
+  the parameter's runtime variable, then the IR interpreter's first `LoadLocal` (the cache miss path) and the native
+  normal entry (`emitLocalCacheLoad()` of a pre-instantiated parameter in `QoreIRToLLVM`) take a reference of their
+  own, and the runtime variable keeps its reference until the call returns, so the write releases only the copy;
+- the native fast entry takes a reference of its own at entry (`qore_rt_incref` in the prologue that binds
+  `fast_entry_args`), and its caller keeps its own until the call returns.
+
+The binding from the runtime stack is shared by every caller that reaches the callee through it: the AST interpreter
+(the AST tier of tiered execution, statements delegated to the AST), the IR interpreter's call path
+(`evalFunctionTmpArgs()`), and an IR caller of a native callee (`qore_rt_call_fast()`).  The callee cannot tell a
+moved temporary from a copy of the caller's variable there, so the binding either moves the value out of the runtime
+variable for every such caller (correct for both: the caller's variable, if any, still holds its own reference) or
+for none.  Moving costs a call that gives nothing through that path a different binding (a move instead of a
+reference: expected to be no more instructions, to be measured), never the inline, direct-parameter or fast-entry
+calls.  A native caller that gives a temporary to a fast entry needs an entry that takes it over: the consume path
+(binding from the runtime stack with the move) or a second fast entry whose prologue does not take a reference for
+these parameters (a second compilation of the body).
+
+The test `examples/test/ir/ParamReassignRelease.qtest` shows the gap with the storage as on develop and the per-site
+inline rule: the object parameters (not IR-only) pass, the container parameters (`hash<auto>`, `list<auto>`, typed
+hashes, the slices and extracts given to them) fail in the IR, JIT and tiered modes, through the binding from the
+runtime stack.
+
+## Explicit type arguments
+
+A method call with explicit type arguments on a receiver whose class is known at run time only (`auto o = c;
+o.n<int>(new D())`) is made by `dispatch_method_on_object()` with an argument list (the
+`!explicit_type_param_instantiation` guards of `qore_rt_dot_eval_method_direct_impl()` and of the pseudo-method paths
+in `lib/JITRuntime.cpp`), whose parameters take references of their own: it does not take its temporary arguments over
+in the IR, JIT and tiered modes, on develop (82c07846f2) as on this branch; a call on a receiver of a known class
+(`c.n<int>(new D())`) does.  Documented in #5958 as a gap.
+
+## The binding from the runtime stack (option 1, David, 2026-11-15)
+
+A parameter that takes its argument over is bound so that it holds the only reference to a temporary argument in
+every binding, with no change to the inline, direct-parameter and fast-entry calls:
+
+- the IR interpreter keeps such a parameter on the runtime stack when the call binds it there: its analysis
+  (`buildInterpreterAnalysis()`) leaves the parameter's bit in `interpreter_locals_ir_only` clear
+  (`qore_ir_collect_take_over_params()`), so the frame reads and writes the runtime variable, which took the
+  argument over in `setupCall()`/`instantiateFastCallParams()`; the frame of a call with direct parameters sets the
+  bit itself (`IRDirectParams`), as before.  Its other properties are those of its IR storage: no callee can reach
+  its variable, so no call invalidates its cached value (`interpreter_has_non_ir_only_locals` is unchanged).  This is
+  data of the function, computed once: no instruction of `execute()` changes;
+- the normal entry of native code (`QoreIRToLLVM::preCreateLocalAllocas()`) loads such a parameter with
+  `qore_rt_take_param()` (`_raw`, `_aot`), which releases the runtime variable's reference once the cache has its own,
+  instead of `qore_rt_load_local()`: the entry's cleanup slot then holds the only reference, a write releases it, and
+  the variable is empty when the call uninstantiates it.  A deoptimization gives the value back to the variable
+  (`qore_rt_return_param()`) before the AST interpreter runs the function again.  The fast entry is unchanged;
+- a native call that gives the callee a temporary argument (`QoreIRToLLVM::callGivesArgs()`, the test of
+  `buildArgCleanupArray()`) does not call the fast entry of a callee with `param_take_over`
+  (`qore_ir_fast_entry_refuses_given_args()` in the fast-entry gates): it is made by the consume path, which binds
+  from the runtime stack.  No second fast entry is compiled.
+
+The helpers are compiled in `lib/JITRuntimeTakeOver.cpp`, outside the single compilation unit.  A range slice and an
+`extract` give a new sequence, which a call consumes as a call's result (`qore_ir_is_sequence_temp()`).
+
+## Measurements (2026-11-15)
+
+callgrind, cuttah Release, per call slope (two sizes), `QORE_JIT_SYNC_COMPILE=1`, `qbuild --count`, develop 82c07846f2
+against the per-site inline rule with the storage as on develop (uncommitted state "step 2"): the reviewer's rows
+(`fh(hash<auto>, int)`, `fl(list<auto>, int)`, `fa(auto, int)`, `fi(int, int)`, `C::m(hash<auto>, int)`), the
+variable-argument writing rows (`f_var_hwrite`, `f_var_lwrite`, `f_var_awrite`, `m_var_hwrite`) and `f_tmp_read`,
+`f_tmp_write`, `m_tmp_read`, in ast, ir, jit, tiered, tiered with thresholds 1, qcc -O0 and -O3: every delta is 0 in
+the code (at most ±0.4 per call, rounding), and the only other deltas are in libc alone (±4..21, the placement noise
+classified before).  e317abfe88 had `fh` +4775 per call (+21.7%) and `fl` +4290 in IR mode.

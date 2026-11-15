@@ -29,7 +29,7 @@
     information.
 */
 
-// The analysis of the parameters of an IR function that take their arguments over (qore_ir_param_write_releases_arg(),
+// The analysis of the parameters of an IR function that take their arguments over (qore_ir_compute_param_take_over(),
 // issue #5958), compiled from QoreIRVerifier.cpp in a unit of its own, outside the single compilation unit of libqore:
 // in that unit, it would change how the compiler inlines the rest of the unit's code, among it the code of the calls.
 // QoreIRVerifier.cpp leaves out what this code does not use.
@@ -37,5 +37,7 @@
 
 // the helpers of QoreIRVerifier.cpp that this code does not use are not compiled
 #pragma GCC diagnostic ignored "-Wunused-function"
+
+#include <optional>
 
 #include "QoreIRVerifier.cpp"

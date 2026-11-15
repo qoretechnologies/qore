@@ -2868,7 +2868,7 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             if (inst->result.isValid() && inst->result.id < def_block.size()) {
                 def_block[inst->result.id] = block.get();
                 def_scope[inst->result.id] = inst->temp_scope_id;
-                def_by_call[inst->result.id] = arg_start >= 0 || qore_ir_is_range_slice(inst);
+                def_by_call[inst->result.id] = arg_start >= 0 || qore_ir_is_sequence_temp(inst);
                 def_by_variable_read[inst->result.id] = qore_ir_reads_variable_for_call_arg(inst->opcode);
                 def_inst[inst->result.id] = inst;
                 def_pos[inst->result.id] = static_cast<uint32_t>(inst_pos);
@@ -3248,13 +3248,23 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     bool has_non_ir_only_locals = false;
     size_t local_slot_count = func.local_var_slots.empty()
         ? 0 : static_cast<size_t>(func.max_local_slot_id) + 1;
+    // a parameter that takes its argument over is kept on the runtime stack when the call binds it there, whose
+    // variable then holds the only reference to a temporary argument, so that a write releases it, as in the AST
+    // interpreter; a call with direct parameters (IRDirectParams) gives it IR storage for its frame, as before.  Its
+    // other properties are those of its IR storage: no callee can reach its variable, so no call invalidates its
+    // cached value (has_non_ir_only_locals; issue #5958, see design/param-take-over.md)
+    std::unordered_set<const void*> take_over_params;
+    if (!param_local_vars.empty()) {
+        qore_ir_collect_take_over_params(func, param_local_vars.data(), static_cast<unsigned>(param_local_vars.size()),
+            &take_over_params);
+    }
     if (local_slot_count > 0) {
         locals_ir_only.assign(local_slot_count, 0);
         for (auto& [lvar, sid] : func.local_var_slots) {
             if (lvar && sid < local_slot_count) {
                 const void* key = reinterpret_cast<const void*>(lvar);
                 if (func.hasIRStorage(key)) {
-                    locals_ir_only[sid] = 1;
+                    locals_ir_only[sid] = take_over_params.count(key) ? 0 : 1;
                     if (func.reference_slot_locals.count(key)) {
                         if (reference_slots.empty()) {
                             reference_slots.assign(local_slot_count, 0);
@@ -3277,19 +3287,75 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_dot_eval_only_bases = std::move(dot_eval_only_bases);
     // a call with an argument that it can consume gives the references of its temporary arguments to the callee (see
     // IRConsumedCallArgs); the others, which the flag tells apart with no test of their arguments, are made with the
-    // code of a call that gives nothing (issue #5882)
-    for (const auto& block : func.blocks) {
-        for (const auto& inst_uptr : block->instructions) {
-            QoreIRInstruction* call_inst = inst_uptr.get();
-            int arg_start = qore_ir_call_arg_start(call_inst);
-            if (arg_start < 0) {
-                continue;
+    // code of a call that gives nothing (issue #5882).  A consumed argument other than a read of a plain local (not
+    // through a reference, not closure-bound, in a function that creates no reference) that the local still holds
+    // when the call is made, and so for the whole call, as no callee can write it, can be taken over observably by a
+    // parameter that the callee writes: QORE_IR_GIVES_CALL_TEMPS (issue #5958)
+    {
+        // the defining instruction of each value, its block and its position in the block
+        struct ValueDef {
+            const QoreIRInstruction* inst = nullptr;
+            const QoreIRBasicBlock* block = nullptr;
+            size_t pos = 0;
+        };
+        std::vector<ValueDef> defs;
+        bool creates_reference = false;
+        for (const auto& block : func.blocks) {
+            const auto& insts = block->instructions;
+            for (size_t pos = 0; pos < insts.size(); ++pos) {
+                const QoreIRInstruction* inst = insts[pos].get();
+                if (inst->result.isValid() && inst->result.id < consumed_call_args.size()) {
+                    if (defs.empty()) {
+                        defs.resize(consumed_call_args.size());
+                    }
+                    defs[inst->result.id] = {inst, block.get(), pos};
+                }
+                if (inst->opcode == QoreIROpcode::CreateParseRef
+                        || (inst->opcode == QoreIROpcode::Invoke
+                            && static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode
+                                == QoreIROpcode::CreateParseRef)) {
+                    creates_reference = true;
+                }
             }
-            for (size_t i = static_cast<size_t>(arg_start); i < call_inst->operands.size(); ++i) {
-                const QoreIRValue& operand = call_inst->operands[i];
-                if (operand.isValid() && operand.id < consumed_call_args.size() && consumed_call_args[operand.id]) {
-                    call_inst->interpreter_gives_call_args = true;
-                    break;
+        }
+        // true if the argument \a id of the call at \a call_pos of \a call_block is a read of a plain local that the
+        // local still holds when the call is made: nothing writes the local from the read to the call in its block
+        auto is_held_local_read = [&](uint32_t id, const QoreIRBasicBlock* call_block, size_t call_pos) -> bool {
+            const ValueDef* def = id < defs.size() ? &defs[id] : nullptr;
+            if (creates_reference || !def || !def->inst || def->inst->opcode != QoreIROpcode::LoadLocal
+                    || def->block != call_block || def->pos >= call_pos) {
+                return false;
+            }
+            const auto* load = static_cast<const QoreIRLocalInstruction*>(def->inst);
+            if (!load->local || load->is_ref || load->is_closure || load->local->closureUse()) {
+                return false;
+            }
+            const auto& insts = call_block->instructions;
+            for (size_t j = def->pos + 1; j < call_pos; ++j) {
+                if (qore_ir_get_written_local(insts[j].get()) == load->local) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        for (const auto& block : func.blocks) {
+            const auto& insts = block->instructions;
+            for (size_t pos = 0; pos < insts.size(); ++pos) {
+                QoreIRInstruction* call_inst = insts[pos].get();
+                int arg_start = qore_ir_call_arg_start(call_inst);
+                if (arg_start < 0) {
+                    continue;
+                }
+                for (size_t i = static_cast<size_t>(arg_start); i < call_inst->operands.size(); ++i) {
+                    const QoreIRValue& operand = call_inst->operands[i];
+                    if (operand.isValid() && operand.id < consumed_call_args.size()
+                            && consumed_call_args[operand.id]) {
+                        call_inst->interpreter_gives_call_args |= QORE_IR_GIVES_CALL_ARGS;
+                        if (!is_held_local_read(operand.id, block.get(), pos)) {
+                            call_inst->interpreter_gives_call_args |= QORE_IR_GIVES_CALL_TEMPS;
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -4126,9 +4192,11 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
             || sig->needsTypeParameterSubstitution()
             || !callee_ir->ast_visible_body_locals.empty()
             || callee_ir->hasTypeSpecialization()
-            // a parameter that takes its argument over is bound by the call path, which releases the reference that
-            // the caller gave to the call once the parameter holds one of its own (issue #5958)
-            || callee_ir->param_take_over
+            // a call that can give a temporary to a parameter that takes its argument over is made by the call path,
+            // which releases the reference that the caller gave once the parameter holds one of its own; whether a
+            // call can give one is fixed for the instruction (QORE_IR_GIVES_CALL_TEMPS), so a call that gives none
+            // is inlined as before (issue #5958, design/param-take-over.md)
+            || (callee_ir->param_take_over && (inst->interpreter_gives_call_args & QORE_IR_GIVES_CALL_TEMPS))
             || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
                 && nargs != static_cast<int>(sig->numParams()))) {
         return reject();
@@ -4334,9 +4402,11 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
             // an inlined call has no frame of its own on the thread-local variable stack
             || callee_ir->needs_call_frame
             || callee_ir->hasTypeSpecialization()
-            // a parameter that takes its argument over is bound by the call path, which releases the reference that
-            // the caller gave to the call once the parameter holds one of its own (issue #5958)
-            || callee_ir->param_take_over
+            // a call that can give a temporary to a parameter that takes its argument over is made by the call path,
+            // which releases the reference that the caller gave once the parameter holds one of its own; whether a
+            // call can give one is fixed for the instruction (QORE_IR_GIVES_CALL_TEMPS), so a call that gives none
+            // is inlined as before (issue #5958, design/param-take-over.md)
+            || (callee_ir->param_take_over && (inst->interpreter_gives_call_args & QORE_IR_GIVES_CALL_TEMPS))
             || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
                 && nargs != static_cast<int>(sig->numParams()))) {
         return reject();
@@ -6372,9 +6442,11 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
                 // an inlined call has no frame of its own on the thread-local variable stack
                 || callee_ir->needs_call_frame
                 || callee_ir->hasTypeSpecialization()
-                // a parameter that takes its argument over is bound by the call path, which releases the reference that
-                // the caller gave to the call once the parameter holds one of its own (issue #5958)
-                || callee_ir->param_take_over
+                // a call that gives a temporary to a parameter that takes its argument over is made by the call
+                // path, which releases the reference that the caller gave once the parameter holds one of its own;
+                // only a call that gives one runs the code instantiated for GIVEN, whose cache is its own
+                // (issue #5958)
+                || (GIVEN && callee_ir->param_take_over)
                 || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
                     && nargs != static_cast<int>(sig->numParams()))) {
             return false;
