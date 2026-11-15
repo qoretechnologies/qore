@@ -21228,6 +21228,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::ReturnNothing: {
             llvm::Value* return_value = nullptr;
+            // the return of the path of a debugger's request in a fast entry whose return type requires a value
+            // raises the error of a missing return value (#6201): with no cleanup of a converted value, which would
+            // be released on every exit of the function, also on the hot path
+            if (!fast_entry_name.empty() && lowering_debug_flow_block && !aot_mode) {
+                const QoreTypeInfo* return_type = specializeType(fast_entry_return_type);
+                if (QoreTypeInfo::hasType(return_type)
+                        && !QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)) {
+                    auto helper = module.getOrInsertFunction("qore_rt_coerce_nothing_return",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
+                    builder->CreateCall(helper, {getTypeInfoPointerArg(return_type),
+                        llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)), xsink_arg});
+                    // the exception is pending: the branch goes to the exception path
+                    emitExceptionBranch(module, llvm_func, inst, false, builder->getTrue());
+                    builder->CreateUnreachable();
+                    return true;
+                }
+            }
             if (!fast_entry_name.empty()) {
                 // a fast entry applies the declared return type to a missing return value like the caller of a
                 // standard entry does: a soft list becomes an empty list, and a type rejecting NOTHING raises
