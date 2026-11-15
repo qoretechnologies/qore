@@ -299,18 +299,25 @@ public namespace DefCons {
         # applied with the provider, and the error of its type is the error of the module without it
         hash<string, hash<auto>> kinds = {
             "DefEnumOnly": {"expr": "cast<*Prov::NewKind>(Prov::value(0))", "result": "True",
-                "check": "== Prov::NewKind::X", "error": "'\\*enum<Prov::NewKind>' of an enum cast"},
+                "check": "== Prov::NewKind::X",
+                "error": "cannot resolve the target type '\\*enum<Prov::NewKind>' of an enum cast"},
             "DefListOnly": {"expr": "cast<*list<Prov::NewKind>>(Prov::value(NOTHING))", "result": "True",
-                "check": "=== NOTHING", "error": "'\\*list<enum<Prov::NewKind>>' of a list cast"},
+                "check": "=== NOTHING",
+                "error": "cannot resolve the target type '\\*list<enum<Prov::NewKind>>' of a list cast"},
             "DefHashOnly": {"expr": "cast<*hash<string, Prov::NewKind>>(Prov::value(NOTHING))", "result": "True",
-                "check": "=== NOTHING", "error": "'\\*hash<string, enum<Prov::NewKind>>' of a hash cast"},
+                "check": "=== NOTHING",
+                "error": "cannot resolve the target type '\\*hash<string, enum<Prov::NewKind>>' of a hash cast"},
             "DefClassOnly": {"expr": "cast<*Prov::NewBox>(Prov::value(NOTHING))", "result": "True",
-                "check": "=== NOTHING", "error": "'Prov::NewBox \\(module Prov\\)' of a class cast"},
+                "check": "=== NOTHING",
+                "error": "cannot resolve the target type 'Prov::NewBox \\(module Prov\\)' of a class cast"},
             "DefNewList": {"expr": "new list<auto>(cast<*Prov::NewKind>(Prov::value(0)))", "result": "True",
-                "check": "== (Prov::NewKind::X,)", "error": "'\\*enum<Prov::NewKind>' of an enum cast"},
+                "check": "== (Prov::NewKind::X,)",
+                "error": "cannot resolve the target type '\\*enum<Prov::NewKind>' of an enum cast"},
             "DefNewHash": {"expr": "new hash<string, auto>(cast<*hash<string, Prov::NewKind>>("
                 "Prov::value({})))", "result": "True", "check": "== {}",
-                "error": "'\\*hash<string, enum<Prov::NewKind>>' of a hash cast"},
+                "error": "cannot resolve the target type '\\*hash<string, enum<Prov::NewKind>>' of a hash cast"},
+            "DefNewHashdecl": {"expr": "new hash<Prov::NewEvent>()", "result": "True", "check": ".y == 2",
+                "error": "cannot resolve the hashdecl 'Prov::NewEvent' of a hashdecl constructor"},
         };
         foreach hash<auto> i in (kinds.pairIterator()) {
             compileModule(dir, i.key, sprintf("%%requires Prov\npublic namespace %s {\n"
@@ -326,7 +333,7 @@ public namespace DefCons {
                 res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-old"),
                     ("--exec-mode=" + mode, "-ne", kcode));
                 assertNeq(0, res.status, i.key + " " + mode + ": " + res.output);
-                assertRegex("cannot resolve the target type " + i.value.error, res.output,
+                assertRegex(i.value.error, res.output,
                     i.key + " " + mode + ": " + res.output);
             }
         }

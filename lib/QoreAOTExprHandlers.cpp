@@ -2801,22 +2801,15 @@ static QoreValue read_expr_hashdecl_new(AOTExprReadCtx& ctx) {
                 ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
             if (!arg_err.empty()) {
                 arg.discard(nullptr);
-                call_args->push(QoreValue(), nullptr);
-                // the first error of an argument is the error of the expression (qore#6125); the remaining
-                // arguments are read so that the reader stays in sync
-                if (ctx.error.empty()) {
-                    ctx.error = arg_err;
-                }
+                // the error of an argument is the error of the expression (qore#6125); the reader is at an unknown
+                // position after it, so the remaining arguments are not read
+                call_args->deref(nullptr);
+                ctx.error = arg_err;
+                return QoreValue();
             } else {
                 call_args->push(arg, nullptr);
             }
         }
-    }
-    if (!ctx.error.empty()) {
-        if (call_args) {
-            call_args->deref(nullptr);
-        }
-        return QoreValue();
     }
     const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(ctx.pgm, hashdecl_path);
     if (!hd) {
@@ -2891,22 +2884,15 @@ static QoreValue read_expr_complex_hash_new(AOTExprReadCtx& ctx) {
                 ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
             if (!arg_err.empty()) {
                 arg.discard(nullptr);
-                call_args->push(QoreValue(), nullptr);
-                // the first error of an argument is the error of the expression (qore#6125); the remaining
-                // arguments are read so that the reader stays in sync
-                if (ctx.error.empty()) {
-                    ctx.error = arg_err;
-                }
+                // the error of an argument is the error of the expression (qore#6125); the reader is at an unknown
+                // position after it, so the remaining arguments are not read
+                call_args->deref(nullptr);
+                ctx.error = arg_err;
+                return QoreValue();
             } else {
                 call_args->push(arg, nullptr);
             }
         }
-    }
-    if (!ctx.error.empty()) {
-        if (call_args) {
-            call_args->deref(nullptr);
-        }
-        return QoreValue();
     }
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
