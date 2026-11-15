@@ -11678,7 +11678,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base(uint64_t expr_bits, uin
     if (!expr.hasNode()) {
         return toBits(QoreValue());
     }
-    auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
+    auto* dot_eval = qore_get_dot_eval_operator_node(expr.getInternalNode());
     if (!dot_eval) {
         // Fallback: shouldn't happen but be safe
         return qore_rt_invoke_expr(expr_bits, xsink);
@@ -11752,7 +11752,7 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
 
     // Phase 5.2c: Pseudo-method fast-call detection
     // Handle <type>::method() pseudo-method calls without QoreListNode allocation
-    if (auto* method_call = dynamic_cast<const MethodCallNode*>(expr.getInternalNode())) {
+    if (auto* method_call = qore_get_method_call_node(expr.getInternalNode())) {
         if (method_call->isPseudo()) {
             const char* mname = method_call->getName();
             if (mname && nargs == 1) {
@@ -11817,14 +11817,14 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
             result = result.refSelf();
         }
         used_operands = true;
-    } else if (auto* call = dynamic_cast<const CallReferenceCallNode*>(expr.getInternalNode());
+    } else if (auto* call = qore_get_call_reference_call_node(expr.getInternalNode());
             call && call->getRuntimeArgNames()) {
         // a named call through a call reference or closure: the callable is the first argument
         result = call->evalRuntimeNamedWithArgs(arg_list.release(), xsink);
         used_operands = true;
-    } else if (auto* call = dynamic_cast<const CallReferenceCallNode*>(expr.getInternalNode())) {
-        const ParseNode* parse_node = dynamic_cast<const ParseNode*>(expr.getInternalNode());
-        const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
+    } else if (auto* call = qore_get_call_reference_call_node(expr.getInternalNode())) {
+        // a CallReferenceCallNode is a ParseNode
+        const QoreProgramLocation* loc = call->loc;
         QoreValue exp = call->getExp();
         if (exp.needsRef()) {
             exp = exp.refSelf();
@@ -11837,7 +11837,7 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
             result = result.refSelf();
         }
         used_operands = true;
-    } else if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
+    } else if (auto* dot = qore_get_dot_eval_operator_node(expr.getInternalNode());
             dot && dot->getMethodCall() && dot->getMethodCall()->getRuntimeArgNames()) {
         // a named call of a method of an object resolved at run time by parameter name: the receiver is the first
         // argument
