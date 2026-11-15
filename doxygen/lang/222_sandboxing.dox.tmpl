@@ -134,7 +134,8 @@ Program p(opts);
       caller.  The code of any other %Program that a sandboxed %Program calls, such as a function imported with
       @ref Qore::Program::importFunction() "Program::importFunction()" or a method of a class imported with
       @ref Qore::Program::importClass() "Program::importClass()", runs with the options of the %Program that defined
-      it; only the caller's @ref Qore::SandboxManager "SandboxManager" governs it
+      it; only the caller's @ref Qore::SandboxManager "SandboxManager" governs it.  The same holds for code that
+      runs through a @ref Qore::Program "Program" object that the code holds (see @ref sandbox_program_capability)
     - <b>Threads started by module code</b>: @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and the other
       thread parse options are checked when the code of the %Program is parsed, so they do not guarantee that the
       %Program cannot cause concurrent execution; see @ref sandbox_po_threads
@@ -235,7 +236,10 @@ auto result = p.callFunction("main");
     invoking the reference later also enforces its creation policy, even when trusted code makes the call and
     the method is implemented in a shared module. The nearest calling Program's policy still applies; an access
     must satisfy both it and every active creation policy. Copies, asynchronous callbacks, and bound callbacks
-    preserve this protection. A manager's interrupt and thread limits remain effective as well.
+    preserve this protection. A manager's interrupt and thread limits remain effective as well. A call reference
+    that sandboxed code gets from another Program with @ref Qore::Program::getCallReference() is created under the
+    caller's sandbox in the same way as one that it makes with the <tt>\\</tt> operator (see
+    @ref sandbox_program_capability).
 
     Creation provenance does not track later changes to a shared object. When a tenant configures an existing
     handler, keep its interface Program wrapper or bind its callback while executing in that interface:
@@ -311,6 +315,34 @@ authenticate();
     the policy manager is missing whenever no sandbox policy governed the setter, also for sandboxed code that runs
     inside a trusted @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" call.
     Only an option that the restrictions allow is checked against the setter's policy.
+
+    @subsection sandbox_program_capability Program Objects Are Capabilities
+
+    A @ref Qore::Program "Program" object is a capability: code that holds one can use everything that the
+    %Program can do.  The methods that run the %Program's code or return its callables, such as
+    @ref Qore::Program::callFunction() "Program::callFunction()",
+    @ref Qore::Program::callFunctionArgs() "Program::callFunctionArgs()",
+    @ref Qore::Program::callStaticMethod() "Program::callStaticMethod()",
+    @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()",
+    @ref Qore::Program::run() "Program::run()",
+    @ref Qore::Program::getCallReference() "Program::getCallReference()" and
+    @ref Qore::Program::getExpression() "Program::getExpression()", run code with the freedom of that %Program, not
+    with the freedom of the code that holds the object.
+
+    - <b>Parse options belong to each %Program</b>: they restrict the code that is parsed in that %Program (see
+      @ref sandbox_parse_options).  They are not carried into another %Program that the code calls: the code of
+      the other %Program runs with its own parse options
+    - <b>The runtime sandbox policy follows the caller</b>: the @ref Qore::SandboxManager "SandboxManager" that
+      governs the caller also governs the code that runs for it in the other %Program, and the objects and call
+      references created for the caller keep the caller's sandbox as their provenance, also when trusted code uses
+      them later (see @ref sandbox_provenance)
+    - <b>Give tenant code only what the tenant may do</b>: a host must not give tenant or sandboxed code a
+      @ref Qore::Program "Program" object with more freedom than the tenant itself has, such as the %Program of the
+      host or of another tenant, or a %Program with fewer parse-option restrictions than the tenant's own.  To give
+      tenant code a controlled operation, import a function that implements only that operation into the tenant's
+      %Program (see @ref Qore::Program::importFunction() "Program::importFunction()") instead
+
+    @since %Qore 3.0
 
     @subsection sandbox_module_state Module State
 

@@ -1563,6 +1563,16 @@ const WARN_NONEXHAUSTIVE_SWITCH = QP_WARN_NONEXHAUSTIVE_SWITCH;
     because code (functions or object methods) imported into and called from a subprogram will run in the parent's space and therefore
     with the parent's capabilities.
 
+    @warning A Program object is a capability: code that holds one can use everything that the %Program can do.
+    The methods that run its code or return its callables (Program::callFunction(), Program::callFunctionArgs(),
+    Program::callStaticMethod(), Program::callStaticMethodArgs(), Program::run(), Program::getCallReference() and
+    Program::getExpression()) run code with the freedom of this %Program, not with that of the code that holds the
+    object.  @ref parse_options "Parse options" belong to each %Program: they restrict the code parsed in this
+    %Program and are not carried into another %Program that its code calls.  Only the runtime policy of a
+    @ref Qore::SandboxManager "SandboxManager" follows the caller, and what is created for a sandboxed caller keeps
+    its sandbox as provenance (see @ref sandbox_provenance).  A host must therefore not give tenant or sandboxed
+    code a Program object with more freedom than the tenant itself has; see @ref sandbox_program_capability.
+
     @ref qore_classes "Classes", @ref constants "constants", @ref qore_namespaces "namespaces", @ref qore_functions "functions", and
     @ref global_variables "global variables" are only inherited into child Program objects if they are declared @ref mod_public "public"
     and no @ref parse_options "parse options" prohibit it.
@@ -1629,6 +1639,10 @@ qclass Program [arg=QoreProgram* p];
 Program pgm();
     @endcode
 
+    @warning the Program object is a capability: code that holds it can use everything that the new %Program can
+    do; do not give tenant or sandboxed code a Program object with more freedom than the tenant itself has (see
+    @ref Qore::Program "Program" and @ref sandbox_program_capability)
+
     @throw PROGRAM-OPTION-ERROR invalid parse options used
  */
 Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
@@ -1677,6 +1691,10 @@ opts.set("no-class-defs");
 opts.set("no-new");
 Program pgm(opts);
     @endcode
+
+    @warning the Program object is a capability: code that holds it can use everything that the new %Program can
+    do; do not give tenant or sandboxed code a Program object with more freedom than the tenant itself has (see
+    @ref Qore::Program "Program" and @ref sandbox_program_capability)
 
     @throw PROGRAM-OPTION-ERROR invalid parse options used
 
@@ -2044,6 +2062,10 @@ auto result = pgm.callFunction("func_name", arg1, arg2);
     @throw ENCODING-CONVERSION-ERROR the function name could not be converted to the @ref default_encoding "default character encoding"
 
     @note The function called could also cause other exceptions to be thrown
+
+    @note a Program object is a capability: the code runs with the freedom of this %Program and its own
+    @ref parse_options "parse options", not with those of the caller; only the caller's runtime sandbox policy
+    follows it (see @ref Qore::Program "Program" and @ref sandbox_program_capability)
  */
 auto Program::callFunction(string name, ...) {
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
@@ -2079,6 +2101,10 @@ auto result = pgm.callFunctionArgs("func_name", (arg1, arg2));
     @throw ENCODING-CONVERSION-ERROR the function name could not be converted to the @ref default_encoding "default character encoding"
 
     @note The function called could also cause other exceptions to be thrown
+
+    @note a Program object is a capability: the code runs with the freedom of this %Program and its own
+    @ref parse_options "parse options", not with those of the caller; only the caller's runtime sandbox policy
+    follows it (see @ref Qore::Program "Program" and @ref sandbox_program_capability)
  */
 auto Program::callFunctionArgs(string function_name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
@@ -2121,6 +2147,10 @@ auto result = p.callStaticMethod("Namespace::Class::method", arg1, arg2);
     itself or a subclass), in the caller's class context (since %Qore 3.0; before, private methods could be called
     from anywhere); a call made through call_function() or through a call reference to this function has the
     class context of that call, so it cannot call a private method
+
+    @note a Program object is a capability: the code runs with the freedom of this %Program and its own
+    @ref parse_options "parse options", not with those of the caller; only the caller's runtime sandbox policy
+    follows it (see @ref Qore::Program "Program" and @ref sandbox_program_capability)
 */
 auto Program::callStaticMethod(string class_name, string method, ...) {
     ReferenceHolder<QoreListNode> call_args(xsink);
@@ -2162,6 +2192,10 @@ auto result = p.callStaticMethodArgs("Namespace::Class::method", (arg1, arg2));
     itself or a subclass), in the caller's class context (since %Qore 3.0; before, private methods could be called
     from anywhere); a call made through call_function() or through a call reference to this function has the
     class context of that call, so it cannot call a private method
+
+    @note a Program object is a capability: the code runs with the freedom of this %Program and its own
+    @ref parse_options "parse options", not with those of the caller; only the caller's runtime sandbox policy
+    follows it (see @ref Qore::Program "Program" and @ref sandbox_program_capability)
 */
 auto Program::callStaticMethodArgs(
         string class_name, string method_name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
@@ -2202,6 +2236,10 @@ bool Program::existsFunction(string function_name) [flags=RET_VALUE_ONLY,NAMED_A
     @code{.py}
 pgm.run();
     @endcode
+
+    @note a Program object is a capability: the code runs with the freedom of this %Program and its own
+    @ref parse_options "parse options", not with those of the caller; only the caller's runtime sandbox policy
+    follows it (see @ref Qore::Program "Program" and @ref sandbox_program_capability)
  */
 auto Program::run() {
     return p->run(xsink);
@@ -4074,14 +4112,28 @@ nothing Program::issueModuleCmd(string module_name, string command) [dom=MODULES
       enables it to access any accessible private method
     - a non-static method cannot be referenced with this method, as it has no object (since %Qore 3.0); use
       <object>::getCallReference()
+    - a call reference that sandboxed code gets with this method keeps the sandbox of that code, also when trusted
+      code calls it later, as one that it makes with the <tt>\\</tt> operator (see @ref sandbox_provenance; since
+      %Qore 3.0)
 
     @see
     - @ref Qore::get_call_reference()
     - <object>::getCallReference()
 
     @since %Qore 0.9.4
+
+    @note a Program object is a capability: the code runs with the freedom of this %Program and its own
+    @ref parse_options "parse options", not with those of the caller; only the caller's runtime sandbox policy
+    follows it (see @ref Qore::Program "Program" and @ref sandbox_program_capability)
  */
 code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // the switch to the Program below hides a sandboxed caller from sandbox resolution: the caller's sandbox is
+    // applied as the provenance of the call reference, as for a reference that the caller creates with the \
+    // operator (issue #6149)
+    QoreCallerSandboxHelper caller_sandbox(p, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     QoreProgramContextHelper pch(p);
     // the identifier is resolved in the Program, not as a method of the Program object, which is the stack object
     // of this method (issue #5863)
@@ -4093,6 +4145,10 @@ code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_AR
     @param label the label for the expression
 
     @since %Qore 0.9.5
+
+    @note a Program object is a capability: the code runs with the freedom of this %Program and its own
+    @ref parse_options "parse options", not with those of the caller; only the caller's runtime sandbox policy
+    follows it (see @ref Qore::Program "Program" and @ref sandbox_program_capability)
 */
 Expression Program::getExpression(string source, string label) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreExpression> exp(new QoreExpression(*p, *source, *label, xsink), xsink);
