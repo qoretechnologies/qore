@@ -71,6 +71,24 @@ public class FoldedDebugStepDensityTest inherits QUnit::Test {
 }
 ";
 
+        #! a function stepped like work() of ChildScript whose folded statement, `x = ++total;`, starts on the line
+        #! before its operation
+        const MultiLineChildScript = "%modern
+*string sub work(int n, code attach, code detach) {
+    int total = 0;
+    int x = 0;
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {                       ### if
+            attach();
+        }
+        x =                                 ### assign
+            ++total;                        ### assign_op
+    }
+    detach();                               ### detach
+    return sprintf(\"%d:%d\", total, x);
+}
+";
+
         #! the statements of work() and those of them whose step events its fused local int operations keep: total +=
         #! 10, total += step and ++total; total++ keeps the value before the increment and is not one operation
         const WorkStatements = 11;
@@ -87,16 +105,20 @@ public class FoldedDebugStepDensityTest inherits QUnit::Test {
             - the line of the flow request
 
             work() is called once first, which compiles it to native code with JIT and tiered execution
-            (QORE_JIT_SYNC_COMPILE=1), and then with the debugger attached from the second iteration of its loop, while
-            it runs: as native code with JIT and tiered execution, with the IR interpreter with IR execution, and with the
-            AST interpreter with AST execution.  The debugger is in another Program, as the target Program does not allow
-            one (a Program can be debugged unless it has PO_NO_DEBUGGING).
+            (QORE_JIT_SYNC_COMPILE=1), and then with the debugger attached from the second iteration of its loop,
+            while it runs: as native code with JIT and tiered execution, with the IR interpreter with IR execution,
+            and with the AST interpreter with AST execution.  The debugger is in another Program, as the target
+            Program does not allow one (a Program can be debugged unless it has PO_NO_DEBUGGING).
+
+            Besides the line of the statement of each step event, the debugger records the line of the call of its
+            onStep() in the thread's call stack: the runtime location of the target Program at the event.
         */
         const ParentScript = '%allow-debugger
 
 class StepRecorder inherits DebugProgram {
     public {
         list<int> step_lines = ();
+        list<int> call_lines = ();
         int flow_value;
         int flow_line;
         int flow_hits = 0;
@@ -117,6 +139,13 @@ class StepRecorder inherits DebugProgram {
             *hash<auto> loc = pgm.getStatementIdInfo(sid);
             if (loc.start_line) {
                 push step_lines, loc.start_line;
+                # the line of the call of this method: the runtime location of the step event
+                foreach hash<CallStackInfo> frame in (get_thread_call_stack()) {
+                    if (frame.function == "StepRecorder::onStep") {
+                        push call_lines, frame.line;
+                        break;
+                    }
+                }
                 if (flow_value && loc.start_line == flow_line && ++flow_hits == 2) {
                     flow = flow_value;
                 }
@@ -154,6 +183,7 @@ dbg.removeProgram(pc);
 printf("ALLOW:%d\n", p.getParseOptions() & PO_ALLOW_DEBUGGER ? 1 : 0);
 printf("RESULT:<%s>\n", r ?? "none");
 printf("STEPLINES:%y\n", dbg.step_lines);
+printf("CALLLINES:%y\n", dbg.call_lines);
 ';
     }
 
@@ -165,6 +195,7 @@ printf("STEPLINES:%y\n", dbg.step_lines);
         addTestCase("the step events of folded statements", \testStepEvents());
         addTestCase("a debugger return at a folded statement", \testDebuggerReturn());
         addTestCase("a debugger break at a folded statement", \testDebuggerBreak());
+        addTestCase("the step event of a folded statement of more than one line", \testMultiLineStatement());
         set_return_value(main());
     }
 
@@ -233,9 +264,9 @@ printf("STEPLINES:%y\n", dbg.step_lines);
     }
 
     #! returns the 1-based line numbers of the tagged statements of work()
-    private hash<string, int> tagLines() {
+    private hash<string, int> tagLines(string script = ChildScript) {
         hash<string, int> ret = {};
-        list<string> script_lines = ChildScript.split("\n");
+        list<string> script_lines = script.split("\n");
         for (int i = 0; i < script_lines.size(); ++i) {
             *list<*string> tag = script_lines[i] =~ x/### ([a-z_]+)/;
             if (tag) {
@@ -246,9 +277,9 @@ printf("STEPLINES:%y\n", dbg.step_lines);
     }
 
     #! returns the IR instruction count of work() in a target Program that the native-compilation budget reports
-    private int workIrCount(string target, *bool no_debugging) {
+    private int workIrCount(string target, *bool no_debugging, string script = ChildScript) {
         TmpFile child(NOTHING, ".q");
-        child.file.write((no_debugging ? "%no-debugging\n" : "") + ChildScript);
+        child.file.write((no_debugging ? "%no-debugging\n" : "") + script);
         child.file.close();
         TmpFile parent(NOTHING, ".qr");
         parent.file.write(ParentScript);
@@ -271,9 +302,10 @@ printf("STEPLINES:%y\n", dbg.step_lines);
     }
 
     #! runs the debugger's script on a target Program in every execution mode; returns the results by mode
-    private hash<string, hash<auto>> runSteps(string target, string action, int flow_line) {
+    private hash<string, hash<auto>> runSteps(string target, string action, int flow_line,
+            string script = ChildScript) {
         TmpFile child(NOTHING, ".q");
-        child.file.write(ChildScript);
+        child.file.write(script);
         child.file.close();
         TmpFile parent(NOTHING, ".qr");
         parent.file.write(ParentScript);
@@ -295,6 +327,7 @@ printf("STEPLINES:%y\n", dbg.step_lines);
 
     private static hash<auto> parseSteps(string out) {
         *list<*string> steps = out =~ x/STEPLINES:\[([0-9, ]*)\]/;
+        *list<*string> calls = out =~ x/CALLLINES:\[([-0-9, ]*)\]/;
         *list<*string> result = out =~ x/RESULT:<([^>]*)>/;
         *list<*string> allow = out =~ x/ALLOW:([01])/;
         return {
@@ -302,6 +335,7 @@ printf("STEPLINES:%y\n", dbg.step_lines);
             "allow": allow ? allow[0] : NOTHING,
             "result": result ? result[0] : NOTHING,
             "step_lines": steps ? (map trim($1).toInt(), steps[0].split(","), trim($1) != "") : (),
+            "call_lines": calls ? (map trim($1).toInt(), calls[0].split(","), trim($1) != "") : (),
         };
     }
 
@@ -313,6 +347,8 @@ printf("STEPLINES:%y\n", dbg.step_lines);
                 "not folded: %s", what, mode, folded{mode}.out));
             assertEq(reference{mode}.step_lines, folded{mode}.step_lines, sprintf("%s %s: the step events with the "
                 "statements not folded", what, mode));
+            assertEq(reference{mode}.call_lines, folded{mode}.call_lines, sprintf("%s %s: the runtime locations of "
+                "the step events with the statements not folded", what, mode));
         }
     }
 
@@ -372,5 +408,32 @@ printf("STEPLINES:%y\n", dbg.step_lines);
         # the IR interpreter does not take the break as AST does (issue #6201), and native code takes no flow (issue
         # #6200): every mode is the same with the statements not folded
         assertSameAsReference(res, runSteps("reference", "break", tags.add_constant), "break");
+    }
+
+    testMultiLineStatement() {
+        hash<string, int> tags = tagLines(MultiLineChildScript);
+        assertEq(tags.assign + 1, tags.assign_op, "the operation of the statement is on its second line");
+        # `x = ++total;` is folded: it has no step event of its own in the IR, unlike in the reference
+        int folded = workIrCount("folded", False, MultiLineChildScript)
+            - workIrCount("folded", True, MultiLineChildScript);
+        int reference = workIrCount("reference", False, MultiLineChildScript)
+            - workIrCount("reference", True, MultiLineChildScript);
+        assertEq(reference - 1, folded, "the multi-line statement of work() is folded in the target Program");
+        # the steps after the attach at i == 2
+        list<int> expected = map tags{$1}, ("assign", "if", "assign", "detach");
+        hash<string, hash<auto>> res = runSteps("folded", "steps", 0, MultiLineChildScript);
+        foreach hash<auto> i in (res.pairIterator()) {
+            assertEq("4:4", i.value.result, i.key + ": the function's result: " + i.value.out);
+            assertEq(expected, i.value.step_lines, i.key + ": the step event of every statement");
+            # the step event of the folded statement is made in the location of the statement (its first line), not
+            # in that of its operation; the AST interpreter does not set the runtime location of a statement before its
+            # event (the same with the reference, below)
+            if (i.key != "ast") {
+                assertEq(expected, i.value.call_lines, i.key + ": the runtime location of every step event");
+            }
+            assertEq(i.key == "jit" || i.key == "tiered", i.value.native, i.key + ": work() runs as native code "
+                "when the debugger attaches with JIT and tiered execution");
+        }
+        assertSameAsReference(res, runSteps("reference", "steps", 0, MultiLineChildScript), "multi-line");
     }
 }
