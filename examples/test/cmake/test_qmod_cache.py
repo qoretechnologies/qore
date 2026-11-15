@@ -216,13 +216,13 @@ class ModuleInfoTest(unittest.TestCase):
         a.mkdir()
         self.assertEqual([], qc.module_candidates("Opt", [str(a), str(b), str(self.dir / "missing")]))
         (b / "Opt" / "Opt.qm").write_text("x")
-        (a / "Opt-api-2.1.qmod").write_text("y")
+        (a / "Opt-api-2.3.qmod").write_text("y")
         (a / "Optional.qm").write_text("z")
         # a process lists each directory once
         self.assertEqual([], qc.module_candidates("Opt", [str(a), str(b)]))
         qc._listdir_cache.clear()
         names = [os.path.relpath(p, self.dir) for p, _ in qc.module_candidates("Opt", [str(a), str(b)])]
-        self.assertEqual(["a/Opt-api-2.1.qmod", os.path.join("b", "Opt", "Opt.qm")], names)
+        self.assertEqual(["a/Opt-api-2.3.qmod", os.path.join("b", "Opt", "Opt.qm")], names)
 
 
 class IncludeTest(unittest.TestCase):
@@ -272,7 +272,7 @@ class EntryProblemTest(unittest.TestCase):
                           "module_key": "e"}],
                 "optional": [{"spec": "xml", "name": "xml", "candidates": [["/m/x", "f"]]}],
                 "resolution": [{"name": "U", "candidates": [["/s/U.qm", "/s/U.qm"]]}],
-                "files": {"qmod": "1" * 64, ".d": "2" * 64, ".d.fingerprints": "3" * 64}, "mode": 0o755,
+                "files": {"qmod": "1" * 64, ".d": "2" * 64, ".d.fingerprints": "3" * 64, ".d.optional": "4" * 64}, "mode": 0o755,
                 "epoch": "4" * 32}
 
     def test_entry_problem(self):
@@ -523,7 +523,7 @@ class KeyTest(unittest.TestCase):
         self.assertNotEqual(k, qc.result_key("base", deps[:1], opt, res))
         self.assertNotEqual(k, qc.result_key("base", deps, [], res))
         self.assertNotEqual(k, qc.result_key("base", deps, [{"spec": "xml", "name": "xml",
-                                                             "candidates": [["/m/xml-api-2.1.qmod", "d"]]}], res))
+                                                             "candidates": [["/m/xml-api-2.3.qmod", "d"]]}], res))
         self.assertNotEqual(k, qc.result_key("base", deps, opt, []))
         self.assertNotEqual(k, qc.result_key("base", deps, opt, [{"name": "U", "candidates": [
             ["/e/U.qm", "/e/U.qm"], ["/s/U.qm", "/s/U.qm"]]}]))
@@ -721,6 +721,8 @@ tmp.replace(out)
 listed = all_deps + ([Path((here / "extra-dep.txt").read_text().strip())] if (here / "extra-dep.txt").exists() else [])
 depfile.write_text("%s: \\\n    %s\n" % (out, " \\\n    ".join(str(p) for p in listed)))
 Path(str(out) + ".d.fingerprints").write_text("\n".join(lines) + "\n")
+# the paths where the modules of failed %try-module directives could be installed (none here; qore#6145)
+Path(str(out) + ".d.optional").write_text("")
 # a source that is written after qcc read it
 if (here / "slow.txt").exists():
     time.sleep(0.05)
@@ -1343,7 +1345,7 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
 
     def test_restored_files_are_checked(self):
         self.build_all()
-        for damaged in ("1", ".d", ".d.fingerprints"):
+        for damaged in ("1", ".d", ".d.fingerprints", ".d.optional"):
             self.assertEqual(["Base", "Mid", "Other", "Top"],
                              self.build_all(env={"QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE": damaged}), damaged)
             self.assertIn("differs from the cache", self.output)

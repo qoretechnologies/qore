@@ -32,6 +32,18 @@
 #ifndef _QORE_QOREMULTIPLYEQUALSOPERATORNODE_H
 #define _QORE_QOREMULTIPLYEQUALSOPERATORNODE_H
 
+class LValueHelper;
+
+//! *= with a date lvalue or operand: assigns the product that the * operator gives, a relative date (qore#6109)
+/** @param v the lvalue
+    @param rhs the operand
+    @param xsink for an \c INVALID-DATE exception if the product is out of range, and for an exception if the
+    lvalue's type does not accept a date
+
+    @return 0 for success, -1 if an exception was raised
+*/
+DLLLOCAL int qore_date_multiply_equals(LValueHelper& v, const QoreValue& rhs, ExceptionSink* xsink);
+
 class QoreMultiplyEqualsOperatorNode : public QoreBinaryLValueOperatorNode {
 OP_COMMON
 protected:
@@ -62,6 +74,14 @@ protected:
         if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(rti)) {
             rti = src;
         }
+        // a date operand gives a relative date, as the * operator does (qore#6109): a date lvalue keeps its type, and
+        // the product is assigned to any other lvalue, whose type decides at runtime
+        if (QoreTypeInfo::isType(lti, NT_DATE)) {
+            return lvalue_e::KEEP;
+        }
+        if (QoreTypeInfo::isType(rti, NT_DATE)) {
+            return lvalue_e::GENERIC;
+        }
         if (QoreTypeInfo::isType(lti, NT_NUMBER)) {
             return lvalue_e::KEEP;
         }
@@ -91,6 +111,10 @@ public:
 
     DLLLOCAL int parseInitIntern(const char* name, QoreParseContext& parse_context) {
         assert(!parse_context.typeInfo);
+        // the operands' values are used: turn off the "return value ignored" flag of the statement, as += does
+        // (qore#6140)
+        QoreParseContextFlagHelper fh_rvi(parse_context);
+        fh_rvi.unsetFlags(PF_RETURN_VALUE_IGNORED);
         int err;
         {
             QoreParseContextFlagHelper fh(parse_context);

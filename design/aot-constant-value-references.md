@@ -371,7 +371,9 @@ replacement is initialized with `FunctionCallNode::parseInitReplacementCall()`, 
 records it, and so is a call of a method of the class without a receiver, which a
 `FunctionCallNode` replaces with a `SelfFunctionCallNode`
 (`examples/test/ir/AOTCrossModuleCallReturnType.qtest`).  The cost of the
-cross-module call itself is [#6035](https://github.com/qoretechnologies/qore/issues/6035).
+cross-module call itself was [#6035](https://github.com/qoretechnologies/qore/issues/6035):
+such a call now calls the callee's native fast entry (see "Native Calls Between
+Modules" in [`aot-object-files-and-module-artifacts.md`](aot-object-files-and-module-artifacts.md)).
 
 ## The load-side guard
 

@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A typed list or hash returned through the return type `any` has its complex type stripped, as on assignment to an
+# `any` variable, in every execution mode and in qcc-compiled code (issue #6058): the IR engines returned it with its
+# type; `auto` and typed return types keep it, and a returned variable keeps its own type; see AnyReturnStrip.qtest.
+
+hashdecl AnyReturnStripHd {
+    int a;
+}
+
+list<int> li = (1, 2);
+hash<string, int> hi = {"a": 1};
+
+any sub literal_nothing() { *int n; return (n, 1); }
+any sub literal_expr() { int x = 4; return (x / 2, 1); }
+any sub literal_const() { return (2, 1); }
+any sub typed_list() { list<int> l = (1, 2); return l; }
+any sub typed_hash() { hash<string, int> h = {"a": 1}; return h; }
+any sub hashdecl_value() { return <AnyReturnStripHd>{"a": 1}; }
+any sub shared_list() { return li; }
+any sub scalar() { return 1; }
+auto sub auto_list() { list<int> l = (1, 2); return l; }
+list<int> sub typed_return() { return (1, 2); }
+# a generic class instantiated with `any`: the value is stripped when it enters the parameter of type `any`, so the
+# return of the type parameter never gets a typed one (`any` is not accepted as an explicit type argument of a generic
+# function, and a typed value cannot be returned as the type parameter; this guards the return of a type parameter
+# that the arguments instantiate as `any`)
+class AnyReturnStripG<T> {
+    T id(T v) { return v; }
+}
+class AnyReturnStripC {
+    any m() { hash<string, int> h = {"a": 1}; return h; }
+}
+code c = any sub () { list<int> l = (3, 4); return l; };
+
+sub show(string label, auto v) {
+    printf("%s: %y %s\n", label, v, v.fullType());
+}
+
+# several calls, so that the code also runs once it has IR or is compiled
+for (int i = 0; i < 3; ++i) {
+    show("literal with nothing", literal_nothing());
+    show("literal expression", literal_expr());
+    show("literal of constants", literal_const());
+    show("list<int> local", typed_list());
+    show("hash<string, int> local", typed_hash());
+    show("hashdecl", hashdecl_value());
+    show("shared list<int>", shared_list());
+    show("scalar", scalar());
+    show("method", (new AnyReturnStripC()).m());
+    show("closure", c());
+    show("auto return", auto_list());
+    show("typed return", typed_return());
+    # calls that do not apply the return type themselves (UserVariantBase::evalTiered())
+    show("call_function", call_function("typed_list"));
+    show("call_object_method", call_object_method(new AnyReturnStripC(), "m"));
+    show("generic instantiated with any", (new AnyReturnStripG<any>()).id(li));
+    printf("caller: %s %s\n", li.fullType(), hi.fullType());
+}
