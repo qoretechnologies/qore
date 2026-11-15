@@ -27,7 +27,8 @@ TESTS = ROOT / "examples/test"
 SOURCE_SUFFIXES = (".qtest", ".qm", ".qc", ".qi", ".ql")
 
 #: the lookups of the interpreter that only TestInterpreter.qm makes
-LOOKUP = re.compile(r"\bQORE_ARGV\[0\]|\bENV\.(?:QORE_BIN|QORE_BINARY|QORE_EXECUTABLE)\b"
+LOOKUP = re.compile(r"\bQORE_ARGV\s*\[\s*0\s*\]"
+                    r"|\bENV\s*(?:\.\s*\"?|\{\s*\")(?:QORE_BIN|QORE_BINARY|QORE_EXECUTABLE)\b"
                     r"|\bgetenv\(\s*\"(?:QORE_BIN|QORE_BINARY|QORE_EXECUTABLE)\"\s*\)")
 
 #: the module that makes the lookups
@@ -118,10 +119,12 @@ class InterpreterLookupTest(unittest.TestCase):
             "/* ENV.QORE_BINARY in a block comment */",
             "string d = \"QORE_ARGV[0] in a string \\\" ENV.QORE_BINARY\";",
             "string e = 'ENV.QORE_EXECUTABLE in a single-quoted string';",
+            "string g = QORE_ARGV [ 0 ] + ENV{\"QORE_BIN\"} + ENV.\"QORE_BINARY\";",
             "string f = TestInterpreter::qore_interpreter();",
         ])
         self.assertEqual([(1, "ENV.QORE_BIN"), (1, "ENV.QORE_BINARY"), (1, "QORE_ARGV[0]"), (2, "QORE_ARGV[0]"),
-                          (3, "getenv(\"QORE_EXECUTABLE\")")], lookups(sample))
+                          (3, "getenv(\"QORE_EXECUTABLE\")"), (8, "QORE_ARGV [ 0 ]"), (8, "ENV{\"QORE_BIN"),
+                          (8, "ENV.\"QORE_BINARY")], lookups(sample))
 
 
 if __name__ == "__main__":

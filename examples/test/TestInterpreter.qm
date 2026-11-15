@@ -109,13 +109,23 @@ public namespace TestInterpreter {
     */
     public string sub qore_interpreter() {
         guard_recursion();
-        foreach *string candidate in ((ENV.QORE_BINARY, ENV.QORE_BIN, ENV.QORE_EXECUTABLE)) {
+        # QORE_BIN first: a developer sets it to choose a build, while run_tests.sh always exports QORE_BINARY
+        foreach *string candidate in ((ENV.QORE_BIN, ENV.QORE_BINARY, ENV.QORE_EXECUTABLE)) {
             if (candidate && !is_own_executable(candidate)) {
                 return candidate;
             }
         }
         if (!running_compiled()) {
-            return QORE_ARGV[0];
+            # the running interpreter; a name found in the PATH is given as the path that the PATH names, so that it
+            # also runs from another directory
+            string path = QORE_ARGV[0];
+            if (path !~ /\//) {
+                *string found = trim(backquote(sprintf("command -v '%s' 2>/dev/null", replace(path, "'", "'\\''"))));
+                if (found) {
+                    return found;
+                }
+            }
+            return path;
         }
         *string found = trim(`command -v qore 2>/dev/null`);
         if (found && !is_own_executable(found)) {
