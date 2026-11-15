@@ -3833,18 +3833,23 @@ public:
             : list(&list), xsink(xsink) {
     }
 
-    // inlined in the removal functions, which hold one each: an out-of-line call costs every removal
+    // inlined in the removal functions, which hold one each: an out-of-line call costs every removal; the exception
+    // of a selector is handled out of line (raiseSelectorException())
     QORE_INTERN_ALWAYS_INLINE ~LValueRemoveSelectors() {
-        // the exception of a selector is raised before any exception raised since
         if (sel_xsink) {
-            ExceptionSink since;
-            since.assimilate(*xsink);
-            xsink->assimilate(sel_xsink);
-            xsink->assimilate(since);
+            raiseSelectorException();
         }
         for (QoreValue& v : values) {
             v.discard(xsink);
         }
+    }
+
+    //! raises the exception of a selector before any exception raised since
+    QORE_INTERN_NOINLINE void raiseSelectorException() {
+        ExceptionSink since;
+        since.assimilate(*xsink);
+        xsink->assimilate(sel_xsink);
+        xsink->assimilate(since);
     }
 
     //! the root hook of LValueHelper: evaluates the selectors

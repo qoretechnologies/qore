@@ -1425,7 +1425,8 @@ public:
     /** A scalar that the lvalue stores natively and that a value holds in a node (an integer outside the inline range
         or a special float) is returned in a new node, which this helper keeps and releases with its other temporary
         values (qore#6094); the value is therefore never the caller's own, and a caller that keeps it takes its own
-        reference
+        reference.  Each call makes and keeps a new node for such a value until the helper is destroyed, so a caller
+        that needs the value more than once reads it once
     */
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE const QoreValue getValue() const {
         return getValueIntern();
@@ -1442,8 +1443,8 @@ public:
     }
 
     //! returns the node stored in the lvalue, or nullptr if it holds none
-    /** unlike getValue(), this never creates a node: getValue() returns a scalar stored natively that a value holds
-        in a node (a large int or a special float) in a new node, which this helper keeps until it is destroyed
+    /** unlike getValue(), this never creates a node: getValue() returns a natively stored large int or special float
+        in a new node, which this helper keeps until it is destroyed
     */
     DLLLOCAL const AbstractQoreNode* getInternalNode() const {
         return val ? val->getInternalNode() : qv->getInternalNode();
