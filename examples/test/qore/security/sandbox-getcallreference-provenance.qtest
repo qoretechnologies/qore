@@ -29,8 +29,7 @@ hash<auto> sub probe() {
     } catch (hash<ExceptionInfo> ex) {
         h.fs = ex.err;
     }
-    # a builtin of the uncontrolled-API domain: a sandbox that governs the code refuses the call
-    # (INVALID-FUNCTION-ACCESS, as the sandbox does not allow uncontrolled APIs; qore#5741)
+    # a builtin of the uncontrolled-API domain, which the sandbox refuses at run time (qore#5741)
     try {
         code c = SandboxManager::createSystemPolicyCall(sub () {});
         delete c;
