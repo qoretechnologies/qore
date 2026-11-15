@@ -235,10 +235,14 @@
     Datasource::getOptionRestrictions() for the restrictions of the code that set it, and
     Datasource::getOptionPolicyManagerRef() for that code's filesystem policy, instead of
     QoreModuleCommandRestrictions::getCallerRestrictions(); it falls back to the caller only when no setter is
-    recorded.  The restrictions are checked first, and an option that they refuse is refused whatever the policy is:
-    Datasource::getOptionPolicyManagerRef() returns nullptr whenever no sandbox policy governed the setter, also for
-    sandboxed code inside a trusted \c SandboxManager::callWithSystemPolicy() call, so a missing policy does not mean
-    that the setter was trusted.  Only an option that the restrictions allow is checked against the policy:
+    recorded.  For an option that is judged like a module command (an option that does something itself, such as
+    adding to a classpath), the restrictions are checked first, and an option that they refuse is refused whatever the
+    policy is: Datasource::getOptionPolicyManagerRef() returns nullptr whenever no sandbox policy governed the setter,
+    also for sandboxed code inside a trusted \c SandboxManager::callWithSystemPolicy() call, so for such an option a
+    missing policy does not mean that the setter was trusted.  Only an option that the restrictions allow is checked
+    against the policy.  An option that chooses the destination of a connection (such as a JDBC URL) is judged
+    instead like the connection values, by the policy rule of the code that chose the connection (below), where a
+    setter without a policy manager counts as trusted:
 
     @code{.cpp}
 static int my_set_option(Datasource* ds, const char* opt, const QoreValue val, ExceptionSink* xsink) {
@@ -283,10 +287,12 @@ static int my_set_option(Datasource* ds, const char* opt, const QoreValue val, E
     values in use, and \c Datasource::addOptionChooser() adds the setter of each option that the driver uses to choose
     the destination (the %Qore library does not know which options of a driver do that).  The connection is
     restricted if any entry does not allow uncontrolled APIs; read each entry's result once, and derive the aggregate
-    from those results, as a host can change a policy at any time.  A restricted connection is checked against the
-    policy managers of the entries that restrict it; a restricted entry without a policy manager is never a
-    permission, and so is an empty record (\c size() == 0, which \c QoreDatasourceConnectChoosers::allowsUncontrolledApis()
-    reports as restricted).  Call them as \c Datasource::getConnectOptions() is called: from the open function, or while
+    from those results, as a host can change a policy at any time.  This is the policy rule, not the rule of a
+    module command: an entry without a policy manager (code that no sandbox governed, or that ran under a trusted
+    barrier such as \c SandboxManager::callWithSystemPolicy() or a capability) allows uncontrolled APIs, so every
+    entry that restricts the connection has a policy manager, and a restricted connection is checked against the
+    policy managers of the entries that restrict it.  An empty record (\c size() == 0) is never a permission:
+    \c QoreDatasourceConnectChoosers::allowsUncontrolledApis() reports it as restricted.  Call them as \c Datasource::getConnectOptions() is called: from the open function, or while
     the thread holds the connection (also for the driver's own reconnect):
 
     @code{.cpp}

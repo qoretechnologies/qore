@@ -885,11 +885,16 @@ public:
         @return true if the code that set the option is known and \a restrictions were set, false if not (the option
         is not set, or it was set in a way that recorded no setter): then the driver judges the code that is running
 
-        @note A driver checks these restrictions first, and an option that they refuse (the setter was sandboxed or
-        restricted) is refused whatever getOptionPolicyManagerRef() returns: that manager is nullptr whenever no
-        sandbox policy governed the setter, also for sandboxed code that ran inside a trusted
-        \c SandboxManager::callWithSystemPolicy() call (a barrier), so a missing policy is not a permission.  Only an
-        option that these restrictions allow is then checked against the policy, if there is one
+        @note For an option that is judged like a module command (an option that does something itself, such as adding
+        to a classpath), a driver checks these restrictions first, and an option that they refuse (the setter was
+        sandboxed or restricted) is refused whatever getOptionPolicyManagerRef() returns: that manager is nullptr
+        whenever no sandbox policy governed the setter, also for sandboxed code that ran inside a trusted
+        \c SandboxManager::callWithSystemPolicy() call (a barrier), so for such an option a missing policy is not a
+        permission.  Only an option that these restrictions allow is then checked against the policy, if there is one.
+        An option that chooses the destination of a connection (such as a JDBC URL), like the connection values and
+        the database name, is judged by the policy rule instead (addOptionChooser() and getConnectChoosers()): a
+        setter without a policy manager (code that no sandbox governed, or that ran under a trusted barrier or a
+        capability) counts as trusted, as QoreDatasourceConnectChoosers::allowsUncontrolledApis(size_t) reports
 
         @see getOptionPolicyManagerRef()
         @see getConnectChoosers() and addOptionChooser() for the code that chose the destination of a connection
@@ -910,10 +915,12 @@ public:
         @return a new reference to the policy manager (the caller owns it), or nullptr if no sandbox policy governed
         the code that set the option, or if the setter is not known (see getOptionRestrictions())
 
-        @note Call it after getOptionRestrictions() has allowed the option, never instead of it: nullptr does not mean
-        that the setter was trusted (under a trusted barrier, \c SandboxManager::callWithSystemPolicy(), the code that
-        set the option has no policy manager but can still be sandboxed), so a driver that refuses the option for a
-        restricted setter refuses it before it looks at the policy
+        @note For an option that is judged like a module command, call it after getOptionRestrictions() has allowed
+        the option, never instead of it: nullptr does not mean that the setter was trusted (under a trusted barrier,
+        \c SandboxManager::callWithSystemPolicy(), the code that set the option has no policy manager but can still be
+        sandboxed), so a driver that refuses the option for a restricted setter refuses it before it looks at the
+        policy.  An option that chooses the destination of a connection is judged by the policy rule of
+        addOptionChooser() instead, where a setter without a policy manager counts as trusted
 
         @since %Qore 3.0
     */
