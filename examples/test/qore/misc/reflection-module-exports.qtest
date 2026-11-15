@@ -6,7 +6,6 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
 %requires FsUtil
 %requires QUnit
 %requires reflection

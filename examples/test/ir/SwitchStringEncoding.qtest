@@ -104,7 +104,9 @@ class SwitchStringEncodingTest inherits QUnit::Test {
         # the iconv of musl has no UTF-7: a UTF-7 value or case can then be compared with no case in another encoding
         bool have_utf7;
         try {
-            convert_encoding("+", "UTF-7");
+            # UTF-7 encodes "+" as "+-"
+            string utf7_plus = convert_encoding("+", "UTF-7");
+            assertEq(binary("+-"), binary(utf7_plus), "UTF-7 \"+\"");
             have_utf7 = True;
         } catch (hash<ExceptionInfo> ex) {
             assertEq("ENCODING-CONVERSION-ERROR", ex.err);

@@ -24,8 +24,6 @@
 
 %modern
 
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/astparser"
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires json

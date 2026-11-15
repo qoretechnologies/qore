@@ -24,10 +24,6 @@
 %modern
 %enable-all-warnings
 
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ocr"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/tokenizer"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/dataframe"
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit

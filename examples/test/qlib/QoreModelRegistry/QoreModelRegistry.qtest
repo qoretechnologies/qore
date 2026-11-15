@@ -25,7 +25,6 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
 %requires Util
 %requires QUnit
 %requires Mime

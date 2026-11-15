@@ -4,7 +4,6 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
 %requires QUnit
 
 # for runtime (as opposed to parse-time) resolution of type strings

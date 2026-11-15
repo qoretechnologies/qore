@@ -12,8 +12,6 @@
 %requires Util
 %requires QUnit
 
-%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/tokenizer"
-
 %requires json
 
 %try-module tokenizer

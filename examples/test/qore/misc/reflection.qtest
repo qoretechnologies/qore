@@ -5,7 +5,6 @@
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
 %requires Util
 %requires QUnit
 
@@ -3706,7 +3705,7 @@ class ReflectionTest inherits QUnit::Test {
 
     userDomainTests() {
         # the functional domains declared on user code are reported (issue #5803)
-        AbstractReflectionFunction f = Function::forName("reflect_tagged");
+        Function f = Function::forName("reflect_tagged");
         assertEq(DOM_PROCESS_CONTROL | DOM_NETWORK, f.getDomain());
         assertEq(DOM_PROCESS_CONTROL | DOM_NETWORK, f.getVariants()[0].getDomain());
         # the names are those of the DOM_* constants (issue #5843)
