@@ -225,10 +225,13 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   executables
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
         #   under valgrind
+        # - AOTModuleInitException (#6217): its checks run in child processes of the interpreter and of qcc
+        #   executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
+                                 "examples/test/ir/AOTModuleInitException.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/classes/deleted-program-types.qtest",
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
