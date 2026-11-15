@@ -4245,18 +4245,25 @@ void QoreModuleManager::getModuleCandidatePaths(const char* name, QoreProgram* p
         dirs.insert(dirs.end(), appended.begin(), appended.end());
     }
 
-    auto add = [&files, missing](const QoreString& path) {
+    // the working directory, for the paths of the missing files: the build checks them from another directory than
+    // the one qcc runs in
+    std::string cwd;
+    if (missing) {
+        std::unique_ptr<char, decltype(&free)> dir(getcwd(nullptr, 0), &free);
+        if (dir) {
+            cwd = dir.get();
+        }
+    }
+    auto add = [&files, missing, &cwd](const QoreString& path) {
         struct stat sb;
         bool found = !stat(path.c_str(), &sb) && S_ISREG(sb.st_mode);
         if (missing) {
             if (!found) {
-                // an absolute path: the build checks it from another directory than the one qcc runs in
-                if (path.c_str()[0] == '/') {
+                // an absolute path
+                if (path.c_str()[0] == '/' || cwd.empty()) {
                     files.emplace_back(path.c_str());
                 } else {
-                    char* cwd = getcwd(nullptr, 0);
-                    files.emplace_back(cwd ? std::string(cwd) + "/" + path.c_str() : std::string(path.c_str()));
-                    free(cwd);
+                    files.emplace_back(cwd + "/" + path.c_str());
                 }
             }
             return;
