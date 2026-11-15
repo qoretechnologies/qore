@@ -31,6 +31,8 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         addPartCase(2, "nested module loads", \moduleCheck());
         addPartCase(2, "nested optional module loads", \tryModuleCheck());
         addPartCase(2, "nested optional AOT module loads", \aotModuleCheck());
+        addPartCase(2, "AOT module compiled without an optional module that is available now",
+            \aotOptionalAvailableCheck());
         addPartCase(2, "module initialization that recurses without end", \runawayInitCheck());
         addPartCase(2, "module initialization deeper than a small stack", \deepInitCheck());
         set_return_value(main());
@@ -93,10 +95,35 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         return dir;
     }
 
+    #! Returns True if the command (the first word of a command line, such as that of CXX) can be run: an executable
+    #! file, or one found in the PATH
+    private static bool haveCommand(string cmd) {
+        string name = (cmd =~ x/^\s*(\S+)/)[0] ?? "";
+        if (!name) {
+            return False;
+        }
+        if (name =~ /\//) {
+            return is_executable(name);
+        }
+        foreach string dir in (ENV.PATH.split(":")) {
+            if (dir && is_executable(dir + "/" + name)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
     #! builds the fixture in the given directory and returns the path of the executable
     private string build(string dir, string root, string libdir) {
+        string cxx = ENV.CXX ?? "c++";
+        # only a missing compiler skips the test: a compiler that cannot build the fixture is a failure
+        if (!haveCommand(cxx)) {
+            testSkip(sprintf("no C++ compiler to build the fixture: %y is not available", cxx));
+        }
         string exe = dir + "/parse-stack-boundary";
-        list<string> args = (ENV.CXX ?? "c++", "-std=c++17", "-pthread", "-g", "-O2", "-I" + root + "/include",
+        # CXX can be a command line, such as "ccache c++": its words are the first arguments
+        list<string> args = (select cxx.split(" "), $1.val());
+        args += ("-std=c++17", "-pthread", "-g", "-O2", "-I" + root + "/include",
             "-I" + libdir + "/include", get_script_dir() + "/parse_stack_boundary.cpp", "-L" + libdir,
             "-Wl,-rpath," + libdir, "-lqore", "-o", exe);
         *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
@@ -105,10 +132,6 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         }
         int status;
         string output = backquote((map quote($1), args).join(" ") + " 2>&1", \status);
-        # 127: the shell cannot find the command
-        if (status == 127 || (status && output =~ /not found/)) {
-            testSkip("no C++ compiler to build the fixture: " + output);
-        }
         assertEq(0, status, output);
         return exe;
     }
@@ -359,19 +382,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         }
         string root = realpath(get_script_dir() + "/../../../../..");
         string libdir = getLibDir();
-        *string qcc = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libdir + "/qcc") ? libdir + "/qcc" : NOTHING);
-        if (!qcc) {
-            # the qcc of the PATH, if any
-            foreach string dir in (ENV.PATH.split(":")) {
-                if (dir && is_executable(dir + "/qcc")) {
-                    qcc = dir + "/qcc";
-                    break;
-                }
-            }
-        }
-        if (!qcc) {
-            testSkip("qcc is not available");
-        }
+        string qcc = getQcc(libdir);
         TmpDir dir("qore-parse-stack-aot-");
         string exe = build(dir.path, root, libdir);
         string src = dir.path + "/src";
@@ -394,14 +405,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
                         "%%endtry\n", next, next)
                     : "",
                 i, i, i + 1 < AotChainLength ? next + "::count()" : "0"));
-            string qmod = sprintf("%s/StackAot%d.qmod", mdir, i);
-            int status;
-            string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
-                + " QORE_MODULE_DIR=" + quote(mdir) + " " + quote(qcc) + " -m " + quote(path) + " -o " + quote(qmod)
-                + " 2>&1", \status);
-            # qcc is available, so a module that it cannot compile is a failure
-            assertEq(0, status, sprintf("qcc %s: %s", basename(path), output));
-            assertTrue(is_file(qmod), sprintf("qcc %s: %s", basename(path), output));
+            compileAotModule(qcc, libdir, mdir, path, sprintf("%s/StackAot%d.qmod", mdir, i));
         }
         string source = dir.path + "/try-aot.q";
         writeFile(source, "%try-module StackAot0\n"
@@ -427,13 +431,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
                 "}\n",
                 i + 1 < AotRequiresChainLength ? sprintf("%%requires AotReq%d\n", i + 1) : "", i, i,
                 i + 1 < AotRequiresChainLength ? sprintf("AotReq%d::count()", i + 1) : "0"));
-            string qmod = sprintf("%s/AotReq%d.qmod", req_mdir, i);
-            int status;
-            string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
-                + " QORE_MODULE_DIR=" + quote(req_mdir) + " " + quote(qcc) + " -m " + quote(path) + " -o "
-                + quote(qmod) + " 2>&1", \status);
-            assertEq(0, status, sprintf("qcc %s: %s", basename(path), output));
-            assertTrue(is_file(qmod), sprintf("qcc %s: %s", basename(path), output));
+            compileAotModule(qcc, libdir, req_mdir, path, sprintf("%s/AotReq%d.qmod", req_mdir, i));
         }
         source = dir.path + "/try-aot-requires.q";
         writeFile(source, "%try-module AotReq0\n"
@@ -445,6 +443,86 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
 
     #! the number of AOT modules in the chain of AOT modules that require each other
     const AotRequiresChainLength = 100;
+
+    #! Returns the qcc that compiles the AOT modules: QCC, QORE_QCC, that of the build tree or that of the PATH
+    private string getQcc(string libdir) {
+        *string qcc = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libdir + "/qcc") ? libdir + "/qcc" : NOTHING);
+        if (!qcc) {
+            # the qcc of the PATH, if any
+            foreach string dir in (ENV.PATH.split(":")) {
+                if (dir && is_executable(dir + "/qcc")) {
+                    qcc = dir + "/qcc";
+                    break;
+                }
+            }
+        }
+        if (!qcc) {
+            testSkip("qcc is not available");
+        }
+        return qcc;
+    }
+
+    #! compiles an AOT module with qcc, with only the modules of the given directory available
+    private compileAotModule(string qcc, string libdir, string mdir, string path, string qmod) {
+        int status;
+        string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_MODULE_DIR=" + quote(mdir) + " " + quote(qcc) + " -m " + quote(path) + " -o " + quote(qmod)
+            + " 2>&1", \status);
+        # qcc is available, so a module that it cannot compile is a failure
+        assertEq(0, status, sprintf("qcc %s: %s", basename(path), output));
+        assertTrue(is_file(qmod), sprintf("qcc %s: %s", basename(path), output));
+    }
+
+    #! An AOT module compiled when the module of its %try-module was missing, which is available now
+    /** The AOT module took the branch for the optional module being unavailable, so it is stale now: its source module
+        is loaded instead, which loads the optional module.  The optional module is the first of a chain of source
+        modules that require each other, so whether it is available is checked (by loading it) with much more stack than
+        the AOT module itself needs; where the thread's stack runs short of it, the check cannot tell, and the load must
+        fail with the parse stack error: it must never load the AOT module as it was compiled, without the optional
+        module (issue #6047).  OptChain0::value() returns 1000 and the fallback for it 0; AotOpt::count() returns that
+        value plus one.
+    */
+    private aotOptionalAvailableCheck() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        string root = realpath(get_script_dir() + "/../../../../..");
+        string libdir = getLibDir();
+        string qcc = getQcc(libdir);
+        TmpDir dir("qore-parse-stack-aot-opt-");
+        string exe = build(dir.path, root, libdir);
+        string mdir = dir.path + "/modules";
+        mkdir(mdir);
+        # the source module is next to the AOT module, which is compiled after it, so the AOT module is only stale
+        # because of the optional module
+        string path = mdir + "/AotOpt.qm";
+        writeFile(path, "%modern\n"
+            "%try-module OptChain0\n"
+            "public namespace OptChain0 { public int sub value() { return 0; } }\n"
+            "%endtry\n"
+            "module AotOpt { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n"
+            "public namespace AotOpt {\n"
+            "public int sub count() { return OptChain0::value() + 1; }\n"
+            "}\n");
+        # OptChain0 does not exist yet
+        compileAotModule(qcc, libdir, mdir, path, mdir + "/AotOpt.qmod");
+        for (int i = 0; i < ChainLength; ++i) {
+            writeFile(sprintf("%s/OptChain%d.qm", mdir, i), sprintf("%%modern\n%s"
+                "module OptChain%d { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n"
+                "public namespace OptChain%d {\n"
+                "public bool sub matches(string s) { return s =~ /^a(b+)c[0-9]{2,}(x|y|z)*$/; }\n"
+                "%s"
+                "}\n",
+                i + 1 < ChainLength ? sprintf("%%requires OptChain%d\n", i + 1) : "", i, i,
+                i ? "" : "public int sub value() { return 1000; }\n"));
+        }
+        string source = dir.path + "/try-aot-optional.q";
+        writeFile(source, "%try-module AotOpt\n"
+            "public namespace AotOpt { public int sub count() { return 0; } }\n"
+            "%endtry\n"
+            "int sub run() { return AotOpt::count(); }\n");
+        runSource(exe, libdir, source, 1001, mdir);
+    }
 
     #! writes a user module with a constant initialized by a recursion
     /** @param dir the module directory
