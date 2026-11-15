@@ -334,10 +334,15 @@ static int qore_module_load_check_stack(ExceptionSink& xsink) {
     if (!q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
         return 0;
     }
-    // the error of a load made by a parse directive is located at the directive (that of the innermost load in
-    // progress with a location: the directive of the module source that has it, for a module that loads modules in
-    // turn), as a parse error is; the run-time location during a parse is that of the code that started the parse.  A
-    // load made at run time (a frame without a Program) is located where it was made, also within a parse
+    // the error is located at the directive of the nearest module load in progress made by a parse directive with a
+    // location (the directive of the module source that has it, for a module that loads modules in turn), as a parse
+    // error is; the run-time location during a parse is that of the code that started the parse.  The search passes
+    // directive frames without a location (ModuleManager::parseLoadModule(), called by a binary module or by qcc)
+    // and stops at a frame of a load made at run time, which only QoreModuleManager::runTimeLoadModule() pushes: its
+    // error has the run-time location where the load was made.  The other loads made at run time push no frame
+    // (loadProviderModule(), loadModuleForReexport() and the loads of issueParseCmd() and issueRuntimeCmd()), so
+    // their errors are located at the directive of the enclosing load, if any: for example, a constant initializer
+    // that runs while %requires Foo loads Foo and loads a data provider module with loadProviderModule()
     const QoreProgramLocation* loc = nullptr;
     for (const QoreModuleLoadWarningFrame* frame = qore_module_load_warning_frame; frame && frame->pgm;
             frame = frame->parent) {

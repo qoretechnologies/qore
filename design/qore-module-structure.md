@@ -889,9 +889,17 @@ the same point as a source parse. The check sits after the requests that need no
 stack and return at once: the `qore` feature (a version check) and a feature
 that the target `Program` already has (`hasFeature()`), so that a
 `%requires json` in a Program that has json succeeds with any stack (a run-time
-`load_module("json")` returns before the module manager then). The error of a
-load made by a parse directive is located at the directive (that of the
-innermost load in progress), as a parse error is. It
+`load_module("json")` returns before the module manager then). The error is
+located as a parse error is: at the directive of the nearest module load in
+progress that a parse directive made and that has a location. The search goes
+outward through the loads in progress, passes the parse-time loads that have no
+location (`ModuleManager::parseLoadModule()`, called by a binary module or by
+qcc), and stops at a load made at run time by
+`QoreModuleManager::runTimeLoadModule()`, whose error has the run-time location
+where it was made. The other run-time loads (`loadProviderModule()`,
+`loadModuleForReexport()` and the loads of `issueParseCmd()` and
+`issueRuntimeCmd()`) are not recorded, so their errors take the location of the
+directive of the enclosing load, if any. It
 comes before every path that does need stack: a reload (`QMLO_RELOAD`, which
 parses the module again), the merge of a module that is already loaded into
 another `Program` (a run-time `Program::loadModule("json")`, for example) and a
