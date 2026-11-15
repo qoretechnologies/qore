@@ -1,0 +1,160 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class HttpClientMaxAgeReservedTest
+
+#! A max_age eviction and a connection with a reserved stream (#6165)
+/** A checkout that found no connection to reuse evicted every connection that had reached max_age and had no active
+    stream, including one that another request had reserved and not yet submitted on: that request then submitted on
+    a closed connection.  The request is held between its reservation and its submission with
+    dbg_http_client_hold_after_reserve(); HTTPClient sets no max_age, so the test sets it with
+    dbg_http_client_max_age(); both only exist in debug builds.
+*/
+public class HttpClientMaxAgeReservedTest inherits QUnit::Test {
+    public {
+        #! the max_age of the connections
+        const MaxAge = 3000;
+    }
+
+    private {
+        Socket listener();
+        int port;
+        #! the number of connections that the server accepted
+        Counter accepted();
+        #! the number of server threads still running
+        Counter running();
+        bool stop;
+    }
+
+    constructor() : Test("HttpClientMaxAgeReservedTest", "1.0", \ARGV) {
+        addTestCase("a max_age eviction leaves a connection with a reserved stream", \reservedTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    globalTearDown() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        stop = True;
+        listener.shutdown();
+        listener.close();
+        running.waitForZero();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (!stop) {
+            *Socket s;
+            try {
+                s = listener.accept(100ms);
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+            if (!s) {
+                continue;
+            }
+            accepted.inc();
+            running.inc();
+            background serve(s);
+        }
+    }
+
+    #! answers the requests of a connection until the client closes it or the test ends
+    private serve(Socket s) {
+        on_exit {
+            s.close();
+            running.dec();
+        }
+        while (!stop) {
+            try {
+                if (!s.isDataAvailable(100ms)) {
+                    if (!s.isOpen()) {
+                        break;
+                    }
+                    continue;
+                }
+                hash<auto> hdr = s.readHTTPHeader(5s);
+                if (!hdr.method) {
+                    break;
+                }
+                if (hdr."content-length") {
+                    s.recvBinary(hdr."content-length".toInt(), 5s);
+                }
+                s.send("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: text/plain\r\n\r\nok");
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+        }
+    }
+
+    reservedTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build (dbg_http_client_hold_after_reserve(), dbg_http_client_max_age())");
+        }
+        call_function("dbg_http_client_max_age", MaxAge);
+        HTTPClient hc;
+        {
+            on_exit call_function("dbg_http_client_max_age", 0);
+            hc = new HTTPClient({"url": "http://127.0.0.1:" + port});
+            # the connection manager takes its options when the client connects
+            hc.connect();
+        }
+        assertEq("ok", hc.get("/"));
+        assertEq(1, accepted.getCount(), "one connection");
+
+        # a POST, which is not repeated on a new connection if it fails on a closed one, reserves the connection's
+        # stream and is held before it submits
+        call_function("dbg_http_client_hold_after_reserve", True);
+        Counter done(1);
+        # the POST's thread ends before the test does, whatever fails
+        on_exit {
+            call_function("dbg_http_client_hold_after_reserve", False);
+            call_function("dbg_http_client_release_after_reserve");
+            done.waitForZero(30s);
+        }
+        *hash<ExceptionInfo> post_ex;
+        *string post_rv;
+        background sub () {
+            on_exit done.dec();
+            try {
+                post_rv = hc.post("/", "body");
+            } catch (hash<ExceptionInfo> ex) {
+                post_ex = ex;
+            }
+        }();
+        assertTrue(call_function("dbg_http_client_wait_held_after_reserve", 20s), "the POST is held");
+        assertEq(1, accepted.getCount(), "the POST reserved the connection");
+
+        # the connection reaches its max_age while the POST holds its reservation (the POST is held: the wait has no
+        # race)
+        usleep(MaxAge * 1000 + 200000);
+
+        # this request finds no connection to reuse, so its checkout evicts the connections that have reached max_age
+        assertEq("ok", hc.get("/"));
+        assertEq(2, accepted.getCount(), "a new connection for the second request");
+
+        call_function("dbg_http_client_release_after_reserve");
+        assertEq(0, done.waitForZero(20s), "the POST ends");
+        assertNothing(post_ex, "the POST did not fail on an evicted connection");
+        assertEq("ok", post_rv);
+        assertEq(2, accepted.getCount(), "the POST was sent on its reserved connection");
+    }
+}

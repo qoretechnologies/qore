@@ -42,7 +42,9 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         #! URL info (host, port, scheme)
         hash<auto> url_info;
 
-        #! Lock for Qore-level shared members (last_activity, controller_ref, pending_stream_count)
+        #! Lock for Qore-level shared members (last_activity, controller_ref); the stream reservations are counted
+        #! in the C++ connection (HttpClientConnectionBase::tryReservePendingStream()), whose operation's idle timeout
+        #! does not close a connection with a reservation (#6184)
         /** @note Connection state (state, ready_cond) is in the C++ base class
             AbstractHttpPollConnection. This lock only protects Qore members.
         */
@@ -97,9 +99,6 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
 
         #! Reference to AsyncSocketIoController for wake notifications
         *AsyncSocketIoController controller_ref;
-
-        #! Number of pending stream reservations (threads assigned but not yet submitted)
-        int pending_stream_count = 0;
 
         #! Proxy connection info (if using a proxy)
         *hash<auto> proxy_info;
@@ -259,7 +258,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         return (cs == HttpClientConnectionState::Ready
                 || cs == HttpClientConnectionState::Connecting)
             && (!max_concurrent_streams
-                || (getPollOperation().getActiveStreamCount() + pending_stream_count)
+                || (getPollOperation().getActiveStreamCount() + getPendingStreamCount())
                     < max_concurrent_streams);
     }
 
@@ -282,12 +281,8 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
                 && cs != HttpClientConnectionState::Connecting) {
             return False;
         }
-        int total = getPollOperation().getActiveStreamCount() + pending_stream_count;
-        if (max_concurrent_streams && total >= max_concurrent_streams) {
-            return False;
-        }
-        ++pending_stream_count;
-        return True;
+        # the reservation is counted in the C++ connection, where the idle timeout of its operation sees it (#6184)
+        return tryReservePendingStream(getPollOperation().getActiveStreamCount(), max_concurrent_streams);
     }
 
     #! Releases a pending stream reservation
@@ -295,10 +290,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         active stream) or when the request is abandoned before submission.
     */
     releaseStreamReservation() {
-        AutoLock al(lock);
-        if (pending_stream_count > 0) {
-            --pending_stream_count;
-        }
+        HttpClientConnectionBase::releaseStreamReservation();
     }
 
     #! Wakes the async I/O controller to flush pending protocol writes
@@ -323,7 +315,10 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     */
     int getOutstandingStreamCount() {
         AutoLock al(lock);
-        return getPollOperation().getActiveStreamCount() + pending_stream_count;
+        # the reservations are read first: a submit counts its active stream before it releases its reservation, so
+        # a request that is being submitted shows in one of the two counts (#6194)
+        int pending = getPendingStreamCount();
+        return pending + getPollOperation().getActiveStreamCount();
     }
 
     #! Returns the connection ID
@@ -438,12 +433,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         # Release the pending reservation AFTER successful submit —
         # active_stream_count was incremented inside submitRequestImpl().
         # If submitRequestImpl() throws, the caller releases the reservation.
-        {
-            AutoLock al(lock);
-            if (pending_stream_count > 0) {
-                --pending_stream_count;
-            }
-        }
+        HttpClientConnectionBase::releaseStreamReservation();
 
         if (!suppress_wake && ctl) {
             ctl.wakeSocket(sock: getSocket());
@@ -501,12 +491,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         }
         @assert(stream_id >= 0);
 
-        {
-            AutoLock al(lock);
-            if (pending_stream_count > 0) {
-                --pending_stream_count;
-            }
-        }
+        HttpClientConnectionBase::releaseStreamReservation();
 
         if (ctl) {
             ctl.wakeSocket(sock: getSocket());
@@ -635,10 +620,12 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
 
     #! Marks (or unmarks) the connection as exclusively leased for a persistent session
     /** While leased, the pool reuse scan skips this connection so no other request borrows
-        it; see @ref HttpClientConnectionManager::leaseConnection(). */
+        it, and its idle timeout does not close it between the requests of the session (#6194);
+        see @ref HttpClientConnectionManager::leaseConnection(). */
     setLeased(bool l) {
         AutoLock al(lock);
         leased = l;
+        setIdleCloseHold(l);
     }
 
     #! Returns @ref True while the connection is exclusively leased out of the pool

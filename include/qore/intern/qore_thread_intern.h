@@ -937,9 +937,11 @@ DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
     This helper sets the runtime parse options to the given options of the code being loaded and suspends any such
     override for its lifetime, which makes load-time resolution what parse-time resolution is for the same source.
     It must only be used around the loading of AOT-compiled code (deserialization, slot-map context construction and
-    module initialization), never around the evaluation of code on behalf of a caller: a variant resolved when code is
-    evaluated is checked against the options in effect for that evaluation, including the restrictions of the
-    Program it runs in.
+    module initialization, including the constant initializers of compiled modules and scripts, eager or run when a
+    constant is first read: qore#6189, and those of source code, evaluated when the declaring code is committed or
+    when a constant is first read: qore#6205), never around the evaluation of code on behalf of a caller: a variant resolved
+    when code is evaluated is checked against the options in effect for that evaluation, including the restrictions
+    of the Program it runs in.
 */
 class LoadTimeParseOptionsHelper {
 public:
@@ -1042,7 +1044,7 @@ private:
     const QoreProgram* old_from_pgm;
 };
 
-//! the runtime parse options override of a call; see qore_get_user_call_runtime_po_override()
+//! the runtime parse options override of a call; see qore_set_user_call_runtime_po_override()
 struct QoreCallParseOptionsOverride {
     //! the options that the override covers
     QoreParseOptions mask;
@@ -1602,7 +1604,7 @@ DLLLOCAL void parse_cond_mark_else();
 DLLLOCAL bool parse_cond_has_else();
 DLLLOCAL bool parse_cond_pop(const QoreProgramLocation* loc);
 DLLLOCAL bool parse_cond_test(const QoreProgramLocation* loc);
-DLLLOCAL void push_parse_options();
+DLLLOCAL void push_parse_options(const QoreProgramLocation* loc);
 DLLLOCAL void parse_try_module_inc();
 DLLLOCAL bool parse_try_module_dec(const QoreProgramLocation* loc);
 DLLLOCAL unsigned parse_try_module_get();
