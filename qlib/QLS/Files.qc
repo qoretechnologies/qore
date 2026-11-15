@@ -326,7 +326,10 @@ public list<string> sub get_std_module_dirs(string module_file, *string user_mod
 }
 
 #! Find standard Qore module files.
-/**
+/** The standard modules are in the first directory of @ref QLS::Files::get_std_module_dirs() "get_std_module_dirs()"
+    that holds Qore source files; the scan options only select the files of that directory, so files skipped because
+    of their size never make the search continue in the directories of other modules.
+
     @param opts the scan options
 
     @return list of file paths
@@ -346,8 +349,11 @@ public list<string> sub find_std_modules(hash<FileScanOptions> opts = <FileScanO
         if (!is_dir(path)) {
             continue;
         }
-        list<string> moduleFiles = find_qore_files(path, opts);
-        if (moduleFiles.size()) {
+        # the first directory with source files holds the standard modules, also when the size limit skips all of
+        # them: the later directories hold other modules
+        list<string> skipped;
+        list<string> moduleFiles = find_qore_files(path, opts, \skipped);
+        if (moduleFiles || skipped) {
             return moduleFiles;
         }
     }
