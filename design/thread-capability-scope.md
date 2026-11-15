@@ -126,7 +126,8 @@ inherited from the code that started it** (`thread_capability_check_creator()`,
   creation.
 
 The sandbox that the thread inherited from the code that started it (design/thread-sandbox-inheritance.md;
-`ThreadData::thread_start_sandbox_context`, applied by `QoreInheritedSandboxHelper`) does not count by itself, nor
+`ThreadData::thread_start_sandbox_context`, applied by `QoreInheritedSandboxHelper`) does not count by itself when the
+starting code's current Program was not sandboxed (`QoreSandboxContext::capturer_sandboxed`), nor
 does a continued operation or a provenance that only that inherited sandbox governed when it was captured
 (`QoreSandboxContext::inherited_only`, never set for a capture made in a Program that is sandboxed, by a manager or its
 flag; it is computed only when such a sandbox or context is present, so the common capture of sandboxed code does no
@@ -137,13 +138,25 @@ the code it runs in that thread, as it does in any other.  Everything else is un
 - the sandboxed code that runs in that thread is governed by its own Program and cannot set a scope;
 - the capabilities' code must still be code that no sandbox governs (`thread_capability_check_code()`), so a scope
   never runs sandboxed code as a capability;
-- the lookup (`get_thread_capability()`) follows the same rule for code that is not module code: the host's code in
-  that thread sees its capabilities, sandboxed code sees none;
+- the lookup (`get_thread_capability()`) follows the same rule for code that is not module code
+  (`thread_capabilities_visible()` asks `qore_scope_creator_is_sandboxed()`, so a Program that is sandboxed by its flag
+  only, which a lookup of managers does not find, sees none either): the host's code in that thread sees its
+  capabilities, sandboxed code sees none;
 - the threads that a capability starts there inherit the sandbox as before: the sandbox still governs everything that
   the module code does for the sandboxed caller.
 
 A thread that sandboxed code starts itself (its own `background`) begins in the sandboxed Program: host code that it
-calls is called by sandboxed code and is refused.
+calls is called by sandboxed code and is refused.  A thread that sandboxed code starts with `call_async()`,
+`parallel_map()` or `parallel_foreach()` enters only the Program of the callable, which can be host code that the host
+gave it (a call reference or a closure without provenance); the thread's start context was captured in the sandboxed
+Program (`capturer_sandboxed`), so it counts, and that host code is refused as well.  This holds for a Program that
+sandboxed code created (sandboxed by its flag), whose code is governed by its creator's sandbox, in a thread, a
+`parallel_map()` worker or a `ThreadPool` task that it starts.
+
+A `Program` object is a capability (see the Program class documentation): code that holds an unsandboxed Program, or a
+call reference that host code created to a builtin that starts a thread (`\call_async()`), and calls it, runs that
+code as host code, and the thread it starts is a host's thread.  A host must not give sandboxed code such an object or
+reference for code that it would not run for that code itself.
 
 ### Independent objects
 

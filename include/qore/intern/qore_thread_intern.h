@@ -836,6 +836,11 @@ public:
     //! that sandboxed code started.  Such a context does not count for qore_scope_creator_is_sandboxed(),
     //! as the inherited sandbox itself does not
     bool inherited_only = false;
+    //! True if the capturing code's current Program is sandboxed (its manager or its flag): the code that started a
+    //! thread with this context was sandboxed code itself (ex: call_async() or parallel_map() with a callable that
+    //! host code created), not the API of a host that starts a thread for a sandboxed caller.  The thread-start
+    //! context of such a thread counts for qore_scope_creator_is_sandboxed()
+    bool capturer_sandboxed = false;
 };
 
 //! Makes the sandbox manager lookups of the current thread return a captured context while the object exists

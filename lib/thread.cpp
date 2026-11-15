@@ -5106,12 +5106,14 @@ private:
 
 //! Returns true if the thread's inherited context is not counted for the creator of a capability scope
 /** Only the sandbox inherited from the code that started the thread (not a task's capture applied with
-    QoreSandboxCaptureHelper, which continues the submitter's operation), or a context that only such a sandbox
-    governed when it was captured (QoreSandboxContext::inherited_only)
+    QoreSandboxCaptureHelper, which continues the submitter's operation) when that code was not sandboxed code itself
+    (QoreSandboxContext::capturer_sandboxed: a host's API that starts a thread for a sandboxed caller, not
+    call_async() or parallel_map() called by sandboxed code, whose thread runs only the callable's Program), or a
+    context that only such a sandbox governed when it was captured (QoreSandboxContext::inherited_only)
 */
 static bool skip_inherited_for_creator(const ThreadData* td) {
     const QoreSandboxContext* ctx = td->inherited_sandbox_context;
-    return ctx && (ctx == td->thread_start_sandbox_context || ctx->inherited_only);
+    return ctx && ((ctx == td->thread_start_sandbox_context && !ctx->capturer_sandboxed) || ctx->inherited_only);
 }
 
 //! Visits the sandbox managers that the Programs and contexts of the current thread contribute
@@ -5802,6 +5804,8 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     }
     std::sort(program_ids.begin(), program_ids.end());
     program_ids.erase(std::unique(program_ids.begin(), program_ids.end()), program_ids.end());
+    // the code that captures the context runs in a sandboxed Program (see skip_inherited_for_creator())
+    capturer_sandboxed = td && qore_program_private::isSandboxed(td->current_pgm);
     // nothing but the sandbox inherited from the code that started the thread governs the capturing code (see
     // qore_scope_creator_is_sandboxed()); only possible with such a sandbox, or a context that has the property
     // already, so the common capture of sandboxed code does not look it up

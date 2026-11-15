@@ -43,16 +43,13 @@ bool thread_capabilities_visible() {
     if (pgm && pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
         return true;
     }
-    // other code sees it only if it may control threads itself and no sandbox governs it
+    // other code sees it only if it may control threads itself and no sandbox governs it, as for the creator of a
+    // scope (thread_capability_check_creator()): also a Program that sandboxed code created, which is sandboxed by
+    // its flag only and has no manager that a lookup would find, and not a sandbox that the thread only inherited from
+    // the code that started it, which does not count by itself
     if (runtime_check_parse_option(PO_NO_THREAD_CONTROL)) {
         return false;
     }
-    QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
-    if (!policy) {
-        return true;
-    }
-    // as for the creator of a scope: a sandbox that the thread only inherited from the code that started it does not
-    // count by itself (thread_capability_check_creator())
     return !qore_scope_creator_is_sandboxed();
 }
 
