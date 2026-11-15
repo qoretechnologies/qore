@@ -2665,18 +2665,51 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
             }
             dense[c] = same;
         }
-        // the columnar schema of a concatenated date column: the first column's, with the time unit that the cells
-        // hold, microseconds, if the columns have different time units (a column without a schema holds
-        // microseconds), and UTC if they have different time zones, as an export writes the cells in the schema's
-        // time unit and time zone (qore#6097)
+        // the columnar schema of a concatenated column with a schema: the schema that holds the cells of all its
+        // columns, as dataFrameMergeColumnSchema() merges them for melt() and join() (qore#6144): the time unit
+        // "us" if the columns have different time units (a column without a schema holds microseconds) and "UTC" if
+        // they have different time zones, as an export writes the cells in the schema's time unit and time zone
+        // (qore#6097), nullable if a column is, and no native type that does not describe them all; date and
+        // timestamp schemas, which it does not merge, give the timestamp schema, as the key column of a join does,
+        // and other date or duration schemas that it does not merge give the first one with no native type (an
+        // export writes the cells in its time unit and time zone, so it holds them all); other schemas that it does
+        // not merge give no schema, as the first one would not describe all the columns (returns false then)
         auto concatSchema = [](const ColumnData& first, const std::string& name,
-                const std::vector<Snapshot>& snapshots) -> QoreColumnarTypeDescriptor {
+                const std::vector<Snapshot>& snapshots, QoreColumnarTypeDescriptor& rv) -> bool {
+            bool has_schema = first.has_columnar_schema;
             QoreColumnarTypeDescriptor schema = first.columnar_schema;
-            if (first.type != ColumnType::DATE) {
-                return schema;
+            schema.name.clear();
+            bool merged = true;
+            for (const Snapshot& snapshot : snapshots) {
+                auto it = snapshot.col_index.find(name);
+                if (it == snapshot.col_index.end()) {
+                    continue;
+                }
+                const ColumnData& src = *snapshot.columns[it->second].data;
+                if (&src != &first && !dataFrameMergeColumnSchema(has_schema, schema, first, src)) {
+                    merged = false;
+                    break;
+                }
             }
+            if (merged) {
+                if (!has_schema) {
+                    return false;
+                }
+                rv = schema;
+                return true;
+            }
+            if (first.type != ColumnType::DATE) {
+                return false;
+            }
+            // date and timestamp schemas: the first timestamp schema (or the first schema if no column has a
+            // timestamp schema), with the unit and zone of all the columns
+            const QoreColumnarTypeDescriptor* ts = nullptr;
+            bool nullable = false;
             bool other_unit = false;
             bool other_zone = false;
+            std::string unit0;
+            std::string zone0;
+            bool first_src = true;
             for (const Snapshot& snapshot : snapshots) {
                 auto it = snapshot.col_index.find(name);
                 if (it == snapshot.col_index.end()) {
@@ -2686,21 +2719,33 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                 std::string unit = src.has_columnar_schema && !src.columnar_schema.time_unit.empty()
                     ? src.columnar_schema.time_unit : std::string("us");
                 std::string zone = src.has_columnar_schema ? src.columnar_schema.timezone : std::string();
-                std::string first_unit = schema.time_unit.empty() ? std::string("us") : schema.time_unit;
-                if (unit != first_unit) {
-                    other_unit = true;
+                if (first_src) {
+                    unit0 = unit;
+                    zone0 = zone;
+                    first_src = false;
+                } else {
+                    other_unit = other_unit || unit != unit0;
+                    other_zone = other_zone || zone != zone0;
                 }
-                if (zone != schema.timezone) {
-                    other_zone = true;
+                // a column without a schema leaves the nullability alone, as in dataFrameMergeColumnSchema()
+                if (src.has_columnar_schema) {
+                    nullable = nullable || src.columnar_schema.nullable;
+                    if (!ts && src.columnar_schema.kind == QoreColumnarTypeKind::Timestamp) {
+                        ts = &src.columnar_schema;
+                    }
                 }
             }
+            rv = ts ? *ts : first.columnar_schema;
+            rv.name.clear();
+            rv.native_type.clear();
+            rv.nullable = nullable;
             if (other_unit) {
-                schema.time_unit = "us";
+                rv.time_unit = "us";
             }
             if (other_zone) {
-                schema.timezone = "UTC";
+                rv.timezone = "UTC";
             }
-            return schema;
+            return true;
         };
 
         // the columns concatenated as lists of values
@@ -2807,8 +2852,9 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                 if (*xsink) {
                     return nullptr;
                 }
-                if (first.has_columnar_schema) {
-                    preserveColumnarSchema(*col.data, col.name, concatSchema(first, col.name, snapshots));
+                QoreColumnarTypeDescriptor schema;
+                if (first.has_columnar_schema && concatSchema(first, col.name, snapshots, schema)) {
+                    preserveColumnarSchema(*col.data, col.name, schema);
                 }
             } else {
                 // columns of different types make the column that the column hash constructor makes of their
@@ -2892,8 +2938,9 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                 if (*xsink) {
                     return nullptr;
                 }
-                if (keep_schema) {
-                    preserveColumnarSchema(*col.data, col.name, concatSchema(first, col.name, snapshots));
+                QoreColumnarTypeDescriptor schema;
+                if (keep_schema && concatSchema(first, col.name, snapshots, schema)) {
+                    preserveColumnarSchema(*col.data, col.name, schema);
                 }
             }
             result->col_index[col.name] = result->columns.size();

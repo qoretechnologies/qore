@@ -164,8 +164,9 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
                 sprintf("%s: durations exported: %y", how, dv));
         }
         # a date-kind key column (date32[day] or date64[ms]) and a timestamp key column in a right or outer join, in
-        # both orders: the timestamp schema in microseconds (unless both units are the same) and UTC, with no native
-        # type, and the times of day kept
+        # both orders: the timestamp schema (its kind is what shows that the key column holds times of day) in
+        # microseconds (unless both units are the same) and UTC, with no native type, nullable if a side is; the
+        # times of day also survive an export (with either schema, so that check does not test the schema)
         DataFrame::DataFrame ts = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
             "t": (2024-01-01T00:00:00Z, 2024-01-03T10:30:00Z), "b": (1, 2),
         }, {
@@ -195,7 +196,7 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
                     }
                     list<auto> tv = DataFrame::DataFrame::fromArrowIpc(j.toArrowIpc()).getColumn("t");
                     assertTrue((select tv, $1 == 2024-01-03T10:30:00Z).size() == 1,
-                        sprintf("%s: the time of day kept: %y", label, tv));
+                        sprintf("%s: the time of day on export (with any schema): %y", label, tv));
                 }
             }
         }
