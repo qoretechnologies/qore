@@ -1308,6 +1308,7 @@ QoreAOTContext::QoreAOTContext() {
 }
 
 QoreAOTContext::~QoreAOTContext() {
+    delete concrete_hashdecl_cache.load(std::memory_order_relaxed);
     // Deref all held expression values (we took a ref in buildAOTContext)
     for (int i = 0; i < num_exprs; ++i) {
         QoreValue v;
