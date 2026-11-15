@@ -54,7 +54,8 @@ public:
             : QoreMemberInfoBase(loc, n_typeInfo, n_parseTypeInfo, e) {
     }
 
-    DLLLOCAL HashDeclMemberInfo(const HashDeclMemberInfo& old) : QoreMemberInfoBase(old), init(old.init) {
+    DLLLOCAL HashDeclMemberInfo(const HashDeclMemberInfo& old) : QoreMemberInfoBase(old), init(old.init),
+            default_receiver_type_info(old.default_receiver_type_info) {
     }
 
     DLLLOCAL bool equal(const HashDeclMemberInfo& other) const;
@@ -74,9 +75,20 @@ public:
 
     DLLLOCAL HashDeclMemberInfo* instantiate(const QoreTypeInfo* receiver_type_info) const;
 
+    //! Returns the type that the default value of the member is evaluated with as the receiver, or nullptr
+    /** The member of an instantiation of a generic hashdecl (HD<string> of HD<X>) shares the initializer of the
+        generic hashdecl, whose types can name its type parameters (new hash<HD2<X, int>>()); they are the type
+        arguments of the instantiation when the initializer is evaluated with its type as the receiver (qore#6240)
+    */
+    DLLLOCAL const QoreTypeInfo* getDefaultReceiverTypeInfo() const {
+        return default_receiver_type_info;
+    }
+
 private:
     //! has parseInit() been called on this member?
     bool init = false;
+    //! the type of the instantiation of a generic hashdecl whose member this is, if it has a default value
+    const QoreTypeInfo* default_receiver_type_info = nullptr;
 };
 
 typedef QoreMemberMapBase<HashDeclMemberInfo> HashDeclMemberMap;
