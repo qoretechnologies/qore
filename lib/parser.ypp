@@ -1730,6 +1730,10 @@ struct ClassVarInfo : public MemberInfo {
         LexicalSemanticPolicy policy;
         LexicalParsePolicyHelper::capture(policy);
         vi->bindInitializationPolicy(policy);
+        // the initializer runs with the parse options of the declaration, as a constant's does (qore#6205)
+        if (QoreProgram* pgm = getProgram()) {
+            vi->bindDeclarationParseOptions(qore_program_private::getParseWarnOptions(pgm).parse_options);
+        }
         if (!(vi && vi->parseHasTypeInfo()) && parse_check_parse_option(PO_REQUIRE_TYPES)) {
             parse_error(*vi->loc, "class static variable '%s' declared without type information, but parse options "
                 "require type information for all declarations", name);
