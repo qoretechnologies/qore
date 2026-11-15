@@ -41,7 +41,7 @@ method references to the same method of the same object: True, of another object
 method references with an object receiver to the same method of the same object: True, of another object: False
 references made in the class to the same object: True, to another object: False
 references made through self to the same object: True, to another object: False
-method, typed receiver, deleted object: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted, arguments evaluated: 0
-method, object receiver, deleted object: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted, arguments evaluated: 0
-method in class, deleted object: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted, arguments evaluated: 0
-method through self, deleted object: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted, arguments evaluated: 0
+method, typed receiver, deleted object: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted, arguments evaluated: 0
+method, object receiver, deleted object: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted, arguments evaluated: 0
+method in class, deleted object: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted, arguments evaluated: 0
+method through self, deleted object: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted, arguments evaluated: 0
