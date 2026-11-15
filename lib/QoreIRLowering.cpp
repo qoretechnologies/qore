@@ -2165,7 +2165,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         builder.setBlock(body_block);
-        pushFlowTarget({exit_block, cond_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+        pushFlowTarget({exit_block, cond_block, false, cleanup_stack.size(), QoreIRValue()});
         // Active enclosing-loop exit for debugger DebugFlowBreak resolution (see while case).
         QoreIRBasicBlock* prev_loop_exit = current_loop_exit;
         current_loop_exit = exit_block;
@@ -2307,7 +2307,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Fused path: int comparisons don't create node temps, no cleanup needed.
 
         builder.setBlock(body_block);
-        pushFlowTarget({exit_block, cond_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+        pushFlowTarget({exit_block, cond_block, false, cleanup_stack.size(), QoreIRValue()});
         // Mark this loop's exit as the active enclosing-loop exit for blocks lowered in
         // the body (body_block itself was created before this point, so stamp it too).
         QoreIRBasicBlock* prev_loop_exit = current_loop_exit;
@@ -2446,7 +2446,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         builder.setBlock(body_block);
-        pushFlowTarget({exit_block, iter_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+        pushFlowTarget({exit_block, iter_block, false, cleanup_stack.size(), QoreIRValue()});
         // Active enclosing-loop exit for debugger DebugFlowBreak resolution (see while case).
         QoreIRBasicBlock* prev_loop_exit = current_loop_exit;
         current_loop_exit = exit_block;
@@ -2666,7 +2666,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             ft.break_target = break_handler_block;
             ft.continue_target = latch_block;
             ft.is_switch = false;
-            ft.catch_cleanup_depth = catch_cleanup_depth;
             ft.cleanup_stack_depth = cleanup_stack.size();
             pushFlowTarget(ft);
 
@@ -3049,7 +3048,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         ft.break_target = exit_block;
         ft.continue_target = latch_block;
         ft.is_switch = false;
-        ft.catch_cleanup_depth = catch_cleanup_depth;
         ft.cleanup_stack_depth = cleanup_stack.size();
         ft.old_implicit_element = old_element;
         pushFlowTarget(ft);
@@ -3443,7 +3441,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         ft.break_target = break_handler_block;
         ft.continue_target = latch_block;
         ft.is_switch = false;
-        ft.catch_cleanup_depth = catch_cleanup_depth;
         ft.cleanup_stack_depth = cleanup_stack.size();
         pushFlowTarget(ft);
 
@@ -3710,7 +3707,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createSwitchInt(switch_val, default_block_for_switch, switch_cases);
 
             // Lower case bodies (same as before)
-            pushFlowTarget({end_block, nullptr, true, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+            pushFlowTarget({end_block, nullptr, true, cleanup_stack.size(), QoreIRValue()});
             for (size_t i = 0; i < cases.size(); ++i) {
                 builder.setBlock(cases[i].block);
                 if (cases[i].node->code) {
@@ -3826,7 +3823,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createSwitchString(switch_val, default_block_for_str_switch, switch_cases);
 
             // Lower case bodies (same as before)
-            pushFlowTarget({end_block, nullptr, true, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+            pushFlowTarget({end_block, nullptr, true, cleanup_stack.size(), QoreIRValue()});
             for (size_t i = 0; i < cases.size(); ++i) {
                 builder.setBlock(cases[i].block);
                 if (cases[i].node->code) {
@@ -3946,7 +3943,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createBranch(end_block);
         }
 
-        pushFlowTarget({end_block, nullptr, true, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+        pushFlowTarget({end_block, nullptr, true, cleanup_stack.size(), QoreIRValue()});
         for (size_t i = 0; i < cases.size(); ++i) {
             builder.setBlock(cases[i].block);
             if (cases[i].node->code) {
@@ -4117,6 +4114,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         {
             BlockCleanupEntry catch_scope_entry;
             catch_scope_entry.type = BlockCleanupEntry::CatchScope;
+            catch_scope_entry.catch_result_id = catch_inst->result.id;
             catch_scope_entry.loc = stmt->loc;
             // the end of the try statement for an exit from its catch block (#5992)
             catch_scope_entry.try_end_depth = try_depth;
@@ -5175,9 +5173,14 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 // the barriers below it here (qore#6017)
                 break;
             case BlockCleanupEntry::CatchScope:
-                // the catch block is closed after its own blocks, before the blocks that enclose it (qore#6017)
+                // the catch block is closed after its own blocks, before the blocks that enclose it (qore#6017), and
+                // the exception's information that its CatchException made, which holds the exception's argument, is
+                // released with it, as the AST interpreter releases it (#6079)
                 if (flags & CF_CATCH_SCOPES) {
-                    builder.createCatchCleanup(entry.loc);
+                    QoreIRInstruction* cleanup = builder.createCatchCleanup(entry.loc);
+                    if (entry.catch_result_id) {
+                        builder.getFunction()->catch_cleanup_results[cleanup] = entry.catch_result_id;
+                    }
                 }
                 break;
         }
@@ -24162,7 +24165,6 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     ft.break_target = exit_block;
     ft.continue_target = latch_block;
     ft.is_switch = false;
-    ft.catch_cleanup_depth = catch_cleanup_depth;
     ft.cleanup_stack_depth = cleanup_stack.size();
     ft.old_implicit_element = old_element;
     pushFlowTarget(ft);

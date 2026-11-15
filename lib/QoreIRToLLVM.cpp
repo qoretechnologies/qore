@@ -23397,6 +23397,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(void_type, {ptr_type}, false));
             builder->CreateCall(helper, {xsink_arg});
             emitCatchScopeExit(1);
+            // a break, continue or return out of the catch block releases the exception's information that its
+            // CatchException made, which holds the exception's argument, as the AST interpreter releases it with the
+            // catch block: UnwindTemps releases nothing in native code, and the value was kept in its cleanup slot
+            // until it was overwritten or the function ended (#6079)
+            if (current_ir_func) {
+                auto ci = current_ir_func->catch_cleanup_results.find(inst);
+                if (ci != current_ir_func->catch_cleanup_results.end()) {
+                    auto ai = invoke_alloca_map.find(ci->second);
+                    if (ai != invoke_alloca_map.end() && ai->second && !persistent_cleanup_allocas.count(ai->second)) {
+                        auto decref = module.getOrInsertFunction("qore_rt_decref",
+                                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                        llvm::Value* val = builder->CreateLoad(i64_type, ai->second);
+                        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), ai->second);
+                        builder->CreateCall(decref, {val, xsink_arg});
+                    }
+                }
+            }
             return true;
         }
 

@@ -8950,6 +8950,21 @@ static QORE_INTERN_NOINLINE bool qore_ir_catch_exit_cleanup(const QoreIRFunction
     return true;
 }
 
+//! Releases the exception's information that the CatchException of the catch block that a break, continue or return
+//! leaves made, which holds the exception's argument, with the catch block, as the AST interpreter releases it (#6079)
+/** A return leaves the try statement's temp scope only when the frame ends, after the locals of the function. */
+static QORE_INTERN_NOINLINE void qore_ir_release_catch_result(const QoreIRFunction& func,
+        const QoreIRInstruction* inst, IRValueSlots& values, IRCleanupSlots& cleanup, ExceptionSink* xsink) {
+    auto i = func.catch_cleanup_results.find(inst);
+    if (i == func.catch_cleanup_results.end() || i->second >= values.size()) {
+        return;
+    }
+    if (removeAllCleanupEntries(cleanup, i->second)) {
+        values[i->second].discard(xsink);
+        values[i->second] = QoreValue();
+    }
+}
+
 //! Restores enclosing caught exceptions on the exceptional exit from a scope (#5969).
 static QORE_INTERN_NOINLINE void qore_ir_close_catch_scopes_pending(std::vector<IRCatchEntry>& stack,
         size_t scope_count, ExceptionSink* xsink) {
@@ -12301,6 +12316,9 @@ next_instruction:
                         catch_swap_exception(entry.saved);
                         entry.caught->del(xsink);
                     }
+                }
+                if (!func.catch_cleanup_results.empty()) {
+                    qore_ir_release_catch_result(func, inst, values, cleanup, xsink);
                 }
                 ++ip;
                 break;

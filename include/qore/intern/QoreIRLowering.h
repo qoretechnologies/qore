@@ -945,6 +945,9 @@ private:
         QoreValue var_expr;                        //!< loop variable expression for RefForeachRecord
         QoreIRValue context_state;                 //!< Context* handle for Context entries
         LocalVar* catch_var = nullptr;             //!< single local for CatchVar entries (try-catch exception param)
+        //! the value of the CatchException of the catch block of a CatchScope entry, which the CatchCleanup that
+        //! closes it releases (see QoreIRFunction::catch_cleanup_results, #6079)
+        uint32_t catch_result_id = 0;
         QoreIRValue foreach_iterator;              //!< iterator handle released by a ForeachSource entry, if any
         QoreIRValue foreach_list;                  //!< list temporary released by a ForeachSource entry, if any
         QoreIRValue foreach_element;               //!< current element released by a ForeachSource entry, if any
@@ -1058,7 +1061,6 @@ private:
         QoreIRBasicBlock* break_target = nullptr;
         QoreIRBasicBlock* continue_target = nullptr;
         bool is_switch = false;
-        int catch_cleanup_depth = 0;   //!< catch_cleanup_depth when this flow target was created
         size_t cleanup_stack_depth = 0;  //!< cleanup_stack depth when this flow target was created
         QoreIRValue old_implicit_element;  //!< saved $# value for foreach loops (for break/continue cleanup)
         size_t temp_scope_depth = 0;     //!< temp scopes open when this flow target was created
