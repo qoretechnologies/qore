@@ -257,6 +257,9 @@ public:
 
 class ThreadPool : public AbstractPrivateData {
 protected:
+    //! true if the manager thread holds a reference to the pool, which it releases when it ends (qore#6253)
+    bool manager_ref = false;
+
     int max,        // maximum number of threads in pool (if <= 0 then unlimited)
         minidle,     // minimum number of idle threads
         maxidle,     // maximum number of idle threads
@@ -548,6 +551,33 @@ public:
         }
 
         str.concat(']');
+    }
+
+    //! stops the pool from a worker of its own without waiting for its workers (qore#6253)
+    /** Called by the destructor of the pool's object when a task of the pool releases the last reference to it: the
+        manager thread, which stops the workers, takes a reference to the pool, which it releases when it has stopped,
+        as it uses the pool until then
+    */
+    DLLLOCAL void stopFromOwnWorker() {
+        AutoLocker al(m);
+        // the manager is still running: it waits for the calling worker before it ends
+        assert(!stopped);
+        ref();
+        manager_ref = true;
+        if (!stopflag) {
+            detach = true;
+            shutdown = true;
+            stopflag = true;
+            cond.signal();
+        }
+    }
+
+    //! returns true if the manager thread holds a reference to the pool that it must release (stopFromOwnWorker())
+    DLLLOCAL bool takeManagerRef() {
+        AutoLocker al(m);
+        bool rv = manager_ref;
+        manager_ref = false;
+        return rv;
     }
 
     // does not return until the thread pool has been stopped
