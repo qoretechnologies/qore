@@ -8589,8 +8589,10 @@ static QORE_IR_INLINE_SITE void irDotEvalMethodDirect(Given& given, QoreIRDotEva
                 nanboxed_args, nullptr, nargs, xsink));
         } else if (name_dispatch_first && method_name) {
             called_external = true;
-            res = fromBits(dot_eval_fallback_with_args(base, method_name,
-                nanboxed_args, nargs, xsink, explicit_inst));
+            res = fromBits(GIVEN
+                ? dot_eval_fallback_with_args_consume(base, method_name, nanboxed_args, given.get(), nargs, xsink,
+                    explicit_inst)
+                : dot_eval_fallback_with_args(base, method_name, nanboxed_args, nargs, xsink, explicit_inst));
         } else if (qore_ir_try_common_no_arg_pseudo_fast_path(intrinsic,
                 base, nargs, res)) {
             // Result produced by the common pseudo-method helper.
@@ -8636,8 +8638,10 @@ static QORE_IR_INLINE_SITE void irDotEvalMethodDirect(Given& given, QoreIRDotEva
                         direct_inst->qc, direct_inst->variant, nanboxed_args, nargs, xsink)));
         } else if (mname) {
             called_external = true;
-            res = fromBits(dot_eval_fallback_with_args(base, mname,
-                nanboxed_args, nargs, xsink, explicit_inst));
+            res = fromBits(GIVEN
+                ? dot_eval_fallback_with_args_consume(base, mname, nanboxed_args, given.get(), nargs, xsink,
+                    explicit_inst)
+                : dot_eval_fallback_with_args(base, mname, nanboxed_args, nargs, xsink, explicit_inst));
         } else {
             xsink->raiseException("IR-ERROR",
                 "DotEvalMethodDirect: null method pointer and no method name");
@@ -8710,8 +8714,10 @@ static QORE_IR_INLINE_SITE void irInvokeDotEvalMethodDirect(Given& given,
                 nanboxed_args, nullptr, nargs, xsink));
         } else if (name_dispatch_first && method_name) {
             called_external = true;
-            res = fromBits(dot_eval_fallback_with_args(base, method_name,
-                nanboxed_args, nargs, xsink, explicit_inst));
+            res = fromBits(GIVEN
+                ? dot_eval_fallback_with_args_consume(base, method_name, nanboxed_args, given.get(), nargs, xsink,
+                    explicit_inst)
+                : dot_eval_fallback_with_args(base, method_name, nanboxed_args, nargs, xsink, explicit_inst));
         } else if (qore_ir_try_common_no_arg_pseudo_fast_path(intrinsic,
                 base, nargs, res)) {
             // Result produced by the common pseudo-method helper.
@@ -8751,8 +8757,10 @@ static QORE_IR_INLINE_SITE void irInvokeDotEvalMethodDirect(Given& given,
                         de_invoke_inst->qc, de_invoke_inst->variant, nanboxed_args, nargs, xsink)));
         } else if (mname) {
             called_external = true;
-            res = fromBits(dot_eval_fallback_with_args(base, mname,
-                nanboxed_args, nargs, xsink, explicit_inst));
+            res = fromBits(GIVEN
+                ? dot_eval_fallback_with_args_consume(base, mname, nanboxed_args, given.get(), nargs, xsink,
+                    explicit_inst)
+                : dot_eval_fallback_with_args(base, mname, nanboxed_args, nargs, xsink, explicit_inst));
         } else {
             xsink->raiseException("IR-ERROR",
                 "InvokeDotEvalMethodDirect: null method pointer and no method name");

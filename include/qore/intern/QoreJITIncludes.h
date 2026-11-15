@@ -53,5 +53,10 @@ static inline uint64_t toBitsNB(const QoreValue& v) {
 DLLLOCAL uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_name,
     uint64_t* args, int nargs, ExceptionSink* xsink,
     const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
+//! as dot_eval_fallback_with_args(), for a call that gives the references of its temporary arguments (\a arg_cleanups,
+//! see IRGivenCallArgs), whose parameters take them over (issues #5882, #5958)
+DLLLOCAL uint64_t dot_eval_fallback_with_args_consume(QoreValue base, const char* method_name,
+    uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
 
 #endif

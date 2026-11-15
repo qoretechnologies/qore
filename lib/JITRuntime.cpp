@@ -20315,10 +20315,13 @@ static bool qore_rt_same_class(const QoreClass* a, const QoreClass* b) {
     return a == b || (a && b && a->getID() == b->getID());
 }
 
+//! calls a method of an object with an argument list; \a given: the call gave the references of its temporary
+//! arguments (see clearConsumedArgCleanups()), which the argument list holds, so that the parameters of the method
+//! found take its values over, as the AST interpreter's call moves its evaluated arguments into the parameters
 static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         QoreListNode* arg_list, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr, bool given = false) {
     // copy() is a special operation that creates a new object — must use execCopy,
     // not regular method dispatch which would call the copy variant as a normal method
     if (!strcmp(method->getName(), "copy")) {
@@ -20364,6 +20367,10 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
     }
     RuntimeConfig& rc = rc_get_current_ref();
     const qore_class_private* priv = qore_class_private::get(*o->getClass());
+    // a write to a parameter of the method found then releases its argument, as in the AST interpreter (issue #5958)
+    if (given && !explicit_type_param_instantiation) {
+        return toBits(priv->evalMethodGivenArgs(o, method->getName(), arg_list, class_ctx, rc, xsink, nullptr));
+    }
     return toBits(priv->evalMethod(o, method->getName(), arg_list, class_ctx, rc, xsink,
         explicit_type_param_instantiation));
 }
@@ -20422,7 +20429,7 @@ static uint64_t qore_rt_dot_eval_method_direct_impl(uint64_t base_bits, const Qo
                 return toBits(QoreValue());
             }
             return dispatch_method_on_object(o, method, qc, variant, *arg_list, xsink,
-                explicit_type_param_instantiation);
+                explicit_type_param_instantiation, arg_cleanups != nullptr);
         }
 
         case NT_OBJECT: {
@@ -20438,7 +20445,7 @@ static uint64_t qore_rt_dot_eval_method_direct_impl(uint64_t base_bits, const Qo
                 return toBits(QoreValue());
             }
             return dispatch_method_on_object(o, method, qc, variant, *arg_list, xsink,
-                explicit_type_param_instantiation);
+                explicit_type_param_instantiation, arg_cleanups != nullptr);
         }
 
         case NT_HASH: {
@@ -20601,6 +20608,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct_with_inst_co
 
 // Fallback for unresolved method calls: use the pre-evaluated args
 // from LLVM with a name-based runtime method dispatch
+//! calls a call reference with an argument list; \a given: the list holds the last references of the arguments that
+//! the call gave (see clearConsumedArgCleanups()), which the parameters of a closure or of a reference to user code
+//! take over, as the AST interpreter's call moves its evaluated arguments into the parameters (issues #5882, #5958)
+static QoreValue qore_rt_invoke_call_ref_list(const ResolvedCallReferenceNode* callref, QoreListNode* args,
+        bool given, ExceptionSink* xsink) {
+    if (given) {
+        QoreSandboxProvenanceHelper provenance(callref);
+        if (callref->getType() == NT_RUNTIME_CLOSURE) {
+            return static_cast<const QoreClosureBase*>(callref)->execValueTmpArgs(args, xsink);
+        }
+        if (auto* rcr = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(callref)) {
+            return rcr->execValueTmpArgs(args, xsink);
+        }
+    }
+    return callref->invoke(args, xsink);
+}
+
 static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_name,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation) {
@@ -20653,20 +20677,29 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
         }
         RuntimeConfig& rc = rc_get_current_ref();
         const qore_class_private* priv = qore_class_private::get(*o->getClass());
+        // a call that gave the references of its temporary arguments (the argument list holds them now) calls the
+        // method found with them, whose parameters take them over: a write to a parameter then releases its
+        // argument, as in the AST interpreter (issue #5958)
+        if (arg_cleanups && !explicit_type_param_instantiation) {
+            return toBits(priv->evalMethodGivenArgs(o, method_name, *arg_list, class_ctx, rc, xsink, nullptr));
+        }
         return toBits(priv->evalMethod(o, method_name, *arg_list, class_ctx, rc, xsink,
             explicit_type_param_instantiation));
     }
 
-    // Check for hash member closures/call references (e.g. h.f() where h.f is a closure)
+    // Check for hash member closures/call references (e.g. h.f() where h.f is a closure); as above, the code called
+    // takes the values of the argument list over if the call gave the references of its temporary arguments
     if (base.getType() == NT_HASH) {
         const AbstractQoreNode* ref = check_call_ref(base.getInternalNode(), method_name);
         if (ref) {
-            return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(*arg_list, xsink));
+            return toBits(qore_rt_invoke_call_ref_list(reinterpret_cast<const ResolvedCallReferenceNode*>(ref),
+                *arg_list, arg_cleanups != nullptr, xsink));
         }
     } else if (base.getType() == NT_WEAKREF_HASH) {
         const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), method_name);
         if (ref) {
-            return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(*arg_list, xsink));
+            return toBits(qore_rt_invoke_call_ref_list(reinterpret_cast<const ResolvedCallReferenceNode*>(ref),
+                *arg_list, arg_cleanups != nullptr, xsink));
         }
     }
 
@@ -20678,6 +20711,14 @@ DLLLOCAL uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method
         uint64_t* args, int nargs, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation) {
     return dot_eval_fallback_with_args(base, method_name, args, nullptr, nargs,
+        xsink, explicit_type_param_instantiation);
+}
+
+// documented in QoreJITIncludes.h
+DLLLOCAL uint64_t dot_eval_fallback_with_args_consume(QoreValue base, const char* method_name,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation) {
+    return dot_eval_fallback_with_args(base, method_name, args, arg_cleanups, nargs,
         xsink, explicit_type_param_instantiation);
 }
 
