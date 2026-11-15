@@ -443,7 +443,8 @@ static inline bool dataFrameIsDecimalColumn(const ColumnData& cd) {
 //! Gives the decimal schema of columns that are int64 and decimal columns, with at least one of each (qore#6144)
 /** An int64 column counts as a decimal(19, 0) column: the schema has the largest number of integer digits and the
     largest scale of the columns, with the other fields of the first decimal schema, no native type, and nullable if
-    a column is; if it would have more than 38 digits, there is none (has_schema is false), and the columns make a
+    a decimal schema is nullable or an int64 column has a null value (the schema of an int64 column is not read);
+    if it would have more than 38 digits, there is none (has_schema is false), and the columns make a
     column that holds their exact values with no schema, as for the other decimal merges
     (dataFrameMergeColumnSchema()).
 
