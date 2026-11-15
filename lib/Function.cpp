@@ -8209,7 +8209,11 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
                 // no-narrow container params must bind through the TLS paths so
                 // setupCall() gives them assignment semantics;
                 // direct params would pass the caller's tagged container through
-                || signature.lv[i]->isNoNarrowContainer()) {
+                || signature.lv[i]->isNoNarrowContainer()
+                // an `any` or a plain `auto!` param strips the complex type of a list or hash argument
+                // (setupCall()), which the direct binding does not do: the variable of an `auto!` param has the
+                // type `auto` (qore#6059)
+                || q_type_strips_complex_type(signature.lv[i]->getTypeInfoForLValue())) {
             all_params_direct_safe = false;
         }
     }

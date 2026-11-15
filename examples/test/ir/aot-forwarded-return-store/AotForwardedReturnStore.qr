@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A function that returns its parameter through a typed local returns the value that the local holds: qcc replaced a
+# call of such a function with the argument and skipped the conversion or check of the store (issue #6162); see
+# AotForwardedReturnStore.qtest.
+
+auto sub to_float(auto v) { float x = v; return x; }
+auto sub to_softstring(auto v) { softstring x = v; return x; }
+auto sub to_number(auto v) { number x = v; return x; }
+auto sub to_int(auto v) { int x = v; return x; }
+auto sub to_list(auto v) { list x = v; return x; }
+auto sub to_hash(auto v) { hash x = v; return x; }
+# a store into a local of the parameter's own type keeps the value
+int sub same(int v) { int x = v; return x; }
+*int sub same_or_nothing(*int v) { *int x = v; return x; }
+list<int> sub keep_list(list<int> v) { list<int> x = v; return x; }
+# a store into a local that is not returned still converts or checks the value
+auto sub check_store(auto v) { int x = v; return v; }
+
+# a local of the type parameter's type, which the call instantiates
+class AotForwardedReturnStoreG<T> {
+    static auto store(auto v) { T x = v; return x; }
+    # the parameter and the local have the type parameter's type: the parameter converts the argument
+    static T id(T v) { T x = v; return x; }
+}
+
+sub show(string label, auto v) {
+    printf("%s: %y %s\n", label, v, v.fullType());
+}
+
+# each case is a function of its own whose only call has locals as arguments, so that qcc considers the call for its
+# fold (it considers no call after a try block in the same function); qcc's statistics are checked by name
+sub case_float() { int i = 1; show("float", to_float(i)); }
+sub case_softstring() { int i = 1; show("softstring", to_softstring(i)); }
+sub case_number() { int i = 1; show("number", to_number(i)); }
+sub case_int() {
+    string s = "abc";
+    try {
+        show("int", to_int(s));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("int: %s\n", ex.err);
+    }
+}
+sub case_list() { list<int> l = (1, 2); show("list", to_list(l)); }
+sub case_hash() { hash<string, int> h = {"a": 1}; show("hash", to_hash(h)); }
+sub case_same() { int i = 1; show("same", same(i)); }
+sub case_same_or_nothing() { *int n; show("same or nothing", same_or_nothing(n)); }
+sub case_unreturned() {
+    string s = "abc";
+    try {
+        show("unreturned int", check_store(s));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("unreturned int: %s\n", ex.err);
+    }
+}
+sub case_type_parameter_any() {
+    list<int> l = (1, 2);
+    show("type parameter any", AotForwardedReturnStoreG<any>::store(l));
+}
+sub case_type_parameter_list() {
+    list<int> l = (1, 2);
+    show("type parameter list", AotForwardedReturnStoreG<list>::store(l));
+}
+sub case_type_parameter_float() { int i = 1; show("type parameter float", AotForwardedReturnStoreG<float>::store(i)); }
+sub case_type_parameter_float_parameter() {
+    int i = 1;
+    show("type parameter float parameter", AotForwardedReturnStoreG<float>::id(i));
+}
+
+#! a call whose argument has the parameter's type, stored in a local of that type: qcc replaces it with the argument
+sub folded() {
+    list<int> l = (1, 2);
+    show("folded", keep_list(l));
+}
+
+#! runs every case
+sub run() {
+    case_float();
+    case_softstring();
+    case_number();
+    case_int();
+    case_list();
+    case_hash();
+    case_same();
+    case_same_or_nothing();
+    case_unreturned();
+    case_type_parameter_any();
+    case_type_parameter_list();
+    case_type_parameter_float();
+    case_type_parameter_float_parameter();
+    folded();
+}
+
+# several calls, so that the code also runs once it has IR or is compiled
+for (int n = 0; n < 3; ++n) {
+    run();
+}
