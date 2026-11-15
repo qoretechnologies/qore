@@ -1766,7 +1766,15 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                     us = (val % 1000000000) / 1000;
                     break;
             }
-            return DateTimeNode::makeRelative(0, 0, 0, 0, 0, secs, us);
+            // the duration is made of days and seconds; a duration of more days than an int holds (about 5.9 million
+            // years) cannot be a Qore duration (qore#6107)
+            if (secs / 86400 > std::numeric_limits<int>::max() || secs / 86400 < std::numeric_limits<int>::min()) {
+                xsink->raiseException("DATAFRAME-IO-ERROR", "the Arrow duration of " QLLD " %s is too long for a "
+                    "Qore duration, whose days are an int", static_cast<int64>(val),
+                    arrowTimeUnitName(dur_type->unit()).c_str());
+                return QoreValue();
+            }
+            return dataFrameMakeDuration(secs, us);
         }
         case arrow::Type::DECIMAL128: {
             auto dec_array = std::static_pointer_cast<arrow::Decimal128Array>(array);
@@ -1942,9 +1950,19 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
 //! returns the error of a date or duration that does not fit in an int64 of the given time unit, out of line, as it
 //! is rare
 __attribute__((noinline, cold)) static arrow::Status arrowTimeOverflow(const DateTimeNode* dt, const char* unit) {
-    QoreStringValueHelper str(dt);
-    return arrow::Status::Invalid(dt->isRelative() ? "the duration " : "the date ", str->c_str(),
-        " cannot be stored in ", unit, " in an int64");
+    QoreString desc;
+    if (dt->isRelative()) {
+        // the parts of a duration, as the string form of a relative date runs them together (qore#6116); they are
+        // read with getInfo(), as DateTime::getYear() returns a short, which cannot hold the years of a long one
+        qore_tm parts;
+        dt->getInfo(parts);
+        desc.sprintf("the duration of %d years, %d months, %d days, %d hours, %d minutes, %d seconds and %d "
+            "microseconds", parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second, parts.us);
+    } else {
+        QoreStringValueHelper str(dt);
+        desc.sprintf("the date %s", str->c_str());
+    }
+    return arrow::Status::Invalid(desc.c_str(), " cannot be stored in ", unit, " in an int64");
 }
 
 static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,

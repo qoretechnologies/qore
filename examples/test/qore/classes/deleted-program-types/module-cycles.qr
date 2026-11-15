@@ -1,0 +1,16 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Loads a module whose classes name each other (DataProviderPipeline and PipelineQueue, with the metrics collector and
+# the data processors) and ends: the declarations of the module's Program that survive its deletion, because the
+# imported copies and the objects of the Program reference them, and that keep each other with the references that they
+# hold for the declarations that they name, are freed by the library cleanup (issue #5790); see
+# deleted-program-types.qtest.  QORE_TEARDOWN_REPORT=1 makes a debug libqore print the number of declarations that are
+# left after qore_cleanup().
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires DataProvider
+
+print("ok\n");
