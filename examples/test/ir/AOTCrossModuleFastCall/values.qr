@@ -1,0 +1,29 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the values of calls of another module's functions, printed one per line (qore#6035)
+
+%requires XfcConsumer
+
+hash<auto> h = XfcConsumer::values();
+foreach hash<auto> i in (h.pairIterator()) {
+    printf("%s: %y\n", i.key, i.value);
+}
+foreach int i in (2, -1, -2) {
+    printf("error(%d): %y\n", i, XfcConsumer::error(i));
+}
+printf("stack: %y\n", XfcConsumer::stack());
+printf("rootIsDir: %y\n", XfcConsumer::rootIsDir());
+
+# from a thread
+Counter c(1);
+background sub () {
+    printf("thread: %y %y\n", XfcConsumer::hot(5), XfcConsumer::error(-1).desc);
+    c.dec();
+}();
+c.waitForZero();
+
+# from a sandboxed Program: the provider's code keeps its own restrictions
+Program p(PO_NO_FILESYSTEM | PO_NO_THREAD_CONTROL);
+p.loadModule("XfcConsumer");
+p.parse("auto sub t() { return (XfcConsumer::rootIsDir(), XfcConsumer::hot(3)); }", "sandbox");
+printf("sandbox: %y\n", p.callFunction("t"));

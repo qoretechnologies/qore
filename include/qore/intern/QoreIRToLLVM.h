@@ -252,6 +252,11 @@ private:
     // Callee AOT contexts loaded once in the logical function entry, keyed by
     // expression slot. The context mapping is immutable during an invocation.
     std::unordered_map<int32_t, llvm::Value*> aot_call_target_contexts;
+    // The callee AOT contexts and fast entries of the calls of other modules' functions (qore#6035), loaded once in
+    // the logical function entry like aot_call_target_contexts
+    std::unordered_map<int32_t, std::pair<llvm::Value*, llvm::Value*>> aot_cross_module_targets;
+    // The buffer of the state of a call of another module's function, in the function's entry block
+    llvm::AllocaInst* cross_module_call_state_storage = nullptr;
 
     // Exact-class checks for stable local receivers, materialized once in the
     // logical function entry. Object validity remains guarded at each call.
@@ -1273,6 +1278,26 @@ private:
             const char* fallback_consume_throwing_name = nullptr,
             bool require_exact_object_class = false,
             const std::vector<uint8_t>* date_kind_guards = nullptr);
+
+    //! Emits the entry into the Program of another module's function before its native call (qore#6035)
+    /** qore_rt_enter_cross_module_call() enters the Program with the state that the runtime call path sets up
+        (qore_rt_call_direct_aot()); the insert point is then the block of the call.
+
+        @return the block taken if the Program cannot be entered: the call is not made and the exception is left in
+        the caller's exception sink; emitLeaveCrossModuleCall() completes it
+    */
+    llvm::BasicBlock* emitEnterCrossModuleCall(llvm::Module& module, llvm::Function* llvm_func, int32_t slot);
+
+    //! Emits the call of another module's function through @a fast_fn, the fast entry that its module registered
+    llvm::Value* emitCrossModuleFastEntryCall(const BatchCalleeInfo& callee_info, llvm::Value* fast_fn,
+            const std::vector<llvm::Value*>& call_args);
+
+    //! Emits the exit from the Program entered by emitEnterCrossModuleCall()
+    /** @return the call's result, or the zero value of the fast entry's return kind if the Program could not be
+        entered (@a skip_bb)
+    */
+    llvm::Value* emitLeaveCrossModuleCall(llvm::Module& module, llvm::Function* llvm_func,
+            const BatchCalleeInfo& callee_info, llvm::Value* call_result, llvm::BasicBlock* skip_bb);
 
     //! Returns @a can_use_fast_entry ANDed with the date kind checks @a date_kind_guards of a call's arguments
     /** @a date_kind_guards has a QoreDateKindGuardFlags entry (0: no check) per argument, as set by

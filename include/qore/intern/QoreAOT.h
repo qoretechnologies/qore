@@ -333,6 +333,11 @@ struct QoreAOTCallTarget {
         nullptr};
     //! Lazily populated bounded cache for polymorphic object method calls.
     std::atomic<QoreAOTMethodDispatchCache*> method_dispatch_cache{nullptr};
+    //! The native fast entry of a function of another module that the call reaches directly (qore#6035), resolved
+    //! at the first call by qore_rt_try_get_cross_module_fast_entry(): its state is 0 before, 1 if the fast entry
+    //! was found, 2 if the call keeps its runtime path
+    std::atomic<const void*> cross_module_fast_entry{nullptr};
+    std::atomic<uint8_t> cross_module_fast_state{0};
     bool is_pseudo = false;                //!< for dot-eval pseudo-method calls
     bool is_static_method = false;         //!< method is a static method target
     bool is_self_method = false;           //!< method target came from SelfFunctionCallNode
@@ -739,6 +744,75 @@ extern "C" QoreStringNode* qore_aot_module_init_v3(
     const char* mod_name,
     const QoreAOTFunc* functions, int num_functions
 );
+
+//! A native fast entry of a function of an AOT module, in the table that the module registers (qore#6035)
+/** The layout is the one that qcc generates (generateModuleABIV2()).
+*/
+struct QoreAOTFastEntry {
+    //! the function's standard native entry, which its variant holds (UserVariantBase::getCachedAOTFunction())
+    AotFunctionPtr fn;
+    //! the function's native fast entry
+    const void* fast_fn;
+    //! the symbol of the fast entry, which encodes its ABI contract (finalizeAOTBatchFastEntrySymbols())
+    const char* fast_symbol;
+};
+
+//! Registers the metadata and the native fast entries of an AOT module; called by its generated init function
+/** The fast entries let the code of another module call the module's functions natively
+    (qore_rt_try_get_cross_module_fast_entry()), and the metadata lets a module compiled against this one find their
+    ABI (qore_aot_get_module_metadata()).  The arrays are the module's own data, which stays valid until the module
+    unregisters them with qore_aot_unregister_module_fast_entries_v1().
+*/
+extern "C" void qore_aot_register_module_fast_entries_v1(const char* mod_name, const uint8_t* metadata,
+    int32_t metadata_len, const QoreAOTFastEntry* entries, int32_t num_entries);
+
+//! Removes the registration of qore_aot_register_module_fast_entries_v1(); called by the module's delete function
+extern "C" void qore_aot_unregister_module_fast_entries_v1(const char* mod_name, const QoreAOTFastEntry* entries,
+    int32_t num_entries);
+
+//! Returns the native fast entry of the function whose standard native entry is \a fn, or nullptr
+/** @param fn the standard native entry of the function
+    @param fast_symbol the symbol of the fast entry that the caller was compiled for; a fast entry with another symbol
+    (another ABI contract) is not returned
+*/
+DLLLOCAL const void* qore_aot_find_cross_module_fast_entry(AotFunctionPtr fn, const char* fast_symbol);
+
+//! Gets the metadata of a loaded AOT module that registered it; returns false if it did not
+DLLLOCAL bool qore_aot_get_module_metadata(const char* mod_name, const uint8_t*& metadata, int32_t& metadata_len);
+
+//! Returns the mark of the fast-entry registrations of the module loads that this thread is making (qore#6035)
+/** A module's init registers its fast entries (qore_aot_register_module_fast_entries_v1()) before its load is
+    complete; they are published by qore_aot_commit_pending_fast_entries() when it is, or dropped by
+    qore_aot_discard_pending_fast_entries() when it fails, as the image is then unloaded without its delete function.
+*/
+DLLLOCAL size_t qore_aot_pending_fast_entries_mark();
+//! Publishes the registrations made since \a mark
+DLLLOCAL void qore_aot_commit_pending_fast_entries(size_t mark);
+//! Drops the registrations made since \a mark
+DLLLOCAL void qore_aot_discard_pending_fast_entries(size_t mark);
+
+//! Publishes the fast-entry registrations of a module load when the load completes, or drops them (qore#6035)
+class QoreAOTPendingFastEntriesHelper {
+public:
+    DLLLOCAL QoreAOTPendingFastEntriesHelper() : mark(qore_aot_pending_fast_entries_mark()) {
+    }
+
+    DLLLOCAL ~QoreAOTPendingFastEntriesHelper() {
+        if (!committed) {
+            qore_aot_discard_pending_fast_entries(mark);
+        }
+    }
+
+    //! the load is complete
+    DLLLOCAL void commit() {
+        qore_aot_commit_pending_fast_entries(mark);
+        committed = true;
+    }
+
+private:
+    size_t mark;
+    bool committed = false;
+};
 
 //! Captures the module loader path before entering the generated AOT module init implementation.
 extern "C" void qore_aot_set_module_init_context_path(QoreModuleInitContext* ctx);

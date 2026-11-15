@@ -5733,6 +5733,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         ctx.plugin_module_handle = plugin_scope.getHandle();
         // an AOT module inherits the restrictions of the Program loading it, as a source module does (#5556)
         QoreAOTModuleInitLoaderHelper aot_loader(path_pgm);
+        // the native fast entries that an AOT module's init registers are published when its load is complete
+        // (qore#6035)
+        QoreAOTPendingFastEntriesHelper aot_fast_entries;
         mod_info.init(ctx, xsink);
         if (xsink) {
             return nullptr;
@@ -5741,6 +5744,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         if (xsink) {
             return nullptr;
         }
+        aot_fast_entries.commit();
     } catch (AbstractException& e) {
         e.convert(&xsink);
         return nullptr;

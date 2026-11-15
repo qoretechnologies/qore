@@ -605,6 +605,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_get_aot_call_target_context) },
     { "qore_rt_try_get_aot_call_target_context",
         reinterpret_cast<void*>(&qore_rt_try_get_aot_call_target_context) },
+    { "qore_rt_try_get_cross_module_fast_entry",
+        reinterpret_cast<void*>(&qore_rt_try_get_cross_module_fast_entry) },
+    { "qore_rt_enter_cross_module_call", reinterpret_cast<void*>(&qore_rt_enter_cross_module_call) },
+    { "qore_rt_leave_cross_module_call", reinterpret_cast<void*>(&qore_rt_leave_cross_module_call) },
     { "qore_rt_object_is_valid", reinterpret_cast<void*>(&qore_rt_object_is_valid) },
     { "qore_rt_date_kind_matches", reinterpret_cast<void*>(&qore_rt_date_kind_matches) },
     { "qore_rt_check_valid_object_call_receiver",
@@ -12492,6 +12496,139 @@ public:
 private:
     RuntimeParseOptionsOverrideHelper helper;
 };
+
+namespace {
+//! The state of a native call of the fast entry of a function of another module (qore#6035)
+/** What qore_rt_call_direct_aot_impl() sets up for the call of a user function in the Program that defined it, in
+    the same order: the Program that keeps the function's Program while the call runs, the entry of that Program,
+    the clear of a calling closure's captured locals, and the runtime parse options of the module's code.  It is
+    built in a buffer of the calling native frame by qore_rt_enter_cross_module_call() and destroyed by
+    qore_rt_leave_cross_module_call(); members are destroyed in the reverse order of their declaration.
+*/
+struct QoreRtCrossModuleCallState {
+    //! the runtime statement, location and parse options of the function, which execJITWithDeopt() sets for its call
+    /** The parse options are the ones of the function's module code, which runtime checks of its native code read
+        (negative offsets, strict arguments); restored before the other members are destroyed
+    */
+    class RuntimeContextSwap {
+    public:
+        DLLLOCAL RuntimeContextSwap(const QoreProgramLocation* loc, const QoreParseOptions& po) {
+            swap_runtime_statement_location(nullptr, nullptr, loc, po, old_stmt, old_loc, old_po);
+        }
+
+        DLLLOCAL ~RuntimeContextSwap() {
+            update_runtime_statement_location(old_stmt, old_loc, old_po);
+        }
+
+    private:
+        const AbstractStatement* old_stmt = nullptr;
+        const QoreProgramLocation* old_loc = nullptr;
+        QoreParseOptions old_po;
+    };
+
+    std::optional<QoreSourceProgramHolder> exec_pgm_holder;
+    std::optional<ProgramThreadCountContextHelper> ptcch;
+    std::optional<ThreadSafeLocalVarRuntimeEnvironmentHelper> closure_env_clear;
+    std::optional<QoreRtUserCallOverrideHelper> po_override;
+    std::optional<RuntimeContextSwap> runtime_context;
+};
+static_assert(sizeof(QoreRtCrossModuleCallState) <= QORE_RT_CROSS_MODULE_CALL_STATE_SIZE,
+    "QORE_RT_CROSS_MODULE_CALL_STATE_SIZE is too small");
+static_assert(alignof(QoreRtCrossModuleCallState) <= QORE_RT_CROSS_MODULE_CALL_STATE_ALIGN,
+    "QORE_RT_CROSS_MODULE_CALL_STATE_ALIGN is too small");
+
+//! Returns the user variant of a call slot that a native fast-entry call can reach, or nullptr
+QORE_ALWAYS_INLINE const UserVariantBase* qore_rt_cross_module_fast_call_variant(const QoreAOTCallTarget& target) {
+    const UserVariantBase* uvb = target.uvb;
+    if (!uvb && target.variant) {
+        uvb = target.variant->getUserVariantBase();
+    }
+    // a generic call infers its type arguments at run time, and a call made from a Program other than the one it
+    // is resolved in runs in its call Program: both keep the runtime path
+    if (!uvb || !uvb->isStaticallyFastCallEligible() || !uvb->hasCachedAOT()
+            || target.explicit_type_param_instantiation || qore_rt_call_needs_call_program(target.pgm, uvb)) {
+        return nullptr;
+    }
+    return uvb;
+}
+}
+
+extern "C" DLLEXPORT QoreAOTContext* qore_rt_try_get_cross_module_fast_entry(QoreAOTContext* ctx, int32_t slot,
+        const char* fast_symbol, const void** fast_fn) {
+    *fast_fn = nullptr;
+    static constinit QoreEnvFlag disable_env("QORE_DISABLE_AOT_CROSS_MODULE_FAST_CALLS");
+    if (!ctx || slot < 0 || slot >= ctx->num_exprs || !ctx->call_targets || disable_env.get()) {
+        return nullptr;
+    }
+    QoreAOTCallTarget& target = ctx->call_targets[slot];
+    uint8_t state = target.cross_module_fast_state.load(std::memory_order_acquire);
+    if (state == 2) {
+        return nullptr;
+    }
+    const UserVariantBase* uvb = qore_rt_cross_module_fast_call_variant(target);
+    if (!uvb) {
+        return nullptr;
+    }
+    const void* fn = nullptr;
+    if (state == 1) {
+        fn = target.cross_module_fast_entry.load(std::memory_order_acquire);
+    } else {
+        // the fast entry that the call was compiled for: a module rebuilt with another ABI contract, or one loaded
+        // from source, has none, and the call keeps the runtime path
+        fn = qore_aot_find_cross_module_fast_entry(uvb->getCachedAOTFunction(), fast_symbol);
+        if (fn) {
+            target.cross_module_fast_entry.store(fn, std::memory_order_release);
+        }
+        target.cross_module_fast_state.store(fn ? 1 : 2, std::memory_order_release);
+        if (!fn) {
+            return nullptr;
+        }
+    }
+    if (!uvb->ensureAOTContext("<cross-module AOT call target>", nullptr)) {
+        return nullptr;
+    }
+    QoreAOTContext* target_ctx = uvb->getCachedAOTContext();
+    if (target_ctx) {
+        *fast_fn = fn;
+    }
+    return target_ctx;
+}
+
+extern "C" DLLEXPORT int qore_rt_enter_cross_module_call(QoreAOTContext* ctx, int32_t slot, void* state_buf,
+        ExceptionSink* xsink) {
+    auto* state = new (state_buf) QoreRtCrossModuleCallState;
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    const UserVariantBase* uvb = target.uvb ? target.uvb : target.variant->getUserVariantBase();
+    QoreProgram* caller_pgm = getProgram();
+    state->exec_pgm_holder.emplace(xsink);
+    QoreProgram* exec_pgm = qore_rt_function_execution_program(target.pgm, caller_pgm, uvb,
+        *state->exec_pgm_holder, xsink);
+    // a Program is returned unless an exception was raised
+    if (!exec_pgm && *xsink) {
+        return -1;
+    }
+    if (exec_pgm != caller_pgm
+            || (qore_program_private::hasThreadEntryHandlers(*exec_pgm) && thread_entry_pending(exec_pgm))) {
+        state->ptcch.emplace(xsink, exec_pgm, true);
+        // the Program is entered unless an exception was raised
+        if (!state->ptcch->entered() && *xsink) {
+            return -1;
+        }
+    }
+    // a normal function call: a calling closure's captured locals do not shadow the callee's
+    state->closure_env_clear.emplace(nullptr);
+    state->po_override.emplace(exec_pgm, uvb, caller_pgm);
+    // the function's parse options, after the override, as execJITWithDeopt() sets them (with the location only)
+    const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
+    if (parse_loc) {
+        state->runtime_context.emplace(parse_loc, uvb->getParseOptions(exec_pgm->getParseOptions()));
+    }
+    return 0;
+}
+
+extern "C" DLLEXPORT void qore_rt_leave_cross_module_call(void* state_buf) {
+    static_cast<QoreRtCrossModuleCallState*>(state_buf)->~QoreRtCrossModuleCallState();
+}
 
 //! Returns the Program that a method runs in, as for the calls made without native code
 /** \a holder keeps the source Program of the class until the thread has left it, as it can be deleted in another
