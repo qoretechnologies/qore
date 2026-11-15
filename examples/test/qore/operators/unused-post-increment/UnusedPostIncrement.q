@@ -87,7 +87,13 @@ int sub id(int v) {
     return v;
 }
 
-#! used forms in contexts whose value is used, beside unused forms, which must keep the old value
+#! post forms whose value is used, which must give the old value, beside unused ones
+/** used: the call argument (i++), the if condition (k++), the list elements (i++, j--), the ternary assigned to t,
+    the switch expression (s++), the while condition (w--), the ?? operand (coalesce++), the comparison operand
+    (cmp++) and the closure's return value (closure_var++)
+
+    unused: the ternaries as statements (c ? a++ : b--;), s++ before the switch and loops++ in the while loop
+*/
 hash<auto> sub used_contexts() {
     int i = 5;
     int arg = id(i++) * 100 + i;
@@ -104,6 +110,12 @@ hash<auto> sub used_contexts() {
     c ? a++ : b--;
     c = False;
     c ? a++ : b--;
+    int ta = 5;
+    int tb = 1;
+    c = True;
+    int t_true = c ? ta++ : tb--;
+    c = False;
+    int t_false = c ? ta++ : tb--;
     int s = 1;
     s++;
     int sw;
@@ -130,6 +142,7 @@ hash<auto> sub used_contexts() {
         "i": i,
         "j": j,
         "ternary": a * 100 + b,
+        "used ternary": (t_true, t_false, ta, tb),
         "switch": sw * 100 + s,
         "while": loops * 100 + w,
         "coalesce": cv * 100 + coalesce,

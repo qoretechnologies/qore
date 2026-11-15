@@ -1,7 +1,7 @@
 int local statements: 7 integer
 int local used: 5061107 integer
 int return post: 5 integer
-used contexts: {arg: 506, if: 1, list: [6, 1], i: 7, j: 0, ternary: 600, switch: 203, while: 299, coalesce: 506, compare: 6, closure: 506} hash<auto>
+used contexts: {arg: 506, if: 1, list: [6, 1], i: 7, j: 0, ternary: 600, used ternary: [5, 1, 6, 0], switch: 203, while: 299, coalesce: 506, compare: 6, closure: 506} hash<auto>
 for loop: 110 integer
 for loop body count: 5 integer
 while loop: 405 integer
