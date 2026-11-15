@@ -29,7 +29,7 @@ hash<auto> sub probe() {
     } catch (hash<ExceptionInfo> ex) {
         h.fs = ex.err;
     }
-    # a builtin of the uncontrolled-API domain, which refuses to create a capability while a sandbox governs the code
+    # a builtin of the uncontrolled-API domain, which the sandbox refuses at run time (qore#5741)
     try {
         code c = SandboxManager::createSystemPolicyCall(sub () {});
         delete c;
@@ -69,7 +69,7 @@ code sub ref_by_program(Program p, string name) { return p.getCallReference(name
         "sandboxed": True,
         "governed": True,
         "fs": "FILESYSTEM-ACCESS-DENIED",
-        "uncontrolled": "SANDBOX-CAPABILITY-ERROR",
+        "uncontrolled": "INVALID-FUNCTION-ACCESS",
     };
 
     constructor() : QUnit::Test("sandbox getCallReference() provenance", "1.0", \ARGV) {
