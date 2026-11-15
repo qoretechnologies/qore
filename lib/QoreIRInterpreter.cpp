@@ -2785,10 +2785,22 @@ static bool qore_ir_operator_keeps_no_operand(QoreIROpcode op) {
     }
 }
 
+//! The definitions of the values of a function, which buildValueUseCounts() finds for buildInterpreterAnalysis()
+struct IRValueDefinitions {
+    //! the instruction defining each value
+    std::vector<const QoreIRInstruction*> inst;
+    //! the block of the instruction defining each value
+    std::vector<const QoreIRBasicBlock*> block;
+    //! the position of the instruction defining each value in its block
+    std::vector<uint32_t> pos;
+    //! true if the function creates a reference, through which a call or a store can write any variable
+    bool creates_reference = false;
+};
+
 static bool buildValueUseCounts(const QoreIRFunction& func,
         std::vector<uint32_t>& counts, std::vector<uint8_t>& dot_eval_only_bases,
         std::vector<uint8_t>& consumed_call_args, std::vector<uint8_t>& phi_takes_incoming,
-        const std::vector<uint8_t>& reused_call_args, ExceptionSink* xsink) {
+        const std::vector<uint8_t>& reused_call_args, IRValueDefinitions& value_defs, ExceptionSink* xsink) {
     counts.assign(func.max_value_id + 1, 0);
     std::vector<uint8_t> dot_eval_base_candidates(counts.size(), 0);
     std::vector<uint8_t> non_dot_eval_uses(counts.size(), 0);
@@ -3103,6 +3115,10 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             consumed_call_args[i] = 1;
         }
     }
+    value_defs.inst = std::move(def_inst);
+    value_defs.block = std::move(def_block);
+    value_defs.pos = std::move(def_pos);
+    value_defs.creates_reference = creates_reference;
     return true;
 }
 
@@ -3131,8 +3147,9 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     bool reuse_complete = qore_ir_find_reused_call_args(func, reused_call_args, nullptr);
     assert(reuse_complete);
     (void)reuse_complete;
+    IRValueDefinitions value_defs;
     if (!buildValueUseCounts(func, value_use_counts, dot_eval_only_bases, consumed_call_args, phi_takes_incoming,
-            reused_call_args, xsink)) {
+            reused_call_args, value_defs, xsink)) {
         return false;
     }
     std::vector<int32_t> operand_use_counts(func.max_value_id + 1, 0);
@@ -3267,12 +3284,13 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     bool has_non_ir_only_locals = false;
     size_t local_slot_count = func.local_var_slots.empty()
         ? 0 : static_cast<size_t>(func.max_local_slot_id) + 1;
-    // a parameter that takes its argument over is kept on the runtime stack when the call binds it there, whose
-    // variable then holds the only reference to a temporary argument, so that a write releases it, as in the AST
-    // interpreter; a call with direct parameters (IRDirectParams) gives it IR storage for its frame, as before.  Its
-    // other properties are those of its IR storage: no callee can reach its variable, so no call invalidates its
-    // cached value (has_non_ir_only_locals; issue #5958, see design/param-take-over.md)
+    // a parameter with IR storage that takes its argument over: a frame bound from the runtime stack moves the value
+    // of its variable into its slot (takeOverRuntimeStackParams()), so that the slot holds the only reference to a
+    // temporary argument, which a write then releases, as in the AST interpreter; a frame whose caller gave nothing
+    // holds a reference that the caller's variable also holds.  Its storage is IR storage in every frame, as for any
+    // IR-only local (issue #5958, see design/param-take-over.md)
     std::unordered_set<const void*> take_over_params;
+    std::vector<IRTakeOverParam> take_over_param_moves;
     if (!param_local_vars.empty()) {
         qore_ir_collect_take_over_params(func, param_local_vars.data(), static_cast<unsigned>(param_local_vars.size()),
             &take_over_params);
@@ -3283,7 +3301,10 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
             if (lvar && sid < local_slot_count) {
                 const void* key = reinterpret_cast<const void*>(lvar);
                 if (func.hasIRStorage(key)) {
-                    locals_ir_only[sid] = take_over_params.count(key) ? 0 : 1;
+                    locals_ir_only[sid] = 1;
+                    if (take_over_params.count(key) && !lvar->closureUse()) {
+                        take_over_param_moves.push_back({static_cast<uint32_t>(sid), lvar});
+                    }
                     if (func.reference_slot_locals.count(key)) {
                         if (reference_slots.empty()) {
                             reference_slots.assign(local_slot_count, 0);
@@ -3311,46 +3332,20 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     // when the call is made, and so for the whole call, as no callee can write it, can be taken over observably by a
     // parameter that the callee writes: QORE_IR_GIVES_CALL_TEMPS (issue #5958)
     {
-        // the defining instruction of each value, its block and its position in the block
-        struct ValueDef {
-            const QoreIRInstruction* inst = nullptr;
-            const QoreIRBasicBlock* block = nullptr;
-            size_t pos = 0;
-        };
-        std::vector<ValueDef> defs;
-        bool creates_reference = false;
-        for (const auto& block : func.blocks) {
-            const auto& insts = block->instructions;
-            for (size_t pos = 0; pos < insts.size(); ++pos) {
-                const QoreIRInstruction* inst = insts[pos].get();
-                if (inst->result.isValid() && inst->result.id < consumed_call_args.size()) {
-                    if (defs.empty()) {
-                        defs.resize(consumed_call_args.size());
-                    }
-                    defs[inst->result.id] = {inst, block.get(), pos};
-                }
-                if (inst->opcode == QoreIROpcode::CreateParseRef
-                        || (inst->opcode == QoreIROpcode::Invoke
-                            && static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode
-                                == QoreIROpcode::CreateParseRef)) {
-                    creates_reference = true;
-                }
-            }
-        }
         // true if the argument \a id of the call at \a call_pos of \a call_block is a read of a plain local that the
         // local still holds when the call is made: nothing writes the local from the read to the call in its block
         auto is_held_local_read = [&](uint32_t id, const QoreIRBasicBlock* call_block, size_t call_pos) -> bool {
-            const ValueDef* def = id < defs.size() ? &defs[id] : nullptr;
-            if (creates_reference || !def || !def->inst || def->inst->opcode != QoreIROpcode::LoadLocal
-                    || def->block != call_block || def->pos >= call_pos) {
+            const QoreIRInstruction* def = id < value_defs.inst.size() ? value_defs.inst[id] : nullptr;
+            if (value_defs.creates_reference || !def || def->opcode != QoreIROpcode::LoadLocal
+                    || value_defs.block[id] != call_block || value_defs.pos[id] >= call_pos) {
                 return false;
             }
-            const auto* load = static_cast<const QoreIRLocalInstruction*>(def->inst);
+            const auto* load = static_cast<const QoreIRLocalInstruction*>(def);
             if (!load->local || load->is_ref || load->is_closure || load->local->closureUse()) {
                 return false;
             }
             const auto& insts = call_block->instructions;
-            for (size_t j = def->pos + 1; j < call_pos; ++j) {
+            for (size_t j = value_defs.pos[id] + 1; j < call_pos; ++j) {
                 if (qore_ir_get_written_local(insts[j].get()) == load->local) {
                     return false;
                 }
@@ -3391,6 +3386,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_param_slot_ids = std::move(param_slot_ids);
     func.interpreter_param_local_vars = std::move(param_local_vars);
     func.interpreter_locals_ir_only = std::move(locals_ir_only);
+    func.interpreter_take_over_param_moves = std::move(take_over_param_moves);
     func.interpreter_reference_slots = std::move(reference_slots);
     func.interpreter_real_slots = std::move(real_slots);
     // the local of each slot, for the release of the locals at the exit of the function (see SlotCacheCleanup): only
@@ -6371,6 +6367,30 @@ static __attribute__((noinline, cold)) void interpreterStripAnyReturn(QoreValue&
     }
 }
 
+//! Returns true if \a ref_val is a closure whose parameters take their arguments over (QoreIRFunction::param_take_over)
+/** A call that gives such a closure a temporary (QORE_IR_GIVES_CALL_TEMPS: an argument that is not a read of a local
+    that holds it for the whole call) is made by the call path, whose binding leaves the parameter the only reference
+    to it, instead of inline; the inline cache of closures is shared by every call site, so the giving sites test
+    this before it (issue #5958, see design/param-take-over.md)
+*/
+static inline bool qore_ir_closure_takes_over_params(QoreValue ref_val) {
+    if (!ref_val.hasNode() || ref_val.getInternalNode()->getType() != NT_RUNTIME_CLOSURE) {
+        return false;
+    }
+    auto* uf = static_cast<UserClosureFunction*>(
+        static_cast<const QoreClosureBase*>(ref_val.getInternalNode())->getFunction());
+    const AbstractQoreFunctionVariant* variant = uf && uf->numVariants() ? uf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const QoreIRFunction* callee_ir = uvb ? uvb->getCachedIR() : nullptr;
+    return callee_ir && callee_ir->param_take_over;
+}
+
+//! Returns true if a call that gives the references of its arguments with the flags \a gives_call_args can run the
+//! closure \a ref_val inline (see qore_ir_closure_takes_over_params())
+static inline bool qore_ir_given_closure_may_inline(uint8_t gives_call_args, QoreValue ref_val) {
+    return !(gives_call_args & QORE_IR_GIVES_CALL_TEMPS) || !qore_ir_closure_takes_over_params(ref_val);
+}
+
 template <bool GIVEN = false>
 static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram* caller_pgm,
         const QoreProgramLocation* call_loc, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
@@ -6472,11 +6492,6 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
                 // an inlined call has no frame of its own on the thread-local variable stack
                 || callee_ir->needs_call_frame
                 || callee_ir->hasTypeSpecialization()
-                // a call that gives a temporary to a parameter that takes its argument over is made by the call
-                // path, which releases the reference that the caller gave once the parameter holds one of its own;
-                // only a call that gives one runs the code instantiated for GIVEN, whose cache is its own
-                // (issue #5958)
-                || (GIVEN && callee_ir->param_take_over)
                 || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
                     && nargs != static_cast<int>(sig->numParams()))) {
             return false;
@@ -7753,8 +7768,9 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 if (nargs == 1) {
                     uint64_t arg0 = toBits(getIRValue(values, inv->operands[1]));
                     QoreValue inline_result;
-                    if (tryExecuteInterpreterInlineIRClosure<GIVEN>(ref_val, getProgram(), inv->loc, &arg0, 1,
-                            inline_result, xsink, nullptr, arg_cleanups)) {
+                    if ((!GIVEN || qore_ir_given_closure_may_inline(inv->interpreter_gives_call_args, ref_val))
+                            && tryExecuteInterpreterInlineIRClosure<GIVEN>(ref_val, getProgram(), inv->loc, &arg0, 1,
+                                inline_result, xsink, nullptr, arg_cleanups)) {
                         return inline_result;
                     }
                     return fromBits(GIVEN
@@ -7769,8 +7785,10 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     args[i] = toBits(getIRValue(values, inv->operands[i + 1]));
                 }
                 QoreValue inline_result;
-                bool inline_done = tryExecuteInterpreterInlineIRClosure<GIVEN>(ref_val, getProgram(), inv->loc, args,
-                    nargs, inline_result, xsink, nullptr, arg_cleanups);
+                bool inline_done = (!GIVEN || qore_ir_given_closure_may_inline(inv->interpreter_gives_call_args,
+                        ref_val))
+                    && tryExecuteInterpreterInlineIRClosure<GIVEN>(ref_val, getProgram(), inv->loc, args, nargs,
+                        inline_result, xsink, nullptr, arg_cleanups);
                 uint64_t result_bits = inline_done ? 0 : (GIVEN
                     ? qore_rt_call_closure_fast_consume_args(ref_bits, args, arg_cleanups, nargs, xsink)
                     : qore_rt_call_closure_fast(ref_bits, args, nargs, xsink));
@@ -8419,8 +8437,9 @@ static QORE_IR_INLINE_SITE void irCallClosure(Given& given, IRValueSlots& values
     constexpr bool GIVEN = Given::GIVEN;
     if (nargs == 1) {
         uint64_t arg0 = toBits(getIRValue(values, inst->operands[1]));
-        used_inline_ir = tryExecuteInterpreterInlineIRClosure<GIVEN>(ref_val, pgm, inst->loc,
-            &arg0, 1, result, xsink, &inline_may_invalidate_external_caches, given.get());
+        used_inline_ir = (!GIVEN || qore_ir_given_closure_may_inline(inst->interpreter_gives_call_args, ref_val))
+            && tryExecuteInterpreterInlineIRClosure<GIVEN>(ref_val, pgm, inst->loc,
+                &arg0, 1, result, xsink, &inline_may_invalidate_external_caches, given.get());
         if (!used_inline_ir) {
             result = fromBits(GIVEN
                 ? qore_rt_call_closure_fast_consume_args(ref_bits, &arg0, given.get(), 1, xsink)
@@ -8433,8 +8452,9 @@ static QORE_IR_INLINE_SITE void irCallClosure(Given& given, IRValueSlots& values
         for (int i = 0; i < nargs; ++i) {
             args[i] = toBits(getIRValue(values, inst->operands[i + 1]));
         }
-        used_inline_ir = tryExecuteInterpreterInlineIRClosure<GIVEN>(ref_val, pgm, inst->loc,
-            args, nargs, result, xsink, &inline_may_invalidate_external_caches, given.get());
+        used_inline_ir = (!GIVEN || qore_ir_given_closure_may_inline(inst->interpreter_gives_call_args, ref_val))
+            && tryExecuteInterpreterInlineIRClosure<GIVEN>(ref_val, pgm, inst->loc,
+                args, nargs, result, xsink, &inline_may_invalidate_external_caches, given.get());
         if (!used_inline_ir) {
             result = fromBits(GIVEN
                 ? qore_rt_call_closure_fast_consume_args(ref_bits, args, given.get(), nargs,
@@ -9228,6 +9248,32 @@ static QORE_INTERN_NOINLINE int qore_ir_run_lvalue_path_ternary(const QoreIRLVal
     return *xsink ? -1 : 0;
 }
 
+//! Moves the values of the parameters that take their arguments over from their variables into their slots
+/** For a frame whose parameters are bound on the runtime stack (setupCall(), instantiateFastCallParams()): the slot
+    then holds the reference of the variable, which is the only one to a temporary argument that the call gave, so
+    that a write to the parameter releases it, as in the AST interpreter, and the slot is the parameter's storage, as
+    for a frame with direct parameters.  A variable that holds a reference, a weak reference, a static assignment or
+    a value that is not a node keeps its value, which the first load of the parameter reads into its slot (issue
+    #5958, see design/param-take-over.md)
+*/
+static __attribute__((noinline)) void takeOverRuntimeStackParams(const QoreIRFunction& func,
+        IRLocalSlotCache& locals_slot_cache, std::vector<bool>& locals_instantiated) {
+    for (const IRTakeOverParam& p : func.interpreter_take_over_param_moves) {
+        assert(p.slot_id < locals_slot_cache.size() && p.slot_id < locals_instantiated.size());
+        assert(locals_slot_cache.storage(p.slot_id).isNothing() && !locals_instantiated[p.slot_id]);
+        LocalVarValue* lvv = thread_try_find_lvar(p.var);
+        if (!lvv || !lvv->val.assigned || lvv->val.static_assignment || lvv->val.type != QV_Node || !lvv->val.v.n) {
+            continue;
+        }
+        qore_type_t t = lvv->val.v.n->getType();
+        if (t == NT_REFERENCE || t == NT_WEAKREF || t == NT_WEAKREF_HASH || t == NT_WEAKREF_LIST) {
+            continue;
+        }
+        locals_slot_cache.set(p.slot_id, lvv->val.removeValue(false));
+        locals_instantiated[p.slot_id] = true;
+    }
+}
+
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
@@ -9561,7 +9607,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         }
     };
-    if (direct_params && direct_params->nargs > 0) {
+    if (!direct_params) {
+        // the parameters are bound on the runtime stack: the ones that take their arguments over are moved into their
+        // slots (issue #5958); the frame of a handler shares its parent's slots, whose parameters are the parent's
+        if (!func.interpreter_take_over_param_moves.empty() && !parent_slot_cache) [[unlikely]] {
+            takeOverRuntimeStackParams(func, locals_slot_cache, locals_instantiated);
+        }
+    } else if (direct_params->nargs > 0) {
         for (int i = 0; i < direct_params->nargs; ++i) {
             // Find the slot_id for this param's LocalVar
             if (i < static_cast<int>(func.interpreter_param_slot_ids.size())) {

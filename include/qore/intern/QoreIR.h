@@ -1413,12 +1413,12 @@ inline const char* qore_ir_cancel_point_operation(int64_t point) {
 class QoreIRBasicBlock;
 struct QoreIRPhiIncoming;
 
-//! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
 //! QoreIRInstruction::interpreter_gives_call_args: the call gives the references of arguments that it consumes
 static constexpr uint8_t QORE_IR_GIVES_CALL_ARGS = 1;
 //! QoreIRInstruction::interpreter_gives_call_args: one of them can be taken over observably by a parameter (#5958)
 static constexpr uint8_t QORE_IR_GIVES_CALL_TEMPS = 2;
 
+//! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
 enum class QoreIRFusedCallTargetCheck : uint8_t {
     None,           //!< no check
     MethodCall,     //!< a method call resolved at parse time: a valid object of the method's classes needs no other check
@@ -4179,6 +4179,14 @@ public:
     bool has_phi_nodes = false;
 };
 
+//! A parameter with IR storage that takes its argument over (QoreIRFunction::interpreter_take_over_param_moves)
+struct IRTakeOverParam {
+    //! the parameter's local slot
+    uint32_t slot_id;
+    //! the parameter's variable
+    const LocalVar* var;
+};
+
 class QoreIRFunction {
 public:
     explicit QoreIRFunction(std::string n_name, std::string n_display_name = {})
@@ -4474,6 +4482,11 @@ public:
         before the next member, so that the layout of the function does not change
     */
     bool param_take_over = false;
+    //! Whether a parameter of the function takes its argument over, for the IR of the AOT compiler, which does not
+    //! set param_take_over: 0 if not computed yet, 1 if none does, 2 if one does; computed once by the code
+    //! generation of the calls of the function (see qore_ir_fast_entry_refuses_given_args() in QoreIRToLLVM.cpp), in
+    //! the padding after param_take_over
+    mutable std::atomic<int8_t> take_over_params_state{0};
 
     // Set of LocalVar* pointers that are already instantiated by the caller
     // (tiered compilation: params from setupCall(), argvid/selfid from evalTiered(),
@@ -4889,6 +4902,9 @@ public:
     mutable std::vector<uint32_t> interpreter_param_slot_ids;
     mutable std::vector<const LocalVar*> interpreter_param_local_vars;
     mutable std::vector<uint8_t> interpreter_locals_ir_only;
+    //! The parameters with IR storage that take their arguments over (qore_ir_collect_take_over_params()): a frame
+    //! bound from the runtime stack moves the value of each one's variable into its slot (issue #5958)
+    mutable std::vector<IRTakeOverParam> interpreter_take_over_param_moves;
     //! Non-zero for the local slots of reference_slot_locals, whose slot can hold a reference that a store writes
     //! through
     mutable std::vector<uint8_t> interpreter_reference_slots;

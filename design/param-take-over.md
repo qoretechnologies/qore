@@ -98,18 +98,32 @@ in the IR, JIT and tiered modes, on develop (82c07846f2) as on this branch; a ca
 A parameter that takes its argument over is bound so that it holds the only reference to a temporary argument in
 every binding, with no change to the inline, direct-parameter and fast-entry calls:
 
-- the IR interpreter keeps such a parameter on the runtime stack when the call binds it there: its analysis
-  (`buildInterpreterAnalysis()`) leaves the parameter's bit in `interpreter_locals_ir_only` clear
-  (`qore_ir_collect_take_over_params()`), so the frame reads and writes the runtime variable, which took the
-  argument over in `setupCall()`/`instantiateFastCallParams()`; the frame of a call with direct parameters sets the
-  bit itself (`IRDirectParams`), as before.  Its other properties are those of its IR storage: no callee can reach
-  its variable, so no call invalidates its cached value (`interpreter_has_non_ir_only_locals` is unchanged).  This is
-  data of the function, computed once: no instruction of `execute()` changes;
+- the IR interpreter keeps such a parameter in IR storage, as on develop, in every frame; a frame whose parameters are
+  bound on the runtime stack (no `IRDirectParams`) moves the value of each such parameter from its variable into its
+  slot (`takeOverRuntimeStackParams()`, the list `QoreIRFunction::interpreter_take_over_param_moves` that
+  `buildInterpreterAnalysis()` computes once): the slot then holds the variable's reference, which is the only one to
+  a temporary that the caller gave (the AST interpreter, a giving call path), and a write releases it; a frame whose
+  caller gave nothing holds a reference that the caller's variable also holds, so nothing observable changes, and
+  its writes are those of an IR-only local, as on develop.  A variable that holds a reference, a weak reference, a
+  static assignment or a value that is not a node keeps its value, which the first load reads as on develop.  The
+  move is tested once per frame bound from the runtime stack (`!direct_params`, then the list's emptiness), the only
+  change on the paths that give nothing.  The frame of a handler shares its parent's slots and moves nothing.  Until
+  1d03004059 the parameter used its runtime variable as storage in every frame bound from the runtime stack
+  (`interpreter_locals_ir_only` clear), which made each write of a caller that gives nothing slower (review of
+  1d03004059: `fl(hv)` with 50 writes of `h.k`, +875 instructions per call in IR mode, +1078 in tiered);
 - the normal entry of native code (`QoreIRToLLVM::preCreateLocalAllocas()`) loads such a parameter with
-  `qore_rt_take_param()` (`_raw`, `_aot`), which releases the runtime variable's reference once the cache has its own,
+  `qore_rt_take_param()` (`_aot`), which releases the runtime variable's reference once the cache has its own,
   instead of `qore_rt_load_local()`: the entry's cleanup slot then holds the only reference, a write releases it, and
-  the variable is empty when the call uninstantiates it.  A deoptimization gives the value back to the variable
-  (`qore_rt_return_param()`) before the AST interpreter runs the function again.  The fast entry is unchanged;
+  the variable is empty when the call uninstantiates it.  The fast entry is unchanged.  Two cases cannot occur, and
+  are asserted: a taken parameter with a reference flag (`qore_rt_load_local_raw()`: an untyped or `auto` parameter,
+  which can be given a reference, is never IR-only when it is written, `computeIROnlyLocals()`), and a deoptimization
+  of a function that took a parameter (the deoptimization runs the function again from the runtime variables, which
+  the take emptied): a function with a guard that has a deopt target takes no parameter over
+  (`qore_ir_function_may_deopt()`).  No lowering makes such a guard today: only `GuardNotNothing` is made, and it has
+  a deopt target only in a try block (or the release block of a replaced return), where the values that it would
+  check are made by invokes, which end their block, so `maybeInsertNotNothingGuard()` makes none for them (checked
+  with `QORE_AOT_DUMP_IR` on `ParamReassignRelease.qr` and on probes of slices, ranges, member and key reads in try
+  blocks).  The hand-back helpers of 1d03004059 (`qore_rt_return_param()`) and the `_raw` takes were removed;
 - a native call that gives the callee a temporary argument (`QoreIRToLLVM::callGivesArgs()`, the test of
   `buildArgCleanupArray()`) does not call the fast entry of a callee with `param_take_over`
   (`qore_ir_fast_entry_refuses_given_args()` in the fast-entry gates): it is made by the consume path, which binds
