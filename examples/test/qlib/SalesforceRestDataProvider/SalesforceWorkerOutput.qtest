@@ -72,6 +72,9 @@ public class SalesforceWorkerOutputTest inherits QUnit::Test {
             "the location without the warning": Location,
             "the location of another script": replace(Location, Worker, "other-worker.qr") + "\n" + grpc,
             "the location of a script whose name ends in the worker's": replace(Location, "//", "//x") + "\n" + grpc,
+            # the worker's name is matched literally: "." is no regular expression wildcard there
+            "the location of a script whose name matches the worker's as a regular expression":
+                replace(Location, Worker, "env-options-workerXqr") + "\n" + grpc,
             "another warning at the location": Location + "\nRETURN-VALUE-IGNORED: call to function f()",
             "the warning twice for one location": Location + "\n" + grpc + "\n" + grpc,
         };
