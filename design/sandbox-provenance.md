@@ -67,7 +67,12 @@ code that created it no privileges in the Program. Sandboxed code that gives a P
 calling code's own calls into it alone. An expression cannot define code: it is parsed as `return (<expression>);`,
 which code that closes the parenthesis could extend with definitions left pending for the next commit, so a
 definition in an expression is a parse error (`check_expression_definition()` in lib/parser.ypp) and the expression's
-pending code is rolled back. The managers are released with the own manager when the Program is cleared, or when it is
+pending code is rolled back (with any pending code that the Program had). Parse directives on a line of their own in
+an expression's code (`%requires`, `%define`) still take effect in the Program: that is not code, and a separate
+issue. The walk's cache of a context with no manager on its chain (`sandboxChainClear()`) is shared by policy and
+other lookups, so a Program with a manager in any slot counts as having one: a Program created in a system-policy
+capability has a kept sandbox but no kept policy manager, and a policy check must not cache "none" for the other
+lookups. The managers are released with the own manager when the Program is cleared, or when it is
 destroyed without being cleared. The constructor throws `std::bad_alloc` if the creator's sandbox cannot be resolved
 (no Program is created); the parse entry points raise an out-of-memory exception and do not parse.
 

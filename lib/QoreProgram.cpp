@@ -714,7 +714,13 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
         ReferenceHolder<QoreSandboxManager> creator_sm(all, nullptr);
         ReferenceHolder<QoreSandboxManager> creator_policy(policy, nullptr);
         if (creator_sm || creator_policy) {
-            addCreatorSandbox(*creator_sm, *creator_policy);
+            try {
+                addCreatorSandbox(*creator_sm, *creator_policy);
+            } catch (...) {
+                // a manager that was attached before the failure is released: the destructor does not run
+                releaseSandboxManagers(nullptr);
+                throw;
+            }
         }
     }
     registerProgram();

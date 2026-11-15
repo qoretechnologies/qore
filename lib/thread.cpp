@@ -5190,20 +5190,28 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
     // own governs alone, as before, and the walk ends there; the sandbox that a Program keeps of the code that created
     // it only adds to the sandbox of its callers, so the walk goes on (a stricter caller still governs the code that
     // it calls).  Returns true if the walk ends, with its result in \a rv
+    //
+    // the cache of the thread's context (see sandboxChainClear()) is shared by policy and other lookups, so a Program
+    // with a manager for the other kind of lookup counts as well: a Program created for sandboxed code under a
+    // system-policy capability keeps a sandbox but no policy manager, and a policy check must not cache that the chain
+    // has none for the lookups that follow
     bool visited_any = false;
     auto try_pgm = [pgm_id, policy, &visit, &visited_any](QoreProgram* p, bool& rv) -> bool {
         if (!p) {
             return false;
         }
+        qore_program_private* pp = qore_program_private::get(*p);
+        if (pp->hasSandboxManager()) {
+            visited_any = true;
+        }
         QoreSandboxManager* own_ptr;
         QoreSandboxManager* creator_ptr;
-        qore_program_private::get(*p)->getSandboxManagerRefs(own_ptr, creator_ptr, policy);
+        pp->getSandboxManagerRefs(own_ptr, creator_ptr, policy);
         ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
         ReferenceHolder<QoreSandboxManager> creator(creator_ptr, nullptr);
         if (!own && !creator) {
             return false;
         }
-        visited_any = true;
         // the innermost Program that contributes a manager is reported
         if (pgm_id && !*pgm_id) {
             *pgm_id = p->getProgramId();

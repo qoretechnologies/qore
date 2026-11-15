@@ -60,10 +60,42 @@ string sub spin(Qore::Thread::Queue started, int max_ms) {
     }
     return \"not stopped\";
 }
+string sub read_then_spin(string path, Qore::Thread::Queue started, int max_ms) {
+    try {
+        Qore::ReadOnlyFile f(path);
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    return spin(started, max_ms);
+}
+string sub read_then_threads(string path) {
+    try {
+        Qore::ReadOnlyFile f(path);
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    # the first thread runs until the second one has been tried, so the sandbox counts it
+    Qore::Thread::Queue release();
+    Qore::Thread::Counter done(1);
+    background sub () {
+        release.get();
+        done.dec();
+    }();
+    string rv;
+    try {
+        background sub () {}();
+        rv = \"started\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv = ex.err;
+    }
+    release.push(True);
+    done.waitForZero();
+    return rv;
+}
 sub export_to(Program h) {
     h.importFunction(\"probe\", \"probe2\");
     h.importFunction(\"probe_async\", \"probe_async2\");
     h.importFunction(\"spin\", \"spin2\");
+    h.importFunction(\"read_then_spin\", \"read_then_spin2\");
+    h.importFunction(\"read_then_threads\", \"read_then_threads2\");
 }
 Program sub mk(string src) {
     Program c(PO_NEW_STYLE);
@@ -397,20 +429,42 @@ sub export_net_to(Program h) {
         Program host(PO_NEW_STYLE);
         SystemPolicyHelper.callFunction("export_to", host);
         assertEq("read:secret", host.callFunction("probe2", DeniedFile).fs);
-        # the sandbox's interrupts still apply to its code, as to the capability's own code
-        Queue started();
-        Queue result();
-        background sub () {
-            try {
-                result.push(host.callFunction("spin2", started, 20000));
-            } catch (hash<ExceptionInfo> ex) {
-                result.push(ex.err);
-            }
-        }();
-        started.get();
-        manager.requestInterrupt();
-        on_exit manager.clearInterrupt();
-        assertEq("PROGRAM-INTERRUPTED", result.get());
+        # the sandbox's interrupts still apply to its code, as to the capability's own code, also after a policy check
+        # in the same call (which finds no policy manager on the call chain)
+        foreach string f in ("spin2", "read_then_spin2") {
+            Queue started();
+            Queue result();
+            background sub () {
+                try {
+                    result.push(f == "spin2"
+                        ? host.callFunction(f, started, 20000)
+                        : host.callFunction(f, DeniedFile, started, 20000));
+                } catch (hash<ExceptionInfo> ex) {
+                    result.push(ex.err);
+                }
+            }();
+            started.get();
+            manager.requestInterrupt();
+            on_exit manager.clearInterrupt();
+            assertEq("PROGRAM-INTERRUPTED", result.get(), f);
+            manager.clearInterrupt();
+        }
+
+        # and so does its thread limit, after a policy check in the same call
+        SandboxManager limited();
+        limited.setUncontrolledApiPolicy(True);
+        limited.setMaxThreads(1);
+        Program pl(PO_NEW_STYLE);
+        pl.setSandboxManager(limited);
+        pl.parse(SandboxedSource, "limited sandbox");
+        code cap2 = SandboxManager::createSystemPolicyCall(sub () {
+            SystemPolicyHelper = new Program(PO_NEW_STYLE);
+            SystemPolicyHelper.parse(ProbeSource, "limited helper");
+        });
+        pl.callFunction("use_capability", cap2);
+        Program host2(PO_NEW_STYLE);
+        SystemPolicyHelper.callFunction("export_to", host2);
+        assertEq("THREAD-CREATION-FAILURE", host2.callFunction("read_then_threads2", DeniedFile));
     }
 
     otherPolicies() {
