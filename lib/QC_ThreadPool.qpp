@@ -464,6 +464,9 @@ tp.stop();
     including the one that runs the calling task, so it would never return; a task can stop its pool from another
     thread (for example with the @ref background "background" operator)
 
+    @note the pool is also stopped when its object is destroyed; a task must therefore not release the last reference
+    to the pool that runs it, as the destructor would then wait for the task
+
     @see ThreadPool::stopWait()
  */
 ThreadPool::stop() {

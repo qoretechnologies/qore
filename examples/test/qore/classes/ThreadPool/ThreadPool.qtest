@@ -298,6 +298,8 @@ class ThreadPoolTest inherits QUnit::Test {
                 }();
             });
             c.waitForZero();
+            # the pool has stopped: it takes no more tasks
+            assertThrows("THREADPOOL-ERROR", \tp.submit(), sub () {}, method + "(): the pool is stopped");
         }
         # a task of another pool stops a pool normally
         ThreadPool other(1);
