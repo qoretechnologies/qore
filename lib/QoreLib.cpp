@@ -4075,7 +4075,7 @@ static QORE_INTERN_ALWAYS_INLINE int64 qore_plus_equals_int_operand_steps(const 
         }
     }
     if (v.isFloat()) {
-        return static_cast<int64>(v.getDouble());
+        return q_float_to_int64(v.getDouble());
     }
     if (v.isBool()) {
         return v.getBool() ? 1 : 0;

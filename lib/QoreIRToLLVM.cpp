@@ -471,6 +471,7 @@ static bool isFastMethodCallEligible(
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/MDBuilder.h>
+#include <llvm/IR/IntrinsicsX86.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <limits>
@@ -799,6 +800,58 @@ static bool qore_ir_value_has_input_identical_type(
         return false;
     }
     return QoreTypeInfo::isInputIdentical(target_type, source_type);
+}
+
+size_t QoreIRToLLVM::expandFloatToIntForTarget(llvm::Module& module, const llvm::Triple& triple) {
+    if (triple.getArch() != llvm::Triple::x86_64) {
+        return 0;
+    }
+    llvm::LLVMContext& c = module.getContext();
+    llvm::Type* i64 = llvm::Type::getInt64Ty(c);
+    llvm::Type* dbl = llvm::Type::getDoubleTy(c);
+    std::vector<llvm::CallInst*> calls;
+    for (llvm::Function& function : module) {
+        for (llvm::BasicBlock& bb : function) {
+            for (llvm::Instruction& inst : bb) {
+                auto* call = llvm::dyn_cast<llvm::CallInst>(&inst);
+                if (call && call->getIntrinsicID() == llvm::Intrinsic::fptosi_sat && call->getType() == i64
+                        && call->getArgOperand(0)->getType() == dbl) {
+                    calls.push_back(call);
+                }
+            }
+        }
+    }
+    for (llvm::CallInst* call : calls) {
+        llvm::BasicBlock* head = call->getParent();
+        llvm::Function* function = head->getParent();
+        // the call and the instructions after it move to the tail; the successors' PHIs are updated
+        llvm::BasicBlock* tail = head->splitBasicBlock(call->getIterator(), "f2i.cont");
+        llvm::BasicBlock* cold = llvm::BasicBlock::Create(c, "f2i.sat", function, tail);
+        llvm::Instruction* head_br = head->getTerminator();
+        llvm::IRBuilder<> b(head_br);
+        llvm::Value* vec = b.CreateInsertElement(llvm::PoisonValue::get(llvm::FixedVectorType::get(dbl, 2)),
+            call->getArgOperand(0), static_cast<uint64_t>(0));
+        // cvttsd2si: the integer indefinite value 0x8000000000000000 for NaN and a value out of the range
+        llvm::Value* raw = b.CreateIntrinsic(llvm::Intrinsic::x86_sse2_cvttsd2si64, {}, {vec}, nullptr, "f2i");
+        llvm::Value* sentinel = b.CreateICmpEQ(raw,
+            llvm::ConstantInt::get(i64, static_cast<uint64_t>(1) << 63));
+        b.CreateCondBr(sentinel, cold, tail, llvm::MDBuilder(c).createBranchWeights(1, 1 << 20));
+        head_br->eraseFromParent();
+        // the saturating conversion in the cold block, also for -2^63, which gives the sentinel as its result
+#if LLVM_VERSION_MAJOR >= 19
+        call->moveBefore(*cold, cold->end());
+        llvm::BranchInst::Create(tail, cold);
+        llvm::PHINode* phi = llvm::PHINode::Create(i64, 2, "f2i.res", tail->begin());
+#else
+        llvm::BranchInst* cold_br = llvm::BranchInst::Create(tail, cold);
+        call->moveBefore(cold_br);
+        llvm::PHINode* phi = llvm::PHINode::Create(i64, 2, "f2i.res", &tail->front());
+#endif
+        call->replaceAllUsesWith(phi);
+        phi->addIncoming(raw, head);
+        phi->addIncoming(call, cold);
+    }
+    return calls.size();
 }
 
 size_t QoreIRToLLVM::pruneNoopDecrefs(llvm::Module& module) {
@@ -2680,6 +2733,13 @@ llvm::Value* QoreIRToLLVM::ensureIntType(llvm::Value* val, uint32_t value_id) {
     llvm::Value* result = builder->CreateCall(to_int, {val});
     cacheStableConversion(value_id, result, stable_int_conversions);
     return result;
+}
+
+llvm::Value* QoreIRToLLVM::createFloatToInt(llvm::Value* val) {
+    if (val->getType() != double_type) {
+        val = builder->CreateFPCast(val, double_type);
+    }
+    return builder->CreateIntrinsic(llvm::Intrinsic::fptosi_sat, {i64_type, double_type}, {val});
 }
 
 // Inline fast-path for ensureIntType: check INT48 tag inline, call runtime only for big ints.
@@ -16723,7 +16783,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     } else if (val->getType()->isIntegerTy()) {
                         val = builder->CreateSExtOrTrunc(val, i64_type);
                     } else if (val->getType()->isFloatingPointTy()) {
-                        val = builder->CreateFPToSI(val, i64_type);
+                        val = createFloatToInt(val);
                     } else {
                         error = "PHI native-int incoming has unsupported LLVM type";
                         return false;
@@ -17304,8 +17364,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // a native float or bool is never a reference; it is converted as getAsBigInt() converts it
             if (native_float_locals.count(key)) {
                 // raw local cache: a native double
-                return builder->CreateFPToSI(builder->CreateLoad(double_type, alloca_it->second.storage(), name),
-                    i64_type);
+                return createFloatToInt(builder->CreateLoad(double_type, alloca_it->second.storage(), name));
             }
             if (native_bool_locals.count(key)) {
                 // raw local cache: a native bool
@@ -18213,13 +18272,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ? ensureIntTypeInline(val, inst->operands[0].id)
                     : val;
             } else if (val->getType() == double_type) {
-                values[inst->result.id] = builder->CreateFPToSI(val, i64_type);
+                values[inst->result.id] = createFloatToInt(val);
             } else if (val->getType() == i1_type) {
                 values[inst->result.id] = builder->CreateZExt(val, i64_type);
             } else if (val->getType()->isIntegerTy()) {
                 values[inst->result.id] = builder->CreateSExtOrTrunc(val, i64_type);
             } else if (val->getType()->isFloatingPointTy()) {
-                values[inst->result.id] = builder->CreateFPToSI(val, i64_type);
+                values[inst->result.id] = createFloatToInt(val);
             } else {
                 error = "unsupported type for ToInt lowering";
                 return false;
