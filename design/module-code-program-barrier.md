@@ -14,7 +14,7 @@ Relevant code:
 - `include/qore/intern/QoreClassIntern.h` — `QoreSourceProgramHolder`, `qore_class_private::getSourceProgramForCall()`
 - `lib/Function.cpp` — `QoreFunction::evalFunction()` and its siblings, `QoreCallProgramEntryHelper`,
   `CodeEvaluationHelper::init()`, `qore_get_module_call_runtime_po_override()`,
-  `qore_get_user_call_runtime_po_override()`
+  `qore_set_user_call_runtime_po_override()`
 - `lib/JITRuntime.cpp` — `qore_rt_function_execution_program()`, `qore_rt_method_execution_program()`,
   `qore_rt_call_needs_call_program()`
 - `lib/thread.cpp` — `runtime_module_call_inherits_caller_restrictions()`, `runtime_module_call_override_in_effect()`,
@@ -126,7 +126,7 @@ A call within a Program, the usual case, must cost no more than it did before mo
 crossing pays for entering the Program, and nothing else:
 
 - **Inline fast paths**: `QoreSourceProgramHolder::setVariant()`, `qore_class_private::getSourceProgramForCall()`,
-  `qore_get_user_call_runtime_po_override()` and the holder's destructor are inline for the current Program, the
+  `qore_set_user_call_runtime_po_override()` and the holder's destructor are inline for the current Program, the
   explicit Program of the call (held by the caller of `QoreProgram::callFunction()`, so it takes no reference and not
   the registry lock), a Program with module lifetime and code that is not module code; the rest is out of line.  The
   caller's effective options are read only when an override is composed.
