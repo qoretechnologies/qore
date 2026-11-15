@@ -68,6 +68,11 @@ enum class HttpClientProtocol {
 */
 #define QORE_HAS_HTTP_CLIENT_PENDING_RESERVATION 1
 
+//! defined if HttpClientConnectionBase::setIdleCloseHold() is available (#6194)
+/** @since %Qore 3.0
+*/
+#define QORE_HAS_HTTP_CLIENT_IDLE_CLOSE_HOLD 1
+
 //! Abstract base for C++ HTTP client connections
 /** This class wraps a protocol-specific poll operation (H1, H2, or H3) and
     a socket, submits the poll op to the global AsyncIoController, and exposes
@@ -215,8 +220,9 @@ public:
     DLLEXPORT int getPendingStreamCount() const;
 
     //! Called by the I/O thread when the connection's idle timeout expires: false if a stream is reserved or active
-    /** Under @ref reserve_lock: with no reserved stream and no active one (a request submitted since the operation
-        found the connection idle; read with \a active_streams, or getActiveStreamCount() if it is nullptr), the
+    /** Under @ref reserve_lock: with no hold (setIdleCloseHold()), no reserved stream and no active one (a request
+        submitted since the operation found the connection idle; read with \a active_streams, or
+        getActiveStreamCount() if it is nullptr), the
         connection is marked as closing for its idle timeout and accepts no further reservation (tryReserveStream()
         and tryReservePendingStream() fail), and true is returned; otherwise false is returned and the operation
         starts a new idle period, so that the reserved request is not closed under (#6184)
@@ -240,6 +246,18 @@ public:
         @since %Qore 3.0 (@ref QORE_HAS_HTTP_CLIENT_PENDING_RESERVATION)
     */
     DLLEXPORT bool tryReservePendingStream(int active_streams, int max_streams);
+
+    //! Holds the connection against its idle timeout, or releases the hold
+    /** While held, tryBeginIdleClose() returns false: the idle timeout of the connection's operation does not close
+        it, whether or not a stream is reserved; for a connection that a session holds between its requests (a leased
+        connection of the Qore-level connection manager, #6194).  Set the hold before the reservation that it replaces
+        is released, so that the connection is never without both.
+
+        @param hold true to hold the connection, false to release the hold
+
+        @since %Qore 3.0 (@ref QORE_HAS_HTTP_CLIENT_IDLE_CLOSE_HOLD)
+    */
+    DLLEXPORT void setIdleCloseHold(bool hold);
 
     //! Returns true if a response has been received on this connection
     /** A connection that has served a request can be closed by the peer while it is idle in the pool, so a
@@ -779,6 +797,10 @@ protected:
     //! True once the connection's idle timeout decided to close it: no reservation is taken.  Protected by
     //! @ref reserve_lock (#6184)
     bool idle_closing = false;
+
+    //! True while the connection is held against its idle timeout (setIdleCloseHold()).  Protected by
+    //! @ref reserve_lock (#6194)
+    bool idle_close_hold = false;
 
     //! Pending streaming-send reservations.  Protected by @ref reserve_lock.
     /** At most one is allowed because H2/H3 connection objects keep one

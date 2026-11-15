@@ -129,7 +129,7 @@ bool HttpClientConnectionBase::tryBeginIdleClose(active_stream_count_t active_st
     // its active stream before it releases its reservation, so a request is in one of the two counts here (the lock
     // order is reserve_lock, then the operation's stream lock, as in tryReserveStream()); the operation counts the
     // active streams of a connection whose owner counts them (a Qore-level connection)
-    if (pending_stream_count || (active_streams ? active_streams(op) : getActiveStreamCount())) {
+    if (idle_close_hold || pending_stream_count || (active_streams ? active_streams(op) : getActiveStreamCount())) {
         return false;
     }
     idle_closing = true;
@@ -146,6 +146,11 @@ bool HttpClientConnectionBase::tryReservePendingStream(int active_streams, int m
     }
     ++pending_stream_count;
     return true;
+}
+
+void HttpClientConnectionBase::setIdleCloseHold(bool hold) {
+    AutoLocker al(reserve_lock);
+    idle_close_hold = hold;
 }
 
 int HttpClientConnectionBase::getPendingStreamCount() const {

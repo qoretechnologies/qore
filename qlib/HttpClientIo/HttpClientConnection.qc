@@ -617,10 +617,12 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
 
     #! Marks (or unmarks) the connection as exclusively leased for a persistent session
     /** While leased, the pool reuse scan skips this connection so no other request borrows
-        it; see @ref HttpClientConnectionManager::leaseConnection(). */
+        it, and its idle timeout does not close it between the requests of the session (#6194);
+        see @ref HttpClientConnectionManager::leaseConnection(). */
     setLeased(bool l) {
         AutoLock al(lock);
         leased = l;
+        setIdleCloseHold(l);
     }
 
     #! Returns @ref True while the connection is exclusively leased out of the pool

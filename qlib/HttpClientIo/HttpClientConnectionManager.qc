@@ -1932,7 +1932,9 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                         log(LoggerLevel::DEBUG, "removing closed connection to %s", key);
                         continue;
                     }
-                    if (conn.getActiveStreamCount() == 0
+                    # a leased connection is its session's, and a reserved one its request's: neither is closed
+                    # for its idle time here; the write lock excludes new reservations (#6194)
+                    if (!conn.isLeased() && conn.getOutstandingStreamCount() == 0
                             && (now_mono_us - conn.getLastActivityMonotonicUs()) > idle_limit_us) {
                         log(LoggerLevel::DEBUG, "closing idle connection to %s", key);
                         push to_close, conn;
@@ -2265,6 +2267,11 @@ printf("%d connection(s) migrated\n", migrated);
                             if (conn.isDraining()) {
                                 continue;
                             }
+                            # a connection leased for a persistent session is the session's: it is neither
+                            # reused nor evicted here (#6194)
+                            if (conn.isLeased()) {
+                                continue;
+                            }
                             if (!isConnectionAlive(conn)) {
                                 push dead_conns, conn;
                                 continue;
@@ -2282,7 +2289,9 @@ printf("%d connection(s) migrated\n", migrated);
                 # Evict dead connections outside the read lock (evictConnections
                 # acquires a write lock — doing it under the read lock would deadlock)
                 if (dead_conns) {
-                    evictConnections(key, dead_conns);
+                    # a connection that another request reserved since it was found idle for too long is kept: it
+                    # is not closed under that request (#6194)
+                    evictConnections(key, dead_conns, True);
                 }
                 if (live_conn) {
                     from_pool = True;
@@ -4449,7 +4458,7 @@ printf("%d connection(s) migrated\n", migrated);
         # opts.idle_timeout / opts.max_age are `timeout` values, i.e. milliseconds, so
         # they are scaled to microseconds here to match the monotonic clock.  The
         # comparison stays strict (age > limit), as the previous date-cutoff form was.
-        if (conn.getActiveStreamCount() == 0) {
+        if (conn.getOutstandingStreamCount() == 0) {
             int now_mono_us = clock_get_monotonic_us();
             # Strict idle-age check.  maybeCleanupIdle() runs only every
             # idle_timeout/3 (clamped), so a connection slightly past
@@ -4507,10 +4516,17 @@ printf("%d connection(s) migrated\n", migrated);
     #! Internal: evicts specific connections from the pool and closes them
     /** @param key the host:port pool key
         @param conns list of connections to evict
+        @param keep_reserved True to keep a connection that is open and has a reserved or active stream: reservations
+        are taken under the read lock, which this write lock excludes, so a connection that a scan found idle and
+        another request reserved since is not closed under that request (#6194)
     */
-    private evictConnections(string key, list<HttpClientConnection> conns) {
+    private evictConnections(string key, list<HttpClientConnection> conns, *bool keep_reserved) {
         {
             AutoWriteLock al(pool_lock);
+            if (keep_reserved) {
+                conns = select conns, $1.isClosed() || $1.getPollOperation().hasError()
+                    || $1.getOutstandingStreamCount() == 0;
+            }
             if (pool.hasKey(key)) {
                 # Build a set of connection IDs to evict for O(1) lookup
                 hash<string, bool> evict_ids;
