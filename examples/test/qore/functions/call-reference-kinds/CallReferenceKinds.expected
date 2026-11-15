@@ -1,0 +1,39 @@
+function: loop 1920 try 1940 named 15/34 args 47, background 63
+function, bound: loop 1920 try 1940 named 15/34 args 47, background 63
+function: equal to itself True, to its bound callback False, bound to itself True
+static method: loop 21920 try 21940 named 1015/1034 args 1047, background 1063
+static method, bound: loop 21920 try 21940 named 1015/1034 args 1047, background 1063
+static method: equal to itself True, to its bound callback False, bound to itself True
+method, typed receiver: loop 1940 try 1960 named 16/35 args 48, background 64
+method, typed receiver, bound: loop 1940 try 1960 named 16/35 args 48, background 64
+method, typed receiver: equal to itself True, to its bound callback False, bound to itself True
+method, object receiver: loop 1960 try 1980 named 17/36 args 49, background 65
+method, object receiver, bound: loop 1960 try 1980 named 17/36 args 49, background 65
+method, object receiver: equal to itself True, to its bound callback False, bound to itself True
+method, auto receiver: loop 13820 try 13840 named 525/564 args 587, background 623
+method, auto receiver, bound: loop 13820 try 13840 named 525/564 args 587, background 623
+method, auto receiver: equal to itself True, to its bound callback False, bound to itself True
+method in class: loop 1940 try 1960 named 16/35 args 48, background 64
+method in class, bound: loop 1940 try 1960 named 16/35 args 48, background 64
+method in class: equal to itself True, to its bound callback False, bound to itself True
+method in class, subclass: loop 13820 try 13840 named 525/564 args 587, background 623
+method in class, subclass, bound: loop 13820 try 13840 named 525/564 args 587, background 623
+method in class, subclass: equal to itself True, to its bound callback False, bound to itself True
+method through self: loop 13820 try 13840 named 525/564 args 587, background 623
+method through self, bound: loop 13820 try 13840 named 525/564 args 587, background 623
+method through self: equal to itself True, to its bound callback False, bound to itself True
+closure: loop 190020 try 190040 named 1005/3004 args 4007, background 6003
+closure, bound: loop 190020 try 190040 named 1005/3004 args 4007, background 6003
+closure: equal to itself True, to its bound callback False, bound to itself True
+closure of an object: loop 29020 try 29040 named 605/804 args 907, background 1103
+closure of an object, bound: loop 29020 try 29040 named 605/804 args 907, background 1103
+closure of an object: equal to itself True, to its bound callback False, bound to itself True
+function references to the same function: True, to another function: False
+static method references to the same method: True, to a function: False
+method references to the same method of the same object: True, of another object: False, to a function: False
+references made in the class to the same object: True, to another object: False
+references made through self to the same object: True, to another object: False
+method, typed receiver, deleted object: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted, arguments evaluated: 0
+method, object receiver, deleted object: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted, arguments evaluated: 0
+method in class, deleted object: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted, arguments evaluated: 0
+method through self, deleted object: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted, arguments evaluated: 0
