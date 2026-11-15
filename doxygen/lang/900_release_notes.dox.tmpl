@@ -1776,6 +1776,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a started @ref filepollerintro "FilePoller" or @ref ftppollerintro "FtpPoller" poller whose last reference is
+      dropped is now destroyed, which stops its polling thread; before, the thread kept the poller alive
     - a @ref background "background expression" nested in another one that calls methods of the object no longer
       crashes the AST interpreter: the calls are made on the object of the code that started the outer one (issue
       #5971)

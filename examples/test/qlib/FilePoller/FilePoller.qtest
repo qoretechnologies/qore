@@ -37,6 +37,47 @@ class IdleFilePoller inherits FilePoller {
     }
 }
 
+#! the holder of a poller's only reference, which a poller's event can drop
+class PollerHolder {
+    public {
+        *FilePoller poller;
+    }
+}
+
+#! a poller that reports its events and its destruction; an event can drop its holder's reference to it
+class LifetimePoller inherits FilePoller {
+    private {
+        Queue events;
+        *PollerHolder drop;
+        #! released when the poller is destroyed, which ends the sleep closure's wait
+        *Counter release;
+    }
+
+    constructor(string dir, Queue events, *PollerHolder drop, *hash<auto> opts, *Counter release)
+            : FilePoller(dir, "^lifetime-", {"poll_interval": 1} + opts) {
+        self.events = events;
+        self.drop = drop;
+        self.release = release;
+    }
+
+    destructor() {
+        events.push({"destructor": gettid()});
+        if (release) {
+            release.dec();
+        }
+    }
+
+    singleFileEvent(hash<FilePollerFileEventInfo> event) {
+        unlink(event.filepath);
+        if (drop) {
+            # the event drops the last reference that is not the polling thread's own
+            remove drop.poller;
+            remove drop;
+        }
+        events.push({"event": gettid()});
+    }
+}
+
 public class FilePollerTest inherits QUnit::Test {
     public {
     }
@@ -55,9 +96,60 @@ public class FilePollerTest inherits QUnit::Test {
         addTestCase("stable file-event date examples", \dateExamples());
         addTestCase("start_thread from the thread's capability", \capabilityTest());
         addTestCase("start_thread from the thread's capability in a restricted Program", \restrictedCapabilityTest());
+        addTestCase("dropping the last reference to a started poller stops its thread", \lastReferenceTest());
+        addTestCase("the last reference dropped in the polling thread stops it without a deadlock",
+            \lastReferenceInPollThreadTest());
 
         # Return for compatibility with test harness that checks return value
         set_return_value(main());
+    }
+
+    #! the polling thread holds the poller only for each poll: dropping the owner's reference destroys the poller,
+    #! whose destructor stops the thread and waits for it
+    lastReferenceTest() {
+        TmpDir dir("file-poller-lifetime-");
+        Queue events();
+        # the polling thread sleeps in this closure, which refers to no poller, until the poller is destroyed: the
+        # reference is dropped while the thread holds none
+        Counter release(1);
+        code sleeper = sub (int secs) {
+            events.push({"sleeping": gettid()});
+            release.waitForZero();
+        };
+        int tid;
+        # the file is polled before the thread sleeps
+        writeLifetimeFile(dir.path, "1");
+        {
+            LifetimePoller poller(dir.path, events, NOTHING, {"poll_interval": 3600, "sleep": sleeper}, release);
+            tid = poller.start();
+            assertEq({"event": tid}, events.get(60s), "the polling thread polls");
+            assertEq({"sleeping": tid}, events.get(60s), "and sleeps");
+        }
+        # the destructor ran when the last reference was dropped, and stopped the thread
+        # the sleep closure can run again after the subclass destructor has released it, before the poller stops
+        assertEq(({"destructor": gettid()},), (select (map events.get(), xrange(events.size())), $1.destructor),
+            "the poller was destroyed in the thread that dropped its last reference, which the thread had left");
+    }
+
+    #! an event that drops the poller's last other reference leaves the polling thread's own as the last: the
+    #! destructor runs in the polling thread after the poll and does not wait for itself
+    lastReferenceInPollThreadTest() {
+        TmpDir dir("file-poller-lifetime-");
+        Queue events();
+        PollerHolder holder();
+        holder.poller = new LifetimePoller(dir.path, events, holder);
+        int tid = holder.poller.start();
+        writeLifetimeFile(dir.path, "1");
+        assertEq({"event": tid}, events.get(60s), "the polling thread polls");
+        assertEq({"destructor": tid}, events.get(60s), "the poller is destroyed in the polling thread");
+        assertEq(NOTHING, holder.poller, "the holder's reference was dropped");
+    }
+
+    private static writeLifetimeFile(string dir, string name) {
+        File f();
+        f.open2(dir + "/lifetime-" + name, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(name);
+        f.close();
     }
 
     #! without the option, a poller created in a host's capability scope starts its thread with the host's
