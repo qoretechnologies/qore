@@ -1065,7 +1065,7 @@ private:
     const char* buf;
     size_t size;
 
-    // Idle phase: timeout deadline in milliseconds from epoch
+    // Idle phase: timeout deadline in milliseconds on the monotonic clock (q_get_monotonic_us() / 1000, #6150)
     int64 idle_timeout_ms;
     // the idle timeout in milliseconds, for the deadline of the next request after one answered by a fast route
     int64 idle_ttl_ms = 0;
