@@ -714,6 +714,12 @@
     a %Qore-language handler; valgrind no longer kills or hangs the process at the wake-up (see
     @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
 
+    @par Calls Through Method References on Deleted Objects Name the Method
+    The \c OBJECT-ALREADY-DELETED exception of a call through a method call reference on a deleted object names the
+    method (<tt>cannot call U::m() ...</tt>) instead of <tt>cannot call a method ...</tt>, in every execution mode
+    (see @ref call_reference_deleted_object; <a href="https://github.com/qoretechnologies/qore/issues/6083">issue
+    6083</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Strict Parse Errors
     The @ref strict-parse-errors "%strict-parse-errors" parse option, implied by @ref modern "%modern", raises the

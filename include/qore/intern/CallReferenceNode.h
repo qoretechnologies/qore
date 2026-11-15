@@ -490,17 +490,12 @@ class ImportedFunctionEntry;
 //! a run-time call reference to a method of a particular object
 class RunTimeObjectMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
-    //! Raises the exception that execValue() raises for an object that has been deleted before it evaluates the
-    //! arguments (issue #5784)
+    //! Raises the exception of a call of the method for an object that has been deleted, before the arguments are
+    //! evaluated (issue #5784) and when the call is made: naming the class of the method and the method, as the call
+    //! of the method raises it (issue #6083)
     /** @return -1 if the exception was raised, 0 if not
     */
     DLLLOCAL int checkObject(ExceptionSink* xsink) const;
-
-    //! Raises the exception of a call of the method for an object that has been deleted, as the call raises it when
-    //! the arguments have deleted the object: naming the class of the method and the method (issue #6083)
-    /** @return -1 if the exception was raised, 0 if not
-    */
-    DLLLOCAL int checkCallObject(ExceptionSink* xsink) const;
 
     DLLLOCAL RunTimeObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
             const char* n_method);
@@ -551,17 +546,12 @@ private:
 // is known when the method reference node object is created
 class RunTimeResolvedMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
-    //! Raises the exception that execValue() raises for an object that has been deleted before it evaluates the
-    //! arguments (issue #5784)
+    //! Raises the exception of a call of the method for an object that has been deleted, before the arguments are
+    //! evaluated (issue #5784) and when the call is made: naming the class of the method and the method, as the call
+    //! of the method raises it (issue #6083)
     /** @return -1 if the exception was raised, 0 if not
     */
     DLLLOCAL int checkObject(ExceptionSink* xsink) const;
-
-    //! Raises the exception of a call of the method for an object that has been deleted, as the call raises it when
-    //! the arguments have deleted the object: naming the class of the method and the method (issue #6083)
-    /** @return -1 if the exception was raised, 0 if not
-    */
-    DLLLOCAL int checkCallObject(ExceptionSink* xsink) const;
 
     //! creates the reference with the class context of the creating code
     DLLLOCAL RunTimeResolvedMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
