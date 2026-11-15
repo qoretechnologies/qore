@@ -1233,6 +1233,13 @@ protected:
 
     DLLLOCAL int findVariantNamed(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
             const qore_class_private* class_ctx, LexicalSemanticPolicy invocation_policy);
+    //! the variant search of a call whose variant committed at parse time rejected its arguments, made after the
+    //! callee's receiver is current: the caller's receiver is made current again for the search of a call with
+    //! explicit type arguments (qore#5892); out of line, as it is not on a call's common path
+    template <bool LexicalInvocation>
+    DLLLOCAL QORE_INTERN_NOINLINE int findVariantRetry(const QoreFunction* func,
+            const AbstractQoreFunctionVariant*& variant, const qore_class_private* cctx,
+            LexicalSemanticPolicy invocation_policy, bool explicit_type_args);
     DLLLOCAL int findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx);
 
