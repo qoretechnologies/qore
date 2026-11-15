@@ -1,0 +1,199 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-plain-durations.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFramePlainDurationsTest
+
+#! A column of durations (relative dates) built from a list or from records keeps them as durations, and a column of
+#! absolute dates and durations holds any value, as a concatenation of the two does (qore#6107)
+class DataFramePlainDurationsTest inherits QUnit::Test {
+    constructor() : Test("DataFramePlainDurationsTest", "1.0", \ARGV) {
+        addTestCase("column of durations", \listTest());
+        addTestCase("durations from records", \recordTest());
+        addTestCase("absolute dates and durations", \mixedTest());
+        addTestCase("export", \exportTest());
+        addTestCase("long durations", \longTest());
+        addTestCase("join()", \joinTest());
+        set_return_value(main());
+    }
+
+    listTest() {
+        DataFrame::DataFrame df({"v": (1h, NOTHING, -90s, 1500us)});
+        assertEq("date", df.dtypes()[0]);
+        checkDurations((1h, NOTHING, -90s, 1500us), df.getColumn("v"), "column hash");
+        df = df.withColumn("w", (2D, 1s, NOTHING, 0s));
+        checkDurations((2D, 1s, NOTHING, 0s), df.getColumn("w"), "withColumn()");
+        # rows taken from the column keep the durations
+        checkDurations((1h, NOTHING), df.head(2).getColumn("v"), "head()");
+        checkDurations((-90s, 1500us, 1h), df.filter("v", "not_null", NOTHING).sortBy(("v",)).getColumn("v"),
+            "sortBy()");
+        assertEq((1h,), map $1.v, df.head(1).toRecords(), "toRecords()");
+        # fillna() fills a column of durations only with a duration, and a column of absolute dates only with an
+        # absolute date
+        DataFrame::DataFrame dates({"d": (1h, NOTHING), "a": (2024-01-01T00:00:00Z, NOTHING)});
+        DataFrame::DataFrame filled = dates.fillna(2h);
+        checkDurations((1h, 2h), filled.getColumn("d"), "fillna() of a column of durations");
+        assertEq(NOTHING, filled.getColumn("a")[1], "fillna() of a column of absolute dates with a duration");
+        # a date of the other kind leaves the value null even outside the range of a date cell
+        assertEq(NOTHING, (new DataFrame::DataFrame({"d": (1h, NOTHING)})).fillna(1970-01-01Z + years(300000))
+            .getColumn("d")[1], "fillna() with a far date");
+        filled = dates.fillna(2024-02-01T00:00:00Z);
+        assertEq(NOTHING, filled.getColumn("d")[1], "fillna() of a column of durations with an absolute date");
+        assertTrue(filled.getColumn("a")[1] == 2024-02-01T00:00:00Z, "fillna() of a column of absolute dates");
+    }
+
+    recordTest() {
+        DataFrame::DataFrame df(({"v": 1h, "i": 1}, {"v": NOTHING, "i": 2}, {"v": -90s, "i": 3}));
+        assertEq("date", df.dtypes()[0]);
+        checkDurations((1h, NOTHING, -90s), df.getColumn("v"), "records");
+        # the path that infers every column first: a column of ints and floats
+        df = new DataFrame::DataFrame(({"v": 1h, "i": 1}, {"v": 2h, "i": 2.5}));
+        checkDurations((1h, 2h), df.getColumn("v"), "records, inferred");
+    }
+
+    mixedTest() {
+        date abs = 2024-01-01T00:00:00Z;
+        foreach list<auto> vals in ((abs, 1h), (1h, abs), (NOTHING, abs, 1h)) {
+            DataFrame::DataFrame df({"v": vals});
+            assertEq("auto", df.dtypes()[0], sprintf("list %y", vals));
+            checkDates(vals, df.getColumn("v"), sprintf("list %y", vals));
+            list<hash<auto>> records = map ("v": $1), vals;
+            df = new DataFrame::DataFrame(records);
+            assertEq("auto", df.dtypes()[0], sprintf("records %y", vals));
+            checkDates(vals, df.getColumn("v"), sprintf("records %y", vals));
+        }
+        # an absolute date outside the range of a date cell is stored in a column that holds any value
+        date far = 1970-01-01Z + years(300000);
+        DataFrame::DataFrame df({"v": (far, 1h)});
+        checkDates((far, 1h), df.getColumn("v"), "far date and a duration");
+    }
+
+    exportTest() {
+        DataFrame::DataFrame df({"v": (1h, NOTHING, -90s)});
+        checkDurations((1h, NOTHING, -90s), DataFrame::DataFrame::fromArrowIpc(df.toArrowIpc()).getColumn("v"),
+            "Arrow IPC");
+    }
+
+    #! durations of more seconds than an int holds keep their length
+    longTest() {
+        list<date> vals = (years(200), -years(200), years(292471) + microseconds(1));
+        DataFrame::DataFrame df({"v": vals});
+        list<int> expected = map get_duration_microseconds($1), vals;
+        assertEq(expected, map get_duration_microseconds($1), df.getColumn("v"), "column");
+        assertEq(expected, map get_duration_microseconds($1),
+            DataFrame::DataFrame::fromArrowIpc(df.toArrowIpc()).getColumn("v"), "Arrow IPC");
+        # an Arrow duration in seconds whose microseconds do not fit in an int64 keeps its length (as a value of a
+        # column that holds any value), and one of more days than an int holds raises an error: 123456789 s is
+        # exported, and patched to 10000000000000 s, -10000000000000 s and 1000000000000000 s
+        DataFrame::DataFrame secs = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "v": (123456789s,),
+        }, {
+            "v": {"schema": {"kind": "duration", "time_unit": "s", "nullable": True}},
+        }));
+        string hex = make_hex_string(secs.toArrowIpc());
+        assertEq(1, (hex =~ x/(15cd5b0700000000)/g).size(), "the value in the IPC data");
+        # (the microseconds of these durations do not fit in an int64, so they are compared by their parts)
+        foreach list<string> patch in ((("00a0724e18090000", "<time: 115740740 days 17 hours 46 minutes 40 seconds>")),
+                (("00608db1e7f6ffff", "<time: -115740740 days -17 hours -46 minutes -40 seconds>"))) {
+            binary patched = parse_hex_string(replace(hex, "15cd5b0700000000", patch[0]));
+            date v = DataFrame::DataFrame::fromArrowIpc(patched).getColumn("v")[0];
+            assertEq(patch[1], sprintf("%y", v), "a duration of 10000000000000 s");
+        }
+        # more days than an int holds: 1e15 s and -1e15 s; the first days that do not fit:
+        # (2147483647 + 1) * 86400 s = 185542587187200 s, and -(2147483648 + 1) * 86400 s = -185542587273600 s
+        foreach string patch in (("0080c6a47e8d0300", "0080395b8172fcff", "00000000c0a80000", "80aefeff3f57ffff")) {
+            binary patched = parse_hex_string(replace(hex, "15cd5b0700000000", patch));
+            assertThrows("DATAFRAME-IO-ERROR", sub () {
+                DataFrame::DataFrame back = DataFrame::DataFrame::fromArrowIpc(patched);
+                back.getColumn("v");
+            }, (), "a duration of more days than an int holds: " + patch);
+        }
+        # the last days that fit: 2147483647 days and -2147483648 days
+        foreach list<string> patch in ((("80aefeffbfa80000", "<time: 2147483647 days>")),
+                (("000000004057ffff", "<time: -2147483648 days>"))) {
+            binary patched = parse_hex_string(replace(hex, "15cd5b0700000000", patch[0]));
+            date v = DataFrame::DataFrame::fromArrowIpc(patched).getColumn("v")[0];
+            assertEq(patch[1], sprintf("%y", v), "the last days that fit");
+        }
+    }
+
+    #! the columns of a join keep their durations
+    joinTest() {
+        DataFrame::DataFrame left({"g": (1, 1, 2), "d": (1h, 2h, 3h)});
+        DataFrame::DataFrame right({"g": (1, 2, 3), "e": (10s, 20s, 30s)});
+        foreach string how in (("inner", "left", "right", "outer", "cross")) {
+            DataFrame::DataFrame j = left.join(right, how == "cross" ? () : ("g",), how);
+            foreach string col in (("d", "e")) {
+                foreach auto v in (j.getColumn(col)) {
+                    if (exists v) {
+                        assertTrue(is_date_relative(v), sprintf("%s join, %s: %y", how, col, v));
+                    }
+                }
+            }
+        }
+        # a key column of durations, in every join, with a key found only on the right
+        foreach string how in (("inner", "left", "right", "outer")) {
+            DataFrame::DataFrame j = left.join(new DataFrame::DataFrame({"d": (1h, 5h), "x": (1, 2)}), ("d",), how);
+            foreach auto v in (j.getColumn("d")) {
+                assertTrue(is_date_relative(v), sprintf("%s join, a key column of durations: %y", how, v));
+            }
+            # the columns are exported as durations
+            DataFrame::DataFrame back = DataFrame::DataFrame::fromArrowIpc(j.toArrowIpc());
+            foreach auto v in (back.getColumn("d")) {
+                assertTrue(is_date_relative(v), sprintf("%s join, exported: %y", how, v));
+            }
+        }
+        # a key column of durations cannot be matched with one of absolute dates
+        DataFrame::DataFrame dates({"d": (1970-01-01T01:00:00Z,), "x": (1,)});
+        assertThrows("DATAFRAME-JOIN-ERROR", \left.join(), (dates, ("d",)), "durations and dates");
+        assertThrows("DATAFRAME-JOIN-ERROR", \dates.join(), (left, ("d",), "outer"), "dates and durations");
+        # key columns of timestamps in different units: a key found only on the right keeps its milliseconds
+        DataFrame::DataFrame ts_s = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "t": (2024-01-01T00:00:00Z,), "x": (1,),
+        }, {"t": {"schema": {"kind": "timestamp", "time_unit": "s", "timezone": "UTC", "nullable": True}}}));
+        DataFrame::DataFrame ts_ms = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "t": (2024-01-01T00:00:00.5Z,), "y": (2,),
+        }, {"t": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "UTC", "nullable": True}}}));
+        list<auto> tkeys = DataFrame::DataFrame::fromArrowIpc(ts_s.join(ts_ms, ("t",), "outer").toArrowIpc())
+            .getColumn("t");
+        assertTrue(tkeys[1] == 2024-01-01T00:00:00.5Z, sprintf("a right key in milliseconds: %y", tkeys));
+    }
+
+    #! checks that the values are durations equal to the expected ones
+    private checkDurations(list<auto> expected, list<auto> actual, string label) {
+        assertEq(expected.size(), actual.size(), label + ": size");
+        foreach auto v in (expected) {
+            auto a = actual[$#];
+            if (!exists v) {
+                assertEq(NOTHING, a, sprintf("%s: %d", label, $#));
+                continue;
+            }
+            assertTrue(a.typeCode() == NT_DATE && is_date_relative(a) && a == v,
+                sprintf("%s: %d: %y", label, $#, a));
+        }
+    }
+
+    #! checks that the values are dates of the same kind and equal to the expected ones
+    private checkDates(list<auto> expected, list<auto> actual, string label) {
+        assertEq(expected.size(), actual.size(), label + ": size");
+        foreach auto v in (expected) {
+            auto a = actual[$#];
+            if (!exists v) {
+                assertEq(NOTHING, a, sprintf("%s: %d", label, $#));
+                continue;
+            }
+            assertTrue(a.typeCode() == NT_DATE && is_date_relative(a) == is_date_relative(v) && a == v,
+                sprintf("%s: %d: %y", label, $#, a));
+        }
+    }
+}

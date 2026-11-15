@@ -1580,6 +1580,13 @@ public:
         return relative ? d.rel.getRelativeMicrosecondsChecked(rv) : d.abs.getEpochMicrosecondsUTCChecked(rv);
     }
 
+    //! as getEpochMicrosecondsUTCChecked(), returning 0 if the value does not fit, 1 for an absolute date and 2 for a
+    //! relative date
+    DLLLOCAL int getEpochMicrosecondsUTCCheckedKind(int64& rv) const {
+        return relative ? (d.rel.getRelativeMicrosecondsChecked(rv) ? 2 : 0)
+            : static_cast<int>(d.abs.getEpochMicrosecondsUTCChecked(rv));
+    }
+
     DLLLOCAL int getDayNumber() const {
         return relative ? 0 : d.abs.getDayNumber();
     }

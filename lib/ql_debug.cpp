@@ -936,6 +936,63 @@ static void ut_date_checked_arithmetic(UnitTestCounters& c) {
             UT_ASSERT(c, !xsink && hours(*h) == 2, "DateTimeValueHelper: an int in range");
         }
     }
+
+//! QoreNumberNode::appendExactKey(): equal values at any precision have one key, different values different keys
+static void ut_number_exact_key(UnitTestCounters& c) {
+    auto key = [](const QoreNumberNode* n) -> std::string {
+        std::string k;
+        n->appendExactKey(k);
+        return k;
+    };
+    // 0.1 at several precisions is several values; 0.5 at any precision is one value
+    SimpleRefHolder<QoreNumberNode> tenth_128(new QoreNumberNode("0.1", 128));
+    SimpleRefHolder<QoreNumberNode> tenth_5000(new QoreNumberNode("0.1", 5000));
+    SimpleRefHolder<QoreNumberNode> half_64(new QoreNumberNode("0.5", 64));
+    SimpleRefHolder<QoreNumberNode> half_8192(new QoreNumberNode("0.5", 8192));
+    UT_ASSERT(c, key(*half_64) == key(*half_8192), "0.5 has one key at 64 and 8192 bits");
+    UT_ASSERT(c, key(*tenth_128) != key(*tenth_5000), "0.1 at 128 bits and 0.1 at 5000 bits are two values");
+    // a value widened to a higher precision (up to the maximum) keeps its key
+    unsigned precs[] = {64, 128, 4096, 4097, 5000, 8192};
+    for (unsigned prec : precs) {
+        SimpleRefHolder<QoreNumberNode> zero(new QoreNumberNode("0", prec));
+        SimpleRefHolder<QoreNumberNode> wide(tenth_128->doPlus(**zero));
+        UT_ASSERT(c, wide->equals(**tenth_128), "a widened number is equal");
+        UT_ASSERT(c, key(*wide) == key(*tenth_128), "a widened number has the same key");
+        SimpleRefHolder<QoreNumberNode> wide5000(tenth_5000->doPlus(**zero));
+        UT_ASSERT(c, key(*wide5000) == key(*tenth_5000), "a number of 5000 bits widened has the same key");
+    }
+    // a value of more than 4096 bits (an exponent of -1000) at two precisions
+    SimpleRefHolder<QoreNumberNode> tiny(new QoreNumberNode("1e-1000"));
+    SimpleRefHolder<QoreNumberNode> zero_max(new QoreNumberNode("0", 8192));
+    SimpleRefHolder<QoreNumberNode> tiny_max(tiny->doPlus(**zero_max));
+    UT_ASSERT(c, tiny->getPrec() > 4096, "1e-1000 has more than 4096 bits");
+    UT_ASSERT(c, key(*tiny) == key(*tiny_max), "1e-1000 has one key at two precisions above 4096 bits");
+    // different values, signs and exponents
+    SimpleRefHolder<QoreNumberNode> one(new QoreNumberNode("1"));
+    SimpleRefHolder<QoreNumberNode> two(new QoreNumberNode("2"));
+    SimpleRefHolder<QoreNumberNode> minus_one(new QoreNumberNode("-1"));
+    SimpleRefHolder<QoreNumberNode> close(new QoreNumberNode("1.0000000000000000000000000000000000001", 256));
+    UT_ASSERT(c, key(*one) != key(*two), "1 and 2 have two keys");
+    UT_ASSERT(c, key(*one) != key(*minus_one), "1 and -1 have two keys");
+    UT_ASSERT(c, key(*one) != key(*close), "1 and a number just above it have two keys");
+    // +0 and -0 have one key, as they are equal; every NaN has one key; the infinities have keys of their own
+    SimpleRefHolder<QoreNumberNode> pzero(new QoreNumberNode("0"));
+    SimpleRefHolder<QoreNumberNode> nzero(new QoreNumberNode("-0", 8192));
+    UT_ASSERT(c, key(*pzero) == key(*nzero), "+0 and -0 have one key");
+    SimpleRefHolder<QoreNumberNode> nan1(new QoreNumberNode("@nan@"));
+    SimpleRefHolder<QoreNumberNode> nan2(new QoreNumberNode("@nan@", 4097));
+    UT_ASSERT(c, nan1->nan() && key(*nan1) == key(*nan2), "every NaN has one key");
+    SimpleRefHolder<QoreNumberNode> pinf(new QoreNumberNode("@inf@"));
+    SimpleRefHolder<QoreNumberNode> ninf(new QoreNumberNode("-@inf@"));
+    UT_ASSERT(c, pinf->inf() && key(*pinf) != key(*ninf), "+inf and -inf have two keys");
+    UT_ASSERT(c, key(*pinf) != key(*nan1) && key(*pzero) != key(*nan1), "NaN, zero and inf have keys of their own");
+    // two values that differ only in the low bits of a partly used last limb: 1 and 1 + 2^-69 at 70 bits
+    SimpleRefHolder<QoreNumberNode> one_70(new QoreNumberNode("1", 70));
+    SimpleRefHolder<QoreNumberNode> eps(new QoreNumberNode(
+        "0.000000000000000000001694065894508600678136645001359283924102783203125", 70));
+    SimpleRefHolder<QoreNumberNode> next(one_70->doPlus(**eps));
+    UT_ASSERT(c, !next->equals(**one_70), "1 + 2^-69 is not 1");
+    UT_ASSERT(c, key(*next) != key(*one_70), "1 and 1 + 2^-69 have two keys");
 }
 
 static void ut_string_data_helper(UnitTestCounters& c) {
@@ -18648,6 +18705,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_qorevalue_null_representations(c);
     ut_string_data_helper(c);
     ut_date_checked_arithmetic(c);
+    ut_number_exact_key(c);
     ut_string_compare_soft_and_concat_chars(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
@@ -19047,6 +19105,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_qorevalue_null_representations(c);
     ut_string_data_helper(c);
     ut_date_checked_arithmetic(c);
+    ut_number_exact_key(c);
     ut_string_compare_soft_and_concat_chars(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
