@@ -1044,7 +1044,8 @@ enum class QoreIROpcode : uint16_t {
         the value replaces the value of the return that the unwind interrupted, which is released then, and the value
         of an earlier hand-over; otherwise it is ignored, as the value that the handler function returns is.  A
         return without a value replaces it with no value.  The release of a replaced value can raise an exception (a
-        destructor), which the CheckException that the lowering emits after the instruction takes to its target.  See
+        destructor), which the IR interpreter takes to the instruction's exception target and native code to the target
+        of the CheckException that the lowering emits after the instruction (the same target).  See
         qore_rt_handler_return().
     */
     HandlerReturn = 432,

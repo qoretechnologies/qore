@@ -37,7 +37,7 @@
 @target x86_64-linux-gnu
 
 # IR execution: every call of a function or method from the IR interpreter
-4096 QoreIRInterpreter::execute
+4112 QoreIRInterpreter::execute
 928 tryExecuteInterpreterInlineIRFunction
 880 tryExecuteInterpreterInlineIRStaticMethod
 96 evalAndRef

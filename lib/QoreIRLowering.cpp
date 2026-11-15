@@ -5060,7 +5060,8 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
             // release of the replaced value when the statement has ended does not (the AST interpreter's try
             // statement gives the value to the enclosing block after it has left its try and catch blocks)
             builder.createCheckException(entry.loc)->exception_target = getCurrentExceptionTarget();
-            builder.createHandlerReturn(handover_try_value, entry.loc);
+            // the IR interpreter takes the exception to the instruction's target; native code to the CheckException's
+            builder.createHandlerReturn(handover_try_value, entry.loc)->exception_target = entry.try_outer_target;
             builder.createCheckException(entry.loc)->exception_target = entry.try_outer_target;
             handover_try_active = false;
         }
@@ -5076,7 +5077,8 @@ void QoreIRLowering::emitHandlerReturn(QoreIRValue value, const QoreProgramLocat
     if (!try_depth) {
         // the release of a replaced value can raise an exception (a destructor), which a CheckException after the
         // hand-over takes to its target
-        builder.createHandlerReturn(value, loc);
+        // the IR interpreter takes the exception to the instruction's target; native code to the CheckException's
+        builder.createHandlerReturn(value, loc)->exception_target = getCurrentExceptionTarget();
         builder.createCheckException(loc)->exception_target = getCurrentExceptionTarget();
         return;
     }
