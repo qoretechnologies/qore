@@ -41,6 +41,36 @@ class MyFtpPoller inherits FtpPoller {
     }
 }
 
+#! a poller that reports its polls and its destruction
+class LifetimeFtpPoller inherits FtpPoller {
+    private {
+        Queue events;
+        #! released when the poller is destroyed, which ends the sleep closure's wait
+        Counter release;
+    }
+
+    constructor(FtpClient ftp, hash<auto> opts, Queue events, Counter release) : FtpPoller(ftp, opts) {
+        self.events = events;
+        self.release = release;
+    }
+
+    destructor() {
+        events.push({"destructor": gettid()});
+        release.dec();
+    }
+
+    *bool fileEvent(list<hash<FtpPollerFileEventInfo>> l) {
+        events.push({"poll": gettid()});
+        return False;
+    }
+
+    singleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+    }
+
+    postSingleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+    }
+}
+
 class FtpPollerTest inherits QUnit::Test {
     public {
     }
@@ -57,6 +87,7 @@ class FtpPollerTest inherits QUnit::Test {
     constructor() : Test("FtpPollerTest", "1.0") {
         addTestCase("main test", \mainTest());
         addTestCase("error delay option test", \errorDelayOptionTest());
+        addTestCase("dropping the last reference to a started poller stops its thread", \lastReferenceTest());
         addTestCase("error logging test", \errorLoggingTest());
         addTestCase("data provider test", \dataProviderTest());
         addTestCase("start_thread from the thread's capability", \capabilityTest());
@@ -116,6 +147,42 @@ class FtpPollerTest inherits QUnit::Test {
             assertTrue(file.name != NOTHING);
             assertTrue(file_paths.hasKey(file.filepath));
         }
+    }
+
+    #! the polling thread holds the poller only for each poll: dropping the owner's reference destroys the poller,
+    #! whose destructor stops the thread and waits for it (qorus#867)
+    private lastReferenceTest() {
+        int port = getPort();
+        FtpServer serv(port, m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+        TmpDir tmp_dir();
+        serv.setPwd(tmp_dir.path);
+        port = serv.getPort();
+        # a file, so that each poll reports its list
+        TmpFile f("ftp_lifetime_", NOTHING, tmp_dir.path);
+
+        Queue events();
+        # the polling thread sleeps in this closure, which refers to no poller, until the poller is destroyed: the
+        # reference is dropped while the thread holds none
+        Counter release(1);
+        code sleeper = sub (int secs) {
+            events.push({"sleeping": gettid()});
+            release.waitForZero();
+        };
+        int tid;
+        {
+            LifetimeFtpPoller poller(new FtpClient("ftp://user:pass@127.0.0.1:" + port), {
+                "path": tmp_dir.path,
+                "poll_interval": 3600,
+                "sleep": sleeper,
+            }, events, release);
+            tid = poller.start();
+            assertEq({"poll": tid}, events.get(60s), "the polling thread polls");
+            assertEq({"sleeping": tid}, events.get(60s), "and sleeps");
+        }
+        # the sleep closure can run again after the subclass destructor has released it, before the poller stops
+        assertEq(({"destructor": gettid()},), (select (map events.get(), xrange(events.size())), $1.destructor),
+            "the poller was destroyed in the thread that dropped its last reference, which the thread had left");
     }
 
     private errorDelayOptionTest() {
