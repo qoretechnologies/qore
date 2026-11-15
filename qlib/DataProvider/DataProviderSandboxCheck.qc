@@ -40,7 +40,7 @@ hashdecl DataProviderSandboxDecision {
 /** An object that does I/O for its callers, such as a data provider factory or a connection, keeps one of these and
     calls check() in every method that does I/O or creates an object that does, for a sandboxed caller; needsCheck()
     tells, without building the arguments of check(), if the call is needed.  A trusted caller is not checked, so the
-    common path is the caller's Qore::SandboxManager::isSandboxed() call.  The object is refused to a sandboxed
+    common path is the caller's Qore::SandboxManager::isRestricted() call.  The object is refused to a sandboxed
     caller if a class of its class hierarchy belongs to a module that registers an app with
     @ref DataProvider::DataProviderAppInfo::external_io "external_io" and without
     @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware" (see @ref dataprovider_external_io), so a
@@ -66,7 +66,7 @@ class MyConnection inherits AbstractConnection {
 
     private object getImpl(bool connect = True, *hash<auto> rtopts) {
         # the common path is one call; a sandboxed caller builds the arguments only if the decision requires them
-        if (SandboxManager::isSandboxed() && sandbox_check.needsCheck(True)) {
+        if (SandboxManager::isRestricted() && sandbox_check.needsCheck(True)) {
             sandbox_check.check("connection", getName(), (Class::getClass(self),), True);
         }
         ...
@@ -92,7 +92,7 @@ public final class DataProviderSandboxCheck {
     /** The cached decision is checked first, so that a caller builds the arguments of check() only when the decision
         is not cached for the current state, or when it refuses a sandboxed caller
 
-        @param sandboxed whether the caller is sandboxed; if not given, Qore::SandboxManager::isSandboxed() decides
+        @param sandboxed whether the caller is sandboxed; if not given, Qore::SandboxManager::isRestricted() decides
 
         @return @ref True if check() must be called, @ref False if it would not throw
     */
@@ -101,14 +101,14 @@ public final class DataProviderSandboxCheck {
         if (d.generation != DataProviderSandboxState::generation) {
             return True;
         }
-        return (d.refused || d.pending) && (sandboxed ?? SandboxManager::isSandboxed());
+        return (d.refused || d.pending) && (sandboxed ?? SandboxManager::isRestricted());
     }
 
     #! Refuses a sandboxed caller the object, as described for this class
     /** @param what what the object is, for the error (ex: \c "connection")
         @param name the name of the object, for the error
         @param classes the classes whose hierarchies decide; only used on the first call
-        @param sandboxed whether the caller is sandboxed; if not given, Qore::SandboxManager::isSandboxed() decides,
+        @param sandboxed whether the caller is sandboxed; if not given, Qore::SandboxManager::isRestricted() decides,
         as for DataProviderActionCatalog::checkSandboxAccess()
 
         @throw APP-SANDBOX-ACCESS-DENIED the caller is sandboxed, and a module of the hierarchy registers an app with
@@ -125,7 +125,7 @@ public final class DataProviderSandboxCheck {
         if (!d.refused && !d.pending) {
             return;
         }
-        if (!(sandboxed ?? SandboxManager::isSandboxed())) {
+        if (!(sandboxed ?? SandboxManager::isRestricted())) {
             return;
         }
         if (d.pending) {

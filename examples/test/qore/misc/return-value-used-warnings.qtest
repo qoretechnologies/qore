@@ -1,0 +1,62 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ReturnValueUsedWarningsTest
+
+#! A call whose value is used gives no RETURN-VALUE-IGNORED warning (qore#6143)
+/** The condition of the ?: operator was parsed with the "return value ignored" flag of the statement, and a call in
+    an expression run with the background operator was reported as an ignored background call although an operator
+    used its value; a call whose value is not used still warns.
+*/
+class ReturnValueUsedWarningsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ReturnValueUsedWarnings", "1.0") {
+        addTestCase("values used", \valuesUsed());
+        addTestCase("values ignored", \valuesIgnored());
+        set_return_value(main());
+    }
+
+    *hash<auto> parseWarning(string code) {
+        Program p(PO_NEW_STYLE);
+        return p.parse(code, "", WARN_RETURN_VALUE_IGNORED){"err", "desc"};
+    }
+
+    valuesUsed() {
+        list<string> cases = (
+            "string s = 'a '; int x = 1; trim(s) ? x++ : x--;",
+            "string s = 'a '; int x = 1; (trim(s) ? \\x : \\x);",
+            "string s = 'a '; our string g; background (g = trim(s));",
+            "string s = 'a '; our string g = ''; background (g += trim(s));",
+            "string s = 'a '; our hash<auto> gh; background (gh{trim(s)} = 1);",
+            "string s = 'a '; our int g = 1; background (trim(s) ? g++ : g--);",
+            "string s = 'a '; our list<auto> gl; background push gl, trim(s);",
+        );
+        foreach string c in (cases) {
+            assertEq(NOTHING, parseWarning(c), c);
+        }
+    }
+
+    valuesIgnored() {
+        list<string> cases = (
+            "string s = 'a '; trim(s);",
+            "string s = 'a '; int x = 1; x ? trim(s) : trim(s);",
+            "string s = 'a '; background trim(s);",
+            "string s = 'a '; our int g = 1; background (g ? trim(s) : trim(s));",
+        );
+        foreach string c in (cases) {
+            assertEq("RETURN-VALUE-IGNORED", parseWarning(c).err, c);
+        }
+        # the call that a background operator runs is named a background call
+        assertRegex("background call to", parseWarning("string s = 'a '; background trim(s);").desc);
+        # a statement of a closure run in the background is not the background expression itself
+        *hash<auto> w = parseWarning("string s = 'a '; background sub () { trim(s); }();");
+        assertEq("RETURN-VALUE-IGNORED", w.err);
+        assertNRegex("background call to", w.desc);
+    }
+}

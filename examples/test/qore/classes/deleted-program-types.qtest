@@ -30,6 +30,13 @@
     generations, that declarations naming each other are freed with their Program, that a declaration named only by a
     surviving value is freed with the value, and that declarations naming each other whose values survive their
     Program are freed with the values.
+
+    deleted-program-types/module-cycles.qr and module-cycles-httpserver.qr (debug builds) load the DataProvider and the
+    HttpServer modules, whose classes name each other, and check that the library cleanup leaves no declaration of a
+    Program behind (valgrind reported the parse tree of their Programs as definitely lost);
+    deleted-program-types/survivors.qr (debug builds) checks that the finder that the cleanup uses (the debug function
+    dbg_cyclic_type_declarations()) does not find declarations that objects and hashes still reference, and that the
+    cleanup leaves no declaration behind.
 */
 class DeletedProgramTypesTest inherits QUnit::Test {
     public {
@@ -99,12 +106,26 @@ class DeletedProgramTypesTest inherits QUnit::Test {
                 sub () { testModuleTeardown(mode); });
         }
         foreach string mode in (ExecModes) {
+            foreach string script in (("module-cycles.qr", "module-cycles-httpserver.qr")) {
+                addTestCase("declarations that keep each other after their Program is deleted are freed at the end: "
+                    + script + ": " + mode, sub () { testModuleCycles(mode, script); });
+            }
+        }
+        foreach string mode in (ExecModes) {
+            addTestCase("declarations that are still referenced are not garbage at the end: " + mode,
+                sub () { testSurvivors(mode); });
+        }
+        foreach string mode in (ExecModes) {
             addTestCase("a module that loads a native module at run time is deleted first: " + mode,
                 sub () { testRuntimeLoad(mode); });
         }
         foreach string mode in (("ast", "jit")) {
             addTestCase("modules that load each other and a native module at run time are deleted first: " + mode,
                 sub () { testRuntimeLoadCycle(mode); });
+        }
+        foreach string mode in (ExecModes) {
+            addTestCase("a cycle of AOT and user modules through a run time load is deleted: " + mode,
+                sub () { testRuntimeCycleUserModules(mode); });
         }
         set_return_value(main());
     }
@@ -189,6 +210,47 @@ class DeletedProgramTypesTest inherits QUnit::Test {
         assertRegex("(^|\n)ok\n$", out);
     }
 
+    #! The declarations of a module's Program that keep each other are freed at the end of the process (qore#5790)
+    /** A declaration that survives the deletion of its Program (the imported copies and the objects of the Program
+        reference it) keeps a reference to each declaration that it names, so classes that name each other (the
+        DataProvider module's DataProviderPipeline and PipelineQueue, and the HttpServer module's classes) kept each
+        other alive after the last value that referenced them was released: nothing freed them, and the memory of the module's Program (its parse tree and
+        the AOT data of a compiled module) was reported as definitely lost by valgrind.  The library cleanup frees them
+        now; a debug libqore counts the declarations of Programs that are left after qore_cleanup() when
+        QORE_TEARDOWN_REPORT is set, and the count must be 0.
+    */
+    testModuleCycles(string mode, string script) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the count of the declarations left after qore_cleanup() is only built with DEBUG");
+        }
+        int status;
+        string out = backquote(sprintf("QORE_TEARDOWN_REPORT=1 QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 "
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s/deleted-program-types/%s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, mode, get_script_dir(), script), \status);
+        assertEq(0, status, out);
+        assertRegex("(^|\n)ok\n", out);
+        assertRegex("\\[TEARDOWN\\] declarations of Programs left after qore_cleanup\\(\\): 0\n", out);
+    }
+
+    #! Declarations that survive their Programs and are still referenced are not freed by the cleanup (qore#5790)
+    /** The library cleanup frees the survivors that only each other keep; the finder that it uses (debug builds:
+        dbg_cyclic_type_declarations()) must not find a declaration that an object or a hash still references, or that a
+        referenced one holds as a base class, a hashdecl parent or an imported source, or names.
+    */
+    testSurvivors(string mode) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the count of the declarations left after qore_cleanup() is only built with DEBUG");
+        }
+        int status;
+        string out = backquote(sprintf("QORE_TEARDOWN_REPORT=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+            "--exec-mode=%s %s/deleted-program-types/survivors.qr 2>&1", libqore_dir, libqore_dir, qore_bin, mode,
+            get_script_dir()), \status);
+        assertEq(0, status, out);
+        assertEq(6, (map $1, out.split("\n"), $1 =~ /cyclic=0$/).size(), out);
+        assertNRegex("cyclic=[1-9]", out);
+        assertRegex("\\[TEARDOWN\\] declarations of Programs left after qore_cleanup\\(\\): 0\n", out);
+    }
+
     #! A module that loads a native module at run time is deleted before it (qore#5790)
     /** Util's get_file_from_sftp() loads the ssh2 module from the module's own Program, which imports the declarations
         of the loaded module.  The load is not in the load context of the module, so the module was not recorded as
@@ -209,17 +271,36 @@ class DeletedProgramTypesTest inherits QUnit::Test {
         runRuntimeLoad(mode, ("RuntimeLoadCycleA", "RuntimeLoadCycleB"), "runtime-load-cycle.qr", "2");
     }
 
-    private runRuntimeLoad(string mode, list<string> modules, string script, string expected) {
+    #! A cycle of an AOT module that loads a module requiring it at run time, and user modules that the loaded module
+    #! requires (qore#6129)
+    /** RuntimeCycleUtil loads RuntimeCycleClient, which requires it and the user module RuntimeCycleServer, which
+        requires the user module RuntimeCycleFile, which requires RuntimeCycleUtil: the modules are in a cycle, which
+        is broken at one of them, so RuntimeCycleFile is deleted before RuntimeCycleServer, which requires it; a debug
+        build asserted that the record of the modules that require it was still there.
+    */
+    testRuntimeCycleUserModules(string mode) {
+        runRuntimeLoad(mode, ("RuntimeCycleUtil", "RuntimeCycleClient"), "runtime-cycle-user-modules.qr", "1",
+            ("RuntimeCycleServer", "RuntimeCycleFile"));
+    }
+
+    #! Runs \a script with the modules \a modules compiled to AOT modules and the source modules \a sources
+    private runRuntimeLoad(string mode, list<string> modules, string script, string expected,
+            list<string> sources = ()) {
         TmpDir tmp("qore-runtime-load-");
         string dir = get_script_dir() + DirSep + "deleted-program-types";
         string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
             libqore_dir);
+        # the source modules are loaded from the directory of the run
+        foreach string name in (sources) {
+            writeFile(tmp.path + DirSep + name + ".qm", ReadOnlyFile::readTextFile(dir + DirSep + name + ".qm"));
+        }
         # the modules are compiled with the module path of the run
+        string compile_path = tmp.path + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
         foreach string name in (modules) {
             string qmod = tmp.path + DirSep + name + ".qmod";
             int status;
-            string out = backquote(sprintf("%s %s --module -o %s %s/%s.qm 2>&1", env, qcc_bin, qmod, dir, name),
-                \status);
+            string out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s --module -o %s %s/%s.qm 2>&1", env,
+                compile_path, qcc_bin, qmod, dir, name), \status);
             assertEq(0, status, out);
             assertTrue(is_file(qmod), "the AOT module was compiled: " + out);
         }

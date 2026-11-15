@@ -156,6 +156,27 @@ struct OptInputHelper {
     }
 };
 
+//! marks that the stored options of a datasource are applied to a connection that is being opened, for its scope
+/** While it exists, Datasource::getOptionRestrictions() and Datasource::getOptionPolicyManagerRef() report the stored
+    setter of an option, not the setter of a value that is being set (see qore_ds_private::getOptionSetter())
+*/
+class QoreDsApplyStoredOptionsHelper {
+public:
+    DLLLOCAL QoreDsApplyStoredOptionsHelper(const Datasource& ds);
+    DLLLOCAL ~QoreDsApplyStoredOptionsHelper();
+
+    QoreDsApplyStoredOptionsHelper(const QoreDsApplyStoredOptionsHelper&) = delete;
+    QoreDsApplyStoredOptionsHelper& operator=(const QoreDsApplyStoredOptionsHelper&) = delete;
+
+private:
+    const Datasource& ds;
+};
+
+//! returns true if \a name is the entry that Datasource::setOption() created for a new option while it is set
+/** The entry has no value until the value is kept; see qore_ds_private::prepareOption()
+*/
+DLLLOCAL bool qore_ds_is_option_placeholder(const Datasource& ds, const char* name);
+
 struct qore_dbi_private {
     const char* name;
     int caps;
@@ -170,12 +191,21 @@ struct qore_dbi_private {
 
     DLLLOCAL int init(Datasource* ds, ExceptionSink* xsink) const {
         assert(xsink);
+        // the connection is opened with the stored options, so the driver judges each of them by its stored setter,
+        // also while an option is being set on the datasource (a driver that reconnects from its option-setting
+        // function): the pending setter belongs to the new value, which is not given to this connection (qore#5741)
+        QoreDsApplyStoredOptionsHelper stored_options(*ds);
         int rc = f.open(ds, xsink);
         assert((!rc && !*xsink) || (rc && *xsink));
         // set option if init was successful
         if (!rc && f.opt.set) {
             ConstHashIterator hi(ds->getConnectOptions());
             while (hi.next()) {
+                // the entry of an option that is being set and that has no value yet (a connection opened by the
+                // driver while it is given the value) is not an option value (qore#5741)
+                if (qore_ds_is_option_placeholder(*ds, hi.getKey())) {
+                    continue;
+                }
                 f.opt.set(ds, hi.getKey(), hi.get(), xsink);
                 if (*xsink) {
                     // the connection cannot be used as configured, and the datasource stays closed: the driver
