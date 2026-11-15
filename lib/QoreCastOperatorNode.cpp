@@ -815,7 +815,9 @@ int QoreClassCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue&
 }
 
 QoreValue QoreClassCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder rv(exp, xsink);
+    // the operand is a temporary of the statement, which lives until the statement ends, as in the other execution
+    // modes (qore#5712)
+    QoreOperandEvalHolder rv(exp, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1281,7 +1283,9 @@ int QoreEnumCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& 
 }
 
 QoreValue QoreEnumCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder rv(exp, xsink);
+    // the operand is a temporary of the statement, which lives until the statement ends, as in the other execution
+    // modes (qore#5712)
+    QoreOperandEvalHolder rv(exp, xsink);
     if (*xsink) {
         return QoreValue();
     }

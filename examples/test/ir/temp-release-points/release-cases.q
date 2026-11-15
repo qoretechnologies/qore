@@ -55,6 +55,11 @@ hashdecl HE {
     auto a;
 }
 
+enum EnR { One = 1 }
+
+class Other {
+}
+
 #! records a point of the statement
 string sub mark(string m) {
     printf("  mark %s\n", m);
@@ -83,6 +88,10 @@ hash<auto> sub mkh(string n) {
 
 E sub mke(string n) {
     return new E(n);
+}
+
+list<E> sub mkl(string n) {
+    return (new E(n),);
 }
 
 # the cases of qore#5801 are functions, not closures, so that each execution mode compiles them
@@ -273,6 +282,15 @@ sub main() {
     # an index and a key
     t("operand of index", auto sub () { list<auto> l = (1, 2); string s = f1(l[mke("ix")]) + mark("ix"); });
     t("operand of key", auto sub () { hash<auto> h = {"a": 1}; string s = f1(h{mke("key").n}) + mark("key"); });
+    # the key itself, not the receiver of a member access (qore#5712)
+    t("operand of key value", auto sub () { hash<auto> h = {"a": 1}; string s = f1(h{id(mke("keyv"))}) + mark("keyv"); });
+    # [] as the source of a functional operator: its index and its container
+    t("index source", auto sub () { list<auto> l = (1, 2); string s = f1(map $1, l[mke("ixs")]) + mark("ixs"); });
+    t("index source container", auto sub () { string s = f1(map $1, mkl("ixc")[(0,)]) + mark("ixc"); });
+    # the operand of a class cast and of an enum cast
+    t("operand of class cast", auto sub () { string s = f1(cast<E>(mke("cc"))) + mark("cc"); });
+    t("class cast exception", auto sub () { string s = g3(new E("arg"), cast<Other>(mke("ccx")), raise()); });
+    t("enum cast exception", auto sub () { string s = g3(new E("arg"), cast<EnR>(id(mke("enx"))), raise()); });
     t("float compare exception", auto sub () { string s = g3(new E("arg"), mke("gt") > 1.0, raise()); });
     # the condition of ?:
     t("condition", auto sub () { string s = f1(1) + ((new E("q")) ? mark("q") : ""); });
