@@ -1063,6 +1063,78 @@ sub caller() {
     printf("caller ret %d\n", read_only(new T("caller-ro"), 1));
 }
 
+# parameters bound on the runtime stack (a default argument: no direct parameters) that are written: the frame keeps
+# them in IR storage, and takes the value of a temporary over from the runtime variable (issue #5958); a caller's
+# variable keeps its value
+hashdecl TlsHash {
+    *T o;
+    int k = 0;
+}
+sub tls_hash(hash<auto> h, string tag, int m = 3) {
+    for (int j = 0; j < m; ++j) {
+        h.k = j;
+    }
+    h = {};
+    printf("after write %s\n", tag);
+}
+sub tls_list(list<auto> l, string tag, int m = 1) {
+    for (int j = 0; j < m; ++j) {
+        l[1] = j;
+    }
+    l = ();
+    printf("after write %s\n", tag);
+}
+sub tls_thash(hash<TlsHash> h, string tag, int m = 1) {
+    h.k = m;
+    h = <TlsHash>{};
+    printf("after write %s\n", tag);
+}
+sub tls_two(hash<auto> a, hash<auto> b, string tag, int m = 1) {
+    b = {};
+    printf("after write %s b\n", tag);
+    a = {};
+    printf("after write %s a\n", tag);
+}
+sub tls_on_exit(hash<auto> h, string tag, int m = 1) {
+    on_exit printf("on_exit %s %y\n", tag, h.o);
+    h = {};
+    printf("after write %s\n", tag);
+}
+class TlsC {
+    m(hash<auto> h, string tag, int m = 1) {
+        h.k = m;
+        h = {};
+        printf("after write %s\n", tag);
+    }
+    static s(hash<auto> h, string tag, int m = 1) {
+        h = {};
+        printf("after write %s\n", tag);
+    }
+}
+sub tls_frames() {
+    tls_hash({"o": new T("tls-h"), "k": 0}, "tls-h");
+    tls_list((new T("tls-l"), 0), "tls-l");
+    tls_thash(<TlsHash>{"o": new T("tls-th")}, "tls-th");
+    tls_two({"o": new T("tls-2a")}, {"o": new T("tls-2b")}, "tls-2");
+    tls_on_exit({"o": new T("tls-oe")}, "tls-oe");
+    TlsC c();
+    c.m({"o": new T("tls-m"), "k": 0}, "tls-m");
+    TlsC::s({"o": new T("tls-s")}, "tls-s");
+    code cl = sub (hash<auto> h, string tag, int m = 1) { h = {}; printf("after write %s\n", tag); };
+    cl({"o": new T("tls-cl")}, "tls-cl");
+    code cr = \tls_hash();
+    cr({"o": new T("tls-cr"), "k": 0}, "tls-cr");
+    # the caller's variable keeps the value that the callee's parameter wrote over
+    hash<auto> hv = {"o": new T("tls-kept"), "k": 0};
+    tls_hash(hv, "tls-kept");
+    printf("tls kept %s\n", hv.o.n);
+    remove hv;
+    printf("tls kept removed\n");
+    list<auto> lv = (new T("tls-lkept"), 0);
+    tls_list(lv, "tls-lkept");
+    printf("tls lkept %s\n", lv[0].n);
+}
+
 for (int round = 0; round < 3; ++round) {
     printf("round %d\n", round);
     cls(new T("cls"));
@@ -1170,6 +1242,7 @@ for (int round = 0; round < 3; ++round) {
     seventeen_calls();
     cross_program();
     ownership_calls();
+    tls_frames();
     # a closure and a call reference
     code cl = sub (T k) { k = new T(k.n + "-cl"); printf("closure out %s\n", k.n); };
     cl(new T("closure"));
