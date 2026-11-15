@@ -1190,6 +1190,17 @@ static bool columnar_value_type_matches_kind(qore_type_t type, QoreColumnarTypeK
     }
 }
 
+//! Returns the type of a value, reading the type of a node inline
+static inline qore_type_t columnar_value_type(const QoreValue& value) {
+    if (value.isPointer()) {
+        const AbstractQoreNode* n = value.getPtr();
+        if (n) {
+            return n->getType();
+        }
+    }
+    return value.getType();
+}
+
 //! Checks the parts of a schema that do not depend on the data: time units, decimal parameters and sizes
 static int columnar_check_descriptor(const char* name, const QoreColumnarTypeDescriptor& schema, const char* err,
         ExceptionSink* xsink) {
@@ -1274,7 +1285,7 @@ static int columnar_check_list_values(const char* name, QoreColumnarTypeDescript
             if (i && !(i % 1024) && qore_check_cancel(xsink, "checking columnar values")) {
                 return -1;
             }
-            qore_type_t type = entry[i].getType();
+            qore_type_t type = columnar_value_type(entry[i]);
             if (type == NT_NOTHING || type == NT_NULL) {
                 nullable = true;
                 continue;
@@ -1304,7 +1315,7 @@ static int columnar_check_list_values(const char* name, QoreColumnarTypeDescript
 //! Checks one value against a schema, and the values in it against the child schemas
 static int columnar_check_value(const char* name, QoreColumnarTypeDescriptor& schema, QoreValue value, size_t row,
         bool nested, const char* err, ExceptionSink* xsink) {
-    qore_type_t type = value.getType();
+    qore_type_t type = columnar_value_type(value);
     if (type == NT_NOTHING || type == NT_NULL) {
         schema.nullable = true;
         return 0;
