@@ -1048,6 +1048,23 @@ enum class QoreIROpcode : uint16_t {
     GtPlugin = 436,
     GePlugin = 437,
 
+    /** Hands the value of a return statement in a handler run out of line to the function that the handler runs for,
+        as the AST interpreter runs a handler with a reference to the return value of its function (#6074)
+
+        operands[0] = the value of the return, or no operand for a return without a value; no result.  Lowered only in
+        the body of a handler compiled as a function of its own (QoreIROnBlockExitInstruction::handler_ir), where the
+        return statement executes, before the handler's own handlers run, or where the outermost try statement of the
+        handler that the return is in ends, as the AST interpreter's try statement gives the value of its return to
+        the enclosing block when it ends.  While the handler runs during an unwind (an exception or a thread_exit),
+        the value replaces the value of the return that the unwind interrupted, which is released then, and the value
+        of an earlier hand-over; otherwise it is ignored, as the value that the handler function returns is.  A
+        return without a value replaces it with no value.  The release of a replaced value can raise an exception (a
+        destructor), which the IR interpreter takes to the instruction's exception target and native code to the target
+        of the CheckException that the lowering emits after the instruction (the same target).  See
+        qore_rt_handler_return().
+    */
+    HandlerReturn = 438,
+
     /** Raises an exception that a release left in the sink in the body of a functional loop (qore#6072)
         The body of a map, select or fold expression keeps the values of an element until the next element replaces
         them; the release of one whose type can hold an object can run a destructor that raises an exception.  The IR
@@ -1060,9 +1077,9 @@ enum class QoreIROpcode : uint16_t {
         code compiles after the release of the previous value at the start of the call's continuation or of the Phi's
         block.
     */
-    CheckReleaseException = 438,
+    CheckReleaseException = 439,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (439, 440, ...)
+    // NOTE: When adding new opcodes, assign the next sequential ID (440, 441, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1072,7 +1089,7 @@ enum class QoreIROpcode : uint16_t {
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
     = static_cast<uint16_t>(QoreIROpcode::CheckReleaseException);
-static_assert(QORE_IR_MAX_OPCODE == 438, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+static_assert(QORE_IR_MAX_OPCODE == 439, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself

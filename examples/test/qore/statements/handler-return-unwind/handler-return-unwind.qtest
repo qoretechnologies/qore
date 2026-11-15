@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of handlers run while a thread_exit or an exception unwinds
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class HandlerReturnUnwindTest
+
+#! A handler that returns a value while a thread_exit or an exception leaves its block (#6073, #6074)
+/** As in the AST interpreter, where the handlers of a block run with the block's return value, the value that a
+    handler returns while a thread_exit or an exception unwinds the block replaces the value of the return that the
+    unwind interrupted, which is released then, and is kept until the function ends, after its locals.  The compiled
+    modes kept it only while an exception was pending: a handler that ran after a thread_exit discarded its value when
+    it ended, before the interrupted value and the locals (#6074, item 1), and the value of the interrupted return of a
+    function whose blocks keep their locals for the unwind was released after the locals, also with an exception
+    pending (#6074, item 2).  A handler's value replaced by a later handler that ends in a thread_exit leaked in the IR
+    interpreter (#6073).  A handler run out of line hands the value of each of its return statements to its function when the
+    statement executes (QoreIROpcode::HandlerReturn): before the handler's own handlers and the block's later handlers
+    run, a return in a handler of a handler also releases the function's interrupted return, a return in a try
+    statement of the handler replaces the value when the try statement ends, a return without a value replaces it
+    with no value, and with a try statement of the function catching the exception, it replaces the value of the try
+    block's return (the review cases k1-k7), a release that raises an exception at the end of a try statement
+    goes past its catch block, and a handler of a handler whose exception leaves the handler forwards its value (the
+    cases rv1-rv5 of the second review); the same handler reached from sites at different try depths of the function
+    gives what is specific to each site at run time (sh0-sh2).  HandlerReturnUnwind.q gives the output of the AST interpreter in every
+    execution mode and compiled with qcc.
+*/
+class HandlerReturnUnwindTest inherits QUnit::Test {
+    public {
+        #! the output of HandlerReturnUnwind.q with the AST interpreter
+        const Expected = "te1[0]: [\"x2\", \"~te1-body\", \"x1\", \"~te1-h\"]
+te1[1]: [\"x2\", \"~te1-body\", \"x1\", \"~te1-h\"]
+te2[0]: [\"s\", \"x\", \"~te2-body\", \"~te2-h\"]
+te2[1]: [\"s\", \"x\", \"~te2-body\", \"~te2-h\"]
+te3[0]: [\"te\", \"x\", \"~te3-body\", \"~te3-h\"]
+te3[1]: [\"te\", \"x\", \"~te3-body\", \"~te3-h\"]
+te4[0]: [\"te\", \"x\", \"~te4-body\", \"~te4-l\", \"~te4-h\"]
+te4[1]: [\"te\", \"x\", \"~te4-body\", \"~te4-l\", \"~te4-h\"]
+te5[0]: [\"s\", \"x\", \"~te5-body\", \"~te5-l\", \"~te5-h\"]
+te5[1]: [\"s\", \"x\", \"~te5-body\", \"~te5-l\", \"~te5-h\"]
+te6[0]: [\"x\", \"~te6-l\", \"~te6-h\"]
+te6[1]: [\"x\", \"~te6-l\", \"~te6-h\"]
+te7[0]: [\"te\", \"xi\", \"~te7-body\", \"~te7-h\"]
+te7[1]: [\"te\", \"xi\", \"~te7-body\", \"~te7-h\"]
+te8[0]: [\"te\", \"xo\", \"~te8-body\", \"~te8-h\"]
+te8[1]: [\"te\", \"xo\", \"~te8-body\", \"~te8-h\"]
+te9[0]: [\"x3\", \"~te9-body\", \"x2\", \"~te9-h3\", \"x1\", \"~te9-h2\"]
+te9[1]: [\"x3\", \"~te9-body\", \"x2\", \"~te9-h3\", \"x1\", \"~te9-h2\"]
+ex1[0]: [\"thr\", \"x\", \"~ex1-body\", \"~ex1-l\", \"~ex1-h\", \"ex:EX1\"]
+ex1[1]: [\"thr\", \"x\", \"~ex1-body\", \"~ex1-l\", \"~ex1-h\", \"ex:EX1\"]
+ex2[0]: [\"x\", \"~ex2-a\", \"~ex2-h\", \"ex:EX2\"]
+ex2[1]: [\"x\", \"~ex2-a\", \"~ex2-h\", \"ex:EX2\"]
+ex3[0]: [\"te\", \"x\", \"~ex3-a\", \"~ex3-h\"]
+ex3[1]: [\"te\", \"x\", \"~ex3-a\", \"~ex3-h\"]
+k1[0]: [\"te\", \"x\", \"~k1-body\", \"y\", \"~k1-l\", \"~k1-h\"]
+k1[1]: [\"te\", \"x\", \"~k1-body\", \"y\", \"~k1-l\", \"~k1-h\"]
+k2[0]: [\"thr\", \"x\", \"~k2-body\", \"y\", \"~k2-l\", \"~k2-h\", \"ex:K2\"]
+k2[1]: [\"thr\", \"x\", \"~k2-body\", \"y\", \"~k2-l\", \"~k2-h\", \"ex:K2\"]
+k3[0]: [\"te\", \"out\", \"~k3-body\", \"in\", \"~k3-hout\", \"~k3-l\", \"~k3-hin\"]
+k3[1]: [\"te\", \"out\", \"~k3-body\", \"in\", \"~k3-hout\", \"~k3-l\", \"~k3-hin\"]
+k4[0]: [\"thr\", \"out\", \"~k4-body\", \"in\", \"~k4-hout\", \"~k4-l\", \"~k4-hin\", \"ex:K4\"]
+k4[1]: [\"thr\", \"out\", \"~k4-body\", \"in\", \"~k4-hout\", \"~k4-l\", \"~k4-hin\", \"ex:K4\"]
+k5[0]: [\"out\", \"in\", \"~k5-body\", \"~k5-q\", \"~k5-l\", \"~k5-hin\"]
+k5[1]: [\"out\", \"in\", \"~k5-body\", \"~k5-q\", \"~k5-l\", \"~k5-hin\"]
+k6[0]: [\"out\", \"in\", \"~k6-body\", \"~k6-q\", \"~k6-l\", \"~k6-hin\", \"ex:K6\"]
+k6[1]: [\"out\", \"in\", \"~k6-body\", \"~k6-q\", \"~k6-l\", \"~k6-hin\", \"ex:K6\"]
+k7[0]: [\"x\", \"~k7-bodyin\", \"~k7-m\", \"~k7-h\", \"caught\", \"~k7-l\", \"rv:k7-body\", \"~k7-body\"]
+k7[1]: [\"x\", \"~k7-bodyin\", \"~k7-m\", \"~k7-h\", \"caught\", \"~k7-l\", \"rv:k7-body\", \"~k7-body\"]
+rn1[0]: [\"te\", \"x\", \"~rn1-body\", \"~rn1-l\"]
+rn1[1]: [\"te\", \"x\", \"~rn1-body\", \"~rn1-l\"]
+rn2[0]: [\"thr\", \"x\", \"~rn2-body\", \"~rn2-l\", \"ex:RN2\"]
+rn2[1]: [\"thr\", \"x\", \"~rn2-body\", \"~rn2-l\", \"ex:RN2\"]
+rn3[0]: [\"thr\", \"y\", \"~rn3-body\", \"x\", \"~rn3-h\", \"~rn3-l\", \"ex:RN3\"]
+rn3[1]: [\"thr\", \"y\", \"~rn3-body\", \"x\", \"~rn3-h\", \"~rn3-l\", \"ex:RN3\"]
+tr1[0]: [\"te\", \"x\", \"~tr1-t\", \"~tr1-body\", \"~tr1-l\", \"~tr1-h\"]
+tr1[1]: [\"te\", \"x\", \"~tr1-t\", \"~tr1-body\", \"~tr1-l\", \"~tr1-h\"]
+tr2[0]: [\"thr\", \"x\", \"~tr2-body\", \"~tr2-l\", \"~tr2-h\", \"ex:TR2\"]
+tr2[1]: [\"thr\", \"x\", \"~tr2-body\", \"~tr2-l\", \"~tr2-h\", \"ex:TR2\"]
+rv1[0]: [\"~rv1-body\", \"~rv1-h\", \"ex:DTOR-rv1-body\"]
+rv1[1]: [\"~rv1-body\", \"~rv1-h\", \"ex:DTOR-rv1-body\"]
+rv2[0]: [\"thr\", \"x\", \"~rv2-body\", \"y\", \"~rv2-l\", \"~rv2-h\", \"ex:RV2\"]
+rv2[1]: [\"thr\", \"x\", \"~rv2-body\", \"y\", \"~rv2-l\", \"~rv2-h\", \"ex:RV2\"]
+rv3[0]: [\"te\", \"1\", \"2\", \"~rv3-body\", \"~rv3-l\", \"~rv3-2\"]
+rv3[1]: [\"te\", \"1\", \"2\", \"~rv3-body\", \"~rv3-l\", \"~rv3-2\"]
+rv4[0]: [\"te\", \"out\", \"in\", \"~rv4-body\", \"~rv4-l\", \"~rv4-out\"]
+rv4[1]: [\"te\", \"out\", \"in\", \"~rv4-body\", \"~rv4-l\", \"~rv4-out\"]
+rv5[0]: [\"e\", \"~rv5-h\", \"c\", \"~rv5-b\", \"ex:RV5b\"]
+rv5[1]: [\"e\", \"~rv5-h\", \"c\", \"~rv5-b\", \"ex:RV5b\"]
+sh0[0]: [\"x\", \"~sh-body0\", \"~sh-l\", \"rv:sh-h0\", \"~sh-h0\"]
+sh0[1]: [\"x\", \"~sh-body0\", \"~sh-l\", \"rv:sh-h0\", \"~sh-h0\"]
+sh1[0]: [\"x\", \"~sh-h1\", \"c\", \"~sh-l\", \"rv:sh-after1\", \"~sh-after1\"]
+sh1[1]: [\"x\", \"~sh-h1\", \"c\", \"~sh-l\", \"rv:sh-after1\", \"~sh-after1\"]
+sh2[0]: [\"x\", \"~sh-h2\", \"~sh-l\"]
+sh2[1]: [\"x\", \"~sh-h2\", \"~sh-l\"]
+tf1[0]: [\"~tf1-base\", \"thr\", \"x\", \"~tf1-base-m\", \"~tf1-h\", \"c\", \"~tf1-l\", \"rv:tf1-body\", \"~tf1-body\"]
+tf1[1]: [\"~tf1-base\", \"thr\", \"x\", \"~tf1-base-m\", \"~tf1-h\", \"c\", \"~tf1-l\", \"rv:tf1-body\", \"~tf1-body\"]
+";
+
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("HandlerReturnUnwindTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/HandlerReturnUnwind.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": a handler's return during an unwind", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: a handler's return during an unwind", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        checkOutput(mode, output);
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-handler-return-unwind-");
+        string exe = tmp.path + DirSep + "handler-return-unwind";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        checkOutput(sprintf("qcc -O%d", opt), output);
+    }
+
+    #! Checks the output of a run against the AST interpreter's, line by line
+    private checkOutput(string mode, string output) {
+        hash<string, string> expected = parseOutput(Expected);
+        hash<string, string> actual = parseOutput(output);
+        assertEq(keys expected, keys actual, mode + ": the cases of the output");
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, actual{i.key}, sprintf("%s: %s as with the AST interpreter", mode, i.key));
+        }
+    }
+
+    #! Returns the lines of an output by their \c "<case>[<call>]" label
+    private static hash<string, string> parseOutput(string output) {
+        hash<string, string> rv();
+        foreach string line in (output.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            int i = line.find(": ");
+            rv{i > 0 ? line.substr(0, i) : line} = i > 0 ? line.substr(i + 2) : "";
+        }
+        return rv;
+    }
+}
