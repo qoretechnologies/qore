@@ -81,7 +81,9 @@ public:
     //! records the code running on the current thread
     /** The restrictions are those that QoreModuleCommandRestrictions::getCallerRestrictions() gives the calling code,
         and the policy manager is the one that a filesystem policy check of the calling code uses
-        (QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy))
+        (QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)).  On a thread without Qore thread data (C++ code
+        that creates or configures a datasource there), no Qore code is calling: the record is unrestricted, with no
+        policy manager
     */
     DLLLOCAL qore_ds_option_setter();
 

@@ -524,7 +524,10 @@ const TypedHashDecl* qore_ds_private::getTypedResultHashDecl(const char* driver_
 }
 
 qore_ds_option_setter::qore_ds_option_setter()
-        : restrictions(QoreModuleCommandRestrictions::getCallerRestrictions()),
+        // getCallerRestrictions() needs a thread that Qore knows; C++ code can create or configure a datasource on a
+        // thread without Qore thread data, where no Qore code is calling, so nothing restricts it (qore#6142)
+        : restrictions(is_valid_qore_thread() ? QoreModuleCommandRestrictions::getCallerRestrictions()
+            : QoreModuleCommandRestrictions()),
         // decides without allocating: nothing that can fail follows the reference to the policy manager
         allows_uncontrolled(qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy)),
         policy(qore_find_thread_sandbox_policy_manager_ref()) {
