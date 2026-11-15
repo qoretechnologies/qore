@@ -17,6 +17,8 @@
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
 
+import errno
+import fcntl
 import importlib.util
 import json
 import os
@@ -454,7 +456,6 @@ class LockFileCreationRaceTest(unittest.TestCase):
 
     def lose_creation_race(self, target):
         """Wraps os.open() so that this job loses the race to create @p target once; returns the race's state"""
-        import errno
         real_open = os.open
         state = {"raced": False, "other": None}
 
@@ -496,7 +497,6 @@ class LockFileCreationRaceTest(unittest.TestCase):
         self.assertEqual(state["other"], os.lstat(os.path.join(self.cache.root, "prune.lock")).st_ino)
 
     def test_lock_of_an_entry_that_loses_the_race_to_create_it(self):
-        import fcntl
         key = "c" * 64
         state = self.lose_creation_race(key + ".lock")
         fd = self.cache.open_lock(key)
@@ -520,7 +520,6 @@ class LockFileCreationRaceTest(unittest.TestCase):
         entry = {"schema": qc.SCHEMA, "key": key, "base_key": base, "deps": [], "optional": [], "resolution": [],
                  "mode": 0o755, "files": {(s or "qmod"): qc.sha256_file(p) for s, p in files.items()}}
         state = self.lose_creation_race(key + ".lock")
-        import fcntl
         real_open_lock = self.cache.open_lock
         modes = []
 
@@ -580,8 +579,23 @@ class OpenOrCreateTest(unittest.TestCase):
         EEXIST and the open that follows the link ENOENT, forever)"""
         target = os.path.join(self.dir, "target")
         os.symlink(target, os.path.join(self.dir, "dangling"))
-        with self.assertRaises(OSError):
-            os.close(qc.open_or_create("dangling", self.dfd, os.O_RDWR))
+        real_open = os.open
+        calls = []
+
+        def bounded_open(path, flags, mode=0o777, *, dir_fd=None):
+            # a helper that follows the link loops (EEXIST, then ENOENT): fail instead of hanging the suite
+            calls.append(flags)
+            if len(calls) > 10:
+                raise AssertionError("open_or_create() keeps looping on the dangling link")
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+        with unittest.mock.patch.object(qc.os, "open", bounded_open):
+            with self.assertRaises(OSError) as cm:
+                os.close(qc.open_or_create("dangling", self.dfd, os.O_RDWR))
+        # the link is refused, not followed (macOS gives EMLINK for O_NOFOLLOW on a link, Linux ELOOP)
+        self.assertIn(cm.exception.errno, (errno.ELOOP, errno.EMLINK))
+        # O_CREAT | O_EXCL (EEXIST), then the open without following the link
+        self.assertEqual(2, len(calls))
+        self.assertTrue(all(f & os.O_NOFOLLOW for f in calls))
         self.assertFalse(os.path.lexists(target))
         self.assertTrue(os.path.islink(os.path.join(self.dir, "dangling")))
 
@@ -1869,7 +1883,6 @@ env > "{finished}"
     def test_prune_leaves_work_in_progress(self):
         """Prune never touches a store in progress: a young temporary directory, an object whose entry is not
         written yet, or one that a job holds"""
-        import fcntl
         self.build_all()
         cache = qc.Cache(str(self.cache))
         objects = Path(cache.objects)
@@ -1962,7 +1975,6 @@ env > "{finished}"
         self.assertEqual([keys["Top"]], self.entry_keys())
 
     def test_prune_never_removes_an_entry_being_read(self):
-        import fcntl
         self.build_all()
         keys = self.keys()
         cache = qc.Cache(str(self.cache))
@@ -1981,7 +1993,6 @@ env > "{finished}"
         self.assertNotIn("in use", out)
 
     def test_one_pruner_at_a_time(self):
-        import fcntl
         self.build_all()
         cache = qc.Cache(str(self.cache))
         fd = os.open(os.path.join(cache.root, "prune.lock"), os.O_RDWR | os.O_CREAT)
