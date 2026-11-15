@@ -1149,6 +1149,48 @@ private:
     DLLLOCAL void restore();
 };
 
+//! The run-time parse options in effect on a thread: its options and the override that they were computed with
+/** Taken in the thread that starts a new thread for code (the \c background operator, q_start_thread()), so that the
+    new thread runs with the options of the code that started it, including the restrictions that apply to that code
+    (qore#6208)
+*/
+struct QoreThreadRuntimeParseOptions {
+    //! the run-time parse options, with the override applied
+    QoreParseOptions po;
+    //! the override that \a po was computed with (its \c td is always nullptr)
+    QoreCallParseOptionsOverride override;
+
+    //! returns the run-time parse options in effect on the current thread
+    DLLLOCAL static QoreThreadRuntimeParseOptions capture();
+};
+
+//! Installs the run-time parse options taken from the thread that started the current thread for its life
+/** The thread starts with none: without them, the code that it runs would not run with the options of the code that
+    started it, nor with the restrictions that apply to that code (qore#6208).  The options in effect before are
+    restored when the helper is destroyed or reset.
+*/
+class QoreThreadRuntimeParseOptionsHelper {
+public:
+    //! installs \a o on the current thread; nothing if \a o is nullptr
+    DLLLOCAL QoreThreadRuntimeParseOptionsHelper(const QoreThreadRuntimeParseOptions* o);
+
+    //! restores the options in effect before, if they have not been restored yet
+    DLLLOCAL ~QoreThreadRuntimeParseOptionsHelper() = default;
+
+    //! restores the options in effect before the helper was created; called before the thread's data is deleted
+    DLLLOCAL void reset() {
+        override_helper.reset();
+    }
+
+    DLLLOCAL QoreThreadRuntimeParseOptionsHelper(const QoreThreadRuntimeParseOptionsHelper&) = delete;
+    DLLLOCAL QoreThreadRuntimeParseOptionsHelper& operator=(const QoreThreadRuntimeParseOptionsHelper&) = delete;
+
+private:
+    //! sets the override and the options, and restores those in effect before (RuntimeParseOptionsOverrideHelper
+    //! restores the run-time parse options too)
+    std::unique_ptr<RuntimeParseOptionsOverrideHelper> override_helper;
+};
+
 DLLLOCAL RootQoreNamespace* getRootNS();
 DLLLOCAL void updateCVarStack(CVNode* ncvs);
 DLLLOCAL CVNode* getCVarStack();

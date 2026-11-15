@@ -1,0 +1,280 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
+# test-platform: macos - background threads started by interpreted, compiled and AOT-compiled code
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class BackgroundRuntimeParseOptionsTest
+
+#! A background thread runs with the run-time parse options of the code that starts it (qore#6208)
+/** The thread started by the \c background operator began with no run-time parse options, so the background
+    expression did not run with the options of the starting code, nor with the restrictions that apply to it.  The
+    checks run in every execution mode, in a child Program with a restriction and in one without, for a background
+    expression, a background closure and nested background expressions; a module (source and compiled) starts a
+    thread for a restricted caller; a script compares the options of its thread with its own, interpreted and as qcc
+    executables.  Each case runs in a process of its own, which waits for its background threads before it exits, so
+    its output is complete and in order.
+*/
+class BackgroundRuntimeParseOptionsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+
+        const Modes = ("ast", "ir", "tiered", "jit");
+
+        #! the code of the child Program, which runs in the mode given and with or without a restriction
+        const ChildCode = "%modern
+nothing sub expr(File f) {
+    background f.print(\"expr: printed\\n\");
+}
+nothing sub nested_expr(File f) {
+    background (background f.print(\"nested expr: printed\\n\"));
+}
+nothing sub closure(File f, Queue q) {
+    background sub () {
+        try {
+            f.print(\"\");
+            q.push(\"closure: printed\");
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(\"closure: \" + ex.err);
+        }
+    }();
+}
+nothing sub nested_closure(File f, Queue q) {
+    background (background sub () {
+        try {
+            f.print(\"\");
+            q.push(\"nested closure: printed\");
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(\"nested closure: \" + ex.err);
+        }
+    }());
+}
+nothing sub mask(Queue q) {
+    background q.push(\"mask: \" + ((Program::getCallerCapabilityMask(0) & PO_NO_TERMINAL_IO) ? \"restricted\"
+        : \"unrestricted\"));
+}
+nothing sub nested_mask(Queue q) {
+    background (background q.push(\"nested mask: \" + ((Program::getCallerCapabilityMask(0) & PO_NO_TERMINAL_IO)
+        ? \"restricted\" : \"unrestricted\")));
+}
+nothing sub neg_index(Queue q) {
+    list<int> l = (1, 2, 3);
+    background q.push(\"index: \" + l[-1]);
+}
+";
+
+        #! runs one case of the child Program: ARGV[0] is the mode, ARGV[1] the case, ARGV[2] \"restricted\" or not
+        const ChildScript = "%modern
+%no-child-restrictions
+hash<string, auto> modes = {\"ast\": EM_AST, \"ir\": EM_IR, \"tiered\": EM_TIERED, \"jit\": EM_JIT};
+Program p(ARGV[2] == \"restricted\" ? PO_NO_TERMINAL_IO : 0);
+p.setExecMode(modes{ARGV[0]});
+p.parse(ENV.BG_CHILD_CODE, \"child\");
+switch (ARGV[1]) {
+    case \"expr\":
+        p.callFunction(\"expr\", stdout);
+        break;
+    case \"nested-expr\":
+        p.callFunction(\"nested_expr\", stdout);
+        break;
+    case \"probe\":
+        Queue q();
+        foreach string f in ((\"closure\", \"nested_closure\")) {
+            p.callFunction(f, stdout, q);
+            printf(\"%s\\n\", q.get(30000));
+        }
+        foreach string f in ((\"mask\", \"nested_mask\", \"neg_index\")) {
+            p.callFunction(f, q);
+            printf(\"%s\\n\", q.get(30000));
+        }
+        break;
+}
+";
+
+        #! a module whose code starts threads
+        const ModuleSource = "%modern
+
+module BgRuntimeOpts {
+    version = \"1.0\";
+    desc = \"qore#6208: background threads with the run-time parse options of the starting code\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace BgRuntimeOpts {
+    #! returns whether the module's threads run with its options, and the value of a negative index in one
+    public list<auto> sub probe() {
+        Queue q();
+        list<int> l = (1, 2, 3);
+        int m = Program::getCallerCapabilityMask(0);
+        background (q.push(Program::getCallerCapabilityMask(0) == m), q.push(l[-1]));
+        list<auto> rv = (q.get(30000), q.get(30000));
+        background (background q.push(Program::getCallerCapabilityMask(0) == m));
+        rv += q.get(30000);
+        return rv;
+    }
+
+    #! prints in a background thread
+    public nothing sub bgprint(File f) {
+        background f.print(\"module: printed\\n\");
+    }
+}
+";
+
+        #! a %modern importer of the module
+        const ModernImporter = "%modern
+%requires BgRuntimeOpts
+printf(\"%y\\n\", BgRuntimeOpts::probe());
+";
+
+        #! a restricted Program that calls module code that starts a thread: the module code runs with the
+        #! restriction of its caller, and so does its thread
+        const RestrictedImporter = "%modern
+%no-child-restrictions
+hash<string, auto> modes = {\"ast\": EM_AST, \"ir\": EM_IR, \"tiered\": EM_TIERED, \"jit\": EM_JIT};
+Program p(PO_NO_TERMINAL_IO);
+p.setExecMode(modes{ARGV[0]});
+p.parse(\"%modern\\n%requires BgRuntimeOpts\\nnothing sub run(File f) { BgRuntimeOpts::bgprint(f); }\\n\", \"child\");
+p.callFunction(\"run\", stdout);
+";
+
+        #! a script whose threads compare their options with the script's, for qcc executables
+        const ExeSource = "%modern
+Queue q();
+list<int> l = (1, 2, 3);
+int m = Program::getCallerCapabilityMask(0);
+background (q.push(Program::getCallerCapabilityMask(0) == m), q.push(l[-1]));
+list<auto> rv = (q.get(30000), q.get(30000));
+background (background q.push(Program::getCallerCapabilityMask(0) == m));
+rv += q.get(30000);
+printf(\"%y\\n\", rv);
+";
+    }
+
+    constructor() : QUnit::Test("BackgroundRuntimeParseOptionsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : trim(`command -v qcc 2>/dev/null`));
+        addTestCase("child Program: background code runs with the restriction of the starting code",
+            \restrictedTest());
+        addTestCase("child Program: background code without a restriction", \openTest());
+        addTestCase("module: threads of module code", \moduleTest());
+        addTestCase("script: threads of interpreted and compiled code", \exeTest());
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! the environment of a child process: the library under test; closures are compiled at their first call
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_IR_THRESHOLD=1 "
+            "QORE_JIT_THRESHOLD=1", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    private string runChild(string script, string mode, string case_name, string restriction) {
+        return backquote(sprintf("%s BG_CHILD_CODE=%s %s -b %s %s %s %s 2>&1", env(), shell_quote(ChildCode),
+            qore_bin, script, mode, case_name, restriction));
+    }
+
+    private string shell_quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+
+    restrictedTest() {
+        TmpDir tmp("qore-bg-runtime-po-");
+        string script = tmp.path + "/child.q";
+        write(script, ChildScript);
+        foreach string mode in (Modes) {
+            foreach string case_name in (("expr", "nested-expr")) {
+                string out = runChild(script, mode, case_name, "restricted");
+                assertRegex("ILLEGAL-EXPRESSION", out, sprintf("%s refused, mode %s", case_name, mode));
+                assertFalse(out =~ /printed/, sprintf("%s did not print, mode %s: %s", case_name, mode, out));
+            }
+            assertEq("closure: ILLEGAL-EXPRESSION\n"
+                "nested closure: ILLEGAL-EXPRESSION\n"
+                "mask: restricted\n"
+                "nested mask: restricted\n"
+                "index: 3\n", runChild(script, mode, "probe", "restricted"), "probe, mode " + mode);
+        }
+    }
+
+    openTest() {
+        TmpDir tmp("qore-bg-runtime-po-");
+        string script = tmp.path + "/child.q";
+        write(script, ChildScript);
+        foreach string mode in (Modes) {
+            assertEq("expr: printed\n", runChild(script, mode, "expr", "open"), "expr, mode " + mode);
+            assertEq("nested expr: printed\n", runChild(script, mode, "nested-expr", "open"),
+                "nested expr, mode " + mode);
+            assertEq("closure: printed\n"
+                "nested closure: printed\n"
+                "mask: unrestricted\n"
+                "nested mask: unrestricted\n"
+                "index: 3\n", runChild(script, mode, "probe", "open"), "probe, mode " + mode);
+        }
+    }
+
+    moduleTest() {
+        TmpDir src("qore-bg-runtime-po-src-");
+        write(src.path + "/BgRuntimeOpts.qm", ModuleSource);
+        TmpDir aot("qore-bg-runtime-po-qmod-");
+        write(aot.path + "/BgRuntimeOpts.qm", ModuleSource);
+        string out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --compile-module --strip-source --output "
+            "%s/BgRuntimeOpts.qmod %s/BgRuntimeOpts.qm 2>&1", env(), aot.path, qore_bin, aot.path, aot.path));
+        assertTrue(is_file(aot.path + "/BgRuntimeOpts.qmod"), "compiled the module: " + out);
+        # the compiled module only: the source would be loaded in its place if the qmod could not be
+        unlink(aot.path + "/BgRuntimeOpts.qm");
+
+        TmpDir run_dir("qore-bg-runtime-po-run-");
+        string modern = run_dir.path + "/modern.q";
+        string restricted = run_dir.path + "/restricted.q";
+        write(modern, ModernImporter);
+        write(restricted, RestrictedImporter);
+        foreach hash<auto> dir in (("source": src.path, "qmod": aot.path).pairIterator()) {
+            foreach string mode in (Modes) {
+                assertEq("[True, 3, True]\n", backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s 2>&1",
+                    env(), dir.value, qore_bin, mode, modern)), sprintf("%s module, mode %s", dir.key, mode));
+                out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s %s 2>&1", env(), dir.value,
+                    qore_bin, mode, restricted, mode));
+                assertRegex("ILLEGAL-EXPRESSION", out, sprintf("%s module, restricted caller, mode %s", dir.key,
+                    mode));
+                assertFalse(out =~ /printed/, sprintf("%s module, restricted caller, mode %s: %s", dir.key, mode,
+                    out));
+            }
+        }
+    }
+
+    exeTest() {
+        TmpDir tmp("qore-bg-runtime-po-exe-");
+        string script = tmp.path + "/bg.q";
+        write(script, ExeSource);
+        foreach string mode in (Modes) {
+            assertEq("[True, 3, True]\n", backquote(sprintf("%s %s -b --exec-mode=%s %s 2>&1", env(), qore_bin, mode,
+                script)), "interpreted, mode " + mode);
+        }
+        if (!qcc_bin.val() || !is_file(qcc_bin)) {
+            testSkip("qcc is unavailable");
+        }
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + "/bg" + opt;
+            string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env(), qcc_bin, opt, exe, script));
+            assertTrue(is_file(exe), "built the executable " + opt + ": " + out);
+            assertEq("[True, 3, True]\n", backquote(sprintf("%s %s 2>&1", env(), exe)), "executable " + opt);
+        }
+    }
+}
