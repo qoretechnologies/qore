@@ -69,6 +69,10 @@ public class Http3StreamContext inherits AbstractStreamContext {
             in this mode — @ref readData() throws.
         */
         bool uses_frame_state = False;
+
+        #! The record of the close frame of the stream's WebSocket connection, which outlives the stream and the
+        #! session (see @ref isWebSocketCloseSent())
+        *WebSocketCloseRecord close_record;
     }
 
     #! Creates an HTTP/3 stream context
@@ -92,6 +96,19 @@ public class Http3StreamContext inherits AbstractStreamContext {
         self.wake_callback = wake_callback;
         self.data_queue = data_queue;
         self.uses_frame_state = uses_frame_state;
+        if (uses_frame_state) {
+            close_record = sock.getQuicStreamWebSocketCloseRecord(session_id, stream_id);
+        }
+    }
+
+    #! Returns @ref True if the close frame of the stream's WebSocket connection was sent
+    /** Includes the close frame of the stream's WebSocket frame state, also after the stream or the QUIC session
+        has ended; see @ref AbstractStreamContext::isWebSocketCloseSent()
+
+        @since AsyncSocketIo 1.0
+    */
+    bool isWebSocketCloseSent() {
+        return ws_close_sent || (close_record && close_record.isCloseSent());
     }
 
     #! Returns True when the transport feeds pre-decoded WebSocket frame hashes
@@ -151,6 +168,7 @@ public class Http3StreamContext inherits AbstractStreamContext {
         @param end_stream if True, signals end of stream after this data
     */
     sendData(binary data, bool end_stream = False) {
+        checkWebSocketDataFrame(data);
         # Guarantee wake callback fires even if waitForQuicStreamDrain() throws
         on_exit {
             if (wake_callback) {
@@ -194,6 +212,7 @@ public class Http3StreamContext inherits AbstractStreamContext {
         @since AsyncSocketIo 1.0
     */
     sendDataWithTimeout(binary data, timeout timeout_ms, bool end_stream = False) {
+        checkWebSocketDataFrame(data);
         # the wake callback runs even if the wait throws, so the data already queued is sent
         on_exit {
             if (wake_callback) {
@@ -234,6 +253,10 @@ public class Http3StreamContext inherits AbstractStreamContext {
         @since AsyncSocketIo 1.0
     */
     bool sendWebSocketClose(binary frame, bool end_stream = False) {
+        # the connection's record decides before the stream or the session, which may have ended
+        if (isWebSocketCloseSent() && !end_stream) {
+            return False;
+        }
         on_exit {
             if (wake_callback) {
                 wake_callback();
@@ -243,6 +266,8 @@ public class Http3StreamContext inherits AbstractStreamContext {
         if (end_stream) {
             ended = True;
         }
+        # a close frame was staged on the stream, now or before
+        ws_close_sent = True;
         return !rc;
     }
 
@@ -268,6 +293,7 @@ public class Http3StreamContext inherits AbstractStreamContext {
         @since AsyncSocketIo 1.0
     */
     bool trySendData(binary data, bool end_stream = False) {
+        checkWebSocketDataFrame(data);
         int rc = sock.submitQuicStreamData(session_id, stream_id, data, end_stream);
         # wake the I/O controller so queued packets are flushed on its next tick
         if (wake_callback) {

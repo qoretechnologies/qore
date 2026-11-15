@@ -64,6 +64,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "qore/intern/WebSocketCloseRecord.h"
+
 class QoreDatagramDispatcher;
 class QoreEventNotifier;
 class QoreSSLCertificate;
@@ -564,6 +566,16 @@ public:
     */
     DLLLOCAL int sendStreamCloseFrame(int64_t stream_id, const void* data, size_t len, bool end_stream,
             ExceptionSink* xsink);
+
+    //! Returns the record of the close frame of a WebSocket stream (#6077)
+    /** The record is created when the stream's WebSocket frame state is registered
+        (registerConnectStreamFrameState()), before the stream can carry a close frame, and set when a close frame is
+        staged on the stream (sendStreamCloseFrame()); the session keeps it until it ends, so a stream context created
+        after the stream ended still gets it, and the context's reference outlives the session.
+
+        @return a reference to the stream's record, or an empty reference if it has none
+    */
+    DLLLOCAL WebSocketCloseRecordRef getWebSocketCloseRecord(int64_t stream_id);
 
 #ifdef DEBUG
     //! Resumes the streams whose staged data dbg_quic_hold_stream_data() held back (debug builds only)
@@ -2064,6 +2076,10 @@ private:
         Protected by connect_data_mutex_.
     */
     std::unordered_map<int64_t, Queue*> connect_stream_queues_;
+
+    //! The records of the close frames of the WebSocket streams, created when their frame state is registered and
+    //! kept for the session's life (getWebSocketCloseRecord(), #6077); protected by mtx_
+    std::unordered_map<int64_t, WebSocketCloseRecordRef> ws_close_records_;
 
     //! Per-stream WebSocket frame state for tunnels that want C++ frame parsing
     /** When registered, h3RecvDataCallback feeds the decoded stream bytes

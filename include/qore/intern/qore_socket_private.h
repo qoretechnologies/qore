@@ -2177,6 +2177,13 @@ public:
 
     mutable QoreThreadLock h2_session_lock;
 
+    //! The records of the close frames of the WebSocket streams of the HTTP/2 session that the socket released when
+    //! it closed (Http2Session::takeWebSocketCloseRecords(), #6077); a stream context created after the session
+    //! ended gets its record from here.  Replaced at the next close, so bounded by the streams of one connection.
+    std::unordered_map<int32_t, WebSocketCloseRecordRef> h2_ws_close_records;
+    //! protects h2_ws_close_records
+    mutable std::mutex h2_ws_close_records_lock;
+
     //! Maximum size for chunked HTTP body reads (0 = unlimited)
     /** When set, chunked body readers raise an HTTP-BODY-TOO-LARGE exception
         if the total size of the chunk data received exceeds this limit, also
@@ -2867,6 +2874,15 @@ public:
             }
         }
 
+        if (old_h2_session) {
+            // the records of the session's WebSocket streams outlive it (#6077); no socket lock is held here
+            std::unordered_map<int32_t, WebSocketCloseRecordRef> recs = old_h2_session->takeWebSocketCloseRecords();
+            if (!recs.empty()) {
+                std::lock_guard<std::mutex> lg(h2_ws_close_records_lock);
+                h2_ws_close_records.swap(recs);
+            }
+            // the records replaced are released here, outside the lock
+        }
         old_h2_session.reset();
         old_h2_stream_complete_callback = nullptr;
         if (old_remote_cert) {

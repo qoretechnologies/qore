@@ -28,6 +28,10 @@
       is not sent, also when it is sent before the connection has processed the frame state's error
     - a close frame that the connection sends after the frame state's is not sent, nor a second one of its own
     - a control frame (a ping) may follow the connection's close frame; a data frame may not
+    - the connection's record of the close frame decides also after the client has gone and the stream and its session
+      have ended, and before direct sends are enabled (issue #6077's close record): a data frame raises
+      WEBSOCKET-CLOSING-ERROR and a second close frame is not sent; a ping then fails for the ended stream or
+      session, as it is no data frame
 */
 
 %modern
@@ -68,6 +72,10 @@ class FrameStateCloseConnection inherits WebSocketConnection {
             ownClose();
             return;
         }
+        if (msg == "own-close-gone") {
+            ownCloseGone();
+            return;
+        }
         fs_handler.in_message.dec();
         # the frame state sends its close frame and then queues its error for the connection, which reads it after
         # this message: the error is taken and put back, so that it is processed as it would be
@@ -93,8 +101,22 @@ class FrameStateCloseConnection inherits WebSocketConnection {
     #! Sends the connection's own close frame on the stream, then a ping, a data frame and another close frame
     private ownClose() {
         AsyncSocketIo::AbstractStreamContext ctx = getStreamContext();
-        fs_handler.outcomes.push(ctx.sendWebSocketClose(ws_encode_message(WSCC_NormalClosure.encodeMsb(2),
-            WSOP_Close)) ? "close sent" : "close not sent");
+        pushClose(ctx);
+        sendAfterClose(ctx);
+    }
+
+    #! Sends the connection's own close frame on the stream, waits until the client has gone and the stream has
+    #! ended, then sends a ping, a data frame and another close frame
+    private ownCloseGone() {
+        AsyncSocketIo::AbstractStreamContext ctx = getStreamContext();
+        pushClose(ctx);
+        # the client answers the close frame and disconnects
+        fs_handler.waitForStreamEnd();
+        sendAfterClose(ctx);
+    }
+
+    #! Sends a ping, a data frame and another close frame after a close frame, and records their outcomes
+    private sendAfterClose(AsyncSocketIo::AbstractStreamContext ctx) {
         # a control frame may follow a close frame (RFC 6455 section 5.5.1)
         try {
             ctx.sendData(ws_encode_message("", WSOP_Ping));
@@ -108,8 +130,47 @@ class FrameStateCloseConnection inherits WebSocketConnection {
         } catch (hash<ExceptionInfo> ex) {
             fs_handler.outcomes.push(ex.err);
         }
-        fs_handler.outcomes.push(ctx.sendWebSocketClose(ws_encode_message(WSCC_NormalClosure.encodeMsb(2),
-            WSOP_Close)) ? "close sent" : "close not sent");
+        pushClose(ctx);
+    }
+
+    #! Sends a close frame on the stream and records the outcome
+    private pushClose(AsyncSocketIo::AbstractStreamContext ctx) {
+        try {
+            fs_handler.outcomes.push(ctx.sendWebSocketClose(ws_encode_message(WSCC_NormalClosure.encodeMsb(2),
+                WSOP_Close)) ? "close sent" : "close not sent");
+        } catch (hash<ExceptionInfo> ex) {
+            fs_handler.outcomes.push(ex.err);
+        }
+    }
+
+    #! Before direct sends are enabled, answers once the frame state has closed the connection (in the modes of the
+    #! handler that do)
+    registered() {
+        if (fs_handler.mode != "registered" && fs_handler.mode != "registered-gone") {
+            return;
+        }
+        # the frame state sends its close frame and then queues its error, which the connection reads only after
+        # this method returns: the error is taken and put back, so that it is processed as it would be
+        Queue q = fs_handler.data_queue;
+        auto error = q.get(HangGuard);
+        fs_handler.error_type = error.type;
+        if (fs_handler.mode == "registered-gone") {
+            # the client answers the close frame and disconnects; the end of the stream is put back after the error
+            fs_handler.waitForStreamEnd();
+            q.push(error);
+            q.push();
+        } else {
+            q.push(error);
+        }
+        try {
+            send("answer");
+            fs_handler.outcomes.push("sent");
+        } catch (hash<ExceptionInfo> ex) {
+            fs_handler.outcomes.push(ex.err);
+        }
+        if (fs_handler.mode == "registered-gone") {
+            pushClose(getStreamContext());
+        }
     }
 }
 
@@ -123,9 +184,19 @@ class FrameStateCloseHandler inherits WebSocketHandler {
         *string error_type;
         #! the outcomes of the connection's sends
         Queue outcomes();
+        #! "registered" or "registered-gone": the connection answers in registered(), before direct sends are enabled
+        *string mode;
     }
 
-    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    constructor(*hash<auto> opts, *string mode) : WebSocketHandler(NOTHING, opts) {
+        self.mode = mode;
+    }
+
+    #! Takes the items of the stream's queue until the end of the stream, which the I/O controller queues when the
+    #! client has gone
+    waitForStreamEnd() {
+        while (exists data_queue.get(HangGuard)) {
+        }
     }
 
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
@@ -153,6 +224,16 @@ class WebSocketFrameStateCloseTest inherits QUnit::Test {
             \h2OwnCloseTest());
         addTestCase("HTTP/3: a ping but no data frame or second close frame follows the connection's close frame",
             \h3OwnCloseTest());
+        addTestCase("HTTP/2: the connection's close frame decides after the client has gone", \h2OwnCloseGoneTest());
+        addTestCase("HTTP/3: the connection's close frame decides after the client has gone", \h3OwnCloseGoneTest());
+        addTestCase("HTTP/2: a message before direct sends is refused after the frame state's close frame",
+            \h2RegisteredTest());
+        addTestCase("HTTP/3: a message before direct sends is refused after the frame state's close frame",
+            \h3RegisteredTest());
+        addTestCase("HTTP/2: the frame state's close frame decides after the client has gone",
+            \h2RegisteredGoneTest());
+        addTestCase("HTTP/3: the frame state's close frame decides after the client has gone",
+            \h3RegisteredGoneTest());
         set_return_value(main());
     }
 
@@ -180,6 +261,77 @@ class WebSocketFrameStateCloseTest inherits QUnit::Test {
         ownCloseImpl("h3");
     }
 
+    h2OwnCloseGoneTest() {
+        ownCloseGoneImpl("h2");
+    }
+
+    h3OwnCloseGoneTest() {
+        ownCloseGoneImpl("h3");
+    }
+
+    h2RegisteredTest() {
+        registeredImpl("h2", False);
+    }
+
+    h3RegisteredTest() {
+        registeredImpl("h3", False);
+    }
+
+    h2RegisteredGoneTest() {
+        registeredImpl("h2", True);
+    }
+
+    h3RegisteredGoneTest() {
+        registeredImpl("h3", True);
+    }
+
+    #! Checks the outcome of a ping that follows a close frame
+    /** A ping is no data frame, so it is not refused for the close frame (RFC 6455 section 5.5.1); it is sent, or it
+        fails for the stream or the session, which the client can have ended after the close frame
+    */
+    private checkPing(string outcome, string msg) {
+        assertRegex("^(ping sent|HTTP2-|QUIC-)", outcome, msg);
+    }
+
+    #! The connection sends its own close frame, then, after the client has gone, a ping, a data frame and a second
+    #! close frame
+    private ownCloseGoneImpl(string protocol) {
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+        FrameStateCloseHandler handler({"logger": logger});
+        Queue queue();
+        WebSocketClient wsc = startServerAndConnect(server, handler, protocol, queue);
+        on_exit try { wsc.disconnect(); } catch () {}
+        wsc.send("own-close-gone");
+        # the outcomes are compared together, so that each one is seen: the close frame, the ping (sent, or failed
+        # for the ended stream or session), the data frame and the second close frame
+        list<string> outcomes = map handler.outcomes.get(HangGuard), xrange(4);
+        if (outcomes[1] =~ /^(ping sent|HTTP2-|QUIC-)/) {
+            outcomes[1] = "ping not refused";
+        }
+        assertEq(("close sent", "ping not refused", "WEBSOCKET-CLOSING-ERROR", "close not sent"), outcomes,
+            "the connection's close frame decides after the client has gone");
+    }
+
+    #! The client sends a frame with a reserved opcode at once; the connection answers in registered(), before direct
+    #! sends are enabled, once the frame state has sent its close frame (and, if \a gone, once the client has gone),
+    #! then sends its own close frame if \a gone
+    private registeredImpl(string protocol, bool gone) {
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+        FrameStateCloseHandler handler({"logger": logger}, gone ? "registered-gone" : "registered");
+        Queue queue();
+        WebSocketClient wsc = startServerAndConnect(server, handler, protocol, queue);
+        on_exit try { wsc.disconnect(); } catch () {}
+        wsc.send("x", ReservedOpcode, True);
+        # the outcomes are compared together, so that each one is seen: the answer and, after the client has gone,
+        # the connection's close frame
+        list<string> outcomes = map handler.outcomes.get(HangGuard), xrange(gone ? 2 : 1);
+        assertEq(gone ? ("WEBSOCKET-CLOSING-ERROR", "close not sent") : ("WEBSOCKET-CLOSING-ERROR",), outcomes,
+            "the answer is refused" + (gone ? " and the connection's close frame is not sent" : ""));
+        assertEq("error", handler.error_type, "the frame state queued its error");
+    }
+
     #! The connection sends its own close frame, then a ping, a data frame and a second close frame
     private ownCloseImpl(string protocol) {
         HttpServer server(<HttpServerOptionInfo>{"logger": logger});
@@ -189,7 +341,7 @@ class WebSocketFrameStateCloseTest inherits QUnit::Test {
         on_exit try { wsc.disconnect(); } catch () {}
         wsc.send("own-close");
         assertEq("close sent", handler.outcomes.get(HangGuard), "the connection's close frame is sent");
-        assertEq("ping sent", handler.outcomes.get(HangGuard), "a ping follows the close frame");
+        checkPing(handler.outcomes.get(HangGuard), "a ping follows the close frame");
         assertEq("WEBSOCKET-CLOSING-ERROR", handler.outcomes.get(HangGuard), "a data frame is refused");
         assertEq("close not sent", handler.outcomes.get(HangGuard), "a second close frame is not sent");
     }

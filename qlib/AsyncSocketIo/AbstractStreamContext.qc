@@ -37,6 +37,16 @@ public namespace AsyncSocketIo {
     - @ref Http3StreamContext — HTTP/3 stream I/O via ngtcp2/nghttp3
 */
 public class AbstractStreamContext {
+    private {
+        #! True once this context sent the close frame of a WebSocket connection (@ref sendWebSocketClose())
+        bool ws_close_sent = False;
+    }
+
+    public {
+        #! The opcode of a WebSocket close frame; frames with a lower opcode are data frames (RFC 6455 section 5.2)
+        const WsOpcodeClose = 8;
+    }
+
     #! Returns the protocol identifier
     /** @return \c "http2" or \c "http3"
     */
@@ -124,8 +134,40 @@ public class AbstractStreamContext {
         @since AsyncSocketIo 1.0
     */
     bool sendWebSocketClose(binary frame, bool end_stream = False) {
+        if (isWebSocketCloseSent()) {
+            return False;
+        }
         sendData(frame, end_stream);
+        ws_close_sent = True;
         return True;
+    }
+
+    #! Returns @ref True if the close frame of a WebSocket connection was sent on the stream
+    /** A WebSocket connection has one close frame, after which no data frame is sent (RFC 6455 section 5.5.1).  The
+        connection's record of its close frame decides before any state of the stream or of its session: it holds
+        also after the stream or the session has ended.  Transports whose streams have a WebSocket frame state that
+        can send a close frame itself (HTTP/2 and HTTP/3) override this to include the frame state's close frame
+        (see @ref Qore::WebSocketCloseRecord "WebSocketCloseRecord"); the default implementation returns @ref True
+        once @ref sendWebSocketClose() has sent a close frame.
+
+        @return @ref True if a close frame was sent on the stream
+
+        @since AsyncSocketIo 1.0
+    */
+    bool isWebSocketCloseSent() {
+        return ws_close_sent;
+    }
+
+    #! Raises @c WEBSOCKET-CLOSING-ERROR if \a data is a WebSocket data frame and a close frame was sent on the stream
+    /** Called by the transports before they hand data to the socket, so that the connection's record decides before
+        any state of the stream or of its session.
+    */
+    private checkWebSocketDataFrame(binary data) {
+        if (data && (data[0] & 0x0f) < WsOpcodeClose && isWebSocketCloseSent()) {
+            throw "WEBSOCKET-CLOSING-ERROR", sprintf("cannot send data on %s stream %d: its WebSocket connection sent "
+                "a close frame; no data frame may follow a close frame (RFC 6455 section 5.5.1)", getProtocol(),
+                getStreamId());
+        }
     }
 
     #! Flushes pending transport data if the protocol has an explicit flush path

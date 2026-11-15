@@ -31,6 +31,7 @@
     information.
 */
 
+#include "qore/intern/WebSocketCloseRecord.h"
 #include "qore/Qore.h"
 #include "qore/intern/QC_Http2PollOperationBase.h"
 #include "qore/intern/HttpStreamConsumeHook.h"
@@ -604,6 +605,10 @@ void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue
 
 void Http2PollOperationPriv::registerStreamFrameState(int32_t stream_id, Queue* queue,
         QoreObject* queue_obj) {
+    // the record of the stream's close frame exists before the stream can carry one, so that the connection's stream
+    // context gets it also if it is created after the frame state's close frame and the end of the stream (#6077)
+    qore_socket_object_get_h2_ws_close_record(sock, stream_id, true);
+
     // Send callback runs on the I/O thread (from frame_state->feedData()
     // inside drainStreamQueues).  nghttp2 queues the DATA frame; the surrounding
     // continueReadPoll() flushes pending data via flushHttp2PendingDataForAsyncPoll() after
