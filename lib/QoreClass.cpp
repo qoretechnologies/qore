@@ -51,6 +51,7 @@
 #include <memory>
 #include <set>
 #include <vector>
+#include <type_traits>
 #include <unordered_set>
 
 #include <cassert>
@@ -93,9 +94,18 @@ public:
 private:
     //! the number of levels kept in place
     static constexpr size_t InPlace = 16;
+    //! not initialized: T is trivially default-constructible, and each level is written when it is pushed
     T in_place[InPlace];
     std::vector<T> overflow;
     size_t count = 0;
+
+    static_assert(std::is_trivially_default_constructible<T>::value, "the levels kept in place are not initialized");
+};
+
+//! A level of a walk of a class hierarchy: a list of base classes and the index of the next one
+struct HierarchyWalkFrame {
+    const BCList* list;
+    size_t next;
 };
 }
 
@@ -3428,15 +3438,15 @@ void BCList::parseAddAncestors(QoreMethod* m) {
 
     // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
     // code declares it (issue #6047)
-    HierarchyWalkStack<std::pair<const BCList*, size_t>> stack;
+    HierarchyWalkStack<HierarchyWalkFrame> stack;
     stack.push({this, 0});
     while (!stack.empty()) {
-        std::pair<const BCList*, size_t>& f = stack.back();
-        if (f.second == f.first->size()) {
+        HierarchyWalkFrame& f = stack.back();
+        if (f.next == f.list->size()) {
             stack.pop();
             continue;
         }
-        const BCNode& n = *(*f.first)[f.second++];
+        const BCNode& n = *(*f.list)[f.next++];
         // if there was a parse error finding the base class, then skip
         QoreClass* qc = n.sclass;
         if (!qc) {
@@ -3460,15 +3470,15 @@ void BCList::parseAddAncestors(QoreMethod* m) {
 void BCList::parseAddStaticAncestors(QoreMethod* m) {
     const char* name = m->getName();
     // the hierarchy is walked iteratively, as for parseAddAncestors()
-    HierarchyWalkStack<std::pair<const BCList*, size_t>> stack;
+    HierarchyWalkStack<HierarchyWalkFrame> stack;
     stack.push({this, 0});
     while (!stack.empty()) {
-        std::pair<const BCList*, size_t>& f = stack.back();
-        if (f.second == f.first->size()) {
+        HierarchyWalkFrame& f = stack.back();
+        if (f.next == f.list->size()) {
             stack.pop();
             continue;
         }
-        const BCNode& n = *(*f.first)[f.second++];
+        const BCNode& n = *(*f.list)[f.next++];
         QoreClass* qc = n.sclass;
         // qc may be 0 if there were a parse error with an unknown class earlier
         if (!qc) {
@@ -3525,15 +3535,15 @@ QoreVarInfo* BCList::parseFindStaticVar(const char* vname, const QoreClass*& qc,
 const QoreClass* BCList::findInHierarchy(const qore_class_private& qc) {
     // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
     // code declares it (issue #6047)
-    HierarchyWalkStack<std::pair<const BCList*, size_t>> stack;
+    HierarchyWalkStack<HierarchyWalkFrame> stack;
     stack.push({this, 0});
     while (!stack.empty()) {
-        std::pair<const BCList*, size_t>& f = stack.back();
-        if (f.second == f.first->size()) {
+        HierarchyWalkFrame& f = stack.back();
+        if (f.next == f.list->size()) {
             stack.pop();
             continue;
         }
-        const BCNode& n = *(*f.first)[f.second++];
+        const BCNode& n = *(*f.list)[f.next++];
         // sclass can be 0 if the class could not be found during parse initialization
         if (!n.sclass) {
             continue;
@@ -5611,7 +5621,7 @@ struct AddBaseClassesFrame {
     //! if it is inherited virtually by the subclass
     bool is_virtual;
     //! the index of its next base class
-    size_t next = 0;
+    size_t next;
 };
 }
 
@@ -5622,7 +5632,7 @@ int BCList::addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bo
     // the base classes of the class itself from its class list (sml)
     assert(this == thisparent->priv->scl);
     HierarchyWalkStack<AddBaseClassesFrame> stack;
-    stack.push({thisparent, thisparent->priv, is_virtual});
+    stack.push({thisparent, thisparent->priv, is_virtual, 0});
     while (!stack.empty()) {
         AddBaseClassesFrame& f = stack.back();
         BCList* l = f.c->scl;
@@ -5637,7 +5647,7 @@ int BCList::addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bo
                 return -1;
             }
             bool virt = f.is_virtual || n.is_virtual;
-            stack.push({n.sclass->priv->cls, n.sclass->priv, virt});
+            stack.push({n.sclass->priv->cls, n.sclass->priv, virt, 0});
             continue;
         }
         // the base classes of the class have been added: the class list of the class, then the class itself, unless
