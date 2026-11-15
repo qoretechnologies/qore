@@ -844,7 +844,10 @@ DLLLOCAL int qore_call_reference_check_target(const ResolvedCallReferenceNode* r
 DLLLOCAL int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr, QoreParseOptions& po,
         ExceptionSink* xsink, bool* sandboxed = nullptr);
 
-//! Returns the call reference as a ResolvedCallReferenceNodeIntern if it is one, otherwise nullptr
+// declared in QoreSandboxProvenance.h: the callback that a sandbox-bound call reference wraps, otherwise nullptr
+DLLLOCAL const ResolvedCallReferenceNode* qore_get_sandbox_bound_callback(const AbstractQoreNode* callback);
+
+//! Returns the node as a ResolvedCallReferenceNodeIntern if it is one, otherwise nullptr
 /** The same result as dynamic_cast<const ResolvedCallReferenceNodeIntern*>(), which is too slow for the per-call
     paths: a dynamic_cast compares the type names with strcmp() as it searches the class hierarchy.
 
@@ -852,12 +855,14 @@ DLLLOCAL int qore_call_reference_code_parse_options(const ResolvedCallReferenceN
     flag or virtual function for its internal subclasses, and all of them have the type code NT_FUNCREF.  Instead,
     a closure is excluded by its type code (only QoreClosureBase's constructor gives NT_RUNTIME_CLOSURE), and the
     classes of the call reference values that the library creates, which are final, are identified by the address of
-    their type_info object, as qore_exact_node_cast() does.  Any other class (the base classes of the references in
-    the parse tree, a sandbox-bound callback, a module's call reference) is tested with the dynamic_cast, so the
-    result does not depend on the list being complete.
+    their type_info object, as qore_exact_node_cast() does.  A call reference that wraps a callback
+    (AbstractCallReferenceNode::getSandboxBoundCallback(): a sandbox-bound reference) is not one either, as no
+    internal class overrides that function.  Any other class (the base classes of the references in the parse tree, a
+    module's call reference, a node that is not a call reference) is tested with the dynamic_cast, so the result does
+    not depend on the list being complete.
 */
 DLLLOCAL inline const ResolvedCallReferenceNodeIntern* qore_get_resolved_call_reference_intern(
-        const ResolvedCallReferenceNode* r) {
+        const AbstractQoreNode* r) {
     static_assert(std::is_final_v<FunctionCallReferenceNode> && std::is_final_v<MethodCallReferenceNode>
         && std::is_final_v<StaticMethodCallReferenceNode> && std::is_final_v<RunTimeObjectMethodReferenceNode>
         && std::is_final_v<RunTimeResolvedMethodReferenceNode> && std::is_final_v<DeferredFunctionCallReferenceNode>
@@ -875,6 +880,10 @@ DLLLOCAL inline const ResolvedCallReferenceNodeIntern* qore_get_resolved_call_re
         const ResolvedCallReferenceNodeIntern* rv = static_cast<const ResolvedCallReferenceNodeIntern*>(r);
         assert(rv == dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r));
         return rv;
+    }
+    if (qore_get_sandbox_bound_callback(r)) {
+        assert(!dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r));
+        return nullptr;
     }
     return dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r);
 }

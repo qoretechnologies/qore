@@ -16065,15 +16065,20 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t*
         return toBits(QoreValue());
     }
 
-    // The call reference is a ResolvedCallReferenceNode (closure, function ref, method ref, etc.): a value with one of
-    // these types is one (as in qore_rt_call_closure_fast_impl()); an unresolved reference is a parse node that needs
-    // evaluation, never a value
+    // The call reference is a ResolvedCallReferenceNode (closure, function ref, method ref, etc.): a closure and the
+    // library's own references are identified without the string comparisons of a dynamic_cast, which tests any
+    // other value (a sandbox-bound or a module's reference; anything else raises the error below)
     AbstractQoreNode* node = ref_val.getInternalNode();
-    qore_type_t ntype = node->getType();
-    ResolvedCallReferenceNode* ref_node = (ntype == NT_FUNCREF || ntype == NT_RUNTIME_CLOSURE)
-        ? static_cast<ResolvedCallReferenceNode*>(node)
-        : nullptr;
-    assert(ref_node == dynamic_cast<ResolvedCallReferenceNode*>(node));
+    ResolvedCallReferenceNode* ref_node;
+    if (node->getType() == NT_RUNTIME_CLOSURE) {
+        // only QoreClosureBase's constructor gives NT_RUNTIME_CLOSURE
+        ref_node = static_cast<ResolvedCallReferenceNode*>(node);
+        assert(ref_node == dynamic_cast<ResolvedCallReferenceNode*>(node));
+    } else if (const ResolvedCallReferenceNodeIntern* ri = qore_get_resolved_call_reference_intern(node)) {
+        ref_node = const_cast<ResolvedCallReferenceNodeIntern*>(ri);
+    } else {
+        ref_node = dynamic_cast<ResolvedCallReferenceNode*>(node);
+    }
     if (!ref_node) {
         xsink->raiseException("JIT-ERROR", "call reference is not a ResolvedCallReferenceNode");
         return toBits(QoreValue());

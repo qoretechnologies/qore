@@ -3247,11 +3247,11 @@ QoreValue qore_call_ref_invoke_named(const ResolvedCallReferenceNode* r, const Q
         assert(dynamic_cast<const QoreClosureBase*>(r));
         return static_cast<const QoreClosureBase*>(r)->dispatchNamed(args, arg_names, xsink);
     }
-    if (const ResolvedCallReferenceNodeIntern* ri = qore_get_resolved_call_reference_intern(r)) {
-        return ri->dispatchNamed(args, arg_names, policy, xsink);
-    }
     if (const SandboxBoundCallReference* sb = qore_exact_node_cast<SandboxBoundCallReference>(r)) {
         return sb->dispatchNamed(args, arg_names, policy, xsink);
+    }
+    if (const ResolvedCallReferenceNodeIntern* ri = qore_get_resolved_call_reference_intern(r)) {
+        return ri->dispatchNamed(args, arg_names, policy, xsink);
     }
     // a call reference implemented outside of the library takes its arguments by position
     xsink->raiseException("NAMED-CALL-NOT-SUPPORTED", "a call through a %s cannot take named arguments; use "
