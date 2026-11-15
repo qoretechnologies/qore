@@ -315,3 +315,12 @@ Before committing changes in this area:
 - LLVM codegen extensions are opt-in and tied to the libqore LLVM major
   version. Runtime-helper fallback should remain available unless the module
   deliberately marks the LLVM extension as required.
+- LLVM codegen extensions are used only by the JIT. Their code can name symbols
+  of the plugin module, which the JIT resolves in the process but which AOT code
+  (a qcc executable or `.qmod`) cannot link: the module is loaded at run time
+  (qore#6130). AOT code calls the registered runtime helper of a unary, binary
+  or subscript value operation that has an extension through a pointer that
+  the call site resolves on its first call from the operation's module-local
+  reference (`qore_rt_plugin_operation_helper_aot()`) and caches, and
+  dispatches any other operation generically (which still names the operation
+  by the process-global id of the compiling process: qore#6136).
