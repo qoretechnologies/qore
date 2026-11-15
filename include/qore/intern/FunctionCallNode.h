@@ -659,6 +659,19 @@ Base* qore_make_function_call(LexicalSemanticPolicy policy, Args&&... args) {
 DLLLOCAL void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObject* o, const char* name,
         const QoreClass* qc, const QoreMethod* method, const AbstractQoreFunctionVariant* variant);
 
+//! Raises the exception of a call of the method @a m on the object @a self that the call's arguments deleted, as the
+//! AST interpreter raises it when it enters the method's code (issue #5824)
+/** The variant is resolved with the arguments @a args (a list of the caller's, whose values the resolution can take
+    over, as the call's would) as the call resolves it (NormalMethodFunction::evalMethodTmpArgs()), unless @a variant
+    is given; the error of the resolution is raised if it fails, otherwise the error of the method's code, which names
+    the class of the variant.  The compiled modes evaluate a call's arguments before the call: their check of the
+    call's target after the arguments raises it instead of the call.
+*/
+DLLLOCAL void qore_raise_deleted_method_call_after_args(QoreObject* self, const QoreMethod& m,
+        const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t* arg_names,
+        ExceptionSink* xsink);
+
 //! Returns the node as a FunctionCallNode if it is one, otherwise nullptr
 /** The same result as dynamic_cast<const FunctionCallNode*>(), from the node type: a FunctionCallNode has
     NT_FUNCTION_CALL and ProgramFunctionCallNode NT_PROGRAM_FUNC_CALL; its other subclasses keep the type of their
@@ -1173,6 +1186,20 @@ public:
         return rv;
     }
 };
+
+//! Returns the node as a MethodCallNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const MethodCallNode*>(), from the node type: only MethodCallNode's constructors
+    give NT_METHOD_CALL, and the lexical variants made by qore_make_function_call() keep the type of their base class.
+    A dynamic_cast searches the class hierarchy with string comparisons of the type names, which is too slow for the
+    per-call paths.
+*/
+DLLLOCAL inline const MethodCallNode* qore_get_method_call_node(const AbstractQoreNode* n) {
+    const MethodCallNode* rv = (n && n->getType() == NT_METHOD_CALL)
+        ? static_cast<const MethodCallNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const MethodCallNode*>(n));
+    return rv;
+}
 
 //! Returns the node as a SelfFunctionCallNode if it is one, otherwise nullptr
 /** The same result as dynamic_cast<const SelfFunctionCallNode*>(), from the node type: only SelfFunctionCallNode's
