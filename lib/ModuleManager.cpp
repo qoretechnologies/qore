@@ -248,6 +248,12 @@ static bool qore_binary_load_error_can_fallback_to_source(ExceptionSink& xsink) 
         return false;
     }
 
+    // a binary module that could not be loaded within the stack of this thread is not one to replace with its source,
+    // whose parse needs more stack (issue #6047)
+    if (qore_has_thread_stack_error(xsink)) {
+        return false;
+    }
+
     QoreValue desc = xsink.getExceptionDesc();
     if (desc.getType() == NT_STRING) {
         QoreStringValueHelper str(desc);
@@ -2931,6 +2937,15 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
     // a module Program that is not handed on is destroyed without the module manager mutex
     UnlockedModuleProgramRelease<ReferenceHolder<QoreProgram>> pholder_release(pholder);
+
+    // every module load comes here, including the loads of the dependencies of a binary or AOT module
+    // (loadAOTBinaryModuleDependencies(), the dependencies of a binary module's description) and of child modules,
+    // which load the modules that they depend on in turn, with no stack check of their own: the load stops while the
+    // parse stack reserve remains, as the parse of a source module does (issue #6047; see parseLoadModule())
+    if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
+        xsink.raiseException(QORE_PARSE_STACK_ERR, QORE_PARSE_STACK_DESC);
+        return nullptr;
+    }
 
     // temporary string buffer
     QoreString tmp_buf;

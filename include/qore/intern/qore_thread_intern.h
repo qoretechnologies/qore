@@ -3038,9 +3038,9 @@ DLLLOCAL extern constinit thread_local std::atomic<size_t> q_thread_stack_limit_
     thread is the one determined when its thread data was created (ThreadData::stack_size).  The primary thread is never
     smaller, whatever its size: its stack is the process's, which code that runs in it cannot choose.
 
-    A thread whose stack is at least the default size has enough stack for the code that %Qore runs: code that still
-    exceeds its stack (\c STACK-LIMIT-EXCEEDED) has a bug of its own, while in a smaller thread, the error depends on
-    the thread (see qore_find_thread_stack_error())
+    The total stack size is compared, not the stack that remains: a thread whose stack is at least the default size is
+    assumed to have enough stack for a module, so that a module that exceeds it (\c STACK-LIMIT-EXCEEDED) is assumed
+    to have a bug, while in a smaller thread, the error depends on the thread (see qore_find_thread_stack_error())
 */
 DLLLOCAL bool q_thread_stack_smaller_than_default();
 

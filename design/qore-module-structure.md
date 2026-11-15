@@ -865,9 +865,17 @@ Which errors depend on the thread (`qore_find_thread_stack_error()`):
   `q_thread_get_stack_size()`, the size that new threads are created with,
   `STACK_SIZE` unless `set_default_thread_stack_size()` changed it). The primary
   thread is never smaller. A module that exceeds a stack of at least the default
-  size has a bug of its own, such as a recursion without end: `%try-module`
+  size is assumed to have a bug, such as a recursion without end: `%try-module`
   falls back and an optional child fails with `MODULE-CHILD-FAILED`, as for any
   module that cannot be loaded.
+- The rule compares the thread's total stack size, not the stack that remains
+  when the module is loaded. A correct module can therefore still be handled as
+  one that cannot be loaded (a fallback, a failed child) where it runs short of
+  stack in a thread with the default size whose caller has used most of it,
+  after `set_default_thread_stack_size()` reduced the default, or in a primary
+  thread with a small stack (`ulimit -s`). This is the intended trade-off: the
+  rule never makes the loaded modules depend silently on a small custom thread
+  stack, and keeps develop's handling of a module's own runaway recursion.
 
 ### Teardown, cycles, and concurrency
 

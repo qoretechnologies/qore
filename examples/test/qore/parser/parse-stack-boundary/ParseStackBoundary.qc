@@ -105,6 +105,10 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         }
         int status;
         string output = backquote((map quote($1), args).join(" ") + " 2>&1", \status);
+        # 127: the shell cannot find the command
+        if (status == 127 || (status && output =~ /not found/)) {
+            testSkip("no C++ compiler to build the fixture: " + output);
+        }
         assertEq(0, status, output);
         return exe;
     }
@@ -406,7 +410,41 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
             "int sub run() { return StackAot0::count(); }\n");
         # only the AOT modules are on the module path
         runSource(exe, libdir, source, AotChainLength, mdir);
+
+        # a long chain of AOT modules that require each other: each AOT module loads the binary module of the next one
+        # when it is loaded, before it is initialized (QoreModuleManager::loadAOTBinaryModuleDependencies()), so the
+        # loads nest in the thread's stack with no parse between them
+        string req_src = dir.path + "/req-src";
+        string req_mdir = dir.path + "/req-modules";
+        mkdir(req_src);
+        mkdir(req_mdir);
+        for (int i = AotRequiresChainLength - 1; i >= 0; --i) {
+            string path = sprintf("%s/AotReq%d.qm", req_src, i);
+            writeFile(path, sprintf("%%modern\n%s"
+                "module AotReq%d { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n"
+                "public namespace AotReq%d {\n"
+                "public int sub count() { return %s + 1; }\n"
+                "}\n",
+                i + 1 < AotRequiresChainLength ? sprintf("%%requires AotReq%d\n", i + 1) : "", i, i,
+                i + 1 < AotRequiresChainLength ? sprintf("AotReq%d::count()", i + 1) : "0"));
+            string qmod = sprintf("%s/AotReq%d.qmod", req_mdir, i);
+            int status;
+            string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+                + " QORE_MODULE_DIR=" + quote(req_mdir) + " " + quote(qcc) + " -m " + quote(path) + " -o "
+                + quote(qmod) + " 2>&1", \status);
+            assertEq(0, status, sprintf("qcc %s: %s", basename(path), output));
+            assertTrue(is_file(qmod), sprintf("qcc %s: %s", basename(path), output));
+        }
+        source = dir.path + "/try-aot-requires.q";
+        writeFile(source, "%try-module AotReq0\n"
+            "public namespace AotReq0 { public int sub count() { return 0; } }\n"
+            "%endtry\n"
+            "int sub run() { return AotReq0::count(); }\n");
+        runSource(exe, libdir, source, AotRequiresChainLength, req_mdir);
     }
+
+    #! the number of AOT modules in the chain of AOT modules that require each other
+    const AotRequiresChainLength = 100;
 
     #! writes a user module with a constant initialized by a recursion
     /** @param dir the module directory

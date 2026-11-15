@@ -79,6 +79,10 @@ public class LibqoreDlopenTest inherits QUnit::Test {
         int status;
         string output = backquote(sprintf("%s -o %s %s -ldl 2>&1", ENV.CC ?? "cc", quote(exe),
             quote(get_script_dir() + "/libqore_dlopen.c")), \status);
+        # 127: the shell cannot find the command
+        if (status == 127 || (status && output =~ /not found/)) {
+            testSkip("no C compiler to build the program: " + output);
+        }
         assertEq(0, status, output);
         output = backquote(quote(exe) + " " + quote(lib) + " 2>&1", \status);
         assertEq(0, status, output);

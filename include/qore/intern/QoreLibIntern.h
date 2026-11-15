@@ -469,9 +469,9 @@ DLLLOCAL int parse_raise_stack_error(const QoreProgramLocation* loc);
 /** The parse error QORE_PARSE_STACK_ERR, raised where the parse of the code or of a module that it loads ran short of
     the stack of the thread, always is.  \c STACK-LIMIT-EXCEEDED, raised where code that runs while a module is loaded
     or initialized (the initialization of its constants, for example) ran short of it, is only in a thread whose stack
-    is smaller than the default thread stack size (q_thread_stack_smaller_than_default()): with at least that much
-    stack, a module that exceeds it has a bug of its own, such as a recursion without end, and is handled as a module
-    that cannot be loaded.  A module whose load fails with an error that depends on the thread is not a module that is
+    is smaller than the default thread stack size (q_thread_stack_smaller_than_default(), which compares the total
+    stack size, not the stack that remains): with at least that much stack, a module that exceeds it is assumed to
+    have a bug, such as a recursion without end, and is handled as a module that cannot be loaded.  A module whose load fails with an error that depends on the thread is not a module that is
     not available (see QoreModuleManager::parseLoadModule())
 */
 DLLLOCAL bool qore_has_thread_stack_error(const ExceptionSink& xsink);

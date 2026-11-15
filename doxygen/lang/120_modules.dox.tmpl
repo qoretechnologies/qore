@@ -1930,8 +1930,11 @@ module MyBaseExtension {
     pending, so that a load in a thread with enough stack attaches it.  This is a child whose parse raises
     \c PARSE-STACK-LIMIT-EXCEEDED, or whose initialization raises \c STACK-LIMIT-EXCEEDED in a thread whose stack is
     smaller than the default thread stack size (see get_default_thread_stack_size() and @ref parse_nesting_limit).  A
-    child whose initialization exceeds the stack of the primary thread or of a thread with at least the default stack
-    size has a bug of its own, and fails as any other broken child does.
+    child whose initialization exceeds the stack of the primary thread or of a thread whose total stack size is at
+    least the default size fails as any other broken child does, on the assumption that the child has a bug.  The
+    rule compares the total size of the thread's stack, not the stack that remains, so a correct child can also fail
+    this way where its parent is loaded deep in such a thread, with a reduced default size, or in a small primary
+    thread (see @ref parse_nesting_limit).
 
     Attachment status can be queried with get_module_hash(), which reports each declared child module under the
     \c "child-modules" key of the declaring module's entry:
