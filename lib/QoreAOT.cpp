@@ -757,6 +757,13 @@ void qore_aot_set_module_closure_dep_sink(std::vector<std::string>* sink) {
     aot_module_dep_sink_closure = sink != nullptr;
 }
 
+// thread-local sink for the paths where the modules of failed %try-module directives could be installed (qore#6145)
+static thread_local std::vector<std::string>* aot_optional_candidate_sink = nullptr;
+
+void qore_aot_set_optional_module_candidate_sink(std::vector<std::string>* sink) {
+    aot_optional_candidate_sink = sink;
+}
+
 //! Appends the real path of a module's file to \a files (none for a builtin module), and the files its %include
 //! directives opened if it was loaded from its source
 static void qore_aot_add_module_files(QoreAbstractModule* m, std::vector<std::string>& files) {
@@ -862,13 +869,18 @@ static bool qore_aot_record_module_deps(QoreProgram* pgm,
         }
         // The artifact is compiled without the modules of failed %try-module directives, so the build depends on
         // the files that could provide them: replacing a module that was too old, for example, must rebuild the
-        // artifact.  A module that is installed later is detected when the artifact is loaded; see
-        // QoreAOTModuleFileInfo.
+        // artifact.  A module that is installed later is detected when the artifact is loaded (see
+        // QoreAOTModuleFileInfo), and by the build through the paths where it could be installed (qore#6145).
         for (const std::string& spec : pp->unavailable_try_modules) {
             size_t end = spec.find_first_of(" \t<>=!");
             std::string name = spec.substr(0, end);
             if (!name.empty()) {
                 QMM.getModuleCandidateFiles(name.c_str(), pgm, *aot_module_dep_sink);
+                // and the paths where it could be installed, so that the build rebuilds the artifact then
+                // (qore#6145)
+                if (aot_optional_candidate_sink) {
+                    QMM.getMissingModuleCandidateFiles(name.c_str(), pgm, *aot_optional_candidate_sink);
+                }
             }
         }
     }
