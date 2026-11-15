@@ -288,6 +288,12 @@ module DeferredAppMod {
     license = \"MIT\";
 }
 
+class DeferredWsModHolder {
+    public {
+        static list<auto> hold;
+    }
+}
+
 class DeferredAppWorker {
     public {
         static Queue requests();
@@ -332,6 +338,28 @@ public namespace DeferredAppMod {
         AsyncIoController::setMaxCallbackWorkers(1);
         AsyncIoController::addTimerDelay(0s, \\f.lock());
     }
+    #! sets the frame callback of a WebSocket operation to a call reference to builtin code made by module code;
+    #! File::lock() on the pipe of the standard output fails when it runs, and is refused with the restriction of the
+    #! module code's caller
+    public nothing sub lock_ws(File f) {
+        Socket listener();
+        listener.bindINET(\"127.0.0.1\", \"0\", True);
+        listener.listen();
+        Socket client();
+        client.connect(\"127.0.0.1:\" + listener.getSocketInfo().port);
+        Socket server = listener.accept();
+        HttpWebSocketPollOperationBase op(server);
+        op.setFrameCallback(\\f.lock());
+        AsyncIoController::setMaxCallbackWorkers(1);
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            \"sock\": server, \"spop\": op, \"to\": -1s, \"owner\": \"deferred-test-modws\",
+        });
+        # a masked text frame \"hi\" from the client
+        client.send(binary(chr(0x81)) + binary(chr(0x82)) + binary(chr(0) + chr(0) + chr(0) + chr(0))
+            + binary(\"hi\"));
+        # the operation and its sockets stay until the callback has run (the script waits for the log)
+        DeferredWsModHolder::hold = (op, server, client, listener);
+    }
     #! has the worker cancel a timer
     public bool sub worker_cancel(int id) {
         DeferredAppWorker::requests.push(id);
@@ -369,6 +397,39 @@ if (ARGV[0] == \"sandboxed\") {
     a.setSandboxManager(new SandboxManager());
 }
 a.parse(\"%modern\\n%requires DeferredAppMod\\nnothing sub run(File f) { DeferredAppMod::lock_timer(f); }\\n\", \"a\");
+a.callFunction(\"run\", stdout);
+printf(\"%s\\n\", L::logged.get(30000));
+";
+
+        #! module code sets a WebSocket frame callback for a sandboxed caller or for one without a sandbox
+        const ModuleWsScript = "%modern
+%no-child-restrictions
+%requires DeferredAppMod
+class L inherits LoggerInterfaceBase {
+    public {
+        static Queue logged();
+    }
+    logArgs(int level, string message, *softlist<auto> format_args) {
+        string m = vsprintf(message, format_args);
+        # only the exceptions of the frame callback
+        if (m =~ /exception/ && m =~ /ILLEGAL-EXPRESSION|FILE-LOCK-ERROR/) {
+            L::logged.push(m);
+        }
+    }
+    bool isEnabledFor(int level) {
+        return True;
+    }
+}
+AsyncIoController::setLogger(new L());
+Program a(PO_NO_TERMINAL_IO);
+if (ARGV[0] == \"sandboxed\") {
+    # the module code opens a loopback connection: the sandbox allows the network, the restriction is the caller's
+    # PO_NO_TERMINAL_IO
+    SandboxManager sm();
+    sm.setNetworkDefaultPolicy(True);
+    a.setSandboxManager(sm);
+}
+a.parse(\"%modern\\n%requires DeferredAppMod\\nnothing sub run(File f) { DeferredAppMod::lock_ws(f); }\\n\", \"a\");
 a.callFunction(\"run\", stdout);
 printf(\"%s\\n\", L::logged.get(30000));
 ";
@@ -411,6 +472,7 @@ DeferredAppMod::stop();
         addTestCase("deferred callbacks with and without a restriction", \callbackTest());
         addTestCase("the timers of a module's worker thread", \appTest());
         addTestCase("a timer that module code adds for a sandboxed caller", \moduleTimerTest());
+        addTestCase("a WebSocket frame callback that module code sets for a sandboxed caller", \moduleWsTest());
         set_return_value(main());
     }
 
@@ -472,6 +534,22 @@ DeferredAppMod::stop();
         write(script, ModuleTimerScript);
         string cmd = sprintf("%s QORE_MODULE_DIR=%s %s -b %s %%s 2>&1", env(), mods.path, qore_bin, script);
         # the module code runs with the restriction of its sandboxed caller, and so does the timer it adds
+        assertRegex("ILLEGAL-EXPRESSION", backquote(sprintf(cmd, "sandboxed")), "sandboxed caller");
+        # without a sandbox, module code runs with its own options: the call runs and fails on the pipe
+        string out = backquote(sprintf(cmd, "open"));
+        assertRegex("FILE-LOCK-ERROR", out, "caller without a sandbox");
+        assertFalse(out =~ /ILLEGAL-EXPRESSION/, "caller without a sandbox: " + out);
+    }
+
+    moduleWsTest() {
+        TmpDir mods("qore-deferred-po-mods-");
+        write(mods.path + "/DeferredAppMod.qm", ModuleSource);
+        TmpDir tmp("qore-deferred-po-modws-");
+        string script = tmp.path + "/modws.q";
+        write(script, ModuleWsScript);
+        string cmd = sprintf("%s QORE_MODULE_DIR=%s %s -b %s %%s 2>&1", env(), mods.path, qore_bin, script);
+        # the module code runs with the restriction of its sandboxed caller, and so does the frame callback it sets,
+        # which the I/O worker runs in no Program of the caller's
         assertRegex("ILLEGAL-EXPRESSION", backquote(sprintf(cmd, "sandboxed")), "sandboxed caller");
         # without a sandbox, module code runs with its own options: the call runs and fails on the pipe
         string out = backquote(sprintf(cmd, "open"));

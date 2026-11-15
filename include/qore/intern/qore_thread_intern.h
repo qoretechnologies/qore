@@ -1191,6 +1191,18 @@ struct QoreThreadRuntimeParseOptions {
     //! returns the run-time parse options in effect on the current thread
     DLLLOCAL static QoreThreadRuntimeParseOptions capture();
 
+    //! returns true if the options in effect on the current thread restrict nothing
+    /** That is, no override is in effect, and no option that grants or denies access is set (no functional domain
+        restriction, \c QDOM_ALL, and no positive option).  Code that runs with no options installed (a thread started
+        without inheriting options, such as a callback worker of the AsyncIoController) is granted and denied the same
+        access: the code that it runs sets the options of its own statements, and builtin code that it calls directly
+        through a call reference sees no restriction either, so options captured from such code need not be kept;
+        options without effect on access (the style options of \c %modern, for example) are then not applied to builtin
+        code called directly, as before the options were captured.  Checked without copying the options or taking
+        references to Programs.
+    */
+    DLLLOCAL static bool currentRestrictsNothing();
+
     //! returns the run-time parse options in effect on the current thread for a thread that it starts
     /** The thread inherits the restrictions of the code that starts it, but not the application that a call of
         module code runs for (\c app_pgm_id), which is attribution, not a restriction: what the thread adds later

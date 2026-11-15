@@ -5657,9 +5657,13 @@ int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotoni
 
     // captured outside the lock: capturing resolves the sandbox through the thread's Program context
     AsyncIoSandboxContext sandbox_ctx = capture_async_io_sandbox_context();
-    // the options of the code that adds the timer, which its callback runs with (qore#6208)
-    AsyncIoRuntimeOptions timer_po = std::make_shared<const QoreThreadRuntimeParseOptions>(
-        QoreThreadRuntimeParseOptions::capture());
+    // the options of the code that adds the timer, which its callback runs with (qore#6208); none are kept for code
+    // that restricts nothing, as the callback worker runs with no options installed, which restrict nothing either,
+    // so that adding a timer allocates nothing and takes no references for it
+    AsyncIoRuntimeOptions timer_po;
+    if (!QoreThreadRuntimeParseOptions::currentRestrictsNothing()) {
+        timer_po = std::make_shared<const QoreThreadRuntimeParseOptions>(QoreThreadRuntimeParseOptions::capture());
+    }
     // the application that module code adds the timer for, if it runs for one with restrictions
     qore_program_id_t app_pgm_id = 0;
     bool for_app = runtime_get_module_caller_app(app_pgm_id);

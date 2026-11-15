@@ -6602,6 +6602,21 @@ QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::captureForThread() 
     return rv;
 }
 
+bool QoreThreadRuntimeParseOptions::currentRestrictsNothing() {
+    ThreadData* td = thread_data.get();
+    // the options that grant or deny access: the functional domains and the positive options
+    static const QoreParseOptions access_options = QoreParseOptions(QDOM_ALL) | QoreParseOptions::POSITIVE_OPTIONS;
+    return !(td->runtime_po & access_options)
+        && !td->runtime_po_override_mask
+        && !td->runtime_po_override_value
+        && !td->runtime_po_override_replace
+        && !td->runtime_po_caller_restrictions
+        && !td->runtime_po_module_pgm
+        && !td->runtime_po_app_pgm_id
+        && !td->runtime_po_sandboxed
+        && !td->runtime_po_override_pgm;
+}
+
 QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
     ThreadData* td = thread_data.get();
     QoreThreadRuntimeParseOptions rv;

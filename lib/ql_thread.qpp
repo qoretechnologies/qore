@@ -2379,9 +2379,12 @@ auto channel_select(list<auto> cases, timeout timeout = 0) [flags=NAMED_ARGS,CUR
 /** In a debug build, while \a hold is set, the pool does not give its queued tasks to workers, so that they stay
     queued until the pool stops and their cancel callbacks run (qore#6208)
 
+    Holding the dispatch of a pool controls its threads: code that may not control threads (\c THREAD_CONTROL) cannot
+    reference it
+
     @return True in a debug build, False otherwise (where it does nothing)
 */
-bool qore_test_thread_pool_hold_dispatch(ThreadPool[ThreadPool] pool, bool hold) {
+bool qore_test_thread_pool_hold_dispatch(ThreadPool[ThreadPool] pool, bool hold) [dom=THREAD_CONTROL] {
 #ifdef DEBUG
     pool->dbgHoldDispatch(hold);
     return true;
