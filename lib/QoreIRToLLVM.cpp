@@ -21503,11 +21503,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 } else {
                     llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
-                            llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {expr_const, args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    if (has_arg_cleanups) {
+                        // the call releases the arguments given to it in the callee's frame, whose parameters take
+                        // them over (issues #5882, #5958)
+                        auto helper = module.getOrInsertFunction("qore_rt_call_with_args_consume_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {expr_const, args_array, arg_cleanups,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    } else {
+                        auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {expr_const, args_array,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    }
                 }
 
                 // Calls with reference-capable arguments can mutate locals that
@@ -23098,11 +23108,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 } else {
                     llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
-                            llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, i32_type, ptr_type}, false));
-                    call_result = builder->CreateCall(helper, {expr_const, args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    if (has_arg_cleanups) {
+                        // the call releases the arguments given to it in the callee's frame, whose parameters take
+                        // them over (issues #5882, #5958)
+                        auto helper = module.getOrInsertFunction("qore_rt_call_with_args_consume_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        call_result = builder->CreateCall(helper, {expr_const, args_array, arg_cleanups,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    } else {
+                        auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, i32_type, ptr_type}, false));
+                        call_result = builder->CreateCall(helper, {expr_const, args_array,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    }
                 }
             } else {
                 if (aot_mode) {
