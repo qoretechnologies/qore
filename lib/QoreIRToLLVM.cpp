@@ -2167,6 +2167,58 @@ llvm::Value* QoreIRToLLVM::hasNodeInline(llvm::Value* qv) {
 }
 
 // documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::emitCallTargetFastTest(const QoreIRExprInstruction* check, uint64_t call_bits,
+        llvm::Value* target, llvm::Module& module, llvm::Function* llvm_func) {
+    if (aot_mode && check->check_after_args) {
+        // the check after the arguments tests only that the object has not been deleted
+        auto fast = module.getOrInsertFunction("qore_rt_call_target_is_valid_object",
+            llvm::FunctionType::get(i1_type, {i64_type, ptr_type, ptr_type, i1_type}, false));
+        llvm::Value* null_class = llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx));
+        return builder->CreateCall(fast, {target, null_class, null_class, builder->getTrue()});
+    }
+    if (aot_mode) {
+        // the classes of the method are those of the running program: the call's slot gives them
+        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(call_bits);
+        auto fast = module.getOrInsertFunction("qore_rt_call_target_needs_no_check_aot",
+            llvm::FunctionType::get(i1_type, {ptr_type, i32_type, i64_type}, false));
+        return builder->CreateCall(fast, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), target});
+    }
+    if (!check->check_class && !check->check_any_class) {
+        // no method resolved at parse time: the cache of the call site knows the classes for which the lookup by name
+        // finds a method; the check is made otherwise
+        if (check->check_cache && !check->check_after_args) {
+            // code that always runs in the same class context and Program tests the cache inline, without reading
+            // them from the thread
+            if (current_ir_func && current_ir_func->static_call_context) {
+                if (const QoreJITObjectLayout* layout = qore_jit_object_layout()) {
+                    return emitCallTargetCacheHitInline(check->check_cache, current_ir_func->static_class_ctx, target,
+                        *layout, llvm_func);
+                }
+            }
+            auto fast = module.getOrInsertFunction("qore_rt_call_target_cache_hit",
+                llvm::FunctionType::get(i1_type, {ptr_type, i64_type}, false));
+            llvm::Value* cache_ptr = builder->CreateIntToPtr(
+                llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(check->check_cache)), ptr_type);
+            return builder->CreateCall(fast, {cache_ptr, target});
+        }
+        return builder->getFalse();
+    }
+    // a qualified self call: an object of any class (QoreIRExprInstruction::check_any_class)
+    const QoreClass* qc = check->check_any_class ? nullptr : check->check_class;
+    const QoreClass* method_qc = check->check_any_class ? nullptr : check->check_method_class;
+    if (const QoreJITObjectLayout* layout = qore_jit_object_layout()) {
+        return emitValidObjectTest(target, *layout, llvm_func, qc, method_qc);
+    }
+    auto fast = module.getOrInsertFunction("qore_rt_call_target_is_valid_object",
+        llvm::FunctionType::get(i1_type, {i64_type, ptr_type, ptr_type, i1_type}, false));
+    auto class_ptr = [&](const QoreClass* cls) -> llvm::Value* {
+        return builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(cls)), ptr_type);
+    };
+    return builder->CreateCall(fast, {target, class_ptr(qc), class_ptr(method_qc),
+        builder->getInt1(check->check_any_class)});
+}
+
+// documented in QoreIRToLLVM.h
 llvm::Value* QoreIRToLLVM::needsRefInline(llvm::Value* qv) {
     // a pointer (0xFFFA), an inline enum value (0xFFFD), which holds its declaration, or an opaque reference (the
     // 0xFFD tag family), as QoreValue::needsRef() and ReleaseOwnedTemp
@@ -2180,7 +2232,7 @@ llvm::Value* QoreIRToLLVM::needsRefInline(llvm::Value* qv) {
 
 // documented in QoreIRToLLVM.h
 llvm::Value* QoreIRToLLVM::emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout,
-        llvm::Function* llvm_func) {
+        llvm::Function* llvm_func, const QoreClass* qc, const QoreClass* method_qc) {
     // JIT only: the layout is the running libqore's (issue #5784)
     assert(!aot_mode);
     llvm::LLVMContext& ctx = builder->getContext();
@@ -2221,12 +2273,116 @@ llvm::Value* QoreIRToLLVM::emitValidObjectTest(llvm::Value* qv, const QoreJITObj
     status->setAtomic(llvm::AtomicOrdering::Monotonic);
     llvm::Value* valid = builder->CreateICmpNE(status,
         llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(layout.deleted_status)), "obj.valid");
+    if (qc) {
+        // an object of the class of the method resolved at parse time or of the method's class (issue #5824)
+        llvm::Value* cls = builder->CreateLoad(ptr_type,
+            builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), priv, layout.class_offset), "obj.class");
+        llvm::Value* cls_int = builder->CreatePtrToInt(cls, i64_type);
+        llvm::Value* of_class = builder->CreateOr(
+            builder->CreateICmpEQ(cls_int, llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(qc))),
+            builder->CreateICmpEQ(cls_int, llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(method_qc))),
+            "obj.of.class");
+        valid = builder->CreateAnd(valid, of_class);
+    }
     builder->CreateBr(done_block);
     builder->SetInsertPoint(done_block);
     llvm::PHINode* result = builder->CreatePHI(i1_type, 3, "obj.valid.object");
     result->addIncoming(builder->getFalse(), node_block);
     result->addIncoming(builder->getFalse(), other_block);
     result->addIncoming(valid, status_block);
+    return result;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::emitCallTargetCacheHitInline(const QoreCallTargetCheckCache* cache,
+        const qore_class_private* class_ctx, llvm::Value* qv, const QoreJITObjectLayout& layout,
+        llvm::Function* llvm_func) {
+    // JIT only: the layout and the addresses are the running libqore's
+    assert(!aot_mode);
+    llvm::LLVMContext& ctx = builder->getContext();
+    auto const_ptr = [&](const void* p) -> llvm::Value* {
+        return builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(p)), ptr_type);
+    };
+    // the value must be an object that has not been deleted, as in emitValidObjectTest()
+    llvm::Value* tag = builder->CreateLShr(qv, llvm::ConstantInt::get(i64_type, 48), "cache.tag");
+    llvm::Value* addr = builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, PAYLOAD_MASK), "cache.addr");
+    llvm::Value* is_node = builder->CreateAnd(
+        builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, TAG_POINTER >> 48)),
+        builder->CreateICmpNE(addr, llvm::ConstantInt::get(i64_type, 0)), "cache.is.node");
+    llvm::Value* is_opaque_object = builder->CreateAnd(
+        builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, TAG16_OPAQUE_OBJECT)),
+        builder->CreateICmpNE(addr, llvm::ConstantInt::get(i64_type, 0)), "cache.is.opaque");
+    llvm::BasicBlock* node_block = llvm::BasicBlock::Create(ctx, "cache.node", llvm_func);
+    llvm::BasicBlock* other_block = llvm::BasicBlock::Create(ctx, "cache.other", llvm_func);
+    llvm::BasicBlock* status_block = llvm::BasicBlock::Create(ctx, "cache.status", llvm_func);
+    llvm::BasicBlock* entry_block = llvm::BasicBlock::Create(ctx, "cache.entry", llvm_func);
+    llvm::BasicBlock* done_block = llvm::BasicBlock::Create(ctx, "cache.done", llvm_func);
+    builder->CreateCondBr(is_node, node_block, other_block);
+    builder->SetInsertPoint(node_block);
+    llvm::Value* node_ptr = builder->CreateIntToPtr(addr, ptr_type);
+    llvm::LoadInst* type_word = builder->CreateAlignedLoad(i32_type,
+        builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), node_ptr, layout.type_byte_offset),
+        llvm::MaybeAlign(1), "cache.type.word");
+    llvm::Value* type = builder->CreateAnd(builder->CreateLShr(type_word, layout.type_shift),
+        llvm::ConstantInt::get(i32_type, (1u << 11) - 1));
+    builder->CreateCondBr(builder->CreateICmpEQ(type, llvm::ConstantInt::get(i32_type, NT_OBJECT)), status_block,
+        done_block);
+    builder->SetInsertPoint(other_block);
+    builder->CreateCondBr(is_opaque_object, status_block, done_block);
+    builder->SetInsertPoint(status_block);
+    llvm::Value* obj_ptr = builder->CreateIntToPtr(addr, ptr_type);
+    llvm::Value* priv = builder->CreateLoad(ptr_type,
+        builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), obj_ptr, layout.priv_offset), "cache.priv");
+    llvm::LoadInst* status = builder->CreateAlignedLoad(i32_type,
+        builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), priv, layout.status_offset), llvm::MaybeAlign(4),
+        "cache.status");
+    status->setAtomic(llvm::AtomicOrdering::Monotonic);
+    llvm::Value* valid = builder->CreateICmpNE(status,
+        llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(layout.deleted_status)), "cache.valid");
+    llvm::Value* obj_class = builder->CreateLoad(ptr_type,
+        builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), priv, layout.class_offset), "cache.obj.class");
+    builder->CreateCondBr(valid, entry_block, done_block);
+    // the entry, read as QoreCallTargetCheckCache::hit() reads it: a sequence lock
+    builder->SetInsertPoint(entry_block);
+    llvm::Value* cache_ptr = const_ptr(cache);
+    auto field = [&](uint32_t offset) {
+        return builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), cache_ptr, offset);
+    };
+    auto atomic_load = [&](llvm::Type* type, llvm::Value* ptr, unsigned align, llvm::AtomicOrdering order,
+            const char* name) -> llvm::Value* {
+        llvm::LoadInst* load = builder->CreateAlignedLoad(type, ptr, llvm::MaybeAlign(align), name);
+        load->setAtomic(order);
+        return load;
+    };
+    // the acquire loads of QoreCallTargetCheckCache::hit() are relaxed loads followed by acquire fences: an acquire
+    // load is LDAPR on AArch64 CPUs with RCpc, which valgrind cannot run
+    llvm::Value* seq = atomic_load(i32_type, field(QoreCallTargetCheckCache::getSeqOffset()), 4,
+        llvm::AtomicOrdering::Monotonic, "cache.seq");
+    builder->CreateFence(llvm::AtomicOrdering::Acquire);
+    llvm::Value* even = builder->CreateICmpEQ(builder->CreateAnd(seq, llvm::ConstantInt::get(i32_type, 1)),
+        llvm::ConstantInt::get(i32_type, 0));
+    llvm::Value* entry_class = atomic_load(ptr_type, field(QoreCallTargetCheckCache::getClassOffset()), 8,
+        llvm::AtomicOrdering::Monotonic, "cache.class");
+    llvm::Value* entry_ctx = atomic_load(ptr_type, field(QoreCallTargetCheckCache::getContextOffset()), 8,
+        llvm::AtomicOrdering::Monotonic, "cache.ctx");
+    llvm::Value* entry_epoch = atomic_load(i64_type, field(QoreCallTargetCheckCache::getEpochOffset()), 8,
+        llvm::AtomicOrdering::Monotonic, "cache.epoch");
+    llvm::Value* epoch = atomic_load(i64_type, const_ptr(qore_get_method_dispatch_epoch_addr()), 8,
+        llvm::AtomicOrdering::Monotonic, "dispatch.epoch");
+    builder->CreateFence(llvm::AtomicOrdering::Acquire);
+    llvm::Value* seq2 = atomic_load(i32_type, field(QoreCallTargetCheckCache::getSeqOffset()), 4,
+        llvm::AtomicOrdering::Monotonic, "cache.seq2");
+    llvm::Value* hit = builder->CreateAnd(even, builder->CreateICmpEQ(entry_class, obj_class));
+    hit = builder->CreateAnd(hit, builder->CreateICmpEQ(entry_ctx, const_ptr(class_ctx)));
+    hit = builder->CreateAnd(hit, builder->CreateICmpEQ(entry_epoch, epoch));
+    hit = builder->CreateAnd(hit, builder->CreateICmpEQ(seq2, seq), "cache.hit");
+    builder->CreateBr(done_block);
+    builder->SetInsertPoint(done_block);
+    llvm::PHINode* result = builder->CreatePHI(i1_type, 4, "cache.hit.result");
+    result->addIncoming(builder->getFalse(), node_block);
+    result->addIncoming(builder->getFalse(), other_block);
+    result->addIncoming(builder->getFalse(), status_block);
+    result->addIncoming(hit, entry_block);
     return result;
 }
 
@@ -15895,6 +16051,13 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // the frame of the code that a call instruction calls is located at the call: the thread's call site is
             // set for the call and cleared after it, as by an AST call (QoreRcCallSiteHelper); no other code runs between
             // a call site and the frame that takes it, so the call site is otherwise always clear
+            // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check; issue
+            // #5824), made before the call as the instruction that it was
+            if (inst->fused_call_check
+                    && !lowerInstruction(inst->fused_call_check.get(), llvm_func, module, error)) {
+                appendQoreIRInstructionDiagnostic(error, inst->fused_call_check.get());
+                return false;
+            }
             const bool call_site = qore_llvm_inst_is_call(inst);
             if (call_site) {
                 emitCallSiteSet(inst, module);
@@ -35872,16 +36035,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::FunctionType::get(i64_type, {}, false));
                     current_self_bits = entry_builder.CreateCall(self_fn, {}, "current.self");
                 }
-                // a method call on an object that has not been deleted needs no other check
-                llvm::Value* self_valid;
-                const QoreJITObjectLayout* layout = aot_mode ? nullptr : qore_jit_object_layout();
-                if (layout) {
-                    self_valid = emitValidObjectTest(current_self_bits, *layout, llvm_func);
-                } else {
-                    auto fast = module.getOrInsertFunction("qore_rt_call_target_is_valid_object",
-                        llvm::FunctionType::get(i1_type, {i64_type}, false));
-                    self_valid = builder->CreateCall(fast, {current_self_bits});
-                }
+                // a method call on an object that has not been deleted needs no other check, if the object is of
+                // the class of the method resolved at parse time (issue #5824)
+                llvm::Value* self_valid = emitCallTargetFastTest(static_cast<const QoreIRExprInstruction*>(inst),
+                    self_call_bits, current_self_bits, module, llvm_func);
                 llvm::BasicBlock* check_block = llvm::BasicBlock::Create(ctx, "check.self.call", llvm_func);
                 llvm::BasicBlock* cont_block = llvm::BasicBlock::Create(ctx, "check.self.call.cont", llvm_func);
                 // the block of the test dominates the continuation, which has two predecessors: the values
@@ -35889,14 +36046,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 immediate_dominator[cont_block] = builder->GetInsertBlock();
                 builder->CreateCondBr(self_valid, cont_block, check_block);
                 builder->SetInsertPoint(check_block);
+                // the check after the arguments raises the error of a call whose arguments deleted the object
+                const bool after_args = static_cast<const QoreIRExprInstruction*>(inst)->check_after_args;
                 if (aot_mode) {
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(self_call_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_check_call_target_aot",
+                    auto helper = module.getOrInsertFunction(after_args ? "qore_rt_check_call_target_after_args_aot"
+                            : "qore_rt_check_call_target_aot",
                         llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
                     builder->CreateCall(helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
                         current_self_bits, xsink_arg});
                 } else {
-                    auto helper = module.getOrInsertFunction("qore_rt_check_call_target",
+                    auto helper = module.getOrInsertFunction(after_args ? "qore_rt_check_call_target_after_args"
+                            : "qore_rt_check_call_target",
                         llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
                     builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, self_call_bits), current_self_bits,
                         xsink_arg});
@@ -35931,30 +36092,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             QoreValue call_val = static_cast<const QoreIRExprInstruction*>(inst)->expr;
             uint64_t call_bits;
             std::memcpy(&call_bits, &call_val, sizeof(call_bits));
-            // the common case, a method call on an object that has not been deleted, is decided first; the check
-            // and its exception routing are made only otherwise
-            llvm::Value* no_check;
-            int32_t slot = -1;
-            if (aot_mode) {
-                slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(call_bits);
-                auto fast = module.getOrInsertFunction("qore_rt_call_target_needs_no_check_aot",
-                    llvm::FunctionType::get(i1_type, {ptr_type, i32_type, i64_type}, false));
-                no_check = builder->CreateCall(fast, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), boxed});
-            } else if (call_val.isPointer() && call_val.getType() != NT_FUNCREFCALL) {
-                // not a call through a call reference: only the object is tested, inline with the layout of the
-                // running libqore if it is known
-                if (const QoreJITObjectLayout* layout = qore_jit_object_layout()) {
-                    no_check = emitValidObjectTest(boxed, *layout, llvm_func);
-                } else {
-                    auto fast = module.getOrInsertFunction("qore_rt_call_target_is_valid_object",
-                        llvm::FunctionType::get(i1_type, {i64_type}, false));
-                    no_check = builder->CreateCall(fast, {boxed});
-                }
-            } else {
-                auto fast = module.getOrInsertFunction("qore_rt_call_target_needs_no_check",
-                    llvm::FunctionType::get(i1_type, {i64_type, i64_type}, false));
-                no_check = builder->CreateCall(fast, {llvm::ConstantInt::get(i64_type, call_bits), boxed});
-            }
+            // the common case, a method call resolved at parse time on an object of its class that has not been
+            // deleted, is decided first; the check and its exception routing are made only otherwise
+            int32_t slot = aot_mode ? const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(call_bits) : -1;
+            llvm::Value* no_check = emitCallTargetFastTest(static_cast<const QoreIRExprInstruction*>(inst),
+                call_bits, boxed, module, llvm_func);
             // a boxed big int or colliding double is a new node, released on both paths
             auto release_boxed = [&]() {
                 if (boxed_temp) {
@@ -35973,13 +36115,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             release_boxed();
             builder->CreateBr(cont_block);
             builder->SetInsertPoint(check_block);
+            // the check after the arguments raises the error of a call whose arguments deleted the object
+            const bool after_args = static_cast<const QoreIRExprInstruction*>(inst)->check_after_args;
             if (aot_mode) {
-                auto helper = module.getOrInsertFunction("qore_rt_check_call_target_aot",
+                auto helper = module.getOrInsertFunction(after_args ? "qore_rt_check_call_target_after_args_aot"
+                        : "qore_rt_check_call_target_aot",
                     llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
                 builder->CreateCall(helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), boxed,
                     xsink_arg});
             } else {
-                auto helper = module.getOrInsertFunction("qore_rt_check_call_target",
+                auto helper = module.getOrInsertFunction(after_args ? "qore_rt_check_call_target_after_args"
+                        : "qore_rt_check_call_target",
                     llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
                 builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, call_bits), boxed, xsink_arg});
             }

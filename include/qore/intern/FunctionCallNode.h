@@ -36,6 +36,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/FunctionList.h"
+#include "qore/intern/QoreCallTargetCheckCache.h"
 
 //! returns the interned list of the names of the arguments of a named call resolved at run time by parameter name
 /** each distinct list is kept once for the life of the library (it is part of the code that uses it, as the names
@@ -755,6 +756,9 @@ public:
     DLLLOCAL const QoreMethod* getMethod() const {
         return method;
     }
+
+    //! the cache of the check of the call's target before its arguments (issue #5824)
+    QoreCallTargetCheckCache check_cache;
 };
 
 class MethodCallNode : public AbstractMethodCallNode {
@@ -997,6 +1001,12 @@ public:
         that a qualified call names, or of the class of \a obj (or the class of the call if there is no object)
     */
     DLLLOCAL bool backgroundCallIsStatic(const QoreObject* obj) const;
+
+    //! Marks a call to an abstract method, resolved at run time, as parseInitCall() marks it; for a call node rebuilt
+    //! from an AOT image
+    DLLLOCAL void setAbstractCall() {
+        is_abstract = true;
+    }
 
 protected:
     NamedScope ns;

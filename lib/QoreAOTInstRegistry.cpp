@@ -866,10 +866,7 @@ static bool instRegistryWriteCallTargetExpr(AOTInstWriteCtx& ctx, const QoreValu
         const QoreMethod* method = call->getMethod();
         const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
         ctx.writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
-        const AbstractQoreFunctionVariant* variant = call->getVariant();
-        // the explicit type arguments of the call (qore#5865)
-        std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant, nullptr,
-            call->getExplicitTypeParamInstantiation());
+        std::string method_ref = qore_aot_encode_self_method_ref(call, false);
         ctx.writer.writeStringRef(method_ref.c_str());
         ctx.writer.writeU8(0);
         return true;

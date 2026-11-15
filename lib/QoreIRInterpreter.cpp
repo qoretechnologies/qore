@@ -2861,6 +2861,9 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 for (size_t i = 1; i < inst->operands.size(); ++i) {
                     markIRValueUse(non_dot_eval_uses, inst->operands[i]);
                 }
+            } else if (inst->opcode == QoreIROpcode::CheckCallTarget) {
+                // the check of a call's target before or after its arguments only reads the base of the call and
+                // keeps no reference to it: the base stays borrowed (issue #5824)
             } else {
                 qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                     markIRValueUse(non_dot_eval_uses, operand);
@@ -4495,7 +4498,7 @@ static bool getSimpleClosureStringLeaf(const QoreIRFunction* callee_ir,
             }
             case QoreIROpcode::DotEvalMethodDirect:
                 if (operation || inst_ptr->exception_target || !inst_ptr->result.isValid()
-                        || inst_ptr->operands.size() != 1) {
+                        || inst_ptr->operands.size() != 1 || inst_ptr->fused_call_check) {
                     return false;
                 }
                 operation = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst_ptr.get());
@@ -4791,7 +4794,7 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
                 }
                 case QoreIROpcode::DotEvalMethodDirect:
                     if (operation || inst_ptr->exception_target || !inst_ptr->result.isValid()
-                            || inst_ptr->operands.size() != 1) {
+                            || inst_ptr->operands.size() != 1 || inst_ptr->fused_call_check) {
                         return reject();
                     }
                     operation = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst_ptr.get());
@@ -7867,6 +7870,39 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
 }
 
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
+//! the value of the current object of a frame of QoreIRInterpreter::execute() that has not been read yet (no object
+//! has this address)
+static QoreObject* const QORE_IR_FRAME_SELF_UNKNOWN = reinterpret_cast<QoreObject*>(uintptr_t(1));
+
+//! true if the check @a check of a method call's target before its arguments needs no other test than that the object
+//! @a target has not been deleted: a lookup by name for the object's class from the current class context found a
+//! method before (QoreCallTargetCheckCache; issue #5824)
+static QORE_INTERN_NOINLINE bool qore_ir_call_target_cache_hit(const QoreIRFunction& func,
+        const QoreIRExprInstruction* check, const QoreValue& target) {
+    if (check->check_after_args) {
+        return false;
+    }
+    // the class context and the Program of code that always runs in the same ones are those of the function; others
+    // are read from the thread
+    return func.static_call_context
+        ? qore_call_target_cache_hit_static(check->check_cache, target, func.static_class_ctx, func.pgm)
+        : qore_call_target_cache_hit(check->check_cache, target);
+}
+
+//! the check of a call's target after the inline tests of the IR interpreter: the cache of a method looked up by name,
+//! then the check itself; returns false if it raised an exception (issue #5824)
+/** Out of line and without state of the interpreter's frame, which is at its stack budget
+    (tools/stack-usage-budgets.txt)
+*/
+static QORE_INTERN_NOINLINE bool qore_ir_call_target_check_slow(const QoreIRFunction& func,
+        const QoreIRExprInstruction* ei, const QoreValue& target, ExceptionSink* xsink) {
+    if (qore_ir_call_target_cache_hit(func, ei, target)) {
+        return true;
+    }
+    return !(ei->check_after_args ? qore_check_call_target_after_args(ei->expr, target, xsink)
+        : qore_check_call_target(ei->expr, target, xsink));
+}
+
 // Drop duplicate runtime-local owners before each handler, including values written back by its predecessor.
 // Handler execution is entered from the innermost active interpreter frame. Resolve its metadata only here,
 // using the existing pool as the debugger's cold helpers do, so ordinary dispatch needs no extra arguments,
@@ -8897,6 +8933,150 @@ static QORE_INTERN_NOINLINE void qore_ir_release_failed_method_call(QoreListNode
     result.discard(xsink);
 }
 
+//! runs the operation of QoreIROpcode::LValuePathTernary (splice or extract) on the lvalue at @a path_copy;
+//! returns -1 for an error, 0 for OK
+/** Out of line: its LValueHelper would otherwise be in the frame of QoreIRInterpreter::execute(), which is at its
+    stack budget (tools/stack-usage-budgets.txt)
+*/
+static QORE_INTERN_NOINLINE int qore_ir_run_lvalue_path_ternary(const QoreIRLValuePathInstruction* path_inst,
+        IRLVPath& path_copy, const QoreValue& offset_val, const QoreValue& length_val,
+        const QoreValue& replacement_val, QoreValue& res, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> removed_list(xsink);
+    LValueHelper lvh(xsink);
+    // as with AST execution, a hash member or list element that does not exist is created, and
+    // then raises EXTRACT-ERROR below like any other lvalue that is not a list, string or binary
+    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
+        // a vivifying navigation fails only with an exception
+        assert(*xsink);
+        return -1;
+    }
+    qore_type_t vt = lvh.getType();
+    if (vt == NT_NOTHING) {
+        // Mirror AST behavior: if the lvalue has a default list/string type,
+        // auto-initialize it before extract/splice.
+        const QoreTypeInfo* ti = lvh.getTypeInfo();
+        if (ti == softListTypeInfo || ti == listTypeInfo || ti == stringTypeInfo
+                || ti == softStringTypeInfo) {
+            if (!lvh.assign(QoreTypeInfo::getDefaultQoreValue(ti))) {
+                vt = lvh.getType();
+            }
+        }
+    }
+    if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
+        xsink->raiseException("EXTRACT-ERROR",
+            "first (lvalue) argument to the extract operator is not a list, "
+            "string, or binary object");
+    } else {
+        lvh.ensureUnique();
+        size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
+        if (path_inst->ternary_op == LVTernaryOp::Splice) {
+            if (vt == NT_LIST) {
+                QoreListNode* vl = lvh.getValue().get<QoreListNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    removed_list = vl->splice(offset);
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        removed_list = vl->splice(offset, length);
+                    } else {
+                        removed_list = qore_list_private::replace(*vl, offset, length, replacement_val, false, xsink);
+                    }
+                }
+            } else if (vt == NT_STRING) {
+                QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    vs->splice(offset, xsink);
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        vs->splice(offset, length, xsink);
+                    } else {
+                        vs->splice(offset, length, replacement_val, xsink);
+                    }
+                }
+            } else { // NT_BINARY
+                BinaryNode* b = lvh.getValue().get<BinaryNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    b->splice(offset, b->size());
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        b->splice(offset, length);
+                    } else {
+                        if (replacement_val.getType() == NT_BINARY) {
+                            const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
+                            b->splice(offset, length, b1->getPtr(), b1->size());
+                        } else {
+                            QoreStringNodeValueHelper sv(replacement_val);
+                            if (!sv->strlen()) {
+                                b->splice(offset, length);
+                            } else {
+                                b->splice(offset, length, sv->getBuffer(), sv->size());
+                            }
+                        }
+                    }
+                }
+            }
+            if (path_inst->ref_rv && !*xsink) {
+                res = lvh.getReferencedValue();
+            }
+        } else {
+            if (vt == NT_LIST) {
+                QoreListNode* vl = lvh.getValue().get<QoreListNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    res = vl->extract(offset);
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        res = vl->extract(offset, length);
+                    } else {
+                        res = qore_list_private::replace(*vl, offset, length, replacement_val, true, xsink);
+                    }
+                }
+            } else if (vt == NT_STRING) {
+                // note: safe; lvh.ensureUnique() above materializes any inline
+                // short string
+                QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    res = vs->extract(offset, xsink);
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        res = vs->extract(offset, length, xsink);
+                    } else {
+                        res = vs->extract(offset, length, replacement_val, xsink);
+                    }
+                }
+            } else { // NT_BINARY
+                BinaryNode* b = lvh.getValue().get<BinaryNode>();
+                BinaryNode* bout = new BinaryNode;
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    b->splice(offset, b->size(), bout);
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        b->splice(offset, length, bout);
+                    } else {
+                        if (replacement_val.getType() == NT_BINARY) {
+                            const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
+                            b->splice(offset, length, b1->getPtr(), b1->size(), bout);
+                        } else {
+                            QoreStringNodeValueHelper sv(replacement_val);
+                            if (!sv->strlen()) {
+                                b->splice(offset, length, bout);
+                            } else {
+                                b->splice(offset, length, sv->getBuffer(), sv->size(), bout);
+                            }
+                        }
+                    }
+                }
+                res = bout;
+            }
+        }
+    }
+    return *xsink ? -1 : 0;
+}
+
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
@@ -9900,8 +10080,37 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Only runtimeCheck() can change (debugger attaches mid-execution).
     bool can_debug = tlpd && statements && pgm;
     // the current object of the frame, read by the first check of a call through self (issue #5823)
-    QoreObject* frame_self = nullptr;
-    bool frame_self_known = false;
+    QoreObject* frame_self = QORE_IR_FRAME_SELF_UNKNOWN;
+    // makes the check of a call's target (QoreIROpcode::CheckCallTarget, or the check that a call makes itself, see
+    // QoreIRInstruction::fused_call_check); returns false if it raised an exception (issues #5784, #5823, #5824)
+    // the common case, an object of the method's class that has not been deleted, is decided inline
+    auto call_target_check_ok = [&](const QoreIRInstruction* check_inst) QORE_IR_LAMBDA_INLINE -> bool {
+        const QoreIRExprInstruction* ei = static_cast<const QoreIRExprInstruction*>(check_inst);
+        if (check_inst->operands.empty()) {
+            // no operand: the call is made through self, on the current object (issue #5823), which does not change
+            // while the frame runs: it is read once (frame_self is QORE_IR_FRAME_SELF_UNKNOWN until then; one pointer,
+            // as the frame of execute() is at its stack budget, tools/stack-usage-budgets.txt)
+            if (frame_self == QORE_IR_FRAME_SELF_UNKNOWN) {
+                frame_self = runtime_get_stack_object();
+            }
+            // a method call on an object that has not been deleted needs no other check, if the object is of the
+            // class of the method resolved at parse time (issue #5824)
+            if (frame_self && qore_object_private::isValidOfClass(frame_self, ei->check_class,
+                    ei->check_method_class, ei->check_any_class)) {
+                return true;
+            }
+            return qore_ir_call_target_check_slow(func, ei, frame_self
+                ? QoreValue(static_cast<AbstractQoreNode*>(frame_self)) : QoreValue(), xsink);
+        }
+        QoreValue target = getIRValue(values, check_inst->operands.front());
+        const AbstractQoreNode* target_node = target.isPointer() ? target.getPtr() : nullptr;
+        if (target_node && target_node->getType() == NT_OBJECT
+                && qore_object_private::isValidOfClass(static_cast<const QoreObject*>(target_node),
+                    ei->check_class, ei->check_method_class, ei->check_any_class)) {
+            return true;
+        }
+        return qore_ir_call_target_check_slow(func, ei, target, xsink);
+    };
     debug_active = can_debug && tlpd->runtimeCheck();
     // the state of the debugger's events of the frame (see QoreIRDebugFrameState)
     QoreIRDebugFrameState dbg_state;
@@ -11621,6 +11830,22 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::Invoke: {
+                // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
+                // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
+                // operands after the switch
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                    inst = inst->fused_call_check.get();
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
                 // Opcode guarantees instruction type; static_cast avoids RTTI overhead
                 auto* inv = static_cast<QoreIRInvokeInstruction*>(inst);
                 assert(inv);
@@ -12412,13 +12637,21 @@ load_local_done:
                     const AbstractQoreNode* target_node = out.isPointer() ? out.getPtr() : nullptr;
                     if (local_inst->fused_call_target_check == QoreIRFusedCallTargetCheck::MethodCall
                             && target_node && target_node->getType() == NT_OBJECT
-                            && qore_object_private::isValidInline(static_cast<const QoreObject*>(target_node))) {
+                            && qore_object_private::isValidOfClass(static_cast<const QoreObject*>(target_node),
+                                static_cast<const QoreIRExprInstruction*>(check)->check_class,
+                                static_cast<const QoreIRExprInstruction*>(check)->check_method_class)) {
                         ++ip;
                         break;
                     }
                     // and a call of a closure, which is always callable and has no object
                     if (local_inst->fused_call_target_check == QoreIRFusedCallTargetCheck::CallReference
                             && target_node && target_node->getType() == NT_RUNTIME_CLOSURE) {
+                        ++ip;
+                        break;
+                    }
+                    // a method call looked up by name for the object's class from this class context before
+                    if (qore_ir_call_target_cache_hit(func, static_cast<const QoreIRExprInstruction*>(check),
+                            out)) {
                         ++ip;
                         break;
                     }
@@ -16487,27 +16720,7 @@ load_local_done:
             case QoreIROpcode::CheckCallTarget: {
                 // the target of a call is checked before its arguments are evaluated, as the AST interpreter checks
                 // it (issue #5784)
-                const QoreIRExprInstruction* ei = static_cast<const QoreIRExprInstruction*>(inst);
-                // qore_check_call_target() decides the common case (a method call on an object that has not been
-                // deleted) first; testing it inline here measured the same
-                QoreValue target;
-                if (inst->operands.empty()) {
-                    // no operand: the call is made through self, on the current object (issue #5823), which does
-                    // not change while the frame runs: it is read once
-                    if (!frame_self_known) {
-                        frame_self = runtime_get_stack_object();
-                        frame_self_known = true;
-                    }
-                    // a method call on an object that has not been deleted needs no other check
-                    if (frame_self && qore_object_private::isValidInline(frame_self)) {
-                        ++ip;
-                        break;
-                    }
-                    target = frame_self ? QoreValue(static_cast<AbstractQoreNode*>(frame_self)) : QoreValue();
-                } else {
-                    target = getIRValue(values, inst->operands.front());
-                }
-                if (qore_check_call_target(ei->expr, target, xsink)) {
+                if (!call_target_check_ok(inst)) {
                     if (inst->exception_target) {
                         // the handler is in this frame: only the raising statement's temps are dead there
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
@@ -18561,144 +18774,10 @@ load_local_done:
                 invalidateLValuePathLocalCaches(path_inst);
                 QoreValue res;
                 // the operation runs in a function so that the lvalue lock is released before values are cleaned
-                // up or the exception is dispatched to an enclosing catch block; returns -1 for an error, 0 for OK
-                auto run_ternary = [&]() -> int {
-                    ReferenceHolder<QoreListNode> removed_list(xsink);
-                    LValueHelper lvh(xsink);
-                    // as with AST execution, a hash member or list element that does not exist is created, and
-                    // then raises EXTRACT-ERROR below like any other lvalue that is not a list, string or binary
-                    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
-                        // a vivifying navigation fails only with an exception
-                        assert(*xsink);
-                        return -1;
-                    }
-                    qore_type_t vt = lvh.getType();
-                    if (vt == NT_NOTHING) {
-                        // Mirror AST behavior: if the lvalue has a default list/string type,
-                        // auto-initialize it before extract/splice.
-                        const QoreTypeInfo* ti = lvh.getTypeInfo();
-                        if (ti == softListTypeInfo || ti == listTypeInfo || ti == stringTypeInfo
-                                || ti == softStringTypeInfo) {
-                            if (!lvh.assign(QoreTypeInfo::getDefaultQoreValue(ti))) {
-                                vt = lvh.getType();
-                            }
-                        }
-                    }
-                    if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
-                        xsink->raiseException("EXTRACT-ERROR",
-                            "first (lvalue) argument to the extract operator is not a list, "
-                            "string, or binary object");
-                    } else {
-                        lvh.ensureUnique();
-                        size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
-                        if (path_inst->ternary_op == LVTernaryOp::Splice) {
-                            if (vt == NT_LIST) {
-                                QoreListNode* vl = lvh.getValue().get<QoreListNode>();
-                                if (length_val.isNothing() && replacement_val.isNothing()) {
-                                    removed_list = vl->splice(offset);
-                                } else {
-                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                    if (replacement_val.isNothing()) {
-                                        removed_list = vl->splice(offset, length);
-                                    } else {
-                                        removed_list = qore_list_private::replace(*vl, offset, length, replacement_val, false, xsink);
-                                    }
-                                }
-                            } else if (vt == NT_STRING) {
-                                QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
-                                if (length_val.isNothing() && replacement_val.isNothing()) {
-                                    vs->splice(offset, xsink);
-                                } else {
-                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                    if (replacement_val.isNothing()) {
-                                        vs->splice(offset, length, xsink);
-                                    } else {
-                                        vs->splice(offset, length, replacement_val, xsink);
-                                    }
-                                }
-                            } else { // NT_BINARY
-                                BinaryNode* b = lvh.getValue().get<BinaryNode>();
-                                if (length_val.isNothing() && replacement_val.isNothing()) {
-                                    b->splice(offset, b->size());
-                                } else {
-                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                    if (replacement_val.isNothing()) {
-                                        b->splice(offset, length);
-                                    } else {
-                                        if (replacement_val.getType() == NT_BINARY) {
-                                            const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
-                                            b->splice(offset, length, b1->getPtr(), b1->size());
-                                        } else {
-                                            QoreStringNodeValueHelper sv(replacement_val);
-                                            if (!sv->strlen()) {
-                                                b->splice(offset, length);
-                                            } else {
-                                                b->splice(offset, length, sv->getBuffer(), sv->size());
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            if (path_inst->ref_rv && !*xsink) {
-                                res = lvh.getReferencedValue();
-                            }
-                        } else {
-                            if (vt == NT_LIST) {
-                                QoreListNode* vl = lvh.getValue().get<QoreListNode>();
-                                if (length_val.isNothing() && replacement_val.isNothing()) {
-                                    res = vl->extract(offset);
-                                } else {
-                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                    if (replacement_val.isNothing()) {
-                                        res = vl->extract(offset, length);
-                                    } else {
-                                        res = qore_list_private::replace(*vl, offset, length, replacement_val, true, xsink);
-                                    }
-                                }
-                            } else if (vt == NT_STRING) {
-                                // note: safe; lvh.ensureUnique() above materializes any inline
-                                // short string
-                                QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
-                                if (length_val.isNothing() && replacement_val.isNothing()) {
-                                    res = vs->extract(offset, xsink);
-                                } else {
-                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                    if (replacement_val.isNothing()) {
-                                        res = vs->extract(offset, length, xsink);
-                                    } else {
-                                        res = vs->extract(offset, length, replacement_val, xsink);
-                                    }
-                                }
-                            } else { // NT_BINARY
-                                BinaryNode* b = lvh.getValue().get<BinaryNode>();
-                                BinaryNode* bout = new BinaryNode;
-                                if (length_val.isNothing() && replacement_val.isNothing()) {
-                                    b->splice(offset, b->size(), bout);
-                                } else {
-                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                    if (replacement_val.isNothing()) {
-                                        b->splice(offset, length, bout);
-                                    } else {
-                                        if (replacement_val.getType() == NT_BINARY) {
-                                            const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
-                                            b->splice(offset, length, b1->getPtr(), b1->size(), bout);
-                                        } else {
-                                            QoreStringNodeValueHelper sv(replacement_val);
-                                            if (!sv->strlen()) {
-                                                b->splice(offset, length, bout);
-                                            } else {
-                                                b->splice(offset, length, sv->getBuffer(), sv->size(), bout);
-                                            }
-                                        }
-                                    }
-                                }
-                                res = bout;
-                            }
-                        }
-                    }
-                    return *xsink ? -1 : 0;
-                };
-                int ternary_rc = run_ternary();
+                // up or the exception is dispatched to an enclosing catch block, and so that its LValueHelper is not
+                // in the frame of execute() (tools/stack-usage-budgets.txt); returns -1 for an error, 0 for OK
+                int ternary_rc = qore_ir_run_lvalue_path_ternary(path_inst, path_copy, offset_val, length_val,
+                    replacement_val, res, xsink);
                 if (ternary_rc < 0) {
                     res.discard(xsink);
                     res = QoreValue();
@@ -19217,6 +19296,22 @@ load_local_done:
             case QoreIROpcode::Call:
             case QoreIROpcode::CallMethod:
             case QoreIROpcode::CallStatic: {
+                // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
+                // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
+                // operands after the switch
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                    inst = inst->fused_call_check.get();
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
                 // the call stack frame of the called code is located at the call
                 QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
                 // CallDirect/CallStaticDirect use their own instruction classes (with extra
@@ -19415,6 +19510,22 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::CallMethodDirect: {
+                // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
+                // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
+                // operands after the switch
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                    inst = inst->fused_call_check.get();
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
                 // Direct method call for devirtualized final class methods
                 // the call stack frame of the called code is located at the call
                 QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
@@ -19529,6 +19640,22 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::InvokeMethodDirect: {
+                // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
+                // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
+                // operands after the switch
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                    inst = inst->fused_call_check.get();
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
                 // Direct method call with exception routing for devirtualized final class methods
                 // the call stack frame of the called code is located at the call
                 QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
@@ -19665,6 +19792,22 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::DotEvalMethodDirect: {
+                // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
+                // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
+                // operands after the switch
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                    inst = inst->fused_call_check.get();
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
                 // Direct dot-eval method call with pre-evaluated base + args
                 // the call stack frame of the called code is located at the call
                 QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
@@ -19737,6 +19880,22 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::InvokeDotEvalMethodDirect: {
+                // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
+                // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
+                // operands after the switch
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                    inst = inst->fused_call_check.get();
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
                 // Direct dot-eval method call with exception routing
                 // the call stack frame of the called code is located at the call
                 QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);

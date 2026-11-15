@@ -1731,7 +1731,9 @@ static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const 
             }
             const AbstractQoreFunctionVariant* resolved_variant = nullptr;
             QoreTypeParamInstantiation type_param_instantiation;
-            if (method_ref.sig_text) {
+            if (method_ref.abstract_self_call) {
+                // a call to an abstract method: looked up by name at run time, with no variant
+            } else if (method_ref.sig_text) {
                 resolved_variant = findAOTStaticMethodVariantByRef(pgm, m, method_ref, false);
             } else if (method_ref.arg_type_sig && *method_ref.arg_type_sig) {
                 MethodFunctionBase* mfb = qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction();
@@ -1762,7 +1764,12 @@ static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const 
             // unqualified names produce ns.size() == 1 for normal virtual dispatch
             SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin, strdup(method_full_name), nullptr, m,
                 qc, qcp);
-            if (resolved_variant) {
+            if (method_ref.abstract_self_call) {
+                // as SelfFunctionCallNode::parseInitCall() marked it: a call to an abstract method is resolved at run
+                // time on the object's class, with no variant, also when it is qualified (Base::m())
+                sfcn->setAbstractCall();
+            } else if (resolved_variant && !static_cast<const MethodVariantBase*>(resolved_variant)->isAbstract()) {
+                // an abstract variant is never bound to a call: parsing binds none
                 sfcn->setVariant(resolved_variant);
                 if (!type_param_instantiation.type_args.empty()) {
                     sfcn->setTypeParamInstantiation(std::move(type_param_instantiation));
@@ -4298,15 +4305,27 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const std::string target_method_text = target_type_arg_pos == std::string::npos
                     ? encoded_target : encoded_target.substr(0, target_type_arg_pos);
                 AOTEncodedMethodRef method_ref(target_method_text.c_str());
-                uint8_t is_pseudo = QoreAOTBinaryReader::readU8(ptr);
+                const uint8_t target_flags = QoreAOTBinaryReader::readU8(ptr);
+                const bool is_pseudo = (target_flags & QORE_AOT_DOT_EVAL_TARGET_PSEUDO) != 0;
+                // a call dispatched by name records the method resolved at parse time only for the check of its
+                // target (issue #5824)
+                const bool name_dispatch = (target_flags & QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH) != 0;
 
-                const QoreClass* qc = findAOTClassByPath(pgm, ref1, is_pseudo != 0);
+                const QoreClass* qc = findAOTClassByPath(pgm, ref1, is_pseudo);
                 const QoreMethod* method = findAOTMethodByName(qc, method_ref.method_name);
                 const AbstractQoreFunctionVariant* variant = findAOTMethodVariantByRef(
-                    pgm, method, method_ref, is_pseudo != 0);
+                    pgm, method, method_ref, is_pseudo);
+                ctx->call_targets[i].check_qc = qc;
+                ctx->call_targets[i].check_method = method;
+                ctx->call_targets[i].check_variant = variant;
+                if (name_dispatch) {
+                    qc = nullptr;
+                    method = nullptr;
+                    variant = nullptr;
+                }
                 ctx->call_targets[i].method = method;
                 ctx->call_targets[i].qc = qc;
-                ctx->call_targets[i].is_pseudo = is_pseudo != 0;
+                ctx->call_targets[i].is_pseudo = is_pseudo;
                 // Make an owned copy of the method name since the source buffer
                 // (decompressed metadata) may be freed after deserialization
                 if (method_ref.method_name && *method_ref.method_name) {
@@ -4345,6 +4364,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                         // caller args directly to the picked variant's signature.
                         ctx->call_targets[i].variant = mfb->first();
                     }
+                }
+                if (!name_dispatch) {
+                    ctx->call_targets[i].check_variant = ctx->call_targets[i].variant;
                 }
                 // Store NOTHING in exprs — slot-based dispatch uses call_targets
                 ctx->exprs[i] = toBitsNB(QoreValue());

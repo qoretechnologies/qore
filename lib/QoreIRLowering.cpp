@@ -5166,6 +5166,9 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // a handler belongs to the Program of the function it is part of (see QoreJIT::workReferencesPgm())
         handler_func->pgm = parent_func->pgm;
         handler_func->pgm_id = parent_func->pgm_id;
+        // a handler runs in the frame of the function it belongs to
+        handler_func->static_call_context = parent_func->static_call_context;
+        handler_func->static_class_ctx = parent_func->static_class_ctx;
         handler_func->emit_debug_statements = parent_func->emit_debug_statements;
 
         uint32_t parent_slot_count = parent_func->local_var_slots.size();
@@ -5310,6 +5313,9 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         // a handler belongs to the Program of the function it is part of (see QoreJIT::workReferencesPgm())
         handler_func->pgm = parent_func->pgm;
         handler_func->pgm_id = parent_func->pgm_id;
+        // a handler runs in the frame of the function it belongs to
+        handler_func->static_call_context = parent_func->static_call_context;
+        handler_func->static_class_ctx = parent_func->static_class_ctx;
         handler_func->emit_debug_statements = parent_func->emit_debug_statements;
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
@@ -13396,6 +13402,11 @@ QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const Q
     auto helper = std::make_unique<QoreIRFunction>("background_helper_" + std::to_string(helper_index));
     helper->pgm = starting_func ? starting_func->pgm : nullptr;
     helper->pgm_id = starting_func ? starting_func->pgm_id : 0;
+    // the new thread runs with the class context and the Program of the starting code (BGThreadParams)
+    if (starting_func) {
+        helper->static_call_context = starting_func->static_call_context;
+        helper->static_class_ctx = starting_func->static_class_ctx;
+    }
 
     QoreIRBuilder helper_builder(helper.get());
     helper_builder.setBlock(helper->createBlock("entry"));
@@ -14019,9 +14030,20 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     variant, m->getParseArgs(), m->getArgs())) {
             // the direct call does not check the object: it is checked before the arguments, as the AST interpreter
             // checks it (issue #5823)
-            emitSelfCallTargetCheck(expr, op->loc);
+            const bool self_side_effects = callArgsMayHaveSideEffects(m->getParseArgs(), m->getArgs());
+            if (self_side_effects) {
+                emitSelfCallTargetCheck(expr, op->loc, qc, method);
+            }
             std::vector<QoreIRValue> lowered_args;
             if (lowerCallArgs(m->getParseArgs(), m->getArgs(), lowered_args, error)) {
+                if (self_side_effects) {
+                    // arguments with side effects can delete the object: it is checked again after them
+                    emitCallTargetCheckAfterArgs(expr, QoreIRValue(), op->loc);
+                } else {
+                    // arguments without side effects cannot change the object: it is checked after them, directly
+                    // before the call, which then makes the check (qore_ir_fuse_call_target_checks())
+                    emitSelfCallTargetCheck(expr, op->loc, qc, method);
+                }
                 if (!exception_stack.empty()) {
                     QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
                     if (!normal_block) {
@@ -14270,8 +14292,31 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 && !QoreTypeInfo::parseAcceptsReturns(receiver_type, NT_NOTHING);
         }
     }
-    if (m && !pseudo_receiver_has_value && callArgsMayHaveSideEffects(m->getParseArgs(), m->getArgs())) {
-        builder.createCheckCallTarget(expr, base_val, getCurrentExceptionTarget(), op->loc);
+    // a call of an overloaded user method that the parser resolved but that is dispatched by name at run time (see
+    // the target of DotEvalMethodDirect below) is checked too: the dispatch by name would raise the error for a
+    // deleted object without the variant that the AST interpreter names (issue #5824)
+    bool resolved_target_dispatched_by_name = false;
+    if (m && !m->isPseudo() && m->getMethod() && m->getClass() && m->getVariant()) {
+        const QoreFunction* resolved_func = qore_method_private::get(*m->getMethod())->getFunction();
+        resolved_target_dispatched_by_name = resolved_func
+            && ((resolved_func->numVariants() != 1 && m->getVariant()->isUser())
+                || overloadedDirectCallNeedsRuntimeDispatch(resolved_func, m->getVariant(), m->getParseArgs(),
+                    m->getArgs()));
+    }
+    // arguments with side effects can delete the object of a method call: it is checked again after them; the check
+    // of a call whose arguments have no side effects is made after them, directly before the call, which then makes
+    // it (qore_ir_fuse_call_target_checks())
+    bool check_after_args = false;
+    bool check_before_call = false;
+    if (m && !pseudo_receiver_has_value) {
+        bool side_effects = callArgsMayHaveSideEffects(m->getParseArgs(), m->getArgs());
+        if (side_effects) {
+            builder.createCheckCallTarget(expr, base_val, getCurrentExceptionTarget(), op->loc,
+                m->isPseudo() ? nullptr : m->getClass(), m->isPseudo() ? nullptr : m->getMethod());
+            check_after_args = !m->isPseudo();
+        } else {
+            check_before_call = resolved_target_dispatched_by_name;
+        }
     }
 
     // a named call resolved at run time by parameter name: the receiver and the arguments in source order are passed
@@ -14297,6 +14342,12 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
         // Lower arguments
         std::vector<QoreIRValue> lowered_args;
         if (lowerCallArgs(m->getParseArgs(), m->getArgs(), lowered_args, error)) {
+            if (check_after_args) {
+                emitCallTargetCheckAfterArgs(expr, base_val, op->loc);
+            } else if (check_before_call) {
+                builder.createCheckCallTarget(expr, base_val, getCurrentExceptionTarget(), op->loc, m->getClass(),
+                    m->getMethod());
+            }
             if (m->isPseudo() && lowered_args.empty()) {
                 const QoreMethod* pseudo_method = m->getMethod();
                 const char* method_name = pseudo_method ? pseudo_method->getName() : m->getName();
@@ -15694,6 +15745,17 @@ bool QoreIRLowering::callArgsMayHaveSideEffects(const QoreParseListNode* parse_a
             if (qore_ir_type_cannot_hold_reference(local->getTypeInfo())) {
                 continue;
             }
+            // a local of a type that can hold a reference (auto) whose value at the read is known to be of a type that
+            // cannot hold one (see getAnalysis()); a local that a closure captures, of a reference type or ever
+            // deleted can change in ways that the analysis does not see
+            if (!local->closureUse() && !local->everDeleted()
+                    && !QoreTypeInfo::getReferenceTarget(local->getTypeInfo())) {
+                QoreParseAnalysis analysis;
+                if (getAnalysis(arg, analysis) && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                        && analysis.known_type && qore_ir_type_cannot_hold_reference(analysis.known_type)) {
+                    continue;
+                }
+            }
         }
         return true;
     }
@@ -16410,14 +16472,35 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
 // QoreIRInlineStateClaim in QoreIR.h), so a value written at lowering time would never be
 // read; the interpreter resolves the same values from the variant on first execution.
 
-void QoreIRLowering::emitSelfCallTargetCheck(const QoreValue& call, const QoreProgramLocation* loc) {
+void QoreIRLowering::emitCallTargetCheckAfterArgs(const QoreValue& call, QoreIRValue target,
+        const QoreProgramLocation* loc) {
+    if (!target.isValid() && !self_local) {
+        // code without a self local (top-level code, a function) has no object to check
+        return;
+    }
+    QoreIRExprInstruction* check = builder.createCheckCallTarget(call, target, getCurrentExceptionTarget(), loc);
+    if (check) {
+        // only the deleted status of the object is tested: its class was checked before the arguments
+        check->check_any_class = true;
+        check->check_after_args = true;
+    }
+}
+
+void QoreIRLowering::emitSelfCallTargetCheck(const QoreValue& call, const QoreProgramLocation* loc,
+        const QoreClass* check_class, const QoreMethod* check_method, bool check_any_class) {
     if (!self_local) {
         // code without a self local (top-level code, a function) has no object to check
         return;
     }
     // the check takes the current object itself: a load of self would make a method ineligible for the fast entries
     // that have no self (isAOTImplicitSelfFastEntryEligible())
-    builder.createCheckCallTarget(call, QoreIRValue(), getCurrentExceptionTarget(), loc);
+    QoreIRExprInstruction* check = builder.createCheckCallTarget(call, QoreIRValue(), getCurrentExceptionTarget(), loc,
+        check_class, check_method);
+    if (check) {
+        // the current object of a method that calls a method of a final class is of that class, which has no
+        // subclass: the class of the object is not tested
+        check->check_any_class = check_any_class || (check_class && check_class->isFinal());
+    }
 }
 
 QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& error) {
@@ -16438,6 +16521,9 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
     if (bg_helper && (!call->getMethod() || !call->getMethod()->isStatic())) {
         bg_helper->uses_self = true;
     }
+    bool self_check_after_args = false;
+    bool self_check_before_call = false;
+    bool self_check_any_class = false;
     // the object is checked before the arguments, as the AST interpreter checks it (issue #5823): always for a direct
     // call (see below), which does not check it, and for a call dispatched at run time when the arguments can show the
     // order; a static method has no object, and copy() is not a method call
@@ -16448,14 +16534,29 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
             && qore_ir_method_target_is_final(qc, call->getVariant())
             && !overloadedDirectCallNeedsRuntimeDispatch(qore_method_private::get(*method)->getFunction(),
                 call->getVariant(), call->getParseArgs(), call->getArgs());
-        if ((!method || !method->isStatic()) && !call->isCopyCall()
-                && (direct || callArgsMayHaveSideEffects(call->getParseArgs(), call->getArgs()))) {
-            emitSelfCallTargetCheck(expr, call->loc);
+        const bool side_effects = callArgsMayHaveSideEffects(call->getParseArgs(), call->getArgs());
+        if ((!method || !method->isStatic()) && !call->isCopyCall() && (direct || side_effects)) {
+            // a qualified call (Base::m()) is not virtual: its method is called on an object of any class
+            self_check_any_class = !call->hasSingleName() && !call->isAbstractCall();
+            if (side_effects) {
+                emitSelfCallTargetCheck(expr, call->loc, qc, method, self_check_any_class);
+                self_check_after_args = true;
+            } else {
+                // arguments without side effects cannot change the object: it is checked after them, directly before
+                // the call, which then makes the check (qore_ir_fuse_call_target_checks())
+                self_check_before_call = true;
+            }
         }
     }
     std::vector<QoreIRValue> operands;
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
+    }
+    if (self_check_after_args) {
+        // arguments with side effects can delete the object: it is checked again after them
+        emitCallTargetCheckAfterArgs(expr, QoreIRValue(), call->loc);
+    } else if (self_check_before_call) {
+        emitSelfCallTargetCheck(expr, call->loc, call->getClass(), call->getMethod(), self_check_any_class);
     }
     // a named call resolved at run time by parameter name passes its arguments in source order to the call node,
     // which binds them by name (AbstractMethodCallNode::execNamed()); no direct call applies

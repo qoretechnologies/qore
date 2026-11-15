@@ -4166,10 +4166,15 @@ QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, Qor
     rc.setClass(c);
     do_rc_update = true;
 
-    if (obj && ref_obj && obj != old_obj && !qore_object_private::get(*obj)->startCall(code, xsink)) {
+    if (obj && ref_obj && obj != old_obj && !qore_object_private::get(*obj)->startCall(c, code, xsink)) {
         do_ref = true;
     } else {
         do_ref = false;
+        // a call on the current object takes no reference, but its arguments can have deleted the object too: the
+        // call raises the same error as for another object, so that every execution mode raises it (issue #5824)
+        if (obj && ref_obj && obj == old_obj) {
+            qore_object_private::get(*obj)->checkCurrentObjectCall(c, code, xsink);
+        }
     }
 
     // issue #3024 / issue #3390: save & update the program call context from the code context
