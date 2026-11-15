@@ -560,6 +560,32 @@ bool SandboxManager::restricts() {
     return sm->restricts();
 }
 
+//! Returns @ref True if the sandbox trusts the code it governs to use uncontrolled APIs
+/** @return @ref True if the policy allows uncontrolled APIs (see setUncontrolledApiPolicy()), @ref False if it refuses
+    them (the default); for a combination of the sandboxes of several callers, @ref True only if every member allows
+    them
+
+    A module that refuses an operation that only an unrestricted caller may use should refuse it if and only if the
+    governing sandbox does not trust its code and restricts something; see @ref sandbox_restricts.
+
+    @par Example:
+    @code{.py}
+SandboxManager sm();
+printf("%y\n", sm.trustsUncontrolledApis());  # False: the default refuses them
+sm.setUncontrolledApiPolicy(True);
+printf("%y\n", sm.trustsUncontrolledApis());  # True
+    @endcode
+
+    @see
+    - getUncontrolledApiPolicy()
+    - restricts()
+
+    @since %Qore 3.0
+*/
+bool SandboxManager::trustsUncontrolledApis() [flags=RET_VALUE_ONLY] {
+    return sm->trustsUncontrolledApis();
+}
+
 //! Creates a preset for maximum restrictions ("lockdown" mode)
 /** @return A new SandboxManager configured for maximum security
 

@@ -444,6 +444,14 @@ restrict. `QoreNetworkSecurityManager::isRestricting()` and `QoreFilesystemSecur
 for one security manager. When a module cannot read the state (for example it takes the configuration hash and a key is
 missing or has another type), it must count the sandbox as restricting.
 
+`trustsUncontrolledApis()` is the fifth predicate: true if the sandbox's uncontrolled-API policy allows them, that is,
+the host that attached the sandbox trusts the code it governs (for a combination of managers, true only if every member
+trusts: the AND over the members, the opposite direction to the others, which are ORs). The rule for a module that
+refuses an operation that only an unrestricted caller may use is: refuse if and only if
+`!trustsUncontrolledApis() && restricts()` on the governing manager (the `QoreSandboxManagerHelper::Policy` manager).
+A sandbox that restricts nothing, or whose host trusts its code, does not make the caller untrusted. There is no
+unreadable state; a module that gets the policy another way and cannot read it counts the sandbox as not trusting.
+
 ### Key Principle: Sandbox Manager May Be Absent
 
 When `QoreSandboxManagerHelper` evaluates to false, no sandboxing is active. Modules must:

@@ -165,6 +165,7 @@ static void sb_fill_restricts(QoreHashNode& rv, const QoreSandboxManagerHelper& 
         rv.setKeyValue("network", sm->networkRestricts(), xsink);
         rv.setKeyValue("filesystem", sm->filesystemRestricts(), xsink);
         rv.setKeyValue("limits", sm->limitsRestrict(), xsink);
+        rv.setKeyValue("trusts", sm->trustsUncontrolledApis(), xsink);
     }
 }
 
@@ -1700,7 +1701,7 @@ nothing sb_mem_free(int handle) {
     filesystem, network or process policy check, which honors a policy barrier); otherwise with
     QoreSandboxManagerHelper::All
 
-    @return a hash with the keys \c sandboxed, \c restricts, \c network, \c filesystem and \c limits; only
+    @return a hash with the keys \c sandboxed, \c restricts, \c network, \c filesystem, \c limits and \c trusts; only
     \c sandboxed is present if no sandbox governs the thread
 */
 hash<auto> sb_governing_restricts(bool policy = False) {

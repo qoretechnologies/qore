@@ -53,6 +53,7 @@ class SandboxRestrictsCompositionTest inherits QUnit::Test {
         addTestCase("a member changed after the composition exists is seen", \testMutatedAfter());
         addTestCase("the Policy purpose resolves the same predicates", \testPolicyPurpose());
         addTestCase("a policy barrier masks the Policy purpose only", \testPolicyBarrier());
+        addTestCase("trustsUncontrolledApis() of a composition is the AND over the members", \testTrusts());
         addTestCase("reset() of the managers restores the default deny", \testReset());
         set_return_value(main());
     }
@@ -79,13 +80,14 @@ class SandboxRestrictsCompositionTest inherits QUnit::Test {
         return p;
     }
 
-    private hash<auto> expected(bool network, bool filesystem, bool limits) {
+    private hash<auto> expected(bool network, bool filesystem, bool limits, bool trusts = False) {
         return {
             "sandboxed": True,
             "restricts": network || filesystem || limits,
             "network": network,
             "filesystem": filesystem,
             "limits": limits,
+            "trusts": trusts,
         };
     }
 
@@ -247,5 +249,49 @@ class SandboxRestrictsCompositionTest inherits QUnit::Test {
             "reset() restores the default deny, which restricts");
         assertEq({"network": True, "filesystem": True, "default_allow": True}, r.copy,
             "the copy made before the reset is independent");
+    }
+
+    private SandboxManager trusting() {
+        SandboxManager sm = allowAll();
+        sm.setUncontrolledApiPolicy(True);
+        return sm;
+    }
+
+    testTrusts() {
+        # the default does not trust
+        assertEq(expected(False, False, False, False), makeProgram(allowAll()).callFunction("here"));
+        assertEq(expected(False, False, False, True), makeProgram(trusting()).callFunction("here"));
+        SandboxManager denied = trusting();
+        denied.setUncontrolledApiPolicy(False);
+        assertEq(expected(False, False, False, False), makeProgram(denied).callFunction("here"));
+        # a composition of members that all trust trusts; one that does not makes it not trust
+        assertEq(expected(False, False, False, True), both(makeProgram(trusting()), makeProgram(trusting())));
+        assertEq(expected(False, False, False, False), both(makeProgram(trusting()), makeProgram(allowAll())));
+        assertEq(expected(False, False, False, False), both(makeProgram(allowAll()), makeProgram(trusting())));
+        assertEq(expected(False, False, False, False), both(makeProgram(allowAll()), makeProgram(allowAll())));
+        # a member that restricts and trusts: the predicates are independent
+        SandboxManager rt = trusting();
+        rt.blockPrivateNetworks();
+        assertEq(expected(True, False, False, True), makeProgram(rt).callFunction("here"));
+        assertEq(expected(True, False, False, True), both(makeProgram(trusting()), makeProgram(rt)));
+        assertEq(expected(True, False, False, False), both(makeProgram(allowAll()), makeProgram(rt)));
+        # three members
+        assertEq(expected(False, False, False, True),
+            three(makeProgram(trusting()), makeProgram(trusting()), makeProgram(trusting())));
+        assertEq(expected(False, False, False, False),
+            three(makeProgram(trusting()), makeProgram(allowAll()), makeProgram(trusting())));
+        # the Policy purpose resolves the same
+        Program p = makeProgram(trusting());
+        assertEq(expected(False, False, False, True), p.callFunction("run", auto sub () { return sb_governing_restricts(True); }));
+        # a member changed after the composition was resolved is seen
+        SandboxManager sm = trusting();
+        Program owner = makeProgram(sm);
+        Program caller = makeProgram(trusting());
+        object o = owner.callFunction("make");
+        hash<auto> r = caller.callFunction("run", auto sub () {
+            return o.around(sub () { sm.setUncontrolledApiPolicy(False); });
+        });
+        assertEq(expected(False, False, False, True), r.before);
+        assertEq(expected(False, False, False, False), r.after);
     }
 }

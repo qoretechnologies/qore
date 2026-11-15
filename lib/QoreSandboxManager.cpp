@@ -1188,6 +1188,11 @@ bool QoreSandboxManager::getUncontrolledApiPolicy() const {
     return fs_mgr.priv->uncontrolled_api_allowed.load(std::memory_order_acquire);
 }
 
+bool QoreSandboxManager::trustsUncontrolledApis() const {
+    // there is no unreadable state; a composition is true only if every member is (getUncontrolledApiPolicy())
+    return getUncontrolledApiPolicy();
+}
+
 void QoreSandboxManager::setMaxThreads(int count) {
     max_threads = count;
     // a raised limit frees slots for the thread pools waiting for one

@@ -140,7 +140,8 @@ typedef std::vector<int> sig_vec_t;
 //! defined for QoreClass::addBuiltinMemberWithAccessors()
 #define _QORE_HAS_BUILTIN_MEMBER_ACCESSORS 1
 
-//! defined for QoreSandboxManager::restricts(), networkRestricts(), filesystemRestricts() and limitsRestrict(), and for
+//! defined for QoreSandboxManager::restricts(), networkRestricts(), filesystemRestricts(), limitsRestrict() and
+//! trustsUncontrolledApis(), and for
 //! the isRestricting() methods of QoreNetworkSecurityManager and QoreFilesystemSecurityManager
 #define _QORE_HAS_SANDBOX_RESTRICTS_API 1
 

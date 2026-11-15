@@ -703,6 +703,25 @@ public:
     */
     DLLEXPORT bool getUncontrolledApiPolicy() const;
 
+    //! Returns @ref true if the sandbox trusts the code it governs to use uncontrolled APIs
+    /** @return @ref true if the policy allows uncontrolled APIs (setUncontrolledApiPolicy()); for a composition of
+        sandbox managers, @ref true only if every member allows them (the AND over the members; the OR rule of
+        restricts() is the opposite direction, because here one member that does not trust makes the composition not
+        trust).  The default is @ref false
+
+        A binary module that refuses an operation that only an unrestricted caller may use (for example an
+        operation with effects outside the process) should refuse it if and only if
+        <tt>!trustsUncontrolledApis() && restricts()</tt> on the governing manager resolved with
+        QoreSandboxManagerHelper::Policy: a sandbox that restricts nothing, or that trusts its code, does not make the
+        caller untrusted.
+
+        @note there is no unreadable state in this predicate; callers that obtain the state another way must treat
+        it as not trusting (fail closed)
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool trustsUncontrolledApis() const;
+
     //! Returns the memory account of the sandbox; for internal use
     DLLLOCAL QoreSandboxMemoryAccount* getMemoryAccount() const {
         return mem_account;

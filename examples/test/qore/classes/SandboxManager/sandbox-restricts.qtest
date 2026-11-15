@@ -24,6 +24,7 @@ class SandboxRestrictsTest inherits QUnit::Test {
         addTestCase("a limits-only sandbox restricts", \testLimitsOnly());
         addTestCase("presets restrict", \testPresets());
         addTestCase("a copy is independent of the original", \testCopy());
+        addTestCase("trustsUncontrolledApis() follows the uncontrolled-API policy", \testTrusts());
         addTestCase("an attached manager that allows everything does not restrict", \testAttached());
         set_return_value(main());
     }
@@ -174,5 +175,26 @@ class SandboxRestrictsTest inherits QUnit::Test {
         # the manager of the Program is the same state: a change is seen
         sm.setMaxThreads(3);
         assertTrue(p.getSandboxManager().restricts());
+    }
+
+    testTrusts() {
+        SandboxManager sm();
+        assertFalse(sm.trustsUncontrolledApis(), "default");
+        assertEq(sm.getUncontrolledApiPolicy(), sm.trustsUncontrolledApis());
+        sm.setUncontrolledApiPolicy(True);
+        assertTrue(sm.trustsUncontrolledApis(), "allowed");
+        # trusting is independent of restricting
+        assertTrue(sm.restricts());
+        sm.setUncontrolledApiPolicy(False);
+        assertFalse(sm.trustsUncontrolledApis(), "denied again");
+        assertFalse(allowAll().trustsUncontrolledApis(), "allow-all does not trust by itself");
+        # a copy keeps the policy and is independent
+        sm.setUncontrolledApiPolicy(True);
+        SandboxManager c = sm.copy();
+        assertTrue(c.trustsUncontrolledApis(), "copy");
+        sm.setUncontrolledApiPolicy(False);
+        assertTrue(c.trustsUncontrolledApis(), "the copy is independent");
+        # presets
+        assertFalse(SandboxManager::createLockdown().trustsUncontrolledApis(), "lockdown");
     }
 }
