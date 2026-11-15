@@ -8912,6 +8912,150 @@ static QORE_INTERN_NOINLINE void qore_ir_release_failed_method_call(QoreListNode
     result.discard(xsink);
 }
 
+//! runs the operation of QoreIROpcode::LValuePathTernary (splice or extract) on the lvalue at @a path_copy;
+//! returns -1 for an error, 0 for OK
+/** Out of line: its LValueHelper would otherwise be in the frame of QoreIRInterpreter::execute(), which is at its
+    stack budget (tools/stack-usage-budgets.txt)
+*/
+static QORE_INTERN_NOINLINE int qore_ir_run_lvalue_path_ternary(const QoreIRLValuePathInstruction* path_inst,
+        IRLVPath& path_copy, const QoreValue& offset_val, const QoreValue& length_val,
+        const QoreValue& replacement_val, QoreValue& res, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> removed_list(xsink);
+    LValueHelper lvh(xsink);
+    // as with AST execution, a hash member or list element that does not exist is created, and
+    // then raises EXTRACT-ERROR below like any other lvalue that is not a list, string or binary
+    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
+        // a vivifying navigation fails only with an exception
+        assert(*xsink);
+        return -1;
+    }
+    qore_type_t vt = lvh.getType();
+    if (vt == NT_NOTHING) {
+        // Mirror AST behavior: if the lvalue has a default list/string type,
+        // auto-initialize it before extract/splice.
+        const QoreTypeInfo* ti = lvh.getTypeInfo();
+        if (ti == softListTypeInfo || ti == listTypeInfo || ti == stringTypeInfo
+                || ti == softStringTypeInfo) {
+            if (!lvh.assign(QoreTypeInfo::getDefaultQoreValue(ti))) {
+                vt = lvh.getType();
+            }
+        }
+    }
+    if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
+        xsink->raiseException("EXTRACT-ERROR",
+            "first (lvalue) argument to the extract operator is not a list, "
+            "string, or binary object");
+    } else {
+        lvh.ensureUnique();
+        size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
+        if (path_inst->ternary_op == LVTernaryOp::Splice) {
+            if (vt == NT_LIST) {
+                QoreListNode* vl = lvh.getValue().get<QoreListNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    removed_list = vl->splice(offset);
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        removed_list = vl->splice(offset, length);
+                    } else {
+                        removed_list = qore_list_private::replace(*vl, offset, length, replacement_val, false, xsink);
+                    }
+                }
+            } else if (vt == NT_STRING) {
+                QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    vs->splice(offset, xsink);
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        vs->splice(offset, length, xsink);
+                    } else {
+                        vs->splice(offset, length, replacement_val, xsink);
+                    }
+                }
+            } else { // NT_BINARY
+                BinaryNode* b = lvh.getValue().get<BinaryNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    b->splice(offset, b->size());
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        b->splice(offset, length);
+                    } else {
+                        if (replacement_val.getType() == NT_BINARY) {
+                            const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
+                            b->splice(offset, length, b1->getPtr(), b1->size());
+                        } else {
+                            QoreStringNodeValueHelper sv(replacement_val);
+                            if (!sv->strlen()) {
+                                b->splice(offset, length);
+                            } else {
+                                b->splice(offset, length, sv->getBuffer(), sv->size());
+                            }
+                        }
+                    }
+                }
+            }
+            if (path_inst->ref_rv && !*xsink) {
+                res = lvh.getReferencedValue();
+            }
+        } else {
+            if (vt == NT_LIST) {
+                QoreListNode* vl = lvh.getValue().get<QoreListNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    res = vl->extract(offset);
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        res = vl->extract(offset, length);
+                    } else {
+                        res = qore_list_private::replace(*vl, offset, length, replacement_val, true, xsink);
+                    }
+                }
+            } else if (vt == NT_STRING) {
+                // note: safe; lvh.ensureUnique() above materializes any inline
+                // short string
+                QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    res = vs->extract(offset, xsink);
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        res = vs->extract(offset, length, xsink);
+                    } else {
+                        res = vs->extract(offset, length, replacement_val, xsink);
+                    }
+                }
+            } else { // NT_BINARY
+                BinaryNode* b = lvh.getValue().get<BinaryNode>();
+                BinaryNode* bout = new BinaryNode;
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    b->splice(offset, b->size(), bout);
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        b->splice(offset, length, bout);
+                    } else {
+                        if (replacement_val.getType() == NT_BINARY) {
+                            const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
+                            b->splice(offset, length, b1->getPtr(), b1->size(), bout);
+                        } else {
+                            QoreStringNodeValueHelper sv(replacement_val);
+                            if (!sv->strlen()) {
+                                b->splice(offset, length, bout);
+                            } else {
+                                b->splice(offset, length, sv->getBuffer(), sv->size(), bout);
+                            }
+                        }
+                    }
+                }
+                res = bout;
+            }
+        }
+    }
+    return *xsink ? -1 : 0;
+}
+
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
@@ -18592,144 +18736,10 @@ load_local_done:
                 invalidateLValuePathLocalCaches(path_inst);
                 QoreValue res;
                 // the operation runs in a function so that the lvalue lock is released before values are cleaned
-                // up or the exception is dispatched to an enclosing catch block; returns -1 for an error, 0 for OK
-                auto run_ternary = [&]() -> int {
-                    ReferenceHolder<QoreListNode> removed_list(xsink);
-                    LValueHelper lvh(xsink);
-                    // as with AST execution, a hash member or list element that does not exist is created, and
-                    // then raises EXTRACT-ERROR below like any other lvalue that is not a list, string or binary
-                    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
-                        // a vivifying navigation fails only with an exception
-                        assert(*xsink);
-                        return -1;
-                    }
-                    qore_type_t vt = lvh.getType();
-                    if (vt == NT_NOTHING) {
-                        // Mirror AST behavior: if the lvalue has a default list/string type,
-                        // auto-initialize it before extract/splice.
-                        const QoreTypeInfo* ti = lvh.getTypeInfo();
-                        if (ti == softListTypeInfo || ti == listTypeInfo || ti == stringTypeInfo
-                                || ti == softStringTypeInfo) {
-                            if (!lvh.assign(QoreTypeInfo::getDefaultQoreValue(ti))) {
-                                vt = lvh.getType();
-                            }
-                        }
-                    }
-                    if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
-                        xsink->raiseException("EXTRACT-ERROR",
-                            "first (lvalue) argument to the extract operator is not a list, "
-                            "string, or binary object");
-                    } else {
-                        lvh.ensureUnique();
-                        size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
-                        if (path_inst->ternary_op == LVTernaryOp::Splice) {
-                            if (vt == NT_LIST) {
-                                QoreListNode* vl = lvh.getValue().get<QoreListNode>();
-                                if (length_val.isNothing() && replacement_val.isNothing()) {
-                                    removed_list = vl->splice(offset);
-                                } else {
-                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                    if (replacement_val.isNothing()) {
-                                        removed_list = vl->splice(offset, length);
-                                    } else {
-                                        removed_list = qore_list_private::replace(*vl, offset, length, replacement_val, false, xsink);
-                                    }
-                                }
-                            } else if (vt == NT_STRING) {
-                                QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
-                                if (length_val.isNothing() && replacement_val.isNothing()) {
-                                    vs->splice(offset, xsink);
-                                } else {
-                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                    if (replacement_val.isNothing()) {
-                                        vs->splice(offset, length, xsink);
-                                    } else {
-                                        vs->splice(offset, length, replacement_val, xsink);
-                                    }
-                                }
-                            } else { // NT_BINARY
-                                BinaryNode* b = lvh.getValue().get<BinaryNode>();
-                                if (length_val.isNothing() && replacement_val.isNothing()) {
-                                    b->splice(offset, b->size());
-                                } else {
-                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                    if (replacement_val.isNothing()) {
-                                        b->splice(offset, length);
-                                    } else {
-                                        if (replacement_val.getType() == NT_BINARY) {
-                                            const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
-                                            b->splice(offset, length, b1->getPtr(), b1->size());
-                                        } else {
-                                            QoreStringNodeValueHelper sv(replacement_val);
-                                            if (!sv->strlen()) {
-                                                b->splice(offset, length);
-                                            } else {
-                                                b->splice(offset, length, sv->getBuffer(), sv->size());
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            if (path_inst->ref_rv && !*xsink) {
-                                res = lvh.getReferencedValue();
-                            }
-                        } else {
-                            if (vt == NT_LIST) {
-                                QoreListNode* vl = lvh.getValue().get<QoreListNode>();
-                                if (length_val.isNothing() && replacement_val.isNothing()) {
-                                    res = vl->extract(offset);
-                                } else {
-                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                    if (replacement_val.isNothing()) {
-                                        res = vl->extract(offset, length);
-                                    } else {
-                                        res = qore_list_private::replace(*vl, offset, length, replacement_val, true, xsink);
-                                    }
-                                }
-                            } else if (vt == NT_STRING) {
-                                // note: safe; lvh.ensureUnique() above materializes any inline
-                                // short string
-                                QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
-                                if (length_val.isNothing() && replacement_val.isNothing()) {
-                                    res = vs->extract(offset, xsink);
-                                } else {
-                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                    if (replacement_val.isNothing()) {
-                                        res = vs->extract(offset, length, xsink);
-                                    } else {
-                                        res = vs->extract(offset, length, replacement_val, xsink);
-                                    }
-                                }
-                            } else { // NT_BINARY
-                                BinaryNode* b = lvh.getValue().get<BinaryNode>();
-                                BinaryNode* bout = new BinaryNode;
-                                if (length_val.isNothing() && replacement_val.isNothing()) {
-                                    b->splice(offset, b->size(), bout);
-                                } else {
-                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                    if (replacement_val.isNothing()) {
-                                        b->splice(offset, length, bout);
-                                    } else {
-                                        if (replacement_val.getType() == NT_BINARY) {
-                                            const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
-                                            b->splice(offset, length, b1->getPtr(), b1->size(), bout);
-                                        } else {
-                                            QoreStringNodeValueHelper sv(replacement_val);
-                                            if (!sv->strlen()) {
-                                                b->splice(offset, length, bout);
-                                            } else {
-                                                b->splice(offset, length, sv->getBuffer(), sv->size(), bout);
-                                            }
-                                        }
-                                    }
-                                }
-                                res = bout;
-                            }
-                        }
-                    }
-                    return *xsink ? -1 : 0;
-                };
-                int ternary_rc = run_ternary();
+                // up or the exception is dispatched to an enclosing catch block, and so that its LValueHelper is not
+                // in the frame of execute() (tools/stack-usage-budgets.txt); returns -1 for an error, 0 for OK
+                int ternary_rc = qore_ir_run_lvalue_path_ternary(path_inst, path_copy, offset_val, length_val,
+                    replacement_val, res, xsink);
                 if (ternary_rc < 0) {
                     res.discard(xsink);
                     res = QoreValue();
