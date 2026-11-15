@@ -4040,11 +4040,38 @@ public:
         return qore_root_ns_private::runtimeGetCallReference(*RootNS, name, xsink);
     }
 
-    DLLLOCAL void pushParseOptions(const char* pf) {
+    //! %push-parse-options: saves the parse options, which are restored when the file ends
+    /** A legacy directive, refused while %modern is in effect: %modern code has a consistent set of parse options, and
+        the compatibility settings that a file sets are bound to the code parsed with them (qore#5764); a legacy file
+        may still push the options before it sets %modern itself, so that its %modern ends with it.  A file included
+        into %modern code is parsed with %modern, so legacy code that needs parse options of its own is parsed apart
+        from it (in a .q file or a Program of its own); %old-style before the directive would save the legacy options
+        and leave the rest of the including file without %modern, so the error does not suggest it.
+    */
+    DLLLOCAL void pushParseOptions(const QoreProgramLocation* loc, const char* pf) {
         // ignore %push-parse-options used multiple times in the same file
         ppo_t::iterator i = ppo.lower_bound(pf);
         if (i != ppo.end() && !strcmp(pf, i->first))
             return;
+        if (isModern(pwo.parse_options)) {
+            QoreStringNode* desc = new QoreStringNode("%push-parse-options cannot be used while %modern is in "
+                "effect: it is a legacy directive, and %modern guarantees a consistent set of parse options");
+            // %modern is complete only with the restrictions that a module parse option mask added to the Program of
+            // the module: the error names them, as the user did not write %modern (as parseCheckModernConflict())
+            if (module_mask_added && !isModern(pwo.parse_options & ~module_mask_added)) {
+                desc->concat("; %modern is complete only with ");
+                describeParseOptions(module_mask_added, *desc);
+                desc->concat(", which the module parse option mask adds (see set_module_parse_option_mask() and "
+                    "load_module_masked()); remove the directive, or load the module with a mask that does not add "
+                    "them");
+            } else {
+                desc->concat("; remove the directive: a file included into %modern code is parsed with %modern, so "
+                    "legacy code that needs parse options of its own is parsed apart from it (in a .q file or a "
+                    "Program of its own)");
+            }
+            makeParseException(pgm, *loc, "PARSE-OPTION-ERROR", desc);
+            return;
+        }
         ppo.insert(i, ppo_t::value_type(pf, pwo.parse_options));
         //printd(5, "qore_program_private::pushParseOptions() this: %p %p '%s' saving %lld\n", this, pf, pf, pwo.parse_options);
     }

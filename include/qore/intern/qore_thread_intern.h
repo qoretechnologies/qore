@@ -1635,7 +1635,7 @@ DLLLOCAL void parse_cond_mark_else();
 DLLLOCAL bool parse_cond_has_else();
 DLLLOCAL bool parse_cond_pop(const QoreProgramLocation* loc);
 DLLLOCAL bool parse_cond_test(const QoreProgramLocation* loc);
-DLLLOCAL void push_parse_options();
+DLLLOCAL void push_parse_options(const QoreProgramLocation* loc);
 DLLLOCAL void parse_try_module_inc();
 DLLLOCAL bool parse_try_module_dec(const QoreProgramLocation* loc);
 DLLLOCAL unsigned parse_try_module_get();
