@@ -2264,7 +2264,14 @@ bool QoreIRToLLVM::emitCallTargetCheckHelper(const QoreIRExprInstruction* check,
                 }
                 llvm::Value* raw = val;
                 arg_kinds[i] = QORE_COMPILED_CALL_ARG_BOXED;
-                if (!nanboxed_values.count(id)) {
+                // a native value read from a boxed one (a list element, for example) is passed as the boxed value
+                // that it was read from, which the call's code has anyway: the native value can be computed only
+                // where the call's code needs it
+                auto boxed_source = nanboxed_values.count(id) ? native_boxed_sources.end()
+                    : native_boxed_sources.find(id);
+                if (boxed_source != native_boxed_sources.end()) {
+                    raw = boxed_source->second;
+                } else if (!nanboxed_values.count(id)) {
                     if (val->getType() == double_type) {
                         raw = builder->CreateBitCast(val, i64_type);
                         arg_kinds[i] = QORE_COMPILED_CALL_ARG_FLOAT;
