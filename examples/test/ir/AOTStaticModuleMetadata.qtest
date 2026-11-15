@@ -198,6 +198,12 @@ int main(int argc, char** argv) {
 
         #! the stack size of the thread of RegisterStackHostCode (KB)
         const RegisterStackSize = 512;
+
+        #! the stack that the first run of RegisterStackHostCode uses up (KB)
+        const RegisterStackStart = 0;
+
+        #! the most stack (KB) that the runs use up after the first parse stack error until the registration fails
+        const RegisterStackWindow = 16;
     }
 
     private {
@@ -372,9 +378,12 @@ int main(int argc, char** argv) {
         would stop it: only the check of registerAOTStaticModuleIntern() can.  The host uses up more of its thread's
         stack at each run before the second registration, until it fails with PARSE-STACK-LIMIT-EXCEEDED (reported
         before the host prints "registered"), and the module is then not used.  Each earlier run must use the module.
-        The runs end at the first failure: with less stack left, the host itself could run out of it.  Without the
-        check, the merge runs with less stack left than any module load is given, and the first stack error is that of
-        the parse after it, if the host does not crash first (issue #6047).
+        The runs step by 4K, and by 1K after a run where only the parse after the registration fails (the registration
+        needs less stack than the parse, so between the two there is a boundary): the registration must then fail
+        within RegisterStackWindow.  The runs end at the first failure of the registration: with less stack left, the
+        host itself could run out of it.  Without the check, the merge runs with less stack left than any module load
+        is given, and the stack errors are those of the parse after it, if the host does not crash first (issue
+        #6047).
     */
     registerStackTest() {
         if (!Option::HAVE_STACK_GUARD) {
@@ -392,7 +401,10 @@ int main(int argc, char** argv) {
         string exe = buildHost(tmp.path, RegisterStackHostCode, obj);
         int used;
         bool stopped;
-        for (int kb = 0; kb < RegisterStackSize; kb += 4) {
+        # the run at which a parse stack error was first seen, if only the parse after the registration failed
+        *int boundary;
+        int kb = RegisterStackStart;
+        while (kb < RegisterStackSize) {
             int status;
             out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s %d %d 2>&1", env, tmp.path, exe, RegisterStackSize, kb),
                 \status);
@@ -408,9 +420,24 @@ int main(int argc, char** argv) {
                 stopped = True;
                 break;
             }
-            # with more than the reserve left at the registration, the module is used
+            if (out =~ /PARSE-STACK-LIMIT-EXCEEDED/) {
+                # the boundary: the registration had just enough stack, and the parse after it, which needs more,
+                # failed; the registration itself must fail within RegisterStackWindow more used, which the runs
+                # approach in 1K steps (without the check, it never does)
+                assertFalse(out =~ /result:/, label + ": " + out);
+                if (!exists boundary) {
+                    boundary = kb;
+                }
+                assertLe(boundary + RegisterStackWindow, kb, sprintf("the registration does not fail within %dK of "
+                    "the first parse stack error at %dK used", RegisterStackWindow, boundary));
+                ++kb;
+                continue;
+            }
+            # with more than the reserve left at the registration and at the parse, the module is used
+            assertEq(NOTHING, boundary, label + ": the module is used again after a parse stack error: " + out);
             assertRegex("result: plain", out, label + ": " + out);
             ++used;
+            kb += 4;
         }
         assertGt(0, used, "the module is used with enough stack");
         assertTrue(stopped, "the registration stops while the parse stack reserve remains");
