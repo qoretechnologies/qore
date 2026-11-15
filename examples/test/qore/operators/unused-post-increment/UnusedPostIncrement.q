@@ -87,10 +87,10 @@ int sub id(int v) {
     return v;
 }
 
-#! post forms whose value is used, which must give the old value, beside unused ones
-/** used: the call argument (i++), the if condition (k++), the list elements (i++, j--), the ternary assigned to t,
-    the switch expression (s++), the while condition (w--), the ?? operand (coalesce++), the comparison operand
-    (cmp++) and the closure's return value (closure_var++)
+#! post forms in contexts whose value is used (which must give the old value), beside unused ones
+/** used: the call argument (i++), the if condition (k++), the list elements (i++, j--), the ternaries assigned to
+    t_true and t_false, the switch expression (s++), the while condition (w--), the ?? operand (coalesce++), the
+    comparison operand (cmp++) and the closure's return value (closure_var++)
 
     unused: the ternaries as statements (c ? a++ : b--;), s++ before the switch and loops++ in the while loop
 */
