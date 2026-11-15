@@ -896,10 +896,10 @@ outward through the loads in progress, passes the parse-time loads that have no
 location (`ModuleManager::parseLoadModule()`, called by a binary module or by
 qcc), and stops at a load made at run time by
 `QoreModuleManager::runTimeLoadModule()`, whose error has the run-time location
-where it was made. The other run-time loads (`loadProviderModule()`,
-`loadModuleForReexport()` and the loads of `issueParseCmd()` and
-`issueRuntimeCmd()`) are not recorded, so their errors take the location of the
-directive of the enclosing load, if any. It
+where it was made. The other loads that push no frame (`loadProviderModule()`,
+`loadModuleForReexport()`, and the loads of `issueParseCmd()`, for a
+`%module-cmd` directive, and of `issueRuntimeCmd()`) are not recorded, so their
+errors take the location of the directive of the enclosing load, if any. It
 comes before every path that does need stack: a reload (`QMLO_RELOAD`, which
 parses the module again), the merge of a module that is already loaded into
 another `Program` (a run-time `Program::loadModule("json")`, for example) and a
