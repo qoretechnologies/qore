@@ -250,6 +250,10 @@ QoreStringNode* QoreStringNode::makeView(QoreStringNode* parent, size_t byte_off
     vp->encoding = actual_parent->getEncoding();
     vp->view_parent = actual_parent;
     vp->view_offset = actual_offset;
+    // the view starts with the part of the known ASCII prefix of its parent that it contains (see
+    // qore_string_private::asciiPrefixStorage()); the parent does not change while the view exists
+    size_t parent_prefix = qore_string_private::get(actual_parent)->getAsciiPrefix();
+    vp->allocated = parent_prefix > actual_offset ? std::min(parent_prefix - actual_offset, byte_len) : 0;
 
     actual_parent->ref();
     return new QoreStringNode(vp);

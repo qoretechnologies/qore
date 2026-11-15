@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - the native checks, the language checks and the timed loops run in child processes
+# test-platform: macos - threads that read one string at once publish its ASCII prefix cache with relaxed atomics
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../ExecModeHarness.qm
+%exec-class AsciiStringIndexTest
+
+#! character offsets of ASCII text in UTF-8 strings (issue #6138)
+class AsciiStringIndexTest inherits QUnit::Test {
+    private {
+        string binary = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        # QORE_BINARY can be the Debug/Release selector script; native tools belong beside the running binary.
+        string tools_dir = dirname(QORE_ARGV[0]);
+        string source = get_script_dir() + "/ascii-string-index.q";
+        string timing_source = get_script_dir() + "/ascii-string-index-timing.q";
+
+        #! the length of the string whose characters the timed loops read
+        const TimedLength = 200000;
+        #! the time limit of each timed loop in seconds; a loop that is quadratic takes several seconds
+        const TimeLimit = 1.0;
+        #! the maximum ratio of the times of a loop over TimedLength and TimedLength / 4 characters for a loop that
+        #! exceeds TimeLimit; about 4 for a linear loop and 16 for a quadratic one
+        const MaxRatio = 8.0;
+    }
+
+    constructor() : QUnit::Test("ASCII string index", "1.0", \ARGV) {
+        addTestCase("native character offsets after the mutators of the C++ API", \native());
+        addTestCase("character offsets after the mutators of the language in all execution modes", \modes());
+        addTestCase("indexing the characters of an ASCII string is linear in all execution modes", \timing());
+        set_return_value(main());
+    }
+
+    private native() {
+        string helper = ENV.QORE_ASCII_STRING_INDEX_TEST ?? tools_dir + "/qore-ascii-string-index-test";
+        if (!is_file(helper)) {
+            testSkip("native ASCII string index test executable is not available");
+            return;
+        }
+        auto result = ExecModeHarness::run_command(quote(helper));
+        assertEq(0, result.rc, result.out);
+        assertRegex("^PASS: [0-9]+ ASCII prefix cache checks\n$", result.stdout, result.out);
+    }
+
+    private modes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(quote(binary) + " -b --enable-debug --exec-mode=" + mode + " "
+                + quote(source));
+            assertRegex("^PASS: [0-9]+ language ASCII prefix cache checks\n$", out, mode);
+        }
+    }
+
+    private timing() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            *list<float> short_times = runTimed(mode, TimedLength / 4);
+            *list<float> times = runTimed(mode, TimedLength);
+            if (!short_times || !times) {
+                continue;
+            }
+            foreach string loop in (("index", "length", "backward")) {
+                float t = times[$#];
+                # a loop over four times as many characters takes about four times as long if it is linear and about
+                # sixteen times as long if it is quadratic: a slow build or machine (ex: a debug or TSan build, or
+                # many tests at once) that exceeds the time limit must still show linear growth
+                float ratio = t / max(short_times[$#], 0.001);
+                if (m_options.verbose) {
+                    printf("%s: %s: %.3f s (%d characters: %.3f s, ratio %.1f)\n", mode, loop, t, TimedLength / 4,
+                        short_times[$#], ratio);
+                }
+                assertTrue(t < TimeLimit || ratio < MaxRatio, sprintf("%s: %s: %d characters in %.3f s, %d in %.3f s",
+                    mode, loop, TimedLength, t, TimedLength / 4, short_times[$#]));
+            }
+        }
+    }
+
+    #! runs the timed loops in the given execution mode and returns their times in seconds
+    private *list<float> runTimed(string mode, int length) {
+        string out = ExecModeHarness::run(quote(binary) + " -b --exec-mode=" + mode + " " + quote(timing_source)
+            + " " + length);
+        *list<*string> times = (out =~ x/^index ([0-9.]+)\nlength ([0-9.]+)\nbackward ([0-9.]+)\n$/);
+        assertEq(3, times.size(), mode + ": " + out);
+        return times.size() == 3 ? (map $1.toFloat(), times) : NOTHING;
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}
