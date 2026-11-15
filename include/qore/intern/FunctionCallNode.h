@@ -980,6 +980,11 @@ public:
         return is_abstract;
     }
 
+    //! returns the class that an AOT image records for the call, from which it restores the class of the call and its
+    //! class context: the parse-time class, or, for an unqualified call of an abstract method, which has none (issue
+    //! #3070), the class of the call
+    DLLLOCAL const QoreClass* getRecordedClass() const;
+
     //! returns the name of the method without a class qualifier
     DLLLOCAL const char* getMethodName() const {
         return ns.getIdentifier();
@@ -999,6 +1004,11 @@ public:
     //! from an AOT image
     DLLLOCAL void setAbstractCall() {
         is_abstract = true;
+        // an unqualified call has no parse-time class, so that the method is looked up by name in the class of the
+        // object, with the class context of the call (issue #3070)
+        if (ns.size() == 1) {
+            qc = nullptr;
+        }
     }
 
 protected:
