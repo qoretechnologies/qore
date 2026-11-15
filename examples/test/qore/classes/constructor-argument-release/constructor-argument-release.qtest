@@ -92,7 +92,9 @@ class ConstructorArgumentReleaseTest inherits QUnit::Test {
         string build = tmp.path + DirSep + "build";
         string config = ENV.Qore_DIR ?? (libdir + "/cmake");
         string configure = "cmake -S " + quote(get_script_dir()) + " -B " + quote(build);
-        if (is_file(config + "/QoreConfig.cmake")) configure += " -DQore_DIR=" + quote(config);
+        # cmake does not resolve a relative Qore_DIR against the current directory (it would find the installed
+        # Qore instead), so the configuration directory of the Qore under test is given as an absolute path
+        if (is_file(config + "/QoreConfig.cmake")) configure += " -DQore_DIR=" + quote(realpath(config));
         checked(configure);
         checked("cmake --build " + quote(build) + " --target ctorprobe -j2");
         string modules = build + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");

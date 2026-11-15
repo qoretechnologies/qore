@@ -56,7 +56,9 @@ class LexicalCompatibilityNativeTest inherits QUnit::Test {
         string build = tmp.path + "/build";
         string config = ENV.Qore_DIR ?? (libqore_dir + "/cmake");
         string configure = "cmake -S " + shellQuote(src) + " -B " + shellQuote(build);
-        if (is_file(config + "/QoreConfig.cmake")) configure += " -DQore_DIR=" + shellQuote(config);
+        # cmake does not resolve a relative Qore_DIR against the current directory (it would find the installed
+        # Qore instead), so the configuration directory of the Qore under test is given as an absolute path
+        if (is_file(config + "/QoreConfig.cmake")) configure += " -DQore_DIR=" + shellQuote(realpath(config));
         checkCommand(configure, "configure external native subclass");
         checkCommand("cmake --build " + shellQuote(build) + " --target compatprobe -j2", "compile native subclass");
         string module_path = build + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
