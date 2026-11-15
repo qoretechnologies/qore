@@ -1033,7 +1033,21 @@ enum class QoreIROpcode : uint16_t {
     */
     CheckCallTarget = 431,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (432, 433, ...)
+    /** Raises an exception that a release left in the sink in the body of a functional loop (qore#6072)
+        The body of a map, select or fold expression keeps the values of an element until the next element replaces
+        them; the release of one whose type can hold an object can run a destructor that raises an exception.  The IR
+        interpreter checks the sink here and branches to the instruction's handler, after an instruction that builds
+        such a container and at the loop's back-edge, which are emitted only for values whose type can hold an object;
+        native code finds the exception with the check that follows the release, and emits nothing.  operands[0] = the
+        value whose release is checked (a container's or a call's), none at a back-edge; no result.
+        qore_ir_prune_release_checks() removes the checks of the values that cannot hold an object, gives a container
+        whose check stays the handler and turns the check of a call's or a Phi's value into a CheckException, which native
+        code compiles after the release of the previous value at the start of the call's continuation or of the Phi's
+        block.
+    */
+    CheckReleaseException = 432,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (433, 434, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1042,8 +1056,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::CheckCallTarget);
-static_assert(QORE_IR_MAX_OPCODE == 431, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::CheckReleaseException);
+static_assert(QORE_IR_MAX_OPCODE == 432, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! The flags of QoreIROpcode::ListSelectorStep (operands[2])
@@ -4266,6 +4280,10 @@ public:
         Program's statement index at runtime.
     */
     bool emit_debug_statements = false;
+    //! true while qore_ir_optimize() is still to run on the function: computeSlotIdsAndEmbed() leaves the release
+    //! checks to it, which prunes them with the facts that it refines (qore#6072, qore_ir_prune_release_checks());
+    //! the pruning gives handlers and converts checks, which a later run cannot undo
+    bool defer_release_check_prune = false;
     //! Owning program of this lowered IR function. Used by the per-Program background
     //! JIT-compile drain (QoreJIT::waitForBgCompileQueue(QoreProgram*)) to cancel/await
     //! only the compiles referencing a Program being torn down. Set unconditionally at

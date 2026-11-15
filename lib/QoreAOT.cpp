@@ -2882,7 +2882,9 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
 
     // Assign slot IDs and compile handler IR functions.  Handler
     // compilation failure now aborts the AOT lowering of this function
-    // (the runtime `executeHandlerBody` asserts handler_ir is populated).
+    // (the runtime `executeHandlerBody` asserts handler_ir is populated).  qore_ir_optimize() below prunes the
+    // release checks (qore#6072)
+    ir_func->defer_release_check_prune = true;
     ir_func->computeSlotIdsAndEmbed();
     std::string handler_error;
     if (lowering.compileAllHandlerIRs(handler_error) < 0) {
@@ -5042,6 +5044,10 @@ static int tryLowerInitExpression(const QoreValue& init_expr, const char* name,
         ir_func = nullptr;
         return -1;
     }
+
+    // the release checks of the values that cannot hold an object go, and the containers of the others get their
+    // handler (qore#6072): native code is generated from this IR without computeSlotIdsAndEmbed()
+    qore_ir_prune_release_checks(*ir_func);
 
     // Init expressions have no body locals (no statement blocks)
     ir_func->computeIROnlyLocals();
@@ -24269,6 +24275,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
             }
             std::string verify_error;
             if (QoreIRVerifier::verify(*ir_func, verify_error)) {
+                // native code is generated here before computeSlotIdsAndEmbed() runs: the release checks of the values
+                // that cannot hold an object go, and the containers of the others get their handler (qore#6072)
+                qore_ir_prune_release_checks(*ir_func);
                 // the LLVM lowering needs the closure-bound locals marked in the instructions: without the flag, a
                 // closure-bound local of a block was not popped at the end of the block, so that the closures of all
                 // iterations of a loop shared one variable (#5869); the slot IDs are not embedded, as the local

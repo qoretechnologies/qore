@@ -82,7 +82,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 431,
+static_assert(QORE_IR_MAX_OPCODE == 432,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -16344,6 +16344,7 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::CheckReleaseException:
             case QoreIROpcode::CheckException: {
                 if (xsink && *xsink) {
                     if (inst->exception_target) {

@@ -105,6 +105,16 @@ struct QoreIRNaturalLoop {
 //! @return natural loops ordered from smallest to largest
 std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlowGraph& cfg);
 
+//! Removes the CheckReleaseException instructions of values that cannot hold an object (qore#6072)
+/** The lowering emits one after each container instruction in the body of a functional loop and one at the loop's
+    back-edge.  One after a container is kept, and the container gets its handler, when the container can hold an
+    object; one at a back-edge is kept when a value of the innermost natural loop that contains it can hold an object.
+    The others are removed, so a loop of values that cannot hold an object runs as before.
+
+    @return the number of instructions removed
+*/
+size_t qore_ir_prune_release_checks(QoreIRFunction& func);
+
 //! Returns the values that a call takes as an argument and that a later execution of the call uses again.
 /** A call that consumes an argument releases it when the call returns (see design/temporary-lifetime.md); that is
     only correct if the argument is defined again for each execution of the call.  Neither the static use count nor
