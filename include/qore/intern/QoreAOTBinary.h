@@ -535,6 +535,8 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        releases (two more arguments).  A handler of an earlier format returned its value, which the runtime no
 //!        longer reads; the AOT runtime identity changes with the runtime entry, so a module compiled for an earlier
 //!        format is refused and must be rebuilt (#6074).
+//!      - the hashdecl path of HASHDECL_NEW/CAST_HASHDECL expressions, slots and member defaults is written as the
+//!        serializable type path when the hashdecl has type parameters (qore#6173, qore#6241)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;

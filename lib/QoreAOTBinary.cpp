@@ -3563,9 +3563,15 @@ static std::string qoreAOTHashDeclDefaultDynamicName(const std::string& path, bo
 
 static QoreValue qoreAOTMakeHashDeclDefaultNode(QoreProgram* pgm, const std::string& path,
         QoreParseListNode* parse_args) {
-    if (const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, path.c_str())) {
+    // a hashdecl with type parameters is resolved with the class that owns them, which gives the hashdecl whose type
+    // parameters are substituted with the types of the receiver when the member is initialized (qore#6241)
+    if (const TypedHashDecl* hd = qore_aot_decode_expr_hashdecl_path(pgm, path.c_str())) {
         // the parse's key check is not serialized, so the keys are always checked when the hash is made
         return QoreValue(new NewHashDeclNode(&loc_builtin, hd, parse_args, true));
+    }
+    // otherwise it is resolved with the receiver and the type arguments of the call when the hash is made
+    if (strstr(path.c_str(), "typeparam<")) {
+        return QoreValue(new NewHashDeclNode(&loc_builtin, path.c_str(), hashTypeInfo, parse_args));
     }
 
     bool or_nothing = false;
@@ -4306,7 +4312,9 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             // NewHashDeclNode: `<MyHashdecl> m();` default-constructed hashdecl
             if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
                 const TypedHashDecl* hd = nhd->hd;
-                std::string ns_path = hd ? hd->getNamespacePath()
+                // a hashdecl with type parameters (HD<T> in a member of a generic class) is written with its type
+                // path, which the reader resolves with the class that owns them (qore#6241)
+                std::string ns_path = hd ? qore_aot_encode_expr_hashdecl_path(hd)
                     : (nhd->isDynamicHashDeclConstruct() ? nhd->getDynamicHashDeclName() : std::string());
                 uint32_t nargs = nhd->args ? static_cast<uint32_t>(nhd->args->size()) : 0;
                 writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT));
@@ -5354,10 +5362,14 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 args.clear();
             }
             if (kind == 2) {
-                // Hashdecl: type_path is a namespace path to a hashdecl
+                // Hashdecl: a namespace path, or the type path of a hashdecl with type parameters (qore#6241)
                 QoreProgram* pgm = getProgram();
                 const QoreNamespace* pns = nullptr;
                 const TypedHashDecl* hd = pgm ? qore_program_private::get(*pgm)->findHashDeclCanonical(type_path, pns) : nullptr;
+                if (!hd && pgm && strstr(type_path, "typeparam<")) {
+                    // a hashdecl with type parameters (qore#6241): see qoreAOTMakeHashDeclDefaultNode()
+                    return qoreAOTMakeHashDeclDefaultNode(pgm, type_path, parse_args);
+                }
                 if (!hd) {
                     printd(0, "AOT readValue VT_NEW_COMPLEX_DEFAULT: cannot resolve hashdecl '%s'\n",
                         type_path);

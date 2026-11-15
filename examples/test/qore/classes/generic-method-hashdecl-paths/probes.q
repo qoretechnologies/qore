@@ -155,6 +155,30 @@ class GT<T> {
     auto defCastT(auto h = cast<hash<HD<T>>>({})) { return h; }
 }
 
+#! member defaults of a generic class with the class's T (qore#6241)
+class GM<T> {
+    public {
+        hash<HD<T>> h1 = new hash<HD<T>>();
+        hash<HD<T>> h2();
+        hash<HD<T>> h3 = cast<hash<HD<T>>>({});
+        # with constructor arguments
+        hash<HD<T>> h4({});
+    }
+}
+
+#! a subclass of an instantiation of the generic class
+class GMI inherits GM<int> {
+}
+
+#! the same member defaults without type parameters, a control
+class MC {
+    public {
+        hash<HD<int>> h1 = new hash<HD<int>>();
+        hash<HD<int>> h2();
+        hash<HD<int>> h3 = cast<hash<HD<int>>>({});
+    }
+}
+
 #! one of the threads running different instantiations of the same generic methods at the same time
 sub thread_worker(int t, Queue q) {
     string err;
@@ -294,6 +318,17 @@ list<string> sub probes(*bool qcc) {
         probe("G.hashListAssign", auto sub () { return g.hashListAssign<int>("x", 1); }),
         probe("G.sctor", auto sub () { return G<string>::sctor<int>("x", 1); }),
         probe("G.defHd2", auto sub () { return g.defHd2<int>("x", 1); }),
+        probe("GM<int>.h1", auto sub () { GM<int> o(); return o.h1; }),
+        probe("GM<int>.h2", auto sub () { GM<int> o(); return o.h2; }),
+        probe("GM<int>.h3", auto sub () { GM<int> o(); return o.h3; }),
+        probe("GM<string>.h1", auto sub () { GM<string> o(); return o.h1; }),
+        probe("GM<string>.h2", auto sub () { GM<string> o(); return o.h2; }),
+        probe("GM<string>.h3", auto sub () { GM<string> o(); return o.h3; }),
+        probe("GM<int>.h4", auto sub () { GM<int> o(); return o.h4; }),
+        probe("GMI.h1", auto sub () { GMI o(); return o.h1; }),
+        probe("MC.h1", auto sub () { MC o(); return o.h1; }),
+        probe("MC.h2", auto sub () { MC o(); return o.h2; }),
+        probe("MC.h3", auto sub () { MC o(); return o.h3; }),
         # two instantiations of a generic class in turn: the class's T is the receiver's
         probe("GT<int>.cast", auto sub () { return gi.castT(1); }),
         probe("GT<string>.cast", auto sub () { return gs.castT("s"); }),
