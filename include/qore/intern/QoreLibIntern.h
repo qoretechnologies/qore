@@ -355,6 +355,42 @@ private:
     int pflag;
 };
 
+//! Sets one parse flag while in scope and restores only that flag: unlike QoreParseContextFlagHelper, it keeps the
+//! flags that the code parsed in its scope sets for the code around it (ex: PF_NARROWED_TYPE)
+class QoreParseContextFlagScope {
+public:
+    DLLLOCAL QoreParseContextFlagScope(QoreParseContext& parse_context, int flag, bool set = true)
+            : parse_context(parse_context), flag(flag), was_set(parse_context.pflag & flag) {
+        if (set) {
+            parse_context.pflag |= flag;
+        }
+    }
+
+    DLLLOCAL ~QoreParseContextFlagScope() {
+        if (was_set) {
+            parse_context.pflag |= flag;
+        } else {
+            parse_context.pflag &= ~flag;
+        }
+    }
+
+    //! Clears the flag while in scope instead of setting it; the parse of an operand that is read in all cases (ex:
+    //! the key expression of an lvalue)
+    struct Clear {};
+    DLLLOCAL QoreParseContextFlagScope(QoreParseContext& parse_context, int flag, Clear)
+            : parse_context(parse_context), flag(flag), was_set(parse_context.pflag & flag) {
+        parse_context.pflag &= ~flag;
+    }
+
+    QoreParseContextFlagScope(const QoreParseContextFlagScope&) = delete;
+    QoreParseContextFlagScope& operator=(const QoreParseContextFlagScope&) = delete;
+
+private:
+    QoreParseContext& parse_context;
+    int flag;
+    bool was_set;
+};
+
 class QoreParseContextAnalysisHelper {
 public:
     DLLLOCAL QoreParseContextAnalysisHelper(QoreParseContext& parse_context)
@@ -444,6 +480,12 @@ DLLLOCAL q_method_t qore_get_lexical_program_method(q_method_t method);
 // returns true if the node needs to be scanned for recursive references or not
 DLLLOCAL bool needs_scan(const AbstractQoreNode* n);
 DLLLOCAL bool needs_scan(const QoreValue& v);
+
+#ifdef DEBUG
+//! the offset in microseconds that debug builds add to the system clock (q_epoch(), q_epoch_us(), q_epoch_ns()), to test
+//! code under a step of the system clock; set with dbg_set_realtime_offset(); the monotonic clock is not affected
+DLLLOCAL extern std::atomic<int64> qore_dbg_realtime_offset_us;
+#endif
 
 #ifdef DEBUG
 //! Returns the number of heap integers (QoreBigIntNode) that exist in the process
@@ -1095,6 +1137,65 @@ DLLLOCAL int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo
 DLLLOCAL int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_int_float_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
+// makes sure the lvalue can be assigned a string value, else raises a parse exception and returns -1
+DLLLOCAL int check_lvalue_string(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
+
+//! returns the one-character UTF-8 string that the += operator adds for a char operand (a new reference)
+/** a char operand of += is added exactly as the one-character string is, for every lvalue type; out of line, as a
+    char operand is rare and its conversion must not enlarge the callers' common paths
+*/
+DLLLOCAL QORE_INTERN_NOINLINE QoreStringNode* qore_plus_equals_char_string(const QoreValue v);
+
+//! returns the integer that += adds to an integer lvalue for a char operand: the char converted as its
+//! one-character string is (\c "5" gives 5, \c "a" 0); out of line, as qore_plus_equals_char_string()
+DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_char_int_operand(const QoreValue v);
+
+//! returns the float that += adds to a float lvalue for a char operand: the char converted as its one-character
+//! string is (\c "5" gives 5.0, \c "a" 0.0); out of line, as qore_plus_equals_char_string()
+DLLLOCAL QORE_INTERN_NOINLINE double qore_plus_equals_char_float_operand(const QoreValue v);
+
+//! QoreValue::isNothing() with the test of an inline value made inline, for the compound assignment paths
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool qore_value_is_nothing(const QoreValue& v) {
+    if (v.rawBits() == QoreValue::makeNothing().rawBits()) {
+        return true;
+    }
+    return v.isPointer() && is_nothing(v.get<const AbstractQoreNode>());
+}
+
+//! QoreValue::isNullOrNothing() with the test of an inline value made inline, for the compound assignment paths
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool qore_value_is_null_or_nothing(const QoreValue& v) {
+    uint64_t bits = v.rawBits();
+    if (bits == QoreValue::makeNothing().rawBits() || bits == QoreValue::makeNull().rawBits()) {
+        return true;
+    }
+    if (!v.isPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* n = v.get<const AbstractQoreNode>();
+    return is_nothing(n) || is_null(n);
+}
+
+//! returns the integer that += adds to an integer lvalue for an operand that is not an inline integer: a char as its
+//! one-character string is, any other value as QoreValue::getAsBigInt() converts it
+/** It takes the same steps as QoreValue::getAsBigInt() after its test for an inline integer, which its callers make
+    (the slow path of native code, and qore_plus_equals_int_operand()), so that it costs no more than that conversion
+*/
+DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_boxed_int_operand(const QoreValue v);
+
+//! returns the integer that += adds to an integer lvalue for an operand: a char as its one-character string is, any
+//! other value as QoreValue::getAsBigInt() converts it, in the same steps, so that it costs no more than that
+//! conversion
+DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_int_operand(const QoreValue v);
+
+//! returns the float that += adds to a float lvalue for an operand that is not a float: a char as its one-character
+//! string is, any other value as QoreValue::getAsFloat() converts it (the same steps after its test for a float)
+DLLLOCAL QORE_INTERN_NOINLINE double qore_plus_equals_nonfloat_float_operand(const QoreValue v);
+
+//! returns the float that += adds to a float lvalue for an operand: a float itself, else as
+//! qore_plus_equals_nonfloat_float_operand()
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE double qore_plus_equals_float_operand(const QoreValue v) {
+    return v.isFloat() ? v.getDouble() : qore_plus_equals_nonfloat_float_operand(v);
+}
 
 DLLLOCAL extern QoreClass* QC_PSEUDOVALUE;
 DLLLOCAL extern QoreClass* QC_PSEUDONOTHING;
@@ -1301,7 +1402,13 @@ DLLLOCAL extern std::atomic<bool> qore_shutdown;
 //! set by qore_cleanup() once no thread but the calling one runs and none can be waited for any more: no thread can be
 //! started from then on (THREAD-CREATION-FAILURE), and a wait cannot be cancelled by another thread (qore#6045)
 DLLLOCAL extern std::atomic<bool> qore_thread_start_closed;
+//! set by qore_stop_module_uncounted_entries() if a foreign thread runs in the code of a module that its Program does
+//! not count (see qore_program_private::leaveForeignThreads())
+DLLLOCAL extern std::atomic<bool> qore_foreign_threads_in_module_code;
 DLLLOCAL extern std::atomic<bool> qore_exiting;
+//! Returns true if the calling thread is a foreign thread: a thread of another runtime registered with
+//! q_register_foreign_thread() or q_register_reserved_foreign_thread()
+DLLLOCAL bool q_thread_is_foreign() noexcept;
 //! set by qore_cleanup() once the types are freed; Qore values released after that are released too late
 DLLLOCAL extern std::atomic<bool> qore_types_deleted;
 

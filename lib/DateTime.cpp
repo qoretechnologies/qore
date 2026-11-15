@@ -194,6 +194,14 @@ int64 DateTime::getEpochMicrosecondsUTC() const {
    return priv->getEpochMicrosecondsUTC();
 }
 
+bool DateTime::getEpochMicrosecondsUTCChecked(int64& micros) const {
+   return priv->getEpochMicrosecondsUTCChecked(micros);
+}
+
+int DateTime::getEpochMicrosecondsUTCCheckedKind(int64& micros) const {
+   return priv->getEpochMicrosecondsUTCCheckedKind(micros);
+}
+
 void DateTime::setDateLiteral(int64 date) {
    priv->setDateLiteral(date);
 }
@@ -290,32 +298,56 @@ bool DateTime::isEqual(const DateTime& dt) const {
    return priv->isEqual(*dt.priv);
 }
 
+// the unchecked (deprecated) functions below saturate a result out of range: they call the checked implementation
+// with no exception sink (qore#6103)
 DateTime* DateTime::add(const DateTime* dt) const {
-   return add(*dt);
+    assert(dt);
+    std::unique_ptr<DateTime> rv(new DateTime(isRelative() ? *dt : *this));
+    rv->priv->add(isRelative() ? *priv : *dt->priv, nullptr);
+    return rv.release();
 }
 
 DateTime* DateTime::add(const DateTime& dt) const {
     std::unique_ptr<DateTime> rv(new DateTime(isRelative() ? dt : *this));
-    if (isRelative()) {
-        rv->priv->add(*priv);
-    } else {
-        rv->priv->add(*dt.priv);
+    rv->priv->add(isRelative() ? *priv : *dt.priv, nullptr);
+    return rv.release();
+}
+
+DateTime* DateTime::add(const DateTime& dt, ExceptionSink* xsink) const {
+    std::unique_ptr<DateTime> rv(new DateTime(isRelative() ? dt : *this));
+    if (rv->priv->add(isRelative() ? *priv : *dt.priv, xsink) && xsink) {
+        return nullptr;
     }
     return rv.release();
 }
 
 DateTime* DateTime::subtractBy(const DateTime* dt) const {
-   return subtractBy(*dt);
+    assert(dt);
+    DateTime* rv = new DateTime(*this);
+    rv->priv->subtractBy(*dt->priv, nullptr);
+    return rv;
 }
 
 DateTime* DateTime::subtractBy(const DateTime& dt) const {
-   DateTime* rv = new DateTime(*this);
-   rv->priv->subtractBy(*dt.priv);
-   return rv;
+    DateTime* rv = new DateTime(*this);
+    rv->priv->subtractBy(*dt.priv, nullptr);
+    return rv;
+}
+
+DateTime* DateTime::subtractBy(const DateTime& dt, ExceptionSink* xsink) const {
+    std::unique_ptr<DateTime> rv(new DateTime(*this));
+    if (rv->priv->subtractBy(*dt.priv, xsink) && xsink) {
+        return nullptr;
+    }
+    return rv.release();
 }
 
 void DateTime::addSecondsTo(int64 secs, int us) {
-   priv->addSecondsTo(secs, us);
+    priv->addSecondsTo(secs, us, nullptr);
+}
+
+int DateTime::addSecondsTo(int64 secs, int us, ExceptionSink* xsink) {
+    return priv->addSecondsTo(secs, us, xsink);
 }
 
 bool DateTime::hasValue() const {
@@ -323,13 +355,25 @@ bool DateTime::hasValue() const {
 }
 
 DateTime* DateTime::unaryMinus() const {
-   DateTime* rv = new DateTime(*this);
-   rv->priv->unaryMinus();
-   return rv;
+    DateTime* rv = new DateTime(*this);
+    rv->priv->unaryMinus(nullptr);
+    return rv;
+}
+
+DateTime* DateTime::unaryMinus(ExceptionSink* xsink) const {
+    std::unique_ptr<DateTime> rv(new DateTime(*this));
+    if (rv->priv->unaryMinus(xsink) && xsink) {
+        return nullptr;
+    }
+    return rv.release();
 }
 
 void DateTime::unaryMinusInPlace() {
-   priv->unaryMinus();
+    priv->unaryMinus(nullptr);
+}
+
+int DateTime::unaryMinusInPlace(ExceptionSink* xsink) {
+    return priv->unaryMinus(xsink);
 }
 
 void DateTime::getInfo(const AbstractQoreZoneInfo* n_zone, qore_tm& info) const {
@@ -367,9 +411,17 @@ DateTime* DateTime::makeRelative(int y, int mo, int d, int h, int mi, int s, int
 }
 
 DateTime* DateTime::makeRelativeFromSeconds(int64 s, int u) {
-   std::unique_ptr<DateTime> rv(new DateTime(true));
-   rv->setRelativeDateSeconds(s, u);
-   return rv.release();
+    std::unique_ptr<DateTime> rv(new DateTime(true));
+    rv->priv->setRelativeDateSeconds(s, u, nullptr);
+    return rv.release();
+}
+
+DateTime* DateTime::makeRelativeFromSeconds(int64 s, int u, ExceptionSink* xsink) {
+    std::unique_ptr<DateTime> rv(new DateTime(true));
+    if (rv->priv->setRelativeDateSeconds(s, u, xsink) && xsink) {
+        return nullptr;
+    }
+    return rv.release();
 }
 
 const AbstractQoreZoneInfo* DateTime::getZone() const {
@@ -377,7 +429,11 @@ const AbstractQoreZoneInfo* DateTime::getZone() const {
 }
 
 void DateTime::setRelativeDateSeconds(int64 s, int us) {
-   priv->setRelativeDateSeconds(s, us);
+    priv->setRelativeDateSeconds(s, us, nullptr);
+}
+
+int DateTime::setRelativeDateSeconds(int64 s, int us, ExceptionSink* xsink) {
+    return priv->setRelativeDateSeconds(s, us, xsink);
 }
 
 int qore_tm::secsEast() const {

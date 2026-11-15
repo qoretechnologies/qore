@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# A Program object that its host releases only after qore_cleanup() has cleared the remaining Programs (a Program
+# object that a Python object holds, for example): clearing the data of its Program used to fail the assertion in
+# qore_program_private::del() that the Program object has stopped reporting its code to the garbage collector
+# (scan_holder), as the object still held the Program.  The test module "staticpgmcode" keeps a reference to an object
+# for the life of the process with staticpgm_keep_object(), as such a host does.  The assertion is compiled into a debug
+# build only: a release build passes the test as well, so the test is meaningful for a debug build of libqore.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class ProgramObjectOutlivesCleanupTest
+
+class ProgramObjectOutlivesCleanupTest inherits QUnit::Test {
+    private {
+        #! the interpreter running this test, used to launch the children
+        string qore_exe;
+        #! environment the children need to pick up the same build as the parent
+        string env_prefix = "";
+    }
+
+    constructor() : Test("ProgramObjectOutlivesCleanupTest", "1.0") {
+        qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        if (ENV.LD_LIBRARY_PATH) {
+            env_prefix += sprintf("LD_LIBRARY_PATH=%s ", ENV.LD_LIBRARY_PATH);
+        }
+        if (ENV.QORE_MODULE_DIR) {
+            env_prefix += sprintf("QORE_MODULE_DIR=%s ", ENV.QORE_MODULE_DIR);
+        }
+        addTestCase("a Program object that outlives the library cleanup", \programObjectTest());
+        addTestCase("a Program object with thread initialization code and entry handlers that outlives the library "
+            "cleanup", \programObjectHandlersTest());
+        set_return_value(main());
+    }
+
+    #! runs "<qore> --exec-mode=<mode> -l staticpgmcode -e '<statement>'" in a child and returns its exit status
+    /** a child that fails an assertion is aborted by SIGABRT: the shell reports 134
+    */
+    private int runChild(string statement, string mode, reference<string> output) {
+        @assert(statement.find("'") == -1);
+        string out_file = sprintf("%s/qore-pgm-object-child-%d.log", tmp_location(), gettid());
+        on_exit unlink(out_file);
+        int rc = system(sprintf("%s%s --exec-mode=%s -l staticpgmcode -e '%s' >%s 2>&1", env_prefix, qore_exe, mode,
+            statement, out_file));
+        output = File::readTextFile(out_file);
+        return rc;
+    }
+
+    #! fails the test case with the reason if the test module "staticpgmcode" cannot be loaded
+    private bool requireModule() {
+        bool ok = system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) == 0;
+        assertTrue(ok, "the test module 'staticpgmcode' cannot be loaded: build it with: cmake --build "
+            "<build directory> --target staticpgmcode (run_tests.sh puts the modules of the build tree in the module "
+            "path)");
+        return ok;
+    }
+
+    private programObjectTest() {
+        if (!requireModule()) {
+            return;
+        }
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string output;
+            assertEq(0, runChild("%modern\nProgram p(PO_NEW_STYLE); p.parse(\"int sub f() { return 1; }\", \"x\"); "
+                "staticpgm_keep_object(p);", mode, \output), "program object: " + mode);
+            assertEq(Qore::False, output =~ /Assertion|exception/i, "no error output: " + mode);
+        }
+    }
+
+    private programObjectHandlersTest() {
+        if (!requireModule()) {
+            return;
+        }
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string output;
+            assertEq(0, runChild("%modern\nProgram p(PO_NEW_STYLE); object o = new Counter(); p.setThreadInit(sub () { o.getCount(); }); "
+                "p.setThreadEntryHandler(sub () { o.getCount(); }, sub () { o.getCount(); }); staticpgm_keep_object(p);", mode, \output),
+                "program object with handlers: " + mode);
+            assertEq(Qore::False, output =~ /Assertion|exception/i, "no error output: " + mode);
+        }
+    }
+}

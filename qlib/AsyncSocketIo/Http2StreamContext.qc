@@ -175,7 +175,8 @@ public class Http2StreamContext inherits AbstractStreamContext {
         @since AsyncSocketIo 1.0
     */
     sendDataWithTimeout(binary data, timeout timeout_ms, bool end_stream = False) {
-        int deadline = timeout_ms > 0 ? clock_getmillis() + timeout_ms : 0;
+        # the deadline is on the monotonic clock: a step of the system clock does not change the wait
+        int deadline = timeout_ms > 0 ? clock_get_monotonic_us() / 1000 + timeout_ms : 0;
         while (True) {
             try {
                 sock.sendHttp2StreamData(stream_id, data, end_stream);
@@ -191,7 +192,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
             }
             int wait_ms = -1;
             if (deadline) {
-                wait_ms = deadline - clock_getmillis();
+                wait_ms = deadline - clock_get_monotonic_us() / 1000;
                 if (wait_ms <= 0) {
                     throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/2 stream %d: the send buffer did not drain within %d "
                         "ms; %d bytes were not sent", stream_id, timeout_ms, data.size());
@@ -206,6 +207,29 @@ public class Http2StreamContext inherits AbstractStreamContext {
         if (wake_callback) {
             wake_callback();
         }
+    }
+
+    #! Sends the close frame of a WebSocket connection on the stream, unless one was sent on it before
+    /** See @ref Qore::Socket::sendHttp2StreamWebSocketClose() "Socket::sendHttp2StreamWebSocketClose()"
+
+        @param frame the encoded close frame
+        @param end_stream if @ref True, ends the stream after the frame (also if the frame is not sent)
+
+        @return @ref True if the frame was sent; @ref False if a close frame was sent on the stream before
+
+        @since AsyncSocketIo 1.0
+    */
+    bool sendWebSocketClose(binary frame, bool end_stream = False) {
+        on_exit {
+            if (wake_callback) {
+                wake_callback();
+            }
+        }
+        int rc = sock.sendHttp2StreamWebSocketClose(stream_id, frame, end_stream);
+        if (end_stream) {
+            ended = True;
+        }
+        return !rc;
     }
 
     #! Attempts to send data on the HTTP/2 stream without blocking on backpressure

@@ -1,0 +1,116 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the iterate operator on hashdecl-typed hashes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class IterateHashDeclTest
+
+#! Tests the element type of the iterate operator on a hash with a hashdecl type (qore#5916)
+/** The iterate operator gives the key/value pairs of a hash.  For a hash with a hashdecl type, or a union of hashdecl
+    types, the parser gave the element the type of the hash itself, so reading the key of a pair was a parse error; a
+    hashdecl-typed hash whose type was known only at run time gave pairs whose value had the type of the hashdecl, so
+    the first member value raised RUNTIME-TYPE-ERROR.  The members of a hashdecl have no single type, so the pairs are
+    hash<KeyValueInfo<auto>>, and the elements of a union of a hashdecl type with other types are auto; for the same
+    reason the list of the values of such a hash has no value type, and the hash is not a hash with a specific value
+    type such as hash<string, int>, so it is not assigned to one.  The checks are in iterate-hashdecl-worker.qr, which
+    is run in each execution mode and as a program compiled with qcc; every run must give the results below.
+*/
+class IterateHashDeclTest inherits QUnit::Test {
+    public {
+        #! the result of every check the worker makes
+        const Expected = {
+            "key-list": "[\"a\", \"s\"]",
+            "untyped-pairs": "[{key: \"a\", value: 1}, {key: \"s\", value: \"x\"}]",
+            "untyped-pairs-type": "list<hash<KeyValueInfo<auto>>>",
+            "union-pairs-a": "[\"a=1\", \"s=x\"]",
+            "union-pairs-b": "[\"b=2\"]",
+            "or-nothing-pairs": "[\"a\", \"s\"]",
+            "or-nothing-pairs-nothing": "null",
+            "foreach-pairs": "[\"a:1\", \"s:\\\"x\\\"\"]",
+            "select-pairs": "[\"a\"]",
+            "first-pair": "\"x\"",
+            "iterator-pairs": "[\"a:1\", \"s:\\\"x\\\"\"]",
+            "complex-hash-pairs": "[{key: \"k\", value: 3}]",
+            "complex-hash-pairs-type": "list<hash<KeyValueInfo<int>>>",
+            "map-without-iterate-type": "hash<IterA>",
+            "values": "[1, \"x\"]",
+            "values-type": "list",
+            "assign-typed-hash": "RUNTIME-TYPE-ERROR",
+            "assign-unique-typed-hash": "RUNTIME-TYPE-ERROR",
+            "mixed-union-pairs": "[\"a\", \"s\"]",
+            "mixed-union-string": "[c'a', c'b']",
+            "mixed-union-string-pairs": "[{key: \"a\", value: 1}, {key: \"s\", value: \"x\"}]",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("IterateHashDeclTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled program", \testCompiledProgram());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, getWorker()));
+            checkWorkerOutput(mode, out);
+        }
+    }
+
+    testCompiledProgram() {
+        TmpDir tmp("qore-iterate-hashdecl-");
+        string exe = tmp.path + DirSep + "iterate-hashdecl";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --strip-source -o %s %s 2>&1", libqore_dir,
+            qcc_bin, exe, getWorker()));
+        assertTrue(is_file(exe), "compiled program: " + compile_out);
+        checkWorkerOutput("aot", backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "iterate-hashdecl-worker.qr";
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them; any other output fails
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

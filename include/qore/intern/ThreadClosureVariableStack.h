@@ -136,6 +136,11 @@ public:
     DLLLOCAL ClosureVarValue* instantiate(const char* id, const QoreTypeInfo* typeInfo, QoreValue& nval,
             bool assign, uint64_t order, bool read_only = false) {
         ClosureVarValue* cvar = new ClosureVarValue(id, typeInfo, nval, assign, read_only);
+        return instantiateNew(cvar, order);
+    }
+
+    //! Publishes newly created storage; an existing capture uses instantiate() without acquiring a frame reference.
+    DLLLOCAL ClosureVarValue* instantiateNew(ClosureVarValue* cvar, uint64_t order) {
         // no other thread can see the variable yet
         cvar->frame_owned.store(true, std::memory_order_relaxed);
         // The frame's reference is never part of a cycle, so it is a real reference: while the frame holds it, no
@@ -145,7 +150,14 @@ public:
         // For the same reason the object the variable holds is marked with a real reference while the frame holds the
         // variable, as a plain local variable's value is: a scan started at the object is deferred as well.
         cvar->lendFrameReference();
-        instantiateIntern(cvar, order, true);
+        try {
+            instantiateIntern(cvar, order, true);
+        } catch (...) {
+            // A new stack block can fail to allocate before the entry is published. Undo the frame's ownership.
+            ClosureStackEntry entry(cvar, order, true);
+            releaseEntry(entry, nullptr);
+            throw;
+        }
         return cvar;
     }
 

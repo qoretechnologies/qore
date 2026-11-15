@@ -1,0 +1,44 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Declarations that survive their Programs and are still referenced are not garbage for the cleanup of the library
+# (issue #5790): a Program defines classes and hashdecls that name each other, inherit each other and a hashdecl
+# parent, a child Program inherits them, and both are deleted while objects and a hash of the declarations are alive;
+# dbg_cyclic_type_declarations() (the finder that the library cleanup uses) must find none until the end, and the
+# cleanup then frees them; see deleted-program-types.qtest.  Needs a debug libqore.
+
+%modern
+const Src1 = "
+%new-style
+public hashdecl HP { int x = 1; }
+public hashdecl HC inherits HP { *hash<HD2> h; }
+public hashdecl HD2 { *hash<HC> c; }
+public class Base { public { *Derived d; } }
+public class Derived inherits Base { public { *Base b; hash<HC> hc = <HC>{}; } }
+public class X inherits Derived { public { *Y y; } }
+public class Y { public { *X x; } }
+public Program sub child() {
+    Program p(PO_NEW_STYLE);
+    p.parse(\"auto sub get() { X x(); x.y = new Y(); return (x, new Y(), <HC>{}); }\", \"p2\");
+    return p;
+}
+";
+our auto keep;
+our Program p2;
+{
+    Program p1(PO_NEW_STYLE);
+    p1.parse(Src1, "p1");
+    p2 = p1.callFunction("child");
+    keep = p2.callFunction("get");
+    printf("loaded cyclic=%d\n", dbg_cyclic_type_declarations());
+    delete p1;
+    printf("p1 deleted cyclic=%d\n", dbg_cyclic_type_declarations());
+}
+delete p2;
+printf("p2 deleted, objects alive: cyclic=%d\n", dbg_cyclic_type_declarations());
+auto a = remove keep[0];
+printf("x alive: cyclic=%d\n", dbg_cyclic_type_declarations());
+a = NOTHING;
+printf("y + hash alive: cyclic=%d\n", dbg_cyclic_type_declarations());
+keep = NOTHING;
+printf("released: cyclic=%d\n", dbg_cyclic_type_declarations());

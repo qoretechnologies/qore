@@ -1183,6 +1183,13 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     return nullptr;
                 }
 
+                // the server was reached once the handshake has completed: recorded before HTTP/3 is set up, also
+                // early for 0-RTT below, so that an error raised while it is set up is known to follow the handshake
+                // (issue #5944)
+                if (quic_session->isHandshakeComplete()) {
+                    handshake_completed_.store(true, std::memory_order_release);
+                }
+
                 // 0-RTT: set up HTTP/3 early when 0-RTT TX key is installed
                 // (may be detected after receiving server response to Initial)
                 {

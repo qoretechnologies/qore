@@ -466,45 +466,68 @@ QoreValue ParseObjectMethodReferenceNode::makeReference(QoreValue val, Exception
 
     const QoreClass* oc = o->getClass();
 
-    // find the method at runtime if necessary
-    if (!m) {
-        // serialize method resolution at runtime
-        AutoLocker al(lck);
-        // check m again inside the lock (this way we avoid the lock in the common case where the method has already been resolved)
-        if (!m) {
-            ClassAccess access = Public;
-            m = oc->findMethod(method.c_str(), access);
-            if (!m) {
-                m = oc->findStaticMethod(method.c_str(), access);
-                if (!m) {
-                    xsink->raiseException(*loc, "OBJECT-METHOD-REFERENCE-ERROR", QoreValue(),
-                        "cannot resolve reference to %s::%s(): unknown method", o->getClassName(), method.c_str());
-                    return QoreValue();
-                }
-            }
-
-            if (access > Public && !qore_class_private::runtimeCheckPrivateClassAccess(*oc)) {
-                if (m->isPrivate())
-                    xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(),
-                        "cannot create a call reference to %s %s::%s() from outside the class",
-                        privpub(access), o->getClassName(), method.c_str());
-                else
-                    xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(),
-                        "cannot create a call reference to %s::%s() because the parent class that implements the method "
-                        "(%s::%s()) is privately inherited", o->getClassName(), method.c_str(),
-                        m->getClass()->getName(), method.c_str());
-
-                return QoreValue();
-            }
-        }
-    }
-
-    // a static method of the receiver's declared class is bound to that class, as a call through the object is
-    // (qore#5990)
-    if (o->getClass() == m->getClass() || (qc && m->isStatic())) {
+    // the method of the declared class, resolved when parsing, for an object of that class; a static method of it is
+    // bound to that class, as a call through the object is (qore#5990)
+    if (m && (oc == m->getClass() || m->isStatic())) {
         return new RunTimeResolvedMethodReferenceNode(loc, o, m);
     }
 
+    // otherwise the method is resolved for the class of each object, also an object of a subclass of the declared
+    // class, which can override the method with one that is not accessible here (qore#6062)
+    uint64_t class_id = qore_class_private::getAllocationId(*oc);
+    if (rt_class_id.load(std::memory_order_acquire) == class_id) {
+        if (rt_resolved) {
+            return new RunTimeResolvedMethodReferenceNode(loc, o, rt_m);
+        }
+        return new RunTimeObjectMethodReferenceNode(loc, o, method.c_str());
+    }
+
+    return makeReferenceForClass(o, oc, class_id, xsink);
+}
+
+QoreValue ParseObjectMethodReferenceNode::makeReferenceForClass(QoreObject* o, const QoreClass* oc,
+        uint64_t class_id, ExceptionSink* xsink) const {
+    ClassAccess access = Public;
+    const QoreMethod* om = oc->findMethod(method.c_str(), access);
+    if (!om) {
+        om = oc->findStaticMethod(method.c_str(), access);
+        if (!om) {
+            xsink->raiseException(*loc, "OBJECT-METHOD-REFERENCE-ERROR", QoreValue(),
+                "cannot resolve reference to %s::%s(): unknown method", o->getClassName(), method.c_str());
+            return QoreValue();
+        }
+    }
+
+    if (access > Public) {
+        // the access check depends on the class context of the caller, so the result is not cached
+        if (!qore_class_private::runtimeCheckPrivateClassAccess(*oc)) {
+            if (om->isPrivate()) {
+                xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(),
+                    "cannot create a call reference to %s %s::%s() from outside the class",
+                    privpub(access), o->getClassName(), method.c_str());
+            } else {
+                xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(),
+                    "cannot create a call reference to %s::%s() because the parent class that implements the method "
+                    "(%s::%s()) is privately inherited", o->getClassName(), method.c_str(),
+                    om->getClass()->getName(), method.c_str());
+            }
+            return QoreValue();
+        }
+    }
+
+    bool resolved = oc == om->getClass();
+    if (access == Public && !rt_class_id.load(std::memory_order_acquire)) {
+        AutoLocker al(lck);
+        if (!rt_class_id.load(std::memory_order_relaxed)) {
+            rt_m = om;
+            rt_resolved = resolved;
+            rt_class_id.store(class_id, std::memory_order_release);
+        }
+    }
+
+    if (resolved) {
+        return new RunTimeResolvedMethodReferenceNode(loc, o, om);
+    }
     return new RunTimeObjectMethodReferenceNode(loc, o, method.c_str());
 }
 
@@ -757,6 +780,24 @@ QoreValue RunTimeResolvedMethodReferenceNode::dispatchValue(const QoreListNode* 
     return qore_method_private::eval(*method, xsink, rc, obj, args, qc, pgm_ctx);
 }
 
+QoreValue RunTimeResolvedMethodReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    if (checkObject(xsink)) {
+        return QoreValue();
+    }
+    QoreProgram* pgm_ctx = reinterpret_cast<QoreProgram*>(pgm_ref);
+    if (pgm_ref & PGM_CREATOR) {
+        pgm_ctx = reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_CREATOR);
+        if (pgm_ctx == rc_get_current_program(rc)) {
+            pgm_ctx = nullptr;
+        }
+    }
+    return qore_method_private::evalGivenArgs(*method, xsink, rc, obj, args, qc, pgm_ctx);
+}
+
 QoreValue RunTimeResolvedMethodReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
@@ -868,6 +909,20 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchValue(const QoreListNode* ar
     QoreProgram* pgm_ctx = pgm != rc_get_current_program(rc) ? pgm : nullptr;
     return qore_class_private::get(*qore_object_private::get(*obj)->theclass)->evalMethod(obj, method.c_str(), args,
         qc, rc, xsink, nullptr, pgm_ctx);
+}
+
+QoreValue RunTimeObjectMethodReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    if (checkObject(xsink)) {
+        return QoreValue();
+    }
+    QoreProgram* pgm = reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_WEAK_REF);
+    QoreProgram* pgm_ctx = pgm != rc_get_current_program(rc) ? pgm : nullptr;
+    return qore_class_private::get(*qore_object_private::get(*obj)->theclass)->evalMethodGivenArgs(obj,
+        method.c_str(), args, qc, rc, xsink, pgm_ctx);
 }
 
 QoreValue RunTimeObjectMethodReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
@@ -1177,6 +1232,14 @@ QoreValue LocalStaticMethodCallReferenceNode::dispatchValue(const QoreListNode* 
     return qore_method_private::eval(*method, xsink, rc, nullptr, args);
 }
 
+QoreValue LocalStaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return qore_method_private::evalGivenArgs(*method, xsink, rc, nullptr, args);
+}
+
 QoreValue LocalStaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
@@ -1226,6 +1289,14 @@ QoreValue LocalMethodCallReferenceNode::dispatchValue(const QoreListNode* args, 
     // the call runs with the permissions of the context that created the reference
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     return qore_method_private::eval(*method, xsink, rc, runtime_get_stack_object(), args, nullptr);
+}
+
+QoreValue LocalMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return qore_method_private::evalGivenArgs(*method, xsink, rc, runtime_get_stack_object(), args);
 }
 
 QoreValue LocalMethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
@@ -1286,6 +1357,14 @@ QoreValue StaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args,
     // issue #4964: do not set object or class context until arguments are evaluated
     // do not set pgm context here before evaluating args
     return qore_method_private::eval(*method, xsink, rc, nullptr, args, class_ctx, pgm);
+}
+
+QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return qore_method_private::evalGivenArgs(*method, xsink, rc, nullptr, args, class_ctx, pgm);
 }
 
 QoreValue StaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
@@ -1458,6 +1537,14 @@ QoreValue MethodCallReferenceNode::dispatchValue(const QoreListNode* args, Excep
     // the call runs with the permissions of the context that created the reference
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     return qore_method_private::eval(*method, xsink, rc, obj, args);
+}
+
+QoreValue MethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return qore_method_private::evalGivenArgs(*method, xsink, rc, obj, args);
 }
 
 QoreValue MethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
@@ -1729,6 +1816,14 @@ QoreValue LocalFunctionCallReferenceNode::dispatchValue(const QoreListNode* args
     return uf->evalFunction(0, args, nullptr, rc, xsink, explicit_inst.get());
 }
 
+QoreValue LocalFunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return uf->evalFunctionTmpArgs(nullptr, args, nullptr, rc, xsink, explicit_inst.get());
+}
+
 QoreValue LocalFunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
@@ -1769,6 +1864,14 @@ QoreValue FunctionCallReferenceNode::dispatchValue(const QoreListNode* args, Exc
     // the call runs with the permissions of the context that created the reference
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     return uf->evalFunction(0, args, pgm, rc, xsink, explicit_inst.get());
+}
+
+QoreValue FunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return uf->evalFunctionTmpArgs(nullptr, args, pgm, rc, xsink, explicit_inst.get());
 }
 
 QoreValue FunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,

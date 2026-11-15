@@ -180,6 +180,20 @@ qore_enum_decl_private::~qore_enum_decl_private() {
     for (auto* member : members) {
         delete member;
     }
+    qore_type_owner_destroyed(&type_owner);
+}
+
+const QoreTypeInfo* qore_enum_decl_private::getTypeOwnerType() const {
+    return typeInfo;
+}
+
+const QoreTypeInfo* qore_enum_decl_private::getTypeOwnerOrNothingType() const {
+    return orNothingTypeInfo;
+}
+
+void qore_enum_decl_private::freeTypeOwner() {
+    assert(!refs.reference_count());
+    delete ed;
 }
 
 QoreEnumDecl* qore_enum_decl_private::newEnumDecl(const char* n, const QoreTypeInfo* baseType) {

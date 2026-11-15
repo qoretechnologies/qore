@@ -136,6 +136,38 @@ static const QoreTypeInfo* qore_plus_element_value_type(const QoreTypeInfo* ti) 
     return nullptr;
 }
 
+//! the type of the container that the operator gives for operand values of the given value types and member types,
+//! if it is known more precisely than the base type of the container; see qore_arith_container_rule_t
+static const QoreTypeInfo* qore_plus_container_type(qore_type_t lt, const QoreTypeInfo* lti, qore_type_t rt,
+        const QoreTypeInfo* rti) {
+    if (lt == NT_LIST || rt == NT_LIST) {
+        // a list and a value added to it as one element; the type of a list made of two lists depends on the values
+        if (lt == rt) {
+            return nullptr;
+        }
+        const QoreTypeInfo* list_ti = lt == NT_LIST ? lti : rti;
+        const QoreTypeInfo* value_ti = qore_plus_element_value_type(lt == NT_LIST ? rti : lti);
+        if (!list_ti || !value_ti) {
+            return nullptr;
+        }
+        bool from_values = false;
+        const QoreTypeInfo* rv = qore_plus_list_add_type(QoreTypeInfo::getElementType(list_ti), value_ti, from_values);
+        return from_values ? nullptr : rv;
+    }
+    // a hash or an object plus NOTHING is the hash or the object, on either side
+    if (lt == NT_NOTHING && (rt == NT_HASH || rt == NT_OBJECT)) {
+        return rti;
+    }
+    if (rt == NT_NOTHING && (lt == NT_HASH || lt == NT_OBJECT)) {
+        return lti;
+    }
+    // two hashes of the same type give a hash of that type, as the rule for operands of one type each gives it
+    if (lt == NT_HASH && rt == NT_HASH && lti && rti && QoreTypeInfo::isOutputIdentical(lti, rti)) {
+        return lti;
+    }
+    return nullptr;
+}
+
 QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     QoreOperandEvalHolder lh(left, xsink);
     if (*xsink)
@@ -166,9 +198,14 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         return qore_list_private::get(*rh->get<const QoreListNode>())->prependElement(lh.takeReferencedValue(), xsink);
     }
 
-    if (lt == NT_STRING) {
+    // a char is added as a one-character string: the operator concatenates it with the other operand converted to a
+    // string, as for a string; a char added to a string takes the encoding of the string, and a char added to any
+    // other value gives a UTF-8 string
+    if (lt == NT_STRING || (lt == NT_CHAR && rt != NT_STRING)) {
         QoreStringNodeValueHelper lstr(*lh);
-        QoreStringNodeHolder str(new QoreStringNode(**lstr));
+        // a char gives a new string of its own, which is taken; a string is copied
+        QoreStringNodeHolder str(lt == NT_CHAR ? lstr.getReferencedValue() : new QoreStringNode(**lstr));
+        assert(str->is_unique());
 
         if (rt == NT_STRING) {
             QoreStringNodeValueHelper rstr(*rh);
@@ -182,7 +219,7 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         return str.release();
     }
 
-    if (rt == NT_STRING) {
+    if (rt == NT_STRING || rt == NT_CHAR) {
         QoreStringNodeValueHelper r(*rh);
         QoreStringNodeValueHelper strval(*lh, r->getEncoding(), xsink);
         if (*xsink)
@@ -204,8 +241,10 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         int64 ms = lh->getAsBigInt() - (secs * 1000);
         DateTime l;
         // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
-        l.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
-        return rh->get<DateTimeNode>()->add(l);
+        if (l.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000), xsink)) {
+            return QoreValue();
+        }
+        return rh->get<DateTimeNode>()->add(l, xsink);
     }
 
     if (check_date_timeout_variant && lt == NT_DATE && rt == NT_INT) {
@@ -213,14 +252,36 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         int64 ms = rh->getAsBigInt() - (secs * 1000);
         DateTime r;
         // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
-        r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
-        return lh->get<DateTimeNode>()->add(r);
+        if (r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000), xsink)) {
+            return QoreValue();
+        }
+        return lh->get<DateTimeNode>()->add(r, xsink);
     }
 
     if (lt == NT_DATE || rt == NT_DATE) {
-        DateTimeNodeValueHelper l(*lh);
-        DateTimeValueHelper r(*rh);
-        return l->add(*r);
+        // a result out of range raises INVALID-DATE, as does an operand converted to a date out of range (qore#6103)
+        if (lt == NT_DATE) {
+            if (rt == NT_DATE) {
+                return lh->get<const DateTimeNode>()->add(*rh->get<const DateTimeNode>(), xsink);
+            }
+            DateTimeValueHelper r(*rh, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            return lh->get<const DateTimeNode>()->add(**r, xsink);
+        }
+        if (lt != NT_INT && lt != NT_FLOAT) {
+            // other types are converted as before (ex: a hash gives the zero date in the local time zone)
+            DateTimeNodeValueHelper l(*lh);
+            return l->add(*rh->get<const DateTimeNode>(), xsink);
+        }
+        // a number of seconds
+        DateTimeValueHelper l(*lh, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        SimpleRefHolder<DateTimeNode> ln(new DateTimeNode(**l));
+        return ln->add(*rh->get<const DateTimeNode>(), xsink);
     }
 
     if (lt == NT_NUMBER || rt == NT_NUMBER) {
@@ -233,7 +294,7 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         return lh->getAsFloat() + rh->getAsFloat();
     }
 
-    if (lt == NT_INT || rt == NT_INT || lt == NT_CHAR || rt == NT_CHAR) {
+    if (lt == NT_INT || rt == NT_INT) {
         return lh->getAsBigInt() + rh->getAsBigInt();
     }
 
@@ -394,7 +455,9 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     else if (QoreTypeInfo::hasType(leftTypeInfo) && QoreTypeInfo::hasType(rightTypeInfo)
         && !QoreTypeInfo::parseReturns(leftTypeInfo, NT_LIST)
         && !QoreTypeInfo::parseReturns(rightTypeInfo, NT_LIST)) {
-        if (QoreTypeInfo::isType(leftTypeInfo, NT_STRING) || QoreTypeInfo::isType(rightTypeInfo, NT_STRING)) {
+        // a char is added as a one-character string
+        if (QoreTypeInfo::isType(leftTypeInfo, NT_STRING) || QoreTypeInfo::isType(rightTypeInfo, NT_STRING)
+            || QoreTypeInfo::isType(leftTypeInfo, NT_CHAR) || QoreTypeInfo::isType(rightTypeInfo, NT_CHAR)) {
             if (!QoreTypeInfo::canConvertToScalar(leftTypeInfo) || !QoreTypeInfo::canConvertToScalar(rightTypeInfo)) {
                 QoreStringMaker desc("cannot mix %s and %s types with the + operator",
                     QoreTypeInfo::getName(leftTypeInfo), QoreTypeInfo::getName(rightTypeInfo));
@@ -408,8 +471,7 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             returnTypeInfo = numberTypeInfo;
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_FLOAT) || QoreTypeInfo::isType(rightTypeInfo, NT_FLOAT)) {
             returnTypeInfo = floatTypeInfo;
-        } else if (QoreTypeInfo::isType(leftTypeInfo, NT_INT) || QoreTypeInfo::isType(rightTypeInfo, NT_INT)
-            || QoreTypeInfo::isType(leftTypeInfo, NT_CHAR) || QoreTypeInfo::isType(rightTypeInfo, NT_CHAR)) {
+        } else if (QoreTypeInfo::isType(leftTypeInfo, NT_INT) || QoreTypeInfo::isType(rightTypeInfo, NT_INT)) {
             returnTypeInfo = bigIntTypeInfo;
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_HASH)) {
             if (QoreTypeInfo::isType(rightTypeInfo, NT_HASH)
@@ -438,7 +500,8 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     {
         const QoreTypeInfo* arith_ti;
         bool single;
-        switch (qore_arith_parse_result_type(QoreArithParseOp::Plus, leftTypeInfo, rightTypeInfo, arith_ti, single)) {
+        switch (qore_arith_parse_result_type(QoreArithParseOp::Plus, leftTypeInfo, rightTypeInfo, arith_ti, single,
+                qore_plus_container_type)) {
             case QoreArithParseResult::Scalar:
                 returnTypeInfo = arith_ti;
                 break;

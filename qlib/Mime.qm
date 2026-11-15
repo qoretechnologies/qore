@@ -186,6 +186,9 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
     - @ref Mime::mime_encode_header_word_b() "mime_encode_header_word_b()" splits a long string into encoded words
       on folded lines; the line breaks of the base64 text were written inside one encoded word without folding
       white space, which broke the header
+    - @ref Mime::mime_encode_header_word_b() "mime_encode_header_word_b()" and
+      @ref Mime::mime_encode_header_word_q() "mime_encode_header_word_q()" take the line ending of the folded lines
+      as an optional argument, so that a header written with another line ending than CRLF is folded with it
     - a part header name or value with a NUL, CR or LF character, which would end the header line and start
       another header, raises \c PART-ERROR when the part is added and in
       @ref Mime::MultiPartMessage::serializeHeaders() "MultiPartMessage::serializeHeaders()"
@@ -1214,7 +1217,7 @@ public namespace Mime {
     # encoded; text that is too long for one encoded word is split between characters, never inside a character,
     # since every encoded word must be decodable on its own (RFC 2047 section 5), and continued in another encoded
     # word with the same label on a folded line
-    string sub mime_encode_header_q_text(string str, string encoding) {
+    string sub mime_encode_header_q_text(string str, string encoding, string eol = "\r\n") {
         # the longest text of an encoded word: the word without "=?", the label, "?Q?" and "?="
         int max_text = MimeEncodedWordLen - encoding.size() - 7;
         string rv = "";
@@ -1235,7 +1238,7 @@ public namespace Mime {
                 }
             }
             if (lp && (lp + nc.size()) > max_text) {
-                rv += sprintf("?=\r\n =?%s?Q?", encoding);
+                rv += sprintf("?=%s =?%s?Q?", eol, encoding);
                 lp = 0;
             }
             rv += nc;
@@ -1273,10 +1276,14 @@ public namespace Mime {
     /** According to <a href="http://tools.ietf.org/html/rfc2047">RFC 2047</a>; a string that is too long for one
         encoded word of at most 75 characters is split between characters into encoded words on folded lines
 
+        @param str the string to encode
+        @param eol the line ending of the folded lines that a long string is split into, which is the line ending
+        of the header (ex: \c "\n" for a header string written with \c "\n" line endings)
+
         @since %Mime 1.9 a long string is split into encoded words on folded lines; the line breaks of the base64
-        text were written inside one encoded word, with no folding white space, before
+        text were written inside one encoded word, with no folding white space, before; added the \a eol parameter
     */
-    public string sub mime_encode_header_word_b(string str) {
+    public string sub mime_encode_header_word_b(string str, string eol = "\r\n") {
         string enc = get_encoding(str);
         # the most bytes whose base64 text fits in an encoded word with the label, "=?", "?B?" and "?="
         int max_bytes = ((MimeEncodedWordLen - enc.size() - 7) / 4) * 3;
@@ -1291,7 +1298,7 @@ public namespace Mime {
             chunk += b;
         }
         words += sprintf("=?%s?B?%s?=", enc, make_base64_string(chunk));
-        return words.join("\r\n ");
+        return words.join(eol + " ");
     }
 
     #! returns a string in "Q" ("quoted-printable") encoding for MIME header string words
@@ -1302,11 +1309,16 @@ public namespace Mime {
 
         @since %Mime 1.9 a CR or LF character is encoded instead of being written as a line break, which ended the
         header line and let the rest of the string be read as another header; the encoded words that a long string
-        is split into carry the encoding label (it was missing: \c "=??Q?") and are split between characters
+        is split into carry the encoding label (it was missing: \c "=??Q?") and are split between characters; added
+        the \a eol parameter
+
+        @param str the string to encode
+        @param eol the line ending of the folded lines that a long string is split into, which is the line ending
+        of the header (ex: \c "\n" for a header string written with \c "\n" line endings)
     */
-    public string sub mime_encode_header_word_q(string str) {
+    public string sub mime_encode_header_word_q(string str, string eol = "\r\n") {
         string enc = get_encoding(str);
-        return sprintf("=?%s?Q?%s?=", enc, mime_encode_header_q_text(str, enc));
+        return sprintf("=?%s?Q?%s?=", enc, mime_encode_header_q_text(str, enc, eol));
     }
     #/@}
 

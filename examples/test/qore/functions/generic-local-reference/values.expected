@@ -1,0 +1,63 @@
+typed-string: "s"
+typed-int: 7
+untyped-string: "s"
+untyped-int: 7
+direct: "s"
+direct-ref: "s"
+initialized: "s"
+nullable: null
+unassigned: null
+invalid-direct: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+invalid-ref: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+escaped-string: "s"
+escaped-int: 7
+escaped-string-again: "t"
+escaped-invalid: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+escaped-reference: "s"
+foreign-invalid: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+class-local: "s"
+inherited-local: "s"
+class-escaped: "s"
+class-invalid: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+typed-string: "s"
+typed-int: 7
+untyped-string: "s"
+untyped-int: 7
+direct: "s"
+direct-ref: "s"
+initialized: "s"
+nullable: null
+unassigned: null
+invalid-direct: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+invalid-ref: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+escaped-string: "s"
+escaped-int: 7
+escaped-string-again: "t"
+escaped-invalid: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+escaped-reference: "s"
+foreign-invalid: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+class-local: "s"
+inherited-local: "s"
+class-escaped: "s"
+class-invalid: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+typed-string: "s"
+typed-int: 7
+untyped-string: "s"
+untyped-int: 7
+direct: "s"
+direct-ref: "s"
+initialized: "s"
+nullable: null
+unassigned: null
+invalid-direct: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+invalid-ref: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+escaped-string: "s"
+escaped-int: 7
+escaped-string-again: "t"
+escaped-invalid: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+escaped-reference: "s"
+foreign-invalid: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+class-local: "s"
+inherited-local: "s"
+class-escaped: "s"
+class-invalid: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
