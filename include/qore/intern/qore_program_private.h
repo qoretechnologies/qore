@@ -1077,16 +1077,35 @@ public:
     std::atomic<bool> sandboxed{false};
 
     //! the sandbox of the code that created the Program or added code to it (referenced), or nullptr
-    /** Set when sandboxed code, or C++ code acting for it, creates the Program (in the constructor) or adds code to
-        it (markSandboxedParse()), to the manager that governs that code (qore_caller_sandbox_ref()); a later addition
-        combines its manager with the one already set, so it never loosens the sandbox.  It governs the Program's code
-        together with \c sandbox_manager wherever the code runs, called by trusted code included (an imported
-        function, a function copied into an evaluation Program, a call by a thread that a binary module entered the
-        Program with), as every lookup of a Program's sandbox resolves it (getSandboxManagerRefs()).
+    /** Set when sandboxed code, or C++ code acting for it, creates the Program (in the constructor) or commits code
+        that it parsed in it (internParseCommit()), to the manager that governs that code (qore_caller_sandbox_refs());
+        a later addition combines its manager with the one already set, so it never loosens the sandbox.  It governs
+        the Program's code together with \c sandbox_manager wherever the code runs, called by trusted code included
+        (an imported function, a function copied into an evaluation Program, a call by a thread that a binary module
+        entered the Program with), as every lookup of a Program's sandbox resolves it (getSandboxManagerRefs()).
         Program::setSandboxManager() does not change it, so the Program's code cannot lose the sandbox of the code
-        that created it.  Written only under sm_lock; released with \c sandbox_manager when the Program is cleared.
+        that created it.  Written only under sm_lock; released with \c sandbox_manager when the Program is cleared or
+        destroyed.
     */
     std::atomic<QoreSandboxManager*> creator_sandbox_manager{nullptr};
+
+    //! the policy sandbox of the code that created the Program or added code to it (referenced), or nullptr
+    /** The manager for policy checks (filesystem, network, uncontrolled APIs) of the same code as
+        \c creator_sandbox_manager, resolved as a policy check resolves it (qore_find_thread_sandbox_policy_manager_ref()):
+        a Program that trusted code creates under a policy barrier or a system-policy capability for a sandboxed
+        caller (SandboxManager::createSystemPolicyCall()) has the caller's sandbox for everything but its policy, as
+        the code that created it does.  Written with \c creator_sandbox_manager.
+    */
+    std::atomic<QoreSandboxManager*> creator_policy_manager{nullptr};
+
+    //! the sandbox of the code that parsed the pending code of the Program (referenced), or nullptr
+    /** Set by a parse entry point for sandboxed code (pendCreatorSandbox()) once the parse may go ahead, attached to
+        the Program (addCreatorSandbox()) when internParseCommit() commits the code, and dropped when the code is
+        rolled back, so that a parse that is refused or fails changes nothing.  Accessed with the parse lock held.
+    */
+    QoreSandboxManager* pending_creator_sandbox = nullptr;
+    //! the policy manager of \c pending_creator_sandbox (referenced), or nullptr
+    QoreSandboxManager* pending_creator_policy = nullptr;
 
     //! true if the Program stays allocated while any code can run: a module's Program (see
     //! qore_program_set_module_lifetime()); never cleared once set
@@ -1788,6 +1807,23 @@ public:
     DLLLOCAL virtual void run() = 0;
 };
 
+//! The sandbox of the code that parses code in a Program, from the parse entry point to the pending code
+/** Resolved by qore_program_private::getParseCreatorSandbox() before the parse switches to the Program, and given to
+    qore_program_private::pendCreatorSandbox() once the parse may go ahead; owns its references
+*/
+struct QoreParseCreatorSandbox {
+    //! the manager for all purposes but policy checks (referenced), or nullptr
+    QoreSandboxManager* sm = nullptr;
+    //! the manager for policy checks (referenced), or nullptr
+    QoreSandboxManager* policy = nullptr;
+
+    DLLLOCAL QoreParseCreatorSandbox() = default;
+    DLLLOCAL ~QoreParseCreatorSandbox();
+
+    QoreParseCreatorSandbox(const QoreParseCreatorSandbox&) = delete;
+    QoreParseCreatorSandbox& operator=(const QoreParseCreatorSandbox&) = delete;
+};
+
 class qore_program_private : public qore_program_private_base {
 public:
     //! the del closures of the local modules that a compiled script embeds, in the order that the compiler gave them
@@ -1954,7 +1990,7 @@ public:
     /** Allocates nothing; the caller must call deref() on each pointer returned that is not nullptr.  The managers
         govern the Program's code together (see \c creator_sandbox_manager).
     */
-    DLLLOCAL void getSandboxManagerRefs(QoreSandboxManager*& own, QoreSandboxManager*& creator);
+    DLLLOCAL void getSandboxManagerRefs(QoreSandboxManager*& own, QoreSandboxManager*& creator, bool policy = false);
 
     //! Returns a ref'd pointer to the sandbox manager set with QoreProgram::setSandboxManager(), or nullptr
     DLLLOCAL QoreSandboxManager* getOwnSandboxManagerRef();
@@ -1972,7 +2008,38 @@ public:
 
         @throw std::bad_alloc the composition of the managers could not be allocated
     */
-    DLLLOCAL void addCreatorSandbox(QoreSandboxManager* sm);
+    DLLLOCAL void addCreatorSandbox(QoreSandboxManager* sm, QoreSandboxManager* policy_sm);
+
+    //! Resolves the sandbox of the calling code for a parse in the Program and marks the Program sandboxed
+    /** Called by every parse entry point that adds code before it switches to the Program: if the calling code is
+        sandboxed (qore_caller_is_sandboxed()), the Program is marked sandboxed (see markSandboxedParse()) and the
+        caller's managers are returned in \a pcs, for pendCreatorSandbox() once the parse may go ahead.
+
+        @return 0 for OK, -1 if the managers could not be resolved for lack of memory (an exception is raised): the
+        parse must not go ahead, as its code would not be governed
+    */
+    DLLLOCAL int getParseCreatorSandbox(QoreParseCreatorSandbox& pcs, ExceptionSink* xsink);
+
+    //! Records the sandbox of the code that parses the pending code; called with the parse lock held
+    /** Called just before the code is parsed, after every check that can refuse the parse: from then on the parse
+        either commits the code (internParseCommit(), which attaches the managers) or rolls it back
+        (internParseRollback(), which drops them).  The managers are combined with those already pending.
+
+        @return 0 for OK, -1 if the managers could not be combined for lack of memory (an exception is raised)
+    */
+    DLLLOCAL int pendCreatorSandbox(QoreParseCreatorSandbox& pcs, ExceptionSink* xsink);
+
+    //! Drops the sandbox of the pending code; called with the parse lock held when the pending code is rolled back
+    DLLLOCAL void dropPendingCreatorSandbox();
+
+    //! Releases every sandbox manager of the Program; when it is cleared, and when it is destroyed without being so
+    DLLLOCAL void releaseSandboxManagers(ExceptionSink* xsink);
+
+    //! Attaches the sandbox of the pending code to the Program; called with the parse lock held before the commit
+    /** @return 0 for OK, -1 if it could not be attached for lack of memory (an exception is raised in \a xsink): the
+        code must not be committed
+    */
+    DLLLOCAL int commitPendingCreatorSandbox(ExceptionSink* xsink);
 
     //! Returns true if the Program's code may not change the state of trusted modules (qore#5664)
     /** The state of a trusted module is its public variables and the static members of its classes: one value that
@@ -2816,7 +2883,9 @@ public:
     }
 
     //! Marks the Program sandboxed if sandboxed code, or code acting for it, adds code to it (issue #5659)
-    /** Called by every parse of source code (parse(), parsePending(), parseExpression()) before it switches to the
+    /** Called by the parse entry points that resolve no sandbox for the code (parseExpression(), whose expression is
+        governed through the provenance of its Expression object, and the definition of command-line defines), and by
+        getParseCreatorSandbox() for the others; called before the parse switches to the
         Program, so that the caller's code is looked at (see qore_caller_is_sandboxed()).  Whether a Program is trusted
         is decided when it is created, but code that sandboxed code supplies later is the sandbox's as well: a
         trusted Program that sandboxed code parses its own code in (one that it was handed, one that library code's
@@ -2909,7 +2978,11 @@ public:
         if (*xsink) {
             return -1;
         }
-        markSandboxedParse();
+        // the sandbox of the calling code, attached to the Program when the code is committed
+        QoreParseCreatorSandbox pcs;
+        if (getParseCreatorSandbox(pcs, xsink)) {
+            return -1;
+        }
 
         ProgramRuntimeParseContextHelper pch(xsink, pgm);
         assert(xsink);
@@ -2917,7 +2990,7 @@ public:
             return -1;
         }
 
-        if (checkParse(xsink)) {
+        if (checkParse(xsink) || pendCreatorSandbox(pcs, xsink)) {
             return -1;
         }
 
@@ -3019,7 +3092,12 @@ public:
         return 0;
     }
 
-    DLLLOCAL void parse(FILE *fp, const char* name, ExceptionSink* xsink, ExceptionSink* wS, int wm) {
+    //! Parses and commits the code in \a fp
+    /** @param outer_pcs the sandbox of the calling code if it was resolved before the parse switched to the Program
+        (parseFile()), otherwise nullptr
+    */
+    DLLLOCAL void parse(FILE *fp, const char* name, ExceptionSink* xsink, ExceptionSink* wS, int wm,
+            QoreParseCreatorSandbox* outer_pcs = nullptr) {
         assert(xsink);
         printd(5, "QoreProgram::parse(fp: %p, name: %s, xsink: %p, wS: %p, wm: %d)\n", fp, name, xsink, wS, wm);
 
@@ -3043,7 +3121,12 @@ public:
         if (*xsink) {
             return;
         }
-        markSandboxedParse();
+        // the sandbox of the calling code, attached to the Program when the code is committed
+        QoreParseCreatorSandbox own_pcs;
+        QoreParseCreatorSandbox& pcs = outer_pcs ? *outer_pcs : own_pcs;
+        if (!outer_pcs && getParseCreatorSandbox(pcs, xsink)) {
+            return;
+        }
 
         {
             ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
@@ -3051,7 +3134,7 @@ public:
                 return;
             }
 
-            if (checkParse(xsink)) {
+            if (checkParse(xsink) || pendCreatorSandbox(pcs, xsink)) {
                 return;
             }
 
@@ -3142,14 +3225,18 @@ public:
         if (*xsink) {
             return;
         }
-        markSandboxedParse();
+        // the sandbox of the calling code, attached to the Program when the code is committed
+        QoreParseCreatorSandbox pcs;
+        if (getParseCreatorSandbox(pcs, xsink)) {
+            return;
+        }
 
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         if (*xsink) {
             return;
         }
 
-        if (checkParse(xsink)) {
+        if (checkParse(xsink) || pendCreatorSandbox(pcs, xsink)) {
             return;
         }
 
@@ -3356,7 +3443,12 @@ public:
         if (*xsink) {
             return;
         }
-        markSandboxedParse();
+        // the sandbox of the calling code, resolved before the switch to the Program; attached to the Program when
+        // the code is committed (see parse(FILE*))
+        QoreParseCreatorSandbox pcs;
+        if (getParseCreatorSandbox(pcs, xsink)) {
+            return;
+        }
 
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         if (*xsink)
@@ -3369,7 +3461,7 @@ public:
         }
         setScriptPath(filename);
 
-        parse(fp, filename, xsink, wS, wm);
+        parse(fp, filename, xsink, wS, wm, &pcs);
     }
 
     DLLLOCAL void parsePending(const QoreString *str, const QoreString *lstr, ExceptionSink* xsink, ExceptionSink* wS, int wm, const QoreString* source = 0, int offset = 0) {
@@ -4771,7 +4863,7 @@ public:
         const qore_program_private* pp = pgm->priv;
         // the flag is set whenever a manager is set; the manager is read as well, so that the answer never depends on
         // the order of the two stores
-        return pp->sandboxed.load(std::memory_order_acquire) || pp->sandbox_manager.load(std::memory_order_acquire);
+        return pp->sandboxed.load(std::memory_order_acquire) || pp->hasSandboxManager();
     }
 
     //! returns the parse options of the Program, as QoreProgram::getParseOptions() does, without a call into the

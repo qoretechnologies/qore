@@ -259,7 +259,9 @@ QoreSandboxManager* qore_socket_ref_policy_sandbox_manager() {
         // applied sandbox context never lowers the sandbox of the Program that is running (see
         // find_thread_sandbox_stack_ref_intern())
         if (QoreProgram* pgm = getProgram()) {
-            QoreSandboxManager* own = qore_program_private::get(*pgm)->getSandboxManagerRef();
+            // the Program's own manager: the sandbox of the code that created it has no policy manager when that
+            // code ran under a system-policy capability
+            QoreSandboxManager* own = qore_program_private::get(*pgm)->getOwnSandboxManagerRef();
             if (own) {
                 own->deref(nullptr);
                 assert(false && "a sandboxed Program has no network policy");

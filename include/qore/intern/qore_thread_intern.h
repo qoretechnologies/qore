@@ -660,6 +660,14 @@ DLLLOCAL bool qore_caller_is_untrusted();
 */
 DLLLOCAL QoreSandboxManager* qore_caller_sandbox_ref();
 
+//! Returns the sandbox of the code running on the current thread for all purposes and for policy checks
+/** \a sm is the manager that qore_caller_sandbox_ref() returns, \a policy_sm the manager that a policy check of the
+    same code resolves (qore_find_thread_sandbox_policy_manager_ref()): none under a policy barrier or a system-policy
+    capability; for the sandbox that a Program keeps of the code that creates it or adds code to it.  The caller owns
+    the references returned; may throw std::bad_alloc, and then returns none
+*/
+DLLLOCAL void qore_caller_sandbox_refs(QoreSandboxManager*& sm, QoreSandboxManager*& policy_sm);
+
 //! the Program ID returned when there is no Program
 #define QORE_NO_PROGRAM_ID (~(qore_program_id_t)0)
 

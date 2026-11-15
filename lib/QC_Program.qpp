@@ -2934,7 +2934,7 @@ pgm.setSandboxManager(sm);
 
     @note Once set, the sandbox manager restricts filesystem and network access for code
     running in this program.
-    @note A %Program that sandboxed code created, or added code to, keeps the sandbox of that code (see
+    @note A %Program that sandboxed code created, or committed code in, keeps the sandbox of that code (see
     @ref sandbox_program_capability): the manager set here governs the %Program's code together with that sandbox,
     so it can only add restrictions to it, and removing the manager does not remove that sandbox
 
@@ -2974,7 +2974,7 @@ if (sm) {
     @endcode
 
     @note NOTHING does not mean that the code of the %Program is not sandboxed: a %Program that sandboxed code
-    creates, or adds code to, has no manager of its own, but it keeps the sandbox of that code, which governs its
+    creates, or commits code in, has no manager of its own, but it keeps the sandbox of that code, which governs its
     code wherever it runs, also when trusted code calls it (see @ref sandbox_program_capability); this method returns
     only the manager set with setSandboxManager()
 

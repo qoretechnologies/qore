@@ -296,15 +296,25 @@ authenticate();
       them later (see @ref sandbox_provenance)
     - <b>A %Program that sandboxed code creates keeps its sandbox</b>: a %Program that sandboxed code creates (with
       @ref Qore::Program::constructor() "Program::constructor()", in a thread that it starts, or through library code
-      that it calls), or adds code to (@ref Qore::Program::parse() "Program::parse()" of a %Program that it was given),
-      keeps the sandbox that governs that code, and its code is governed by it wherever it runs: also when trusted
-      code calls it without the Program object, such as a function that it imported into a %Program of the host, or a
-      function copied into an evaluation %Program
+      that it calls), or commits code in (@ref Qore::Program::parse() "Program::parse()" of a %Program that it was
+      given, or @ref Qore::Program::parsePending() "Program::parsePending()" whose code is committed later, by any
+      code), keeps the sandbox that governs that code, and its code is governed by it wherever it runs: also when
+      trusted code calls it without the Program object, such as a function that it imported into a %Program of the
+      host, or a function copied into an evaluation %Program
       (@ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()"), and also on a thread
       that a binary module enters the %Program with.  The sandbox's interrupts and call limits apply to that code as
-      well.  @ref Qore::Program::setSandboxManager() "Program::setSandboxManager()" adds a manager of the %Program's
-      own, which governs its code together with the sandbox that it keeps; it never removes that sandbox, and
-      @ref Qore::Program::getSandboxManager() "Program::getSandboxManager()" returns only the %Program's own manager
+      well.  This is the whole %Program's code: a %Program of the host that sandboxed code commits code in is governed
+      by that sandbox from then on, its earlier code included, so a host gives sandboxed code a %Program that it may
+      add code to only for the sandbox's own use.  A parse that is refused or rolled back, and an
+      @ref Qore::Expression "Expression" (which is governed through its object), add no code and give the %Program
+      no sandbox.  The policy that the %Program keeps is the one that governed the code that created it: a %Program
+      that trusted code creates in a system-policy capability
+      (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") for a sandboxed
+      caller keeps the caller's interrupts and limits but not its filesystem, network and uncontrolled-API policy, as
+      the capability's own code has.  @ref Qore::Program::setSandboxManager() "Program::setSandboxManager()" adds a manager of the
+      %Program's own, which governs its code together with the sandbox that it keeps; it never removes that sandbox,
+      and @ref Qore::Program::getSandboxManager() "Program::getSandboxManager()" returns only the %Program's own
+      manager
     - <b>Give tenant code only what the tenant may do</b>: a host must not give tenant or sandboxed code a
       @ref Qore::Program "Program" object with more freedom than the tenant itself has, such as the %Program of the
       host or of another tenant, or a %Program with fewer parse-option restrictions than the tenant's own.  To give

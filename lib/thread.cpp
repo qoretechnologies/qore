@@ -5158,7 +5158,7 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
         auto visit_pgm = [&](QoreProgram* p) -> bool {
             QoreSandboxManager* own_ptr;
             QoreSandboxManager* creator_ptr;
-            qore_program_private::get(*p)->getSandboxManagerRefs(own_ptr, creator_ptr);
+            qore_program_private::get(*p)->getSandboxManagerRefs(own_ptr, creator_ptr, policy);
             ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
             ReferenceHolder<QoreSandboxManager> creator(creator_ptr, nullptr);
             if (!own && !creator) {
@@ -5186,15 +5186,16 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
     // established it; see ThreadData::sandbox_policy_barrier and ThreadData::sandbox_policy_barrier_ctx
     const bool barrier = policy && td->sandbox_policy_barrier;
     // the first Program found with a sandbox governs alone: its managers (its own and the sandbox of the code that
-    // created it) are visited while their references are held, and the walk ends.  Returns true if the Program has a
+    // created it, the policy manager of that code for a policy check) are visited while their references are held,
+    // and the walk ends.  Returns true if the Program has a
     // sandbox, with the result of the visit in \a rv
-    auto try_pgm = [pgm_id, &visit](QoreProgram* p, bool& rv) -> bool {
+    auto try_pgm = [pgm_id, policy, &visit](QoreProgram* p, bool& rv) -> bool {
         if (!p) {
             return false;
         }
         QoreSandboxManager* own_ptr;
         QoreSandboxManager* creator_ptr;
-        qore_program_private::get(*p)->getSandboxManagerRefs(own_ptr, creator_ptr);
+        qore_program_private::get(*p)->getSandboxManagerRefs(own_ptr, creator_ptr, policy);
         ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
         ReferenceHolder<QoreSandboxManager> creator(creator_ptr, nullptr);
         if (!own && !creator) {
@@ -5400,6 +5401,31 @@ bool qore_caller_is_untrusted() {
     }
     QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
     return static_cast<bool>(governing);
+}
+
+void qore_caller_sandbox_refs(QoreSandboxManager*& sm, QoreSandboxManager*& policy_sm) {
+    sm = nullptr;
+    policy_sm = nullptr;
+    ReferenceHolder<QoreSandboxManager> all(qore_caller_sandbox_ref(), nullptr);
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+    // library code that code that is not trusted loaded, while it is initialized: that code's sandbox, as for all
+    // purposes (see qore_caller_sandbox_ref())
+    if (!td->module_init_barriers.empty()) {
+        const ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
+        if (!mib.lift && mib.loader_untrusted) {
+            if (mib.loader_manager) {
+                mib.loader_manager->ref();
+            }
+            policy_sm = mib.loader_manager;
+            sm = all.release();
+            return;
+        }
+    }
+    policy_sm = find_thread_sandbox_manager_ref_intern(nullptr, true);
+    sm = all.release();
 }
 
 QoreSandboxManager* qore_caller_sandbox_ref() {

@@ -36,18 +36,31 @@ code can import a function into a Program of the host, the host can copy its fun
 decisions made from it (what it creates, the paths reserved for trusted code), but applies no policy, interrupt or
 limit, so the code called in those ways ran with the freedom of the trusted code that called it.
 
-So the Program also keeps the sandbox itself: `qore_program_private::creator_sandbox_manager`, the manager that
-`qore_caller_sandbox_ref()` resolves for the creating code, is set in the constructor whenever the constructor marks
-the Program sandboxed, and by `markSandboxedParse()` when sandboxed code parses code into a Program (a later addition
-is combined with the one set, so it only adds restrictions). It is separate from the Program's own manager:
+So the Program also keeps the sandbox itself: `qore_program_private::creator_sandbox_manager` and
+`creator_policy_manager`, the managers that `qore_caller_sandbox_refs()` resolves for the creating code for all
+purposes and for policy checks (none for policy under a policy barrier or a system-policy capability, so a helper
+Program that trusted code creates there for a sandboxed caller keeps the caller's interrupts and limits but not its
+policy, as the capability's own code does), are set in the constructor whenever the constructor marks the Program
+sandboxed, and when code that sandboxed code parsed is committed (a later addition is combined with the one set, so
+it only adds restrictions). A parse entry point resolves them before it switches to the Program
+(`getParseCreatorSandbox()`), records them as the sandbox of the pending code once nothing can refuse the parse any
+more (`pendCreatorSandbox()`), and `internParseCommit()` attaches them just before it merges the code, so the code is
+never committed without its sandbox (an allocation failure refuses the commit); `internParseRollback()` drops them,
+so a refused or failed parse, or pending code that the host rolls back, changes nothing. An expression
+(`parseExpression()`) attaches nothing: it is governed through the provenance of its `Expression` object. The
+attached sandbox governs all of the Program's code, its earlier code included. It is separate from the Program's own
+manager:
 `QoreProgram::setSandboxManager()` (also with `nullptr`) and `Program::getSandboxManager()` act on the own manager
 only, and the two govern the Program's code together. Every lookup of a Program's sandbox resolves both:
-`getSandboxManagerRefs()` returns references to both without allocating, which the walk of the thread's sandbox
-stack visits as one Program (`visit_thread_sandbox_stack()`), so the uncontrolled-API check still allocates
+`getSandboxManagerRefs()` returns references to the own manager and the creator's manager (its policy manager for a
+policy check) without allocating, which the walk of the thread's sandbox stack visits as one Program
+(`visit_thread_sandbox_stack()`), so the uncontrolled-API check still allocates
 nothing; `getSandboxManagerRef()` combines them (a composition is allocated only when both are set and differ); and
 entering the Program starts the call budgets of both (`ProgramThreadCountContextHelper`). Adding it increments
 `qore_sandbox_manager_generation`, as setting a manager does, so that no thread's cached "no manager on the chain"
-result hides it. The manager is released with the own manager when the Program is cleared.
+result hides it. The managers are released with the own manager when the Program is cleared, or when it is
+destroyed without being cleared. The constructor throws `std::bad_alloc` if the creator's sandbox cannot be resolved
+(no Program is created); the parse entry points raise an out-of-memory exception and do not parse.
 
 The existing nearest-caller rule is otherwise unchanged. Interrupt checks include every contributing manager;
 threads reserve a slot in each distinct contributing manager and roll back all reservations on failure. The
