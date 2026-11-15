@@ -172,6 +172,51 @@ class GF<T: EF> {
     auto callRet() { return ret(); }
 }
 
+# generic functions, whose type arguments are enums or plain types
+auto sub gmap<T: int>(list<T> l) { return map $1, l; }
+auto sub gselect<T: int>(list<T> l) { return select l, $1 > 0; }
+auto sub gselectAnd<T: int>(list<T> l) { return select l, $1 > 0 && $1 < 8; }
+auto sub gfoldlMax<T: int>(list<T> l) { return foldl max($1, $2), l; }
+auto sub gfoldrMin<T: float>(list<T> l) { return foldr min($1, $2), l; }
+auto sub gfoldlTernary<T: int>(list<T> l) { return foldl ($1 > $2 ? $1 : $2), l; }
+auto sub gfoldrOfSelect<T: int>(list<T> l) { return foldr ($1 < $2 ? $1 : $2), (select l, $1 > 0); }
+auto sub gmapSelect<T: int>(list<T> l) { return map $1, l, $1 > 1; }
+auto sub gfirstOfMap<T: int>(list<T> l) { return (map $1, l)[0]; }
+auto sub ghashKey<T: int>(hash<string, T> h) { return h.a; }
+auto sub ghashOfMap<T: int>(list<T> l) { hash<string, T> h = map {$1.toString(): $1}, l; return h."7"; }
+auto sub gmapHashKey<T: int>(list<hash<string, T>> l) { return map $1.a, l; }
+T sub greturn<T: float>(T v) { return v; }
+
+class GM {
+    auto mapList<U: int>(list<U> l) { return map $1, l; }
+    static auto selectList<U: int>(list<U> l) { return select l, $1 > 0; }
+}
+
+sub genericFunctions(list<EI> l, list<EF> lf, EF ef) {
+    list<int> li = (7, 1, 8);
+    GM gm();
+    run("generic function map", auto sub () { return gmap<EI>(l); });
+    run("generic function select", auto sub () { return gselect<EI>(l); });
+    run("generic function select with &&", auto sub () { return gselectAnd<EI>(l); });
+    run("generic function foldl max", auto sub () { return gfoldlMax<EI>(l); });
+    run("generic function foldr min float", auto sub () { return gfoldrMin<EF>(lf); });
+    run("generic function foldl ternary", auto sub () { return gfoldlTernary<EI>(l); });
+    run("generic function foldr of select", auto sub () { return gfoldrOfSelect<EI>(l); });
+    run("generic function map with select", auto sub () { return gmapSelect<EI>(l); });
+    run("generic function element of map", auto sub () { return gfirstOfMap<EI>(l); });
+    run("generic function hash key", auto sub () { return ghashKey<EI>({"a": EI::Seven}); });
+    run("generic function hash of map", auto sub () { return ghashOfMap<EI>(l); });
+    run("generic function map hash key", auto sub () { return gmapHashKey<EI>(({"a": EI::Seven}, {"a": EI::One})); });
+    run("generic function return float", auto sub () { return greturn<EF>(ef); });
+    run("generic method map", auto sub () { return gm.mapList<EI>(l); });
+    run("generic static method select", auto sub () { return GM::selectList<EI>(l); });
+    # plain type arguments keep plain values
+    run("generic function map int", auto sub () { return gmap<int>(li); });
+    run("generic function select int", auto sub () { return gselect<int>(li); });
+    run("generic function foldl max int", auto sub () { return gfoldlMax<int>(li); });
+    run("generic function hash key int", auto sub () { return ghashKey<int>({"a": 3}); });
+}
+
 sub generics(EI e, EF ef) {
     G<EI> gi(e, EI::One);
     GE<EI> ge(e, EI::Eight);
@@ -311,3 +356,4 @@ sub cases(list<EI> l, list<EF> lf, list<ES> ls, list<EN> ln, EI e, EF ef, ES es,
 cases((EI::Seven, EI::One, EI::Eight), (EF::H, EF::Q), (ES::X, ES::Y), (EN::N1, EN::N2), EI::Seven, EF::Q, ES::Y,
     EN::N2);
 generics(EI::Seven, EF::Q);
+genericFunctions((EI::Seven, EI::One, EI::Eight), (EF::H, EF::Q), EF::Q);
