@@ -81,7 +81,8 @@ class UnaryAnyResultLeakTest inherits QUnit::Test {
 
     private checkOutput(string label, string out) {
         list<string> lines = (select out.split("\n"), $1);
-        assertEq(Expected, lines[0], label + ": result: " + out);
+        # the C library prints the sign of a NaN on Linux ("-nan") but not on macOS ("nan")
+        assertEq(Expected, regex_subst(lines[0], "\"nan\\.0\"", "\"-nan.0\""), label + ": result: " + out);
         assertEq("live heap integers: 0", lines[1], label + ": heap integers left behind: " + out);
         assertEq("live heap floats: 0", lines[2], label + ": heap floats left behind: " + out);
     }
