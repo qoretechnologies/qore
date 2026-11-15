@@ -293,6 +293,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Group 6: HTTPClient Alt-Svc Upgrade (Phase 2)
         addTestCase("HTTPClient Alt-Svc auto-upgrade to HTTP/3", \testHttpClientAltSvcUpgrade());
         addTestCase("HTTPClient http3_mode=disabled skips QUIC", \testHttpClientHttp3Disabled());
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("HTTPClient Alt-Svc entry after a step forward of the system clock",
+                \testHttpClientAltSvcClockStep());
+        }
         addTestCase("HTTPClient QUIC fallback on failure", \testHttpClientQuicFallback());
         addTestCase("HTTPClient http3_mode option in constructor", \testHttpClientHttp3ModeOption());
 
@@ -1199,6 +1203,44 @@ l50Xb2GWQesIt9k5jF5IOw==
         hash<auto> resp3 = client.send("", "GET", "/test", NOTHING, True);
         assertEq(200, int(resp3.status_code), "third HTTP/3 request should return 200");
         assertTrue(client.isHttp3Active(), "should still be HTTP/3 after third request");
+    }
+
+    #! A step forward of the system clock does not expire the Alt-Svc entry of an HTTPClient (#6166)
+    /** The lifetime of an entry (ma=) is measured on the monotonic clock: on the system clock, a step forward longer
+        than the lifetime dropped the entry, so the next request did not upgrade to HTTP/3.  The step is made with
+        dbg_set_realtime_offset() (debug builds).
+    */
+    testHttpClientAltSvcClockStep() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "enable_h3": True,
+        });
+        on_exit {
+            delete server;
+        }
+        server.setHandler("test", "/test", NOTHING, new SimpleHandler());
+        server.waitForAsyncIo();
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": "0",
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+
+        HTTPClient client({"url": "https://127.0.0.1:" + info.port, "ssl_verify_cert": False});
+        on_exit {
+            delete client;
+        }
+        hash<auto> resp1 = client.send("", "GET", "/test", NOTHING, True);
+        assertEq(200, int(resp1.status_code));
+        assertTrue(exists resp1."alt-svc", "the response advertises HTTP/3");
+
+        # a step of 30 days, longer than the lifetime that the server advertises
+        call_function("dbg_set_realtime_offset", 30 * 86400 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        hash<auto> resp2 = client.send("", "GET", "/test", NOTHING, True);
+        assertEq(200, int(resp2.status_code));
+        assertTrue(client.isHttp3Active(), "the Alt-Svc entry is used: the request upgraded to HTTP/3");
     }
 
     testHttpClientHttp3Disabled() {

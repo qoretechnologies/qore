@@ -898,8 +898,8 @@ public:
 
     //! Returns the largest estimated size of the code that runs the on_block_exit handlers of a function that is
     //! compiled natively (see QoreIRFunction::getHandlerCostEstimate()), 0 for no limit
-    /** Defaults to 120000 (a function whose catch blocks have a local and a handler gets there at about 56 of them,
-        and takes about ten seconds to compile); QORE_JIT_MAX_HANDLER_COST overrides it (qore#6104)
+    /** Defaults to 120000 (with the table-driven code of QoreIRToLLVM::obe_table_mode, more than 900 handlers reach
+        it); QORE_JIT_MAX_HANDLER_COST overrides it (qore#6104, qore#6110)
     */
     static uint64_t getMaxJITHandlerCost();
 

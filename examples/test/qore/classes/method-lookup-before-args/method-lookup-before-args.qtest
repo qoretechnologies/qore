@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of the check of a method call's target and its inline object class test
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class MethodLookupBeforeArgsTest
+
+#! Regression test for issue #5824: a method call looks its method up before it evaluates its arguments, as in AST
+/** The compiled execution modes evaluated the arguments of a call to a private or missing method before raising
+    METHOD-IS-PRIVATE or METHOD-DOES-NOT-EXIST, also when a subclass overrides a public method with a private one, and
+    a call of an overloaded method on a deleted object did not name the variant resolved at parse time.
+
+    MethodLookupBeforeArgs.q makes these calls, calls that are made (a private method from its class, a member closure,
+    a pseudo-method, a public override, an overloaded method) and qualified calls through self (Base::m()), which call
+    their method on an object of any class; its output must be the one in MethodLookupBeforeArgs.expected, which the AST
+    interpreter prints, in every execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
+*/
+class MethodLookupBeforeArgsTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string fixture = get_script_dir() + "/MethodLookupBeforeArgs.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/MethodLookupBeforeArgs.expected");
+    }
+
+    constructor() : QUnit::Test("method lookup before arguments", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/method-lookup-before-args";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

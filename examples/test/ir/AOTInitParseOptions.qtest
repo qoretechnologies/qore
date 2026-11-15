@@ -1,0 +1,249 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
+# test-platform: macos - AOT module compilation and qcc executables that run constant initializers
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTInitParseOptionsTest
+
+#! The constant initializers of AOT-compiled code run with the code's own parse options (qore#6189)
+/** The initializers of a compiled module (\c --compile-module) ran with the run-time parse options of the code that
+    triggered the load, and those of a qcc executable with the options in effect when it started: while a
+    \c %requires is parsed they are empty, so a negative index gave NOTHING (no negative offsets) and the
+    initializer had no strict arguments.  The values are compared between the source and the compiled forms, in every
+    execution mode, with a %modern importer, with a legacy importer that has %no-negative-offsets, whose options the
+    module must not get, and with a second import into a legacy Program of the same process, which gets the module's
+    values; the options that an initializer runs with are checked with Program::getCallerCapabilityMask(), for the
+    namespace and class constants of the source and the compiled module and for the constants of interpreted and
+    compiled scripts: a source constant also ran with no run-time options (qore#6205).
+*/
+class AOTInitParseOptionsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+
+        const Modes = ("ast", "ir", "tiered", "jit");
+
+        #! the module: constants whose initializers depend on negative offsets and strict arguments, and that are not
+        #! folded when the module is compiled (they call functions)
+        const ModuleSource = "%modern
+
+module AotInitOpts {
+    version = \"1.0\";
+    desc = \"qore#6189: constant initializers with the module's own parse options\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AotInitOpts {
+    public list<int> sub get_list() { return (1, 2, 3); }
+    public string sub get_string() { return \"abc\"; }
+    public const Last = get_list()[-1];
+    public const LastChar = get_string()[-1];
+    # the parse options that the initializer itself runs with (a function that it called would switch to its own)
+    public const StrictInInit = (Program::getCallerCapabilityMask(0) & PO_STRICT_ARGS) != 0;
+    public class C {
+        public {
+            const StrictInInit = (Program::getCallerCapabilityMask(0) & PO_STRICT_ARGS) != 0;
+        }
+    }
+    public list<auto> sub values() { return (Last, LastChar); }
+}
+";
+
+        const ModernScript = "%modern
+%requires AotInitOpts
+printf(\"%y\\n\", AotInitOpts::values());
+";
+
+        #! a legacy importer with %no-negative-offsets and %loose-args: the module keeps its own options
+        const LegacyScript = "%no-negative-offsets
+%loose-args
+%requires AotInitOpts
+printf(\"%y\\n\", AotInitOpts::values());
+";
+
+        #! the module imported by a %modern script and then by a legacy Program of the same process (whose code opts out
+        #! of the parent's %modern with %old-style): the second import gets the values of the module's own Program
+        const SecondImportScript = "%modern
+%requires AotInitOpts
+Program p();
+p.parse(\"%old-style\\n%no-negative-offsets\\n%loose-args\\n%requires AotInitOpts\\n\"
+    \"auto sub f() { return AotInitOpts::values(); }\",
+    \"legacy\");
+printf(\"%y\\n\", p.callFunction(\"f\"));
+";
+
+        #! prints whether the initializer of the module's constant ran with the module's strict arguments
+        const StrictScript = "%modern
+%requires AotInitOpts
+printf(\"%y\\n\", AotInitOpts::StrictInInit && AotInitOpts::C::StrictInInit);
+";
+
+        #! a script whose own constants have the same initializers, for qcc executables
+        const ExeSource = "%modern
+list<int> sub get_list() { return (1, 2, 3); }
+string sub get_string() { return \"abc\"; }
+const Last = get_list()[-1];
+const LastChar = get_string()[-1];
+const StrictInInit = (Program::getCallerCapabilityMask(0) & PO_STRICT_ARGS) != 0;
+printf(\"%y\\n\", (Last, LastChar));
+printf(\"%y\\n\", StrictInInit);
+";
+
+        #! the same constants in a script object (qcc -c) of an executable, which runs its entry function only
+        const ObjSource = "list<int> sub get_list() { return (1, 2, 3); }
+string sub get_string() { return \"abc\"; }
+const Last = get_list()[-1];
+const LastChar = get_string()[-1];
+const StrictInInit = (Program::getCallerCapabilityMask(0) & PO_STRICT_ARGS) != 0;
+int sub main() {
+    printf(\"%y\\n\", (Last, LastChar));
+    printf(\"%y\\n\", StrictInInit);
+    return 0;
+}
+";
+
+        const Expected = "[3, c'c']\n";
+
+        #! running code parses code with other options: the constants of that code run with its options, not with
+        #! those of the statement that parses it, and give the values that the same expressions give in its functions
+        const RuntimeParseScript = "%modern
+Program p();
+p.parse(\"%old-style
+%loose-args
+%no-negative-offsets
+string sub gs() { return 'abcd'; }
+const Strict = (Program::getCallerCapabilityMask(0) & PO_STRICT_ARGS) != 0;
+const Range = gs()[1..-1];
+list<auto> sub consts() { return (Strict, Range); }
+list<auto> sub in_function() { return ((Program::getCallerCapabilityMask(0) & PO_STRICT_ARGS) != 0, gs()[1..-1]); }
+\", \"legacy\");
+list<auto> c = p.callFunction(\"consts\");
+printf(\"%y\\n\", (c[0], c[1] === p.callFunction(\"in_function\")[1]));
+";
+    }
+
+    constructor() : QUnit::Test("AOTInitParseOptionsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : trim(`command -v qcc 2>/dev/null`));
+        addTestCase("module constants: source and compiled modules give the same values", \moduleTest());
+        addTestCase("script constants: qcc executables give the interpreted values", \exeTest());
+        addTestCase("constants of code parsed by running code", \runtimeParseTest());
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private string run(string module_dir, string mode, string script) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s "
+            "2>&1", libqore_dir, libqore_dir, module_dir, qore_bin, mode, script));
+    }
+
+    moduleTest() {
+        TmpDir src("qore-aot-init-opts-src-");
+        write(src.path + "/AotInitOpts.qm", ModuleSource);
+        TmpDir aot("qore-aot-init-opts-qmod-");
+        write(aot.path + "/AotInitOpts.qm", ModuleSource);
+        string out = backquote(sprintf("QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --compile-module --strip-source "
+            "--output %s/AotInitOpts.qmod %s/AotInitOpts.qm 2>&1", libqore_dir, aot.path, qore_bin, aot.path,
+            aot.path));
+        if (!is_file(aot.path + "/AotInitOpts.qmod")) {
+            testSkip("the module could not be compiled (AOT compilation unavailable?): " + out);
+        }
+        # the compiled module only: the source would be loaded in its place if the qmod could not be
+        unlink(aot.path + "/AotInitOpts.qm");
+
+        TmpDir run_dir("qore-aot-init-opts-run-");
+        string modern = run_dir.path + "/modern.q";
+        string legacy = run_dir.path + "/legacy.q";
+        string second = run_dir.path + "/second.q";
+        string strict = run_dir.path + "/strict.q";
+        write(modern, ModernScript);
+        write(legacy, LegacyScript);
+        write(second, SecondImportScript);
+        write(strict, StrictScript);
+        foreach hash<auto> dir in (("source": src.path, "qmod": aot.path).pairIterator()) {
+            foreach string mode in (Modes) {
+                assertEq(Expected, run(dir.value, mode, modern), sprintf("%s module, %%modern importer, mode %s",
+                    dir.key, mode));
+                assertEq(Expected, run(dir.value, mode, second), sprintf("%s module, second import into a legacy "
+                    "Program, mode %s", dir.key, mode));
+            }
+            # legacy code runs in the AST interpreter only
+            assertEq(Expected, run(dir.value, "ast", legacy), sprintf("%s module, legacy importer", dir.key));
+        }
+        # the initializers of the source and the compiled module run with the module's options, which have strict
+        # arguments (qore#6189, qore#6205)
+        foreach hash<auto> dir in (("source": src.path, "qmod": aot.path).pairIterator()) {
+            foreach string mode in (Modes) {
+                assertEq("True\n", run(dir.value, mode, strict), sprintf("%s module initializer options, mode %s",
+                    dir.key, mode));
+            }
+        }
+    }
+
+    runtimeParseTest() {
+        TmpDir tmp("qore-aot-init-opts-rt-");
+        string script = tmp.path + "/rt.q";
+        write(script, RuntimeParseScript);
+        # the child Program's code is legacy code, which runs in the AST interpreter; the parent runs in each mode
+        foreach string mode in (Modes) {
+            assertEq("[False, True]\n", backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b "
+                "--exec-mode=%s %s 2>&1", libqore_dir, libqore_dir, qore_bin, mode, script)), "mode " + mode);
+        }
+    }
+
+    exeTest() {
+        TmpDir tmp("qore-aot-init-opts-exe-");
+        string script = tmp.path + "/consts.q";
+        write(script, ExeSource);
+        # the interpreted script: the values, and its initializer runs with the script's strict arguments (qore#6205)
+        foreach string mode in (Modes) {
+            assertEq(Expected + "True\n", backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+                libqore_dir, qore_bin, mode, script)), "interpreted, mode " + mode);
+        }
+        if (!qcc_bin.val() || !is_file(qcc_bin)) {
+            testSkip("qcc is unavailable");
+        }
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + "/consts" + opt;
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s %s -o %s %s 2>&1",
+                libqore_dir, libqore_dir, libqore_dir, qcc_bin, opt, exe, script));
+            assertTrue(is_file(exe), "built the executable " + opt + ": " + out);
+            # the values, and the executable's initializer runs with the script's strict arguments
+            assertEq(Expected + "True\n", backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1",
+                libqore_dir, libqore_dir, exe)), "executable " + opt);
+        }
+        # an executable linked from an object compiled separately (qcc -c), whose script is registered when the
+        # executable starts (qore_aot_script_register())
+        string obj_dir = tmp.path + "/obj";
+        mkdir(obj_dir);
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+        string obj_src = tmp.path + "/consts-obj.q";
+        write(obj_src, ObjSource);
+        string out = backquote(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/consts.qo %s 2>&1", env, qcc_bin,
+            obj_dir, obj_dir, obj_src));
+        assertTrue(is_file(obj_dir + "/consts.qo"), "compiled the object: " + out);
+        string exe = tmp.path + "/consts-obj";
+        out = backquote(sprintf("%s %s -O0 -o %s %s/consts.qo 2>&1", env, qcc_bin, exe, obj_dir));
+        assertTrue(is_file(exe), "linked the executable from the object: " + out);
+        assertEq(Expected + "True\n", backquote(sprintf("%s %s 2>&1", env, exe)), "executable from an object");
+    }
+}
