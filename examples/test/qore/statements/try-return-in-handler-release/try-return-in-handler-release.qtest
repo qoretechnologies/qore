@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of returns in try statements of handlers
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class TryReturnInHandlerReleaseTest
+
+#! A return in a try statement of a handler replaces a value whose destructor throws (#6128)
+/** The value of the return that the handler runs after is released when the try statement ends, as the AST
+    interpreter's try statement replaces it once it has left its try and catch blocks: the exception that its
+    destructor raises is not caught by the try statement's catch block.  Native code (jit, tiered, qcc) took the
+    exception to that catch block, which released the value of the try block's return, and then returned that value,
+    already released (a use after free).  TryReturnInHandlerRelease.q gives the output of the AST interpreter in every
+    execution mode and compiled with qcc.
+*/
+class TryReturnInHandlerReleaseTest inherits QUnit::Test {
+    public {
+        #! the output of TryReturnInHandlerRelease.q with the AST interpreter
+        const Expected = "u1[0]: [\"~u1-body\", \"~u1-h\", \"ex:DTOR-u1-body\"]
+u1[1]: [\"~u1-body\", \"~u1-h\", \"ex:DTOR-u1-body\"]
+u2[0]: [\"~u2-body\", \"~u2-h\", \"ex:DTOR-u2-body\"]
+u2[1]: [\"~u2-body\", \"~u2-h\", \"ex:DTOR-u2-body\"]
+u3[0]: [\"~u3-body\", \"~u3-h\", \"ex:DTOR-u3-body\"]
+u3[1]: [\"~u3-body\", \"~u3-h\", \"ex:DTOR-u3-body\"]
+u4[0]: [\"~u4-body\", \"~u4-h\", \"ex:DTOR-u4-body\"]
+u4[1]: [\"~u4-body\", \"~u4-h\", \"ex:DTOR-u4-body\"]
+u5[0]: [\"c:U5\", \"~u5-body\", \"~u5-h\", \"ex:DTOR-u5-body\"]
+u5[1]: [\"c:U5\", \"~u5-body\", \"~u5-h\", \"ex:DTOR-u5-body\"]
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("TryReturnInHandlerReleaseTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/TryReturnInHandlerRelease.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": a return in a try statement of a handler", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: a return in a try statement of a handler", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-try-return-in-handler-release-");
+        string exe = tmp.path + DirSep + "try-return-in-handler-release";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

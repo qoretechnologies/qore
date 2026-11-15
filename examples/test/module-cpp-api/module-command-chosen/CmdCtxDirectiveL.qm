@@ -1,0 +1,14 @@
+%modern
+
+# a user module with a %module-cmd directive in its own source that needs the filesystem, which a sandboxed Program
+# loads by a path of its own, from its source and compiled with qcc (module-command-context.qtest,
+# testSandboxedLoaderReplay()): judged by the restrictions of the sandboxed loader, so it is refused
+
+module CmdCtxDirectiveL {
+    version = "1.0";
+    desc = "issues a module command from the source of a module";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+%module-cmd(cmdctxaware) path

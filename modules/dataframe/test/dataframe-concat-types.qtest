@@ -25,6 +25,7 @@ class DataFrameConcatTypesTest inherits QUnit::Test {
         addTestCase("sliced nullable source", \slicedTest());
         addTestCase("float32 buffer", \float32BufferTest());
         addTestCase("time units and zones", \unitTest());
+        addTestCase("date and timestamp native types", \nativeTypeTest());
         set_return_value(main());
     }
 
@@ -168,6 +169,58 @@ class DataFrameConcatTypesTest inherits QUnit::Test {
         DataFrame::DataFrame df = decimalFrame(cells, 10, 2);
         DataFrame::DataFrame both = DataFrame::DataFrame::concat((df.slice(5, 13), df.slice(3, 9)));
         assertEq(cells[5..12] + cells[3..8], both.getColumn("v"), "the values and nulls");
+    }
+
+    #! a date32[day] column and a timestamp column: the timestamp schema in microseconds and UTC with no native
+    #! type, in both orders; columns of one native type keep it, of two native types lose it (qore#6144)
+    nativeTypeTest() {
+        DataFrame::DataFrame d32 = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (2024-01-01T00:00:00Z,)}, {"v": {"schema": {"kind": "date", "time_unit": "day",
+            "native_type": "date32[day]", "nullable": True}}}));
+        DataFrame::DataFrame ts = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (2024-01-03T10:30:00Z,)}, {"v": {"schema": {"kind": "timestamp", "time_unit": "ms",
+            "timezone": "Europe/Prague", "native_type": "timestamp[ms, tz=Europe/Prague]", "nullable": False}}}));
+        # (a concatenated dense column always exports as nullable, so the nullability is not checked)
+        DataFrame::DataFrame other({"x": (1,)});
+        foreach list<DataFrame::DataFrame> frames in (((d32, ts), (ts, d32), (d32, other, ts), (ts, d32, ts))) {
+            hash<auto> s = getSchema(DataFrame::DataFrame::concat(frames), "v");
+            assertEq(("timestamp", "us", "UTC", NOTHING), (s.kind, s.time_unit, s.timezone, s.native_type),
+                sprintf("%d frames, %s first", frames.size(), frames[0] == d32 ? "date32" : "timestamp"));
+        }
+        # date32 and date64: merged, a date column in microseconds with no native type
+        DataFrame::DataFrame d64 = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (2024-01-05T10:00:00Z,)}, {"v": {"schema": {"kind": "date", "time_unit": "ms",
+            "native_type": "date64[ms]", "nullable": True}}}));
+        hash<auto> s = getSchema(DataFrame::DataFrame::concat((d32, d64)), "v");
+        assertEq(("date", "us", NOTHING), (s.kind, s.time_unit, s.native_type), "date32 and date64");
+        # durations of two units lose their native type
+        DataFrame::DataFrame ds = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (2s,)}, {"v": {"schema": {"kind": "duration", "time_unit": "s", "native_type": "duration[s]",
+            "nullable": True}}}));
+        DataFrame::DataFrame dms = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (1500ms,)}, {"v": {"schema": {"kind": "duration", "time_unit": "ms", "native_type": "duration[ms]",
+            "nullable": True}}}));
+        s = getSchema(DataFrame::DataFrame::concat((ds, dms)), "v");
+        assertEq(("us", NOTHING), (s.time_unit, s.native_type), "durations of two units");
+        # schemas that cannot be merged (a float32 schema on a float64 buffer and a float64 column): no schema, so
+        # that the float64 values are exported exactly
+        DataFrame::DataFrame f32 = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (1.5,)}, {"v": {"schema": {"kind": "float", "buffer_type": "float32", "native_type": "real"}}}));
+        DataFrame::DataFrame f64 = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (0.1, 1e300)}));
+        DataFrame::DataFrame fc = DataFrame::DataFrame::concat((f32, f64));
+        assertEq((1.5, 0.1, 1e300), DataFrame::DataFrame::fromArrowIpc(fc.toArrowIpc()).getColumn("v"),
+            "schemas that cannot be merged: exact values");
+        # timestamps of one native type keep it, of two lose it
+        DataFrame::DataFrame ts2 = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (2024-01-04T10:30:00Z,)}, {"v": {"schema": {"kind": "timestamp", "time_unit": "ms",
+            "timezone": "Europe/Prague", "native_type": "timestamp[ms, tz=Europe/Prague]", "nullable": False}}}));
+        assertEq("timestamp[ms, tz=Europe/Prague]", getSchema(DataFrame::DataFrame::concat((ts, ts2)), "v").native_type,
+            "one native type");
+        DataFrame::DataFrame ts3 = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (2024-01-04T10:30:00Z,)}, {"v": {"schema": {"kind": "timestamp", "time_unit": "ms",
+            "timezone": "Europe/Prague", "native_type": "timestamptz", "nullable": False}}}));
+        assertEq(NOTHING, getSchema(DataFrame::DataFrame::concat((ts, ts3)), "v").native_type, "two native types");
     }
 
     private DataFrame::DataFrame durationFrame(list<auto> values) {
