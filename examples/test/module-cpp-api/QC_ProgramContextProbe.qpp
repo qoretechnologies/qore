@@ -27,6 +27,26 @@
 #include "cppapiuser-module.h"
 #include "QC_ProgramContextProbe.h"
 
+#include <functional>
+#include <new>
+
+// runs enter, which enters a Program from C++, and reports what the entry leaves (see enterProgram())
+static QoreHashNode* enter_program_report(ExceptionSink* xsink, const std::function<bool()>& enter) {
+    QoreProgram* before = getProgram();
+    bool caught = false;
+    bool entered = false;
+    try {
+        entered = enter();
+    } catch (std::bad_alloc&) {
+        caught = true;
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("caught", caught, xsink);
+    rv->setKeyValue("entered", entered, xsink);
+    rv->setKeyValue("restored", getProgram() == before, xsink);
+    return rv.release();
+}
+
 //! reports the Program context that a binary module's C++ code sees when its methods are called
 /** Binary modules that act on the caller's behalf check the calling Program's restrictions from C++
     with <tt>getProgram()->getParseOptions()</tt> -- e.g. @ref PO_NO_FILESYSTEM before touching a file.
@@ -61,4 +81,45 @@ int ProgramContextProbe::getParseOptions() [flags=CONSTANT] {
 static int ProgramContextProbe::getStaticParseOptions() [flags=CONSTANT] {
     QoreProgram* pgm = getProgram();
     return pgm ? pgm->getParseOptions64() : 0;
+}
+
+//! Enters a Program with QoreExternalProgramContextHelper and reports what the entry leaves
+/** With dbg_fail_next_program_entry() armed (debug builds), an allocation fails while the helper enters the Program:
+    the std::bad_alloc propagates from the helper's constructor, and the thread must be as it was before the entry
+    (issue #6198)
+
+    @param program the Program to enter
+
+    @return a hash with the keys \c caught (True if std::bad_alloc was thrown), \c entered (True if the Program was
+    the current one inside the helper) and \c restored (True if the calling Program is the current one afterwards)
+*/
+static hash<auto> ProgramContextProbe::enterProgram(Program[QoreProgram] program) {
+    QoreProgram* pgm = *program;
+    return enter_program_report(xsink, [pgm, xsink]() -> bool {
+        QoreExternalProgramContextHelper pch(xsink, pgm);
+        return !*xsink && getProgram() == pgm;
+    });
+}
+
+//! Parses and commits code in a Program from C++ and reports what the commit's entry into the Program leaves
+/** As enterProgram(), for the entry that QoreProgram::parseCommit() makes (ProgramRuntimeParseCommitContextHelper):
+    with dbg_fail_next_program_entry() armed, an allocation fails while the commit enters the Program, and the thread
+    must be as it was before (issue #6198)
+
+    @param program the Program to parse the code in
+    @param code the code to parse
+
+    @return a hash with the keys \c caught (True if std::bad_alloc was thrown), \c entered (True if the code was
+    committed) and \c restored (True if the calling Program is the current one afterwards)
+*/
+static hash<auto> ProgramContextProbe::commitProgram(Program[QoreProgram] program, string code) {
+    QoreProgram* pgm = *program;
+    return enter_program_report(xsink, [pgm, code, xsink]() -> bool {
+        pgm->parsePending(code->c_str(), "program-context-probe", xsink);
+        if (*xsink) {
+            return false;
+        }
+        pgm->parseCommit(xsink);
+        return !*xsink;
+    });
 }

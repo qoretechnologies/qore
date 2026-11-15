@@ -1696,19 +1696,65 @@ void ThreadProgramData::delProgram(QoreProgram* pgm) {
     deref();
 }
 
-bool ThreadProgramData::saveProgram(bool runtime) {
-    if (!qore_program_private::setThreadVarData(td->current_pgm, this, td->tlpd, runtime)) {
-        return false;
+#ifdef DEBUG
+//! the step of the next entry into another Program that fails with std::bad_alloc, or -1
+static std::atomic<int> dbg_program_entry_fail_site{-1};
+
+void qore_dbg_fail_next_program_entry(int site) {
+    dbg_program_entry_fail_site.store(site, std::memory_order_seq_cst);
+}
+
+bool qore_dbg_program_entry_fails(int site) {
+    int expected = site;
+    return dbg_program_entry_fail_site.compare_exchange_strong(expected, -1, std::memory_order_seq_cst);
+}
+#endif
+
+bool ThreadProgramData::saveProgram(bool runtime, bool* first_entry) {
+    QoreProgram* pgm = td->current_pgm;
+    ThreadLocalProgramData* old_tlpd = td->tlpd;
+    if (first_entry) {
+        *first_entry = false;
     }
-    printd(5, "ThreadProgramData::saveProgram() this: %p pgm: %p\n", this, td->current_pgm);
-    ref();
-    td->current_pgm->depRef();
-    {
-        AutoLocker al(pslock);
-        assert(pgm_set.find(td->current_pgm) == pgm_set.end());
-        pgm_set.insert(td->current_pgm);
+    // the thread's data in the Program is created on its first entry, and only then is the Program recorded in the
+    // thread; a failure of either step leaves neither (issue #6198): the Program cannot be torn down meanwhile, as
+    // the entry holds its thread count (or the module cleanup, which tears down module Programs, has not stopped the
+    // uncounted entries)
+    bool first = qore_program_private::setThreadVarData(pgm, this, td->tlpd, false);
+    if (first) {
+        try {
+            AutoLocker al(pslock);
+            assert(pgm_set.find(pgm) == pgm_set.end());
+#ifdef DEBUG
+            if (qore_dbg_program_entry_fails(QDPES_PROGRAM_SET)) {
+                throw std::bad_alloc();
+            }
+#endif
+            pgm_set.insert(pgm);
+        } catch (...) {
+            qore_program_private::removeThreadVarData(pgm, this);
+            td->tlpd = old_tlpd;
+            throw;
+        }
+        printd(5, "ThreadProgramData::saveProgram() this: %p pgm: %p\n", this, pgm);
+        // the reference belongs to the Program's entry for the thread (see delProgram())
+        ref();
+        pgm->depRef();
+        if (first_entry) {
+            *first_entry = true;
+        }
     }
-    return true;
+    // once the thread's data is recorded: a failure leaves an entry that the thread or the Program releases as any
+    // other, and a partial instantiation is resumed on the next entry (doTopLevelInstantiation())
+    if (runtime) {
+#ifdef DEBUG
+        if (qore_dbg_program_entry_fails(QDPES_INSTANTIATION)) {
+            throw std::bad_alloc();
+        }
+#endif
+        qore_program_private::instantiateThreadVarData(*pgm, *td->tlpd);
+    }
+    return first;
 }
 
 bool ThreadProgramData::canRunDebugCallbacks() const {
@@ -4661,6 +4707,10 @@ void ProgramThreadCountContextHelper::restoreContext() {
     td->current_pgm_ctx = old_ctx;
     sync_runtime_config_program(td);
 
+    releaseThreadCount(td, pgm);
+}
+
+void ProgramThreadCountContextHelper::releaseThreadCount(ThreadData* td, QoreProgram* pgm) {
     if (thread_count_incremented) {
         thread_count_incremented = false;
         qore_program_private::decThreadCount(*pgm, td->tid, xsink);
@@ -4768,23 +4818,44 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
         }
     }
 
-    // set up thread stacks
+    // set up thread stacks; an exception (std::bad_alloc) restores the thread and releases the thread count before it
+    // propagates from the constructor, whose destructor does not run (issue #6198)
     restore = true;
     td->current_pgm = pgm;
-    // the thread's local data in a module's Program stays in place while entries without the thread count are
-    // allowed: it is cached in the thread, which then takes no lock of the Program (see findModuleProgramData())
-    ThreadLocalProgramData* cached_tlpd = module_uncounted ? td->tpd->findModuleProgramData(pgm) : nullptr;
-    if (cached_tlpd) {
-        td->tlpd = cached_tlpd;
-        init_tlpd = false;
-        if (runtime) {
-            qore_program_private::instantiateThreadVarData(*pgm, *cached_tlpd);
+    bool first_entry = false;
+    try {
+#ifdef DEBUG
+        if (qore_dbg_program_entry_fails(QDPES_SWITCH)) {
+            throw std::bad_alloc();
         }
-    } else {
-        init_tlpd = td->tpd->saveProgram(runtime); // set new td->tlpd
-        if (module_uncounted) {
-            td->tpd->cacheModuleProgramData(pgm, td->tlpd);
+#endif
+        // the thread's local data in a module's Program stays in place while entries without the thread count are
+        // allowed: it is cached in the thread, which then takes no lock of the Program (see findModuleProgramData())
+        ThreadLocalProgramData* cached_tlpd = module_uncounted ? td->tpd->findModuleProgramData(pgm) : nullptr;
+        if (cached_tlpd) {
+            td->tlpd = cached_tlpd;
+            init_tlpd = false;
+            if (runtime) {
+                qore_program_private::instantiateThreadVarData(*pgm, *cached_tlpd);
+            }
+        } else {
+            init_tlpd = td->tpd->saveProgram(runtime, &first_entry); // set new td->tlpd
+            if (module_uncounted) {
+                td->tpd->cacheModuleProgramData(pgm, td->tlpd);
+            }
         }
+    } catch (...) {
+        // the thread's data was recorded before the failure: the thread initialization code runs on the thread's
+        // first entry that succeeds
+        if (first_entry && runtime) {
+            td->tlpd->thread_init_pending = true;
+        }
+        restore = false;
+        td->current_pgm = old_pgm;
+        td->tlpd = old_tlpd;
+        releaseThreadCount(td, pgm);
+        module_uncounted = false;
+        throw;
     }
     if (init_tlpd && runtime) {
         // the thread initialization code runs on the thread's first entry that succeeds
@@ -4794,6 +4865,28 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
     sync_runtime_config_program(td);
     save_frameCount = td->tlpd->lvstack.getFrameCount();
 
+    // from here on the context is switched: an exception leaves the entry as the destructor would
+    try {
+        enterSwitched(td, xsink, pgm, pp, runtime);
+    } catch (...) {
+        if (restore) {
+            if (entry_frame.isActive()) {
+                entry_frame.exit(td, xsink);
+            }
+            restoreContext();
+            restore = false;
+        }
+        throw;
+    }
+}
+
+void ProgramThreadCountContextHelper::enterSwitched(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm,
+        qore_program_private* pp, bool runtime) {
+#ifdef DEBUG
+    if (qore_dbg_program_entry_fails(QDPES_SWITCHED)) {
+        throw std::bad_alloc();
+    }
+#endif
     // entering a Program with a sandbox manager starts a call budget if the manager has a time limit and the thread
     // is not already running a call of it (see design/sandbox-resource-limits.md)
     // (almost every Program has no manager, which is checked without the call that takes a reference to it)
@@ -6001,20 +6094,33 @@ ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(E
         if (qore_program_private::lockParsing(*pgm, xsink))
             return;
 
-        // set up thread stacks
+        // set up thread stacks; an exception (std::bad_alloc) restores the thread and unlocks the Program before it
+        // propagates from the constructor, whose destructor does not run (issue #6198)
         restore = true;
         old_pgm = td->current_pgm;
         old_tlpd = td->tlpd;
         td->current_pgm = pgm;
-        td->tpd->saveProgram(false);
-        sync_runtime_config_program(td);
-        // the commit runs code of the Program: initializers, and the code they call
-        if (entry_frame.enter(pgm, xsink)) {
+        auto undo = [this, td, pgm]() {
             td->current_pgm = old_pgm;
             td->tlpd = old_tlpd;
             sync_runtime_config_program(td);
             qore_program_private::unlockParsing(*pgm);
             restore = false;
+        };
+        try {
+            td->tpd->saveProgram(false);
+            sync_runtime_config_program(td);
+            // the commit runs code of the Program: initializers, and the code they call
+            if (entry_frame.enter(pgm, xsink)) {
+                undo();
+            }
+        } catch (...) {
+            // the exit handler runs while the thread is still in the Program, as in the destructor
+            if (entry_frame.isActive()) {
+                entry_frame.exit(xsink);
+            }
+            undo();
+            throw;
         }
     } else {
         assert(qore_program_private::get(*pgm)->parsingLocked());

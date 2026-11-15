@@ -885,6 +885,30 @@ private:
     bool active = false;
 };
 
+#ifdef DEBUG
+//! The steps of an entry into another Program at which dbg_fail_next_program_entry() makes an allocation fail
+enum qore_dbg_program_entry_site_e : int {
+    //! after the thread's current Program is switched (ProgramThreadCountContextHelper::setOtherProgram())
+    QDPES_SWITCH = 0,
+    //! the allocation of the thread's local data in the Program (qore_program_private::setThreadVarData())
+    QDPES_LOCAL_DATA = 1,
+    //! the record of the Program in the thread's Program set (ThreadProgramData::saveProgram())
+    QDPES_PROGRAM_SET = 2,
+    //! the instantiation of the Program's top-level local variables for the thread (ThreadProgramData::saveProgram())
+    QDPES_INSTANTIATION = 3,
+    //! the instantiation of a top-level local variable after the first one (doTopLevelInstantiation())
+    QDPES_INSTANTIATION_VAR = 4,
+    //! the steps of the entry once the thread's context is switched (ProgramThreadCountContextHelper::enterSwitched())
+    QDPES_SWITCHED = 5,
+};
+
+//! Makes the next entry into another Program that reaches \a site throw std::bad_alloc there; -1 disarms it
+DLLLOCAL void qore_dbg_fail_next_program_entry(int site);
+
+//! Returns true, and disarms the hook, if the next entry is armed to fail at \a site
+DLLLOCAL bool qore_dbg_program_entry_fails(int site);
+#endif
+
 //! Pops a sandbox policy barrier pushed with @ref qore_push_sandbox_policy_barrier()
 DLLLOCAL void qore_pop_sandbox_policy_barrier();
 
@@ -2500,6 +2524,14 @@ private:
     //! restores the thread's context as it was before set() switched it
     DLLLOCAL void restoreContext();
 
+    //! releases the thread count that set() took in \a pgm, or leaves the entry without it (module_uncounted)
+    DLLLOCAL void releaseThreadCount(ThreadData* td, QoreProgram* pgm);
+
+    //! the steps of setOtherProgram() once the thread's context is switched (the budgets, the deferral, the entry
+    //! handler, the thread initialization code and the debugger); an exception that they raise is undone by the caller
+    DLLLOCAL void enterSwitched(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm, qore_program_private* pp,
+        bool runtime);
+
     //! Takes the thread count in the Program that set() entered without it (module_uncounted) for takeThreadCount()
     /** The entry without the thread count is still left when the context is restored
     */
@@ -3262,7 +3294,7 @@ public:
        @return true if this is the thread's first entry into the Program; the caller then runs the Program's thread
        initialization code (qore_program_private::doThreadInit()), after the Program's thread entry handler
    */
-   DLLLOCAL bool saveProgram(bool runtime);
+   DLLLOCAL bool saveProgram(bool runtime, bool* first_entry = nullptr);
    DLLLOCAL void del(ExceptionSink* xsink);
    DLLLOCAL bool canRunDebugCallbacks() const;
    DLLLOCAL bool isActiveProgram(QoreProgram* pgm) const;
