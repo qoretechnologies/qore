@@ -4259,6 +4259,34 @@ private:
     QoreIRLowering& l;
 };
 
+//! The lowering of the code of a path of a debugger's flow request (#6201)
+/** The outermost path is an exit of its own: the handlers lowered inline in it do not count toward the budget of an
+    exit that is being lowered around it (a step event in the body of a handler lowered inline), so that the code
+    lowers its handlers as it does without step events.  The paths of the step events in the code of a path (in the
+    body of a handler that it lowers inline) take from the budget of the outermost path, so that the size of the paths
+    is bounded as that of an exit (QORE_IR_INLINE_HANDLER_BUDGET)
+*/
+class QoreIRLowering::DebugFlowPathLowering {
+public:
+    DLLLOCAL DebugFlowPathLowering(QoreIRLowering& l) : l(l), saved_exit_lowering_nesting(l.exit_lowering_nesting),
+            saved_inline_handlers_lowered(l.inline_handlers_lowered) {
+        if (!l.debug_flow_path_depth++) {
+            l.exit_lowering_nesting = 0;
+        }
+    }
+    DLLLOCAL ~DebugFlowPathLowering() {
+        if (!--l.debug_flow_path_depth) {
+            l.exit_lowering_nesting = saved_exit_lowering_nesting;
+            l.inline_handlers_lowered = saved_inline_handlers_lowered;
+        }
+    }
+
+private:
+    QoreIRLowering& l;
+    const int saved_exit_lowering_nesting;
+    const size_t saved_inline_handlers_lowered;
+};
+
 static bool qore_ir_block_may_return(const StatementBlock* block);
 
 //! Returns true if \a stmt can execute a return statement; conservatively true for any statement that is not a known
@@ -4911,16 +4939,13 @@ QoreIRBasicBlock* QoreIRLowering::lowerDebugFlowPath(int rc, const LoopJumpTarge
     // after it needs again; the rest of the lowering state is restored by the code of the jump itself, as for a
     // break or a continue statement, which can be followed by unreachable code of its block
     QoreIRBuilder::TempScopeState temp_state = builder.saveTempScopeState();
-    // the path is an exit of its own: the handlers lowered inline in it do not count toward the budget of an exit
-    // that is being lowered around it (a step event in the body of a handler lowered inline)
-    const int saved_exit_lowering_nesting = exit_lowering_nesting;
-    const size_t saved_inline_handlers_lowered = inline_handlers_lowered;
-    exit_lowering_nesting = 0;
-    builder.setBlock(path);
-    bool ok = rc == RC_RETURN ? lowerReturnWithoutValue(error, true)
-        : lowerLoopJump(rc == RC_BREAK, jt, loc, error, true);
-    exit_lowering_nesting = saved_exit_lowering_nesting;
-    inline_handlers_lowered = saved_inline_handlers_lowered;
+    bool ok;
+    {
+        DebugFlowPathLowering path_lowering(*this);
+        builder.setBlock(path);
+        ok = rc == RC_RETURN ? lowerReturnWithoutValue(error, true)
+            : lowerLoopJump(rc == RC_BREAK, jt, loc, error, true);
+    }
     builder.restoreTempScopeState(std::move(temp_state));
     builder.setBlock(saved_block);
     if (!ok) {
@@ -5037,17 +5062,16 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
             return nullptr;
         }
         QoreIRBuilder::TempScopeState temp_state = builder.saveTempScopeState();
-        const int saved_exit_lowering_nesting = exit_lowering_nesting;
-        const size_t saved_inline_handlers_lowered = inline_handlers_lowered;
-        exit_lowering_nesting = 0;
-        builder.setBlock(path);
-        bool ok = emitBlockCleanups(hf.cleanup_depth, error, false, CF_CATCH_SCOPES | CF_HANDLERS_OUT_OF_LINE,
-            hf.temp_depth, loc);
-        if (ok && !blockHasTerminator(builder.getBlock())) {
-            builder.createBranch(end, loc);
+        bool ok;
+        {
+            DebugFlowPathLowering path_lowering(*this);
+            builder.setBlock(path);
+            ok = emitBlockCleanups(hf.cleanup_depth, error, false, CF_CATCH_SCOPES | CF_HANDLERS_OUT_OF_LINE,
+                hf.temp_depth, loc);
+            if (ok && !blockHasTerminator(builder.getBlock())) {
+                builder.createBranch(end, loc);
+            }
         }
-        exit_lowering_nesting = saved_exit_lowering_nesting;
-        inline_handlers_lowered = saved_inline_handlers_lowered;
         builder.restoreTempScopeState(std::move(temp_state));
         builder.setBlock(saved_block);
         if (!ok) {

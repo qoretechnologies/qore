@@ -540,3 +540,21 @@ the frame's exits) is gone.
 - **AOT (format v41, `QORE_AOT_DEBUG_FLOW_VERSION`).** DebugStatement, DebugBlock and ScopeExit records end with a
   u8 mask and a u16 block index per path; block flag 0x10 is `debug_flow`.  AOT native code lowers no path blocks.
 
+- **Analyses of the code** (prof's decision after the `-d ir` regressions).  The summary, pattern and projection
+  analyses take the function through `QoreIRCodeBlocks` (`include/qore/intern/QoreIR.h`): the blocks without
+  `debug_flow` (size, front, index, `getSingleBlock()`), the incomings of a Phi from them (`countIncomings()`,
+  `getIncomings()`), and `QoreIRControlFlowGraph(func, exc, &code)`, the graph of the code only, without the path blocks
+  and the flow edges.  So code with step events gets the summaries of the same code without them.  The return facts of
+  the effect summaries are those of the code; `QoreIRFunctionEffectSummary::debug_flow_returns_nothing` records a path
+  that returns NOTHING.
+- **Soundness of the return facts.**  AOT native code has no paths, so an AOT batch keeps the facts of the code.  The
+  JIT's native code takes the paths, and the facts are used after the call (the elided NOTHING check of a later
+  argument, the exact boxed kind of the value), where no check exists to fall back on without a check on the hot path
+  or an exit from native code in the middle of the frame.  `qore_ir_restrict_debug_flow_return_facts()` therefore
+  leaves `never_returns_nothing` and the inferred boxed return kind out of a JIT batch's callee whose path returns
+  NOTHING, unless its declared return type requires a value: its path then raises the error of a missing return
+  value, as the AST interpreter does.  A call replaced by a summary runs no code of the callee, so no request can be
+  made in it.
+- **Native size of the paths.**  The return of a path shares the return tail and releases only the temporaries of the
+  temp scopes still open, so that the code of the paths grows with the function; only the outermost path resets the
+  budget of the handlers lowered inline (`DebugFlowPathLowering`), so that nested paths are bounded.

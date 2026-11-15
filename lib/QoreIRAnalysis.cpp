@@ -1779,6 +1779,7 @@ bool qore_ir_compute_function_effect_summaries(
         std::unordered_set<const void*> local_modified_runtime_locals;
         bool local_never_returns_nothing = true;
         bool saw_return = false;
+        bool debug_flow_returns_nothing = false;
         std::vector<const AbstractQoreFunctionVariant*> callees;
         std::vector<uint8_t> param_noescape;
         std::vector<uint8_t> param_may_modify;
@@ -1870,7 +1871,8 @@ bool qore_ir_compute_function_effect_summaries(
                         };
                     }
                 }
-                if (inst && inst->opcode == QoreIROpcode::Return) {
+                if (inst && QoreIRCodeBlocks::isCodeBlock(block.get())
+                        && inst->opcode == QoreIROpcode::Return) {
                     auto* ret = static_cast<const QoreIRReturnInstruction*>(inst);
                     effect.saw_return = true;
                     const QoreIRValueFacts* facts = ret->has_value
@@ -1880,8 +1882,14 @@ bool qore_ir_compute_function_effect_summaries(
                         effect.local_never_returns_nothing = false;
                     }
                 } else if (inst && inst->opcode == QoreIROpcode::ReturnNothing) {
-                    effect.saw_return = true;
-                    effect.local_never_returns_nothing = false;
+                    // the return facts are those of the code (QoreIRCodeBlocks): the return of the path of a
+                    // debugger's request is recorded on its own (#6201)
+                    if (QoreIRCodeBlocks::isCodeBlock(block.get())) {
+                        effect.saw_return = true;
+                        effect.local_never_returns_nothing = false;
+                    } else {
+                        effect.debug_flow_returns_nothing = true;
+                    }
                 }
                 bool has_ref_args = true;
                 const AbstractQoreFunctionVariant* callee =
@@ -2123,6 +2131,7 @@ bool qore_ir_compute_function_effect_summaries(
             effect.local_modified_runtime_locals.end());
         summaries[effect.variant].never_returns_nothing =
             effect.saw_return && effect.local_never_returns_nothing;
+        summaries[effect.variant].debug_flow_returns_nothing = effect.debug_flow_returns_nothing;
         summaries[effect.variant].param_noescape = effect.param_noescape;
         summaries[effect.variant].param_may_modify = effect.param_may_modify;
         if (may_invalidate) {
@@ -2409,16 +2418,32 @@ static bool qore_ir_visit_exception_targets(const QoreIRBasicBlock& block, const
 }
 
 QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
-        bool include_exception_edges) {
-    blocks.reserve(func.blocks.size());
+        bool include_exception_edges, const QoreIRCodeBlocks* code) {
+    blocks.reserve(code ? code->size() : func.blocks.size());
     size_t check_count = 0;
-    for (const auto& block : func.blocks) {
+    auto add_block = [&](QoreIRBasicBlock* block) {
         if (qore_ir_analysis_cancelled(check_count, "IR control-flow analysis")) {
             cancelled = true;
-            return;
+            return false;
         }
-        block_ids.emplace(block.get(), blocks.size());
-        blocks.push_back(block.get());
+        block_ids.emplace(block, blocks.size());
+        blocks.push_back(block);
+        return true;
+    };
+    // the graph of the code only has no edges to the paths of the debugger's flow requests, as their blocks have no
+    // id (#6201)
+    if (code) {
+        for (QoreIRBasicBlock* block : *code) {
+            if (!add_block(block)) {
+                return;
+            }
+        }
+    } else {
+        for (const auto& block : func.blocks) {
+            if (!add_block(block.get())) {
+                return;
+            }
+        }
     }
 
     successors.resize(blocks.size());
@@ -6596,6 +6621,7 @@ static size_t qore_ir_eliminate_redundant_phis(QoreIRFunction& func,
     for (size_t round = 0; round < max_rounds; ++round) {
         std::unordered_map<uint32_t, QoreIRValue> replacements;
         std::unordered_set<const QoreIRInstruction*> removed;
+        size_t uncounted = 0;
         for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
             for (const auto& inst : cfg.blocks[block_id]->instructions) {
                 if (qore_ir_analysis_cancelled(check_count, "IR redundant phi analysis")) {
@@ -6634,6 +6660,13 @@ static size_t qore_ir_eliminate_redundant_phis(QoreIRFunction& func,
                 }
                 replacements.emplace(inst->result.id, single);
                 removed.insert(inst.get());
+                // a Phi of the paths of a debugger's flow requests, or one that only their incomings made, is not
+                // counted: the count is that of the code (QoreIRCodeBlocks, #6201)
+                if (!QoreIRCodeBlocks::isCodeBlock(cfg.blocks[block_id])
+                        || (QoreIRCodeBlocks::countIncomings(phi) < phi.incoming.size()
+                            && QoreIRCodeBlocks::countIncomings(phi) <= 1)) {
+                    ++uncounted;
+                }
             }
         }
         if (replacements.empty()) {
@@ -6685,7 +6718,8 @@ static size_t qore_ir_eliminate_redundant_phis(QoreIRFunction& func,
                 ++it;
             }
         }
-        eliminated += removed.size();
+        eliminated += removed.size() - uncounted;
+        uncounted = 0;
     }
     return eliminated;
 }

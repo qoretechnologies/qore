@@ -106,7 +106,10 @@ struct QoreIRControlFlowGraph {
     //! Build reachability, predecessor, successor, and dominator information.
     //! @param func lowered IR function to analyze
     //! @param include_exception_edges include instruction exception-handler edges in the graph
-    explicit QoreIRControlFlowGraph(const QoreIRFunction& func, bool include_exception_edges = false);
+    //! @param code if not null, the graph is that of the code of the function, without the paths of the debugger's
+    //! flow requests (QoreIRCodeBlocks): its block ids are those of the blocks of \a code
+    explicit QoreIRControlFlowGraph(const QoreIRFunction& func, bool include_exception_edges = false,
+        const QoreIRCodeBlocks* code = nullptr);
 
     //! @param dominator candidate dominator block ID
     //! @param block candidate dominated block ID
@@ -301,7 +304,15 @@ struct QoreIRFunctionEffectSummary {
     //! Exact runtime locals modified when may_modify_runtime_locals is false.
     //! Pointer identities are valid within one IR/JIT/AOT compilation group.
     std::vector<const void*> modified_runtime_locals;
+    //! True if every return of the code of the function (QoreIRCodeBlocks) has a value that is not NOTHING
     bool never_returns_nothing = false;
+    //! True if the path of a debugger's return request (or of a break or a continue that leaves the function) returns
+    //! without a value, which the code of the function never does if \a never_returns_nothing is set; the path raises
+    //! the error of a missing return value instead where the declared return type requires a value (#6201)
+    /** A caller compiled to native code by the JIT, whose callee takes the path, relies on \a never_returns_nothing
+        only where the callee's declared return type requires a value (qore_ir_callee_return_facts_hold())
+    */
+    bool debug_flow_returns_nothing = false;
     //! True for parameters whose value is only observed during the call.
     //! A returned value is allowed because return lowering takes an owning ref.
     std::vector<uint8_t> param_noescape;

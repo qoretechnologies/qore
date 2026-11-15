@@ -1261,6 +1261,9 @@ private:
     //! the handler bodies lowered inline since the outermost exit being lowered began
     size_t inline_handlers_lowered = 0;
     class ExitLoweringNesting;
+    //! the nesting of the lowering of the paths of a debugger's flow requests (see DebugFlowPathLowering)
+    int debug_flow_path_depth = 0;
+    class DebugFlowPathLowering;
     //! the value of the return that a return in a try statement in a handler replaces when the walk of its
     //! cleanups leaves the outermost try statement in the handler (try_end_depth == try_replaced_depth), as the AST
     //! interpreter's try statement replaces it when it ends (TryStatement::execImpl(), #5992)

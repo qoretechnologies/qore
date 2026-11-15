@@ -1451,7 +1451,9 @@ bool qore_ir_function_returns_pass_through(const QoreIRFunction& func, const Qor
     QoreIRClassContextHelper class_ctx(func);
     return_type = func.specializeType(return_type);
     size_t check_count = 0;
-    for (const auto& block : func.blocks) {
+    // the returns of the code (QoreIRCodeBlocks): the return of the path of a debugger's request raises the error of a
+    // missing value where the type needs a conversion (#6201)
+    for (QoreIRBasicBlock* block : qore_ir_code_blocks(func)) {
         for (const auto& inst : block->instructions) {
             // a cancelled scan reports a converting return, which only prevents a summary; the caller aborts on its
             // own cancellation check
@@ -5214,7 +5216,8 @@ void QoreIRToLLVM::emitExceptionExitTail(llvm::Module& module) {
     }
 }
 
-void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit) {
+void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit,
+        size_t first_temp) {
     // an exit on an exception keeps the values of the returns that it interrupts until after the locals (qore#5941)
     bool hold_returns = false;
     if (exception_exit) {
@@ -5267,7 +5270,9 @@ void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_s
         auto helper = module.getOrInsertFunction("qore_rt_decref",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
         size_t count = 0;
-        for (auto it = invoke_result_allocas.rbegin(); it != invoke_result_allocas.rend(); ++it) {
+        auto end = first_temp < invoke_result_allocas.size()
+            ? invoke_result_allocas.rend() - static_cast<std::ptrdiff_t>(first_temp) : invoke_result_allocas.rbegin();
+        for (auto it = invoke_result_allocas.rbegin(); it != end; ++it) {
             if (!(++count % 100)) {
                 (void)qore_check_cancel(nullptr, "LLVM function exit temp release");
             }
@@ -14479,6 +14484,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     native_boxed_sources.clear();
     native_boxed_source_kinds.clear();
     known_not_nothing_values.clear();
+    lowering_debug_flow_block = false;
     preinstantiated_entry_loads.clear();
     preinstantiated_entry_cleanup_allocas.clear();
     preinstantiated_entry_cleanup_by_local.clear();
@@ -16248,6 +16254,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
             continue;
         }
+        lowering_debug_flow_block = block->debug_flow;
         if (block->debug_flow != in_debug_flow_run) {
             in_debug_flow_run = block->debug_flow;
             if (in_debug_flow_run) {
@@ -21256,9 +21263,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCall(incref_fn, {return_value});
             }
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
-            // the AST
-            emitExitStatementCleanup(module, true);
-            if (share_return_tail) {
+            // the AST; the return of the path of a debugger's request at a step event, which every step event has,
+            // releases those of the temp scopes still open, so that the size of the code of the paths grows with
+            // that of the function (#6201)
+            emitExitStatementCleanup(module, true, false, lowering_debug_flow_block && !temp_cleanup_marks.empty()
+                ? temp_cleanup_marks.front().invoke_alloca_count
+                : (lowering_debug_flow_block ? invoke_result_allocas.size() : 0));
+            // the returns of the paths of a debugger's requests, which every step event of the function has, share
+            // the rest of the return, so that the size of the code of the paths grows with that of the function
+            // (#6201)
+            if (share_return_tail || (lowering_debug_flow_block && !(aot_mode
+                    && static_cast<const QoreIRReturnInstruction*>(inst)->outline_signal))) {
                 // the rest of the return is the same for every return (see emitReturnTail())
                 emitSharedReturn(llvm_func, return_value ? return_value : getNothingReturnValue());
                 return true;

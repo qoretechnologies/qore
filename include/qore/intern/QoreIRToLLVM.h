@@ -463,6 +463,9 @@ private:
     // Value IDs known not to be NOTHING.  This is intentionally narrower than
     // assigned-state: only typed locals proven assigned on every load contribute
     // here, so auto/any values assigned to NOTHING are not misclassified.
+    //! true while the block being lowered is a block of the paths of a debugger's flow requests
+    //! (QoreIRBasicBlock::debug_flow, #6201)
+    bool lowering_debug_flow_block = false;
     std::unordered_set<uint32_t> known_not_nothing_values;
 
     // LocalVar* keys whose LoadLocal results can be marked known-not-NOTHING.
@@ -1887,7 +1890,10 @@ private:
     //! @param exception_exit true for an exit by an exception, whose release of the locals releases the iterators
     //! that have a place among them (positioned_iterator_allocas), and which releases the other iterators (those of
     //! functional operators) first, before the temporaries, as the AST interpreter unwinds the operators
-    void emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit = false);
+    //! @param first_temp the first of the tracked call results that the exit can find holding a value: those before
+    //! it belong to temp scopes that have ended, which hold no value, and emitInvokeCleanup() releases them all
+    void emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit = false,
+        size_t first_temp = 0);
 
     // Returns the block that an exception raised by \a inst branches to on its way to the in-frame handler
     // \a handler: a block that first releases the temporaries of the temp scopes that the exception leaves - the

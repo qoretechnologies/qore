@@ -3862,6 +3862,22 @@ inline const QoreIRDebugFlowTargets* qore_ir_debug_flow_targets(const QoreIRInst
     }
 }
 
+//! Returns the paths of the debugger's flow requests of \a inst for a pass that changes them, or nullptr
+inline QoreIRDebugFlowTargets* qore_ir_debug_flow_targets(QoreIRInstruction* inst) {
+    switch (inst->opcode) {
+        case QoreIROpcode::DebugStatement:
+        case QoreIROpcode::DebugBlock:
+            if (!QoreIRDebugStatementInstruction::isInstClass(inst->inst_class)) {
+                return nullptr;
+            }
+            return static_cast<QoreIRDebugStatementInstruction*>(inst)->flow.get();
+        case QoreIROpcode::ScopeExit:
+            return static_cast<QoreIRScopeExitInstruction*>(inst)->flow.get();
+        default:
+            return nullptr;
+    }
+}
+
 // documented above
 inline QoreIRBasicBlock* qore_ir_debug_flow_target(const QoreIRInstruction* inst, int rc) {
     const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst);
@@ -5030,6 +5046,137 @@ private:
     mutable std::atomic<size_t> cached_instruction_count{0};
     mutable std::atomic<size_t> cached_handler_cost{0};
 };
+
+//! The code of a function without the paths of a debugger's flow requests (QoreIRBasicBlock::debug_flow, #6201)
+/** Every step event of code with step events (the default) has the paths of a debugger's break, continue and return
+    requests, which run only when a debugger makes one: a summary, pattern or projection analysis whose result is for
+    the code that runs without a request (the facts of a function's returns, the shape of its code, whether a call can
+    be replaced or projected) takes the blocks of a function, the incomings of its Phis and the successors of its blocks
+    through this view, so that it gives code with step events the result that it gives the same code without them
+    (\%no-debugging).
+
+    That is sound for AOT native code, which has no paths (a debugger runs the debug IR of AOT code in the IR
+    interpreter).  The IR interpreter and native JIT code take the paths: a frame that takes the return path of a
+    function whose return facts a native caller relies on reports it (qore_ir_set_debug_flow_return_taken()), and the
+    native caller falls back at the call (design/debug-flow-edges.md, "Analyses of the code").
+*/
+class QoreIRCodeBlocks {
+public:
+    using const_iterator = std::vector<QoreIRBasicBlock*>::const_iterator;
+
+    //! Creates an empty view
+    QoreIRCodeBlocks() = default;
+
+    //! Takes the blocks of the code of \a func, in the order of its blocks
+    explicit QoreIRCodeBlocks(const QoreIRFunction& func) {
+        blocks.reserve(func.blocks.size());
+        for (const auto& block : func.blocks) {
+            if (isCodeBlock(block.get())) {
+                blocks.push_back(block.get());
+            }
+        }
+        has_paths = blocks.size() != func.blocks.size();
+    }
+
+    //! Returns true if \a block is a block of the code, false for a block of a path or a null block
+    static bool isCodeBlock(const QoreIRBasicBlock* block) {
+        return block && !block->debug_flow;
+    }
+
+    const_iterator begin() const {
+        return blocks.begin();
+    }
+
+    const_iterator end() const {
+        return blocks.end();
+    }
+
+    //! Returns the number of blocks of the code
+    size_t size() const {
+        return blocks.size();
+    }
+
+    bool empty() const {
+        return blocks.empty();
+    }
+
+    //! Returns the first block of the code, the entry block of the function
+    QoreIRBasicBlock* front() const {
+        assert(!blocks.empty());
+        return blocks.front();
+    }
+
+    //! Returns the last block of the code
+    QoreIRBasicBlock* back() const {
+        assert(!blocks.empty());
+        return blocks.back();
+    }
+
+    //! Returns the block \a i of the code (not the block \a i of the function, if the function has paths)
+    QoreIRBasicBlock* operator[](size_t i) const {
+        assert(i < blocks.size());
+        return blocks[i];
+    }
+
+    //! Returns true if the function has blocks of paths
+    bool hasPaths() const {
+        return has_paths;
+    }
+
+    //! Returns the only block of the code of \a func, or nullptr if its code has no block or more than one
+    static QoreIRBasicBlock* getSingleBlock(const QoreIRFunction& func) {
+        QoreIRBasicBlock* only = nullptr;
+        for (const auto& block : func.blocks) {
+            if (isCodeBlock(block.get())) {
+                if (only) {
+                    return nullptr;
+                }
+                only = block.get();
+            }
+        }
+        return only;
+    }
+
+    //! Returns the number of incomings of \a phi from blocks of the code
+    static size_t countIncomings(const QoreIRPhiInstruction& phi) {
+        size_t count = 0;
+        for (const QoreIRPhiIncoming& incoming : phi.incoming) {
+            if (isCodeBlock(incoming.block)) {
+                ++count;
+            }
+        }
+        return count;
+    }
+
+    //! Calls \a visitor with each incoming of \a phi from a block of the code, in order
+    template <typename F>
+    static void visitIncomings(const QoreIRPhiInstruction& phi, F&& visitor) {
+        for (const QoreIRPhiIncoming& incoming : phi.incoming) {
+            if (isCodeBlock(incoming.block)) {
+                visitor(incoming);
+            }
+        }
+    }
+
+    //! Returns the incomings of \a phi from blocks of the code, in order
+    static std::vector<QoreIRPhiIncoming> getIncomings(const QoreIRPhiInstruction& phi) {
+        std::vector<QoreIRPhiIncoming> rv;
+        rv.reserve(phi.incoming.size());
+        visitIncomings(phi, [&rv](const QoreIRPhiIncoming& incoming) {
+            rv.push_back(incoming);
+        });
+        return rv;
+    }
+
+private:
+    std::vector<QoreIRBasicBlock*> blocks;
+    bool has_paths = false;
+};
+
+//! Returns the blocks of the code of \a func, without the paths of a debugger's flow requests (see QoreIRCodeBlocks)
+inline QoreIRCodeBlocks qore_ir_code_blocks(const QoreIRFunction& func) {
+    return QoreIRCodeBlocks(func);
+}
 
 //! Check if an opcode is a block terminator (transfers control flow)
 inline bool isTerminator(QoreIROpcode op) {

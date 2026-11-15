@@ -4429,12 +4429,14 @@ static bool interpreterNativeLeafInlineDisabled(QoreIRCallDirectInstruction::Nat
 
 static const QoreIRIncrementLocalIntInstruction* getSimpleClosureIncrementInstruction(
         const QoreIRFunction* callee_ir) {
+    // the code without the paths of a debugger's flow requests (#6201)
+    const QoreIRCodeBlocks code_blocks = callee_ir ? QoreIRCodeBlocks(*callee_ir) : QoreIRCodeBlocks();
     if (!callee_ir) {
         return nullptr;
     }
     const QoreIRIncrementLocalIntInstruction* inc_inst = nullptr;
     bool has_return_nothing = false;
-    for (const auto& block : callee_ir->blocks) {
+    for (const auto& block : code_blocks) {
         if (!block) {
             continue;
         }
@@ -4474,14 +4476,16 @@ static const QoreIRIncrementLocalIntInstruction* getSimpleClosureIncrementInstru
 
 static bool getSimpleClosureStringLeaf(const QoreIRFunction* callee_ir,
         LocalVar*& local, QoreIRCallDirectInstruction::NativeLeafKind& kind) {
-    if (!callee_ir || callee_ir->blocks.size() != 1 || !callee_ir->blocks.front()
-            || callee_ir->blocks.front()->instructions.size() > 16) {
+    // the code without the paths of a debugger's flow requests (#6201)
+    const QoreIRCodeBlocks code_blocks = callee_ir ? QoreIRCodeBlocks(*callee_ir) : QoreIRCodeBlocks();
+    if (!callee_ir || code_blocks.size() != 1 || !code_blocks.front()
+            || code_blocks.front()->instructions.size() > 16) {
         return false;
     }
     const QoreIRLocalInstruction* load = nullptr;
     const QoreIRDotEvalMethodDirectInstruction* operation = nullptr;
     const QoreIRReturnInstruction* ret = nullptr;
-    for (const auto& inst_ptr : callee_ir->blocks.front()->instructions) {
+    for (const auto& inst_ptr : code_blocks.front()->instructions) {
         if (!inst_ptr) {
             continue;
         }
@@ -4579,8 +4583,10 @@ static bool tryExecuteSimpleClosureIncrement(const QoreClosureBase* cb,
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 static bool isInterpreterNativeIntProgram(const QoreIRFunction* ir,
         const UserSignature* sig, unsigned num_params) {
-    if (!ir || !sig || !num_params || num_params > 2 || ir->blocks.size() < 2
-            || ir->blocks.size() > 8 || ir->all_body_locals.size() > 8
+    // the code without the paths of a debugger's flow requests (#6201)
+    const QoreIRCodeBlocks code_blocks = ir ? QoreIRCodeBlocks(*ir) : QoreIRCodeBlocks();
+    if (!ir || !sig || !num_params || num_params > 2 || code_blocks.size() < 2
+            || code_blocks.size() > 8 || ir->all_body_locals.size() > 8
             || sig->getReturnTypeInfo() != bigIntTypeInfo) {
         return false;
     }
@@ -4605,8 +4611,8 @@ static bool isInterpreterNativeIntProgram(const QoreIRFunction* ir,
     }
 
     size_t instruction_count = 0;
-    for (size_t block_index = 0; block_index < ir->blocks.size(); ++block_index) {
-        const auto& block = ir->blocks[block_index];
+    for (size_t block_index = 0; block_index < code_blocks.size(); ++block_index) {
+        const auto& block = code_blocks[block_index];
         if (!block) {
             return false;
         }
@@ -4616,8 +4622,8 @@ static bool isInterpreterNativeIntProgram(const QoreIRFunction* ir,
                 return false;
             }
             auto targetIsForward = [&](const QoreIRBasicBlock* target) {
-                for (size_t i = block_index + 1; i < ir->blocks.size(); ++i) {
-                    if (ir->blocks[i].get() == target) {
+                for (size_t i = block_index + 1; i < code_blocks.size(); ++i) {
+                    if (code_blocks[i] == target) {
                         return true;
                     }
                 }
@@ -4744,7 +4750,9 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
         }
         return reject();
     }
-    if (callee_ir->blocks.size() != 1) {
+    // the code without the paths of a debugger's flow requests (#6201)
+    const QoreIRCodeBlocks code_blocks(*callee_ir);
+    if (code_blocks.size() != 1) {
         if (!isInterpreterNativeIntProgram(callee_ir, sig, num_params)) {
             return reject();
         }
@@ -4752,8 +4760,8 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
         inst->native_leaf_state.store(1, std::memory_order_release);
         return true;
     }
-    if (!callee_ir->blocks.front()
-            || callee_ir->blocks.front()->instructions.size() > 16) {
+    if (!code_blocks.front()
+            || code_blocks.front()->instructions.size() > 16) {
         return reject();
     }
     const LocalVar* params[2] = {nullptr, nullptr};
@@ -4779,7 +4787,7 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
         const QoreIRLocalInstruction* load = nullptr;
         const QoreIRDotEvalMethodDirectInstruction* operation = nullptr;
         const QoreIRReturnInstruction* ret = nullptr;
-        for (const auto& inst_ptr : callee_ir->blocks.front()->instructions) {
+        for (const auto& inst_ptr : code_blocks.front()->instructions) {
             if (!inst_ptr) {
                 continue;
             }
@@ -4916,7 +4924,7 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
 
     const QoreIRInstruction* binary = nullptr;
     const QoreIRReturnInstruction* ret = nullptr;
-    for (const auto& inst_ptr : callee_ir->blocks.front()->instructions) {
+    for (const auto& inst_ptr : code_blocks.front()->instructions) {
         if (!inst_ptr) {
             continue;
         }
