@@ -9260,6 +9260,7 @@ static __attribute__((noinline)) void takeOverRuntimeStackParams(const QoreIRFun
         IRLocalSlotCache& locals_slot_cache, std::vector<bool>& locals_instantiated) {
     for (const IRTakeOverParam& p : func.interpreter_take_over_param_moves) {
         assert(p.slot_id < locals_slot_cache.size() && p.slot_id < locals_instantiated.size());
+        // raw slot: the frame's slots are empty when its parameters are bound
         assert(locals_slot_cache.storage(p.slot_id).isNothing() && !locals_instantiated[p.slot_id]);
         LocalVarValue* lvv = thread_try_find_lvar(p.var);
         if (!lvv || !lvv->val.assigned || lvv->val.static_assignment || lvv->val.type != QV_Node || !lvv->val.v.n) {
