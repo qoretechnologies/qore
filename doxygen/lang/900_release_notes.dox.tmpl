@@ -1284,6 +1284,9 @@
     - @ref mailmessageintro "MailMessage" module
       - the \c From header of a message created to be sent keeps the sender's display name, which was dropped
         (<a href="https://github.com/qoretechnologies/qore/issues/6019">issue 6019</a>)
+      - only the display names of the \c To, \c CC and \c BCC headers are encoded, valid addresses are kept whole,
+        and internationalized addresses are accepted, also by the @ref smtpclientintro "SmtpClient" module with
+        servers that support \c SMTPUTF8 (<a href="https://github.com/qoretechnologies/qore/issues/6066">issue 6066</a>)
       - see @ref mailmessage_v1_5_1 for all changes
 
     - @ref mapperintro "Mapper" module
