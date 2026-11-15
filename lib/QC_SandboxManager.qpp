@@ -494,6 +494,72 @@ hash<SandboxConfigInfo> SandboxManager::getConfiguration() {
     return sm->getConfiguration(xsink);
 }
 
+//! Returns @ref True if the sandbox restricts network access
+/** @return @ref True if the default network policy denies access, or if there are allowed IP ranges, denied IP ranges
+    (blockPrivateNetworks() and blockLocalhost() add denied ranges) or allowed port rules; @ref False otherwise.
+    Allowed host patterns alone do not count
+
+    @see restricts()
+
+    @since %Qore 3.0
+*/
+bool SandboxManager::networkRestricts() {
+    return sm->networkRestricts();
+}
+
+//! Returns @ref True if the sandbox restricts filesystem access
+/** @return @ref True if the default filesystem policy denies access, or if there are allowed or denied path rules or a
+    sandbox root; @ref False otherwise
+
+    @see restricts()
+
+    @since %Qore 3.0
+*/
+bool SandboxManager::filesystemRestricts() {
+    return sm->filesystemRestricts();
+}
+
+//! Returns @ref True if the sandbox sets a resource limit
+/** @return @ref True if the maximum number of threads, the wall-clock time limit, the CPU time limit, the stack size
+    limit or the memory limit is greater than 0 (0 means unlimited); @ref False otherwise
+
+    @see restricts()
+
+    @since %Qore 3.0
+*/
+bool SandboxManager::limitsRestrict() {
+    return sm->limitsRestrict();
+}
+
+//! Returns @ref True if the sandbox restricts anything
+/** Only the state of the sandbox manager is considered; the parse options and the functional domains of a
+    @ref Qore::Program "Program" are not part of it.  A sandbox manager that allows everything and sets no limit
+    restricts nothing, also when it is attached to a %Program.
+
+    @par Example:
+    @code{.py}
+SandboxManager sm();
+printf("%y\n", sm.restricts());  # True: the default policies deny
+sm.setFilesystemDefaultPolicy(True);
+sm.setNetworkDefaultPolicy(True);
+printf("%y\n", sm.restricts());  # False
+sm.setMaxThreads(4);
+printf("%y\n", sm.restricts());  # True: a resource limit
+    @endcode
+
+    @return @ref True if networkRestricts(), filesystemRestricts() or limitsRestrict() is @ref True
+
+    @see
+    - networkRestricts()
+    - filesystemRestricts()
+    - limitsRestrict()
+
+    @since %Qore 3.0
+*/
+bool SandboxManager::restricts() {
+    return sm->restricts();
+}
+
 //! Creates a preset for maximum restrictions ("lockdown" mode)
 /** @return A new SandboxManager configured for maximum security
 

@@ -366,6 +366,21 @@ bool QoreFilesystemSecurityManager::getDefaultPolicy() const {
     return priv->default_allow;
 }
 
+bool QoreFilesystemSecurityManager::isRestricting() const {
+    // a composition holds no state of its own: it restricts if any member does
+    if (priv->composition) {
+        for (const auto* manager : priv->composition->managers) {
+            if (manager->filesystem().isRestricting()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    // the sandbox root confines every access to a subtree, so it restricts like a path rule
+    return !priv->default_allow || !priv->allowed_paths.empty() || !priv->denied_paths.empty()
+        || !priv->sandbox_root.empty();
+}
+
 bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, ExceptionSink* xsink) {
     if (priv->composition) {
         unsigned checked = 0;
@@ -854,6 +869,22 @@ bool QoreNetworkSecurityManager::getDefaultPolicy() const {
     return priv->default_allow;
 }
 
+bool QoreNetworkSecurityManager::isRestricting() const {
+    // a composition holds no state of its own: it restricts if any member does
+    if (priv->composition) {
+        for (const auto* manager : priv->composition->managers) {
+            if (manager->network().isRestricting()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    // allowed host patterns alone are not a restriction: with the default policy "allow" they restrict nothing, and
+    // with "deny" the default policy counts
+    return !priv->default_allow || !priv->allowed_ranges.empty() || !priv->denied_ranges.empty()
+        || !priv->allowed_ports.empty();
+}
+
 bool QoreNetworkSecurityManager::checkConnect(const struct sockaddr* addr, socklen_t len,
                                                int proto, ExceptionSink* xsink) {
     return checkConnect(nullptr, addr, len, proto, xsink);
@@ -1202,6 +1233,24 @@ void QoreSandboxManager::setMaxStackSize(int64 bytes) {
 
 int64 QoreSandboxManager::getMaxStackSize() const {
     return sandbox_intersection_limit<int64>(this, max_stack_size.load(), &QoreSandboxManager::getMaxStackSize);
+}
+
+bool QoreSandboxManager::networkRestricts() const {
+    return net_mgr.isRestricting();
+}
+
+bool QoreSandboxManager::filesystemRestricts() const {
+    return fs_mgr.isRestricting();
+}
+
+bool QoreSandboxManager::limitsRestrict() const {
+    // the getters report the tightest positive limit of the members of a composition
+    return getMaxThreads() > 0 || getWallTimeLimit() > 0 || getCPUTimeLimit() > 0 || getMaxStackSize() > 0
+        || getMemoryLimit() > 0;
+}
+
+bool QoreSandboxManager::restricts() const {
+    return networkRestricts() || filesystemRestricts() || limitsRestrict();
 }
 
 int QoreSandboxManager::acquireThreadSlot(ExceptionSink* xsink) {

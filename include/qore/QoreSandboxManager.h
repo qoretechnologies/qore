@@ -182,6 +182,20 @@ public:
     */
     DLLEXPORT bool getDefaultPolicy() const;
 
+    //! Returns @ref true if the manager restricts filesystem access
+    /** @return @ref true if the default policy denies access, or if there is any allowed or denied path rule;
+        @ref false if the default policy allows access and there are no path rules.  The sandbox root of this class is
+        a path rule, so it counts too
+
+        @note
+        - for the filesystem manager of a composition of sandbox managers, the result is the OR over the members
+        - the state is read directly and cannot fail; a state that cannot be read must be counted as restricting by
+          callers that read it in another way (fail closed)
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool isRestricting() const;
+
     //! Checks if access is allowed for the given path and mode
     /** This is the main enforcement method called from QoreFile, QoreDir, etc.
 
@@ -366,6 +380,18 @@ public:
 
     //! Gets the current default policy
     DLLEXPORT bool getDefaultPolicy() const;
+
+    //! Returns @ref true if the manager restricts network access
+    /** @return @ref true if the default policy denies access, or if there are allowed IP ranges, denied IP ranges
+        (blockPrivateNetworks() and blockLocalhost() add denied ranges), or allowed port rules; @ref false otherwise.
+        Allowed host patterns alone do not count: with the default policy "allow" they restrict nothing, and with
+        "deny" the default policy already counts
+
+        @note for the network manager of a composition of sandbox managers, the result is the OR over the members
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool isRestricting() const;
 
     //! Checks if a connection is allowed - called AFTER DNS resolution
     /** @param addr The resolved socket address
@@ -789,6 +815,45 @@ public:
     */
     DLLEXPORT bool checkNetworkBind(const struct sockaddr* addr, socklen_t len,
                                      int proto, ExceptionSink* xsink);
+
+    //! Returns @ref true if the sandbox restricts network access
+    /** @return the result of QoreNetworkSecurityManager::isRestricting(); the OR over the members for a composition
+        of sandbox managers
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool networkRestricts() const;
+
+    //! Returns @ref true if the sandbox restricts filesystem access
+    /** @return the result of QoreFilesystemSecurityManager::isRestricting(); the OR over the members for a
+        composition of sandbox managers
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool filesystemRestricts() const;
+
+    //! Returns @ref true if the sandbox sets a resource limit
+    /** @return @ref true if the maximum number of threads, the wall-clock time limit, the CPU time limit, the maximum
+        stack size or the memory limit is greater than 0 (0 or negative means unlimited); for a composition of
+        sandbox managers, if any member sets one
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool limitsRestrict() const;
+
+    //! Returns @ref true if the sandbox restricts anything
+    /** @return networkRestricts() || filesystemRestricts() || limitsRestrict()
+
+        Only the state of the manager is considered; the parse options and the functional domains of a Program are not
+        part of it.  A binary module should use this method, or the one for the kind of access it provides, to decide
+        whether a sandbox constrains the code it serves, and not whether a manager is attached or what
+        network().getConfiguration() holds: a manager that allows everything restricts nothing, and the
+        configuration of a composition of sandbox managers is empty.  When the state cannot be determined, treat the
+        sandbox as restricting (fail closed).
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool restricts() const;
 
     //! Creates a copy with the same or stricter restrictions
     /** @return A new QoreSandboxManager with the same configuration

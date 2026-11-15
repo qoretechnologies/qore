@@ -1680,6 +1680,27 @@ nothing sb_mem_free(int handle) {
     return QoreValue();
 }
 
+//! Returns the restriction predicates of the sandbox manager that governs the current thread
+/** Resolves the manager with QoreSandboxManagerHelper (the manager of a call through several sandboxed Programs is
+    their composition), and reports QoreSandboxManager::restricts(), networkRestricts(), filesystemRestricts() and
+    limitsRestrict()
+
+    @return a hash with the keys \c sandboxed, \c restricts, \c network, \c filesystem and \c limits; only
+    \c sandboxed is present if no sandbox governs the thread
+*/
+hash<auto> sb_governing_restricts() {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    QoreSandboxManagerHelper sm(QoreSandboxManagerHelper::All);
+    rv->setKeyValue("sandboxed", static_cast<bool>(sm), xsink);
+    if (sm) {
+        rv->setKeyValue("restricts", sm->restricts(), xsink);
+        rv->setKeyValue("network", sm->networkRestricts(), xsink);
+        rv->setKeyValue("filesystem", sm->filesystemRestricts(), xsink);
+        rv->setKeyValue("limits", sm->limitsRestrict(), xsink);
+    }
+    return rv.release();
+}
+
 //! Captures the sandbox that governs the current thread with QoreSandboxCapture; returns a handle for it
 /** @return the handle of the capture, for the other sb_capture functions; release it with sb_capture_free()
 */

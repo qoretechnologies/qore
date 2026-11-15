@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxRestrictsCompositionTest
+
+#! trusted class whose method reports the restriction predicates of the manager that governs it; sandboxed code
+#! subclasses it
+class Probe {
+    #! returns the predicates of the governing manager
+    hash<auto> get() {
+        return sb_governing_restricts();
+    }
+}
+
+#! Tests QoreSandboxManager::restricts() and its relatives on the manager that governs a thread, including the
+#! composition of the managers of two sandboxes
+/** A call of a method of an object that sandboxed code created, made by code of another sandbox, is governed by both
+    sandboxes: the governing manager is the composition of their managers (see design/sandbox-provenance.md), whose
+    own configuration is the empty default
+*/
+class SandboxRestrictsCompositionTest inherits QUnit::Test {
+    private {
+        int counter = 0;
+    }
+
+    constructor() : QUnit::Test("SandboxRestrictsCompositionTest", "1.0", \ARGV) {
+        addTestCase("no sandbox", \testUnsandboxed());
+        addTestCase("one sandbox", \testSingle());
+        addTestCase("a composition of allow-all managers restricts nothing", \testAllowAllComposition());
+        addTestCase("a composition restricts if one member does", \testRestrictingMember());
+        addTestCase("a composition with a limits-only member restricts", \testLimitsMember());
+        addTestCase("a composition with a filesystem-restricting member restricts", \testFilesystemMember());
+        set_return_value(main());
+    }
+
+    private SandboxManager allowAll() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.setFilesystemDefaultPolicy(True);
+        return sm;
+    }
+
+    #! returns a Program with the given sandbox manager that can create a Probe subclass object and call a method of
+    #! an object
+    private Program makeProgram(SandboxManager sm) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.importClass("Probe");
+        p.parse("class Sub inherits Probe {}\n"
+            "object sub make() { return new Sub(); }\n"
+            "hash<auto> sub call(object o) { return o.get(); }\n"
+            "hash<auto> sub here() { return new Sub().get(); }", "restricts-" + (++counter));
+        return p;
+    }
+
+    private hash<auto> expected(bool network, bool filesystem, bool limits) {
+        return {
+            "sandboxed": True,
+            "restricts": network || filesystem || limits,
+            "network": network,
+            "filesystem": filesystem,
+            "limits": limits,
+        };
+    }
+
+    #! the predicates seen by the method of an object created in Program a, called in Program b
+    private hash<auto> both(Program a, Program b) {
+        object o = a.callFunction("make");
+        return b.callFunction("call", o);
+    }
+
+    testUnsandboxed() {
+        assertEq({"sandboxed": False}, sb_governing_restricts());
+        assertEq({"sandboxed": False}, new Probe().get());
+    }
+
+    testSingle() {
+        Program a = makeProgram(allowAll());
+        assertEq(expected(False, False, False), a.callFunction("here"));
+        SandboxManager sm = allowAll();
+        sm.blockPrivateNetworks();
+        assertEq(expected(True, False, False), makeProgram(sm).callFunction("here"));
+    }
+
+    testAllowAllComposition() {
+        assertEq(expected(False, False, False), both(makeProgram(allowAll()), makeProgram(allowAll())));
+    }
+
+    testRestrictingMember() {
+        SandboxManager sm = allowAll();
+        sm.blockPrivateNetworks();
+        Program denied = makeProgram(sm);
+        Program open = makeProgram(allowAll());
+        assertEq(expected(True, False, False), both(open, denied));
+        assertEq(expected(True, False, False), both(denied, open));
+    }
+
+    testLimitsMember() {
+        SandboxManager sm = allowAll();
+        sm.setMaxThreads(8);
+        Program limited = makeProgram(sm);
+        Program open = makeProgram(allowAll());
+        assertEq(expected(False, False, True), both(open, limited));
+        assertEq(expected(False, False, True), both(limited, open));
+    }
+
+    testFilesystemMember() {
+        SandboxManager sm = allowAll();
+        sm.addFilesystemDeniedPath("/etc");
+        Program fs = makeProgram(sm);
+        Program open = makeProgram(allowAll());
+        assertEq(expected(False, True, False), both(open, fs));
+        assertEq(expected(False, True, False), both(fs, open));
+    }
+}

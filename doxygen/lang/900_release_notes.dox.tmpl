@@ -1078,6 +1078,13 @@
     whoever configures a datasource decides what its options may do; see @ref sandbox_datasource_options
     (<a href="https://github.com/qoretechnologies/qore/issues/5741">issue 5741</a>).
 
+    @par Asking Whether a Sandbox Restricts Anything
+    @ref Qore::SandboxManager::restricts() "SandboxManager::restricts()", \c networkRestricts(), \c filesystemRestricts()
+    and \c limitsRestrict() tell whether a sandbox manager restricts network access, filesystem access or resource
+    use at all; a manager that allows everything and sets no limit restricts nothing.  Binary modules use the matching
+    C++ methods of \c QoreSandboxManager (feature macro \c _QORE_HAS_SANDBOX_RESTRICTS_API) instead of testing whether
+    a sandbox manager is attached; see @ref sandbox_restricts.
+
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
     @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check
