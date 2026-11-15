@@ -233,6 +233,45 @@ struct qore_number_private : public qore_number_private_intern {
         return (bool)mpfr_nan_p(num);
     }
 
+    //! appends a binary key of the exact value of the number (see QoreNumberNode::appendExactKey())
+    /** The significand of an MPFR number is normalized (its most significant bit is set) and aligned to the most
+        significant bit of its most significant limb, so two numbers of the same value at different precisions have
+        the same limbs but for zero limbs at the end of the one of the higher precision, which are left out.
+    */
+    DLLLOCAL void appendExactKey(std::string& key) const {
+        if (mpfr_nan_p(num)) {
+            key += 'N';
+            return;
+        }
+        if (mpfr_zero_p(num)) {
+            // +0 == -0
+            key += '0';
+            return;
+        }
+        bool neg = mpfr_signbit(num);
+        if (mpfr_inf_p(num)) {
+            key += neg ? '-' : '+';
+            key += 'I';
+            return;
+        }
+        key += neg ? '-' : '+';
+        int64 exp = (int64)mpfr_get_exp(num);
+        key.append(reinterpret_cast<const char*>(&exp), sizeof(exp));
+        // the limbs from the least significant one: the zero limbs at the low end are left out; this relies on two
+        // properties of MPFR: mpfr_custom_get_significand() gives the significand of any mpfr_t (it reads its
+        // limb pointer), and the bits of the least significant limb below the precision are always zero (an MPFR
+        // invariant, checked by mpfr_check()), so two equal values have equal limbs in a partly used last limb too
+        const mp_limb_t* limbs = static_cast<const mp_limb_t*>(mpfr_custom_get_significand(num));
+        size_t n = (mpfr_get_prec(num) + GMP_NUMB_BITS - 1) / GMP_NUMB_BITS;
+        size_t low = 0;
+        while (low < n && !limbs[low]) {
+            ++low;
+        }
+        for (size_t i = n; i > low; --i) {
+            key.append(reinterpret_cast<const char*>(&limbs[i - 1]), sizeof(mp_limb_t));
+        }
+    }
+
     DLLLOCAL bool inf() const {
         return (bool)mpfr_inf_p(num);
     }

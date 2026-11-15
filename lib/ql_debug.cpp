@@ -148,6 +148,10 @@ static inline void strindent(QoreString* s, int indent) {
 typedef std::set<const AbstractQoreNode*> nset_t;
 
 static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const QoreValue n, int indent, bool shallow) {
+    // a value nested too deeply raises an exception instead of overflowing the stack (qore#6117)
+    if (check_stack(xsink)) {
+        return;
+    }
     const AbstractQoreNode* p = n.getInternalNode();
     if (n.hasNode()) {
         nset_t::iterator i = nset.lower_bound(p);
@@ -345,6 +349,12 @@ static QoreValue f_dbg_retired_type_declarations(const QoreListNode* params, Run
 //! Returns the number of groups of declarations that survived their Program and are not collected yet (issue #5790)
 static QoreValue f_dbg_type_declaration_groups(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_type_owner_group_count());
+}
+
+//! Returns the number of declarations that survived their Program and only each other keep; the library cleanup frees
+//! them (issue #5790)
+static QoreValue f_dbg_cyclic_type_declarations(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_cyclic_type_owner_count());
 }
 
 static QoreValue f_dbg_global_vars(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -793,6 +803,203 @@ static void ut_stateful_string_api(UnitTestCounters& c) {
     s->getByteOffset(2, &xsink);
     UT_ASSERT(c, is_unsupported_encoding(xsink), "getByteOffset() raises UNSUPPORTED-ENCODING");
     xsink.clear();
+}
+
+//! the overloads of the date/time API that raise INVALID-DATE for a result out of range (qore#6103)
+static void ut_date_checked_arithmetic(UnitTestCounters& c) {
+    constexpr int imax = std::numeric_limits<int>::max();
+    constexpr int imin = std::numeric_limits<int>::min();
+    // the INVALID-DATE exception of a sink, cleared
+    auto invalid_date = [](ExceptionSink& xsink) -> bool {
+        bool rc = false;
+        if (xsink.isException()) {
+            QoreStringValueHelper err(xsink.getExceptionErr());
+            rc = !strcmp(err->c_str(), "INVALID-DATE");
+        }
+        xsink.clear();
+        return rc;
+    };
+    // the hours of a relative date
+    auto hours = [](const DateTime* dt) -> int {
+        qore_tm info;
+        dt->getInfo(info);
+        return info.hour;
+    };
+
+    std::unique_ptr<DateTime> maxh(DateTime::makeRelative(0, 0, 0, imax));
+    std::unique_ptr<DateTime> minh(DateTime::makeRelative(0, 0, 0, imin));
+    std::unique_ptr<DateTime> one_hour(DateTime::makeRelative(0, 0, 0, 1));
+
+    // DateTime::add()
+    {
+        ExceptionSink xsink;
+        std::unique_ptr<DateTime> sum(maxh->add(*one_hour, &xsink));
+        UT_ASSERT(c, !sum, "DateTime::add(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::add(): INVALID-DATE out of range");
+        sum.reset(maxh->add(*one_hour, nullptr));
+        UT_ASSERT(c, sum && hours(sum.get()) == imax, "DateTime::add(): saturated with no sink");
+        std::unique_ptr<DateTime> m(DateTime::makeRelative(0, 0, 0, imax - 1));
+        sum.reset(m->add(*one_hour, &xsink));
+        UT_ASSERT(c, sum && !xsink && hours(sum.get()) == imax, "DateTime::add(): in range");
+    }
+    // DateTime::subtractBy()
+    {
+        ExceptionSink xsink;
+        std::unique_ptr<DateTime> diff(minh->subtractBy(*one_hour, &xsink));
+        UT_ASSERT(c, !diff, "DateTime::subtractBy(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::subtractBy(): INVALID-DATE out of range");
+        diff.reset(maxh->subtractBy(*one_hour, &xsink));
+        UT_ASSERT(c, diff && !xsink && hours(diff.get()) == imax - 1, "DateTime::subtractBy(): in range");
+        // the difference of two absolute dates in hours
+        std::unique_ptr<DateTime> far(DateTime::makeAbsolute(nullptr, 9999999, 1, 1));
+        std::unique_ptr<DateTime> first(DateTime::makeAbsolute(nullptr, 1, 1, 1));
+        diff.reset(far->subtractBy(*first, &xsink));
+        UT_ASSERT(c, !diff, "DateTime::subtractBy(): no absolute difference out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::subtractBy(): INVALID-DATE for an absolute difference");
+    }
+    // DateTime::unaryMinus() and unaryMinusInPlace()
+    {
+        ExceptionSink xsink;
+        std::unique_ptr<DateTime> neg(minh->unaryMinus(&xsink));
+        UT_ASSERT(c, !neg, "DateTime::unaryMinus(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::unaryMinus(): INVALID-DATE out of range");
+        neg.reset(maxh->unaryMinus(&xsink));
+        UT_ASSERT(c, neg && !xsink && hours(neg.get()) == -imax, "DateTime::unaryMinus(): in range");
+        DateTime d(*minh);
+        UT_ASSERT_EQ(c, -1, d.unaryMinusInPlace(&xsink), "DateTime::unaryMinusInPlace(): -1 out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::unaryMinusInPlace(): INVALID-DATE out of range");
+        UT_ASSERT_EQ(c, imax, hours(&d), "DateTime::unaryMinusInPlace(): saturated");
+        DateTime e(*maxh);
+        UT_ASSERT_EQ(c, 0, e.unaryMinusInPlace(&xsink), "DateTime::unaryMinusInPlace(): 0 in range");
+        UT_ASSERT_EQ(c, -imax, hours(&e), "DateTime::unaryMinusInPlace(): negated");
+    }
+    // DateTime::addSecondsTo()
+    {
+        ExceptionSink xsink;
+        DateTime d(*maxh);
+        UT_ASSERT_EQ(c, -1, d.addSecondsTo(3600, 0, &xsink), "DateTime::addSecondsTo(): -1 out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::addSecondsTo(): INVALID-DATE out of range");
+        DateTime e(*one_hour);
+        UT_ASSERT_EQ(c, 0, e.addSecondsTo(3600, 0, &xsink), "DateTime::addSecondsTo(): 0 in range");
+        UT_ASSERT_EQ(c, 2, hours(&e), "DateTime::addSecondsTo(): added");
+    }
+    // DateTime::setRelativeDateSeconds() and makeRelativeFromSeconds()
+    {
+        ExceptionSink xsink;
+        DateTime d(true);
+        UT_ASSERT_EQ(c, -1, d.setRelativeDateSeconds(9223372036855ll, 0, &xsink),
+            "DateTime::setRelativeDateSeconds(): -1 out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::setRelativeDateSeconds(): INVALID-DATE out of range");
+        UT_ASSERT_EQ(c, imax, hours(&d), "DateTime::setRelativeDateSeconds(): saturated");
+        UT_ASSERT_EQ(c, 0, d.setRelativeDateSeconds(7730941132799ll, 0, &xsink),
+            "DateTime::setRelativeDateSeconds(): 0 in range");
+        UT_ASSERT_EQ(c, imax, hours(&d), "DateTime::setRelativeDateSeconds(): the largest hours");
+        std::unique_ptr<DateTime> r(DateTime::makeRelativeFromSeconds(-7730941136400ll, 0, &xsink));
+        UT_ASSERT(c, !r, "DateTime::makeRelativeFromSeconds(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::makeRelativeFromSeconds(): INVALID-DATE out of range");
+        r.reset(DateTime::makeRelativeFromSeconds(-7730941132800ll, 0, &xsink));
+        UT_ASSERT(c, r && !xsink && hours(r.get()) == imin, "DateTime::makeRelativeFromSeconds(): in range");
+    }
+    // DateTimeNode
+    {
+        ExceptionSink xsink;
+        SimpleRefHolder<DateTimeNode> maxn(DateTimeNode::makeRelative(0, 0, 0, imax));
+        SimpleRefHolder<DateTimeNode> minn(DateTimeNode::makeRelative(0, 0, 0, imin));
+        SimpleRefHolder<DateTimeNode> r(maxn->add(*one_hour, &xsink));
+        UT_ASSERT(c, !*r, "DateTimeNode::add(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTimeNode::add(): INVALID-DATE out of range");
+        r = minn->subtractBy(*one_hour, &xsink);
+        UT_ASSERT(c, !*r, "DateTimeNode::subtractBy(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTimeNode::subtractBy(): INVALID-DATE out of range");
+        r = minn->unaryMinus(&xsink);
+        UT_ASSERT(c, !*r, "DateTimeNode::unaryMinus(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTimeNode::unaryMinus(): INVALID-DATE out of range");
+        r = DateTimeNode::makeRelativeFromSeconds(9223372036855ll, 0, &xsink);
+        UT_ASSERT(c, !*r, "DateTimeNode::makeRelativeFromSeconds(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTimeNode::makeRelativeFromSeconds(): INVALID-DATE out of range");
+        r = maxn->subtractBy(*one_hour, &xsink);
+        UT_ASSERT(c, *r && !xsink && hours(*r) == imax - 1, "DateTimeNode::subtractBy(): in range");
+        r = maxn->add(*minh, &xsink);
+        UT_ASSERT(c, *r && !xsink && hours(*r) == -1, "DateTimeNode::add(): in range");
+        r = maxn->unaryMinus(&xsink);
+        UT_ASSERT(c, *r && !xsink && hours(*r) == -imax, "DateTimeNode::unaryMinus(): in range");
+        r = DateTimeNode::makeRelativeFromSeconds(3600, 0, &xsink);
+        UT_ASSERT(c, *r && !xsink && hours(*r) == 1, "DateTimeNode::makeRelativeFromSeconds(): in range");
+    }
+    // DateTimeValueHelper with an exception sink
+    {
+        ExceptionSink xsink;
+        {
+            DateTimeValueHelper h(QoreValue(static_cast<int64>(9223372036855ll)), &xsink);
+            UT_ASSERT(c, invalid_date(xsink), "DateTimeValueHelper: INVALID-DATE for an int out of range");
+        }
+        {
+            DateTimeValueHelper h(QoreValue(std::numeric_limits<double>::quiet_NaN()), &xsink);
+            UT_ASSERT(c, invalid_date(xsink), "DateTimeValueHelper: INVALID-DATE for NaN");
+        }
+        {
+            DateTimeValueHelper h(QoreValue(static_cast<int64>(7200)), &xsink);
+            UT_ASSERT(c, !xsink && hours(*h) == 2, "DateTimeValueHelper: an int in range");
+        }
+    }
+}
+
+//! QoreNumberNode::appendExactKey(): equal values at any precision have one key, different values different keys
+static void ut_number_exact_key(UnitTestCounters& c) {
+    auto key = [](const QoreNumberNode* n) -> std::string {
+        std::string k;
+        n->appendExactKey(k);
+        return k;
+    };
+    // 0.1 at several precisions is several values; 0.5 at any precision is one value
+    SimpleRefHolder<QoreNumberNode> tenth_128(new QoreNumberNode("0.1", 128));
+    SimpleRefHolder<QoreNumberNode> tenth_5000(new QoreNumberNode("0.1", 5000));
+    SimpleRefHolder<QoreNumberNode> half_64(new QoreNumberNode("0.5", 64));
+    SimpleRefHolder<QoreNumberNode> half_8192(new QoreNumberNode("0.5", 8192));
+    UT_ASSERT(c, key(*half_64) == key(*half_8192), "0.5 has one key at 64 and 8192 bits");
+    UT_ASSERT(c, key(*tenth_128) != key(*tenth_5000), "0.1 at 128 bits and 0.1 at 5000 bits are two values");
+    // a value widened to a higher precision (up to the maximum) keeps its key
+    unsigned precs[] = {64, 128, 4096, 4097, 5000, 8192};
+    for (unsigned prec : precs) {
+        SimpleRefHolder<QoreNumberNode> zero(new QoreNumberNode("0", prec));
+        SimpleRefHolder<QoreNumberNode> wide(tenth_128->doPlus(**zero));
+        UT_ASSERT(c, wide->equals(**tenth_128), "a widened number is equal");
+        UT_ASSERT(c, key(*wide) == key(*tenth_128), "a widened number has the same key");
+        SimpleRefHolder<QoreNumberNode> wide5000(tenth_5000->doPlus(**zero));
+        UT_ASSERT(c, key(*wide5000) == key(*tenth_5000), "a number of 5000 bits widened has the same key");
+    }
+    // a value of more than 4096 bits (an exponent of -1000) at two precisions
+    SimpleRefHolder<QoreNumberNode> tiny(new QoreNumberNode("1e-1000"));
+    SimpleRefHolder<QoreNumberNode> zero_max(new QoreNumberNode("0", 8192));
+    SimpleRefHolder<QoreNumberNode> tiny_max(tiny->doPlus(**zero_max));
+    UT_ASSERT(c, tiny->getPrec() > 4096, "1e-1000 has more than 4096 bits");
+    UT_ASSERT(c, key(*tiny) == key(*tiny_max), "1e-1000 has one key at two precisions above 4096 bits");
+    // different values, signs and exponents
+    SimpleRefHolder<QoreNumberNode> one(new QoreNumberNode("1"));
+    SimpleRefHolder<QoreNumberNode> two(new QoreNumberNode("2"));
+    SimpleRefHolder<QoreNumberNode> minus_one(new QoreNumberNode("-1"));
+    SimpleRefHolder<QoreNumberNode> close(new QoreNumberNode("1.0000000000000000000000000000000000001", 256));
+    UT_ASSERT(c, key(*one) != key(*two), "1 and 2 have two keys");
+    UT_ASSERT(c, key(*one) != key(*minus_one), "1 and -1 have two keys");
+    UT_ASSERT(c, key(*one) != key(*close), "1 and a number just above it have two keys");
+    // +0 and -0 have one key, as they are equal; every NaN has one key; the infinities have keys of their own
+    SimpleRefHolder<QoreNumberNode> pzero(new QoreNumberNode("0"));
+    SimpleRefHolder<QoreNumberNode> nzero(new QoreNumberNode("-0", 8192));
+    UT_ASSERT(c, key(*pzero) == key(*nzero), "+0 and -0 have one key");
+    SimpleRefHolder<QoreNumberNode> nan1(new QoreNumberNode("@nan@"));
+    SimpleRefHolder<QoreNumberNode> nan2(new QoreNumberNode("@nan@", 4097));
+    UT_ASSERT(c, nan1->nan() && key(*nan1) == key(*nan2), "every NaN has one key");
+    SimpleRefHolder<QoreNumberNode> pinf(new QoreNumberNode("@inf@"));
+    SimpleRefHolder<QoreNumberNode> ninf(new QoreNumberNode("-@inf@"));
+    UT_ASSERT(c, pinf->inf() && key(*pinf) != key(*ninf), "+inf and -inf have two keys");
+    UT_ASSERT(c, key(*pinf) != key(*nan1) && key(*pzero) != key(*nan1), "NaN, zero and inf have keys of their own");
+    // two values that differ only in the low bits of a partly used last limb: 1 and 1 + 2^-69 at 70 bits
+    SimpleRefHolder<QoreNumberNode> one_70(new QoreNumberNode("1", 70));
+    SimpleRefHolder<QoreNumberNode> eps(new QoreNumberNode(
+        "0.000000000000000000001694065894508600678136645001359283924102783203125", 70));
+    SimpleRefHolder<QoreNumberNode> next(one_70->doPlus(**eps));
+    UT_ASSERT(c, !next->equals(**one_70), "1 + 2^-69 is not 1");
+    UT_ASSERT(c, key(*next) != key(*one_70), "1 and 1 + 2^-69 have two keys");
 }
 
 static void ut_string_data_helper(UnitTestCounters& c) {
@@ -5277,6 +5484,9 @@ public:
     }
 
 private:
+    //! uses DnsServer to resolve a name to the IPv6 and the IPv4 loopback addresses
+    friend class ConnectErrorAfterSoErrorReadTest;
+
     enum class Case {
         //! the server answers every query
         Answered,
@@ -16682,6 +16892,53 @@ static QoreValue f_dbg_http_client_drain_limit(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Debug-only: sets the max_age (ms) of the connection managers that HTTPClient objects create from now on; 0: none
+/** HTTPClient sets no max_age of its own: this lets a test check the max_age of HttpClientConnectionManagerBase (#6150)
+*/
+static QoreValue f_dbg_http_client_max_age(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t ms = get_param_value(params, 0).getAsBigInt();
+    if (ms < 0 || ms > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_client_max_age(): invalid max_age %lld", (long long)ms);
+        return QoreValue();
+    }
+    QoreHttpClientDrainDebug::get().max_age_ms.store(static_cast<int>(ms), std::memory_order_release);
+    return QoreValue();
+}
+
+//! Debug-only: sets the idle timeout (ms) of the connection managers that HTTPClient objects create from now on; 0: the
+//! default (#6184)
+static QoreValue f_dbg_http_client_idle_timeout(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t ms = get_param_value(params, 0).getAsBigInt();
+    if (ms < 0 || ms > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_client_idle_timeout(): invalid timeout %lld",
+            (long long)ms);
+        return QoreValue();
+    }
+    QoreHttpClientDrainDebug::get().idle_timeout_ms.store(static_cast<int>(ms), std::memory_order_release);
+    return QoreValue();
+}
+
+//! Debug-only: arms (or disarms) the hold of the next request of an HTTPClient after the reservation of its
+//! connection's stream and before its submission (#6165)
+static QoreValue f_dbg_http_client_hold_after_reserve(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreHttpClientDrainDebug::get().armReserveHold(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until a request is held by dbg_http_client_hold_after_reserve(); returns False on timeout
+static QoreValue f_dbg_http_client_wait_held_after_reserve(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return QoreHttpClientDrainDebug::get().waitReserveHeld(get_param_value(params, 0).getAsBigInt());
+}
+
+//! Debug-only: lets the request held by dbg_http_client_hold_after_reserve() submit
+static QoreValue f_dbg_http_client_release_after_reserve(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreHttpClientDrainDebug::get().releaseReserveHold();
+    return QoreValue();
+}
+
 //! Debug-only: sets the number of streaming streams whose buffered data an HTTP/2 client delivers in one pass; 0: the
 //! default
 static QoreValue f_dbg_http2_client_streaming_batch(const QoreListNode* params, RuntimeConfig& rc,
@@ -17716,6 +17973,69 @@ static QoreValue f_dbg_fork_while_handler_held(const QoreListNode* params, Runti
     return rv.release();
 }
 
+//! Debug-only: creates a child process with fork() while another thread holds the parse options lock of a Program
+/** The other thread holds the lock that serializes the changes of the Program's parse options (issue #6078) until
+    fork() has returned in the parent.  The child runs the code given, which can change the Program's options, and exits
+    with the value it returns (99 if it raised an exception).  The child first checks that it can take the lock and
+    exits with 98 at once if it cannot, so that a child that inherited the lock held fails without waiting for it.
+    DEBUG builds only.
+
+    @return the exit status of the child (-1 if it did not exit normally)
+
+    @throw DBG-FORK-ERROR fork() failed
+*/
+static QoreValue f_dbg_fork_while_parse_options_locked(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 1).get<const ResolvedCallReferenceNode>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    std::recursive_mutex& wlock = qore_program_private::getParseOptionsWriteLock(**pgm);
+    std::mutex m;
+    std::condition_variable cv;
+    bool held = false;
+    bool release = false;
+    std::thread holder([&]() {
+        std::lock_guard<std::recursive_mutex> wl(wlock);
+        std::unique_lock<std::mutex> ul(m);
+        held = true;
+        cv.notify_all();
+        cv.wait(ul, [&release] { return release; });
+    });
+    {
+        std::unique_lock<std::mutex> ul(m);
+        cv.wait(ul, [&held] { return held; });
+    }
+    pid_t pid = fork();
+    if (!pid) {
+        // a lock inherited held would block the code below forever
+        if (!wlock.try_lock()) {
+            _exit(98);
+        }
+        wlock.unlock();
+        ExceptionSink child_xsink;
+        ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+        int status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+        child_xsink.clear();
+        _exit(status);
+    }
+    int fork_errno = errno;
+    {
+        std::lock_guard<std::mutex> lg(m);
+        release = true;
+        cv.notify_all();
+    }
+    holder.join();
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", fork_errno, "fork() failed");
+        return QoreValue();
+    }
+    return ut_wait_child(pid);
+}
+
 //! Debug-only: release the socket private data detached by dbg_detach_async_io_socket(), closing its fd.
 /** A test arms dbg_detach_async_io_socket() to reproduce the abrupt-drop state and calls this once the controller
     has evicted the operation, so the held fd and its buffers are freed (otherwise the detached socket is kept
@@ -18100,6 +18420,373 @@ static QoreValue f_dbg_run_llvm_target_init_tests(const QoreListNode* params, Ru
     UnitTestCounters c;
     ut_once_init_concurrent(c);
     ut_llvm_target_init_once(c);
+    return make_unit_test_result(c, xsink);
+}
+#endif
+
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+//! A connect that fails after its pending error was read as 0 reports the connect's own error, never EPIPE (#6119)
+/** The check of a nonblocking connect reads the pending error (SO_ERROR), then confirms the connection with a
+    zero-byte send.  When the connect fails between the two system calls (refused, or timed out), Darwin fails the
+    send with EPIPE, as the failure marks the socket unable to send before the send checks the pending error, and the
+    connect was reported as "Broken pipe" (seen in ut_manager_new_connection_closed_before_reservation() on macOS).
+    The hook qore_dbg_connect_error_after_so_error_read makes this interleaving happen at every check, on every
+    platform: the send fails with EPIPE, and the connect's error stays pending until it is read.  Each case connects
+    to a listening socket, which the connect reaches without the hook (checked first), so the failure the hook
+    models is the only one.
+
+    The error is also taken before the failed attempt is given up (Happy Eyeballs) or the socket is closed (UNIX
+    socket), whose system calls can change errno: the hook qore_dbg_errno_after_connect_close sets errno after them,
+    so an error read from errno then is not the connect's.
+*/
+class ConnectErrorAfterSoErrorReadTest {
+public:
+    static void run(UnitTestCounters& c) {
+        runRealRefusal(c, false);
+        runRealRefusal(c, true);
+        runInet(c);
+        runHappyEyeballs(c);
+        runHappyEyeballsLastError(c);
+        runUnix(c, false);
+        runUnix(c, true);
+        runUnixRealRefusal(c);
+    }
+
+private:
+    //! the error that a system call made while a failed attempt is given up or a socket is closed leaves in errno
+    static constexpr int CloseErrno = EBADF;
+
+    //! Sets the hooks of the checks of the connects made in its scope
+    struct HookHelper {
+        //! @param err the error of every check of a connect whose pending error is read as 0 (0 = none)
+        //! @param first_err the error of the first such check instead (0 = @p err)
+        //! @param close_errno errno after a failed attempt is given up or a socket is closed (0 = unchanged)
+        DLLLOCAL explicit HookHelper(int err, int first_err = 0, int close_errno = 0) {
+            qore_dbg_connect_error_after_so_error_read.store(err, std::memory_order_relaxed);
+            qore_dbg_connect_first_error_after_so_error_read.store(first_err, std::memory_order_relaxed);
+            qore_dbg_errno_after_connect_close.store(close_errno, std::memory_order_relaxed);
+        }
+
+        DLLLOCAL ~HookHelper() {
+            qore_dbg_connect_error_after_so_error_read.store(0, std::memory_order_relaxed);
+            qore_dbg_connect_first_error_after_so_error_read.store(0, std::memory_order_relaxed);
+            qore_dbg_errno_after_connect_close.store(0, std::memory_order_relaxed);
+        }
+
+        HookHelper(const HookHelper&) = delete;
+        HookHelper& operator=(const HookHelper&) = delete;
+    };
+
+    //! Checks the exception of a failed connect: the connect's error @p err is reported, and none of @p other
+    static void checkError(UnitTestCounters& c, const char* what, int rc, QoreSocket& client, ExceptionSink& xsink,
+            int err, std::initializer_list<int> other = {}) {
+        std::string w(what);
+        UT_ASSERT_EQ(c, -1, rc, (w + ": the connect fails").c_str());
+        UT_ASSERT(c, xsink.isException(), (w + ": the connect raises an exception").c_str());
+        UT_ASSERT(c, !client.isOpen(), (w + ": the socket is not open after the failed connect").c_str());
+        if (!xsink.isException()) {
+            return;
+        }
+        QoreStringValueHelper ex_err(xsink.getExceptionErr());
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        printf("  %s: %s: %s\n", what, ex_err->c_str(), desc->c_str());
+        UT_ASSERT(c, !strcmp(ex_err->c_str(), "SOCKET-CONNECT-ERROR"),
+            (w + ": the error is SOCKET-CONNECT-ERROR: " + ex_err->c_str()).c_str());
+        UT_ASSERT(c, strstr(desc->c_str(), strerror(err)) != nullptr,
+            (w + ": the description has the connect's error (" + strerror(err) + "): " + desc->c_str()).c_str());
+        // the error of the send, and the given others
+        std::vector<int> not_expected = {EPIPE};
+        not_expected.insert(not_expected.end(), other.begin(), other.end());
+        for (int e : not_expected) {
+            UT_ASSERT(c, !strstr(desc->c_str(), strerror(e)),
+                (w + ": the description does not have another error (" + strerror(e) + "): "
+                    + desc->c_str()).c_str());
+        }
+        xsink.clear();
+    }
+
+    //! Listens on a loopback address; returns the port or -1
+    static int listenInet(QoreSocket& listener, const char* addr, int family, const char* port,
+            ExceptionSink& xsink) {
+        int rc = listener.bindINET(addr, port, true, family, SOCK_STREAM, 0, &xsink);
+        if (!rc && !xsink) {
+            rc = listener.listen(8);
+        }
+        if (rc || xsink) {
+            xsink.clear();
+            return -1;
+        }
+        return listener.getPort();
+    }
+
+    //! A temporary directory for a UNIX socket, removed with the socket file when it goes out of scope
+    class SocketDir {
+    public:
+        DLLLOCAL SocketDir() {
+            std::string dir;
+            {
+                QoreEnvironmentValue tmp("TMPDIR");
+                if (tmp.c_str() && *tmp.c_str()) {
+                    dir = tmp.c_str();
+                }
+            }
+            if (dir.empty()) {
+                dir = "/tmp";
+            }
+            while (dir.size() > 1 && dir.back() == '/') {
+                dir.pop_back();
+            }
+            std::vector<char> tmpl(dir.begin(), dir.end());
+            const char* suffix = "/qore-ut-connect-XXXXXX";
+            tmpl.insert(tmpl.end(), suffix, suffix + strlen(suffix) + 1);
+            if (mkdtemp(tmpl.data())) {
+                path = tmpl.data();
+                socket_path = path + "/s";
+            }
+        }
+
+        DLLLOCAL ~SocketDir() {
+            if (!path.empty()) {
+                unlink(socket_path.c_str());
+                rmdir(path.c_str());
+            }
+        }
+
+        SocketDir(const SocketDir&) = delete;
+        SocketDir& operator=(const SocketDir&) = delete;
+
+        //! the socket's path, or empty if the directory could not be made
+        DLLLOCAL const std::string& socketPath() const {
+            return socket_path;
+        }
+
+    private:
+        std::string path;
+        std::string socket_path;
+    };
+
+    //! A connect refused by the system reports ECONNREFUSED without the hook
+    /** With @p close_errno, errno is changed after the failed attempt is given up
+    */
+    static void runRealRefusal(UnitTestCounters& c, bool close_errno) {
+        UtClosedPort port_holder;
+        int port = port_holder.port();
+        UT_ASSERT(c, port > 0, "connect error: a loopback port with no listener is held");
+        if (port <= 0) {
+            return;
+        }
+        HookHelper hook(0, 0, close_errno ? CloseErrno : 0);
+        ExceptionSink xsink;
+        QoreSocket client;
+        int rc = client.connectINET("127.0.0.1", port, 30000, &xsink);
+        if (close_errno) {
+            checkError(c, "connect error: refused by the system, errno changed after the attempt is given up", rc,
+                client, xsink, ECONNREFUSED, {CloseErrno});
+        } else {
+            checkError(c, "connect error: refused by the system", rc, client, xsink, ECONNREFUSED);
+        }
+    }
+
+    //! The check of the nonblocking connect of one address
+    static void runInet(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        QoreSocket listener;
+        int port = listenInet(listener, "127.0.0.1", AF_INET, "0", xsink);
+        UT_ASSERT(c, port > 0, "connect error: the IPv4 listener listens");
+        if (port <= 0) {
+            return;
+        }
+        {
+            QoreSocket client;
+            int rc = client.connectINET("127.0.0.1", port, 30000, &xsink);
+            UT_ASSERT(c, !rc && !xsink, "connect error: the connect to the IPv4 listener succeeds without the hook");
+            xsink.clear();
+        }
+        HookHelper hook(ECONNREFUSED);
+        QoreSocket client;
+        int rc = client.connectINET("127.0.0.1", port, 30000, &xsink);
+        checkError(c, "connect error: IPv4 connect refused after its pending error was read", rc, client, xsink,
+            ECONNREFUSED);
+    }
+
+    //! Listens on the IPv4 and, if the system has it, the IPv6 loopback address of one port
+    /** @return the port, or -1 if the IPv4 listener cannot be made; @p v6 is set if the IPv6 listener is made
+    */
+    static int listenDual(QoreSocket& listener4, QoreSocket& listener6, bool& v6, ExceptionSink& xsink) {
+        int port = listenInet(listener4, "127.0.0.1", AF_INET, "0", xsink);
+        if (port <= 0) {
+            v6 = false;
+            return -1;
+        }
+        std::string service = std::to_string(port);
+        v6 = listenInet(listener6, "::1", AF_INET6, service.c_str(), xsink) == port;
+        return port;
+    }
+
+    //! Happy Eyeballs: every attempt fails after its pending error was read; the attempts' error is reported
+    /** localhost is resolved to the IPv6 and the IPv4 loopback addresses where both are configured, each with an
+        attempt of its own, and each attempt is checked and given up before the error is raised; where only one is
+        configured, the one attempt is
+    */
+    static void runHappyEyeballs(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        QoreSocket listener4, listener6;
+        bool v6;
+        int port = listenDual(listener4, listener6, v6, xsink);
+        UT_ASSERT(c, port > 0, "connect error: the Happy Eyeballs IPv4 listener listens");
+        if (port <= 0) {
+            return;
+        }
+        std::string service = std::to_string(port);
+        // localhost if there is an IPv6 listener, else 127.0.0.1, so that every attempt reaches a listener
+        const char* host = v6 ? "localhost" : "127.0.0.1";
+        printf("  connect error: Happy Eyeballs: IPv6 loopback listener: %s; target: %s\n", v6 ? "yes" : "no", host);
+        {
+            QoreSocket client;
+            int rc = client.connectINET2(host, service.c_str(), Q_AF_UNSPEC, Q_SOCK_STREAM, 0, 30000, &xsink);
+            UT_ASSERT(c, !rc && !xsink, "connect error: the Happy Eyeballs connect succeeds without the hook");
+            xsink.clear();
+        }
+        // a connect that times out is reported as such
+        HookHelper hook(ETIMEDOUT);
+        QoreSocket client;
+        int rc = client.connectINET2(host, service.c_str(), Q_AF_UNSPEC, Q_SOCK_STREAM, 0, 30000, &xsink);
+        checkError(c, "connect error: Happy Eyeballs attempts time out after their pending error was read", rc,
+            client, xsink, ETIMEDOUT);
+    }
+
+    //! Happy Eyeballs: the error of the attempt that fails last is reported, not errno after it is given up
+    /** The first attempt fails with ECONNREFUSED, the second with ETIMEDOUT, and errno is changed after each attempt
+        is given up; the error reported is ETIMEDOUT.  The name is resolved by a DNS server of the test to the IPv6
+        and the IPv4 loopback addresses, on both of which a listener listens, for two attempts (localhost resolves to
+        one address on many systems).
+    */
+    static void runHappyEyeballsLastError(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        QoreSocket listener4, listener6;
+        bool v6;
+        int port = listenDual(listener4, listener6, v6, xsink);
+        UT_ASSERT(c, port > 0, "connect error: the Happy Eyeballs last-error IPv4 listener listens");
+        if (port <= 0) {
+            return;
+        }
+        if (!v6) {
+            printf("  connect error: Happy Eyeballs last error: skipped: the IPv6 loopback listener cannot be made on "
+                "the port\n");
+            return;
+        }
+        HappyEyeballsLayeredConnectTest::DnsServer dns;
+        int rc = dns.start("127.0.0.1", "::1", 0);
+        UT_ASSERT_EQ(c, 0, rc, "connect error: Happy Eyeballs last error: the DNS server starts");
+        if (rc) {
+            return;
+        }
+        // the answers are sent at once
+        dns.release();
+        // a local class: its members take no visibility attribute
+        struct ServersHelper {
+            ServersHelper(int port) : prev(qore_dbg_cares_set_servers("127.0.0.1:" + std::to_string(port))) {
+            }
+            ~ServersHelper() {
+                qore_dbg_cares_set_servers(prev);
+            }
+            std::string prev;
+        } servers(dns.getPort());
+
+        std::string service = std::to_string(port);
+        const char* name = "qore-connect-error.test";
+        {
+            QoreSocket client;
+            rc = client.connectINET2(name, service.c_str(), Q_AF_UNSPEC, Q_SOCK_STREAM, 0, 30000, &xsink);
+            UT_ASSERT(c, !rc && !xsink, "connect error: Happy Eyeballs last error: the connect succeeds without the "
+                "hook");
+            xsink.clear();
+        }
+        UT_ASSERT(c, dns.getQueries() > 0, "connect error: Happy Eyeballs last error: the name is resolved by the "
+            "DNS server");
+        // the order of the failures does not depend on the order in which the attempts are checked: the first check
+        // that reads the pending error as 0, of whichever attempt, takes ECONNREFUSED and every later check
+        // ETIMEDOUT, and a check that fails gives its attempt up at once, so the attempt that fails last always fails
+        // with ETIMEDOUT
+        HookHelper hook(ETIMEDOUT, ECONNREFUSED, CloseErrno);
+        QoreSocket client;
+        rc = client.connectINET2(name, service.c_str(), Q_AF_UNSPEC, Q_SOCK_STREAM, 0, 30000, &xsink);
+        UT_ASSERT_EQ(c, 0, qore_dbg_connect_first_error_after_so_error_read.load(),
+            "connect error: Happy Eyeballs last error: the first attempt took the first error");
+        checkError(c, "connect error: Happy Eyeballs attempts fail with different errors", rc, client, xsink,
+            ETIMEDOUT, {ECONNREFUSED, CloseErrno});
+    }
+
+    //! The check of the connect of a UNIX socket
+    /** With @p close_errno, errno is changed after the socket is closed
+    */
+    static void runUnix(UnitTestCounters& c, bool close_errno) {
+        SocketDir dir;
+        UT_ASSERT(c, !dir.socketPath().empty(), "connect error: the UNIX socket directory is made");
+        if (dir.socketPath().empty()) {
+            return;
+        }
+        const char* path = dir.socketPath().c_str();
+        ExceptionSink xsink;
+        QoreSocket listener;
+        int rc = listener.bindUNIX(path, SOCK_STREAM, 0, &xsink);
+        if (!rc && !xsink) {
+            rc = listener.listen(8);
+        }
+        UT_ASSERT(c, !rc && !xsink, "connect error: the UNIX socket listener listens");
+        if (rc || xsink) {
+            xsink.clear();
+            return;
+        }
+        {
+            QoreSocket client;
+            rc = client.connectUNIX(path, SOCK_STREAM, 0, &xsink);
+            UT_ASSERT(c, !rc && !xsink, "connect error: the connect to the UNIX socket succeeds without the hook");
+            xsink.clear();
+        }
+        HookHelper hook(ECONNREFUSED, 0, close_errno ? CloseErrno : 0);
+        QoreSocket client;
+        rc = client.connectUNIX(path, SOCK_STREAM, 0, &xsink);
+        if (close_errno) {
+            checkError(c, "connect error: UNIX socket connect refused after its pending error was read, errno "
+                "changed after the close", rc, client, xsink, ECONNREFUSED, {CloseErrno});
+        } else {
+            checkError(c, "connect error: UNIX socket connect refused after its pending error was read", rc, client,
+                xsink, ECONNREFUSED);
+        }
+    }
+
+    //! A UNIX socket connect refused by the system reports ECONNREFUSED, also when errno changes after the close
+    /** The socket is bound and does not listen, so the system refuses the connect in connect()
+    */
+    static void runUnixRealRefusal(UnitTestCounters& c) {
+        SocketDir dir;
+        UT_ASSERT(c, !dir.socketPath().empty(), "connect error: the UNIX socket directory of the refusal is made");
+        if (dir.socketPath().empty()) {
+            return;
+        }
+        const char* path = dir.socketPath().c_str();
+        ExceptionSink xsink;
+        QoreSocket bound;
+        int rc = bound.bindUNIX(path, SOCK_STREAM, 0, &xsink);
+        UT_ASSERT(c, !rc && !xsink, "connect error: the UNIX socket that does not listen is bound");
+        if (rc || xsink) {
+            xsink.clear();
+            return;
+        }
+        HookHelper hook(0, 0, CloseErrno);
+        QoreSocket client;
+        rc = client.connectUNIX(path, SOCK_STREAM, 0, &xsink);
+        checkError(c, "connect error: UNIX socket connect refused by the system, errno changed after the close", rc,
+            client, xsink, ECONNREFUSED, {CloseErrno});
+    }
+};
+
+//! Debug-only: runs the unit tests of the error that a failed connect reports (#6119)
+static QoreValue f_dbg_run_connect_error_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ConnectErrorAfterSoErrorReadTest::run(c);
     return make_unit_test_result(c, xsink);
 }
 #endif
@@ -19069,6 +19756,8 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);
     ut_string_data_helper(c);
+    ut_date_checked_arithmetic(c);
+    ut_number_exact_key(c);
     ut_string_compare_soft_and_concat_chars(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
@@ -19467,6 +20156,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);
     ut_string_data_helper(c);
+    ut_date_checked_arithmetic(c);
+    ut_number_exact_key(c);
     ut_string_compare_soft_and_concat_chars(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
@@ -23644,6 +24335,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_type_declaration_groups", f_dbg_type_declaration_groups, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_cyclic_type_declarations", f_dbg_cyclic_type_declarations, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
@@ -23668,6 +24361,10 @@ void init_debug_functions(QoreNamespace& qns) {
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_llvm_target_init_tests", f_dbg_run_llvm_target_init_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+#ifndef _Q_WINDOWS
+    qns.addBuiltinVariant("dbg_run_connect_error_tests", f_dbg_run_connect_error_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+#endif
     qns.addBuiltinVariant("dbg_run_http1_duplex_tests", f_dbg_run_http1_duplex_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_poll_close_before_open_state", f_dbg_poll_close_before_open_state, QCF_NO_FLAGS,
@@ -23725,6 +24422,20 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http_client_drain_limit", f_dbg_http_client_drain_limit,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "limit");
+    qns.addBuiltinVariant("dbg_http_client_max_age", f_dbg_http_client_max_age,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "max_age_ms");
+    qns.addBuiltinVariant("dbg_http_client_idle_timeout", f_dbg_http_client_idle_timeout,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "idle_timeout_ms");
+    qns.addBuiltinVariant("dbg_http_client_hold_after_reserve", f_dbg_http_client_hold_after_reserve,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "arm");
+    qns.addBuiltinVariant("dbg_http_client_wait_held_after_reserve", f_dbg_http_client_wait_held_after_reserve,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_http_client_release_after_reserve", f_dbg_http_client_release_after_reserve,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http2_client_streaming_batch", f_dbg_http2_client_streaming_batch,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "batch");
@@ -24151,6 +24862,9 @@ void init_debug_functions(QoreNamespace& qns) {
         hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_fork_while_parse_options_locked", f_dbg_fork_while_parse_options_locked, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", codeTypeInfo,
         QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_ref_set_unique_remove_key", f_dbg_ref_set_unique_remove_key, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, autoTypeInfo, 4, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo,

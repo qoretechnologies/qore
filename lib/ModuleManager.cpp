@@ -1854,8 +1854,12 @@ void QoreUserModuleDefContextHelper::setNameInit(const char* name) {
 
     assert(!po);
 
-    po = pgm->pwo.parse_options;
-    pgm->pwo.parse_options |= MOD_HEADER_PO;
+    {
+        // the options saved are the ones that the header's restrictions are added to (issue #6078)
+        std::lock_guard<std::recursive_mutex> lg(pgm->pwo.parse_options.writeLock());
+        po = pgm->pwo.parse_options;
+        pgm->pwo.parse_options |= MOD_HEADER_PO;
+    }
     // the header's own restrictions do not apply to the functional domains declared on user code
     qore_program_private::setModuleHeaderDomains(*pgm->pgm, static_cast<int64>(MOD_HEADER_PO) & ~po.getLo());
 }
@@ -4419,6 +4423,16 @@ bool QoreModuleManager::findAvailableOptionalModule(const std::vector<std::strin
 
 void QoreModuleManager::getModuleCandidateFiles(const char* name, QoreProgram* pgm,
         std::vector<std::string>& files) {
+    getModuleCandidatePaths(name, pgm, files, false);
+}
+
+void QoreModuleManager::getMissingModuleCandidateFiles(const char* name, QoreProgram* pgm,
+        std::vector<std::string>& files) {
+    getModuleCandidatePaths(name, pgm, files, true);
+}
+
+void QoreModuleManager::getModuleCandidatePaths(const char* name, QoreProgram* pgm,
+        std::vector<std::string>& files, bool missing) {
     std::vector<std::string> dirs;
     {
         AutoLocker al(mutex);
@@ -4431,9 +4445,30 @@ void QoreModuleManager::getModuleCandidateFiles(const char* name, QoreProgram* p
         dirs.insert(dirs.end(), appended.begin(), appended.end());
     }
 
-    auto add = [&files](const QoreString& path) {
+    // the working directory, for the paths of the missing files: the build checks them from another directory than
+    // the one qcc runs in
+    std::string cwd;
+    if (missing) {
+        std::unique_ptr<char, decltype(&free)> dir(getcwd(nullptr, 0), &free);
+        if (dir) {
+            cwd = dir.get();
+        }
+    }
+    auto add = [&files, missing, &cwd](const QoreString& path) {
         struct stat sb;
-        if (!stat(path.c_str(), &sb) && S_ISREG(sb.st_mode)) {
+        bool found = !stat(path.c_str(), &sb) && S_ISREG(sb.st_mode);
+        if (missing) {
+            if (!found) {
+                // an absolute path
+                if (path.c_str()[0] == '/' || cwd.empty()) {
+                    files.emplace_back(path.c_str());
+                } else {
+                    files.emplace_back(cwd + "/" + path.c_str());
+                }
+            }
+            return;
+        }
+        if (found) {
             char* resolved = realpath(path.c_str(), nullptr);
             files.emplace_back(resolved ? resolved : path.c_str());
             free(resolved);
@@ -4896,11 +4931,12 @@ int QoreModuleManager::addModuleParseOptionMask(const char* name, const QoreModu
     // the mask can complete %modern (it can add parts of it, such as PO_STRONG_ENCAPSULATION), which cannot be in
     // effect with a compatibility option of the module that %modern does not allow (issue #5682); the mask is refused
     // before anything is changed
-    // the options that are checked are the ones that are applied: they are read once (the parse options of a Program
-    // are not locked against a concurrent change by C++ code, so they are not read again between the check and the
-    // change)
+    // the options that are checked are the ones that are applied: the write lock is held from the read to the change,
+    // so that no other change comes between them (issue #6078)
+    std::unique_lock<std::recursive_mutex> wl;
     QoreParseOptions masked;
     if (mpgm && !mask.empty()) {
+        wl = std::unique_lock<std::recursive_mutex>(qore_program_private::getParseOptionsWriteLock(*mpgm));
         QoreParseOptions current = mpgm->getParseOptions();
         masked = mask.apply(current);
         if (qore_program_private_base::isModern(masked)
@@ -5929,6 +5965,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         ctx.plugin_module_handle = plugin_scope.getHandle();
         // an AOT module inherits the restrictions of the Program loading it, as a source module does (#5556)
         QoreAOTModuleInitLoaderHelper aot_loader(path_pgm);
+        // the native fast entries that an AOT module's init registers are published when its load is complete
+        // (qore#6035)
+        QoreAOTPendingFastEntriesHelper aot_fast_entries;
         mod_info.init(ctx, xsink);
         if (xsink) {
             return nullptr;
@@ -5937,6 +5976,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         if (xsink) {
             return nullptr;
         }
+        aot_fast_entries.commit();
     } catch (AbstractException& e) {
         e.convert(&xsink);
         return nullptr;

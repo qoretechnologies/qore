@@ -207,6 +207,20 @@ smtp.sendMessage(msg);@endcode
       - Added \c "content-id" field to the send email attachment type
       - Inline attachments are used for embedding images in HTML emails (referenced as \c "cid:content-id")
     - Fixed \c SmtpPingPollOperation to set \c goal_reached on successful completion
+    - A message whose sender or recipient address, or an address in whose header, has non-ASCII characters (an
+      internationalized email address, <a href="https://datatracker.ietf.org/doc/html/rfc6531">RFC 6531</a>) is
+      sent with the \c SMTPUTF8 parameter of the \c MAIL \c FROM command if the server advertises the
+      \c SMTPUTF8 extension; otherwise \c SMTP-SEND-ERROR is raised before the credentials or the message are
+      sent; an address with a quoted local part with a \c "<", a \c ">" or white space is refused with
+      \c MESSAGE-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6066">issue 6066</a>)
+    - A message is sent to every address of a \c To, \c CC or \c BCC entry with several addresses or a group, with
+      one \c RCPT \c TO command for each address, and \c SMTPUTF8 is used if any of them has non-ASCII
+      characters; only the first address of an entry got the message (fixed in MailMessage 1.5.1,
+      <a href="https://github.com/qoretechnologies/qore/issues/6134">issue 6134</a>); if one of the addresses cannot
+      be sent in an SMTP command (a quoted local part with white space, a \c "<" or a \c ">"), the whole message is
+      refused with \c MESSAGE-ERROR
+    - A server reply that is not valid UTF-8 (ex: an \c EHLO reply with a Latin-1 host name) is read bytewise; it
+      made sending fail with \c INVALID-ENCODING
     - A message is now always sent with SMTP transparency
       (<a href="https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.2">RFC 5321</a> section 4.5.2),
       whatever its SMTP mode: every CR or LF character that is not part of a CRLF line break is sent as CRLF, and
@@ -960,13 +974,32 @@ smtp.setToken(new_access_token);
           character that is not part of a CRLF line break is sent as CRLF, and a \c "." is added at the start of
           every line that starts with \c "."; see
           @ref SmtpClient::SmtpSendPollOperation::getData() "SmtpSendPollOperation::getData()"
+        - The message is sent to every address of every \c To, \c CC and \c BCC entry, with one \c RCPT \c TO
+          command for each address, as returned by
+          @ref MailMessage::Message::getRecipients() "Message::getRecipients()": an entry can be a list of
+          mailboxes or a group (ex: <tt>a\@x.com, Ann \<b\@y.com\></tt>), and an address is sent once
+        - A message whose sender or recipient address has non-ASCII characters (an internationalized email address,
+          see @ref MailMessage::Message::getEmailAddress() "Message::getEmailAddress()"), or whose header has such an
+          address (ex: <tt>"a\@x.com jörg\@müller.de"</tt> in a \c To header, which is not a list of mailboxes
+          and whose envelope recipient is <tt>a\@x.com</tt>), is sent with the \c SMTPUTF8 parameter of the
+          \c MAIL \c FROM command (RFC 6531) if the server advertises the \c SMTPUTF8 extension in its reply to
+          \c EHLO; otherwise \c SMTP-SEND-ERROR is raised before the credentials or the message are sent
+        - An address with a quoted local part that has a \c "<", a \c ">" or white space is refused with
+          \c MESSAGE-ERROR, and the message is then not sent to any recipient, also when the address is one of
+          several in a \c To, \c CC or \c BCC entry; see
+          @ref SmtpClient::SmtpSendPollOperation::checkEnvelope() "SmtpSendPollOperation::checkEnvelope()"
 
         @throw MESSAGE-ERROR the message is incomplete and cannot be sent, or the sender or a recipient address
-        contains a NUL, CR or LF character
+        contains a NUL, CR or LF character or has a quoted local part with a \c "<", a \c ">" or white space
         @throw HEADER-ERROR a message header name contains a NUL, CR or LF character
         @throw PART-ERROR an attachment header name or value contains a NUL, CR or LF character
         @throw SMTPCLIENT-INVALID-AUTHENTICATION a credential contains a character that separates the fields of the
         SASL message (see @ref SmtpClient::SmtpClient::getAuthInfo() "SmtpClient::getAuthInfo()")
+        @throw SMTP-SEND-ERROR the server returned an error, or the sender or a recipient address has non-ASCII
+        characters and the server does not support the \c SMTPUTF8 extension
+
+        @since %SmtpClient 2.2 an address with non-ASCII characters is sent with the \c SMTPUTF8 parameter if the
+        server supports it
     */
     hash<auto> sendMessage(MailMessage::Message message) {
         if (log_debug)
@@ -1376,6 +1409,22 @@ smtp.setEventQueue();
         }
     }
 
+    #! @cond nodoc
+    # returns the description of an SMTP reply: its lines without the reply codes, separated by "\n"
+    static string getResponseDesc(string text) {
+        string desc;
+        foreach string line in (text.split("\n")) {
+            trim line;
+            *string part = (line =~ x/^[0-9]{3}[ -](.*)$/)[0];
+            if (desc.size()) {
+                desc += "\n";
+            }
+            desc += part.val() ? part : line;
+        }
+        return desc;
+    }
+    #! @endcond
+
     private log(string msg) {
         if (log_info.val())
             call_function(log_info, "SmtpClient: " + trim(vsprintf(msg, argv)));
@@ -1609,13 +1658,14 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
         int code = code_value.typeCode() == NT_INT ? code_value : -1;
         string desc;
         if (text.val()) {
-            foreach string line in (text.split("\n")) {
-                trim line;
-                *string part = (line =~ x/^[0-9]{3}[ -](.*)$/)[0];
-                if (desc.size()) {
-                    desc += "\n";
+            try {
+                desc = SmtpClient::getResponseDesc(text);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "INVALID-ENCODING") {
+                    rethrow;
                 }
-                desc += part.val() ? part : line;
+                # a reply that is not valid UTF-8 (ex: a Latin-1 host name) is read bytewise, as Latin-1
+                desc = SmtpClient::getResponseDesc(force_encoding(text, "ISO-8859-1"));
             }
         }
         return <SmtpResponseInfo>{"code": code, "desc": desc};
@@ -1659,9 +1709,11 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         @param smtp the SmtpClient whose connection info drives the pipeline
         @param message the email message to send
 
-        @throw SMTP-SEND-ERROR if the SMTP server returns an error response
+        @throw SMTP-SEND-ERROR if the SMTP server returns an error response, or the sender or a recipient address
+        has non-ASCII characters and the server does not advertise the \c SMTPUTF8 extension
         @throw MESSAGE-ERROR if the message cannot be serialized (no sender, no recipients), or the sender or a
-        recipient address contains a NUL, CR or LF character
+        recipient address contains a NUL, CR or LF character or has a quoted local part with a \c "<", a \c ">" or
+        white space
         @throw HEADER-ERROR a message header name contains a NUL, CR or LF character
         @throw PART-ERROR an attachment header name or value contains a NUL, CR or LF character
         @throw SMTPCLIENT-INVALID-AUTHENTICATION a credential contains a character that separates the fields of
@@ -1684,6 +1736,7 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
 
         # Serialize the message body upfront (MIME encoding) with SMTP transparency
         string mstr = SmtpSendPollOperation::getData(message);
+        bool smtputf8 = SmtpSendPollOperation::needsSmtpUtf8(sender, recipients, mstr);
 
         string hostname = gethostname();
         hash<SmtpAuthInfo> ai = SmtpClient::getAuthInfo(info);
@@ -1739,11 +1792,21 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         setStepTarget(br_tls, tls_start, detect_start);
         SmtpClient::addAuthDetectSteps(self);
 
+        # --- an address with non-ASCII characters needs the SMTPUTF8 extension (RFC 6531); this is checked before
+        # the credentials are sent ---
+        if (smtputf8) {
+            # a line of the reply (the reply text has the lines without their line breaks, separated by "\n") that is
+            # the keyword after the reply code, case-insensitive, as helloHasSmtpUtf8() checks on a connection
+            addCheckRegex("hello_text", SmtpUtf8LineRegex, "server_has_smtputf8");
+            addRequireContextKey("server_has_smtputf8", "SMTP-SEND-ERROR",
+                SmtpSendPollOperation::getSmtpUtf8Error(sender, recipients));
+        }
+
         # --- SASL authentication ---
         SmtpClient::addAuthSteps(self, "SMTP-SEND-ERROR");
 
         # --- MAIL FROM ---
-        addSend(sprintf("MAIL FROM: <%s>\r\n", sender));
+        addSend(SmtpSendPollOperation::getMailFromCommand(sender, smtputf8));
         addRecvLineResponse("mailfrom_code", "mailfrom_text", "SMTP-SEND-ERROR");
 
         # --- unrolled RCPT TO per recipient ---
@@ -1780,9 +1843,11 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         @param do_auth if True, run SASL authentication before MAIL FROM; the mechanism comes from the
         client configuration, since no \c EHLO capability list is available on an already-connected socket
 
-        @throw SMTP-SEND-ERROR if the SMTP server returns an error response
+        @throw SMTP-SEND-ERROR if the SMTP server returns an error response, or the sender or a recipient address
+        has non-ASCII characters and the \a hello_reply does not advertise the \c SMTPUTF8 extension
         @throw MESSAGE-ERROR if the message cannot be serialized (no sender, no recipients), or the sender or a
-        recipient address contains a NUL, CR or LF character
+        recipient address contains a NUL, CR or LF character or has a quoted local part with a \c "<", a \c ">" or
+        white space
         @throw HEADER-ERROR a message header name contains a NUL, CR or LF character
         @throw PART-ERROR an attachment header name or value contains a NUL, CR or LF character
         @throw SMTPCLIENT-INVALID-AUTHENTICATION a credential contains a character that separates the fields of
@@ -1807,6 +1872,11 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
 
         # Serialize the message body upfront (MIME encoding) with SMTP transparency
         string mstr = SmtpSendPollOperation::getData(message);
+        bool smtputf8 = SmtpSendPollOperation::needsSmtpUtf8(sender, recipients, mstr);
+        # the reply to EHLO on the connection must advertise SMTPUTF8 for an address with non-ASCII characters
+        if (smtputf8 && !SmtpSendPollOperation::helloHasSmtpUtf8(hello_reply)) {
+            throw "SMTP-SEND-ERROR", SmtpSendPollOperation::getSmtpUtf8Error(sender, recipients);
+        }
 
         if (do_auth) {
             # no EHLO reply is available on an already-connected socket, so the mechanism comes from
@@ -1818,7 +1888,7 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
             }
         }
 
-        addSend(sprintf("MAIL FROM: <%s>\r\n", sender));
+        addSend(SmtpSendPollOperation::getMailFromCommand(sender, smtputf8));
         addRecvLineResponse("mailfrom_code", "mailfrom_text", "SMTP-SEND-ERROR");
 
         int i = 0;
@@ -1863,21 +1933,83 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         return MailMessage::Message::encodeSmtpData(message.serializeRaw());
     }
 
-    #! Raises \c MESSAGE-ERROR if the sender or a recipient address contains a NUL, CR or LF character
+    #! Raises \c MESSAGE-ERROR if the sender or a recipient address cannot be written to an SMTP command line
     /** The addresses are written to the \c MAIL \c FROM and \c RCPT \c TO command lines, so a line break in an
-        address would end the command and start another one
+        address would end the command and start another one; an address with a quoted local part (ex:
+        <tt>"John Doe"\@example.com</tt>) is refused if the quoted string has a \c "<", a \c ">" or white space,
+        which a server could take as the end of the address or the start of a parameter of the command
 
         @param sender the sender address
         @param recipients the recipient addresses
 
-        @throw MESSAGE-ERROR the sender or a recipient address contains a NUL, CR or LF character
+        @throw MESSAGE-ERROR the sender or a recipient address contains a NUL, CR or LF character, or has a quoted
+        local part with a \c "<", a \c ">" or white space
 
         @since %SmtpClient 2.2
     */
     static checkEnvelope(string sender, list<string> recipients) {
         check_line_text(sender, "SMTP sender address", "MESSAGE-ERROR");
         map check_line_text($1, "SMTP recipient address", "MESSAGE-ERROR"), recipients;
+        SmtpSendPollOperation::checkQuotedLocalPart(sender, "sender");
+        map SmtpSendPollOperation::checkQuotedLocalPart($1, "recipient"), recipients;
     }
+
+    #! @cond nodoc
+    # raises MESSAGE-ERROR if an address has a quoted local part with a "<", a ">" or white space
+    private static checkQuotedLocalPart(string addr, string what) {
+        if (addr.substr(0, 1) == "\"" && addr =~ /^"[^"]*[<>\s]/) {
+            throw "MESSAGE-ERROR", sprintf("SMTP %s address %y has a quoted local part with a \"<\", a \">\" or "
+                "white space, which cannot be sent in an SMTP command", what, addr);
+        }
+    }
+    #! @endcond
+
+    #! @cond nodoc
+    # returns True if the message can only be sent with the SMTPUTF8 extension (RFC 6531): the sender or a recipient
+    # address has non-ASCII characters, or the message header has non-ASCII text, which is an address, since other
+    # text with non-ASCII characters is encoded (ex: "a@x.com jörg@müller.de" in a To header, which is not a list of
+    # mailboxes, and whose envelope recipient is a@x.com; every address of a list of mailboxes is a recipient: issue
+    # #6134)
+    private static bool needsSmtpUtf8(string sender, list<string> recipients, string mstr) {
+        if (!sender.isDataAscii() || (select recipients, !$1.isDataAscii())) {
+            return True;
+        }
+        int i = mstr.find("\r\n\r\n");
+        return !(i < 0 ? mstr : mstr.substr(0, i)).isDataAscii();
+    }
+
+    # returns the description of the error raised when the server does not support SMTPUTF8
+    private static string getSmtpUtf8Error(string sender, list<string> recipients) {
+        *string addr = sender.isDataAscii() ? (select recipients, !$1.isDataAscii())[0] : sender;
+        if (!exists addr) {
+            return "the SMTP server does not support the SMTPUTF8 extension (RFC 6531), which is needed to send a "
+                "message whose header has an address with non-ASCII characters";
+        }
+        return sprintf("the SMTP server does not support the SMTPUTF8 extension (RFC 6531), which is needed to send "
+            "the address %y with non-ASCII characters", addr);
+    }
+
+    # a line of an EHLO reply that is the SMTPUTF8 keyword after the reply code, in any case, with optional white
+    # space around it
+    private {
+        const SmtpUtf8LineRegex = "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$";
+    }
+
+    # returns True if the EHLO reply of a connection advertises SMTPUTF8: a line of the reply (after the reply
+    # code, which the reply description does not have) is the keyword, in any case, with optional white space
+    # around it, as in the pipeline of a new connection (SmtpUtf8LineRegex)
+    private static bool helloHasSmtpUtf8(hash<auto> hello_reply) {
+        *string desc = hello_reply.EHLO.desc;
+        # the reply is matched bytewise (as Latin-1), so that a byte that is not valid UTF-8 in another line (ex: a
+        # Latin-1 host name) does not hide the keyword, as in the pipeline
+        return exists desc && force_encoding(desc, "ISO-8859-1") =~ /^[ \t]*SMTPUTF8[ \t]*$/mi;
+    }
+
+    # returns the MAIL FROM command for the sender, with the SMTPUTF8 parameter if needed (RFC 6531 section 3.4)
+    private static string getMailFromCommand(string sender, bool smtputf8) {
+        return sprintf("MAIL FROM: <%s>%s\r\n", sender, smtputf8 ? " SMTPUTF8" : "");
+    }
+    #! @endcond
 
     #! Returns the current state as a string
     string getState() {
@@ -1919,13 +2051,14 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         int code = code_value.typeCode() == NT_INT ? code_value : -1;
         string desc;
         if (text.val()) {
-            foreach string line in (text.split("\n")) {
-                trim line;
-                *string part = (line =~ x/^[0-9]{3}[ -](.*)$/)[0];
-                if (desc.size()) {
-                    desc += "\n";
+            try {
+                desc = SmtpClient::getResponseDesc(text);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "INVALID-ENCODING") {
+                    rethrow;
                 }
-                desc += part.val() ? part : line;
+                # a reply that is not valid UTF-8 (ex: a Latin-1 host name) is read bytewise, as Latin-1
+                desc = SmtpClient::getResponseDesc(force_encoding(text, "ISO-8859-1"));
             }
         }
         return <SmtpResponseInfo>{"code": code, "desc": desc};

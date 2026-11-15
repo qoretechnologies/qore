@@ -636,6 +636,13 @@ public:
     void setSelfLocal(LocalVar* n_self_local) {
         self_local = n_self_local;
     }
+    //! Gives a plugin dispatch instruction the active handler (see withExceptionTarget())
+    /** An exception that the plugin operation raises then branches to an enclosing try/catch in the same function
+        instead of returning from the frame (qore#6135).
+    */
+    QoreIRPluginInstruction* withPluginExceptionTarget(QoreIRPluginInstruction* inst) const {
+        return withExceptionTarget(inst);
+    }
 
 private:
     //! the "self" local of the method lowered, if any (see setSelfLocal())
@@ -651,8 +658,21 @@ private:
 
         @param call the call (QoreDotEvalOperatorNode or SelfFunctionCallNode)
         @param loc the location of the call
+        @param check_class the class of the method resolved at parse time, if any
+        @param check_method the method resolved at parse time, if any
+        @param check_any_class true for a qualified call (Base::m()), which is not virtual: its method is called on
+        an object of any class (QoreIRExprInstruction::check_any_class)
     */
-    void emitSelfCallTargetCheck(const QoreValue& call, const QoreProgramLocation* loc);
+    //! Emits the check of the target of a call after its arguments (QoreIRExprInstruction::check_after_args)
+    /** @param call the call (QoreDotEvalOperatorNode or SelfFunctionCallNode)
+        @param target the value that the method is called on; invalid for a call through self, on the current object
+        @param loc the location of the call
+    */
+    void emitCallTargetCheckAfterArgs(const QoreValue& call, QoreIRValue target, const QoreProgramLocation* loc);
+
+    void emitSelfCallTargetCheck(const QoreValue& call, const QoreProgramLocation* loc,
+        const QoreClass* check_class = nullptr, const QoreMethod* check_method = nullptr,
+        bool check_any_class = false);
     bool directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
         const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction* func,
@@ -666,6 +686,8 @@ private:
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue left, QoreIRValue right,
         const QoreProgramLocation* loc, std::string& error);
+    //! returns true if the comparison \a op of the operator \a node may dispatch to a plugin operation (qore#5911)
+    static bool comparisonMayDispatchToPlugin(QoreIROpcode op, const QoreOperatorNode* node);
     QoreIRValue lowerUnaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue value,
         const QoreProgramLocation* loc, std::string& error);
     QoreIRValue emitHashKeyCompoundOp(const VarRefNode* container_var, const std::string& key_name,
@@ -913,6 +935,9 @@ private:
         //! for the last entry of a try statement that an exit leaves (the Scope entry of its try block, the
         //! CatchScope entry of its catch block): try_depth in the statement, 0 for the other entries (#5992)
         int try_end_depth = 0;
+        //! for an entry with try_end_depth: the exception target outside the try statement, which an exception raised
+        //! once the statement has ended goes to (#6128)
+        QoreIRBasicBlock* try_outer_target = nullptr;
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
         QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord
@@ -920,6 +945,9 @@ private:
         QoreValue var_expr;                        //!< loop variable expression for RefForeachRecord
         QoreIRValue context_state;                 //!< Context* handle for Context entries
         LocalVar* catch_var = nullptr;             //!< single local for CatchVar entries (try-catch exception param)
+        //! the value of the CatchException of the catch block of a CatchScope entry, which the CatchCleanup that
+        //! closes it releases (see QoreIRFunction::catch_cleanup_results, #6079)
+        uint32_t catch_result_id = 0;
         QoreIRValue foreach_iterator;              //!< iterator handle released by a ForeachSource entry, if any
         QoreIRValue foreach_list;                  //!< list temporary released by a ForeachSource entry, if any
         QoreIRValue foreach_element;               //!< current element released by a ForeachSource entry, if any
@@ -1033,7 +1061,6 @@ private:
         QoreIRBasicBlock* break_target = nullptr;
         QoreIRBasicBlock* continue_target = nullptr;
         bool is_switch = false;
-        int catch_cleanup_depth = 0;   //!< catch_cleanup_depth when this flow target was created
         size_t cleanup_stack_depth = 0;  //!< cleanup_stack depth when this flow target was created
         QoreIRValue old_implicit_element;  //!< saved $# value for foreach loops (for break/continue cleanup)
         size_t temp_scope_depth = 0;     //!< temp scopes open when this flow target was created
@@ -1061,10 +1088,29 @@ private:
     //! Depth of active catch scopes that need CatchCleanup on non-local exit
     int catch_cleanup_depth = 0;
 
-    //! the number of the scopes of blocks with handlers (handlerScopeCount()) where each active catch block was
-    //! entered, innermost last (one for each catch scope that catch_cleanup_depth counts); see
-    //! catchScopesClosedByThrow()
-    std::vector<size_t> catch_scope_depth_stack;
+    //! An active catch block (see catch_exit_stack)
+    struct CatchExitInfo {
+        //! true if it has an exit block, which closes it when an exception leaves it
+        bool has_exit;
+        //! its catch variable, if any
+        LocalVar* catch_var;
+    };
+    //! the active catch blocks, innermost last (see the lowering of TryStatement, #5968)
+    std::vector<CatchExitInfo> catch_exit_stack;
+    //! A block with an exception path of its own (lowerStatementBlock()), and the catch blocks without exit blocks
+    //! whose statements' exceptions go to it
+    struct AnchorCatchInfo {
+        //! the block's exception path
+        QoreIRBasicBlock* anchor = nullptr;
+        //! catch_cleanup_depth in the block
+        int catch_depth = 0;
+        //! the catch variables of those catch blocks
+        std::vector<LocalVar*> vars;
+        //! true if there is any
+        bool any = false;
+    };
+    //! the blocks with exception paths of their own being lowered, innermost last (#5968)
+    std::vector<AnchorCatchInfo> anchor_catch_stack;
 
     //! catch_cleanup_depth at the body of each enclosing try statement, innermost last
     /** An exception raised in a try body lands in that try statement's catch block, so a throw or rethrow there
@@ -1129,43 +1175,23 @@ private:
         return catch_cleanup_depth - (try_catch_cleanup_depth_stack.empty() ? 0 : try_catch_cleanup_depth_stack.back());
     }
 
-    //! Returns the number of the catch scopes left by a throw or rethrow statement at the current point that it closes
-    //! before it raises the exception
-    /** These are the innermost of the catch scopes that the statement leaves (catchScopesLeftByThrow()) up to the
-        first one that a block with handlers separates from the statement: the catch block of the AST interpreter runs
-        its handlers, and those of the blocks in it, with its exception the current one (td->catchException), so that
-        a rethrow in them raises it again (#5968).  The catch scopes that a block with handlers separates from the
-        statement stay open, and the exception path of the outermost such block in each closes it after the block's
-        handlers ran and its locals were released (see lowerStatementBlock()).  A catch scope with no block with
-        handlers between it and the statement (only the scopes of reference foreach and context statements, if any)
-        has no code that can see its exception after the statement, and is closed before it, as before.
+    //! Releases the catch variable of the catch block that a throw or rethrow statement closes (see
+    //! catchScopesClosedByThrow()), if any
+    void emitCatchVarReleaseForThrow(const QoreProgramLocation* loc);
+    //! Closes the catch block that a throw statement closes (see catchScopesClosedByThrow()), if any, after
+    //! releasing its catch variable
+    void emitCatchCloseForThrow(const QoreProgramLocation* loc);
+
+    //! Returns the number of the catch scopes that a throw or rethrow statement at the current point closes before
+    //! it raises the exception
+    /** A catch block with an exit block is closed there, after the code in it that the exception leaves; one without
+        (see qore_ir_catch_block_needs_exit()) has no code in it that the exception leaves, can only be the innermost
+        catch block, and is closed by the statement, as no code can see its exception afterwards (#5968).
     */
     int catchScopesClosedByThrow() const {
-        int left = catchScopesLeftByThrow();
-        if (!left) {
-            return 0;
-        }
-        const size_t handler_scopes = handlerScopeCount();
-        int closed = 0;
-        while (closed < left && catch_scope_depth_stack[catch_cleanup_depth - 1 - closed] >= handler_scopes) {
-            ++closed;
-        }
-        return closed;
-    }
-
-    //! Returns the number of the open scopes of blocks with handlers (the Scope entries of cleanup_stack with
-    //! block_scope set)
-    /** The other scopes (those of try statements, reference foreach and context statements) run no code of the
-        program when an exception leaves them.
-    */
-    size_t handlerScopeCount() const {
-        size_t count = 0;
-        for (const BlockCleanupEntry& entry : cleanup_stack) {
-            if (entry.type == BlockCleanupEntry::Scope && entry.block_scope) {
-                ++count;
-            }
-        }
-        return count;
+        // the innermost catch block that the statement is in: the handlers of a block left by a return, break or
+        // continue are lowered with the state of their block (catch_cleanup_depth, qore#6017)
+        return catchScopesLeftByThrow() > 0 && !catch_exit_stack[catch_cleanup_depth - 1].has_exit ? 1 : 0;
     }
 
     //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr

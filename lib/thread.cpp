@@ -2111,6 +2111,10 @@ public:
                 const QoreClass* qc = sfcn->getClass();
                 if (qc) {
                     class_ctx = qore_class_private::get(*qc);
+                } else if (sfcn->isAbstractCall()) {
+                    // an unqualified call of an abstract method has no parse-time class (issue #3070); its class
+                    // context is the class of the call
+                    class_ctx = sfcn->getClassContext();
                 }
             }
 
@@ -3167,9 +3171,9 @@ bool parse_cond_test(const QoreProgramLocation* loc) {
     return td->pcs->test(loc);
 }
 
-void push_parse_options() {
+void push_parse_options(const QoreProgramLocation* loc) {
     ThreadData* td = thread_data.get();
-    qore_program_private::get(*td->current_pgm)->pushParseOptions(td->parse_file);
+    qore_program_private::get(*td->current_pgm)->pushParseOptions(loc, td->parse_file);
 }
 
 // called when a StatementBlock has "on_exit" blocks
@@ -4162,10 +4166,15 @@ QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, Qor
     rc.setClass(c);
     do_rc_update = true;
 
-    if (obj && ref_obj && obj != old_obj && !qore_object_private::get(*obj)->startCall(code, xsink)) {
+    if (obj && ref_obj && obj != old_obj && !qore_object_private::get(*obj)->startCall(c, code, xsink)) {
         do_ref = true;
     } else {
         do_ref = false;
+        // a call on the current object takes no reference, but its arguments can have deleted the object too: the
+        // call raises the same error as for another object, so that every execution mode raises it (issue #5824)
+        if (obj && ref_obj && obj == old_obj) {
+            qore_object_private::get(*obj)->checkCurrentObjectCall(c, code, xsink);
+        }
     }
 
     // issue #3024 / issue #3390: save & update the program call context from the code context
@@ -6265,7 +6274,7 @@ QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code
         // Program running on the thread that it calls back, have the effective options of their own callers
         td->callback_caller_pgm = nullptr;
         code_pgm = caller;
-        return caller->getParseOptions();
+        return qore_program_private::getParseOptions(*caller);
     }
     code_pgm = td->current_pgm;
     return runtime_get_effective_parse_options_for(td, td->current_pgm);
@@ -6314,7 +6323,8 @@ void QoreCallReferenceArgEvalHelper::evaluated(const QoreListNode* evaluated_arg
     }
 }
 
-QoreCallbackCallerHelper::QoreCallbackCallerHelper(const QoreProgram* caller) : po(caller->getParseOptions()) {
+QoreCallbackCallerHelper::QoreCallbackCallerHelper(const QoreProgram* caller)
+        : po(qore_program_private::getParseOptions(*caller)) {
     ThreadData* td = thread_data.get();
     old_caller_pgm = td->callback_caller_pgm;
     old_from_pgm = td->callback_from_pgm;
@@ -6330,7 +6340,7 @@ QoreCallbackCallerHelper::~QoreCallbackCallerHelper() {
 
 QoreParseOptions runtime_get_effective_parse_options_for(const QoreProgram* pgm) {
     ThreadData* td = thread_data.get();
-    return pgm ? apply_runtime_po_override(td, pgm->getParseOptions()) : td->runtime_po;
+    return pgm ? apply_runtime_po_override(td, qore_program_private::getParseOptions(*pgm)) : td->runtime_po;
 }
 
 QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOptions& po) {
@@ -6354,7 +6364,7 @@ ThreadData* qore_get_thread_data() {
 
 QoreParseOptions runtime_get_effective_parse_options_for(ThreadData* td, const QoreProgram* pgm) {
     assert(td == thread_data.get());
-    return pgm ? apply_runtime_po_override(td, pgm->getParseOptions()) : td->runtime_po;
+    return pgm ? apply_runtime_po_override(td, qore_program_private::getParseOptions(*pgm)) : td->runtime_po;
 }
 
 bool runtime_module_call_inherits_caller_restrictions(const QoreProgram* caller_pgm) {

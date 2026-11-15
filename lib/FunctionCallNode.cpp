@@ -495,6 +495,12 @@ QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execImpl(LexicalSema
             : qore_method_private::evalWithPolicy<Lexical>(policy, *method, xsink, rc, o, args, ctx, nullptr, nullptr,
                 explicit_inst);
     }
+    return execByNameImpl<Lexical>(policy, o, c_str, ctx, rc, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execByNameImpl(LexicalSemanticPolicy policy, QoreObject* o,
+        const char* c_str, const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const {
     // the method is looked up by name in the class of the object
     if (runtime_arg_names) {
         // resolved on the method of the class of the object, as a call with positional arguments (see execNamed())
@@ -584,13 +590,18 @@ __attribute__((noinline, cold)) QoreValue AbstractMethodCallNode::execNamed(Lexi
         *runtime_arg_names, policy);
 }
 
-const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
+const QoreTypeInfo* FunctionCallBase::getCallReturnTypeInfo(QoreFunction* func) const {
     const QoreTypeInfo* rv = variant
         ? variant->parseGetReturnTypeInfo()
-        : (method
-            ? qore_method_private::get(*method)->getFunction()->parseGetUniqueReturnTypeInfo()
+        : (func
+            ? func->parseRuntimeCallReturnType(nullptr, receiver_type_info,
+                has_explicit_type_args ? &explicit_runtime_type_param_instantiation.type_args : nullptr, true)
             : nullptr);
     return qore_substitute_type_params_if_needed(rv, receiver_type_info, getTypeParamInstantiation());
+}
+
+const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
+    return getCallReturnTypeInfo(method ? qore_method_private::get(*method)->getFunction() : nullptr);
 }
 
 static void invalid_access(const QoreProgramLocation* loc, QoreFunction* func, const QoreParseOptions& denied,
@@ -642,7 +653,11 @@ static void warn_deprecated(const QoreProgramLocation* loc, QoreFunction* func) 
 }
 
 static void check_flags(const QoreProgramLocation* loc, QoreFunction* func, int64 flags, int64 pflag) {
-    if (pflag & (PF_RETURN_VALUE_IGNORED | PF_BACKGROUND)) {
+    // the background operator sets both flags for its expression; an operator that uses the value of an operand
+    // turns off PF_RETURN_VALUE_IGNORED for it, but PF_BACKGROUND stays set in the whole expression, so only the
+    // former decides whether the value of the call is ignored, and the latter only names it a background call
+    // (qore#6143)
+    if (pflag & PF_RETURN_VALUE_IGNORED) {
         bool is_bg_call = (pflag & PF_BACKGROUND);
         // the stronger diagnostic is warranted when the call neither has side effects nor can raise
         // a domain exception.  QCF_CONSTANT is the legacy, unchecked spelling of that pair;
@@ -1010,9 +1025,12 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             check_flags(loc, func, func->parseGetUniqueFlags(), parse_context.pflag);
         }
 
+        // a call resolved at run time has a type that does not name the callee's type parameters (qore#5896,
+        // qore#6151)
         parse_context.typeInfo = qore_substitute_type_params_if_needed(
             variant ? variant->parseGetReturnTypeInfo()
-                : (deferred_rt ? deferred_rt : func->parseGetUniqueReturnTypeInfo()),
+                : (deferred_rt ? deferred_rt : func->parseRuntimeCallReturnType(class_ctx, receiver_type_info,
+                    has_explicit_type_args ? &explicit_type_args : nullptr)),
             receiver_type_info, &type_param_instantiation);
         // a named call of a method that a class can override is resolved at run time, after the checks of its variant
         // and with its type (qore#5990)
@@ -1052,6 +1070,14 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
     return err;
 }
 
+template <bool Lexical>
+QORE_INTERN_NOINLINE QoreValue AbstractMethodCallNode::execByName(LexicalSemanticPolicy policy, QoreObject* o,
+        const char* c_str, const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    // the location of this call is the location of the call stack frame of the called code
+    QoreRcCallSiteHelper call_site(rc, loc);
+    return execByNameImpl<Lexical>(policy, o, c_str, ctx, rc, xsink);
+}
+
 QoreValue SelfFunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
@@ -1079,14 +1105,16 @@ QORE_INTERN_ALWAYS_INLINE QoreValue SelfFunctionCallNode::evalCommon(LexicalSema
         // list.  Binding to the parse-time variant instead silently skipped such overrides.
         // must have a class context here
         assert(class_ctx || runtime_cls);
-        // exec() sets the call site
+        // exec() sets the call site; a call of an abstract method has no parse-time class (see parseInitCall()), so
+        // the method is looked up by name (issue #3070)
         return execImpl<Lexical>(policy, self, ns.ostr, class_ctx ? class_ctx : runtime_cls, xsink);
     }
 
     if (is_abstract) {
         // issue #5933: a qualified call of an abstract method is dispatched by the name of the method (not the
-        // qualified name) on the class of the object, which implements it; exec() sets the call site
-        return execImpl<Lexical>(policy, self, ns.getIdentifier(), class_ctx ? class_ctx : runtime_cls, xsink);
+        // qualified name) on the class of the object, which implements it, also for an object of the class of the
+        // call (issue #3070)
+        return execByName<Lexical>(policy, self, ns.getIdentifier(), class_ctx ? class_ctx : runtime_cls, rc, xsink);
     }
 
     if (!method) {
@@ -1126,6 +1154,21 @@ SelfFunctionCallNode::SelfFunctionCallNode(const QoreProgramLocation* loc, char*
         const QoreMethod* m, const QoreClass* n_qc, const qore_class_private* class_ctx) :
         AbstractMethodCallNode(loc, NT_SELF_CALL, n_args, n_qc, m), ns(n), class_ctx(class_ctx), is_copy(false),
         is_abstract(m && qore_method_private::get(*m)->isAbstract()) {
+    // an unqualified call of an abstract method has no parse-time class, as in parseInitCall() (issue #3070), so that
+    // the method is looked up by name in the class of the object, with the class context of the call
+    if (is_abstract && ns.size() == 1) {
+        qc = nullptr;
+    }
+}
+
+const QoreClass* SelfFunctionCallNode::getRecordedClass() const {
+    if (qc) {
+        return qc;
+    }
+    if (class_ctx) {
+        return class_ctx->cls;
+    }
+    return method ? method->getClass() : nullptr;
 }
 
 template <bool Lexical>
@@ -1235,6 +1278,13 @@ int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_
         if (qore_method_private::get(*method)->isAbstract()) {
             assert(!variant);
             is_abstract = true;
+            // the class of the object implements the method, also when it inherits the implementation from another
+            // parent class than the one that declares the method, so an unqualified call has no parse-time class:
+            // AbstractMethodCallNode::exec() then looks the method up by name also for an object of the class of
+            // the call, and the call costs nothing more at run time than other virtual self calls
+            if (ns.size() == 1) {
+                qc = nullptr;
+            }
         }
     }
     return err;
@@ -2522,12 +2572,7 @@ __attribute__((noinline, cold)) QoreValue StaticMethodCallNode::evalNamed(Lexica
 }
 
 const QoreTypeInfo* StaticMethodCallNode::getTypeInfo() const {
-    const QoreTypeInfo* rv = variant
-        ? variant->parseGetReturnTypeInfo()
-        : (method
-            ? qore_method_private::get(*method)->getFunction()->parseGetUniqueReturnTypeInfo()
-            : 0);
-    return qore_substitute_type_params_if_needed(rv, receiver_type_info, getTypeParamInstantiation());
+    return getCallReturnTypeInfo(method ? qore_method_private::get(*method)->getFunction() : nullptr);
 }
 
 QoreValue SelfFunctionCallNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {

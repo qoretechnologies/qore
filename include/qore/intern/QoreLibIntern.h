@@ -970,7 +970,24 @@ DLLLOCAL void qore_process_params(unsigned num_params, type_vec_t& typeList, arg
 
 // call to get a node with reference count 1 (copy on write)
 void ensure_unique(AbstractQoreNode** v, ExceptionSink* xsink);
+//! Gives \a v a node with reference count 1 that the caller can modify in place (copy on write)
+/** A short string held inline is replaced with a string node, and an enum value with an owned copy of its base value
+    (see qore_enum_value_copy_for_write()).
+*/
 void ensure_unique(QoreValue& v, ExceptionSink* xsink);
+
+//! Returns an owned copy of the base value of the enum value \a v, which the caller can modify in place
+/** An enum value (QoreValue::isEnum()) holds a reference to its enum member, not to the member's base value, which is
+    shared and constant: a node reached through it with QoreValue::get() or QoreValue::getInternalNode() has a
+    reference count of 1 although the value that reaches it does not own it.  Code that modifies a value in place
+    replaces an enum value with this copy first, so that the enum member never changes.
+
+    @param v an enum value
+    @return a string base value as a new string node (also when it is held inline), any other base value held by a
+    node as a copy of the node, and a base value held inline (int, float) as it is; the caller owns the value
+    returned
+*/
+DLLLOCAL QoreValue qore_enum_value_copy_for_write(const QoreValue& v);
 
 //! Returns a value holding \a copy, a copy of the hash or list that \a v holds, in the representation of \a v
 /** A copy of a container held through an opaque reference (the \c \@= operator) is held through an opaque
@@ -990,7 +1007,9 @@ DLLLOCAL QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* co
     QoreValue::discard() or LValueHelper::saveTemp(): releasing it as a plain node would leave the registration of
     an opaque value with the opaque target registry (see design/dgc.md, "Opaque references").
 
-    @param v a value holding a node other than an object
+    An enum value is always replaced, with an owned copy of its base value (see qore_enum_value_copy_for_write()).
+
+    @param v a value holding a node other than an object, or an enum value
     @return the value replaced, or NOTHING if the node was unique
 */
 DLLLOCAL QoreValue qore_value_copy_on_write(QoreValue& v);
@@ -1137,6 +1156,65 @@ DLLLOCAL int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo
 DLLLOCAL int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_int_float_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
+// makes sure the lvalue can be assigned a string value, else raises a parse exception and returns -1
+DLLLOCAL int check_lvalue_string(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
+
+//! returns the one-character UTF-8 string that the += operator adds for a char operand (a new reference)
+/** a char operand of += is added exactly as the one-character string is, for every lvalue type; out of line, as a
+    char operand is rare and its conversion must not enlarge the callers' common paths
+*/
+DLLLOCAL QORE_INTERN_NOINLINE QoreStringNode* qore_plus_equals_char_string(const QoreValue v);
+
+//! returns the integer that += adds to an integer lvalue for a char operand: the char converted as its
+//! one-character string is (\c "5" gives 5, \c "a" 0); out of line, as qore_plus_equals_char_string()
+DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_char_int_operand(const QoreValue v);
+
+//! returns the float that += adds to a float lvalue for a char operand: the char converted as its one-character
+//! string is (\c "5" gives 5.0, \c "a" 0.0); out of line, as qore_plus_equals_char_string()
+DLLLOCAL QORE_INTERN_NOINLINE double qore_plus_equals_char_float_operand(const QoreValue v);
+
+//! QoreValue::isNothing() with the test of an inline value made inline, for the compound assignment paths
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool qore_value_is_nothing(const QoreValue& v) {
+    if (v.rawBits() == QoreValue::makeNothing().rawBits()) {
+        return true;
+    }
+    return v.isPointer() && is_nothing(v.get<const AbstractQoreNode>());
+}
+
+//! QoreValue::isNullOrNothing() with the test of an inline value made inline, for the compound assignment paths
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool qore_value_is_null_or_nothing(const QoreValue& v) {
+    uint64_t bits = v.rawBits();
+    if (bits == QoreValue::makeNothing().rawBits() || bits == QoreValue::makeNull().rawBits()) {
+        return true;
+    }
+    if (!v.isPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* n = v.get<const AbstractQoreNode>();
+    return is_nothing(n) || is_null(n);
+}
+
+//! returns the integer that += adds to an integer lvalue for an operand that is not an inline integer: a char as its
+//! one-character string is, any other value as QoreValue::getAsBigInt() converts it
+/** It takes the same steps as QoreValue::getAsBigInt() after its test for an inline integer, which its callers make
+    (the slow path of native code, and qore_plus_equals_int_operand()), so that it costs no more than that conversion
+*/
+DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_boxed_int_operand(const QoreValue v);
+
+//! returns the integer that += adds to an integer lvalue for an operand: a char as its one-character string is, any
+//! other value as QoreValue::getAsBigInt() converts it, in the same steps, so that it costs no more than that
+//! conversion
+DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_int_operand(const QoreValue v);
+
+//! returns the float that += adds to a float lvalue for an operand that is not a float: a char as its one-character
+//! string is, any other value as QoreValue::getAsFloat() converts it (the same steps after its test for a float)
+DLLLOCAL QORE_INTERN_NOINLINE double qore_plus_equals_nonfloat_float_operand(const QoreValue v);
+
+//! returns the float that += adds to a float lvalue for an operand: a float itself, else as
+//! qore_plus_equals_nonfloat_float_operand()
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE double qore_plus_equals_float_operand(const QoreValue v) {
+    return v.isFloat() ? v.getDouble() : qore_plus_equals_nonfloat_float_operand(v);
+}
 
 DLLLOCAL extern QoreClass* QC_PSEUDOVALUE;
 DLLLOCAL extern QoreClass* QC_PSEUDONOTHING;

@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class HttpClientMaxAgeClockStepTest
+
+#! The max_age of the HTTP client's connection manager under a step of the system clock (#6150)
+/** The age of a pooled connection was measured on the system clock: a step forward made a new connection look as old
+    as the step, so that it was replaced at its next use, and a step back made an old one look new, so that it was used
+    after its max_age.  It is measured on the monotonic clock.  HTTPClient sets no max_age: the tests set it with
+    dbg_http_client_max_age() and step the system clock with dbg_set_realtime_offset(), which only debug builds
+    have.
+*/
+public class HttpClientMaxAgeClockStepTest inherits QUnit::Test {
+    public {
+        #! a step of the system clock
+        const Step = 3600 * 1000000;
+    }
+
+    private {
+        Socket listener();
+        int port;
+        #! the number of connections that the server accepted
+        Counter accepted();
+        #! the number of server threads still running
+        Counter running();
+        bool stop;
+    }
+
+    constructor() : Test("HttpClientMaxAgeClockStepTest", "1.0", \ARGV) {
+        addTestCase("a connection is replaced after its max_age", \maxAgeTest());
+        addTestCase("a step forward of the system clock does not make a new connection reach its max_age",
+            \stepForwardTest());
+        addTestCase("a step back of the system clock does not keep a connection past its max_age", \stepBackTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    globalTearDown() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        stop = True;
+        listener.shutdown();
+        listener.close();
+        running.waitForZero();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (!stop) {
+            *Socket s;
+            try {
+                s = listener.accept(100ms);
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+            if (!s) {
+                continue;
+            }
+            accepted.inc();
+            running.inc();
+            background serve(s);
+        }
+    }
+
+    #! answers the requests of a connection until the client closes it or the test ends
+    private serve(Socket s) {
+        on_exit {
+            s.close();
+            running.dec();
+        }
+        while (!stop) {
+            try {
+                if (!s.isDataAvailable(100ms)) {
+                    if (!s.isOpen()) {
+                        break;
+                    }
+                    continue;
+                }
+                hash<auto> hdr = s.readHTTPHeader(5s);
+                if (!hdr.method) {
+                    break;
+                }
+                s.send("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: text/plain\r\n\r\nok");
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+        }
+    }
+
+    private skipIfNoDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build (dbg_set_realtime_offset(), dbg_http_client_max_age())");
+        }
+    }
+
+    #! makes a request with \a hc and returns the number of connections that the server accepted for it
+    private int request(HTTPClient hc) {
+        int before = accepted.getCount();
+        assertEq("ok", hc.get("/"));
+        return accepted.getCount() - before;
+    }
+
+    private HTTPClient getClient(int max_age_ms) {
+        call_function("dbg_http_client_max_age", max_age_ms);
+        on_exit call_function("dbg_http_client_max_age", 0);
+        HTTPClient hc({"url": "http://127.0.0.1:" + port});
+        # the connection manager takes its options when the client connects
+        hc.connect();
+        return hc;
+    }
+
+    maxAgeTest() {
+        skipIfNoDebug();
+        # long enough that a loaded run reuses the connection within it
+        HTTPClient hc = getClient(2000);
+        request(hc);
+        assertEq(0, request(hc), "the connection is reused within its max_age");
+        usleep(2500ms);
+        assertEq(1, request(hc), "the connection is replaced after its max_age");
+    }
+
+    stepForwardTest() {
+        skipIfNoDebug();
+        HTTPClient hc = getClient(60000);
+        request(hc);
+        call_function("dbg_set_realtime_offset", Step);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        assertEq(0, request(hc), "the connection is reused within its max_age");
+    }
+
+    stepBackTest() {
+        skipIfNoDebug();
+        HTTPClient hc = getClient(1000);
+        request(hc);
+        call_function("dbg_set_realtime_offset", -Step);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        usleep(1500ms);
+        assertEq(1, request(hc), "the connection is replaced after its max_age");
+    }
+}

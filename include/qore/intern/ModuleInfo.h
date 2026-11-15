@@ -780,6 +780,20 @@ public:
     */
     DLLLOCAL void getModuleCandidateFiles(const char* name, QoreProgram* pgm, std::vector<std::string>& files);
 
+    //! Appends the paths in the module path where a module with the given name could be found, but is not
+    /** As getModuleCandidateFiles(), but the paths that are not regular files are given, so that a build can
+        notice when the module is installed (qore#6145)
+    */
+    DLLLOCAL void getMissingModuleCandidateFiles(const char* name, QoreProgram* pgm,
+            std::vector<std::string>& files);
+
+private:
+    //! Appends the candidate paths of a module: the existing files, or the paths that are not files
+    DLLLOCAL void getModuleCandidatePaths(const char* name, QoreProgram* pgm, std::vector<std::string>& files,
+            bool missing);
+
+public:
+
     //! Worker for ModuleManager::registerAOTStaticModule — no dlopen, skip filesystem search
     /** @param aot_info the metadata record that qcc linked with the module (see qore_aot_register_into_program_v2()),
         or nullptr; with it, the module's name is checked, an optional module that it was compiled without and that is
@@ -1058,7 +1072,13 @@ public:
             // remove dependents
             for (strset_t::iterator si = i->second.begin(), se = i->second.end(); si != se; ++si) {
                 md_map_t::iterator di = md_map.find(*si);
-                assert(di != md_map.end());
+                // a module in a dependency cycle (modules that load each other at run time, see
+                // trySetModuleProgramBinaryDependencyLocked()) can be deleted before a module that requires it, as
+                // QoreModuleManager::cleanup() breaks the cycle at one of them: its record of the modules that
+                // require it was removed with it, and there is nothing left to release (qore#6129)
+                if (di == md_map.end()) {
+                    continue;
+                }
 
                 strset_t::iterator dsi = di->second.find(i->first);
                 assert(dsi != di->second.end());

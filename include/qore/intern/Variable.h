@@ -733,6 +733,12 @@ protected:
         }
     }
 
+    //! Replaces the enum value \a current that the lvalue holds with an owned copy of its base value
+    /** see qore_enum_value_copy_for_write(); the lvalue's reference to the enum member is released here (releasing
+        it executes no Qore code)
+    */
+    DLLLOCAL void replaceEnumForWrite(const QoreValue& current);
+
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
     //! checks the stack and records the lvalue ID of a reference that is resolved; nullptr if the stack is exhausted
     DLLLOCAL const lvalue_ref* startReferenceLValue(const ReferenceNode* ref);
@@ -802,6 +808,22 @@ protected:
     DLLLOCAL int makeFloat(const char* desc);
     DLLLOCAL int makeNumber(const char* desc);
 
+    //! returns the value of the lvalue; see getValue() const
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue getValueIntern() const {
+        if (!val) {
+            return *qv;
+        }
+        QoreValue rv = val->getValue();
+        // only a natively stored scalar can be returned in a new node; a node or an inline value is the lvalue's
+        if (val->optimized() && rv.isPointer()) {
+            keepCreatedNode(rv);
+        }
+        return rv;
+    }
+
+    //! keeps the node that getValue() created for a natively stored scalar in tvec
+    DLLLOCAL QORE_INTERN_NOINLINE void keepCreatedNode(QoreValue rv) const;
+
     DLLLOCAL int doRecursiveException() {
         vl.xsink->raiseException("REFERENCE-ERROR", "recursive reference detected in assignment");
         return -1;
@@ -812,7 +834,8 @@ public:
 
 private:
     typedef std::vector<AbstractQoreNode*> nvec_t;
-    nvec_t tvec;
+    //! values released when the helper is destroyed, after the locks; getValue() adds the nodes that it creates
+    mutable nvec_t tvec;
     lvid_set_t* lvid_set = nullptr;
     //! the Programs of the references that the lvalue was reached through, entered until the lvalue has been used
     /** see keepReferenceProgram() and adoptReferenceProgram()
@@ -1176,6 +1199,22 @@ public:
     */
     DLLLOCAL void removedValue(const QoreValue& v);
 
+private:
+    //! removedValue() for a value at the given nesting depth below the removed value
+    DLLLOCAL void removedValueIntern(const QoreValue& v, unsigned depth);
+
+    //! removedValue() for a deeply nested list or hash, with a work stack instead of recursion (qore#6117)
+    DLLLOCAL void removedValueWithoutRecursion(const QoreValue& v);
+
+public:
+    //! Records the objects in the value that a removal took into the given lvalue storage
+    /** Only a node held by the storage can be or contain an object; a scalar held inline is not read, as
+        QoreLValue::getValue() boxes a large integer or a special float in a new node that the caller must release
+    */
+    DLLLOCAL void removedValue(const QoreLValueGeneric& v) {
+        removedValue(QoreValue(static_cast<const AbstractQoreNode*>(v.getInternalNode())));
+    }
+
     DLLLOCAL void objectRemoved(RObject& obj, bool scan_value_removed) {
         removal_object_reported = true;
         if (scan_value_removed) {
@@ -1243,7 +1282,9 @@ public:
         if (qv) {
             saveTemp(*qv);
         } else {
-            saveTemp(getValue().getInternalNode());
+            // the node that the variable holds, if any: a scalar that it stores natively has none (getValue() would
+            // return it in a new node that this helper already keeps)
+            saveTemp(val->getInternalNode());
         }
     }
 
@@ -1394,12 +1435,20 @@ public:
         return qv->getType() == NT_REFERENCE ? qv->get<const ReferenceNode>() : nullptr;
     }
 
-    DLLLOCAL const QoreValue getValue() const {
-        return val ? val->getValue() : *qv;
+    //! returns the value of the lvalue, which stays valid while this helper exists
+    /** A scalar that the lvalue stores natively and that a value holds in a node (an integer outside the inline range
+        or a special float) is returned in a new node, which this helper keeps and releases with its other temporary
+        values (qore#6094); the value is therefore never the caller's own, and a caller that keeps it takes its own
+        reference.  Each call makes and keeps a new node for such a value until the helper is destroyed, so a caller
+        that needs the value more than once reads it once
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE const QoreValue getValue() const {
+        return getValueIntern();
     }
 
-    DLLLOCAL QoreValue getValue() {
-        return val ? val->getValue() : *qv;
+    //! returns the value of the lvalue, which stays valid while this helper exists; see getValue() const
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue getValue() {
+        return getValueIntern();
     }
 
     DLLLOCAL AbstractQoreNode* getNodeValue() {
@@ -1408,8 +1457,8 @@ public:
     }
 
     //! returns the node stored in the lvalue, or nullptr if it holds none
-    /** unlike getValue(), this never creates a value: a large int stored natively is returned by getValue() as a
-        new heap node that the caller would have to release
+    /** unlike getValue(), this never creates a node: getValue() returns a natively stored large int or special float
+        in a new node, which this helper keeps until it is destroyed
     */
     DLLLOCAL const AbstractQoreNode* getInternalNode() const {
         return val ? val->getInternalNode() : qv->getInternalNode();
@@ -1439,7 +1488,15 @@ public:
             return;
         }
         member_lvalue_modified = true;
-        QoreValue current = getValue();
+        // an enum (QV_Enum, which QoreLValue::getValue() returns borrowed), a container or a string: never a scalar
+        // that the lvalue stores natively in a node that getValue() would create and keep (qore#6094)
+        QoreValue current = val ? val->getValue() : *qv;
+        if (current.isEnum()) {
+            // the enum member's base value is shared and constant: the lvalue takes an owned copy to modify
+            replaceEnumForWrite(current);
+            return;
+        }
+        assert(!val || !val->optimized());
         if (current.isShortString()) {
             char buf[7];
             current.getShortString(buf);

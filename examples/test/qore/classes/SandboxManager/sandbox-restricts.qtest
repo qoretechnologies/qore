@@ -1,0 +1,200 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxRestrictsTest
+
+#! Tests SandboxManager::restricts(), networkRestricts(), filesystemRestricts() and limitsRestrict()
+/** A manager restricts when its state restricts: the Program's parse options are not part of it, a manager that allows
+    everything and sets no limit restricts nothing, and allowed host patterns alone are not a restriction.
+*/
+class SandboxRestrictsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("SandboxManager restricts", "1.0", \ARGV) {
+        addTestCase("a default manager restricts", \testDefault());
+        addTestCase("an allow-all manager restricts nothing", \testAllowAll());
+        addTestCase("network dimensions", \testNetwork());
+        addTestCase("filesystem dimensions", \testFilesystem());
+        addTestCase("each limit alone", \testLimits());
+        addTestCase("a limits-only sandbox restricts", \testLimitsOnly());
+        addTestCase("presets restrict", \testPresets());
+        addTestCase("a copy is independent of the original", \testCopy());
+        addTestCase("trustsUncontrolledApis() follows the uncontrolled-API policy", \testTrusts());
+        addTestCase("an attached manager that allows everything does not restrict", \testAttached());
+        set_return_value(main());
+    }
+
+    #! returns a manager that allows everything and sets no limit
+    private SandboxManager allowAll() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.setFilesystemDefaultPolicy(True);
+        return sm;
+    }
+
+    #! checks the four answers of a manager
+    private check(SandboxManager sm, bool network, bool filesystem, bool limits, string msg) {
+        assertEq(network, sm.networkRestricts(), msg + ": networkRestricts()");
+        assertEq(filesystem, sm.filesystemRestricts(), msg + ": filesystemRestricts()");
+        assertEq(limits, sm.limitsRestrict(), msg + ": limitsRestrict()");
+        assertEq(network || filesystem || limits, sm.restricts(), msg + ": restricts()");
+    }
+
+    testDefault() {
+        SandboxManager sm();
+        check(sm, True, True, False, "default");
+    }
+
+    testAllowAll() {
+        check(allowAll(), False, False, False, "allow all");
+    }
+
+    testNetwork() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        check(sm, True, False, False, "default network deny");
+
+        sm = allowAll();
+        sm.addNetworkAllowedHost("*.example.com");
+        check(sm, False, False, False, "allowed host alone with default allow");
+
+        sm = allowAll();
+        sm.addNetworkAllowedIPRange("10.1.0.0/16");
+        check(sm, True, False, False, "allowed range");
+
+        sm = allowAll();
+        sm.addNetworkDeniedIPRange("192.168.0.0/16");
+        check(sm, True, False, False, "denied range");
+
+        sm = allowAll();
+        sm.blockPrivateNetworks();
+        check(sm, True, False, False, "blockPrivateNetworks()");
+
+        sm = allowAll();
+        sm.blockLocalhost();
+        check(sm, True, False, False, "blockLocalhost()");
+
+        sm = allowAll();
+        sm.addNetworkAllowedPort(443);
+        check(sm, True, False, False, "allowed port");
+
+        sm = allowAll();
+        sm.addNetworkAllowedPortRange(8000, 8100, QSEC_NET_TCP);
+        check(sm, True, False, False, "allowed port range");
+
+        sm = allowAll();
+        sm.allowHTTPSOnly();
+        check(sm, True, False, False, "allowHTTPSOnly()");
+
+        # back to allow-by-default after a deny: the default policy alone decides
+        sm = allowAll();
+        sm.setNetworkDefaultPolicy(False);
+        check(sm, True, False, False, "default network deny set explicitly");
+    }
+
+    testFilesystem() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        check(sm, False, True, False, "default filesystem deny");
+
+        sm = allowAll();
+        sm.addFilesystemAllowedPath("/tmp", QSEC_READ);
+        check(sm, False, True, False, "allowed path rule");
+
+        sm = allowAll();
+        sm.addFilesystemDeniedPath("/etc");
+        check(sm, False, True, False, "denied path rule");
+
+        sm = allowAll();
+        sm.setFilesystemSandboxRoot("/tmp");
+        check(sm, False, True, False, "sandbox root");
+        # clearing the root removes the path rule that setting it added
+        sm.clearFilesystemSandboxRoot();
+        check(sm, False, False, False, "sandbox root cleared");
+    }
+
+    testLimits() {
+        SandboxManager sm = allowAll();
+        sm.setMaxThreads(2);
+        check(sm, False, False, True, "max threads");
+        sm.setMaxThreads(0);
+        check(sm, False, False, False, "max threads unlimited again");
+
+        sm = allowAll();
+        sm.setWallTimeLimit(1000);
+        check(sm, False, False, True, "wall time");
+
+        sm = allowAll();
+        sm.setCPUTimeLimit(1000);
+        check(sm, False, False, True, "CPU time");
+
+        sm = allowAll();
+        sm.setMaxStackSize(1024 * 1024);
+        check(sm, False, False, True, "stack size");
+
+        sm = allowAll();
+        sm.setMemoryLimit(10 * 1024 * 1024);
+        check(sm, False, False, True, "memory");
+    }
+
+    testLimitsOnly() {
+        SandboxManager sm = allowAll();
+        sm.setMaxThreads(4);
+        sm.setMemoryLimit(100 * 1024 * 1024);
+        assertTrue(sm.restricts());
+        assertFalse(sm.networkRestricts());
+        assertFalse(sm.filesystemRestricts());
+        assertTrue(sm.limitsRestrict());
+    }
+
+    testPresets() {
+        check(SandboxManager::createLockdown(), True, True, True, "lockdown");
+        check(SandboxManager::createWebSafe(), True, True, True, "web safe");
+    }
+
+    testCopy() {
+        SandboxManager sm = allowAll();
+        sm.setWallTimeLimit(500);
+        SandboxManager c = sm.copy();
+        check(c, False, False, True, "copy");
+        sm.blockPrivateNetworks();
+        check(c, False, False, True, "copy is independent");
+        check(sm, True, False, True, "original");
+    }
+
+    testAttached() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm = allowAll();
+        p.setSandboxManager(sm);
+        assertFalse(p.getSandboxManager().restricts());
+        # the manager of the Program is the same state: a change is seen
+        sm.setMaxThreads(3);
+        assertTrue(p.getSandboxManager().restricts());
+    }
+
+    testTrusts() {
+        SandboxManager sm();
+        assertFalse(sm.trustsUncontrolledApis(), "default");
+        assertEq(sm.getUncontrolledApiPolicy(), sm.trustsUncontrolledApis());
+        sm.setUncontrolledApiPolicy(True);
+        assertTrue(sm.trustsUncontrolledApis(), "allowed");
+        # trusting is independent of restricting
+        assertTrue(sm.restricts());
+        sm.setUncontrolledApiPolicy(False);
+        assertFalse(sm.trustsUncontrolledApis(), "denied again");
+        assertFalse(allowAll().trustsUncontrolledApis(), "allow-all does not trust by itself");
+        # a copy keeps the policy and is independent
+        sm.setUncontrolledApiPolicy(True);
+        SandboxManager c = sm.copy();
+        assertTrue(c.trustsUncontrolledApis(), "copy");
+        sm.setUncontrolledApiPolicy(False);
+        assertTrue(c.trustsUncontrolledApis(), "the copy is independent");
+        # presets
+        assertFalse(SandboxManager::createLockdown().trustsUncontrolledApis(), "lockdown");
+    }
+}

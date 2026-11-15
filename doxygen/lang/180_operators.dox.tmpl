@@ -158,6 +158,8 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     |unquoted @ref string "string" \a shell_command|@ref string_type "string"|The shell command will be executed and the \c stdout is returned as a string
 
     @throw BACKQUOTE-ERROR An error occurred in fork() or creating the output pipe
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "SandboxManager" governing the code does not allow
+    \c /bin/sh, which runs the command, to be executed (see @ref sandbox_fs_shell)
 
     <hr>
     @subsection hash_element_operator Hash Element or Object Member Expression Dereference Operator ({})
@@ -702,7 +704,8 @@ if (!exists error_code)
     |@ref date|Gives the negative of its argument as a @ref date, ex: <tt>-(-1s) = 1s, -(1s) = -1s</tt>
     |other|Returns 0
 
-    This operator does not throw any exceptions
+    @throw INVALID-DATE a component of a @ref relative_dates "relative date" is the smallest signed 32-bit integer,
+    whose negative a relative date cannot hold (ex: <tt>-hours(-2147483648)</tt>)
 
     <hr>
     @subsection unary_plus_operator Unary Plus Operator (+)
@@ -1342,19 +1345,45 @@ foreach string key in (keys hash)
     \a expression1 <tt>*</tt> \a expression2
 
     @par Return Type
-    @ref int_type "int", @ref float_type "float", or @ref number_type "number"
+    @ref int_type "int", @ref float_type "float", @ref number_type "number" or @ref date_type "date"
 
     @par Example
     @code{.py} value = x * y;@endcode
+    @code{.py} date period = months(1) * 3;@endcode
 
     <b>Arguments Processed by * (in order of precedence)</b>
     |!Argument|!Processing
+    |@ref date_type "date"|Gives a @ref relative_dates "relative date": the date multiplied by the other argument (see below)
     |@ref number_type "number"|Gives the result of multiplying its arguments; @ref integer "ints" and @ref float "floats" are converted to @ref number "numbers" if at least one of the arguments is a @ref number "number"
     |@ref float_type "float"|Gives the result of multiplying its arguments; @ref integer "ints" are converted to @ref float "floats" if at least one of the arguments is a @ref float "float"
     |@ref int_type "int"|Gives the result of multiplying its arguments
     |any other type|Converts argument to a @ref number "number" and performs the multiplication
 
-    This operator does not throw any exceptions.
+    @anchor relative_date_multiplication
+    @par Multiplying a Relative Date
+    @parblock
+    A @ref relative_dates "relative date" multiplied by a number (in either order) gives a relative date whose
+    components (years, months, days, hours, minutes, seconds and microseconds) are each multiplied by the number and
+    then normalized as in date arithmetic (ex: 60 seconds are 1 minute and 12 months are 1 year; days are never
+    converted to months, nor hours to days), so a calendar component stays a calendar component:
+    - <tt>months(1) * 2</tt> gives <tt>2 months</tt>, and <tt>2024-01-31 + months(1) * 2</tt> gives
+      \c 2024-03-31, as <tt>2024-01-31 + months(2)</tt> does
+    - <tt>(hours(1) + minutes(30)) * 3</tt> gives <tt>4 hours 30 minutes</tt>
+
+    With a @ref float_type "float" or a @ref number_type "number" factor (a number is converted to a float), the
+    fraction of each component's product is carried to the smaller units as @ref Qore::date(string) "date(string)"
+    carries the fraction of an ISO 8601 duration component written as the product in decimal (the shortest decimal
+    that gives the float): a year is 365 days, a month 30 days and a day 24 hours, and a fraction of a microsecond is
+    truncated.  So <tt>months(1) * 1.5</tt> gives <tt>1 month 15 days</tt>, as \c date("P1.5M") does,
+    <tt>months(1) * 2.3</tt> gives <tt>2 months 9 days</tt>, as \c date("P2.3M") does, and <tt>years(1) * 1.5</tt>
+    gives <tt>1 year 182 days 12 hours</tt>, as \c date("P1.5Y") does.
+
+    Any other factor is converted to an @ref int_type "int".  An @ref absolute_dates "absolute date" is first
+    converted to the time from now until the date (zero for a date in the past), as get_duration_microseconds() does.
+    @endparblock
+
+    @throw INVALID-DATE a component of the product does not fit a signed 32-bit integer, or the factor is a float that
+    is not a finite number (NaN or infinity)
 
     <hr>
     @subsection division_operator Divide Operator (/)
@@ -1419,16 +1448,19 @@ foreach string key in (keys hash)
     @code{.py} list = (1, 2) + ("three", "four", "five");@endcode
     @code{.py} hash = ( "key1" : 1, "key2" : 2) + ( "key3" : "three", "key4": "four");@endcode
     @code{.py} bin = bin1 + bin2;@endcode
+    @code{.py} string hex = rtf[i] + rtf[i + 1]; # two chars give a two-character string@endcode
 
     @par Arguments Processed by + (in order of precedence)
     |!Argument|!Processing
     |@ref list_type list|Gives the result of concatenating its arguments, i.e. <tt>(1, 2) + (3, 4) = (1, 2, 3, 4)</tt>
-    |@ref string_type "string"|Gives the result of concatenating its arguments
+    |@ref string_type "string" or @ref char "char"|Gives the result of concatenating its arguments; a @ref char "char" is added as a one-character string with any other argument, so that <tt>c'a' + c'b'</tt> gives \c "ab", <tt>c'a' + 1</tt> gives \c "a1" and <tt>c'a' + NOTHING</tt> gives \c "a" (see @ref char_plus)
     |@ref date_type "date"|Gives the result of adding date/time values (see @ref date_time_arithmetic)
     |@ref number_type "number"|Gives the result of adding its arguments
     |@ref float_type "float"|Gives the result of adding its arguments
     |@ref int_type "int"|Gives the result of adding its arguments
     |@ref hash_type "hash"|Gives the result of concatenating/merging its arguments. Any common keys will be overwritten by the values in the second hash (\a expression2)
+
+    With a @ref date_type "date" argument, a number added to the date is a number of seconds.
 
     @par Lists
     A list that \c + gives keeps the type of a typed list where it can:
@@ -1478,7 +1510,10 @@ h = add(<Child>{}, <Other>{});
     @endcode
     The @ref plus_equals_operator "+=" operator merges a hash into the hash of its lvalue, which keeps its hashdecl.
 
-    This operator does not throw any exceptions.
+    @throw INVALID-DATE the sum of @ref date_type "dates" is out of range: a component of a
+    @ref relative_dates "relative date" does not fit a signed 32-bit integer (ex:
+    <tt>hours(2147483647) + hours(1)</tt>), or the year of an @ref absolute_dates "absolute date" is not from
+    -2147483647 to 2147483646; or a number added to a date gives a relative date out of range
 
     <hr>
     @subsection minus_operator Minus Operator (-)
@@ -1510,7 +1545,10 @@ h = add(<Child>{}, <Other>{});
     |@ref hash_type "hash" - @ref list_type "list"|hash key deletion: \a expression1 - \a expression2; all elements of the list are converted to strings (if necessary) and any keys with those names are deleted from the hash.
     |@ref hash_type "hash" - @ref hash_type "hash"|no-op; silently returns @ref nothing
 
-    This operator does not throw any exceptions.
+    @throw INVALID-DATE the difference of @ref date_type "dates" is out of range: a component of a
+    @ref relative_dates "relative date" does not fit a signed 32-bit integer (ex: the hours between
+    \c 0001-01-01 and \c 9999999-01-01), or the year of an @ref absolute_dates "absolute date" is not from
+    -2147483647 to 2147483646; or a number subtracted from a date gives a relative date out of range
 
     <hr>
     @subsection shift_right_operator Shift Right Operator (>>)
@@ -2473,15 +2511,21 @@ if (x || y)
     @note Values replaced in a hash or object are released after the merge finishes and its lvalue locks are
     released, including after a partial merge fails; their destructors can read or modify the target.
 
+    A @ref char "char" \a expression is added exactly as its one-character string is, whatever the type of the
+    \a lvalue: <tt>int i = 1; i += c'5';</tt> gives \c 6, as <tt>i += "5"</tt> does, a list \a lvalue is appended
+    the string, and an \a lvalue with no value is assigned it; code-point addition takes \c int()
+    (<tt>i += int(c'5')</tt> gives \c 54).  See @ref char_plus.
+
     <b>Arguments Processed by +=</b>
     |!Argument|!Processing
     |\a lvalue (@ref list_type "list")|the expression will be evaluated and concatenated to the \a lvalue. If \a expression is a list, the lists will be concatenated, to ensure adding a single element to a list, use the @ref push "push operator"
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object")|the \a expression will be evaluated, and, if it is a hash or object, then it's members will be added to the \a lvalue, any duplicate elements in the \a lvalue will be overridden by elements in the \a expression.
     |\a lvalue (@ref string_type "string")|the \a expression will be evaluated and converted to a string if necessary and concatenated to the \a lvalue.
+    |\a lvalue (@ref char "char")|the \a lvalue is processed as a one-character string: it is assigned the string that concatenates the \a lvalue and the \a expression converted to a string (see @ref char_plus); a \c char lvalue cannot hold the string, so the operator is a parse error with an lvalue declared as \c char
     |\a lvalue (@ref number_type "number")|the \a expression will be evaluated and converted to a number if necessary and added to the \a lvalue.
     |\a lvalue (@ref float_type "float")|the \a expression will be evaluated and converted to a float if necessary and added to the \a lvalue.
     |\a lvalue (@ref binary_type "binary")|the \a expression will be evaluated and converted to a binary if necessary and added to the \a lvalue.
-    |\a lvalue (@ref date_type "date")|the \a expression will be evaluated and converted to a date if necessary and added to the \a lvalue.
+    |\a lvalue (@ref date_type "date")|the \a expression will be evaluated and converted to a date if necessary and added to the \a lvalue; \c INVALID-DATE is raised if the result is out of range (see @ref plus_operator "+")
     |\a lvalue (@ref nothing)|if the \a lvalue's type has a default value (ex: @ref int_type "int", @ref string_type "string"), the \a lvalue first takes that value and is processed as above; an or-nothing lvalue (ex: \c *string) takes the default value of its plain type, unless \a expression has no value, which leaves it with no value; otherwise the \a lvalue will be assigned to the value of \a expression.
     |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer, and the \a expression will be evaluated and converted to an integer if necessary, and then the result will be added to the \a lvalue.
 
@@ -2526,7 +2570,7 @@ if (x || y)
     |!Argument|!Processing
     |\a lvalue (@ref number_type "number")|the \a expression will be evaluated and converted to a number if necessary and subtracted from the \a lvalue
     |\a lvalue (@ref float_type "float")|the \a expression will be evaluated and converted to a float if necessary and subtracted from the \a lvalue
-    |\a lvalue (@ref date_type "date")|the \a expression will be evaluated and converted to a date if necessary and subtracted from the \a lvalue
+    |\a lvalue (@ref date_type "date")|the \a expression will be evaluated and converted to a date if necessary and subtracted from the \a lvalue; \c INVALID-DATE is raised if the result is out of range (see @ref minus_operator "-")
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object"), \a expression (@ref string_type "string")|the hash key represented by \a expression will be removed from the \a lvalue
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object"), \a expression (@ref list_type "list")|each element in the list will be converted to a string (if necessary) and the key represented by each string will be removed from the hash or object
     |\a lvalue (@ref nothing), \a expression (any type)|a hash lvalue is left with no value; otherwise, if the \a lvalue's type, or for an or-nothing lvalue (ex: \c *int) its plain type, has a default value, the \a lvalue first takes that value and is processed as above (ex: <tt>int i; i -= 0;</tt> gives 0); otherwise the negated \a expression will be assigned to \a lvalue; an \a expression with no value leaves the \a lvalue unchanged
@@ -2606,14 +2650,19 @@ if (x || y)
     \a lvalue <tt>*=</tt> \a expression
 
     @par Return Type
-    @ref int_type "int", @ref float_type "float", or @ref number_type "number"
+    @ref int_type "int", @ref float_type "float", @ref number_type "number" or @ref date_type "date"
 
     @par Example
     @code{.py} a *= 10;@endcode
+    @code{.py} period *= 2;@endcode
 
     <b>Arguments Processed by *=</b>
     |!Argument|!Processing
-    |All|The type precedence from highest to lowest is @ref number "number", @ref float "float" float, and @ref integer "int", other types are converted to @ref integer "int". The \a expression will be evaluated and multiplied by the \a lvalue, and the result will be saved to the \a lvalue.
+    |@ref date_type "date"|If the \a lvalue or the \a expression is a @ref date_type "date", the \a lvalue is assigned <tt>lvalue * expression</tt>, a @ref relative_dates "relative date" (see @ref relative_date_multiplication), which the \a lvalue's type must accept
+    |All other types|The type precedence from highest to lowest is @ref number "number", @ref float "float" float, and @ref integer "int", other types are converted to @ref integer "int". The \a expression will be evaluated and multiplied by the \a lvalue, and the result will be saved to the \a lvalue.
+
+    @throw INVALID-DATE a component of a @ref relative_dates "relative date" product does not fit a signed 32-bit
+    integer, or a date is multiplied by a float that is not a finite number
 
     <hr>
     @subsection divide_equals_operator Divide Equals Operator (/=)

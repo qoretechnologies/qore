@@ -46,8 +46,8 @@ HttpClientConnectionBase::HttpClientConnectionBase() : opener_policy(qore_socket
 HttpClientConnectionBase::HttpClientConnectionBase(std::string target_host, int target_port, bool ssl_required)
         : target_host(std::move(target_host)), target_port(target_port), ssl_required(ssl_required),
             opener_policy(qore_socket_ref_policy_sandbox_manager()) {
-    int us = 0;
-    created_us_ = q_epoch_us(us) * 1000000LL + us;
+    // on the monotonic clock: max_age is an interval, which a step of the system clock must not end or extend (#6150)
+    created_us_ = q_get_monotonic_us();
 }
 
 HttpClientConnectionBase::~HttpClientConnectionBase() {
@@ -103,7 +103,7 @@ bool HttpClientConnectionBase::tryReserveStream(bool streaming_send) {
     // ends it, so a stream count that shows the released stream is followed by the draining state: checked after
     // the count, a connection that the response ends is not reserved, even if it was found accepting requests
     // before its stream was released
-    if (isDraining() || isClosed()) {
+    if (isDraining() || isClosed() || idle_closing) {
         return false;
     }
     ++pending_stream_count;
@@ -121,6 +121,36 @@ void HttpClientConnectionBase::releaseStreamReservation(bool streaming_send) {
     if (streaming_send && pending_streaming_send_count > 0) {
         --pending_streaming_send_count;
     }
+}
+
+bool HttpClientConnectionBase::tryBeginIdleClose(active_stream_count_t active_streams, const void* op) {
+    AutoLocker al(reserve_lock);
+    // a request submitted since the operation found the connection idle shows in the active streams: a submit counts
+    // its active stream before it releases its reservation, so a request is in one of the two counts here (the lock
+    // order is reserve_lock, then the operation's stream lock, as in tryReserveStream()); the operation counts the
+    // active streams of a connection whose owner counts them (a Qore-level connection)
+    if (idle_close_hold || pending_stream_count || (active_streams ? active_streams(op) : getActiveStreamCount())) {
+        return false;
+    }
+    idle_closing = true;
+    return true;
+}
+
+bool HttpClientConnectionBase::tryReservePendingStream(int active_streams, int max_streams) {
+    AutoLocker al(reserve_lock);
+    if (isDraining() || isClosed() || idle_closing) {
+        return false;
+    }
+    if (max_streams && (active_streams + pending_stream_count) >= max_streams) {
+        return false;
+    }
+    ++pending_stream_count;
+    return true;
+}
+
+void HttpClientConnectionBase::setIdleCloseHold(bool hold) {
+    AutoLocker al(reserve_lock);
+    idle_close_hold = hold;
 }
 
 int HttpClientConnectionBase::getPendingStreamCount() const {

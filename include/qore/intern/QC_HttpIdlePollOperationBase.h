@@ -127,14 +127,13 @@ private:
     QoreSocketObject* sock_obj;         //!< ref'd socket
     //! the state; atomic: abort() sets it from any thread (see finish())
     std::atomic<IdleState> idle_state{IdleState::IDLE};
-    int64_t deadline_us;                //!< absolute deadline in microseconds since epoch
+    int64_t deadline_us;                //!< deadline on the monotonic clock (nowUs()) in microseconds
     int64_t ttl_us;                     //!< keep-alive timeout duration in microseconds
 
-    //! Returns current time in microseconds since epoch
+    //! Returns the monotonic clock in microseconds: the deadlines are intervals, which a step of the system clock
+    //! must not end or stop (#6150)
     DLLLOCAL static int64_t nowUs() {
-        int us;
-        int64_t secs = q_epoch_us(us);
-        return secs * 1000000LL + us;
+        return q_get_monotonic_us();
     }
 };
 

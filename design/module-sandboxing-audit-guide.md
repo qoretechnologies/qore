@@ -422,6 +422,36 @@ destructor only; what a Qore destructor calls is judged as any other call. Conse
 
 Audit item: a builtin class in the domain whose destructor does more than release its resources.
 
+#### Asking whether a sandbox restricts anything
+
+A manager that is attached to a Program is not necessarily restricting: one that allows everything and sets no limit
+restricts nothing, and the configuration of a combination of managers (`QoreSandboxComposition`,
+`network().getConfiguration()`) is the empty default, not the members'. A module that tests "a manager is attached" or
+reads `network().getConfiguration()` to decide whether to take a slow, checked path or to refuse an operation is
+therefore wrong in both directions. Use the predicates of `QoreSandboxManager` on the resolved manager (the
+`QoreSandboxManagerHelper::Policy` manager for filesystem and network policy, as above), tested with
+`#ifdef _QORE_HAS_SANDBOX_RESTRICTS_API` where the module also builds against older Qore headers:
+
+- `networkRestricts()`: the default network policy is not allow, or there are allowed or denied IP ranges
+  (`blockPrivateNetworks()` adds denied ranges) or allowed ports; allowed host patterns alone do not count;
+- `filesystemRestricts()`: the default filesystem policy is not allow, or there are allowed or denied path rules or a
+  sandbox root;
+- `limitsRestrict()`: the thread, wall-time, CPU-time, stack or memory limit is greater than 0;
+- `restricts()`: any of the three. Only manager state counts, not the Program's parse options or functional domains.
+
+For a combination of managers, each predicate is the OR over the members, so one restricting member makes it
+restrict. `QoreNetworkSecurityManager::isRestricting()` and `QoreFilesystemSecurityManager::isRestricting()` answer
+for one security manager. When a module cannot read the state (for example it takes the configuration hash and a key is
+missing or has another type), it must count the sandbox as restricting.
+
+`trustsUncontrolledApis()` is the fifth predicate: true if the sandbox's uncontrolled-API policy allows them, that is,
+the host that attached the sandbox trusts the code it governs (for a combination of managers, true only if every member
+trusts: the AND over the members, the opposite direction to the others, which are ORs). The rule for a module that
+refuses an operation that only an unrestricted caller may use is: refuse if and only if
+`!trustsUncontrolledApis() && restricts()` on the governing manager (the `QoreSandboxManagerHelper::Policy` manager).
+A sandbox that restricts nothing, or whose host trusts its code, does not make the caller untrusted. There is no
+unreadable state; a module that gets the policy another way and cannot read it counts the sandbox as not trusting.
+
 ### Key Principle: Sandbox Manager May Be Absent
 
 When `QoreSandboxManagerHelper` evaluates to false, no sandboxing is active. Modules must:
