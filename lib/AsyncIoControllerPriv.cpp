@@ -2061,6 +2061,15 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // item (or a synchronous caller), which carries the flag itself (AsyncIoDeferredRelease::module_cleanup_delegate)
         QoreModuleCleanupDelegateHelper cleanup_delegate(async_item.sandbox_ctx
             && async_item.sandbox_ctx->module_cleanup_delegate);
+        // the item's callbacks run with the parse options of its Program, as calls of the code of that Program do,
+        // installed before the Program is entered, whose thread entry handler and initialization run then: a
+        // callback that is a call reference to builtin code sets no options of its own, and the worker has none, so
+        // it ran without the restrictions of the Program that registered it (qore#6208)
+        QoreThreadRuntimeParseOptions item_po;
+        if (async_item.pgm) {
+            item_po.po = async_item.pgm->getParseOptions();
+        }
+        QoreThreadRuntimeParseOptionsHelper item_po_helper(async_item.pgm ? &item_po : nullptr);
         ExceptionSink pgm_guard_xsink;
         std::unique_ptr<ProgramThreadCountContextHelper> pgm_guard;
         if (async_item.pgm) {

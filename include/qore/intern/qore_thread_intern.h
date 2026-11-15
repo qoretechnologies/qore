@@ -1159,10 +1159,47 @@ struct QoreThreadRuntimeParseOptions {
     //! the run-time parse options, with the override applied
     QoreParseOptions po;
     //! the override that \a po was computed with (its \c td is always nullptr)
+    /** The Programs that it names (\c module_pgm, \c override_pgm) are compared by identity only; each copy holds a
+        dependency reference to them (QoreProgram::depRef()), so that their memory is not reused for another Program
+        while the options can be installed, which would make an unrelated Program match them
+    */
     QoreCallParseOptionsOverride override;
+
+    DLLLOCAL QoreThreadRuntimeParseOptions() = default;
+
+    DLLLOCAL QoreThreadRuntimeParseOptions(const QoreThreadRuntimeParseOptions& old) : po(old.po),
+            override(old.override) {
+        refPrograms();
+    }
+
+    DLLLOCAL QoreThreadRuntimeParseOptions& operator=(const QoreThreadRuntimeParseOptions& other) {
+        if (this != &other) {
+            // the other's references are taken before this object's are released, as they can be the same Programs
+            QoreThreadRuntimeParseOptions copy(other);
+            std::swap(po, copy.po);
+            std::swap(override, copy.override);
+        }
+        return *this;
+    }
+
+    DLLLOCAL ~QoreThreadRuntimeParseOptions() {
+        derefPrograms();
+    }
 
     //! returns the run-time parse options in effect on the current thread
     DLLLOCAL static QoreThreadRuntimeParseOptions capture();
+
+    //! returns the run-time parse options in effect on the current thread for a thread that it starts
+    /** The thread inherits the restrictions of the code that starts it, but not the application that a call of
+        module code runs for (\c app_pgm_id), which is attribution, not a restriction: what the thread adds later
+        (timers, for example) belongs to the call that adds it, not to the caller of the code that started the
+        thread, which a long-lived worker thread of a module does not serve only (qore#6208)
+    */
+    DLLLOCAL static QoreThreadRuntimeParseOptions captureForThread();
+
+private:
+    DLLLOCAL void refPrograms();
+    DLLLOCAL void derefPrograms();
 };
 
 //! Installs the run-time parse options taken from the thread that started the current thread for its life

@@ -2059,7 +2059,7 @@ public:
     //! the sandbox of the starting code, which governs the new thread as its outermost caller, or nullptr
     std::unique_ptr<QoreInheritedSandbox> sandbox;
     //! the run-time parse options of the starting code, which the new thread runs with (qore#6208)
-    QoreThreadRuntimeParseOptions runtime_po = QoreThreadRuntimeParseOptions::capture();
+    QoreThreadRuntimeParseOptions runtime_po = QoreThreadRuntimeParseOptions::captureForThread();
     //! true if the starting thread runs the module cleanup or work that it handed over; the new thread is then part
     //! of the cleanup (see qore_module_cleanup_delegation())
     bool module_cleanup_delegate = qore_module_cleanup_delegation();
@@ -4392,7 +4392,11 @@ int ThreadEntryHandlerFrame::enterHandlers(ThreadData* td, QoreProgram* pgm, Exc
     // the caller's sink can already hold an exception, as when a destructor runs while the stack unwinds, so the
     // handler gets a sink of its own, which also tells whether it failed
     ExceptionSink handler_xsink;
-    token = run_thread_entry_handler(td, handlers->on_enter, nullptr, handler_xsink);
+    {
+        // the handler runs with the options of the code that set it (qore#6208)
+        QoreThreadRuntimeParseOptionsHelper po_helper(&handlers->po);
+        token = run_thread_entry_handler(td, handlers->on_enter, nullptr, handler_xsink);
+    }
     if (!handler_xsink) {
         return 0;
     }
@@ -4441,6 +4445,8 @@ void ThreadEntryHandlerFrame::exitHandlers(ThreadData* td, ExceptionSink* xsink)
         // the list takes the reference to the value returned by the entry handler
         args->push(token, &handler_xsink);
         token = QoreValue();
+        // the handler runs with the options of the code that set it (qore#6208)
+        QoreThreadRuntimeParseOptionsHelper po_helper(&handlers->po);
         ValueHolder rv(run_thread_entry_handler(td, handlers->on_exit, *args, handler_xsink), &handler_xsink);
     } else {
         token.discard(&handler_xsink);
@@ -6395,7 +6401,8 @@ qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* caller_pgm) 
 
 bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id) {
     ThreadData* td = thread_data.get();
-    if (!td->runtime_po_module_pgm || td->runtime_po_module_pgm != td->current_pgm) {
+    // no application: the code of a thread that module code started runs for no caller of its own (qore#6208)
+    if (!td->runtime_po_module_pgm || td->runtime_po_module_pgm != td->current_pgm || !td->runtime_po_app_pgm_id) {
         return false;
     }
     app_pgm_id = td->runtime_po_app_pgm_id;
@@ -6563,6 +6570,30 @@ void RuntimeParseOptionsOverrideHelper::restore() {
     td->runtime_po = old_po;
 }
 
+void QoreThreadRuntimeParseOptions::refPrograms() {
+    if (override.module_pgm) {
+        const_cast<QoreProgram*>(override.module_pgm)->depRef();
+    }
+    if (override.override_pgm) {
+        const_cast<QoreProgram*>(override.override_pgm)->depRef();
+    }
+}
+
+void QoreThreadRuntimeParseOptions::derefPrograms() {
+    if (override.module_pgm) {
+        const_cast<QoreProgram*>(override.module_pgm)->depDeref();
+    }
+    if (override.override_pgm) {
+        const_cast<QoreProgram*>(override.override_pgm)->depDeref();
+    }
+}
+
+QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::captureForThread() {
+    QoreThreadRuntimeParseOptions rv = capture();
+    rv.override.app_pgm_id = 0;
+    return rv;
+}
+
 QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
     ThreadData* td = thread_data.get();
     QoreThreadRuntimeParseOptions rv;
@@ -6575,6 +6606,7 @@ QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
     rv.override.app_pgm_id = td->runtime_po_app_pgm_id;
     rv.override.sandboxed = td->runtime_po_sandboxed;
     rv.override.override_pgm = td->runtime_po_override_pgm;
+    rv.refPrograms();
     return rv;
 }
 
@@ -7086,7 +7118,7 @@ struct ThreadArg {
             : f(n_f), arg(a), tid(n_tid), flags(n_flags), sandbox(std::move(n_sandbox)),
                 inherit_runtime_po(!(n_flags & QTF_NO_SANDBOX_INHERIT)) {
         if (inherit_runtime_po) {
-            runtime_po = QoreThreadRuntimeParseOptions::capture();
+            runtime_po = QoreThreadRuntimeParseOptions::captureForThread();
         }
     }
 

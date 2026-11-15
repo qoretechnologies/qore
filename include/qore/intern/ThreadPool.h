@@ -89,12 +89,14 @@ public:
         QoreProgram* pgm = code->getProgram();
         // declared before the Program is entered, which can be the Program of a module
         QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
+        // the submitter's options, installed before the Program is entered, whose thread entry handler and
+        // initialization run then (qore#6208)
+        QoreThreadRuntimeParseOptionsHelper po_helper(&runtime_po);
         QoreExternalProgramContextHelper pch(xsink, pgm);
         if (*xsink) {
             return QoreValue();
         }
         SandboxScope sandbox_scope(sandbox_context);
-        QoreThreadRuntimeParseOptionsHelper po_helper(&runtime_po);
         return code->invoke(0, xsink);
     }
 
@@ -106,8 +108,8 @@ public:
     DLLLOCAL void cancel(ExceptionSink* xsink) {
         if (cancelCode) {
             QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
-            SandboxScope sandbox_scope(sandbox_context);
             QoreThreadRuntimeParseOptionsHelper po_helper(&runtime_po);
+            SandboxScope sandbox_scope(sandbox_context);
             cancelCode->invoke(0, xsink).discard(xsink);
         }
     }

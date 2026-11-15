@@ -652,10 +652,11 @@ void QoreSignalManager::signal_handler_thread() {
                 {
                     // the handler's thread-local data in the Program's family is created when the handler first
                     // saves data
+                    // the handler runs with the options of the code that set it (qore#6208), installed before the
+                    // Program is entered, whose thread entry handler and initialization run then
+                    QoreThreadRuntimeParseOptionsHelper po_helper(&handler_po);
                     ProgramThreadCountContextHelper tch(&xsink, *pgm, true);
                     if (!xsink) {
-                        // the handler runs with the options of the code that set it (qore#6208)
-                        QoreThreadRuntimeParseOptionsHelper po_helper(&handler_po);
                         QoreSignalHandler::runHandler(**callback, sig, &xsink);
                     }
                     // a callback whose handler was replaced while it ran is destroyed here, in its Program's context

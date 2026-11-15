@@ -113,6 +113,9 @@ public:
       assert(pgm);
       assert(n_funcref);
       CodePgm rv(funcref, pgm);
+      // the old options go with the old handler, which is released outside the signal lock, as their references to
+      // Programs can be the last ones
+      rv.po = po;
 
       funcref = n_funcref->refRefSelf();
       setProgram(n_pgm);
@@ -140,10 +143,14 @@ public:
       CodePgm rv(funcref, pgm);
       funcref = 0;
       pgm = 0;
+      // the options hold references to Programs, which must not outlive the handler (qore#6208)
+      po = QoreThreadRuntimeParseOptions();
       return rv;
    }
 
    DLLLOCAL void del(ExceptionSink* xsink) {
+      // the options hold references to Programs, which must not outlive the handler (qore#6208)
+      po = QoreThreadRuntimeParseOptions();
       if (funcref) {
          funcref->deref(xsink);
          assert(pgm);

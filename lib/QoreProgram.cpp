@@ -1607,11 +1607,17 @@ void qore_program_private::doThreadInit(ExceptionSink* xsink) {
 
     // if there is any thread-initialization code, execute it here
     ReferenceHolder<ResolvedCallReferenceNode> ti(xsink);
+    QoreThreadRuntimeParseOptions ti_po;
     {
         AutoLocker al(tlock);
         ti = thr_init ? thr_init->refRefSelf() : 0;
+        if (ti) {
+            ti_po = thr_init_po;
+        }
     }
     if (ti) {
+        // the code runs with the options of the code that set it (qore#6208)
+        QoreThreadRuntimeParseOptionsHelper po_helper(&ti_po);
         ValueHolder v(ti->invoke(0, xsink), xsink);
     }
 }
@@ -1734,6 +1740,8 @@ bool qore_program_private::setThreadInit(const ResolvedCallReferenceNode* n_thr_
         AutoLocker al(tlock);
         old = thr_init;
         thr_init = n_thr_init ? n_thr_init->refRefSelf() : nullptr;
+        // the options of the code that sets it, which it runs with (qore#6208)
+        thr_init_po = n_thr_init ? QoreThreadRuntimeParseOptions::capture() : QoreThreadRuntimeParseOptions();
         if (scan_holder) {
             scanValuesChangedIntern(program_code_needs_scan(*old), {thr_init});
         }
@@ -6253,11 +6261,12 @@ void qore_run_exit_hook(QoreExitHook& hook) {
     {
         // the hook runs in its Program, without the policy of a sandboxed caller that deletes a Program; a Program
         // that is being deleted meanwhile refuses it with an exception
+        // the hook runs with the options of the code that registered it (qore#6208), installed before the Program
+        // is entered, whose thread entry handler and initialization run then
+        QoreThreadRuntimeParseOptionsHelper po_helper(&hook.po);
         ProgramThreadCountContextHelper tch(&xsink, hook.pgm, true);
         if (!xsink) {
             QoreSandboxPolicyBarrierHelper barrier;
-            // the hook runs with the options of the code that registered it (qore#6208)
-            QoreThreadRuntimeParseOptionsHelper po_helper(&hook.po);
             hook.code->invoke(nullptr, &xsink).discard(&xsink);
         }
     }
