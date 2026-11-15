@@ -315,24 +315,19 @@ bool dataFrameMergeColumnSchema(bool& has_schema, QoreColumnarTypeDescriptor& sc
 
 bool dataFrameIntDecimalSchema(const std::vector<const ColumnData*>& cols, bool& has_schema,
         QoreColumnarTypeDescriptor& schema) {
-    const ColumnData* first_decimal = nullptr;
-    bool any_int = false;
-    bool nullable = false;
-    int32_t int_digits = 0;
-    int32_t scale = 0;
     // the types first, with no scan of the cells
-    for (const ColumnData* cd : cols) {
-        if (cd->type != ColumnType::INT64 && !dataFrameIsDecimalColumn(*cd)) {
-            return false;
-        }
+    if (!dataFrameIntDecimalTypes(cols)) {
+        return false;
     }
+    const ColumnData* first_decimal = nullptr;
+    bool nullable = false;
+    // an int64 holds at most 19 digits
+    int32_t int_digits = 19;
+    int32_t scale = 0;
     for (const ColumnData* cd : cols) {
         if (cd->type == ColumnType::INT64) {
-            // an int64 holds at most 19 digits
-            any_int = true;
-            int_digits = std::max(int_digits, 19);
             nullable = nullable || cd->countNull() > 0;
-        } else if (dataFrameIsDecimalColumn(*cd)) {
+        } else {
             if (!first_decimal) {
                 first_decimal = cd;
             }
@@ -340,13 +335,9 @@ bool dataFrameIntDecimalSchema(const std::vector<const ColumnData*>& cols, bool&
             int_digits = std::max(int_digits, d.precision - d.scale);
             scale = std::max(scale, d.scale);
             nullable = nullable || d.nullable;
-        } else {
-            return false;
         }
     }
-    if (!any_int || !first_decimal) {
-        return false;
-    }
+    assert(first_decimal);
     if (int_digits + scale > 38) {
         has_schema = false;
         return true;

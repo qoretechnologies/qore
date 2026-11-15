@@ -22,7 +22,7 @@ class DataFrameIntDecimalTest inherits QUnit::Test {
         addTestCase("melt()", \meltTest());
         addTestCase("concat()", \concatTest());
         addTestCase("join()", \joinTest());
-        addTestCase("concat() beyond 38 digits and nullability", \moreTest());
+        addTestCase("concat() beyond 38 digits, and the nullability of melt()", \moreTest());
         set_return_value(main());
     }
 
@@ -96,9 +96,15 @@ class DataFrameIntDecimalTest inherits QUnit::Test {
         DataFrame::DataFrame jw = ints.join(d38, ("k",), "outer");
         assertEq("auto", schema(jw, "k").kind, "beyond 38 digits: no schema");
         assertEq(4, jw.numRows(), "beyond 38 digits: rows");
+        # the keys of both sides, exact: the ints of the left side as they are (no number in a column with no
+        # schema), the numbers of the right side
+        list<auto> wk = jw.getColumn("k");
+        assertTrue((select wk, $1 === 9007199254740993).size() == 1 && (select wk, $1 === 3).size() == 1
+            && (select wk, $1.typeCode() == NT_NUMBER && $1 == 0.5n).size() == 1
+            && (select wk, $1 == 1).size() == 1, sprintf("beyond 38 digits: keys %y", wk));
     }
 
-    #! concat() beyond 38 digits, and the nullability of the merged schema
+    #! concat() beyond 38 digits, and the nullability of the merged schema of melt()
     moreTest() {
         DataFrame::DataFrame ints({"v": (9223372036854775807,)});
         DataFrame::DataFrame d38 = decimalFrame({"v": (0.12345678901234567891n,)}, ("v",), 38, 20);
@@ -106,14 +112,17 @@ class DataFrameIntDecimalTest inherits QUnit::Test {
         assertEq("auto", schema(c, "v").kind, "concat() beyond 38 digits: no schema");
         list<auto> v = c.getColumn("v");
         assertTrue(v[0] === 9223372036854775807 && v[1] == d38.getColumn("v")[0], sprintf("exact values: %y", v));
-        # nullable if a column is (a decimal column that is not nullable, and an int64 column with a null value)
+        # nullable if a column is: a decimal(20,2) column that is not nullable, and an int64 column with or without a
+        # null value (an int64 column: a column of nulls only would be a float64 column)
         DataFrame::DataFrame dec = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
-            {"d": (1.5n,)}, {"d": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2, "nullable": False}}}))
-            .withColumn("id", (1,));
-        foreach list<auto> ints_values in ((((1,), False), ((NOTHING,), True))) {
+            {"d": (1.5n, 2.5n)}, {"d": {"schema": {"kind": "decimal128", "precision": 20, "scale": 2,
+                "nullable": False}}})).withColumn("id", (1, 2));
+        foreach list<auto> ints_values in ((((1, 2), False), ((1, NOTHING), True))) {
             DataFrame::DataFrame df = dec.withColumn("i", ints_values[0]);
+            assertEq("int64", df.dtypes()[2], "an int64 column");
             hash<auto> col = (map $1, df.melt(("id",)).toColumnarResult().schemaV2(), $1.name == "value")[0];
-            assertEq(ints_values[1], col.nullable, sprintf("nullable with %y", ints_values[0]));
+            assertEq(("decimal128", 21, 2, ints_values[1]), (col.kind, col.precision, col.scale, col.nullable),
+                sprintf("the schema with %y", ints_values[0]));
         }
     }
 
