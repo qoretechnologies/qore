@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - threads entering a Program while another thread starts to parse it
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ReparseEntryTest
+
+#! Entering a PO_ALLOW_REPARSE Program while it is reparsed (issue #6206)
+/** The check that no thread runs the Program's code and the flag that refuses a thread to enter it are set atomically
+    when a parse starts; a parse that fails leaves the Program usable.  The parse is stopped where it has started with
+    a gate of the debug build (dbg_arm_parse_start_gate()), so that another thread tries to enter the Program then.
+*/
+public class ReparseEntryTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ReparseEntryTest", "1.0", \ARGV) {
+        addTestCase("parse refuses entry", \parseRefusesEntry());
+        addTestCase("parsePending refuses entry", \parsePendingRefusesEntry());
+        addTestCase("failure after the start", \failureAfterStart());
+        addTestCase("failed parse", \failedParse());
+        addTestCase("active threads", \activeThreads());
+        set_return_value(main());
+    }
+
+    #! returns a Program that can be parsed again, with a function f() returning 1
+    private Program getProgram() {
+        Program p(PO_ALLOW_REPARSE | PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("int sub f() { return 1; }", "f");
+        return p;
+    }
+
+    #! returns the error of a call of f() in the Program, or "OK" if it ran
+    private string tryCall(Program p) {
+        try {
+            assertEq(1, p.callFunction("f"));
+            return "OK";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    private skipWithoutGate() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+    }
+
+    parseRefusesEntry() {
+        skipWithoutGate();
+        Program p = getProgram();
+        call_function("dbg_arm_parse_start_gate", p, False);
+        Counter c(1);
+        *hash<ExceptionInfo> parse_ex;
+        background sub () {
+            on_exit {
+                # a parse that ends without reaching the gate does not leave the test waiting
+                call_function("dbg_abort_parse_start_gate");
+                c.dec();
+            }
+            try {
+                p.parse("int sub g() { return 2; }", "g");
+            } catch (hash<ExceptionInfo> ex) {
+                parse_ex = ex;
+            }
+        }();
+        {
+            # the gate is released also if an assertion fails, so that the parse ends
+            on_exit {
+                call_function("dbg_release_parse_start_gate");
+                c.waitForZero();
+            }
+            assertTrue(call_function("dbg_wait_parse_start_gate"));
+            # the parse has started: no thread can enter the Program
+            assertEq("PROGRAM-ERROR", tryCall(p));
+        }
+        assertNothing(parse_ex);
+        assertEq(2, p.callFunction("g"));
+        assertEq("OK", tryCall(p));
+    }
+
+    parsePendingRefusesEntry() {
+        skipWithoutGate();
+        Program p = getProgram();
+        call_function("dbg_arm_parse_start_gate", p, False);
+        Counter c(1);
+        *hash<ExceptionInfo> parse_ex;
+        background sub () {
+            on_exit {
+                # a parse that ends without reaching the gate does not leave the test waiting
+                call_function("dbg_abort_parse_start_gate");
+                c.dec();
+            }
+            try {
+                p.parsePending("int sub g() { return 2; }", "g");
+            } catch (hash<ExceptionInfo> ex) {
+                parse_ex = ex;
+            }
+        }();
+        {
+            on_exit {
+                call_function("dbg_release_parse_start_gate");
+                c.waitForZero();
+            }
+            assertTrue(call_function("dbg_wait_parse_start_gate"));
+            assertEq("PROGRAM-ERROR", tryCall(p));
+        }
+        assertNothing(parse_ex);
+        # the code is pending until it is committed
+        assertEq("PROGRAM-ERROR", tryCall(p));
+        p.parseCommit();
+        assertEq(2, p.callFunction("g"));
+        assertEq("OK", tryCall(p));
+    }
+
+    failureAfterStart() {
+        skipWithoutGate();
+        Program p = getProgram();
+        # the parse fails at the gate, after it has been marked as in progress
+        call_function("dbg_arm_parse_start_gate", p, True);
+        call_function("dbg_release_parse_start_gate");
+        assertThrows("DBG-PARSE-START-GATE", \p.parse(), ("int sub g() { return 2; }", "g"));
+        # the Program can be entered and parsed again
+        assertEq("OK", tryCall(p));
+        p.parse("int sub h() { return 3; }", "h");
+        assertEq(3, p.callFunction("h"));
+
+        # the same for a parse commit that has nothing pending
+        call_function("dbg_arm_parse_start_gate", p, True);
+        call_function("dbg_release_parse_start_gate");
+        assertThrows("DBG-PARSE-START-GATE", \p.parseCommit());
+        assertEq("OK", tryCall(p));
+    }
+
+    failedParse() {
+        Program p = getProgram();
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("int sub g() { return 2 }", "g"));
+        # a failed parse is rolled back: the Program can be entered and parsed again
+        assertEq("OK", tryCall(p));
+        p.parse("int sub g() { return 2; }", "g");
+        assertEq(2, p.callFunction("g"));
+    }
+
+    activeThreads() {
+        Program p = getProgram();
+        p.parse("int sub wait_for_end(Queue started, Queue end) { started.push(1); return end.get(); }", "w");
+        Queue started();
+        Queue end();
+        Counter c(1);
+        background sub () {
+            on_exit c.dec();
+            p.callFunction("wait_for_end", started, end);
+        }();
+        {
+            on_exit {
+                end.push(1);
+                c.waitForZero();
+            }
+            # the thread is in the Program
+            started.get();
+            assertThrows("PARSE-ERROR", "threads are active", \p.parse(), ("int sub h() { return 3; }", "h"));
+        }
+        # the refused parse has not marked the Program as being parsed
+        assertEq("OK", tryCall(p));
+        p.parse("int sub h() { return 3; }", "h");
+        assertEq(3, p.callFunction("h"));
+    }
+}

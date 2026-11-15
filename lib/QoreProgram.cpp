@@ -1996,6 +1996,28 @@ void qore_program_private_base::copyExternalData() {
     }
 }
 
+int qore_program_private::beginParse(ExceptionSink* xsink, ParseStartGuard& guard) {
+    {
+        AutoLocker al(plock);
+        if (checkParseIntern(xsink)) {
+            return -1;
+        }
+        // set in the same critical section as the check that no thread runs the Program's code, so that no thread
+        // enters it between them; a Program without PO_ALLOW_REPARSE makes no such check, and sets the flag when its
+        // code is parsed, as before
+        if ((pwo.parse_options & PO_ALLOW_REPARSE) && !parsing_in_progress) {
+            parsing_in_progress = true;
+            guard.began = true;
+        }
+    }
+#ifdef DEBUG
+    if (qore_dbg_parse_start_gate(pgm, xsink)) {
+        return -1;
+    }
+#endif
+    return 0;
+}
+
 void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     bool atomic_rollback = static_cast<bool>(pwo.parse_options & PO_ALLOW_REPARSE);
     // delete pending changes to namespaces: only what the failed parse added is removed, also without

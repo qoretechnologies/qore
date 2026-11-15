@@ -2746,18 +2746,14 @@ public:
     //! Returns the number of error (not warning) diagnostics rendered.  Implemented in QoreProgram.cpp.
     DLLLOCAL unsigned renderParseDiagnosticFrames(const char* source_text, FILE* os) const;
 
-    DLLLOCAL int checkParse(ExceptionSink* xsink) {
+    //! Raises an exception if the Program cannot be parsed now; plock must be held
+    DLLLOCAL int checkParseIntern(ExceptionSink* xsink) {
         // For REPL mode (PO_ALLOW_REPARSE), ensure no threads are running in the Program
         // The calling thread (doing the parsing) is not attached to this Program,
         // so any thread_count > 0 means background threads are still active
         if (pwo.parse_options & PO_ALLOW_REPARSE) {
             // the thread count is changed by other threads under the lock (incThreadCount(), decThreadCount())
-            int count;
-            {
-                AutoLocker al(plock);
-                count = thread_count;
-            }
-            if (count > 0) {
+            if (thread_count > 0) {
                 xsink->raiseException("PARSE-ERROR", "cannot parse while threads are active in the Program "
                     "(for REPL mode, wait for all threads to finish before parsing)");
                 return -1;
@@ -2769,6 +2765,74 @@ public:
         }
         return 0;
     }
+
+    //! Raises an exception if the Program cannot be parsed now, without starting a parse
+    DLLLOCAL int checkParse(ExceptionSink* xsink) {
+        AutoLocker al(plock);
+        return checkParseIntern(xsink);
+    }
+
+    //! Clears parsing_in_progress if a parse that set it with beginParse() does not start or ends with an exception
+    /** Once the parse has started (handOver()), it manages the flag itself: a parse commit or a rollback clears it
+        (the rollback only with PO_ALLOW_REPARSE; see internParseRollback()), and code that is parsed with
+        parsePending() keeps it set until it is committed or rolled back.  A C++ exception that leaves a parse that set
+        the flag after it has started rolls it back, so that the Program does not refuse to be entered after a failed
+        parse; a parse of code that was pending already is not rolled back.
+    */
+    class ParseStartGuard {
+    public:
+        DLLLOCAL ParseStartGuard(qore_program_private& pp) : pp(pp), exceptions(std::uncaught_exceptions()) {
+        }
+
+        DLLLOCAL ~ParseStartGuard() {
+            if (!began || !pp.parsing_in_progress) {
+                return;
+            }
+            if (!started) {
+                pp.parsing_in_progress = false;
+                return;
+            }
+            if (std::uncaught_exceptions() > exceptions) {
+                try {
+                    ExceptionSink xsink;
+                    pp.internParseRollback(&xsink);
+                    xsink.clear();
+                } catch (...) {
+                }
+            }
+        }
+
+        ParseStartGuard(const ParseStartGuard&) = delete;
+        ParseStartGuard& operator=(const ParseStartGuard&) = delete;
+
+        //! the parse has started: the parse commit or rollback manages the flag from now on
+        DLLLOCAL void handOver() {
+            started = true;
+        }
+
+    private:
+        friend class qore_program_private;
+
+        qore_program_private& pp;
+        int exceptions;
+        //! true if beginParse() set parsing_in_progress
+        bool began = false;
+        //! true once the parse has started
+        bool started = false;
+    };
+
+    //! Checks that the Program can be parsed and marks the parse as in progress, atomically (issue #6206)
+    /** With PO_ALLOW_REPARSE, the check that no thread runs the Program's code and the flag that refuses a thread to
+        enter it (parsing_in_progress, see incThreadCount()) are made in one critical section of plock, which
+        incThreadCount() takes as well, so that no thread can enter the Program between them.  The caller holds the
+        parse lock.
+
+        @param guard records whether this call set the flag (it is not set without PO_ALLOW_REPARSE or if code is
+        pending already), so that it is cleared if the parse does not start (see ParseStartGuard)
+
+        @return 0 if the parse can go on, -1 if an exception was raised
+    */
+    DLLLOCAL int beginParse(ExceptionSink* xsink, ParseStartGuard& guard);
 
     DLLLOCAL int parsePending(const char* code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
             const char* orig_src = nullptr, int offset = 0) {
@@ -2787,12 +2851,14 @@ public:
             return -1;
         }
 
-        if (checkParse(xsink)) {
+        ParseStartGuard psg(*this);
+        if (beginParse(xsink, psg)) {
             return -1;
         }
 
         startParsing(xsink, wS, wm);
 
+        psg.handOver();
         int rc = internParsePending(xsink, code, label, orig_src, offset);
         warnSink = nullptr;
 #ifdef DEBUG
@@ -2848,13 +2914,15 @@ public:
             return -1;
         }
 
-        if (checkParse(xsink)) {
+        ParseStartGuard psg(*this);
+        if (beginParse(xsink, psg)) {
             return -1;
         }
 
         startParsing(xsink, wS, wm);
 
         // finalize parsing, back out or commit all changes
+        psg.handOver();
         int rc = internParseCommit();
 
         // Validate exec mode immediately after parse completion
@@ -2914,7 +2982,8 @@ public:
                 return;
             }
 
-            if (checkParse(xsink)) {
+            ParseStartGuard psg(*this);
+            if (beginParse(xsink, psg)) {
                 return;
             }
 
@@ -2933,10 +3002,12 @@ public:
             // endParsing() is called by yyparse() below
 			beginParsing(sname);
 
+            // a Program without PO_ALLOW_REPARSE is marked here (see beginParse())
             if (!parsing_in_progress) {
                 parsing_in_progress = true;
             }
 
+            psg.handOver();
             //printd(5, "QoreProgram::parse(): about to call yyparse()\n");
             yylex_init_extra(&state, &lexer);
             yyset_in(fp, lexer);
@@ -3012,13 +3083,15 @@ public:
             return;
         }
 
-        if (checkParse(xsink)) {
+        ParseStartGuard psg(*this);
+        if (beginParse(xsink, psg)) {
             return;
         }
 
         startParsing(xsink, wS, wm);
 
         // parse text given
+        psg.handOver();
         if (!internParsePending(xsink, code, label, orig_src, offset))
             internParseCommit();   // finalize parsing, back out or commit all changes
 
@@ -5997,6 +6070,16 @@ DLLLOCAL void qore_run_exit_hooks(QoreProgram* pgm);
 
 //! Returns true if the exit hooks of the process have started to run
 DLLLOCAL bool qore_exit_hooks_started();
+
+#ifdef DEBUG
+//! Stops a parse of the Program armed with dbg_arm_parse_start_gate() after it has started (debug builds, for tests)
+/** Called by qore_program_private::beginParse() once the parse is marked as in progress: the thread waits until
+    dbg_release_parse_start_gate() releases it, so that a test can try to enter the Program meanwhile (issue #6206).
+
+    @return -1 if the gate was armed to fail, with an exception raised, otherwise 0
+*/
+DLLLOCAL int qore_dbg_parse_start_gate(const QoreProgram* pgm, ExceptionSink* xsink);
+#endif
 
 //! Starts a callback in a new thread of a Program that no sandbox governs; see SandboxManager::createSystemThreadCall()
 /** The thread does not inherit the sandbox of the starting code and does not count against its limits.  Refused,

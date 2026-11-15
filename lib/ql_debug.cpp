@@ -17469,6 +17469,93 @@ static QoreValue f_dbg_signal_reassign_release(const QoreListNode* params, Runti
     return rv.release();
 }
 
+namespace {
+//! the gate of dbg_arm_parse_start_gate() (issue #6206)
+struct QoreDbgParseStartGate {
+    std::mutex m;
+    std::condition_variable cv;
+    //! the Program whose next parse stops; cleared when a parse reaches the gate
+    const QoreProgram* pgm = nullptr;
+    //! true if the parse fails at the gate
+    bool fail = false;
+    bool reached = false;
+    bool release = false;
+    //! set by dbg_abort_parse_start_gate() when the parse ends without reaching the gate
+    bool aborted = false;
+};
+
+QoreDbgParseStartGate parse_start_gate;
+}
+
+int qore_dbg_parse_start_gate(const QoreProgram* pgm, ExceptionSink* xsink) {
+    std::unique_lock<std::mutex> ul(parse_start_gate.m);
+    if (!parse_start_gate.pgm || parse_start_gate.pgm != pgm) {
+        return 0;
+    }
+    parse_start_gate.pgm = nullptr;
+    parse_start_gate.reached = true;
+    parse_start_gate.cv.notify_all();
+    parse_start_gate.cv.wait(ul, [] { return parse_start_gate.release; });
+    if (parse_start_gate.fail) {
+        xsink->raiseException("DBG-PARSE-START-GATE", "the parse failed at the gate armed by "
+            "dbg_arm_parse_start_gate()");
+        return -1;
+    }
+    return 0;
+}
+
+//! Debug-only: stops the next parse of the Program once it has started (issue #6206)
+/** The parse (Program::parse(), Program::parsePending() or Program::parseCommit()) stops after it has been marked
+    as in progress, until dbg_release_parse_start_gate() is called; dbg_wait_parse_start_gate() waits until it has
+    stopped.  If \a fail is True, the parse then fails with \c DBG-PARSE-START-GATE.  DEBUG builds only.
+*/
+static QoreValue f_dbg_arm_parse_start_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> lg(parse_start_gate.m);
+    parse_start_gate.pgm = *pgm;
+    parse_start_gate.fail = get_param_value(params, 1).getAsBool();
+    parse_start_gate.reached = false;
+    parse_start_gate.release = false;
+    parse_start_gate.aborted = false;
+    return QoreValue();
+}
+
+//! Debug-only: waits until a parse has stopped at the gate armed with dbg_arm_parse_start_gate(); DEBUG builds only
+/** @return True if a parse stopped at the gate, False if dbg_abort_parse_start_gate() was called first (the parse
+    ended without reaching it)
+*/
+static QoreValue f_dbg_wait_parse_start_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::unique_lock<std::mutex> ul(parse_start_gate.m);
+    parse_start_gate.cv.wait(ul, [] { return parse_start_gate.reached || parse_start_gate.aborted; });
+    return parse_start_gate.reached;
+}
+
+//! Debug-only: wakes dbg_wait_parse_start_gate() if no parse has stopped at the gate, and disarms it; DEBUG only
+/** Called by a test when the thread that parses ends, so that a parse that ends without reaching the gate does not
+    leave the test waiting.
+*/
+static QoreValue f_dbg_abort_parse_start_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(parse_start_gate.m);
+    parse_start_gate.pgm = nullptr;
+    parse_start_gate.aborted = true;
+    parse_start_gate.cv.notify_all();
+    return QoreValue();
+}
+
+//! Debug-only: lets the parse stopped at the gate armed with dbg_arm_parse_start_gate() go on; DEBUG builds only
+static QoreValue f_dbg_release_parse_start_gate(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(parse_start_gate.m);
+    parse_start_gate.release = true;
+    parse_start_gate.cv.notify_all();
+    return QoreValue();
+}
+
 //! Debug-only: creates a child process with fork() while another thread holds the lock of a registered fork handler
 /** The other thread takes the lock as the handler's prepare handler does, and releases it when the prepare handlers
     reach the handler, so fork() waits for it.  The child takes and releases the lock in the same way, runs the code
@@ -24167,6 +24254,15 @@ void init_debug_functions(QoreNamespace& qns) {
         "name");
     qns.addBuiltinVariant("dbg_file_stream_io_flags", f_dbg_file_stream_io_flags, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
+    qns.addBuiltinVariant("dbg_arm_parse_start_gate", f_dbg_arm_parse_start_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", boolTypeInfo, QORE_PARAM_NO_ARG,
+        "fail");
+    qns.addBuiltinVariant("dbg_wait_parse_start_gate", f_dbg_wait_parse_start_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo);
+    qns.addBuiltinVariant("dbg_abort_parse_start_gate", f_dbg_abort_parse_start_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_release_parse_start_gate", f_dbg_release_parse_start_gate, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "child");
