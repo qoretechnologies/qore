@@ -663,6 +663,12 @@ static bool qore_ir_opcode_holds_operands(QoreIROpcode op) {
         case QoreIROpcode::LeAny:
         case QoreIROpcode::GtAny:
         case QoreIROpcode::GeAny:
+        case QoreIROpcode::EqPlugin:
+        case QoreIROpcode::NePlugin:
+        case QoreIROpcode::LtPlugin:
+        case QoreIROpcode::LePlugin:
+        case QoreIROpcode::GtPlugin:
+        case QoreIROpcode::GePlugin:
         case QoreIROpcode::CmpAny:
         case QoreIROpcode::Not:
         case QoreIROpcode::ToBool:
@@ -16075,11 +16081,9 @@ size_t qore_ir_fuse_collection_producer_consumers(QoreIRFunction& func,
                 || consumer->opcode == QoreIROpcode::EqInt;
             bool not_equal = consumer->opcode == QoreIROpcode::NeAny
                 || consumer->opcode == QoreIROpcode::NeInt;
-            // a comparison that may dispatch to a plugin is not a scalar comparison (qore#5911)
             if ((!equal && !not_equal) || consumer->exception_target
                     || !consumer->result.isValid()
-                    || consumer->operands.size() != 2
-                    || consumer->plugin_comparison) {
+                    || consumer->operands.size() != 2) {
                 continue;
             }
             size_t producer_operand =
@@ -18172,9 +18176,7 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
                 || consumer->opcode == QoreIROpcode::GtString
                 || consumer->opcode == QoreIROpcode::GeString;
             if (comparison_candidate) {
-                // a comparison that may dispatch to a plugin is not a string comparison (qore#5911)
                 if (consumer->operands.size() != 2
-                        || consumer->plugin_comparison
                         || !safe_cross_block_path(
                             producer, consumer, consumer_block_id)) {
                     continue;

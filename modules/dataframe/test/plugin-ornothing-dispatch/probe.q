@@ -55,6 +55,14 @@ show("closure *ColumnRef", cn(df.column("a")));
 show("closure NOTHING", cn(NOTHING));
 show("closure if auto ColumnRef", ca(df.column("a")));
 show("closure if auto int", ca(1));
+# a comparison with an exception handler is an invoke in the IR
+code ct = auto sub (*DataFrame::ColumnRef c) { try { return c > 1.5; } catch (hash<ExceptionInfo> ex) { return ex.err; } };
+show("closure try *ColumnRef", ct(df.column("a")));
+show("closure try NOTHING", ct(NOTHING));
+# a case with an operator compares without plugins, as the AST's CaseNodeWithOperator does
+code cs = auto sub (auto c) { switch (c) { case > 5: return "gt"; case == 2: return "eq"; } return "no"; };
+show("closure case ColumnRef", cs(df.column("a")));
+show("closure case int", cs(7));
 show("if auto ColumnRef", ifauto(df.column("a"), 1.5));
 show("if auto int", ifauto(1, 1.5));
 show("if union ColumnRef", ifctx(df.column("a"), 1.5));

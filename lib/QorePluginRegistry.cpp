@@ -1852,41 +1852,6 @@ bool qore_plugin_binary_operation_may_apply(QoreProgram* pgm, const QoreTypeInfo
             rhs_type ? rhs_type : autoTypeInfo, operation_name, QorePluginHelperAbi::BinaryValue);
 }
 
-bool qore_plugin_program_has_comparison_operations(QoreProgram* pgm) {
-    if (!qore_plugin_has_registered_operations()) {
-        return false;
-    }
-    ExceptionSink xsink;
-    std::set<std::string> active_modules;
-    if (pgm) {
-        active_modules = getActivePluginModuleSet(pgm, &xsink);
-        if (xsink) {
-            // a marked comparison gives the result of the comparison for a value that is not a plugin value; it is
-            // only not optimized as a scalar comparison
-            xsink.clear();
-            return true;
-        }
-    }
-
-    std::lock_guard<std::mutex> lock(plugin_registry_mutex);
-    for (const auto& module_pair : plugin_modules) {
-        const RegisteredPluginModule& module = module_pair.second;
-        if (pgm && active_modules.find(module.module_name) == active_modules.end()) {
-            continue;
-        }
-        for (const RegisteredPluginOperation& op : module.operations) {
-            if (op.signature.helper_abi != QorePluginHelperAbi::BinaryValue) {
-                continue;
-            }
-            const std::string& name = op.operation_name;
-            if (name == "eq" || name == "ne" || name == "lt" || name == "le" || name == "gt" || name == "ge") {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 static int resolveProgramOperationInfoForValues(QoreProgram* pgm, QoreValue lhs, const QoreValue* rhs,
         const char* operation_name, QorePluginHelperAbi helper_abi, QorePluginResolvedOperationInfo& info,
         ExceptionSink* xsink) {

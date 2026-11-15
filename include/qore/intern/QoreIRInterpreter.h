@@ -64,7 +64,7 @@ class QoreIRInterpreter {
 public:
     static QoreValue evalComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
             ExceptionSink* xsink);
-    //! Evaluates a comparison whose operands may hold a value of a plugin type (QoreIRInstruction::plugin_comparison)
+    //! Evaluates a plugin comparison (QoreIROpcode::EqPlugin...GePlugin)
     /** dispatches to the plugin operation for such a value, as the AST operator does, and evaluates the comparison
         otherwise (qore#5911)
     */

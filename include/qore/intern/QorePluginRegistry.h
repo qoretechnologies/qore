@@ -172,11 +172,6 @@ DLLLOCAL bool qore_plugin_operation_may_apply(QoreProgram* pgm, const QoreTypeIn
 DLLLOCAL bool qore_plugin_binary_operation_may_apply(QoreProgram* pgm, const QoreTypeInfo* lhs_type,
         const QoreTypeInfo* rhs_type, const char* operation_name);
 
-//! Returns true if a module that the Program uses has a plugin comparison operation (eq, ne, lt, le, gt or ge)
-/** IR read from a qmod does not keep QoreIRInstruction::plugin_comparison, so a comparison in such IR may dispatch to
-    a plugin when this is true (qore#5911); also true when the modules of the Program cannot be determined
-*/
-DLLLOCAL bool qore_plugin_program_has_comparison_operations(QoreProgram* pgm);
 DLLLOCAL int qore_plugin_get_lowering_infos(QoreProgram* pgm, qore_type_t node_type,
     std::vector<QorePluginLoweringInfo>& infos, ExceptionSink* xsink);
 DLLLOCAL int qore_plugin_resolve_program_operation_info(QoreProgram* pgm, const QoreTypeInfo* lhs_type,

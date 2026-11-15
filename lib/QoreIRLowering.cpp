@@ -10463,8 +10463,11 @@ QoreIRValue QoreIRLowering::lowerLogicalEquals(const QoreValue& expr, std::strin
         op = selectComparisonOpcode(eq->getLeft(), eq->getRight(),
             QoreIROpcode::EqInt, QoreIROpcode::EqFloat, QoreIROpcode::EqAny);
     }
-    QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, eq->loc, error,
-        comparisonMayDispatchToPlugin(op, eq));
+    // a comparison whose operands may hold a plugin value dispatches to the plugin operation (qore#5911)
+    if (comparisonMayDispatchToPlugin(op, eq)) {
+        op = qore_ir_plugin_comparison_opcode(op);
+    }
+    QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, eq->loc, error);
     return result;
 }
 
@@ -10493,8 +10496,11 @@ QoreIRValue QoreIRLowering::lowerLogicalNotEquals(const QoreValue& expr, std::st
         op = selectComparisonOpcode(ne->getLeft(), ne->getRight(),
             QoreIROpcode::NeInt, QoreIROpcode::NeFloat, QoreIROpcode::NeAny);
     }
-    QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, ne->loc, error,
-        comparisonMayDispatchToPlugin(op, ne));
+    // a comparison whose operands may hold a plugin value dispatches to the plugin operation (qore#5911)
+    if (comparisonMayDispatchToPlugin(op, ne)) {
+        op = qore_ir_plugin_comparison_opcode(op);
+    }
+    QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, ne->loc, error);
     return result;
 }
 
@@ -10561,8 +10567,11 @@ QoreIRValue QoreIRLowering::lowerLogicalLessThan(const QoreValue& expr, std::str
         op = selectComparisonOpcode(lt->getLeft(), lt->getRight(),
             QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny);
     }
-    QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, lt->loc, error,
-        comparisonMayDispatchToPlugin(op, lt));
+    // a comparison whose operands may hold a plugin value dispatches to the plugin operation (qore#5911)
+    if (comparisonMayDispatchToPlugin(op, lt)) {
+        op = qore_ir_plugin_comparison_opcode(op);
+    }
+    QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, lt->loc, error);
     return result;
 }
 
@@ -10591,8 +10600,11 @@ QoreIRValue QoreIRLowering::lowerLogicalLessThanOrEquals(const QoreValue& expr, 
         op = selectComparisonOpcode(le->getLeft(), le->getRight(),
             QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny);
     }
-    QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, le->loc, error,
-        comparisonMayDispatchToPlugin(op, le));
+    // a comparison whose operands may hold a plugin value dispatches to the plugin operation (qore#5911)
+    if (comparisonMayDispatchToPlugin(op, le)) {
+        op = qore_ir_plugin_comparison_opcode(op);
+    }
+    QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, le->loc, error);
     return result;
 }
 
@@ -10621,8 +10633,11 @@ QoreIRValue QoreIRLowering::lowerLogicalGreaterThan(const QoreValue& expr, std::
         op = selectComparisonOpcode(gt->getLeft(), gt->getRight(),
             QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny);
     }
-    QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, gt->loc, error,
-        comparisonMayDispatchToPlugin(op, gt));
+    // a comparison whose operands may hold a plugin value dispatches to the plugin operation (qore#5911)
+    if (comparisonMayDispatchToPlugin(op, gt)) {
+        op = qore_ir_plugin_comparison_opcode(op);
+    }
+    QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, gt->loc, error);
     return result;
 }
 
@@ -10651,8 +10666,11 @@ QoreIRValue QoreIRLowering::lowerLogicalGreaterThanOrEquals(const QoreValue& exp
         op = selectComparisonOpcode(ge->getLeft(), ge->getRight(),
             QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny);
     }
-    QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, ge->loc, error,
-        comparisonMayDispatchToPlugin(op, ge));
+    // a comparison whose operands may hold a plugin value dispatches to the plugin operation (qore#5911)
+    if (comparisonMayDispatchToPlugin(op, ge)) {
+        op = qore_ir_plugin_comparison_opcode(op);
+    }
+    QoreIRValue result = lowerBinaryOpOrInvoke(op, expr, left, right, ge->loc, error);
     return result;
 }
 
@@ -15168,7 +15186,7 @@ bool QoreIRLowering::comparisonMayDispatchToPlugin(QoreIROpcode op, const QoreOp
 }
 
 QoreIRValue QoreIRLowering::lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue left,
-        QoreIRValue right, const QoreProgramLocation* loc, std::string& error, bool plugin_comparison) {
+        QoreIRValue right, const QoreProgramLocation* loc, std::string& error) {
     QoreIRValue result;
     // Native opcodes are selected only after operand type and assigned-state
     // proofs. Keep dynamic and zero-checking arithmetic on exception edges.
@@ -15183,16 +15201,12 @@ QoreIRValue QoreIRLowering::lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreVal
         QoreIRBasicBlock* handler = exception_stack.back();
         auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, loc);
         inst->invoke_opcode = op;
-        inst->plugin_comparison = plugin_comparison;
         builder.setBlock(normal_block);
         result = inst->result;
     } else {
-        auto* inst = builder.createBinaryOp(op, left, right, loc);
-        inst->plugin_comparison = plugin_comparison;
-        result = inst->result;
+        result = builder.createBinaryOp(op, left, right, loc)->result;
     }
-    // the result of a plugin operation need not be a value of the comparison's result type
-    if (!plugin_comparison && opcodeNeverReturnsNothing(op)) {
+    if (opcodeNeverReturnsNothing(op)) {
         never_nothing_values.insert(result.id);
     } else {
         maybeInsertNotNothingGuard(result, &expr, loc, nullptr);

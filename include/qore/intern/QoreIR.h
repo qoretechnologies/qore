@@ -1033,7 +1033,21 @@ enum class QoreIROpcode : uint16_t {
     */
     CheckCallTarget = 431,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (432, 433, ...)
+    /** Comparisons whose operands may hold a value of a plugin operation's type (qore#5911): EqAny, NeAny, LtAny,
+        LeAny, GtAny and GeAny for operands that the parser found may hold such a value only for some of their values
+        (an or-nothing or a union type that includes the plugin's type, auto, or no type).  They dispatch to the
+        plugin operation for such a value, as the AST operator does, and compare as the Any opcode otherwise; the
+        result need not be a boolean.  A switch case with an operator compares with the Any opcode, as the AST's
+        CaseNodeWithOperator compares without plugins.
+    */
+    EqPlugin = 432,
+    NePlugin = 433,
+    LtPlugin = 434,
+    LePlugin = 435,
+    GtPlugin = 436,
+    GePlugin = 437,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (438, 439, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1042,9 +1056,40 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::CheckCallTarget);
-static_assert(QORE_IR_MAX_OPCODE == 431, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::GePlugin);
+static_assert(QORE_IR_MAX_OPCODE == 437, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
+
+//! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself
+inline QoreIROpcode qore_ir_plugin_comparison_base_opcode(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::EqPlugin: return QoreIROpcode::EqAny;
+        case QoreIROpcode::NePlugin: return QoreIROpcode::NeAny;
+        case QoreIROpcode::LtPlugin: return QoreIROpcode::LtAny;
+        case QoreIROpcode::LePlugin: return QoreIROpcode::LeAny;
+        case QoreIROpcode::GtPlugin: return QoreIROpcode::GtAny;
+        case QoreIROpcode::GePlugin: return QoreIROpcode::GeAny;
+        default: return op;
+    }
+}
+
+//! Returns the plugin comparison opcode of an Any comparison (QoreIROpcode::EqAny...GeAny), or \a op itself
+inline QoreIROpcode qore_ir_plugin_comparison_opcode(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::EqAny: return QoreIROpcode::EqPlugin;
+        case QoreIROpcode::NeAny: return QoreIROpcode::NePlugin;
+        case QoreIROpcode::LtAny: return QoreIROpcode::LtPlugin;
+        case QoreIROpcode::LeAny: return QoreIROpcode::LePlugin;
+        case QoreIROpcode::GtAny: return QoreIROpcode::GtPlugin;
+        case QoreIROpcode::GeAny: return QoreIROpcode::GePlugin;
+        default: return op;
+    }
+}
+
+//! Returns true for a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin)
+inline bool qore_ir_is_plugin_comparison_opcode(QoreIROpcode op) {
+    return qore_ir_plugin_comparison_base_opcode(op) != op;
+}
 
 //! The flags of QoreIROpcode::ListSelectorStep (operands[2])
 enum class QoreIRListSelectorFlag : int64_t {
@@ -1505,11 +1550,6 @@ public:
     // references of its temporary arguments to the callee (see IRConsumedCallArgs in QoreIRInterpreter.cpp, issue
     // #5882); set with the interpreter's analysis of the function, before the function runs
     bool interpreter_gives_call_args = false;
-    // Transient: EqAny / NeAny / LtAny / LeAny / GtAny / GeAny (or an Invoke of one) whose operands have a type, such
-    // as an or-nothing or a union type, that may hold a value of a plugin operation's type: it dispatches to the
-    // plugin operation for such a value, whose result need not be a boolean; set by the lowering with
-    // qore_plugin_operation_may_apply() (qore#5911)
-    bool plugin_comparison = false;
     AOTStringCaseComparisonKind aot_string_case_comparison =
         AOTStringCaseComparisonKind::None;
     uint8_t aot_string_case_comparison_operand = 0;

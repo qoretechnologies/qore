@@ -78,12 +78,13 @@ class DataFramePluginOrNothingDispatchTest inherits QUnit::Test {
         string expected = run(sprintf("%s -b --exec-mode=ast %s", quote(qore_bin), quote(probe)));
         assertRegex("(?m)^\\*ColumnRef >: RowMask$", expected, expected);
         assertRegex("(?m)^closure \\*ColumnRef: RowMask$", expected, expected);
+        assertRegex("(?m)^closure case ColumnRef: \"no\"$", expected, expected);
         foreach string level in ("-O0", "-O3") {
             TmpDir dir("qore-dataframe-plugin-dispatch-");
             string exe = dir.path + "/probe";
             run(sprintf("%s %s -o %s %s", quote(qcc_bin), level, quote(exe), quote(probe)));
             assertEq(expected, run(sprintf("%s -b", quote(exe))), "qcc " + level);
-            # closures run as their IR read from the executable, which does not keep the marks of the lowering
+            # closures run as their IR read from the executable
             assertEq(expected, run(sprintf("env QORE_DISABLE_AOT_NATIVE_CLOSURES=1 %s -b", quote(exe))),
                 "qcc " + level + " interpreted closures");
         }

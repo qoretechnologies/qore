@@ -530,6 +530,13 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::ToFloatChecked, {G::Base, G::Expr}, true},
     {O::IteratorCreateSource, {G::IteratorCreate}},
     {O::CheckCallTarget, {G::Expr}},
+    // the comparisons that may dispatch to a plugin operation (qore#5911)
+    {O::EqPlugin, {G::Base, G::Expr}, true},
+    {O::NePlugin, {G::Base, G::Expr}, true},
+    {O::LtPlugin, {G::Base, G::Expr}, true},
+    {O::LePlugin, {G::Base, G::Expr}, true},
+    {O::GtPlugin, {G::Base, G::Expr}, true},
+    {O::GePlugin, {G::Base, G::Expr}, true},
 };
 
 constexpr bool aotOpcodeLayoutsIndexed() {

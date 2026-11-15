@@ -574,8 +574,8 @@ uint64_t qore_rt_expr_op(int opcode, uint64_t expr_bits, ExceptionSink* xsink);
 //! Generic comparison op: delegates to QoreIRInterpreter::evalComparison()
 uint64_t qore_rt_comparison_op(int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink);
 
-//! Comparison that may dispatch to a plugin operation (QoreIRInstruction::plugin_comparison): delegates to
-//! QoreIRInterpreter::evalPluginComparison() (qore#5911)
+//! Plugin comparison (QoreIROpcode::EqPlugin...GePlugin): delegates to QoreIRInterpreter::evalPluginComparison()
+//! (qore#5911)
 uint64_t qore_rt_plugin_comparison_op(int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink);
 
 //! Generic ternary op: delegates to QoreIRInterpreter::evalTernary()

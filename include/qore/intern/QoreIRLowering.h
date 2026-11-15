@@ -664,9 +664,8 @@ private:
         const QoreProgramLocation* loc, std::string& error, bool has_ref_args = false);
     QoreIRValue lowerExprOpOrInvokeNoGuard(QoreIROpcode op, const QoreValue& expr,
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc, std::string& error);
-    //! lowers a binary operation; \a plugin_comparison sets QoreIRInstruction::plugin_comparison (qore#5911)
     QoreIRValue lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue left, QoreIRValue right,
-        const QoreProgramLocation* loc, std::string& error, bool plugin_comparison = false);
+        const QoreProgramLocation* loc, std::string& error);
     //! returns true if the comparison \a op of the operator \a node may dispatch to a plugin operation (qore#5911)
     static bool comparisonMayDispatchToPlugin(QoreIROpcode op, const QoreOperatorNode* node);
     QoreIRValue lowerUnaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue value,

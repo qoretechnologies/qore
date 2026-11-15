@@ -43,7 +43,6 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreAOTBinary.h"
-#include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/Variable.h"
@@ -8807,33 +8806,6 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
                 }
             }
             func->blocks[i]->instructions.push_back(std::move(inst));
-        }
-    }
-
-    // QoreIRInstruction::plugin_comparison is not serialized: a comparison of IR read for a Program that uses a
-    // plugin comparison operation dispatches to it for a plugin value, which the IR interpreter checks by the value's
-    // type (qore#5911)
-    if (qore_plugin_program_has_comparison_operations(pgm)) {
-        auto is_any_comparison = [](QoreIROpcode op) {
-            switch (op) {
-                case QoreIROpcode::EqAny:
-                case QoreIROpcode::NeAny:
-                case QoreIROpcode::LtAny:
-                case QoreIROpcode::LeAny:
-                case QoreIROpcode::GtAny:
-                case QoreIROpcode::GeAny:
-                    return true;
-                default:
-                    return false;
-            }
-        };
-        for (auto& block : func->blocks) {
-            for (auto& inst : block->instructions) {
-                if (is_any_comparison(inst->opcode) || (inst->opcode == QoreIROpcode::Invoke
-                        && is_any_comparison(static_cast<QoreIRInvokeInstruction*>(inst.get())->invoke_opcode))) {
-                    inst->plugin_comparison = true;
-                }
-            }
         }
     }
 
