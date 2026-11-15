@@ -107,3 +107,22 @@ generic int select: ["integer", "integer"] [3, 4]
 generic int foldl max: integer 4
 generic int hash key: integer 3
 generic int local: integer 3
+generic function map: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+generic function select: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+generic function select with &&: ["enum<EI>", "enum<EI>"] [7, 1]
+generic function foldl max: enum<EI> 8
+generic function foldr min float: enum<EF> 0.25
+generic function foldl ternary: enum<EI> 8
+generic function foldr of select: enum<EI> 1
+generic function map with select: ["enum<EI>", "enum<EI>"] [7, 8]
+generic function element of map: enum<EI> 7
+generic function hash key: enum<EI> 7
+generic function hash of map: enum<EI> 7
+generic function map hash key: ["enum<EI>", "enum<EI>"] [7, 1]
+generic function return float: enum<EF> 0.25
+generic method map: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+generic static method select: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+generic function map int: ["integer", "integer", "integer"] [7, 1, 8]
+generic function select int: ["integer", "integer", "integer"] [7, 1, 8]
+generic function foldl max int: integer 8
+generic function hash key int: integer 3
