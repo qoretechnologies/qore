@@ -1488,14 +1488,15 @@ public:
             return;
         }
         member_lvalue_modified = true;
-        // a container or a string: never a scalar that the lvalue stores natively, which getValue() would keep
+        // an enum (QV_Enum, which QoreLValue::getValue() returns borrowed), a container or a string: never a scalar
+        // that the lvalue stores natively in a node that getValue() would create and keep (qore#6094)
         QoreValue current = val ? val->getValue() : *qv;
-        assert(!val || !val->optimized());
         if (current.isEnum()) {
             // the enum member's base value is shared and constant: the lvalue takes an owned copy to modify
             replaceEnumForWrite(current);
             return;
         }
+        assert(!val || !val->optimized());
         if (current.isShortString()) {
             char buf[7];
             current.getShortString(buf);
