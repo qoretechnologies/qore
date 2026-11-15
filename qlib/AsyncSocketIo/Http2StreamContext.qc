@@ -63,10 +63,6 @@ public class Http2StreamContext inherits AbstractStreamContext {
             them on its next tick rather than on the next timeout.
         */
         *code<nothing()> wake_callback;
-
-        #! The record of the close frame of the stream's WebSocket connection, which outlives the stream and the
-        #! session (see @ref isWebSocketCloseSent())
-        *WebSocketCloseRecord close_record;
     }
 
     #! Creates an HTTP/2 stream context with Queue-based async I/O
@@ -89,18 +85,8 @@ public class Http2StreamContext inherits AbstractStreamContext {
         self.uses_frame_state = uses_frame_state;
         self.wake_callback = wake_callback;
         if (uses_frame_state) {
-            close_record = sock.getHttp2StreamWebSocketCloseRecord(stream_id);
+            ws_close_record = sock.getHttp2StreamWebSocketCloseRecord(stream_id);
         }
-    }
-
-    #! Returns @ref True if the close frame of the stream's WebSocket connection was sent
-    /** Includes the close frame of the stream's WebSocket frame state, also after the stream or the HTTP/2 session
-        has ended; see @ref AbstractStreamContext::isWebSocketCloseSent()
-
-        @since AsyncSocketIo 1.0
-    */
-    bool isWebSocketCloseSent() {
-        return ws_close_sent || (close_record && close_record.isCloseSent());
     }
 
     #! Returns True when the transport feeds pre-decoded WebSocket frame hashes

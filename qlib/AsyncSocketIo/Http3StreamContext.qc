@@ -69,10 +69,6 @@ public class Http3StreamContext inherits AbstractStreamContext {
             in this mode — @ref readData() throws.
         */
         bool uses_frame_state = False;
-
-        #! The record of the close frame of the stream's WebSocket connection, which outlives the stream and the
-        #! session (see @ref isWebSocketCloseSent())
-        *WebSocketCloseRecord close_record;
     }
 
     #! Creates an HTTP/3 stream context
@@ -97,18 +93,8 @@ public class Http3StreamContext inherits AbstractStreamContext {
         self.data_queue = data_queue;
         self.uses_frame_state = uses_frame_state;
         if (uses_frame_state) {
-            close_record = sock.getQuicStreamWebSocketCloseRecord(session_id, stream_id);
+            ws_close_record = sock.getQuicStreamWebSocketCloseRecord(session_id, stream_id);
         }
-    }
-
-    #! Returns @ref True if the close frame of the stream's WebSocket connection was sent
-    /** Includes the close frame of the stream's WebSocket frame state, also after the stream or the QUIC session
-        has ended; see @ref AbstractStreamContext::isWebSocketCloseSent()
-
-        @since AsyncSocketIo 1.0
-    */
-    bool isWebSocketCloseSent() {
-        return ws_close_sent || (close_record && close_record.isCloseSent());
     }
 
     #! Returns True when the transport feeds pre-decoded WebSocket frame hashes
