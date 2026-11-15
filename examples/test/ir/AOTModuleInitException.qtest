@@ -288,6 +288,7 @@ public namespace %s {
             assertEq(all, r.inits, m.key + ": the init closures that ran: " + r.out);
             assertNeq(0, r.rc, m.key + ": exit status");
             assertRegex("MODORDB-INIT-ERROR", r.out, m.key + ": the exception is reported");
+            assertFalse(r.out =~ /^main$/m, m.key + ": the program does not run");
         }
 
         # the modules compiled to qmods
@@ -298,6 +299,10 @@ public namespace %s {
             run(sprintf("INIT_LOG=%s/compile.log %s %s -b --compile-module --strip-source --output %s/%s.qmod "
                 "%s/%s.qm", qmod.path, env(qmod.path), qore_bin, qmod.path, name, src.path, name));
             if (!is_file(qmod.path + "/" + name + ".qmod")) {
+                # AOT compilation is available with qcc: the module must compile then
+                if (qcc_bin) {
+                    assertTrue(False, sprintf("compiled module %s", name));
+                }
                 have_qmods = False;
                 break;
             }
@@ -309,7 +314,29 @@ public namespace %s {
                     prog), True);
                 assertEq(all, r.inits, label + ": the init closures that ran");
                 assertNeq(0, r.rc, label + ": exit status");
+                assertRegex("MODORDB-INIT-ERROR", r.out, label + ": the exception is reported");
+                assertFalse(r.out =~ /^main$/m, label + ": the program does not run");
             }
+        }
+
+        # ModOrdB missing from the module path: the other modules initialize before the program fails, as in the
+        # interpreter, which loads the other modules after a %requires that fails
+        TmpDir nob_src("qore-aot-modinit-order-nob-");
+        TmpDir nob_qmod("qore-aot-modinit-order-nobq-");
+        foreach string name in (("ModOrdA", "ModOrdC")) {
+            write(nob_src.path + "/" + name + ".qm", ReadOnlyFile::readTextFile(src.path + "/" + name + ".qm"));
+            if (have_qmods) {
+                write(nob_qmod.path + "/" + name + ".qmod", ReadOnlyFile::readTextFile(qmod.path + "/" + name
+                    + ".qmod", "ISO-8859-1"));
+            }
+        }
+        list<string> no_b = ("ModOrdA", "ModOrdC");
+        {
+            hash<auto> r = runLogged(src.path, sprintf("%s %s -b %s/byname.q", env(nob_src.path), qore_bin,
+                src.path), False);
+            assertEq(no_b, r.inits, "interpreted, ModOrdB missing: the init closures that ran: " + r.out);
+            assertNeq(0, r.rc, "interpreted, ModOrdB missing: exit status");
+            assertFalse(r.out =~ /^main$/m, "interpreted, ModOrdB missing: the program does not run");
         }
 
         if (!qcc_bin) {
@@ -349,6 +376,18 @@ public namespace %s {
             assertNeq(0, r.rc, m.key + ": exit status");
             assertRegex("MODORDB-INIT-ERROR", r.out, m.key + ": the exception is reported");
             assertFalse(r.out =~ /^main$/m, m.key + ": the program does not run");
+
+            # the executables that load the modules from the module path, run without ModOrdB
+            *string nob_dir;
+            if (m.value[2] == "byname.q") {
+                nob_dir = m.value[1] == qmod.path ? nob_qmod.path : nob_src.path;
+            }
+            if (nob_dir) {
+                r = runLogged(src.path, sprintf("%s %s", env(nob_dir), exe), False);
+                assertEq(no_b, r.inits, m.key + ", ModOrdB missing: the init closures that ran: " + r.out);
+                assertNeq(0, r.rc, m.key + ", ModOrdB missing: exit status");
+                assertFalse(r.out =~ /^main$/m, m.key + ", ModOrdB missing: the program does not run");
+            }
         }
     }
 }
