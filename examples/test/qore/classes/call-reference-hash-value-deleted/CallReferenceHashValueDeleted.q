@@ -22,6 +22,11 @@ class C {
     int callInMethod(hash<auto> h) {
         return h.r(side("in method"));
     }
+
+    # a call through a hash member named like a pseudo-method of hashes
+    auto callPseudoNameInMethod(hash<auto> h) {
+        return h.hasKey(side("pseudo-method name in method"));
+    }
 }
 
 int sub side(string label) {
@@ -35,6 +40,19 @@ int sub callInFunction() {
     hash<auto> h = {"r": \c1.m()};
     delete c1;
     return h.r(side("in function"));
+}
+
+# a call through a hash member named like a pseudo-method of hashes (<hash>::hasKey()), which the member's call
+# reference takes precedence over
+auto sub callPseudoNameInFunction() {
+    C c1();
+    hash<auto> h = {"hasKey": \c1.m()};
+    delete c1;
+    return h.hasKey(side("pseudo-method name in function"));
+}
+
+auto sub callPseudoNameThroughParam(hash<auto> h) {
+    return h.hasKey(side("pseudo-method name, parameter"));
 }
 
 sub check(string name, code c) {
@@ -77,4 +95,24 @@ for (int i = 0; i < 3; ++i) {
         return c2.callInMethod(h);
     });
     check("call in a function, object deleted", \callInFunction());
+    check("pseudo-method name in a function, object deleted", \callPseudoNameInFunction());
+    {
+        C c1();
+        C c2();
+        hash<auto> h = {"hasKey": \c1.m()};
+        delete c1;
+        check("pseudo-method name through a parameter, object deleted",
+            auto sub () { return callPseudoNameThroughParam(h); });
+        check("pseudo-method name in a method, object deleted", auto sub () { return c2.callPseudoNameInMethod(h); });
+        try {
+            printf("pseudo-method name in top-level code, object deleted: %y\n",
+                h.hasKey(side("pseudo-method name, top level")));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("pseudo-method name in top-level code, object deleted: %s: %s\n", ex.err, ex.desc);
+        }
+    }
+    check("pseudo-method of a hash without the member", auto sub () {
+        hash<auto> h = {"a": 1};
+        return h.hasKey(side("pseudo-method"));
+    });
 }
