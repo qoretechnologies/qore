@@ -1138,8 +1138,12 @@ public:
     }
 
     //! returns true if the type returns exactly plain values of the given base type; see isPlainType()
+    /** A type parameter is not plain, although parseReturns() gives its bound: the values of \c T: \c int are the
+        members of an int enum when the type argument is the enum, as are those of \c T: \c EI (isType() is false for a
+        type parameter)
+    */
     DLLLOCAL static bool parseReturnsPlain(const QoreTypeInfo* ti, qore_type_t t) {
-        return parseReturns(ti, t) == QTI_IDENT && !getReturnEnum(ti);
+        return parseReturns(ti, t) == QTI_IDENT && !getReturnEnum(ti) && !getTypeParameterSourceType(ti);
     }
 
     // static version of method, checking for null pointer

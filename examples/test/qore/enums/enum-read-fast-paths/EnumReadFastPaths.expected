@@ -24,6 +24,10 @@ select string: ["enum<ES>"] ["y"]
 select number: ["enum<EN>"] [2.5]
 select hash key: ["hash<string, enum<EI>>"] [{a: 7}]
 select of map: ["enum<EI>", "enum<EI>"] [7, 8]
+select != 0: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+select float != 0: ["enum<EF>", "enum<EF>"] [0.5, 0.25]
+select float > 0: ["enum<EF>", "enum<EF>"] [0.5, 0.25]
+map with select toInt(): ["enum<EI>", "enum<EI>"] [7, 8]
 foldl min: enum<EI> 1
 foldl max: enum<EI> 8
 foldr max: enum<EI> 8
@@ -32,6 +36,7 @@ foldr min float: enum<EF> 0.25
 min: enum<EI> 1
 max: enum<EI> 8
 min float: enum<EF> 0.25
+foldl ternary: enum<EI> 8
 return: enum<EI> 7
 return float: enum<EF> 0.25
 local float: enum<EF> 0.25
@@ -39,6 +44,10 @@ loop: enum<EI> 8
 loop float: enum<EF> 0.25
 index: enum<EI> 8
 index float: enum<EF> 0.25
+while float: enum<EF> 0.25
+ternary float function: enum<EF> 0.25
+push: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+push float: ["enum<EF>", "enum<EF>"] [0.5, 0.25]
 capture: enum<EI> 7
 capture float: enum<EF> 0.25
 capture local float: enum<EF> 0.25
@@ -74,3 +83,27 @@ to int: integer 7
 to float: float 0.25
 list element + 1: integer 2
 sum in a loop: integer 16
+generic int bound map: ["enum<EI>", "enum<EI>"] [7, 1]
+generic int bound map with select: ["enum<EI>", "enum<EI>"] [7, 1]
+generic int bound select: ["enum<EI>", "enum<EI>"] [7, 1]
+generic int bound foldl max: enum<EI> 7
+generic int bound foldr min: enum<EI> 1
+generic int bound hash key: enum<EI> 7
+generic int bound local: enum<EI> 7
+generic int bound push: ["enum<EI>", "enum<EI>"] [7, 1]
+generic int bound return: enum<EI> 7
+generic enum bound map: ["enum<EI>", "enum<EI>"] [7, 8]
+generic enum bound select: ["enum<EI>", "enum<EI>"] [7, 8]
+generic enum bound foldl max: enum<EI> 8
+generic enum bound hash key: enum<EI> 7
+generic float enum bound map: ["enum<EF>", "enum<EF>"] [0.25, 0.5]
+generic float enum bound select: ["enum<EF>", "enum<EF>"] [0.25, 0.5]
+generic float enum bound foldr min: enum<EF> 0.25
+generic float enum bound hash key: enum<EF> 0.25
+generic float enum bound local: enum<EF> 0.25
+generic float enum bound return: enum<EF> 0.25
+generic int map: ["integer", "integer"] [3, 4]
+generic int select: ["integer", "integer"] [3, 4]
+generic int foldl max: integer 4
+generic int hash key: integer 3
+generic int local: integer 3

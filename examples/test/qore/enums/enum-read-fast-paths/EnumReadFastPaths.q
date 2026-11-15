@@ -76,6 +76,134 @@ auto sub indexEI(list<EI> l) {
     return r;
 }
 
+EF sub ternaryEF(bool b, EF x, EF y) {
+    return b ? x : y;
+}
+
+auto sub whileEF(list<EF> l) {
+    EF r = EF::Q;
+    int i = 0;
+    while (i < l.size()) {
+        r = l[i];
+        ++i;
+    }
+    return r;
+}
+
+list<EF> sub pushEF(list<EF> l) {
+    list<EF> r = ();
+    foreach EF x in (l) {
+        push r, x;
+    }
+    return r;
+}
+
+list<EI> sub pushEI(list<EI> l) {
+    list<EI> r = ();
+    foreach EI x in (l) {
+        push r, x;
+    }
+    return r;
+}
+
+# the values of a type parameter are enum values when the type argument is an enum, also when its bound is int or
+# float
+class G<T: int> {
+    public {
+        T v;
+        list<T> l;
+        hash<string, T> h;
+    }
+
+    constructor(T x, T y) {
+        v = x;
+        l = (x, y);
+        h = {"a": x};
+    }
+
+    auto mapList() { list<T> l2 = l; return map $1, l2; }
+    auto mapSelect() { list<T> l2 = l; return map $1, l2, $1 > 0; }
+    auto selectList() { list<T> l2 = l; return select l2, $1 > 0; }
+    auto foldlMax() { return foldl max($1, $2), l; }
+    auto foldrMin() { list<T> l2 = l; return foldr min($1, $2), l2; }
+    auto hashKey() { hash<string, T> h2 = h; return h2.a; }
+    auto local() { T y = v; T z = y; return z; }
+    auto pushList() { list<T> l2 = (); foreach T x in (l) { push l2, x; } return l2; }
+    T ret() { return v; }
+    auto callRet() { return ret(); }
+}
+
+class GE<T: EI> {
+    public {
+        list<T> l;
+        hash<string, T> h;
+    }
+
+    constructor(T x, T y) {
+        l = (x, y);
+        h = {"a": x};
+    }
+
+    auto mapList() { list<T> l2 = l; return map $1, l2; }
+    auto selectList() { list<T> l2 = l; return select l2, $1 > 0; }
+    auto foldlMax() { return foldl max($1, $2), l; }
+    auto hashKey() { hash<string, T> h2 = h; return h2.a; }
+}
+
+class GF<T: EF> {
+    public {
+        T v;
+        list<T> l;
+        hash<string, T> h;
+    }
+
+    constructor(T x, T y) {
+        v = x;
+        l = (x, y);
+        h = {"a": x};
+    }
+
+    auto mapList() { list<T> l2 = l; return map $1, l2; }
+    auto selectList() { list<T> l2 = l; return select l2, $1 > 0; }
+    auto foldrMin() { list<T> l2 = l; return foldr min($1, $2), l2; }
+    auto hashKey() { hash<string, T> h2 = h; return h2.a; }
+    auto local() { T y = v; T z = y; return z; }
+    T ret() { return v; }
+    auto callRet() { return ret(); }
+}
+
+sub generics(EI e, EF ef) {
+    G<EI> gi(e, EI::One);
+    GE<EI> ge(e, EI::Eight);
+    GF<EF> gf(ef, EF::H);
+    G<int> gint(3, 4);
+    run("generic int bound map", auto sub () { return gi.mapList(); });
+    run("generic int bound map with select", auto sub () { return gi.mapSelect(); });
+    run("generic int bound select", auto sub () { return gi.selectList(); });
+    run("generic int bound foldl max", auto sub () { return gi.foldlMax(); });
+    run("generic int bound foldr min", auto sub () { return gi.foldrMin(); });
+    run("generic int bound hash key", auto sub () { return gi.hashKey(); });
+    run("generic int bound local", auto sub () { return gi.local(); });
+    run("generic int bound push", auto sub () { return gi.pushList(); });
+    run("generic int bound return", auto sub () { return gi.callRet(); });
+    run("generic enum bound map", auto sub () { return ge.mapList(); });
+    run("generic enum bound select", auto sub () { return ge.selectList(); });
+    run("generic enum bound foldl max", auto sub () { return ge.foldlMax(); });
+    run("generic enum bound hash key", auto sub () { return ge.hashKey(); });
+    run("generic float enum bound map", auto sub () { return gf.mapList(); });
+    run("generic float enum bound select", auto sub () { return gf.selectList(); });
+    run("generic float enum bound foldr min", auto sub () { return gf.foldrMin(); });
+    run("generic float enum bound hash key", auto sub () { return gf.hashKey(); });
+    run("generic float enum bound local", auto sub () { return gf.local(); });
+    run("generic float enum bound return", auto sub () { return gf.callRet(); });
+    # plain values of a generic class keep their plain types
+    run("generic int map", auto sub () { return gint.mapList(); });
+    run("generic int select", auto sub () { return gint.selectList(); });
+    run("generic int foldl max", auto sub () { return gint.foldlMax(); });
+    run("generic int hash key", auto sub () { return gint.hashKey(); });
+    run("generic int local", auto sub () { return gint.local(); });
+}
+
 sub cases(list<EI> l, list<EF> lf, list<ES> ls, list<EN> ln, EI e, EF ef, ES es, EN en) {
     hash<string, EI> hh = {"a": EI::Seven};
     hash<string, EI> h2();
@@ -113,6 +241,10 @@ sub cases(list<EI> l, list<EF> lf, list<ES> ls, list<EN> ln, EI e, EF ef, ES es,
     run("select number", auto sub () { return select ln, $1 > 2n; });
     run("select hash key", auto sub () { return select lh, $1.a > 1; });
     run("select of map", auto sub () { return select (map $1, l), $1 > 1; });
+    run("select != 0", auto sub () { return select l, $1 != 0; });
+    run("select float != 0", auto sub () { return select lf, $1 != 0; });
+    run("select float > 0", auto sub () { return select lf, $1 > 0; });
+    run("map with select toInt()", auto sub () { return map $1, l, $1.toInt() > 1; });
 
     # folds that give one of the elements
     run("foldl min", auto sub () { return foldl min($1, $2), l; });
@@ -123,6 +255,7 @@ sub cases(list<EI> l, list<EF> lf, list<ES> ls, list<EN> ln, EI e, EF ef, ES es,
     run("min", auto sub () { return min(l); });
     run("max", auto sub () { return max(l); });
     run("min float", auto sub () { return min(lf); });
+    run("foldl ternary", auto sub () { return foldl ($1 > $2 ? $1 : $2), l; });
 
     # locals, returns and captures
     run("return", auto sub () { return retEI(e); });
@@ -132,6 +265,10 @@ sub cases(list<EI> l, list<EF> lf, list<ES> ls, list<EN> ln, EI e, EF ef, ES es,
     run("loop float", auto sub () { return loopEF(lf); });
     run("index", auto sub () { return indexEI(l); });
     run("index float", auto sub () { return indexEF(lf); });
+    run("while float", auto sub () { return whileEF(lf); });
+    run("ternary float function", auto sub () { return ternaryEF(True, ef, EF::H); });
+    run("push", auto sub () { return pushEI(l); });
+    run("push float", auto sub () { return pushEF(lf); });
     run("capture", auto sub () { code c = auto sub () { return e; }; return c(); });
     run("capture float", auto sub () { code c = auto sub () { return ef; }; return c(); });
     run("capture local float", auto sub () { EF x = ef; code c = auto sub () { return x; }; return c(); });
@@ -173,3 +310,4 @@ sub cases(list<EI> l, list<EF> lf, list<ES> ls, list<EN> ln, EI e, EF ef, ES es,
 
 cases((EI::Seven, EI::One, EI::Eight), (EF::H, EF::Q), (ES::X, ES::Y), (EN::N1, EN::N2), EI::Seven, EF::Q, ES::Y,
     EN::N2);
+generics(EI::Seven, EF::Q);
