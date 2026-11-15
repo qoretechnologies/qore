@@ -3301,11 +3301,15 @@ void qore_program_private::del(ExceptionSink* xsink) {
     clearScanHolder();
     assert(!scan_holder);
     ResolvedCallReferenceNode* old_thr_init;
+    // the options of the code that set it, released with it after the lock (qore#6208)
+    QoreThreadRuntimeParseOptions old_thr_init_po;
     {
         // the object that survives can still set or get the code (Program::setThreadInit())
         AutoLocker al(tlock);
         old_thr_init = thr_init;
         thr_init = nullptr;
+        std::swap(old_thr_init_po.po, thr_init_po.po);
+        std::swap(old_thr_init_po.override, thr_init_po.override);
     }
     if (old_thr_init) {
         old_thr_init->deref(xsink);

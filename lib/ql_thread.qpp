@@ -42,10 +42,6 @@
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/ThreadPool.h"
-
-// the ThreadPool class (QC_ThreadPool.qpp), for qore_test_thread_pool_hold_dispatch()
-DLLLOCAL extern qore_classid_t CID_THREADPOOL;
-DLLLOCAL extern QoreClass* QC_THREADPOOL;
 #include "qore/intern/QC_Promise.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/FastRouteGuard.h"
@@ -59,6 +55,10 @@ DLLLOCAL extern QoreClass* QC_THREADPOOL;
 #include <numeric>
 #include <atomic>
 #include <optional>
+
+// the ThreadPool class (QC_ThreadPool.qpp), for qore_test_thread_pool_hold_dispatch()
+DLLLOCAL extern qore_classid_t CID_THREADPOOL;
+DLLLOCAL extern QoreClass* QC_THREADPOOL;
 
 // internal struct for call_async thread parameters
 struct CallAsyncParams {

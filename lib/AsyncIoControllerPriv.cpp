@@ -703,6 +703,7 @@ struct AsyncIoDebugHeldTimers {
         ResolvedCallReferenceNode* code;
         std::string owner;
         AsyncIoSandboxContext sandbox_ctx;
+        AsyncIoRuntimeOptions runtime_po;
     };
     std::vector<Held> held;
 
@@ -747,7 +748,7 @@ size_t AsyncIoControllerPriv::dbgReleaseHeldTimerCallbacks(ExceptionSink* xsink)
     for (auto& h : held) {
         h.ctrl->ensureCallDispatcher();
         h.ctrl->call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(h.code, nullptr, h.owner,
-            std::move(h.sandbox_ctx));
+            std::move(h.sandbox_ctx), std::move(h.runtime_po));
     }
     // the callbacks have run when this returns
     for (auto& h : held) {
@@ -758,7 +759,7 @@ size_t AsyncIoControllerPriv::dbgReleaseHeldTimerCallbacks(ExceptionSink* xsink)
 }
 
 bool AsyncIoControllerPriv::dbgHoldTimerCallback(ResolvedCallReferenceNode* code, const std::string& owner,
-        AsyncIoSandboxContext& sandbox_ctx) {
+        AsyncIoSandboxContext& sandbox_ctx, AsyncIoRuntimeOptions& runtime_po) {
     AsyncIoDebugHeldTimers& state = AsyncIoDebugHeldTimers::get();
     if (!state.hold.load(std::memory_order_acquire)) {
         return false;
@@ -768,7 +769,7 @@ bool AsyncIoControllerPriv::dbgHoldTimerCallback(ResolvedCallReferenceNode* code
         return false;
     }
     ref();
-    state.held.push_back({this, code, owner, std::move(sandbox_ctx)});
+    state.held.push_back({this, code, owner, std::move(sandbox_ctx), std::move(runtime_po)});
     state.cond.broadcast();
     return true;
 }
@@ -1440,10 +1441,11 @@ void QoreCallDispatcher::dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashN
 }
 
 void QoreCallDispatcher::dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
-        const std::string& owner, AsyncIoSandboxContext sandbox_ctx) {
+        const std::string& owner, AsyncIoSandboxContext sandbox_ctx, AsyncIoRuntimeOptions runtime_po) {
     AsyncWorkItem item{nullptr, nullptr, callback, args, DT_CALLBACK, nullptr, std::string()};
     item.owner = owner;
     item.sandbox_ctx = std::move(sandbox_ctx);
+    item.runtime_po = std::move(runtime_po);
     enqueue(std::move(item));
 }
 
@@ -2070,6 +2072,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             item_po.po = async_item.pgm->getParseOptions();
         }
         QoreThreadRuntimeParseOptionsHelper item_po_helper(async_item.pgm ? &item_po : nullptr);
+        // a callback that is not run in a Program (a timer's) runs with the options of the code that registered it,
+        // which for module code running for a sandboxed caller include the caller's restrictions (qore#6208)
+        QoreThreadRuntimeParseOptionsHelper registrar_po_helper(async_item.runtime_po.get());
         ExceptionSink pgm_guard_xsink;
         std::unique_ptr<ProgramThreadCountContextHelper> pgm_guard;
         if (async_item.pgm) {
@@ -2973,6 +2978,8 @@ void AsyncIoControllerPriv::deref(ExceptionSink* xsink) {
             timer_callback->deref(xsink);
             timer_callback = nullptr;
         }
+        // released with the callback (qore#6208)
+        timer_callback_po.reset();
         for (auto& [id, tinfo] : timer_info_map) {
             tinfo.udata.discard(xsink);
         }
@@ -5581,11 +5588,14 @@ void AsyncIoControllerPriv::clearCrossModuleRefs(ExceptionSink* xsink) {
         return;
     }
     ResolvedCallReferenceNode* tcb;
+    AsyncIoRuntimeOptions tcb_po;
     std::unordered_map<int64_t, TimerInfo> stolen_timers;
     {
         AutoLocker al(m);
         tcb = timer_callback;
         timer_callback = nullptr;
+        // released after the lock with the callback (qore#6208)
+        tcb_po.swap(timer_callback_po);
         stolen_timers.swap(timer_info_map);
     }
     if (tcb) {
@@ -5647,6 +5657,9 @@ int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotoni
 
     // captured outside the lock: capturing resolves the sandbox through the thread's Program context
     AsyncIoSandboxContext sandbox_ctx = capture_async_io_sandbox_context();
+    // the options of the code that adds the timer, which its callback runs with (qore#6208)
+    AsyncIoRuntimeOptions timer_po = std::make_shared<const QoreThreadRuntimeParseOptions>(
+        QoreThreadRuntimeParseOptions::capture());
     // the application that module code adds the timer for, if it runs for one with restrictions
     qore_program_id_t app_pgm_id = 0;
     bool for_app = runtime_get_module_caller_app(app_pgm_id);
@@ -5686,6 +5699,7 @@ int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotoni
         tinfo.owner = owner;
         // the sandbox of the code that adds the timer governs its callback
         tinfo.sandbox_ctx = std::move(sandbox_ctx);
+        tinfo.runtime_po = std::move(timer_po);
         tinfo.for_app = for_app;
         tinfo.app_pgm_id = app_pgm_id;
         timer_info_map[id] = std::move(tinfo);
@@ -5751,12 +5765,19 @@ void AsyncIoControllerPriv::setTimerCallback(ResolvedCallReferenceNode* cb, Exce
     if (checkForked("setTimerCallback", xsink)) {
         return;
     }
-    AutoLocker al(m);
-    if (timer_callback) {
-        timer_callback->deref(xsink);
+    // the options of the code that sets the callback, which it runs with (qore#6208); the old ones are released
+    // after the lock, as their references to Programs can be the last ones
+    AsyncIoRuntimeOptions po = cb ? std::make_shared<const QoreThreadRuntimeParseOptions>(
+        QoreThreadRuntimeParseOptions::capture()) : AsyncIoRuntimeOptions();
+    {
+        AutoLocker al(m);
+        if (timer_callback) {
+            timer_callback->deref(xsink);
+        }
+        // Takes ownership of the caller's reference
+        timer_callback = cb;
+        timer_callback_po.swap(po);
     }
-    // Takes ownership of the caller's reference
-    timer_callback = cb;
 }
 
 void AsyncIoControllerPriv::setMaxCallbackWorkers(int max_workers) {
@@ -7258,9 +7279,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             QoreValue udata;
             std::string owner;
             AsyncIoSandboxContext sandbox_ctx;
+            AsyncIoRuntimeOptions runtime_po;
         };
         std::vector<TimerEvent> timer_events;
         ResolvedCallReferenceNode* cb_snapshot = nullptr;
+        // the options of the code that set the timer callback, taken with it
+        AsyncIoRuntimeOptions cb_snapshot_po;
 
         // Process poll results in two passes:
         // Pass 1: socket events (I/O-thread-only state, no lock needed)
@@ -7342,7 +7366,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         auto it = timer_info_map.find(tid_val);
                         if (it != timer_info_map.end()) {
                             timer_events.push_back({tid_val, it->second.udata, it->second.owner,
-                                std::move(it->second.sandbox_ctx)});
+                                std::move(it->second.sandbox_ctx), std::move(it->second.runtime_po)});
                             timer_info_map.erase(it);
                         }
                     }
@@ -7350,6 +7374,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 if (!timer_events.empty() && timer_callback) {
                     cb_snapshot = timer_callback;
                     cb_snapshot->ref();
+                    cb_snapshot_po = timer_callback_po;
                 }
             }
         }
@@ -7405,7 +7430,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 #ifdef DEBUG
             if (is_code) {
                 // a test can hold the callback of a fired timer and run it later (see dbgHoldTimerCallbacks())
-                if (dbgHoldTimerCallback(*code_ref, te.owner, te.sandbox_ctx)) {
+                AsyncIoRuntimeOptions held_po = is_code ? te.runtime_po : cb_snapshot_po;
+                if (dbgHoldTimerCallback(*code_ref, te.owner, te.sandbox_ctx, held_po)) {
                     code_ref.release();
                     continue;
                 }
@@ -7414,8 +7440,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             const bool dbg_pause = dbgTakeDeliveryPause(DBG_PAUSE_DELIVERY);
 #endif
             // a code reference is tagged with the timer's owner (if any); see above
+            // the timer's own code runs with the options of the code that added the timer, the timer callback with
+            // those of the code that set it (qore#6208)
             call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(code_ref.release(), args.release(),
-                is_code ? te.owner : std::string(), std::move(te.sandbox_ctx));
+                is_code ? te.owner : std::string(), std::move(te.sandbox_ctx),
+                is_code ? std::move(te.runtime_po) : cb_snapshot_po);
 #ifdef DEBUG
             if (dbg_pause) {
                 dbgWaitAfterDelivery(DBG_PAUSE_DELIVERY);
