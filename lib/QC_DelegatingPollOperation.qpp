@@ -42,6 +42,10 @@ public:
     QoreObject* inner_obj;
     SocketPollOperationBase* inner_base;
     ResolvedCallReferenceNode* on_complete_code;
+    //! the run-time parse options of the code that created the operation, which on_complete_code runs with
+    /** A callback that is a call reference to builtin code sets no options of its own (qore#6208)
+    */
+    const QoreThreadRuntimeParseOptions on_complete_po = QoreThreadRuntimeParseOptions::capture();
     QoreObject* counter_obj;
     bool inner_has_abort;
     bool inner_has_get_output;
@@ -414,6 +418,8 @@ nothing DelegatingPollOperation::onComplete(hash<SocketPollResultInfo> result) [
         ExceptionSink cb_xsink;
         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &cb_xsink);
         args->push(result->refSelf(), &cb_xsink);
+        // the callback runs with the options of the code that created the operation (qore#6208)
+        QoreThreadRuntimeParseOptionsHelper po_helper(&poll->on_complete_po);
         ValueHolder rv(poll->on_complete_code->invoke(*args, &cb_xsink), &cb_xsink);
         if (cb_xsink) {
             xsink->assimilate(cb_xsink);

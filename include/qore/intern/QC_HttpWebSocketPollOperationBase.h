@@ -498,6 +498,11 @@ private:
 
     //! Frame callback — invoked from onPollComplete() after frames are pushed to recv_queue
     ResolvedCallReferenceNode* frame_callback = nullptr;
+    //! the run-time parse options of the code that set frame_callback, which it runs with (qore#6208); guarded by m
+    /** A callback that is a call reference to builtin code sets no options of its own, and the callback worker that
+        calls it has none
+    */
+    QoreThreadRuntimeParseOptions frame_callback_po;
 
     //! Optional I/O-thread frame handler — bypasses recv_queue entirely
     WsIoThreadFrameHandler* io_frame_handler = nullptr;

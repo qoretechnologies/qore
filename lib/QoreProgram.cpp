@@ -639,6 +639,7 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     sm_lock.reinitAfterFork();
     featureLock.reinitAfterFork();
     new (&runtime_metadata_lock) std::recursive_mutex();
+    pwo.parse_options.reinitAfterFork();
     ir_fallback_lock.reinitAfterFork();
     plugin_fallback_lock.reinitAfterFork();
     debug_program_counter.reinitAfterFork();
@@ -1607,11 +1608,17 @@ void qore_program_private::doThreadInit(ExceptionSink* xsink) {
 
     // if there is any thread-initialization code, execute it here
     ReferenceHolder<ResolvedCallReferenceNode> ti(xsink);
+    QoreThreadRuntimeParseOptions ti_po;
     {
         AutoLocker al(tlock);
         ti = thr_init ? thr_init->refRefSelf() : 0;
+        if (ti) {
+            ti_po = thr_init_po;
+        }
     }
     if (ti) {
+        // the code runs with the options of the code that set it (qore#6208)
+        QoreThreadRuntimeParseOptionsHelper po_helper(&ti_po);
         ValueHolder v(ti->invoke(0, xsink), xsink);
     }
 }
@@ -1730,10 +1737,17 @@ bool qore_program_private::scanMembers(RObject& obj, RSetHelper& rsh) {
 bool qore_program_private::setThreadInit(const ResolvedCallReferenceNode* n_thr_init, ExceptionSink* xsink) {
     // the old code is released after the lock, as releasing it can run destructors
     ReferenceHolder<ResolvedCallReferenceNode> old(xsink);
+    // the options of the code that sets it, which it runs with, without the application of a call of module code,
+    // as it runs for every thread that enters the Program (qore#6208); the old ones are released after the lock, as
+    // their references to Programs can be the last ones
+    QoreThreadRuntimeParseOptions po = n_thr_init ? QoreThreadRuntimeParseOptions::captureForThread()
+        : QoreThreadRuntimeParseOptions();
     {
         AutoLocker al(tlock);
         old = thr_init;
         thr_init = n_thr_init ? n_thr_init->refRefSelf() : nullptr;
+        std::swap(thr_init_po.po, po.po);
+        std::swap(thr_init_po.override, po.override);
         if (scan_holder) {
             scanValuesChangedIntern(program_code_needs_scan(*old), {thr_init});
         }
@@ -1859,19 +1873,26 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
 
     setCreatorChain(*p_pgm);
 
+    // the parent's options are read once, so that the test and the steps below use the same value (issue #6078)
+    QoreParseOptions p_po = p_pgm->priv->pwo.parse_options;
     // if children inherit restrictions, then set all child restrictions
-    if (!(p_pgm->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS)) {
+    if (!(p_po & PO_NO_CHILD_PO_RESTRICTIONS)) {
         // lock child parse options
         po_locked = true;
-        // turn on all restrictions in the child that are set in the parent
-        pwo.parse_options |= p_pgm->priv->pwo.parse_options;
-        // make sure all options that give more freedom and are off in the parent program are turned off in the child;
-        // the mask must be the full-width one: the legacy PO_POSITIVE_OPTIONS cannot hold extended (bits 64+)
-        // positive options, which would then pass to the child unchecked
-        pwo.parse_options &= (p_pgm->priv->pwo.parse_options | ~QoreParseOptions::POSITIVE_OPTIONS);
+        // turn on all restrictions in the child that are set in the parent, and make sure all options that give more
+        // freedom and are off in the parent program are turned off in the child; the mask must be the full-width one:
+        // the legacy PO_POSITIVE_OPTIONS cannot hold extended (bits 64+) positive options, which would then pass to
+        // the child unchecked
+        pwo.parse_options = (pwo.parse_options | p_po) & (p_po | ~QoreParseOptions::POSITIVE_OPTIONS);
+        // the child keeps the restrictions of its parent and those it was created with
+        locked_restrictions = pwo.parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
     } else {
         pwo.parse_options = n_parse_options;
         po_locked = !(n_parse_options & PO_NO_CHILD_PO_RESTRICTIONS);
+        if (po_locked) {
+            // a locked child keeps the restrictions that it was created with
+            locked_restrictions = n_parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
+        }
     }
 
     // share the thread-local data of the parent's family
@@ -3280,11 +3301,15 @@ void qore_program_private::del(ExceptionSink* xsink) {
     clearScanHolder();
     assert(!scan_holder);
     ResolvedCallReferenceNode* old_thr_init;
+    // the options of the code that set it, released with it after the lock (qore#6208)
+    QoreThreadRuntimeParseOptions old_thr_init_po;
     {
         // the object that survives can still set or get the code (Program::setThreadInit())
         AutoLocker al(tlock);
         old_thr_init = thr_init;
         thr_init = nullptr;
+        std::swap(old_thr_init_po.po, thr_init_po.po);
+        std::swap(old_thr_init_po.override, thr_init_po.override);
     }
     if (old_thr_init) {
         old_thr_init->deref(xsink);
@@ -3954,6 +3979,9 @@ bool qore_program_private::derefUnregister() {
     programid_to_program_map_t::iterator i = programid_to_program_map.find(programId);
     assert(i != programid_to_program_map.end() && i->second == pgm);
     programid_to_program_map.erase(i);
+    // the method lookups cached for code of this Program are no longer known to be stable (the classes that it is the
+    // source Program of raise an error for a call once it is torn down; QoreCallTargetCheckCache, issue #5824)
+    qore_bump_method_dispatch_epoch();
     return true;
 }
 
@@ -3965,6 +3993,8 @@ ExceptionSink* QoreProgram::getParseExceptionSink() {
 }
 
 int QoreProgram::setWarningMask(int wm) {
+    // the check and the change are atomic with a change of PO_LOCK_WARNINGS (issue #6078)
+    std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     if (!(priv->pwo.parse_options & PO_LOCK_WARNINGS)) {
         priv->pwo.warn_mask = wm;
         return 0;
@@ -3974,6 +4004,8 @@ int QoreProgram::setWarningMask(int wm) {
 
 // returns 0 for success, -1 for error
 int QoreProgram::enableWarning(int code) {
+    // the check and the change are atomic with a change of PO_LOCK_WARNINGS (issue #6078)
+    std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     if (!(priv->pwo.parse_options & PO_LOCK_WARNINGS)) {
         priv->pwo.warn_mask |= code;
         return 0;
@@ -3983,6 +4015,8 @@ int QoreProgram::enableWarning(int code) {
 
 // returns 0 for success, -1 for error
 int QoreProgram::disableWarning(int code) {
+    // the check and the change are atomic with a change of PO_LOCK_WARNINGS (issue #6078)
+    std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     if (!(priv->pwo.parse_options & PO_LOCK_WARNINGS)) {
         priv->pwo.warn_mask &= ~code;
         return 0;
@@ -4073,7 +4107,70 @@ void QoreProgram::waitForTerminationAndDeref(ExceptionSink* xsink) {
 }
 
 void QoreProgram::lockOptions() {
+    // atomic with the lock check of a change of the options (issue #6078); the write lock before po_mutex (see
+    // qore_program_private_base::po_mutex); the restrictions that it has now are kept
+    std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
+    std::lock_guard<std::mutex> po_guard(priv->po_mutex);
+    priv->locked_restrictions |= priv->pwo.parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
     priv->po_locked = true;
+}
+
+QoreParseOptions qore_program_private_base::getCreatorRestrictions(const QoreParseOptions& creator_po) {
+    // the options of style and backward compatibility, %modern's included, are the created Program's own; the
+    // options that decide what user code a child inherits from its parent are not restrictions of a Program that is
+    // not a child (nor is the inheritance of the module data of a parent), and the system options are never
+    // inherited this way; the options that keep system code from a Program are taken, as an independent Program
+    // copies its namespace from the system namespace, not from its creator's
+    static const QoreParseOptions not_inherited = QoreParseOptions::POSITIVE_OPTIONS | lockedMayDisable()
+        | modernImpliedOptions() | modernIncompatibleOptions()
+        | QoreParseOptions(PO_USER_INHERITANCE_OPTIONS | PO_NO_INHERIT_PROGRAM_DATA | PO_SYSTEM_OPS);
+    return creator_po & ~not_inherited;
+}
+
+QoreParseOptions qore_program_private_base::restrictForCreator(const QoreProgram* creator,
+        const QoreParseOptions& po, QoreParseOptions& restrictions, bool& restricted) {
+    restricted = false;
+    restrictions = QoreParseOptions();
+    if (!creator) {
+        return po;
+    }
+    QoreParseOptions creator_po;
+    bool creator_locked;
+    {
+        // the options of the creator may be changed in another thread
+        std::lock_guard<std::mutex> po_guard(creator->priv->po_mutex);
+        creator_po = creator->priv->pwo.parse_options;
+        creator_locked = creator->priv->po_locked;
+    }
+    QoreParseOptions creator_restrictions = getCreatorRestrictions(creator_po);
+    // sandboxed code cannot create a Program that is free of its restrictions
+    const bool sandboxed = qore_caller_is_sandboxed();
+    // code without restrictions that is not locked has none that the Program could escape; such code creates an
+    // independent Program with the options it gives, as before (QoreRepl, for example, creates one with
+    // PO_ALLOW_REPARSE); a locked Program has no positive options that it cannot have, which the new Program does not
+    // get either
+    if (!sandboxed && ((creator_po & PO_NO_CHILD_PO_RESTRICTIONS) || (!creator_restrictions && !creator_locked))) {
+        return po;
+    }
+    restricted = true;
+    restrictions = creator_restrictions;
+    // the restrictions of the creator are added, and the options that give more freedom that it does not have are
+    // removed, as setParent() does for a child; the children of the Program of sandboxed code inherit them;
+    // PO_ALLOW_REPARSE is kept, as it only allows code to be parsed in the new Program more than once (QoreRepl
+    // creates its Program with it)
+    QoreParseOptions allowed = creator_po | ~QoreParseOptions::POSITIVE_OPTIONS | QoreParseOptions(PO_ALLOW_REPARSE);
+    if (sandboxed) {
+        allowed &= ~QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS);
+    }
+    return (po | restrictions) & allowed;
+}
+
+void qore_program_private_base::lockCreatorRestrictions(QoreProgram& pgm, const QoreParseOptions& restrictions) {
+    std::lock_guard<std::mutex> po_guard(pgm.priv->po_mutex);
+    // the options were given by restrictForCreator(), so the Program has the restrictions already
+    assert((pgm.priv->pwo.parse_options & restrictions) == restrictions);
+    pgm.priv->locked_restrictions |= restrictions;
+    pgm.priv->po_locked = true;
 }
 
 // setExecClass() NOTE: string passed here will copied
@@ -4102,7 +4199,7 @@ bool QoreProgram::checkWarning(int code) const {
 }
 
 int QoreProgram::getWarningMask() const {
-    return priv->warnSink ? priv->pwo.warn_mask : 0;
+    return priv->warnSink ? priv->pwo.warn_mask.load(std::memory_order_relaxed) : 0;
 }
 
 bool QoreProgram::existsFunction(const char* name) {
@@ -4303,8 +4400,12 @@ int qore_program_private_base::checkNewProgramModernOptions(const QoreProgram* p
         ExceptionSink* xsink, const char* what) {
     // a child Program has its parent's options too, unless the parent allows other options for its children
     QoreParseOptions inherited;
-    if (parent && !(parent->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS)) {
-        inherited = parent->priv->pwo.parse_options;
+    if (parent) {
+        // the parent's options are read once, so that the test and the value checked are the same (issue #6078)
+        QoreParseOptions parent_po = parent->priv->pwo.parse_options;
+        if (!(parent_po & PO_NO_CHILD_PO_RESTRICTIONS)) {
+            inherited = parent_po;
+        }
     }
     if (!isModern(inherited | po)) {
         return 0;
@@ -6166,9 +6267,17 @@ struct QoreExitHook {
     QoreProgram* pgm;
     //! the hook; referenced
     ResolvedCallReferenceNode* code;
+    //! the run-time parse options of the code that registered the hook, which the hook runs with (qore#6208)
+    /** A hook that is a call reference to builtin code sets no options of its own, and the thread that runs the hooks
+        (the one that deletes the Program, or the main thread at the end of the process) has its own
+    */
+    QoreThreadRuntimeParseOptions po;
 
     //! Releases the hook's references; called without the registry lock
     void release(ExceptionSink* xsink) {
+        // the options' references to Programs are released here, not when the object is overwritten or destroyed
+        // with the registry lock held (qore#6208)
+        po = QoreThreadRuntimeParseOptions();
         code->deref(xsink);
         pgm->depDeref();
     }
@@ -6248,6 +6357,9 @@ void qore_run_exit_hook(QoreExitHook& hook) {
     {
         // the hook runs in its Program, without the policy of a sandboxed caller that deletes a Program; a Program
         // that is being deleted meanwhile refuses it with an exception
+        // the hook runs with the options of the code that registered it (qore#6208), installed before the Program
+        // is entered, whose thread entry handler and initialization run then
+        QoreThreadRuntimeParseOptionsHelper po_helper(&hook.po);
         ProgramThreadCountContextHelper tch(&xsink, hook.pgm, true);
         if (!xsink) {
             QoreSandboxPolicyBarrierHelper barrier;
@@ -6287,7 +6399,7 @@ int64 qore_register_exit_hook(const ResolvedCallReferenceNode* code, ExceptionSi
     int64 id = ++exit_hook_seq;
     // taking the references cannot fail, and releasing them takes no lock
     pgm->depRef();
-    exit_hooks.push_back({id, pgm, code->refRefSelf()});
+    exit_hooks.push_back({id, pgm, code->refRefSelf(), QoreThreadRuntimeParseOptions::capture()});
     return id;
 }
 

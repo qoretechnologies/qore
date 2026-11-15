@@ -42,6 +42,7 @@ class RuntimeConfig;
 #include <utility>
 #include <set>
 #include <map>
+#include <optional>
 #include <memory>
 #include <new>
 
@@ -960,7 +961,8 @@ static inline bool qore_compiled_code_strict_args() {
     override for its lifetime, which makes load-time resolution what parse-time resolution is for the same source.
     It must only be used around the loading of AOT-compiled code (deserialization, slot-map context construction and
     module initialization, including the constant initializers of compiled modules and scripts, eager or run when a
-    constant is first read: qore#6189), never around the evaluation of code on behalf of a caller: a variant resolved
+    constant is first read: qore#6189, and those of source code, evaluated when the declaring code is committed or
+    when a constant is first read: qore#6205), never around the evaluation of code on behalf of a caller: a variant resolved
     when code is evaluated is checked against the options in effect for that evaluation, including the restrictions
     of the Program it runs in.
 */
@@ -1065,7 +1067,7 @@ private:
     const QoreProgram* old_from_pgm;
 };
 
-//! the runtime parse options override of a call; see qore_get_user_call_runtime_po_override()
+//! the runtime parse options override of a call; see qore_set_user_call_runtime_po_override()
 struct QoreCallParseOptionsOverride {
     //! the options that the override covers
     QoreParseOptions mask;
@@ -1170,6 +1172,97 @@ private:
     const QoreProgram* old_override_pgm;
 
     DLLLOCAL void restore();
+};
+
+//! The run-time parse options in effect on a thread: its options and the override that they were computed with
+/** Taken in the thread that starts a new thread for code (the \c background operator, q_start_thread()), so that the
+    new thread runs with the options of the code that started it, including the restrictions that apply to that code
+    (qore#6208)
+*/
+struct QoreThreadRuntimeParseOptions {
+    //! the run-time parse options, with the override applied
+    QoreParseOptions po;
+    //! the override that \a po was computed with (its \c td is always nullptr)
+    /** The Programs that it names (\c module_pgm, \c override_pgm) are compared by identity only; each copy holds a
+        dependency reference to them (QoreProgram::depRef()), so that their memory is not reused for another Program
+        while the options can be installed, which would make an unrelated Program match them
+    */
+    QoreCallParseOptionsOverride override;
+
+    DLLLOCAL QoreThreadRuntimeParseOptions() = default;
+
+    DLLLOCAL QoreThreadRuntimeParseOptions(const QoreThreadRuntimeParseOptions& old) : po(old.po),
+            override(old.override) {
+        refPrograms();
+    }
+
+    DLLLOCAL QoreThreadRuntimeParseOptions& operator=(const QoreThreadRuntimeParseOptions& other) {
+        if (this != &other) {
+            // the other's references are taken before this object's are released, as they can be the same Programs
+            QoreThreadRuntimeParseOptions copy(other);
+            std::swap(po, copy.po);
+            std::swap(override, copy.override);
+        }
+        return *this;
+    }
+
+    DLLLOCAL ~QoreThreadRuntimeParseOptions() {
+        derefPrograms();
+    }
+
+    //! returns the run-time parse options in effect on the current thread
+    DLLLOCAL static QoreThreadRuntimeParseOptions capture();
+
+    //! returns true if the options in effect on the current thread restrict nothing
+    /** That is, no override is in effect, and no option that grants or denies access is set (no functional domain
+        restriction, \c QDOM_ALL, and no positive option).  Code that runs with no options installed (a thread started
+        without inheriting options, such as a callback worker of the AsyncIoController) is granted and denied the same
+        access: the code that it runs sets the options of its own statements, and builtin code that it calls directly
+        through a call reference sees no restriction either, so options captured from such code need not be kept;
+        options without effect on access (the style options of \c %modern, for example) are then not applied to builtin
+        code called directly, as before the options were captured.  Checked without copying the options or taking
+        references to Programs.
+    */
+    DLLLOCAL static bool currentRestrictsNothing();
+
+    //! returns the run-time parse options in effect on the current thread for a thread that it starts
+    /** The thread inherits the restrictions of the code that starts it, but not the application that a call of
+        module code runs for (\c app_pgm_id), which is attribution, not a restriction: what the thread adds later
+        (timers, for example) belongs to the call that adds it, not to the caller of the code that started the
+        thread, which a long-lived worker thread of a module does not serve only (qore#6208)
+    */
+    DLLLOCAL static QoreThreadRuntimeParseOptions captureForThread();
+
+private:
+    DLLLOCAL void refPrograms();
+    DLLLOCAL void derefPrograms();
+};
+
+//! Installs the run-time parse options taken from the thread that started the current thread for its life
+/** The thread starts with none: without them, the code that it runs would not run with the options of the code that
+    started it, nor with the restrictions that apply to that code (qore#6208).  The options in effect before are
+    restored when the helper is destroyed or reset.
+*/
+class QoreThreadRuntimeParseOptionsHelper {
+public:
+    //! installs \a o on the current thread; nothing if \a o is nullptr
+    DLLLOCAL QoreThreadRuntimeParseOptionsHelper(const QoreThreadRuntimeParseOptions* o);
+
+    //! restores the options in effect before, if they have not been restored yet
+    DLLLOCAL ~QoreThreadRuntimeParseOptionsHelper() = default;
+
+    //! restores the options in effect before the helper was created; called before the thread's data is deleted
+    DLLLOCAL void reset() {
+        override_helper.reset();
+    }
+
+    DLLLOCAL QoreThreadRuntimeParseOptionsHelper(const QoreThreadRuntimeParseOptionsHelper&) = delete;
+    DLLLOCAL QoreThreadRuntimeParseOptionsHelper& operator=(const QoreThreadRuntimeParseOptionsHelper&) = delete;
+
+private:
+    //! sets the override and the options, and restores those in effect before (RuntimeParseOptionsOverrideHelper
+    //! restores the run-time parse options too)
+    std::optional<RuntimeParseOptionsOverrideHelper> override_helper;
 };
 
 DLLLOCAL RootQoreNamespace* getRootNS();
@@ -1625,7 +1718,7 @@ DLLLOCAL void parse_cond_mark_else();
 DLLLOCAL bool parse_cond_has_else();
 DLLLOCAL bool parse_cond_pop(const QoreProgramLocation* loc);
 DLLLOCAL bool parse_cond_test(const QoreProgramLocation* loc);
-DLLLOCAL void push_parse_options();
+DLLLOCAL void push_parse_options(const QoreProgramLocation* loc);
 DLLLOCAL void parse_try_module_inc();
 DLLLOCAL bool parse_try_module_dec(const QoreProgramLocation* loc);
 DLLLOCAL unsigned parse_try_module_get();

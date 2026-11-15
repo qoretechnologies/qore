@@ -1,0 +1,576 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - thread pools, signal handlers, thread entry handlers and exit hooks run in other threads
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class DeferredCallbackRuntimeParseOptionsTest
+
+#! Deferred callbacks run with the run-time parse options of the code that registered them (qore#6208)
+/** Code that a Program registers to run later, in another thread or when a thread enters the Program, ran with the
+    options of the thread that ran it: a call reference to builtin code, which sets no options of its own, ran without
+    the restriction of the code that registered it.  Each case runs in a process of its own, in every execution mode,
+    with a restriction (the builtin code is refused) and without one (it runs):
+    - a thread pool task and a thread pool cancel callback (debug builds, whose test hook keeps a task queued)
+    - the thread initialization code (set_thread_init()), entered by a thread pool worker and by another thread
+    - a thread entry handler (Program::setThreadEntryHandler()), set by restricted code and entered by another thread
+    - the completion callback of a poll operation, which the async I/O controller's callback worker calls in the
+      Program that created the operation
+    - a WebSocket poll operation's frame callback, a timer of the application, set_thread_resource() code and the
+      thread initialization code of a Program that restricted code created
+    - a signal handler (Linux: the order of pending signals is the lowest first)
+    - an exit hook that runs at the end of the process
+
+    A timer belongs to the application of the call that adds it; a thread that module code starts keeps the
+    caller's restrictions but serves no application: the timers that it adds belong to none, and it cannot cancel
+    the timers of an application.
+*/
+class DeferredCallbackRuntimeParseOptionsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        const Modes = ("ast", "ir", "tiered", "jit");
+
+        #! the code of the child Program; f is stdout, which a Program with no-terminal-io may not use
+        const ChildCode = "%modern
+nothing sub noop() {}
+
+class DeferredWsHolder {
+    public {
+        static auto hold;
+    }
+}
+
+nothing sub pool(File f, Queue q) {
+    # one worker runs the tasks in order: the second ends after the first
+    ThreadPool tp(1);
+    tp.submit(\\f.sync());
+    tp.submit(sub () { q.push(\"pool: done\"); });
+    tp.stopWait();
+}
+
+nothing sub cancel(File f, Queue q) {
+    ThreadPool tp(1);
+    # test hook of debug builds: the tasks stay queued, so that they are cancelled when the pool stops
+    qore_test_thread_pool_hold_dispatch(tp, True);
+    tp.submit(sub () {}, \\f.sync());
+    # the cancel callbacks run in order, each with a sink of its own: this one runs after the builtin one
+    tp.submit(sub () {}, sub () { q.push(\"cancel: done\"); });
+    tp.stop();
+}
+
+nothing sub thread_init(File f, Queue q) {
+    set_thread_init(\\f.sync());
+    ThreadPool tp(1);
+    # the worker enters the Program to run the task, which runs the initialization code first; when that fails,
+    # the task does not run
+    tp.submit(sub () {});
+    tp.stopWait();
+    q.push(\"thread_init: done\");
+}
+
+nothing sub set_init(File f) {
+    set_thread_init(\\f.sync());
+}
+
+Program sub entry_handler(File f) {
+    # the handler is created in the Program that runs it, so its call does not switch to another Program's options;
+    # this code, which has the restriction, sets it
+    Program sp();
+    sp.parse(\"code sub mk(File f) { return \\\\f.sync(); } nothing sub noop() {}\", \"sub\");
+    sp.setThreadEntryHandler(sp.callFunction(\"mk\", f));
+    return sp;
+}
+
+nothing sub signal(File f, Queue q) {
+    # the handler is called with the signal number, which File::lock() takes; it checks the restriction
+    set_signal_handler(SIGUSR1, \\f.lock());
+    set_signal_handler(SIGUSR2, sub (int sig) { q.push(\"signal: done\"); });
+}
+
+nothing sub app_timer(File f) {
+    # a timer callback is called with no arguments: File::lock() on the pipe of the standard output fails when it
+    # runs (FILE-LOCK-ERROR) and raises ILLEGAL-EXPRESSION with the restriction; either is logged
+    AsyncIoController::setMaxCallbackWorkers(1);
+    AsyncIoController::addTimerDelay(0s, \\f.lock());
+}
+
+nothing sub wsframe(File f) {
+    Socket listener();
+    listener.bindINET(\"127.0.0.1\", \"0\", True);
+    listener.listen();
+    Socket client();
+    client.connect(\"127.0.0.1:\" + listener.getSocketInfo().port);
+    Socket server = listener.accept();
+    HttpWebSocketPollOperationBase op(server);
+    # File::lock() fails on the pipe when it runs, and is refused with the restriction; either is logged
+    op.setFrameCallback(\\f.lock());
+    AsyncIoController::setMaxCallbackWorkers(1);
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": server, \"spop\": op, \"to\": -1s, \"owner\": \"deferred-test-ws\",
+    });
+    # a masked text frame \"hi\" from the client
+    client.send(binary(chr(0x81)) + binary(chr(0x82)) + binary(chr(0) + chr(0) + chr(0) + chr(0)) + binary(\"hi\"));
+    # the operation and its sockets stay until the callback has run (the case waits for the log)
+    DeferredWsHolder::hold = (op, server, client, listener);
+}
+
+Program sub child_thread_init(File f) {
+    # the code is created in the Program that runs it, which this code, with the restriction, sets it for
+    Program sp();
+    sp.parse(\"code sub mk(File f) { return \\\\f.sync(); } nothing sub noop() {}\", \"sub\");
+    sp.setThreadInit(sp.callFunction(\"mk\", f));
+    return sp;
+}
+
+nothing sub thread_resource(File f) {
+    set_thread_resource(\\f.sync(), NOTHING);
+}
+
+nothing sub exit_hook_end(File f) {
+    # runs at the end of the process, in the main thread
+    register_exit_hook(\\f.sync());
+}
+";
+
+        #! the poll operation case: code without strict arguments, as the completion callback, File::sync(), is
+        #! called with the result hash, which it ignores then; it runs in the AST interpreter, while the callback
+        #! itself is called by the async I/O controller's callback worker in the Program that created the operation
+        const DelegatingCode = "%new-style
+nothing sub delegating(File f, Queue q) {
+    Socket listener();
+    listener.bindINET(\"127.0.0.1\", \"0\", True);
+    listener.listen();
+    Socket client();
+    client.connect(\"127.0.0.1:\" + listener.getSocketInfo().port);
+    Socket server = listener.accept();
+    AsyncIoController::setMaxCallbackWorkers(1);
+    # the operation's counter is decremented by the callback worker just before it calls the completion callback
+    Counter c(1);
+    PollPipeline pipeline(client);
+    pipeline.addRecvExact(2, True);
+    DelegatingPollOperation op(pipeline, \\f.sync(), c);
+    hash<SocketPollOperationInfo> info = <SocketPollOperationInfo>{
+        \"sock\": client, \"spop\": op, \"to\": -1s, \"owner\": \"deferred-test\",
+    };
+    AsyncIoController::submit(info);
+    server.send(\"hi\");
+    c.waitForZero();
+    # the one callback worker is running the first completion: the second one, submitted now, runs after it
+    PollPipeline pipeline2(client);
+    pipeline2.addRecvExact(2, True);
+    DelegatingPollOperation op2(pipeline2, sub (hash h) { q.push(\"delegating: done\"); }, NOTHING);
+    info.spop = op2;
+    AsyncIoController::submit(info);
+    server.send(\"hi\");
+}
+";
+
+        #! runs one case: ARGV[0] the case, ARGV[1] \"restricted\" or not, ARGV[2] the execution mode
+        const CaseScript = "%modern
+%no-child-restrictions
+hash<string, auto> modes = {\"ast\": EM_AST, \"ir\": EM_IR, \"tiered\": EM_TIERED, \"jit\": EM_JIT};
+# the exceptions of the controller's callbacks are logged
+class DeferredTestLogger inherits LoggerInterfaceBase {
+    public {
+        static Queue logged();
+    }
+    logArgs(int level, string message, *softlist<auto> format_args) {
+        string m = vsprintf(message, format_args);
+        if (m =~ /exception/) {
+            stderr.printf(\"logged: %s\\n\", m);
+            # only the exceptions of the callbacks that the cases wait for
+            if (m =~ /ILLEGAL-EXPRESSION|FILE-LOCK-ERROR/) {
+                DeferredTestLogger::logged.push(\"logged: \" + m);
+            }
+        }
+    }
+    bool isEnabledFor(int level) {
+        return True;
+    }
+}
+AsyncIoController::setLogger(new DeferredTestLogger());
+Program p(ARGV[1] == \"restricted\" ? PO_NO_TERMINAL_IO : 0);
+p.setExecMode(modes{ARGV[2]});
+p.parse(ReadOnlyFile::readTextFile(ENV.DEFERRED_CHILD_CODE), \"child\");
+Queue q();
+# the Program of the poll operation case, which has to exist until its timer has run
+*Program dp;
+switch (ARGV[0]) {
+    case \"pool\":
+    case \"cancel\":
+    case \"thread_init\":
+        p.callFunction(ARGV[0], stdout, q);
+        break;
+    case \"thread_init_parent\":
+        p.callFunction(\"set_init\", stdout);
+        # this thread enters the Program for the first time: the initialization code runs then
+        background sub () {
+            try {
+                p.callFunction(\"noop\");
+            } catch (hash<ExceptionInfo> ex) {
+                stderr.printf(\"%s\\n\", ex.err);
+            }
+            q.push(\"thread_init_parent: done\");
+        }();
+        break;
+    case \"entry_handler\":
+        Program sp = p.callFunction(\"entry_handler\", stdout);
+        background sub () {
+            try {
+                sp.callFunction(\"noop\");
+            } catch (hash<ExceptionInfo> ex) {
+                stderr.printf(\"%s\\n\", ex.err);
+            }
+            q.push(\"entry_handler: done\");
+        }();
+        break;
+    case \"signal\":
+        p.callFunction(\"signal\", stdout, q);
+        system(\"kill -USR1 \" + getpid());
+        system(\"kill -USR2 \" + getpid());
+        break;
+    case \"delegating\":
+        dp = new Program(ARGV[1] == \"restricted\" ? PO_NO_TERMINAL_IO : 0);
+        dp.parse(ReadOnlyFile::readTextFile(ENV.DEFERRED_DELEGATING_CODE), \"delegating\");
+        dp.callFunction(\"delegating\", stdout, q);
+        break;
+    case \"app_timer\":
+    case \"wsframe\":
+        p.callFunction(ARGV[0], stdout);
+        stderr.printf(\"%s\\n\", DeferredTestLogger::logged.get(30000));
+        q.push(ARGV[0] + \": done\");
+        break;
+    case \"child_thread_init\":
+        Program sp = p.callFunction(\"child_thread_init\", stdout);
+        background sub () {
+            try {
+                sp.callFunction(\"noop\");
+            } catch (hash<ExceptionInfo> ex) {
+                stderr.printf(\"%s\\n\", ex.err);
+            }
+            q.push(\"child_thread_init: done\");
+        }();
+        break;
+    case \"thread_resource\":
+        p.callFunction(\"thread_resource\", stdout);
+        try {
+            throw_thread_resource_exceptions();
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf(\"%s\\n\", ex.err);
+        }
+        q.push(\"thread_resource: done\");
+        break;
+    case \"exit_hook_end\":
+        p.callFunction(\"exit_hook_end\", stdout);
+        q.push(\"exit_hook_end: done\");
+        break;
+}
+printf(\"%s\\n\", q.get(30000));
+";
+
+        #! a module whose worker thread, started for one caller, adds and cancels timers for others
+        const ModuleSource = "%modern
+module DeferredAppMod {
+    version = \"1.0\";
+    desc = \"qore#6208: the application of timers and of a module's worker thread\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+class DeferredWsModHolder {
+    public {
+        static list<auto> hold;
+    }
+}
+
+class DeferredAppWorker {
+    public {
+        static Queue requests();
+        static Queue replies();
+    }
+
+    static run() {
+        while (True) {
+            auto r = DeferredAppWorker::requests.get();
+            if (r == \"stop\") {
+                return;
+            }
+            # the worker's own code adds and cancels the timers, for no caller of its own
+            if (r == \"add\") {
+                DeferredAppWorker::replies.push(AsyncIoController::addTimerDelay(1h, sub () {}));
+            } else {
+                DeferredAppWorker::replies.push(AsyncIoController::cancelTimer(r));
+            }
+        }
+    }
+}
+
+public namespace DeferredAppMod {
+    public nothing sub start_worker() {
+        background DeferredAppWorker::run();
+    }
+    #! adds a timer in the call: it belongs to the caller's application
+    public int sub add_timer() {
+        return AsyncIoController::addTimerDelay(1h, sub () {});
+    }
+    #! has the worker add a timer: it belongs to no application
+    public int sub worker_add_timer() {
+        DeferredAppWorker::requests.push(\"add\");
+        return DeferredAppWorker::replies.get();
+    }
+    public bool sub cancel(int id) {
+        return AsyncIoController::cancelTimer(id);
+    }
+    #! adds a timer whose callback is a call reference to builtin code made by module code; File::lock() on the pipe
+    #! of the standard output fails when it runs, and is refused with the restriction of the module code's caller
+    public nothing sub lock_timer(File f) {
+        AsyncIoController::setMaxCallbackWorkers(1);
+        AsyncIoController::addTimerDelay(0s, \\f.lock());
+    }
+    #! sets the frame callback of a WebSocket operation to a call reference to builtin code made by module code;
+    #! File::lock() on the pipe of the standard output fails when it runs, and is refused with the restriction of the
+    #! module code's caller
+    public nothing sub lock_ws(File f) {
+        Socket listener();
+        listener.bindINET(\"127.0.0.1\", \"0\", True);
+        listener.listen();
+        Socket client();
+        client.connect(\"127.0.0.1:\" + listener.getSocketInfo().port);
+        Socket server = listener.accept();
+        HttpWebSocketPollOperationBase op(server);
+        op.setFrameCallback(\\f.lock());
+        AsyncIoController::setMaxCallbackWorkers(1);
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            \"sock\": server, \"spop\": op, \"to\": -1s, \"owner\": \"deferred-test-modws\",
+        });
+        # a masked text frame \"hi\" from the client
+        client.send(binary(chr(0x81)) + binary(chr(0x82)) + binary(chr(0) + chr(0) + chr(0) + chr(0))
+            + binary(\"hi\"));
+        # the operation and its sockets stay until the callback has run (the script waits for the log)
+        DeferredWsModHolder::hold = (op, server, client, listener);
+    }
+    #! has the worker cancel a timer
+    public bool sub worker_cancel(int id) {
+        DeferredAppWorker::requests.push(id);
+        return DeferredAppWorker::replies.get();
+    }
+    public nothing sub stop() {
+        DeferredAppWorker::requests.push(\"stop\");
+    }
+}
+";
+
+        #! a sandboxed caller (ARGV[0] \"sandboxed\") or one without a sandbox has module code add a timer whose callback
+        #! is builtin code; the controller logs its exception
+        const ModuleTimerScript = "%modern
+%no-child-restrictions
+%requires DeferredAppMod
+class L inherits LoggerInterfaceBase {
+    public {
+        static Queue logged();
+    }
+    logArgs(int level, string message, *softlist<auto> format_args) {
+        string m = vsprintf(message, format_args);
+        # only the exceptions of the timer's callback
+        if (m =~ /exception/ && m =~ /ILLEGAL-EXPRESSION|FILE-LOCK-ERROR/) {
+            L::logged.push(m);
+        }
+    }
+    bool isEnabledFor(int level) {
+        return True;
+    }
+}
+AsyncIoController::setLogger(new L());
+Program a(PO_NO_TERMINAL_IO);
+if (ARGV[0] == \"sandboxed\") {
+    a.setSandboxManager(new SandboxManager());
+}
+a.parse(\"%modern\\n%requires DeferredAppMod\\nnothing sub run(File f) { DeferredAppMod::lock_timer(f); }\\n\", \"a\");
+a.callFunction(\"run\", stdout);
+printf(\"%s\\n\", L::logged.get(30000));
+";
+
+        #! module code sets a WebSocket frame callback for a sandboxed caller or for one without a sandbox
+        const ModuleWsScript = "%modern
+%no-child-restrictions
+%requires DeferredAppMod
+class L inherits LoggerInterfaceBase {
+    public {
+        static Queue logged();
+    }
+    logArgs(int level, string message, *softlist<auto> format_args) {
+        string m = vsprintf(message, format_args);
+        # only the exceptions of the frame callback
+        if (m =~ /exception/ && m =~ /ILLEGAL-EXPRESSION|FILE-LOCK-ERROR/) {
+            L::logged.push(m);
+        }
+    }
+    bool isEnabledFor(int level) {
+        return True;
+    }
+}
+AsyncIoController::setLogger(new L());
+Program a(PO_NO_TERMINAL_IO);
+if (ARGV[0] == \"sandboxed\") {
+    # the module code opens a loopback connection: the sandbox allows the network, the restriction is the caller's
+    # PO_NO_TERMINAL_IO
+    SandboxManager sm();
+    sm.setNetworkDefaultPolicy(True);
+    a.setSandboxManager(sm);
+}
+a.parse(\"%modern\\n%requires DeferredAppMod\\nnothing sub run(File f) { DeferredAppMod::lock_ws(f); }\\n\", \"a\");
+a.callFunction(\"run\", stdout);
+printf(\"%s\\n\", L::logged.get(30000));
+";
+
+        #! application A starts the worker; B adds a timer in its call and one through the worker
+        const AppScript = "%modern
+%no-child-restrictions
+%requires DeferredAppMod
+# module code runs for an application when its caller is sandboxed
+Program a(PO_NO_TERMINAL_IO);
+a.setSandboxManager(new SandboxManager());
+a.parse(\"%modern\\n%requires DeferredAppMod\\nnothing sub start() { DeferredAppMod::start_worker(); }\\n\"
+    \"bool sub cancel(int id) { return DeferredAppMod::cancel(id); }\\n\"
+    \"bool sub worker_cancel(int id) { return DeferredAppMod::worker_cancel(id); }\\n\", \"a\");
+Program b(PO_NO_TERMINAL_IO);
+b.setSandboxManager(new SandboxManager());
+b.parse(\"%modern\\n%requires DeferredAppMod\\nint sub add() { return DeferredAppMod::add_timer(); }\\n\"
+    \"int sub worker_add() { return DeferredAppMod::worker_add_timer(); }\\n\"
+    \"bool sub cancel(int id) { return DeferredAppMod::cancel(id); }\\n\", \"b\");
+a.callFunction(\"start\");
+int b1 = b.callFunction(\"add\");
+int b2 = b.callFunction(\"add\");
+int w = b.callFunction(\"worker_add\");
+printf(\"a cancels b's: %y\\n\", a.callFunction(\"cancel\", b1));
+printf(\"a has the worker cancel b's: %y\\n\", a.callFunction(\"worker_cancel\", b1));
+printf(\"b cancels its own: %y\\n\", b.callFunction(\"cancel\", b1));
+printf(\"b cancels the worker's: %y\\n\", b.callFunction(\"cancel\", w));
+printf(\"a cancels the worker's: %y\\n\", a.callFunction(\"cancel\", w));
+int w2 = b.callFunction(\"worker_add\");
+printf(\"the worker cancels the worker's: %y\\n\", DeferredAppMod::worker_cancel(w2));
+printf(\"host cancels the worker's: %y\\n\", DeferredAppMod::cancel(w));
+printf(\"host cancels b's: %y\\n\", DeferredAppMod::cancel(b2));
+DeferredAppMod::stop();
+";
+    }
+
+    constructor() : QUnit::Test("DeferredCallbackRuntimeParseOptionsTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("deferred callbacks with and without a restriction", \callbackTest());
+        addTestCase("the timers of a module's worker thread", \appTest());
+        addTestCase("a timer that module code adds for a sandboxed caller", \moduleTimerTest());
+        addTestCase("a WebSocket frame callback that module code sets for a sandboxed caller", \moduleWsTest());
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_IR_THRESHOLD=1 "
+            "QORE_JIT_THRESHOLD=1", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    callbackTest() {
+        TmpDir tmp("qore-deferred-po-");
+        string code = tmp.path + "/child.q";
+        string delegating = tmp.path + "/delegating.q";
+        string script = tmp.path + "/case.q";
+        write(code, ChildCode);
+        write(delegating, DelegatingCode);
+        write(script, CaseScript);
+        list<string> cases = ("pool", "thread_init", "thread_init_parent", "entry_handler", "child_thread_init",
+            "delegating", "wsframe", "app_timer", "thread_resource", "exit_hook_end");
+        # the cancel callbacks of thread pool tasks run when the pool stops; a test hook of debug builds keeps the
+        # tasks queued until then
+        {
+            ThreadPool tp(1);
+            on_exit tp.stop();
+            if (qore_test_thread_pool_hold_dispatch(tp, False)) {
+                cases += "cancel";
+            }
+        }
+        if (PlatformOS == "Linux") {
+            cases += "signal";
+        }
+        foreach string mode in (Modes) {
+            foreach string case_name in (cases) {
+                string label = sprintf("%s, mode %s", case_name, mode);
+                # signal handling is enabled: no -b
+                string cmd = sprintf("%s DEFERRED_CHILD_CODE=%s DEFERRED_DELEGATING_CODE=%s %s %s %s %%s %s 2>&1", env(),
+                    code, delegating, qore_bin, script, case_name, mode);
+                string out = backquote(sprintf(cmd, "restricted"));
+                assertRegex("ILLEGAL-EXPRESSION", out, label + ", restricted: " + out);
+                assertRegex(case_name + ": done\n", out, label + ", restricted, the case completed: " + out);
+                out = backquote(sprintf(cmd, "open"));
+                assertFalse(out =~ /ILLEGAL-EXPRESSION/, label + ", without a restriction: " + out);
+                assertRegex(case_name + ": done\n", out, label + ", without a restriction, the case completed: "
+                    + out);
+            }
+        }
+    }
+
+    moduleTimerTest() {
+        TmpDir mods("qore-deferred-po-mods-");
+        write(mods.path + "/DeferredAppMod.qm", ModuleSource);
+        TmpDir tmp("qore-deferred-po-modtimer-");
+        string script = tmp.path + "/modtimer.q";
+        write(script, ModuleTimerScript);
+        string cmd = sprintf("%s QORE_MODULE_DIR=%s %s -b %s %%s 2>&1", env(), mods.path, qore_bin, script);
+        # the module code runs with the restriction of its sandboxed caller, and so does the timer it adds
+        assertRegex("ILLEGAL-EXPRESSION", backquote(sprintf(cmd, "sandboxed")), "sandboxed caller");
+        # without a sandbox, module code runs with its own options: the call runs and fails on the pipe
+        string out = backquote(sprintf(cmd, "open"));
+        assertRegex("FILE-LOCK-ERROR", out, "caller without a sandbox");
+        assertFalse(out =~ /ILLEGAL-EXPRESSION/, "caller without a sandbox: " + out);
+    }
+
+    moduleWsTest() {
+        TmpDir mods("qore-deferred-po-mods-");
+        write(mods.path + "/DeferredAppMod.qm", ModuleSource);
+        TmpDir tmp("qore-deferred-po-modws-");
+        string script = tmp.path + "/modws.q";
+        write(script, ModuleWsScript);
+        string cmd = sprintf("%s QORE_MODULE_DIR=%s %s -b %s %%s 2>&1", env(), mods.path, qore_bin, script);
+        # the module code runs with the restriction of its sandboxed caller, and so does the frame callback it sets,
+        # which the I/O worker runs in no Program of the caller's
+        assertRegex("ILLEGAL-EXPRESSION", backquote(sprintf(cmd, "sandboxed")), "sandboxed caller");
+        # without a sandbox, module code runs with its own options: the call runs and fails on the pipe
+        string out = backquote(sprintf(cmd, "open"));
+        assertRegex("FILE-LOCK-ERROR", out, "caller without a sandbox");
+        assertFalse(out =~ /ILLEGAL-EXPRESSION/, "caller without a sandbox: " + out);
+    }
+
+    appTest() {
+        TmpDir mods("qore-deferred-po-mods-");
+        write(mods.path + "/DeferredAppMod.qm", ModuleSource);
+        TmpDir tmp("qore-deferred-po-app-");
+        string script = tmp.path + "/app.q";
+        write(script, AppScript);
+        assertEq("a cancels b's: False\n"
+            "a has the worker cancel b's: False\n"
+            "b cancels its own: True\n"
+            "b cancels the worker's: False\n"
+            "a cancels the worker's: False\n"
+            "the worker cancels the worker's: True\n"
+            "host cancels the worker's: True\n"
+            "host cancels b's: True\n", backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b %s 2>&1", env(), mods.path,
+            qore_bin, script)));
+    }
+}

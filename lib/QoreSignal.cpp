@@ -643,6 +643,8 @@ void QoreSignalManager::signal_handler_thread() {
                 // which releases the references the handler holds
                 ReferenceHolder<QoreProgram> pgm(handlers[sig].refProgram(), &xsink);
                 ReferenceHolder<ResolvedCallReferenceNode> callback(handlers[sig].refCallback(), &xsink);
+                // the options of the code that set the handler, copied in the lock as the handler can be replaced
+                QoreThreadRuntimeParseOptions handler_po = handlers[sig].po;
 
                 // unlock to run handler code
                 sl.unlock();
@@ -650,6 +652,9 @@ void QoreSignalManager::signal_handler_thread() {
                 {
                     // the handler's thread-local data in the Program's family is created when the handler first
                     // saves data
+                    // the handler runs with the options of the code that set it (qore#6208), installed before the
+                    // Program is entered, whose thread entry handler and initialization run then
+                    QoreThreadRuntimeParseOptionsHelper po_helper(&handler_po);
                     ProgramThreadCountContextHelper tch(&xsink, *pgm, true);
                     if (!xsink) {
                         QoreSignalHandler::runHandler(**callback, sig, &xsink);
@@ -666,9 +671,9 @@ void QoreSignalManager::signal_handler_thread() {
                         dbg_hold_armed = false;
                         dbg_held = true;
                         cond.broadcast();
-                        int64 deadline = q_clock_getmillis() + 30000;
+                        int64 deadline = q_get_monotonic_us() / 1000 + 30000;
                         while (!idle_waiting) {
-                            int64 left = deadline - q_clock_getmillis();
+                            int64 left = deadline - q_get_monotonic_us() / 1000;
                             if (left <= 0) {
                                 break;
                             }
@@ -953,9 +958,9 @@ void QoreSignalManager::dbgHoldAfterCallback() {
 
 bool QoreSignalManager::dbgWaitHeldAfterCallback(int timeout_ms) {
     AutoLocker al(&mutex);
-    int64 deadline = q_clock_getmillis() + timeout_ms;
+    int64 deadline = q_get_monotonic_us() / 1000 + timeout_ms;
     while (!dbg_held) {
-        int64 left = deadline - q_clock_getmillis();
+        int64 left = deadline - q_get_monotonic_us() / 1000;
         if (left <= 0) {
             return false;
         }
