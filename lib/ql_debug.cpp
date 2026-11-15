@@ -10739,9 +10739,10 @@ static void ut_datasource_pending_params_locked(UnitTestCounters& c) {
         UT_ASSERT(c, ut_ds_str(ds.getPendingDBName()) == "x3-db2", "X3: the new database name is pending");
         UT_ASSERT_EQ(c, 4321, ds.getPendingPort(), "X3: the new port is pending");
 
-        // the source and the target are each read or written in a section of their own, never together
+        // the source and the target are each read or written in a section of their own, never together: the source,
+        // the creators of the target (which are merged with those of the source outside the lock), and the target
         Datasource target(drv);
-        ut_ds_pending_sections(c, 2, "X3: setPendingConnectionValues()", [&]() {
+        ut_ds_pending_sections(c, 3, "X3: setPendingConnectionValues()", [&]() {
             qore_ds_private::get(target)->setPendingConnectionValues(qore_ds_private::get(ds));
         });
         UT_ASSERT(c, ut_ds_str(target.getPendingDBName()) == "x3-db2", "X3: the target has the database name");

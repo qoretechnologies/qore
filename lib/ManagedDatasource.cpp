@@ -612,18 +612,27 @@ int ManagedDatasource::reset(ExceptionSink *xsink) {
 }
 
 void ManagedDatasource::setPendingUsername(const char *u) {
-   DsLocker al(*this);
-   Datasource::setPendingUsername(u);
+    // the calling code is the setter of the value (qore#6142), recorded before the lock is taken; the
+    // previous setter is released after the lock
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    DsLocker al(*this);
+    qore_ds_private::get(*this)->setPendingParam(QDCP_USER, u, setter);
 }
 
 void ManagedDatasource::setPendingPassword(const char *p) {
-   DsLocker al(*this);
-   Datasource::setPendingPassword(p);
+    // the calling code is the setter of the value (qore#6142), recorded before the lock is taken; the
+    // previous setter is released after the lock
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    DsLocker al(*this);
+    qore_ds_private::get(*this)->setPendingParam(QDCP_PASS, p, setter);
 }
 
 void ManagedDatasource::setPendingDBName(const char *d) {
-   DsLocker al(*this);
-   Datasource::setPendingDBName(d);
+    // the calling code is the setter of the value (qore#6142), recorded before the lock is taken; the
+    // previous setter is released after the lock
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    DsLocker al(*this);
+    qore_ds_private::get(*this)->setPendingParam(QDCP_DB, d, setter);
 }
 
 void ManagedDatasource::setPendingDBEncoding(const char *c) {
@@ -632,13 +641,19 @@ void ManagedDatasource::setPendingDBEncoding(const char *c) {
 }
 
 void ManagedDatasource::setPendingHostName(const char *h) {
-   DsLocker al(*this);
-   Datasource::setPendingHostName(h);
+    // the calling code is the setter of the value (qore#6142), recorded before the lock is taken; the
+    // previous setter is released after the lock
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    DsLocker al(*this);
+    qore_ds_private::get(*this)->setPendingParam(QDCP_HOST, h, setter);
 }
 
 void ManagedDatasource::setPendingPort(int port) {
-   DsLocker al(*this);
-   Datasource::setPendingPort(port);
+    // the calling code is the setter of the value (qore#6142), recorded before the lock is taken; the previous setter
+    // is released after the lock
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    DsLocker al(*this);
+    qore_ds_private::get(*this)->setPendingPort(port, setter);
 }
 
 QoreStringNode *ManagedDatasource::getPendingUsername() const {

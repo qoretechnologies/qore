@@ -54,28 +54,61 @@ DatasourceConfig::DatasourceConfig(DBIDriver* n_driver, const char* n_user, cons
         // the code that creates the pool configures the options of all of its connections (qore#5741); created
         // before the reference to the options is taken, as it can fail
         opt_setter(qore_ds_option_setter::getCaller()),
+        // the code that creates the pool is its creator, and the creator of each of its connections (qore#6142)
+        creators(qore_ds_make_creators(opt_setter)),
         opts(n_opts ? n_opts->hashRefSelf() : nullptr), q(n_q), arg(n_arg) {
+}
+
+DatasourceConfig::DatasourceConfig(const DatasourceConfig& old,
+        const std::shared_ptr<const qore_ds_option_setter>& copier) :
+        driver(old.driver), user(old.user), pass(old.pass), db(old.db), encoding(old.encoding), host(old.host),
+        port(old.port), opt_setter(old.opt_setter),
+        // the code that copies the pool and the creators of the original (qore#6142); created before the references
+        // are taken, as it can fail
+        creators(qore_ds_merge_creators(copier, old.creators)),
+        opts(old.opts ? old.opts->hashRefSelf() : nullptr),
+        q(old.q ? old.q->queueRefSelf() : nullptr), arg(old.arg.refSelf()),
+        mctx(old.mctx ? old.mctx->refSelf() : nullptr) {
 }
 
 // the first connection (opened in the DatasourcePool constructor) is passed with an xsink obj
 // because invalid options can cause an exception to be thrown
 Datasource* DatasourceConfig::get(DatasourceStatementHelper* dsh, ExceptionSink* xsink) const {
-    // owned here until it is returned, so that it is freed if its configuration cannot be stored
-    std::unique_ptr<Datasource> ds(new Datasource(driver, dsh));
+    assert(opt_setter);
+    assert(creators);
+    // owned here until it is returned, so that it is freed if its configuration cannot be stored; created with the
+    // record of the pool, so that the connection never records the code that grows the pool, which can be any code
+    // that uses it (qore#6142)
+    std::unique_ptr<Datasource> ds(new Datasource(driver, dsh, qore_ds_pool_record{creators, opt_setter}));
+    qore_ds_private* dspriv = qore_ds_private::get(*ds.get());
 
-    if (!user.empty())
-        ds->setPendingUsername(user.c_str());
-    if (!pass.empty())
-        ds->setPendingPassword(pass.c_str());
-    if (!db.empty())
-        ds->setPendingDBName(db.c_str());
-    if (!encoding.empty())
-        ds->setPendingDBEncoding(encoding.c_str());
-    if (!host.empty())
-        ds->setPendingHostName(host.c_str());
-
-    if (port)
-        ds->setPendingPort(port);
+    // the values are set by the code that created the pool, not by the code running on this thread (qore#6142)
+    {
+        std::shared_ptr<const qore_ds_option_setter> setter;
+        if (!user.empty()) {
+            setter = opt_setter;
+            dspriv->setPendingParam(QDCP_USER, user.c_str(), setter);
+        }
+        if (!pass.empty()) {
+            setter = opt_setter;
+            dspriv->setPendingParam(QDCP_PASS, pass.c_str(), setter);
+        }
+        if (!db.empty()) {
+            setter = opt_setter;
+            dspriv->setPendingParam(QDCP_DB, db.c_str(), setter);
+        }
+        if (!encoding.empty()) {
+            dspriv->setPendingString(&qore_ds_pending_params::Values::db_encoding, encoding.c_str());
+        }
+        if (!host.empty()) {
+            setter = opt_setter;
+            dspriv->setPendingParam(QDCP_HOST, host.c_str(), setter);
+        }
+        if (port) {
+            setter = opt_setter;
+            dspriv->setPendingPort(port, setter);
+        }
+    }
 
     if (q) {
         q->ref();
@@ -91,8 +124,6 @@ Datasource* DatasourceConfig::get(DatasourceStatementHelper* dsh, ExceptionSink*
 
     // set options; they are recorded as set by the code that created the pool, not by the code running on this
     // thread, which can be any code that uses the pool (qore#5741)
-    assert(opt_setter);
-    qore_ds_private* dspriv = qore_ds_private::get(*ds.get());
     ConstHashIterator hi(opts);
     while (hi.next()) {
         // skip "min" and "max" options
@@ -143,13 +174,20 @@ DatasourcePool::DatasourcePool(ExceptionSink* xsink, DBIDriver* ndsl, const char
     forkRegister();
 }
 
+// the code that copies the pool is recorded in a step of its own, before the lock of the original is taken (qore#6142)
 DatasourcePool::DatasourcePool(const DatasourcePool& old, ExceptionSink* xsink) :
-    DatasourcePool(old, CopyLock(old), xsink) {
+    DatasourcePool(old, qore_ds_option_setter::getCaller(), xsink) {
+}
+
+DatasourcePool::DatasourcePool(const DatasourcePool& old, const std::shared_ptr<const qore_ds_option_setter>& copier,
+        ExceptionSink* xsink) :
+    DatasourcePool(old, copier, CopyLock(old), xsink) {
 }
 
 // the configuration, the timeouts and the warning callback of the pool that is copied are changed with its lock held,
 // so they are copied with it held as well
-DatasourcePool::DatasourcePool(const DatasourcePool& old, CopyLock&& lock, ExceptionSink* xsink) :
+DatasourcePool::DatasourcePool(const DatasourcePool& old, const std::shared_ptr<const qore_ds_option_setter>& copier,
+        CopyLock&& lock, ExceptionSink* xsink) :
     pool(new Datasource*[old.max]()),
     tid_list(new int[old.max]()),
     min(old.min),
@@ -162,7 +200,7 @@ DatasourcePool::DatasourcePool(const DatasourcePool& old, CopyLock&& lock, Excep
     stats_reqs(0),
     stats_hits(0),
     warning_callback(nullptr),
-    config(old.config),
+    config(old.config, copier),
     valid(false) {
     // the references are taken once the members that can fail are created, so that they cannot leak
     warning_callback = old.warning_callback ? old.warning_callback->refRefSelf() : nullptr;

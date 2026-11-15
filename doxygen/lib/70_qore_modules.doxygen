@@ -275,10 +275,56 @@ static int my_set_option(Datasource* ds, const char* opt, const QoreValue val, E
     setters that the driver reads are those of the stored values that the connection is given.  A driver must not
     call \c Datasource::setOption() from its own open or option-setting functions.
 
+    @par The Code That Chose a Connection
+
+    A driver that must not connect to a destination that sandboxed code chose judges a connection by the code that
+    chose it, not by the code that is running when it connects (qore#6142): \c Datasource::getConnectChoosers() fills
+    a \c QoreDatasourceConnectChoosers object with the creators of the datasource and the setters of the connection
+    values in use, and \c Datasource::addOptionChooser() adds the setter of each option that the driver uses to choose
+    the destination (the %Qore library does not know which options of a driver do that).  The connection is
+    restricted if any entry does not allow uncontrolled APIs; read each entry's result once, and derive the aggregate
+    from those results, as a host can change a policy at any time.  A restricted connection is checked against the
+    policy managers of the entries that restrict it; a restricted entry without a policy manager is never a
+    permission.  Call them as \c Datasource::getConnectOptions() is called: from the open function, or while the
+    thread holds the connection (also for the driver's own reconnect):
+
+    @code{.cpp}
+static int my_check_connect(Datasource* ds, ExceptionSink* xsink) {
+#ifdef _QORE_HAS_DATASOURCE_CONNECT_CHOOSERS
+    QoreDatasourceConnectChoosers c;
+    if (ds->getConnectChoosers(c, xsink)) {
+        return -1;
+    }
+    // the options that choose the destination
+    ConstHashIterator hi(ds->getConnectOptions());
+    while (hi.next()) {
+        if (!strcasecmp(hi.getKey(), "url") && ds->addOptionChooser(hi.getKey(), c, xsink) < 0) {
+            return -1;
+        }
+    }
+    for (size_t i = 0; i < c.size(); ++i) {
+        if (c.allowsUncontrolledApis(i)) {
+            continue;
+        }
+        // restricted: check the destination against this entry's policy
+        ReferenceHolder<QoreSandboxManager> policy(c.getPolicyManagerRef(i), xsink);
+        if (!policy) {
+            xsink->raiseException("MY-CONNECT-ERROR", "the sandbox policy of the code that chose the connection "
+                "cannot be determined");
+            return -1;
+        }
+        ...
+    }
+#endif
+    return 0;
+}
+    @endcode
+
     A driver must not call \c Datasource::getPendingUsername(), \c Datasource::getPendingPassword(),
     \c Datasource::getPendingDBName(), \c Datasource::getPendingDBEncoding(), \c Datasource::getPendingHostName(),
-    \c Datasource::getPendingPort(), \c Datasource::getConfigHash() or \c Datasource::getConfigString() from its
-    statement close or free functions (\c QDBI_METHOD_STMT_CLOSE, \c QDBI_METHOD_STMT_FREE): the pending connection
+    \c Datasource::getPendingPort(), \c Datasource::getConfigHash(), \c Datasource::getConfigString(),
+    \c Datasource::getConnectChoosers() or \c Datasource::addOptionChooser() from its statement close or free
+    functions (\c QDBI_METHOD_STMT_CLOSE, \c QDBI_METHOD_STMT_FREE): the pending connection
     values are guarded by an internal lock of the datasource that is held while those functions are called, and the
     lock is not recursive (<a href="https://github.com/qoretechnologies/qore/issues/6142">issue 6142</a>).  A debug
     build of the %Qore library asserts this.

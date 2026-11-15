@@ -1059,6 +1059,17 @@
     whoever configures a datasource decides what its options may do; see @ref sandbox_datasource_options
     (<a href="https://github.com/qoretechnologies/qore/issues/5741">issue 5741</a>).
 
+    @par C++ API: DBI Drivers Judge a Connection by the Code That Chose It
+    A datasource records its creators and the code that set each of its connection values, which a driver reads with
+    the new \c Datasource::getConnectChoosers() and \c Datasource::addOptionChooser() and the new
+    \c QoreDatasourceConnectChoosers class, so that it judges a connection by the code that chose it, never by the code
+    that opens it: a trusted pool that grows for sandboxed code is not restricted, and a datasource that sandboxed code
+    created, copied or configured is restricted also when trusted code opens it.  This is a behaviour change for the
+    drivers that use it: sandboxed code that opens a trusted datasource that it did not change is no longer
+    restricted by them; see @ref sandbox_datasource_connect_choosers
+    (<a href="https://github.com/qoretechnologies/qore/issues/6142">issue 6142</a>).  The addition is additive within
+    module API 2.3.
+
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
     @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check
