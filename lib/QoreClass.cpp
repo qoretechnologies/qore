@@ -43,8 +43,6 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreForkHandlers.h"
-#include "qore/intern/CallReferenceNode.h"
-#include "qore/intern/QoreClosureNode.h"
 
 #include <algorithm>
 #include <atomic>
@@ -5187,12 +5185,6 @@ QoreValue qore_class_private::evalMemberGate(QoreObject* self, const char* nme, 
     return self->evalMethod(*memberGate, *args, xsink);
 }
 
-// the calls of a method that is not defined (see below)
-template <bool Lexical, bool Given = false>
-static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_private& qcp,
-        LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args,
-        const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink);
-
 QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* nme, QoreListNode* args,
         const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink, QoreProgram* pgm_ctx) const {
     assert(self);
@@ -5209,7 +5201,10 @@ QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* 
         // parameters take over (issue #5958); a call through a call reference of another Program (pgm_ctx) is made
         // as evalMethod() makes it
         if (!pgm_ctx) {
-            return qore_eval_missing_method<false, true>(*this, {}, self, nme, args, class_ctx, rc, xsink);
+            QoreValue rv;
+            if (qore_class_eval_member_code_given_args(*this, self, nme, args, class_ctx, xsink, rv)) {
+                return rv;
+            }
         }
     }
     // anything else is called as evalMethod() calls it
@@ -5218,9 +5213,7 @@ QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* 
 
 // Member-call references, pseudo-methods and methodGate are only considered after method lookup fails.
 // Their ownership/locking locals must not reserve stack space on the ordinary method-call path.
-// With Given, args is a temporary argument list that the caller owns, whose values the parameters of a closure or of a
-// reference to user code that the member holds take over (see qore_class_private::evalMethodGivenArgs()).
-template <bool Lexical, bool Given>
+template <bool Lexical>
 static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_private& qcp,
         LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args,
         const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -5251,22 +5244,8 @@ static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_
                 const ResolvedCallReferenceNode* ref =
                     dynamic_cast<const ResolvedCallReferenceNode*>(mv.getInternalNode());
                 if (ref) {
-                    if constexpr (Given) {
-                        static_assert(!Lexical);
-                        QoreSandboxProvenanceHelper provenance(ref);
-                        QoreListNode* tmp_args = const_cast<QoreListNode*>(args);
-                        if (ref->getType() == NT_RUNTIME_CLOSURE) {
-                            return static_cast<const QoreClosureBase*>(ref)->execValueTmpArgs(tmp_args, xsink);
-                        }
-                        if (auto* rcr = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(ref)) {
-                            return rcr->execValueTmpArgs(tmp_args, xsink);
-                        }
-                        return ref->invoke(args, xsink);
-                    } else if constexpr (Lexical) {
-                        return ref->invokeLexical(args, xsink, policy);
-                    } else {
-                        return ref->invoke(args, xsink);
-                    }
+                    if constexpr (Lexical) return ref->invokeLexical(args, xsink, policy);
+                    else return ref->invoke(args, xsink);
                 }
             }
         }

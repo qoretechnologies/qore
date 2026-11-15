@@ -62,6 +62,7 @@ class StatementBlock;
 class AbstractStatement;
 class CaseNodeRegex;
 class QoreIRFunction;
+class QoreIRInstruction;
 class FunctionalOperator;
 class ContextStatement;
 class SummarizeStatement;
@@ -112,13 +113,26 @@ DLLLOCAL bool qore_ir_local_is_written(const QoreIRFunction& ir_func, const Loca
 /** The AST interpreter's parameter takes the caller's temporary argument over (UserVariantBase::setupCall()), so a
     write to the parameter releases the argument, and the destructor of an object that the caller no longer holds runs
     at the write.  A parameter that can hold an object (directly or in a container) and that the function writes needs
-    a variable of its own that holds the only reference to the argument: QoreIRFunction::takes_over_args.  A write that
+    a variable of its own that holds the only reference to the argument (QoreIRFunction::param_take_over).  A write that
     the IR of the function does not record counts as well: one in a closure that captures the parameter
     (LocalVar::closureUse()), one through a reference to the parameter that the function creates, and one in a handler
     of the function (on_exit, on_error, on_success), which is a function of its own
     (QoreIROnBlockExitInstruction::handler_ir; qore#6004).
 */
 DLLLOCAL bool qore_ir_param_write_releases_arg(const QoreIRFunction& ir_func, const LocalVar* param);
+
+//! Sets QoreIRFunction::param_take_over of \a ir_func for the \a num_params parameters \a params of its signature
+/** Defined in QoreIRTakeOver.cpp, which is compiled outside the single compilation unit of libqore, as are the
+    other functions of the analysis (see qore_ir_param_write_releases_arg())
+*/
+DLLLOCAL void qore_ir_compute_param_take_over(QoreIRFunction& ir_func, LocalVar* const* params, unsigned num_params);
+
+//! Returns true if \a inst is a range slice (also in an exception region, as an Invoke)
+/** Its value is a new list or string, a temporary that a call that takes it as an argument consumes as it consumes a
+    call's result, so that a parameter that takes it over releases it when it is written, as in the AST interpreter
+    (issue #5958); defined in QoreIRTakeOver.cpp
+*/
+DLLLOCAL bool qore_ir_is_range_slice(const QoreIRInstruction* inst);
 
 DLLLOCAL bool qore_plugin_get_value_profile_info(const AbstractQoreNode* node, std::string& module_name,
     uint16_t& local_type_id, const QoreTypeInfo*& type_info);
@@ -4362,19 +4376,16 @@ public:
     //! not closure-captured, not reference-typed) AND no argvid is needed.
     //! When true, callers can use IRDirectParams to skip TLS entirely.
     bool direct_params_eligible = false;
-
     //! True if a parameter's write can release an object that the caller passed (qore_ir_param_write_releases_arg())
     /** Such a parameter is not IR-only (computeIROnlyLocals()) and the function has no fast entry
         (qore_ir_fast_entry_param_is_private()): the parameter's variable on the runtime stack holds the only reference
-        to the argument once the call has released the reference that the caller gave it (IRGivenCallArgs, issue
-        #5882), so a write releases the argument, as in the AST interpreter (issue #5958)
+        to the argument once the call path has released the reference that the caller gave it (IRGivenCallArgs, issue
+        #5882), so a write releases the argument, as in the AST interpreter (issue #5958); the IR interpreter does not
+        inline a call of such a function, which the call path makes.  Set by qore_ir_compute_param_take_over().
+        Declared after direct_params_eligible, in the padding before the next member, so that the layout of the
+        function does not change
     */
-    bool takes_over_args = false;
-    //! For each parameter, true if its write can release an object that the caller passed (see takes_over_args)
-    /** An inlined call releases the reference that the caller gave to such a parameter's argument once the parameter
-        is bound and holds a reference of its own, so that the parameter's reference is the only one
-    */
-    std::vector<uint8_t> takes_over_params;
+    bool param_take_over = false;
 
     // Set of LocalVar* pointers that are already instantiated by the caller
     // (tiered compilation: params from setupCall(), argvid/selfid from evalTiered(),
@@ -4457,15 +4468,6 @@ public:
     // lowering can skip qore_rt_assign_local (runtime sync) and reloadLocalFromRuntime
     // (reload after calls), since no AST callback will ever look them up.
     std::unordered_set<const void*> ir_only_locals;
-
-    //! The locals that the function creates a reference to (\\var), collected by computeIROnlyLocals()
-    /** For qore_ir_param_write_releases_arg(): a parameter that a callee can write through a reference is written by
-        the function; parse_ref_unknown is true if a reference expression could not be walked, which counts as a
-        reference to any local.  Only valid if parse_ref_locals_valid is true.
-    */
-    std::unordered_set<const void*> parse_ref_locals;
-    bool parse_ref_unknown = false;
-    bool parse_ref_locals_valid = false;
 
     // Locals kept AST-visible because a direct hash/list element store can
     // perform COW assign-back through the runtime local stack. Optimizations

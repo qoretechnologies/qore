@@ -2732,18 +2732,6 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
     running cleanup code) would get the exception again from a call that the AST interpreter runs to its first check
     point of its own, such as a loop.  A pending cancellation is raised at the program's next check point instead.
 */
-// returns true for a range slice (also in an exception region, as an Invoke): its value is a new list or string, a
-// temporary that a call that takes it as an argument consumes as it consumes a call's result, so that a parameter
-// that takes it over releases it when it is written, as in the AST interpreter (issue #5958)
-static bool qore_ir_is_range_slice(const QoreIRInstruction* inst) {
-    QoreIROpcode op = inst->opcode;
-    if (op == QoreIROpcode::Invoke) {
-        op = static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
-    }
-    return op == QoreIROpcode::RangeSliceAny || op == QoreIROpcode::RangeSliceInt
-        || op == QoreIROpcode::RangeSliceFloat;
-}
-
 // returns true for an instruction that reads a variable or a member of self, whose value a call that takes it as an
 // argument releases
 // when it returns if the read gave the frame a reference of its own; an implicit argument ($1) is not one: a later $1
@@ -3819,29 +3807,6 @@ static inline __attribute__((always_inline)) void releaseGivenCallArgs(uint64_t*
     }
 }
 
-//! Releases the references given to an inlined call (see IRGivenCallArgs) of the arguments of the parameters that take
-//! them over (QoreIRFunction::takes_over_params), once the parameters are bound; returns true if one was released
-/** Such a parameter's variable holds a reference of its own, which is then the only one, so that a write to the
-    parameter releases the argument, as in the AST interpreter, whose parameter takes the caller's temporary argument
-    over (issue #5958); the arguments are released last first, as the other references given to the call.  Once one is
-    released, the call cannot be made again by the caller: a guard of the callee's IR does not give the call back.
-*/
-static QORE_INTERN_NOINLINE bool releaseTakenOverGivenArgs(const QoreIRFunction& callee_ir, uint64_t** arg_cleanups,
-        int nargs, ExceptionSink* xsink) {
-    bool released = false;
-    for (int i = std::min(nargs, static_cast<int>(callee_ir.takes_over_params.size())) - 1; i >= 0; --i) {
-        uint64_t* slot = arg_cleanups[i];
-        if (!callee_ir.takes_over_params[i] || !slot || !*slot) {
-            continue;
-        }
-        uint64_t bits = *slot;
-        *slot = 0;
-        fromBits(bits).discard(xsink);
-        released = true;
-    }
-    return released;
-}
-
 //! The references of the temporary arguments that a call consumes, which the caller gives to the call
 /** As the AST interpreter moves its argument list into the parameters (UserVariantBase::setupCall()), so that the
     last reference of a temporary argument is released in the callee's frame (issue #5882), the caller gives the
@@ -4161,6 +4126,9 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
             || sig->needsTypeParameterSubstitution()
             || !callee_ir->ast_visible_body_locals.empty()
             || callee_ir->hasTypeSpecialization()
+            // a parameter that takes its argument over is bound by the call path, which releases the reference that
+            // the caller gave to the call once the parameter holds one of its own (issue #5958)
+            || callee_ir->param_take_over
             || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
                 && nargs != static_cast<int>(sig->numParams()))) {
         return reject();
@@ -4366,6 +4334,9 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
             // an inlined call has no frame of its own on the thread-local variable stack
             || callee_ir->needs_call_frame
             || callee_ir->hasTypeSpecialization()
+            // a parameter that takes its argument over is bound by the call path, which releases the reference that
+            // the caller gave to the call once the parameter holds one of its own (issue #5958)
+            || callee_ir->param_take_over
             || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
                 && nargs != static_cast<int>(sig->numParams()))) {
         return reject();
@@ -5763,13 +5734,6 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
             param_scope->instantiateEmptyArgv();
         }
     }
-    // a parameter that takes its argument over holds its only reference now (see releaseTakenOverGivenArgs())
-    bool taken_over = false;
-    if constexpr (GIVEN) {
-        if (arg_cleanups && callee_ir->takes_over_args) {
-            taken_over = releaseTakenOverGivenArgs(*callee_ir, arg_cleanups, nargs, xsink);
-        }
-    }
 
     std::optional<ThreadSafeLocalVarRuntimeEnvironmentHelper> closure_env_clear;
     if (thread_has_runtime_closure_env()) {
@@ -5789,7 +5753,7 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
         }
         ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
             nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-            nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, taken_over, direct_params);
+            nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
         if (ok && !(xsink && *xsink)) {
             acceptInterpreterIRReturnType(sig, inst->cached_return_type, nullptr, ir_return_value, xsink);
         }
@@ -5808,16 +5772,6 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     if (!ok && !(xsink && *xsink)) {
         ir_return_value.discard(xsink);
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
-        // a call whose arguments were taken over cannot be made again by the caller (its guards have no deopt target)
-        assert(!taken_over);
-        if (taken_over) {
-            if (xsink) {
-                xsink->raiseException("IR-EXECUTION-ERROR", "internal error: an inlined call that took its arguments "
-                    "over could not be completed");
-            }
-            result = QoreValue();
-            return true;
-        }
         return false;
     }
     // the references that the caller gave to the call are released in the callee's frame
@@ -5917,20 +5871,13 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
             param_scope->instantiateEmptyArgv();
         }
     }
-    // a parameter that takes its argument over holds its only reference now (see releaseTakenOverGivenArgs())
-    bool taken_over = false;
-    if constexpr (GIVEN) {
-        if (arg_cleanups && callee_ir->takes_over_args) {
-            taken_over = releaseTakenOverGivenArgs(*callee_ir, arg_cleanups, nargs, xsink);
-        }
-    }
 
     QoreValue ir_return_value;
     IRDirectParams dp{args, nargs};
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
     bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
         nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-        nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, taken_over, direct_params);
+        nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
     if constexpr (GIVEN) {
         // with an exception pending, the value of the return is released before the parameters, which hold the last
         // references of the arguments that the caller gave to the call, as the AST interpreter releases it (#6039)
@@ -5945,16 +5892,6 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     if (!ok && !(xsink && *xsink)) {
         ir_return_value.discard(xsink);
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
-        // a call whose arguments were taken over cannot be made again by the caller (its guards have no deopt target)
-        assert(!taken_over);
-        if (taken_over) {
-            if (xsink) {
-                xsink->raiseException("IR-EXECUTION-ERROR", "internal error: an inlined call that took its arguments "
-                    "over could not be completed");
-            }
-            result = QoreValue();
-            return true;
-        }
         return false;
     }
     // the references that the caller gave to the call are released in the callee's frame
@@ -6230,13 +6167,6 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
             param_scope->instantiateEmptyArgv();
         }
     }
-    // a parameter that takes its argument over holds its only reference now (see releaseTakenOverGivenArgs())
-    bool taken_over = false;
-    if constexpr (GIVEN) {
-        if (arg_cleanups && callee_ir->takes_over_args) {
-            taken_over = releaseTakenOverGivenArgs(*callee_ir, arg_cleanups, nargs, xsink);
-        }
-    }
 
     QoreValue ir_return_value;
     IRDirectParams dp{args, nargs};
@@ -6250,7 +6180,7 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
             METHV_const(uvb->getAbstractFunctionVariant())->getClassPriv());
         ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
             nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-            nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, taken_over, direct_params);
+            nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
         if (ok && !(xsink && *xsink)) {
             acceptInterpreterIRReturnType(sig, inst->cached_return_type, nullptr, ir_return_value, xsink);
         }
@@ -6269,16 +6199,6 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
     if (!ok && !(xsink && *xsink)) {
         ir_return_value.discard(xsink);
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
-        // a call whose arguments were taken over cannot be made again by the caller (its guards have no deopt target)
-        assert(!taken_over);
-        if (taken_over) {
-            if (xsink) {
-                xsink->raiseException("IR-EXECUTION-ERROR", "internal error: an inlined call that took its arguments "
-                    "over could not be completed");
-            }
-            result = QoreValue();
-            return true;
-        }
         return false;
     }
     // the references that the caller gave to the call are released in the callee's frame
@@ -6452,6 +6372,9 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
                 // an inlined call has no frame of its own on the thread-local variable stack
                 || callee_ir->needs_call_frame
                 || callee_ir->hasTypeSpecialization()
+                // a parameter that takes its argument over is bound by the call path, which releases the reference that
+                // the caller gave to the call once the parameter holds one of its own (issue #5958)
+                || callee_ir->param_take_over
                 || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
                     && nargs != static_cast<int>(sig->numParams()))) {
             return false;
@@ -6561,20 +6484,13 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
             param_scope->instantiateEmptyArgv();
         }
     }
-    // a parameter that takes its argument over holds its only reference now (see releaseTakenOverGivenArgs())
-    bool taken_over = false;
-    if constexpr (GIVEN) {
-        if (arg_cleanups && callee_ir->takes_over_args) {
-            taken_over = releaseTakenOverGivenArgs(*callee_ir, arg_cleanups, nargs, xsink);
-        }
-    }
 
     QoreValue ir_return_value;
     IRDirectParams dp{args, nargs};
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
     bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
         nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-        nullptr, uvb->getDebugEntryStatementBlock(), uvb->pgm, taken_over, direct_params);
+        nullptr, uvb->getDebugEntryStatementBlock(), uvb->pgm, false, direct_params);
     if constexpr (GIVEN) {
         // with an exception pending, the value of the return is released before the parameters, which hold the last
         // references of the arguments that the caller gave to the call, as the AST interpreter releases it (#6039)
@@ -6588,16 +6504,6 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     }
     if (!ok && !(xsink && *xsink)) {
         ir_return_value.discard(xsink);
-        // a call whose arguments were taken over cannot be made again by the caller (its guards have no deopt target)
-        assert(!taken_over);
-        if (taken_over) {
-            if (xsink) {
-                xsink->raiseException("IR-EXECUTION-ERROR", "internal error: an inlined call that took its arguments "
-                    "over could not be completed");
-            }
-            result = QoreValue();
-            return true;
-        }
         return false;
     }
     // the references that the caller gave to the call are released in the callee's frame
@@ -8601,10 +8507,14 @@ static QORE_IR_INLINE_SITE void irDotEvalMethodDirect(Given& given, QoreIRDotEva
                 nanboxed_args, nullptr, nargs, xsink));
         } else if (name_dispatch_first && method_name) {
             called_external = true;
-            res = fromBits(GIVEN
-                ? dot_eval_fallback_with_args_consume(base, method_name, nanboxed_args, given.get(), nargs, xsink,
-                    explicit_inst)
-                : dot_eval_fallback_with_args(base, method_name, nanboxed_args, nargs, xsink, explicit_inst));
+            if constexpr (GIVEN) {
+                // the callee found takes the arguments given to the call over (issue #5958)
+                res = fromBits(dot_eval_fallback_with_args_consume(base, method_name, nanboxed_args, given.get(), nargs,
+                    xsink, explicit_inst));
+            } else {
+                res = fromBits(dot_eval_fallback_with_args(base, method_name,
+                    nanboxed_args, nargs, xsink, explicit_inst));
+            }
         } else if (qore_ir_try_common_no_arg_pseudo_fast_path(intrinsic,
                 base, nargs, res)) {
             // Result produced by the common pseudo-method helper.
@@ -8650,10 +8560,14 @@ static QORE_IR_INLINE_SITE void irDotEvalMethodDirect(Given& given, QoreIRDotEva
                         direct_inst->qc, direct_inst->variant, nanboxed_args, nargs, xsink)));
         } else if (mname) {
             called_external = true;
-            res = fromBits(GIVEN
-                ? dot_eval_fallback_with_args_consume(base, mname, nanboxed_args, given.get(), nargs, xsink,
-                    explicit_inst)
-                : dot_eval_fallback_with_args(base, mname, nanboxed_args, nargs, xsink, explicit_inst));
+            if constexpr (GIVEN) {
+                // the callee found takes the arguments given to the call over (issue #5958)
+                res = fromBits(dot_eval_fallback_with_args_consume(base, mname, nanboxed_args, given.get(), nargs,
+                    xsink, explicit_inst));
+            } else {
+                res = fromBits(dot_eval_fallback_with_args(base, mname,
+                    nanboxed_args, nargs, xsink, explicit_inst));
+            }
         } else {
             xsink->raiseException("IR-ERROR",
                 "DotEvalMethodDirect: null method pointer and no method name");
@@ -8726,10 +8640,14 @@ static QORE_IR_INLINE_SITE void irInvokeDotEvalMethodDirect(Given& given,
                 nanboxed_args, nullptr, nargs, xsink));
         } else if (name_dispatch_first && method_name) {
             called_external = true;
-            res = fromBits(GIVEN
-                ? dot_eval_fallback_with_args_consume(base, method_name, nanboxed_args, given.get(), nargs, xsink,
-                    explicit_inst)
-                : dot_eval_fallback_with_args(base, method_name, nanboxed_args, nargs, xsink, explicit_inst));
+            if constexpr (GIVEN) {
+                // the callee found takes the arguments given to the call over (issue #5958)
+                res = fromBits(dot_eval_fallback_with_args_consume(base, method_name, nanboxed_args, given.get(), nargs,
+                    xsink, explicit_inst));
+            } else {
+                res = fromBits(dot_eval_fallback_with_args(base, method_name,
+                    nanboxed_args, nargs, xsink, explicit_inst));
+            }
         } else if (qore_ir_try_common_no_arg_pseudo_fast_path(intrinsic,
                 base, nargs, res)) {
             // Result produced by the common pseudo-method helper.
@@ -8769,10 +8687,14 @@ static QORE_IR_INLINE_SITE void irInvokeDotEvalMethodDirect(Given& given,
                         de_invoke_inst->qc, de_invoke_inst->variant, nanboxed_args, nargs, xsink)));
         } else if (mname) {
             called_external = true;
-            res = fromBits(GIVEN
-                ? dot_eval_fallback_with_args_consume(base, mname, nanboxed_args, given.get(), nargs, xsink,
-                    explicit_inst)
-                : dot_eval_fallback_with_args(base, mname, nanboxed_args, nargs, xsink, explicit_inst));
+            if constexpr (GIVEN) {
+                // the callee found takes the arguments given to the call over (issue #5958)
+                res = fromBits(dot_eval_fallback_with_args_consume(base, mname, nanboxed_args, given.get(), nargs,
+                    xsink, explicit_inst));
+            } else {
+                res = fromBits(dot_eval_fallback_with_args(base, mname,
+                    nanboxed_args, nargs, xsink, explicit_inst));
+            }
         } else {
             xsink->raiseException("IR-ERROR",
                 "InvokeDotEvalMethodDirect: null method pointer and no method name");

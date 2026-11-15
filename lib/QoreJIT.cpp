@@ -733,7 +733,7 @@ bool qore_ir_fast_entry_param_is_private(
     // caller passed and no longer holds runs at the write.  A fast entry takes a reference of its own to its
     // argument, which the caller keeps until the call returns, so the write could not release it; such a parameter
     // stays on the runtime stack, whose variable holds the only reference once the call has released the one that
-    // the caller gave it (QoreIRFunction::takes_over_args, issue #5958)
+    // the caller gave it (QoreIRFunction::param_take_over, issue #5958)
     if (qore_ir_param_write_releases_arg(ir_func, local)) {
         return false;
     }

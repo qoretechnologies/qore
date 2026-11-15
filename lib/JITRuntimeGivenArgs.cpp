@@ -35,6 +35,8 @@
 // that the calls that give nothing share with it, and so the code of these calls.  JITRuntime.cpp leaves out what this
 // code does not use.
 #define QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT 1
+// its definitions (see JITRuntime.cpp)
+#define QORE_JIT_RUNTIME_GIVEN_ARGS_DEFS 1
 
 // the helpers of JITRuntime.cpp that this code does not use are not compiled
 #pragma GCC diagnostic ignored "-Wunused-function"
