@@ -550,6 +550,14 @@ public:
         str.concat(']');
     }
 
+    //! returns true if the calling thread is a worker of this pool, also a detached one (qore#6242)
+    /** Stopping the pool waits for all of its workers, so a worker of the pool cannot stop it
+    */
+    DLLLOCAL bool isOwnWorker() const {
+        ThreadPoolThread* tpt = ThreadPoolThread::current;
+        return tpt && &tpt->getPool() == this;
+    }
+
     // does not return until the thread pool has been stopped
     DLLLOCAL void stop() {
         AutoLocker al(m);
