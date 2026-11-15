@@ -26223,7 +26223,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call_aot(
     if (!bg_op) {
         return 0;
     }
-    auto* crcn = dynamic_cast<const CallReferenceCallNode*>(bg_op->getExp().getInternalNode());
+    auto* crcn = qore_get_call_reference_call_node(bg_op->getExp().getInternalNode());
     if (!crcn) {
         xsink->raiseException("AOT-BACKGROUND-ERROR",
             "background expression slot %d is not a call-reference call", slot);

@@ -2543,7 +2543,7 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
         return {true, result};
     }
     // background callref(args) — call-ref pre-evaluated in operand 0
-    if (auto* crcn = dynamic_cast<const CallReferenceCallNode*>(inner)) {
+    if (auto* crcn = qore_get_call_reference_call_node(inner)) {
         QoreValue callee = getIRValue(values, operands[0]);
         if (callee.needsRef()) {
             callee.refSelf();
@@ -8545,7 +8545,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         res = evalTmpCallAndRef(&clone, xsink);
                     }
                     used_operands = true;
-                } else if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(inv->expr.getInternalNode());
+                } else if (auto* crc = qore_get_call_reference_call_node(inv->expr.getInternalNode());
                         crc && crc->getRuntimeArgNames()) {
                     // a named call through a call reference or closure: the callable is the first operand
                     res = crc->evalRuntimeNamedWithArgs(arg_list, xsink);
@@ -22075,8 +22075,8 @@ load_local_done:
                                 res = evalTmpCallAndRef(&clone, xsink);
                             }
                             used_operands = true;
-                        } else if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(
-                                call_expr.getInternalNode()); crc && crc->getRuntimeArgNames()) {
+                        } else if (auto* crc = qore_get_call_reference_call_node(call_expr.getInternalNode());
+                                crc && crc->getRuntimeArgNames()) {
                             // a named call through a call reference or closure: the callable is the first operand
                             res = crc->evalRuntimeNamedWithArgs(arg_list, xsink);
                             used_operands = true;
