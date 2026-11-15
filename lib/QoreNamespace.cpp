@@ -772,10 +772,20 @@ FunctionEntry* qore_ns_private::addPendingVariantIntern(const char* fname, Abstr
     FunctionEntry* fe = func_list.findNode(fname);
 
     if (!fe) {
+        // the location of the declaration, for the warning below (the variant is owned by the function afterwards)
+        const QoreProgramLocation* decl_loc = !imported && v->getUserVariantBase()
+            ? v->getUserVariantBase()->getUserSignature()->getParseLocation() : nullptr;
         QoreFunction* u = new QoreFunction(fname);
         u->addPendingVariant(vh.release());
         fe = func_list.add(u, this);
         new_func = true;
+        // qore#6034: a function that unqualified calls cannot reach, as the Qore namespace has one of its name
+        // (the namespace of the declaration need not be attached to the root yet: the root of the Program is used)
+        if (decl_loc) {
+            if (RootQoreNamespace* root = getRootNS()) {
+                root->rpriv->parseWarnShadowedByQoreFunction(decl_loc, fname, this, fe);
+            }
+        }
         return fe;
     }
 
@@ -3059,6 +3069,124 @@ void qore_root_ns_private::parseWarnAmbiguousFunctionCall(const QoreProgramLocat
         "AMBIGUOUS-CALL-RESOLUTION", desc);
 }
 
+bool qore_root_ns_private::parseShadowWarningEnabled(const qore_ns_private* declaring_ns) {
+    // the check searches the Qore namespace: it is made only if the warning will be raised
+    if (!declaring_ns || !(qore_program_private::getParseWarningMask(*getProgram()) & QP_WARN_LANGUAGE_TRAPS)
+            || parse_check_parse_option(PO_IN_MODULE) || useBrokenNamespaceResolutionParse()) {
+        return false;
+    }
+    const qore_ns_private* qore_ns = getQore();
+    if (!qore_ns) {
+        return false;
+    }
+    // a namespace block that is parsed is not attached to the root: it is the Qore namespace's own if it has its name
+    // and is declared at the top level, as are the namespaces inside it
+    for (const qore_ns_private* cur = declaring_ns; cur; cur = cur->parent) {
+        if (cur == qore_ns || (cur->name == "Qore" && (!cur->parent || cur->parent == this))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void qore_root_ns_private::parseWarnShadowedByQoreSymbol(const QoreProgramLocation* loc, const char* kind,
+        const char* name, const qore_ns_private* declaring_ns, const qore_ns_private* qore_symbol_ns) {
+    assert(loc);
+    assert(kind);
+    assert(name);
+    assert(declaring_ns);
+
+    const bool is_function = !strcmp(kind, "function");
+    const char* suffix = is_function ? "()" : "";
+
+    std::string declared_path;
+    declaring_ns->getPath(declared_path, false, true);
+    std::string qore_path;
+    if (qore_symbol_ns) {
+        qore_symbol_ns->getPath(qore_path, false, true);
+    } else {
+        qore_path = "Qore::";
+    }
+    // the paths end with '::' or are empty for the root namespace
+    std::string declared_name = (declared_path.empty() ? std::string("::") : declared_path) + name + suffix;
+    std::string qore_name = qore_path + name + suffix;
+
+    QoreDiagnosticMetadata metadata("USER-SYMBOL-SHADOWED-BY-QORE",
+        "unqualified resolution of a name selects the symbol of the Qore namespace first, so the symbol that the "
+        "program declares with the same name is reached only through a namespace path");
+    metadata.addFact("kind", kind);
+    metadata.addFact("name", name);
+    metadata.addFact("declared", declared_name.c_str());
+    metadata.addFact("shadowedBy", qore_name.c_str());
+    metadata.addSuggestion(declared_name.c_str());
+    metadata.addFix("use the symbol with its namespace path, or rename it", "review-required");
+
+    QoreStringNode* desc = new QoreStringNodeMaker("%s '%s' declared in namespace '%s' is not reachable by an "
+        "unqualified %s: unqualified resolution selects '%s' first; %s '%s' or rename it", kind, name,
+        declared_path.empty() ? "::" : declared_path.c_str(), is_function ? "call" : "reference", qore_name.c_str(),
+        is_function ? "call it as" : "use", declared_name.c_str());
+    qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_LANGUAGE_TRAPS, "LANGUAGE-TRAP", desc,
+        metadata);
+}
+
+void qore_root_ns_private::parseWarnShadowedByQoreFunction(const QoreProgramLocation* loc, const char* fname,
+        const qore_ns_private* declaring_ns, const FunctionEntry* declared) {
+    assert(loc);
+    assert(fname);
+    if (!parseShadowWarningEnabled(declaring_ns)) {
+        return;
+    }
+    const FunctionEntry* qore_fe = parseFindQoreFunctionEntryIntern(fname);
+    if (!qore_fe || qore_fe == declared) {
+        return;
+    }
+    parseWarnShadowedByQoreSymbol(loc, "function", fname, declaring_ns, qore_fe->getNamespace());
+}
+
+void qore_root_ns_private::parseCheckClassShadowedByQore(const QoreProgramLocation* loc, const QoreClass* oc,
+        const qore_ns_private* declaring_ns) {
+    if (!parseShadowWarningEnabled(declaring_ns)) {
+        return;
+    }
+    const QoreClass* qc = parseFindQoreClassIntern(oc->getName());
+    if (qc && qc != oc) {
+        parseWarnShadowedByQoreSymbol(loc, "class", oc->getName(), declaring_ns, qore_class_private::get(*qc)->ns);
+    }
+}
+
+void qore_root_ns_private::parseCheckConstantShadowedByQore(const QoreProgramLocation* loc, const char* cname,
+        const qore_ns_private* declaring_ns) {
+    if (!parseShadowWarningEnabled(declaring_ns)) {
+        return;
+    }
+    qore_ns_private* qns = nullptr;
+    if (parseFindQoreConstantEntryIntern(cname, qns)) {
+        parseWarnShadowedByQoreSymbol(loc, "constant", cname, declaring_ns, qns);
+    }
+}
+
+void qore_root_ns_private::parseCheckHashDeclShadowedByQore(const QoreProgramLocation* loc, const TypedHashDecl* hd,
+        const qore_ns_private* declaring_ns) {
+    if (!parseShadowWarningEnabled(declaring_ns)) {
+        return;
+    }
+    const TypedHashDecl* qhd = parseFindQoreHashDeclIntern(hd->getName());
+    if (qhd && qhd != hd) {
+        parseWarnShadowedByQoreSymbol(loc, "hashdecl", hd->getName(), declaring_ns,
+            typed_hash_decl_private::get(*qhd)->getNamespace());
+    }
+}
+
+void qore_root_ns_private::parseCheckGlobalVarShadowedByQore(const QoreProgramLocation* loc, const char* vname,
+        const qore_ns_private* declaring_ns) {
+    if (!parseShadowWarningEnabled(declaring_ns)) {
+        return;
+    }
+    if (parseFindQoreGlobalVarIntern(vname)) {
+        parseWarnShadowedByQoreSymbol(loc, "global variable", vname, declaring_ns, nullptr);
+    }
+}
+
 AbstractCallReferenceNode* qore_root_ns_private::parseResolveCallReferenceIntern(
         UnresolvedProgramCallReferenceNode* fr) {
     std::unique_ptr<UnresolvedProgramCallReferenceNode> fr_holder(fr);
@@ -3388,6 +3516,10 @@ void qore_ns_private::scanExportedThreadLocals(const qore_ns_private& mns, const
 void qore_ns_private::parseAddGlobalVarDecl(const QoreProgramLocation* loc, char* name, const QoreTypeInfo* typeInfo,
         QoreParseTypeInfo* parseTypeInfo, bool pub, qore_var_t type) {
     GVEntryBase e(loc, name, typeInfo, parseTypeInfo, type);
+    if (RootQoreNamespace* root = getRootNS()) {
+        // (the entry owns the name)
+        root->rpriv->parseCheckGlobalVarShadowedByQore(loc, e.var->getName(), this);
+    }
     if (pub) {
         e.var->setPublic();
         if (type == VT_THREAD_LOCAL) {
@@ -3468,6 +3600,10 @@ Var* qore_root_ns_private::parseAddResolvedGlobalVarDefIntern(const QoreProgramL
         const QoreTypeInfo* typeInfo, qore_var_t type) {
     Var* v = new Var(loc, vname.getIdentifier(), typeInfo, false, type == VT_THREAD_LOCAL);
     v->assignModule();
+    // a variable declared with a plain name is in the root namespace
+    if (vname.size() == 1) {
+        parseCheckGlobalVarShadowedByQore(loc, vname.getIdentifier(), this);
+    }
     pend_gvlist.push_back(GVEntry(this, vname, v));
 
     checkGlobalVarDecl(v, vname);
@@ -3478,6 +3614,10 @@ Var* qore_root_ns_private::parseAddGlobalVarDefIntern(const QoreProgramLocation*
         QoreParseTypeInfo* typeInfo, qore_var_t type) {
     Var* v = new Var(loc, vname.getIdentifier(), typeInfo, type == VT_THREAD_LOCAL);
     v->assignModule();
+    // a variable declared with a plain name is in the root namespace
+    if (vname.size() == 1) {
+        parseCheckGlobalVarShadowedByQore(loc, vname.getIdentifier(), this);
+    }
     pend_gvlist.push_back(GVEntry(this, vname, v));
 
     checkGlobalVarDecl(v, vname);
@@ -3878,6 +4018,12 @@ cnemap_t::iterator qore_ns_private::parseAddConstant(const QoreProgramLocation* 
     // track the new constant for rollback support
     if (rv != constant.end()) {
         pending_const_names.push_back(cname);
+        // qore#6034: a constant that unqualified references cannot reach, as the Qore namespace has one of its name
+        if (!imported) {
+            if (RootQoreNamespace* root = getRootNS()) {
+                root->rpriv->parseCheckConstantShadowedByQore(loc, cname, this);
+            }
+        }
     }
     return rv;
 }
@@ -4059,6 +4205,13 @@ int qore_ns_private::parseAddPendingClass(const QoreProgramLocation* loc, QoreCl
 
     qore_class_private::get(*oc)->setNamespace(this);
 
+    // qore#6034: a class that unqualified references cannot reach, as the Qore namespace has one of its name
+    if (!imported) {
+        if (RootQoreNamespace* root = getRootNS()) {
+            root->rpriv->parseCheckClassShadowedByQore(loc, oc, this);
+        }
+    }
+
     //printd(5, "qore_ns_private::parseAddPendingClass() added class %p '%s' ns: %p '%s' parent: %p\n", oc,
     //    oc->getName(), this, name.c_str(), parent);
 
@@ -4097,6 +4250,13 @@ int qore_ns_private::parseAddPendingHashDecl(const QoreProgramLocation* loc, Typ
     thd.release();
     // track the new hashdecl for rollback support
     pending_hashdecl_names.push_back(hashdecl->getName());
+
+    // qore#6034: a hashdecl that unqualified references cannot reach, as the Qore namespace has one of its name
+    if (!imported) {
+        if (RootQoreNamespace* root = getRootNS()) {
+            root->rpriv->parseCheckHashDeclShadowedByQore(loc, hashdecl, this);
+        }
+    }
 
     return 0;
 }
@@ -5706,4 +5866,37 @@ bool QoreNamespaceEnumIterator::next() {
 
 const QoreEnumDecl& QoreNamespaceEnumIterator::get() const {
     return *priv->get();
+}
+
+void qore_ns_private::getTypeOwners(std::vector<QoreTypeOwner*>& owners) {
+    {
+        ClassListIterator i(classList);
+        while (i.next()) {
+            qore_class_private* priv = qore_class_private::get(*i.get());
+            if (priv && !priv->type_owner.isTypeOwnerSystem()) {
+                owners.push_back(&priv->type_owner);
+            }
+        }
+    }
+    {
+        HashDeclListIterator i(hashDeclList);
+        while (i.next()) {
+            typed_hash_decl_private* priv = typed_hash_decl_private::get(*i.get());
+            if (!priv->type_owner.isTypeOwnerSystem()) {
+                owners.push_back(&priv->type_owner);
+            }
+        }
+    }
+    {
+        EnumListIterator i(enumList);
+        while (i.next()) {
+            qore_enum_decl_private* priv = qore_enum_decl_private::get(*i.get());
+            if (!priv->type_owner.isTypeOwnerSystem()) {
+                owners.push_back(&priv->type_owner);
+            }
+        }
+    }
+    for (auto& i : nsl.nsmap) {
+        qore_ns_private::get(*i.second)->getTypeOwners(owners);
+    }
 }

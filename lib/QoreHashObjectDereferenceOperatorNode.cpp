@@ -140,6 +140,9 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
         QoreParseContextFlagHelper fh0(parse_context);
         fh0.unsetFlags(PF_FOR_ASSIGNMENT);
         QoreParseContextAnalysisHelper ah(parse_context);
+        // the key or index is read also when the lvalue operand of the reference, delete or remove operator is not
+        // (qore#5937)
+        QoreParseContextFlagScope key_read(parse_context, PF_LVALUE_NOT_READ, QoreParseContextFlagScope::Clear());
         if (parse_init_value(right, parse_context) && !err) {
             err = -1;
         }

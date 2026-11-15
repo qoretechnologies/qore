@@ -43,6 +43,7 @@ class RuntimeConfig;
 #include <set>
 #include <map>
 #include <memory>
+#include <new>
 
 #include "qore/intern/QoreSandboxLimits.h"
 #include "qore/QoreSandboxManager.h"
@@ -284,6 +285,21 @@ struct QoreBackgroundHelperCode {
     QoreAOTContext* aot_ctx = nullptr;
 };
 
+//! how the thread of a background helper uses the object of the code that starts it
+/** The thread holds the object while it runs when the expression calls methods of the object.  The AST interpreter
+    runs the thread with the object as its context, and so checks that the object has not been deleted when the thread
+    starts, only when the expression is a call of a method of the object; a call elsewhere in the expression checks the
+    object when it is made, so the expression runs until then (qore#5973).
+*/
+enum QoreBackgroundHelperSelf : uint8_t {
+    //! the thread does not use the object
+    QBHS_NONE = 0,
+    //! the expression is a call of a method of the object: the thread checks the object when it starts
+    QBHS_CHECKED = 1,
+    //! the expression calls methods of the object elsewhere: each call checks the object
+    QBHS_HELD = 2,
+};
+
 //! Starts a thread evaluating a background expression with its helper (QoreIRBackgroundInstruction)
 /** The starting code has evaluated the values that the expression takes when the thread starts.  The new thread
     instantiates the helper's parameters with them, runs the helper and releases its value, as the AST interpreter's
@@ -293,13 +309,13 @@ struct QoreBackgroundHelperCode {
     @param params the helper's parameters
     @param values the value of each parameter, borrowed: the thread takes references of its own
     @param num the number of parameters and values
-    @param uses_self true if the thread runs with the object of the starting code, which it holds while it runs
+    @param self_mode how the thread uses the object of the starting code
     @param xsink for exceptions raised starting the thread
 
     @return the TID of the new thread, or NOTHING if an exception was raised
 */
 DLLLOCAL QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar* const* params,
-        const QoreValue* values, size_t num, bool uses_self, ExceptionSink* xsink);
+        const QoreValue* values, size_t num, QoreBackgroundHelperSelf self_mode, ExceptionSink* xsink);
 
 //! Runs a background helper in the thread started by do_op_background_helper(), with its parameters instantiated
 /** Defined with the JIT runtime, which owns the native calling conventions.
@@ -1406,13 +1422,18 @@ DLLLOCAL extern std::atomic<uint64_t> qore_sandbox_manager_generation;
 
     It is never less than the number of managers whose QSB_INTR_REQUESTED bit is set, so it is 0 only while no
     interrupt is requested: requestInterrupt() increments it before it sets the bit (and decrements it again if the bit
-    was already set), and clearInterrupt() and the destructor of a manager decrement it only after they have cleared a
-    set bit.  A clear that runs between a request's increment and its setting of the bit finds no bit and leaves the
-    count alone.  If the request set the bit first, such a clear would decrement the count before the request
-    incremented it, and a check in between would read 0 while the interrupt of another manager is pending.  It can be
-    one higher than the number of set bits for a moment, which only makes a check look up the manager.  All changes are
-    seq_cst, as the bit, and made before requestInterrupt() wakes the waiting threads: a waiter that registers its
-    wait and then reads 0 is woken by the wakeup that follows.
+    was already set), clearInterrupt() decrements it only after it has cleared a set bit, and the destructor of a
+    manager, which does not clear the bit, decrements it if it finds the bit set, when no other thread can request or
+    clear the manager's interrupt any more (the manager is reference-counted, and every caller holds a reference).  A
+    clear that runs between a request's increment and its setting of the bit finds no bit and leaves the count alone,
+    unless the bit was already set: then the clear removes the earlier request's count, and the request sets the bit
+    again and keeps its own increment.  If the request set the bit first, such a clear would decrement the
+    count before the request incremented it, and a check in between would read 0 while the interrupt of another
+    manager is pending.  For a moment it can be higher than the number of set bits by the number of requests and
+    clears in progress (a request from its increment until it sets the bit or takes the increment back, a clear from
+    its clearing of the bit until its decrement), which only makes a check look up the manager.  All changes are
+    seq_cst, as the bit, and requestInterrupt() makes its changes before it wakes the waiting threads: a waiter that
+    registers its wait and then reads 0 is woken by the wakeup that follows.
 */
 DLLLOCAL extern std::atomic<int> qore_sandbox_interrupt_count;
 
@@ -1915,6 +1936,9 @@ DLLLOCAL ClosureParseEnvironment* thread_get_closure_parse_env();
 
 DLLLOCAL ClosureVarValue* thread_instantiate_closure_var(const char* id, const QoreTypeInfo* typeInfo, QoreValue& nval,
     bool assign, bool read_only = false);
+//! Creates a local's closure storage with the owning invocation's concrete constraint.
+DLLLOCAL ClosureVarValue* thread_instantiate_closure_var(const LocalVar* local, const QoreTypeInfo* runtimeTypeInfo,
+    QoreValue& nval, bool assign);
 DLLLOCAL void thread_instantiate_closure_var(ClosureVarValue* cvar);
 DLLLOCAL void thread_uninstantiate_closure_var(ExceptionSink* xsink);
 DLLLOCAL ClosureVarValue* thread_find_closure_var(const char* id);
@@ -2104,6 +2128,10 @@ public:
 
     CalleeContextHelper(const CalleeContextHelper&) = delete;
     CalleeContextHelper& operator=(const CalleeContextHelper&) = delete;
+
+    //! releases the implicit arguments that the helper set before it is destroyed, in the frame of the call, as the
+    //! AST interpreter releases them (issue #5882); the destructor restores the caller's
+    DLLLOCAL void releaseArgv();
 
 private:
     //! the current thread
@@ -2706,6 +2734,16 @@ DLLLOCAL bool qore_reference_program_needs_entry(const QoreProgram* p, int& tid)
 */
 DLLLOCAL bool qore_thread_add_exit_cleanup(void (*fn)(void*), void* data);
 
+#ifdef DEBUG
+//! Debug-only: makes QoreThreadLocalObject::getNoThrow() fail to allocate an object in the calling thread
+/** For the tests of the callers' handling of an allocation failure; see qore_thread_test_alloc_fails()
+*/
+DLLLOCAL void qore_thread_test_set_alloc_fails(bool fails);
+
+//! Debug-only: returns true if QoreThreadLocalObject::getNoThrow() fails to allocate an object in the calling thread
+DLLLOCAL bool qore_thread_test_alloc_fails();
+#endif
+
 DLLLOCAL bool qore_thread_program_teardown_enter();
 //! records in the thread's data that it has deleted a Program's data; only after qore_thread_program_teardown_enter()
 //! returned true
@@ -2783,6 +2821,10 @@ public:
     DLLLOCAL ArgvContextHelper(QoreListNode* argv, ExceptionSink* n_xsink);
     // calls deref(xsink) on list in destructor
     DLLLOCAL ~ArgvContextHelper();
+
+    //! releases the implicit arguments that the helper set before it is destroyed, in the frame of the call, as the
+    //! AST interpreter releases them (issue #5882); the destructor restores the caller's
+    DLLLOCAL void releaseArgv();
 
 private:
     QoreListNode* old_argv;
@@ -2885,10 +2927,17 @@ public:
 
     //! Sets the stack size of threads created with these attributes
     /** The stack of each thread is this size for its code: the static TLS that the C library places on the stack
-        (see q_thread_stack_tls_size()) is added to it
+        (see q_thread_stack_tls_size()) is added to it; a total below the platform's minimum (PTHREAD_STACK_MIN,
+        ex: 128 KB on Linux aarch64) is raised to the minimum, so the thread gets at least the requested size
     */
     DLLLOCAL int setstacksize(size_t ssize) {
-        int rc = pthread_attr_setstacksize(&attr, ssize + q_thread_stack_tls_size());
+        size_t total = ssize + q_thread_stack_tls_size();
+#ifdef PTHREAD_STACK_MIN
+        if (total < static_cast<size_t>(PTHREAD_STACK_MIN)) {
+            total = static_cast<size_t>(PTHREAD_STACK_MIN);
+        }
+#endif
+        int rc = pthread_attr_setstacksize(&attr, total);
         if (!rc) {
             requested_stack_size = ssize;
         }
@@ -3306,7 +3355,8 @@ DLLLOCAL void checkpoint_stack_pos(const char*);
     The object here is behind a thread_local pointer, which has no destructor and is valid for the life of the thread,
     created when the thread first uses it and released when the Qore thread ends (or, for the main thread, when
     qore_cleanup() deletes the thread's data; see qore_thread_add_exit_cleanup()).  A thread without thread data (a
-    thread that runs no Qore code, or one that runs after qore_cleanup()) gets an object that is never released.
+    thread that runs no Qore code, or one that runs after qore_cleanup()) gets an object from get() that is never
+    released; getNoThrow() gives it an object of its own instead, which the caller deletes.
 
     @tparam T the class of the object, default constructible
     @tparam Tag a type that identifies the use (an empty struct): each use has its own pointer
@@ -3321,6 +3371,37 @@ public:
             p = create();
         }
         return *p;
+    }
+
+    //! returns the calling thread's object, creating it if the thread has none, or nullptr if it cannot be allocated
+    /** No exception is thrown for an allocation failure (but the constructor of T can throw).
+
+        A thread without thread data does not keep the object, as nothing would release it: \a owned is then set, and
+        the caller deletes the object when it is done with it.
+
+        @param owned set to true if the caller owns the object returned and must delete it, false otherwise
+    */
+    DLLLOCAL static T* getNoThrow(bool& owned) {
+        owned = false;
+        T* p = ptr;
+        if (__builtin_expect(p != nullptr, 1)) {
+            return p;
+        }
+#ifdef DEBUG
+        if (qore_thread_test_alloc_fails()) {
+            return nullptr;
+        }
+#endif
+        p = new (std::nothrow) T;
+        if (!p) {
+            return nullptr;
+        }
+        if (!qore_thread_add_exit_cleanup(release, nullptr)) {
+            owned = true;
+            return p;
+        }
+        ptr = p;
+        return p;
     }
 
 private:

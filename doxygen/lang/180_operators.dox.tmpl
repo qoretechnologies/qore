@@ -1453,6 +1453,32 @@ list<softint> l = (1, 2);
 int x = l + 1;
     @endcode
 
+    @par Type-Safe Hashes
+    A hash that \c + gives from two @ref hashdecl "type-safe hashes" is a hash of the same
+    @ref hashdecl "hashdecl" if both have it, and if one hashdecl @ref hashdecl_inheritance "inherits" the other, a
+    hash of the child hashdecl, which declares every key of the result (ex: \c hash&lt;Child&gt; for
+    <tt>c + p</tt> and for <tt>p + c</tt>, if \c c is a \c hash&lt;Child&gt; and \c p a \c hash&lt;Parent&gt;);
+    hashes of hashdecls of which neither inherits the other (such as two children of the same parent), and a
+    type-safe hash with a hash that has no hashdecl, give a \c hash&lt;auto&gt;.  The parse-time type of the sum of
+    two values of the same hashdecl type is that type, which holds unless the two values are hashes of two different
+    children of the hashdecl: their sum is then a \c hash&lt;auto&gt;, and its assignment to the hashdecl type raises
+    a \c RUNTIME-TYPE-ERROR:
+    @code{.py}
+hashdecl Parent { int x = 1; }
+hashdecl Child inherits Parent { int y = 2; }
+hashdecl Other inherits Parent { int z = 3; }
+
+hash<Parent> sub add(hash<Parent> l, hash<Parent> r) {
+    return l + r;
+}
+
+# a hash<Child>
+hash<Parent> h = add(<Child>{}, <Parent>{"x": 2});
+# raises RUNTIME-TYPE-ERROR when executed: the result is a hash<auto> with keys x, y and z
+h = add(<Child>{}, <Other>{});
+    @endcode
+    The @ref plus_equals_operator "+=" operator merges a hash into the hash of its lvalue, which keeps its hashdecl.
+
     This operator does not throw any exceptions.
 
     <hr>
@@ -1615,7 +1641,7 @@ if (x < y)
     |@ref number_type "number"|If \a expression1 is numerically less than \a expression2, returns @ref True "True", otherwise returns @ref False "False"
     |@ref float_type "float"|If \a expression1 is numerically less than \a expression2, returns @ref True "True", otherwise returns @ref False "False"
     |@ref int_type "int"|If \a expression1 is numerically less than \a expression2, returns @ref True "True", otherwise returns @ref False "False"
-    |@ref string_type "string"|If \a expression1 comes before \a expression2 in string sort order, returns @ref True "True", otherwise returns @ref False "False"
+    |@ref string_type "string"|If \a expression1 comes before \a expression2 in string sort order (an empty string comes before every other string), returns @ref True "True", otherwise returns @ref False "False"
     |@ref date_type "date"|If \a expression1 is before (or a shorter amount of time than of the arguments are @ref relative_dates) \a expression2, returns @ref True "True", otherwise returns @ref False "False"
 
     This operator does not throw any exceptions.
@@ -1672,6 +1698,7 @@ if (x == y)
     |@ref number_type "number"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref float_type "float"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref int_type "int"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
+    |@ref char_type "char"|A char is compared as an @ref int_type "int" with its code point, also with a @ref bool_type "bool" (<tt>c'\\x01' == True</tt> is @ref True "True", <tt>c'a' == True</tt> is @ref False "False")
     |@ref date_type "date"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref list_type "list"|If each element in the each list where order is relevant satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
     |@ref hash_type "hash"|If each hash has the same keys and the value of each equal key in each hash satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
@@ -1706,6 +1733,7 @@ if (x != y)
     |@ref number_type "number"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref float_type "float"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref int_type "int"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
+    |@ref char_type "char"|A char is compared as an @ref int_type "int" with its code point, also with a @ref bool_type "bool" (<tt>c'a' != True</tt> is @ref True "True")
     |@ref date_type "date"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref list_type "list"|If each element in the each list where order is relevant satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
     |@ref hash_type "hash"|If the hashes have different keys or the value of each equal key in each hash satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
@@ -2323,6 +2351,13 @@ if (x || y)
     with \c x holding 1.5, <tt>softint v = 10; v *= x</tt> leaves the int 15, and <tt>timeout t; t *= x</tt>
     raises \c RUNTIME-TYPE-ERROR as <tt>timeout t = x</tt> does).  An operation whose result is refused leaves no
     new hash key or list element behind.
+
+    @anchor native_member_callback_lvalue
+    @note When object \c += or \c -=, or member @ref remove "removal" or @ref delete "deletion", calls a native
+    member gate or accessor, the parent lvalue is released before the callback runs. The operation retains its
+    original target object: a callback can replace or remove the variable or container holding it, and that write
+    is preserved. A successful compound assignment returns the original target object. Pending parent member
+    notifications run after the operation, and exceptions from callbacks propagate to the caller.
 
     @anchor compound_assignment_parse_checks
     @note A compound assignment, \c ++ or \c -- whose result the declared type of its lvalue can never accept is

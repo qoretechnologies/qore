@@ -409,6 +409,10 @@
             "named": true
           },
           {
+            "type": "generic_type",
+            "named": true
+          },
+          {
             "type": "identifier",
             "named": true
           },
@@ -7638,6 +7642,10 @@
     "named": false
   },
   {
+    "type": "%no-strict-parse-errors",
+    "named": false
+  },
+  {
     "type": "%no-string-index-char",
     "named": false
   },
@@ -7743,6 +7751,10 @@
   },
   {
     "type": "%strict-bool-eval",
+    "named": false
+  },
+  {
+    "type": "%strict-parse-errors",
     "named": false
   },
   {

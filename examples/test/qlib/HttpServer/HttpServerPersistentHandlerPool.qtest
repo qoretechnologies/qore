@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - handler-pool threads of persistent HTTP/1.x connections and their release on stop
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5758: the thread of a persistent HTTP/1.x connection (a handler that called setPersistent()) stays with the
+    connection until persistence ends, as the handler can keep thread-bound resources across its requests; it used to
+    stay in the async I/O handler pool for that time, so max_handler_threads persistent connections took every thread
+    of the pool and no other request was served.  The thread now leaves the pool
+    (ThreadPool::detachCurrentThread()): more persistent connections than max_handler_threads are opened, ordinary
+    requests are still served, each persistent connection keeps its own thread, and stopping the server ends all of
+    them.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerPersistentHandlerPoolTest
+
+#! Upper bound for any wait that a regression turns into a hang
+const HangTimeout = 20s;
+
+#! The handler threads of the server
+const PoolSize = 2;
+
+#! The persistent connections opened: more than the handler threads
+const Sessions = 4;
+
+#! Makes its connection persistent with the first request, and answers with the thread that it runs in
+class PersistentHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! receives the session's name when its persistent connection is closed
+        Queue closed();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path =~ /start/) {
+            Queue q = closed;
+            string name = (hdr.path =~ x/start\/(.*)$/)[0];
+            notifyClosed(sub () {
+                q.push(name);
+            });
+            setPersistent(True);
+        } else if (!isPersistent()) {
+            return makeResponse(500, "not persistent", {"Content-Type": MimeTypeText});
+        }
+        return makeResponse(200, string(gettid()), {"Content-Type": MimeTypeText});
+    }
+}
+
+#! Answers an ordinary request
+class PlainHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "plain", {"Content-Type": MimeTypeText});
+    }
+}
+
+class HttpServerPersistentHandlerPoolTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerPersistentHandlerPool", "1.0") {
+        addTestCase("more persistent connections than handler threads", \morePersistentThanThreadsTest());
+        set_return_value(main());
+    }
+
+    morePersistentThanThreadsTest() {
+        Logger logger("persistent-handler-pool", LoggerLevel::getLevelInfo());
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger, "max_handler_threads": PoolSize});
+        on_exit server.stop();
+        PersistentHandler persistent();
+        server.setHandler("persistent", "/persistent", NOTHING, persistent);
+        server.setHandler("plain", "/plain", NOTHING, new PlainHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        assertTrue(server.waitForAsyncIo(HangTimeout), "async I/O is ready");
+        string url = sprintf("http://127.0.0.1:%d", port);
+
+        # each session takes a thread for the life of its connection
+        hash<string, HTTPClient> sessions;
+        hash<string, string> tids;
+        on_exit {
+            foreach HTTPClient client in (sessions.iterator()) {
+                client.disconnect();
+            }
+        }
+        for (int i = 0; i < Sessions; ++i) {
+            string name = sprintf("s%d", i);
+            HTTPClient client({"url": url, "timeout": HangTimeout});
+            sessions{name} = client;
+            hash<auto> resp = client.send(NOTHING, "GET", "/persistent/start/" + name);
+            assertEq(200, resp.status_code, sprintf("%s: the persistent connection is set up", name));
+            tids{name} = resp.body;
+        }
+        assertEq(Sessions, (map {$1: True}, tids.values()).size(), "each persistent connection has a thread of its own");
+
+        # an ordinary request is served with every persistent connection open
+        {
+            HTTPClient client({"url": url, "timeout": HangTimeout});
+            on_exit client.disconnect();
+            assertEq("plain", client.get("/plain"), "an ordinary request is served");
+        }
+
+        # each persistent connection is still served by its own thread
+        foreach hash<auto> i in (sessions.pairIterator()) {
+            hash<auto> resp = i.value.send(NOTHING, "GET", "/persistent/next");
+            assertEq(200, resp.status_code, sprintf("%s: the persistent connection serves another request", i.key));
+            assertEq(tids{i.key}, resp.body, sprintf("%s: by the thread of the connection", i.key));
+        }
+
+        # stopping the server ends every persistent connection
+        server.stop();
+        hash<string, bool> closed;
+        for (int i = 0; i < Sessions; ++i) {
+            closed{persistent.closed.get(HangTimeout)} = True;
+        }
+        hash<string, bool> expected = map {$1: True}, keys sessions;
+        assertEq(expected, closed, "every persistent connection was closed");
+    }
+}

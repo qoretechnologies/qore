@@ -533,7 +533,12 @@ public:
         return 0;
     }
 
-    DLLLOCAL QoreValue takeMember(ExceptionSink* xsink, const char* mem, bool check_access = true, bool for_delete = false);
+    DLLLOCAL QoreValue takeMember(ExceptionSink* xsink, const char* mem, bool check_access = true,
+        bool for_delete = false, bool* exists = nullptr);
+
+    //! Removes a mixed native/ordinary member slice after detaching its parent lvalue
+    DLLLOCAL __attribute__((noinline)) void takeExternalMembers(QoreLValueGeneric& rv, LValueHelper& lvh,
+        const QoreListNode* l, bool for_delete);
 
     DLLLOCAL QoreValue takeMember(LValueHelper& lvh, const char* mem, bool for_delete = false, bool* exists = nullptr);
 

@@ -448,6 +448,52 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         return Qore::AsyncIoController::addTimer(deadline, callback, owner);
     }
 
+    #! Adds a timer that fires after the given delay, measured on the monotonic clock
+    /** As @ref addTimer "addTimer(date, code)", but the timer fires when \a delay has passed since the call: a step
+        of the system clock does not move it, as it moves a timer added for @ref Qore::now_us() "now_us()" plus an
+        interval; use it for heartbeat, idle, retry and timeout timers
+
+        @par Example:
+        @code{.py}
+int timer_id = controller.addTimerDelay(1s, sub () { checkConnection(); });
+        @endcode
+
+        @param delay the time after which the timer fires; zero or a negative value fires it at once
+        @param callback the closure to call when the timer fires
+
+        @return the unique timer ID that can be passed to cancelTimer() to cancel the timer
+
+        @par Module Code and Restricted Callers
+        As for @ref addTimer "addTimer(date, code)"; see
+        @ref Qore::AsyncIoController::addTimerDelay() "AsyncIoController::addTimerDelay()"
+
+        @throw INVALID-FUNCTION-ACCESS a caller that may not control threads passed code that is not its own module's
+
+        @since AsyncSocketIo 3.0
+    */
+    int addTimerDelay(timeout delay, code<nothing()> callback) {
+        return Qore::AsyncIoController::addTimerDelay(delay, callback);
+    }
+
+    #! Adds an owner-tagged timer that fires after the given delay, measured on the monotonic clock
+    /** As @ref addTimerDelay "addTimerDelay(timeout, code)", with the callback dispatch tagged with \a owner as with
+        @ref addTimer "addTimer(date, code, string)"
+
+        @param delay the time after which the timer fires; zero or a negative value fires it at once
+        @param callback the closure to call when the timer fires
+        @param owner the owner identifier to tag the callback dispatch with (so it is drainable via
+        @ref flushCallbacksByOwner())
+
+        @return the unique timer ID that can be passed to cancelTimer() to cancel the timer
+
+        @throw INVALID-FUNCTION-ACCESS a caller that may not control threads passed code that is not its own module's
+
+        @since AsyncSocketIo 3.0
+    */
+    int addTimerDelay(timeout delay, code<nothing()> callback, string owner) {
+        return Qore::AsyncIoController::addTimerDelay(delay, callback, owner);
+    }
+
     #! Cancels a pending timer
     /** @param timer_id the timer ID returned by addTimer()
         @return @ref True "True" if the timer was found and canceled; @ref False "False" if

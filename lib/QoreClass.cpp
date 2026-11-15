@@ -60,6 +60,11 @@ DLLLOCAL Sequence classIDSeq(1);
 // class IDs can be allocated in a child process created with fork() (see QoreForkHandlers.h)
 static QoreForkThreadLock class_id_fork_handler(classIDSeq, QFLR_LEAF, "class_ids");
 
+uint64_t qore_class_next_allocation_id() {
+    static std::atomic<uint64_t> seq{0};
+    return seq.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
 static std::atomic<uint64_t> qore_method_dispatch_epoch{1};
 
 uint64_t qore_get_method_dispatch_epoch() {
@@ -1006,6 +1011,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         raw_accepts_parameterized(old.raw_accepts_parameterized),
         raw_construction_defaults_to_auto(old.raw_construction_defaults_to_auto),
         type_params(old.type_params),
+        type_param_bound_types(old.type_param_bound_types),
         parameterized_vparents(old.parameterized_vparents),
         domain(old.domain),
         num_methods(old.num_methods),
@@ -1047,6 +1053,13 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     // create new class object
     cls = old.cls->copyImport();
     cls->priv = this;
+
+    // a class imported from another Program uses the types of its source, which must not be freed with the source
+    // Program (issue #5790)
+    if (deref_source_program) {
+        old.ref();
+        import_source = const_cast<qore_class_private*>(&old);
+    }
 
     printd(5, "qore_class_private::qore_class_private() this: %p creating copy of '%s' (old: '%s') ID:%d cls: %p " \
         "old: %p sys: %d pgm: %p -> %p\n", this, name.c_str(), old.name.c_str(), classID, cls, old.cls, sys,
@@ -1120,6 +1133,45 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 
 qore_class_private::~qore_class_private() {
     printd(5, "qore_class_private::~qore_class_private() this: %p %s\n", this, name.c_str());
+    releaseMethodsAndData(false);
+
+    // the next class allocated can reuse these addresses and this class's
+    qore_purge_derived_types(cls, owns_typeinfo ? typeInfo : nullptr,
+        owns_ornothingtypeinfo ? orNothingTypeInfo : nullptr);
+
+    if (owns_typeinfo)
+        delete typeInfo;
+
+    if (owns_ornothingtypeinfo)
+        delete orNothingTypeInfo;
+
+    if (mud) {
+        try {
+            mud->doDeref();
+        } catch (AbstractException& e) {
+            // there is currently no way to handle these exceptions
+#ifdef DEBUG
+            // this will result in the exception being printed out on the console
+            ExceptionSink xsink;
+            e.convert(&xsink);
+#endif
+        }
+    }
+
+    // the base classes are kept by a retired class, as the type checks of its types read them (issue #5790)
+    delete scl;
+    scl = nullptr;
+
+    // the source of an imported class is released after its types are no longer used (issue #5790)
+    if (import_source) {
+        import_source->deref(false, false, false);
+    }
+
+    // the declarations named by this class's types are no longer kept for it
+    qore_type_owner_destroyed(&type_owner);
+}
+
+void qore_class_private::releaseMethodsAndData(bool retiring) {
     // dispatch caches keyed by this class's address, its methods or its types must miss from now on, before the
     // memory can be reused for another class
     qore_bump_method_dispatch_epoch();
@@ -1132,7 +1184,9 @@ qore_class_private::~qore_class_private() {
     }
     //assert(!spgm);
 
-    assert(!refs.reference_count());
+    // a class being retired can be referenced by code that reached it through a derived type (ex: the reflection
+    // API, issue #5790); such code does not use what is released here
+    assert(retiring || !refs.reference_count());
     assert(!var_refs.reference_count());
     assert(var_ref_wrappers.empty());
     assert(!data_refs.reference_count());
@@ -1157,38 +1211,105 @@ qore_class_private::~qore_class_private() {
         //printd(5, "qore_class_private::~qore_class_private() deleting method %p %s::%s()\n", m, name, m->getName());
         delete i.second;
     }
+    hm.clear();
 
     // delete static methods
     for (auto& i : shm) {
         //printd(5, "qore_class_private::~qore_class_private() deleting static method %p %s::%s()\n", m, name, m->getName());
         delete i.second;
     }
+    shm.clear();
 
-    delete scl;
     delete system_constructor;
+    system_constructor = nullptr;
+}
 
-    // the next class allocated can reuse these addresses and this class's
-    qore_purge_derived_types(cls, owns_typeinfo ? typeInfo : nullptr,
-        owns_ornothingtypeinfo ? orNothingTypeInfo : nullptr);
+__attribute__((noinline)) void qore_class_private::derefLast(bool in_del) {
+    // a class whose types are still named is retired, not freed (issue #5790); not possible when the class object is
+    // being deleted
+    if (!in_del && qore_type_owner_released(&type_owner)) {
+        return;
+    }
+    // remove the private data pointer, delete the class object, then delete ourselves
+    cls->priv = nullptr;
+    if (!in_del) {
+        delete cls;
+    }
 
-    if (owns_typeinfo)
-        delete typeInfo;
+    // delete all linked QoreClass objects
+    for (auto& i : qcrefs) {
+        i.first->priv = nullptr;
+        delete i.first;
+    }
 
-    if (owns_ornothingtypeinfo)
-        delete orNothingTypeInfo;
+    delete this;
+}
 
+void qore_class_private::retireTypeOwner() {
+    printd(5, "qore_class_private::retireTypeOwner() this: %p %s\n", this, name.c_str());
+    // what the type checks of the class's types read is kept; see the header
+    releaseMethodsAndData(true);
+    constlist.reset();
+    for (auto& i : members.member_list) {
+        free(i.first);
+        delete i.second;
+    }
+    members.member_list.clear();
+    member_init_list.clear();
+    for (auto& i : ahm) {
+        delete i.second;
+    }
+    ahm.clear();
     if (mud) {
         try {
             mud->doDeref();
         } catch (AbstractException& e) {
-            // there is currently no way to handle these exceptions
 #ifdef DEBUG
-            // this will result in the exception being printed out on the console
             ExceptionSink xsink;
             e.convert(&xsink);
 #endif
         }
+        mud = nullptr;
     }
+}
+
+void qore_class_private::getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
+    for (auto& i : members.member_list) {
+        if (i.second) {
+            qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);
+        }
+    }
+    for (auto& i : vars.member_list) {
+        if (i.second) {
+            qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);
+        }
+    }
+    for (const hm_method_t* m : {&hm, &shm}) {
+        for (auto& i : *m) {
+            QoreFunctionIterator fi(*qore_method_private::get(*i.second)->getFunction());
+            while (fi.next()) {
+                const AbstractFunctionSignature* sig = fi.getVariant()->getSignature();
+                if (!sig) {
+                    continue;
+                }
+                qore_type_owner_add_name(names, sig->getReturnTypeInfo(), &type_owner);
+                for (unsigned p = 0; p < sig->numParams(); ++p) {
+                    qore_type_owner_add_name(names, sig->getParamTypeInfo(p), &type_owner);
+                }
+            }
+        }
+    }
+}
+
+void qore_class_private::freeTypeOwner() {
+    assert(!refs.reference_count());
+    cls->priv = nullptr;
+    delete cls;
+    for (auto& i : qcrefs) {
+        i.first->priv = nullptr;
+        delete i.first;
+    }
+    delete this;
 }
 
 void qore_class_private::addBuiltinStaticVar(const char* vname, QoreValue value, ClassAccess access, const QoreTypeInfo* vTypeInfo) {
@@ -1371,6 +1492,26 @@ int qore_class_private::initializeIntern() {
     // is empty when initializing classes (which can be done at any time during parsing)
     LVarStackBreakHelper lvar_stack_helper;
 
+    int bound_err = 0;
+    // the bounds of the type parameters are resolved before the methods' code is parsed: a value of a bounded type
+    // parameter has its bound in the class's code (qore#5774)
+    if (!type_params.empty() && type_param_bound_types.empty()) {
+        type_param_bound_types.assign(type_params.size(), nullptr);
+        for (size_t i = 0, e = type_params.size(); i < e; ++i) {
+            if (!type_params[i].hasBound()) {
+                continue;
+            }
+            std::unique_ptr<QoreParseTypeInfo> pti(qore_parse_type_string_to_pti(type_params[i].getBoundType()));
+            if (!pti) {
+                parseException(*loc, "PARSE-TYPE-ERROR", "cannot parse bound type '%s' for generic class '%s' type "
+                    "parameter '%s'", type_params[i].getBoundType(), name.c_str(), type_params[i].name.c_str());
+                bound_err = -1;
+                continue;
+            }
+            type_param_bound_types[i] = QoreParseTypeInfo::resolveAny(pti.get(), loc, bound_err);
+        }
+    }
+
     // first resolve types in pending variants in all method signatures (incl. return types)
     // since abstract method functions are copied by reference from the normal list; this resolves all pending
     // method function signatures as well
@@ -1381,7 +1522,7 @@ int qore_class_private::initializeIntern() {
         i.second->priv->func->resolvePendingSignatures();
     }
 
-    int err = 0;
+    int err = bound_err;
 
     QoreProgram* pgm = getProgram();
     if (pgm && !sys && (qore_program_private::parseAddDomain(pgm, domain))) {
@@ -1781,8 +1922,12 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
         if (*xsink) {
             return -1;
         }
+        // the type arguments of the object: those of its instantiation, or else its class, whose parent classes give the
+        // type arguments of the generic classes that it inherits (class IntBox inherits Box<int>, qore#6027); as the
+        // members are accessed (see qore_object_private::getMemberValueRefForAssignment())
+        qore_object_private* opriv = qore_object_private::get(o);
         const QoreTypeInfo* member_type = qore_substitute_type_params_if_needed(info.getInitializerTypeInfo(),
-            qore_object_private::get(o)->instantiated_type);
+            opriv->instantiated_type ? opriv->instantiated_type : opriv->theclass->getTypeInfo());
         printd(5, "qore_class_private::initMember() this: %p '%s::%s' type %s val: %s filter: %d\n", this, name.c_str(),
             member_name, QoreTypeInfo::getPath(member_type),
             val->getFullTypeName(true),
@@ -1878,6 +2023,27 @@ static const QoreTypeInfo* qore_get_instantiated_object_type_info(const QoreClas
     return object_class->getTypeInfo(args);
 }
 
+// Constructor completion and its surrounding checks share the inline form of ExceptionSink's event test.
+// The public operator is out of line; these checks run for every object construction.
+static QORE_INTERN_ALWAYS_INLINE bool qore_constructor_has_event(const ExceptionSink* xsink) {
+    const qore_es_private* es = qore_es_private::get(*xsink);
+    return es->head || es->thread_exit;
+}
+
+//! Consumes the construction's object reference on the exceptional path (#6086).
+static QORE_INTERN_NOINLINE void qore_release_failed_construction(QoreObject* self, bool completed,
+        ExceptionSink* xsink) {
+    if (completed) {
+        // Argument cleanup failed after successful construction. Keep its exception primary while the completed
+        // object's ordinary release runs its destructor (unless the constructor published another reference).
+        self->deref(xsink);
+    } else {
+        // Preserve partial-construction cleanup: release native private data without executing the destructors
+        // of this class or its already-constructed base classes.
+        self->obliterate(xsink);
+    }
+}
+
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreObject* qore_class_private::execConstructorImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const QoreClass* obj_cls,
@@ -1923,7 +2089,7 @@ QORE_INTERN_ALWAYS_INLINE QoreObject* qore_class_private::execConstructorImpl(Le
     const QoreClass* object_class = obj_cls ? obj_cls : cls;
     const QoreTypeInfo* instantiated_type = qore_get_instantiated_object_type_info(object_class, object_type_info,
         xsink);
-    if (*xsink) {
+    if (qore_constructor_has_event(xsink)) {
         return nullptr;
     }
 
@@ -1947,6 +2113,8 @@ QORE_INTERN_ALWAYS_INLINE QoreObject* qore_class_private::execConstructorImpl(Le
     // if we made at least one assignment, then scan the object for recursive references after all assignments
     bool need_scan = false;
 
+    bool constructor_completed = false;
+
     // instantiate members first
     initMembers(*self, need_scan, xsink);
 
@@ -1955,7 +2123,7 @@ QORE_INTERN_ALWAYS_INLINE QoreObject* qore_class_private::execConstructorImpl(Le
         LValueHelper lvh(*self, xsink);
     }
 
-    if (!*xsink) {
+    if (!qore_constructor_has_event(xsink)) {
         // it's possible for constructor = 0 and variant != 0, when a class is instantiated to initialize a constant
         // and the matched variant is pending
         if (!constructor && !variant) {
@@ -1971,18 +2139,19 @@ QORE_INTERN_ALWAYS_INLINE QoreObject* qore_class_private::execConstructorImpl(Le
             if (!constructor) {
                 hm_method_t::const_iterator i = hm.find("constructor");
                 assert(i != hm.end());
-                i->second->priv->evalConstructorWithPolicy<Lexical>(policy, variant, self, args, *bceal, rc, xsink, tmp_args);
+                constructor_completed = i->second->priv->evalConstructorWithPolicy<Lexical>(policy, variant, self,
+                    args, *bceal, rc, xsink, tmp_args);
             } else
-                constructor->priv->evalConstructorWithPolicy<Lexical>(policy, variant, self, args, *bceal, rc, xsink, tmp_args);
+                constructor_completed = constructor->priv->evalConstructorWithPolicy<Lexical>(policy, variant, self,
+                    args, *bceal, rc, xsink, tmp_args);
             printd(5, "qore_class_private::execConstructor() class: %p %s done\n", cls, name.c_str());
         }
     }
 
-    if (*xsink) {
-        // instead of executing the destructors for the superclasses that were already executed we call QoreObject::obliterate()
-        // which will clear out all the private data by running their dereference methods which must be OK
-        self->obliterate(xsink);
-        printd(5, "qore_class_private::execConstructor() this: %p %s::constructor() o: %p, exception in constructor, obliterating QoreObject and returning 0\n", this, name.c_str(), self);
+    if (qore_constructor_has_event(xsink)) {
+        qore_release_failed_construction(self, constructor_completed, xsink);
+        printd(5, "qore_class_private::execConstructor() this: %p %s::constructor() o: %p, exception during construction "
+            "or argument cleanup, releasing QoreObject and returning 0\n", this, name.c_str(), self);
         return nullptr;
     }
 
@@ -2446,6 +2615,8 @@ void BCNode::setClassPointer(QoreClass* qc) {
 
 int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
     if (!sclass) {
+        // the parent class is named without type arguments (qore#6082)
+        const bool raw_parent = !parsed_type;
         if (parsed_type) {
             QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, *parsed_type->cscope, raise_error);
             if (qc) {
@@ -2547,6 +2718,17 @@ int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
         setClassPointer(sclass);
         if (cls == sclass) {
             parse_error(*cls->priv->loc, "class '%s' cannot inherit itself", cls->getName());
+            assert(cls->priv->scl);
+            cls->priv->scl->valid = false;
+            sclass = nullptr;
+        }
+        // a generic class is inherited with type arguments, as it is instantiated with them; the classes that
+        // default to a value-erased instance for raw use (legacy_raw) can be inherited without (qore#6082)
+        if (sclass && raw_parent && sclass->hasTypeParameters()
+            && !qore_class_private::get(*sclass)->rawConstructionDefaultsToAuto()) {
+            parseException(*loc, "MISSING-TYPE-ARGUMENTS", "cannot inherit generic class '%s' without type "
+                "arguments; use '%s<auto>' for an explicitly value-erased parent", sclass->getName(),
+                sclass->getName());
             assert(cls->priv->scl);
             cls->priv->scl->valid = false;
             sclass = nullptr;
@@ -5003,6 +5185,23 @@ QoreValue qore_class_private::evalMemberGate(QoreObject* self, const char* nme, 
     return self->evalMethod(*memberGate, *args, xsink);
 }
 
+QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* nme, QoreListNode* args,
+        const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink, QoreProgram* pgm_ctx) const {
+    assert(self);
+    qore_object_private* self_priv = qore_object_private::get(*self);
+    if (self_priv->status != OS_DELETED && strcmp(nme, "copy")) {
+        const QoreMethod* w = getMethodForEval(nme, self_priv->pgm, class_ctx, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (w) {
+            return qore_method_private::evalGivenArgs(*w, xsink, rc, self, args, class_ctx, pgm_ctx);
+        }
+    }
+    // anything else is called as evalMethod() calls it
+    return evalMethod(self, nme, args, class_ctx, rc, xsink, nullptr, pgm_ctx);
+}
+
 // Member-call references, pseudo-methods and methodGate are only considered after method lookup fails.
 // Their ownership/locking locals must not reserve stack space on the ordinary method-call path.
 template <bool Lexical>
@@ -5827,6 +6026,11 @@ int qore_class_private::parseInit() {
         err = -1;
     }
 
+    // qore#6027: a generic parent class that is inherited through two paths has the same type arguments in both
+    if (!err && parseCheckGenericParentInstantiations()) {
+        err = -1;
+    }
+
     // issue #5838: a variant that a call typed against a parent class can select must return a compatible type
     if (!err && parseCheckReturnTypeHierarchy()) {
         err = -1;
@@ -6160,6 +6364,91 @@ void collect_hierarchy_functions(const qore_class_private& qc, const std::string
 }
 
 } // namespace
+
+namespace {
+
+//! an instantiation of a generic class that a class inherits, and the direct parent class through which it does
+struct GenericParentSeen {
+    const QoreClass* base;
+    const QoreTypeInfo* type;
+    std::string via;
+};
+
+//! the name of a class type without the "object<>" of its type name: Box<int>
+std::string generic_parent_name(const QoreTypeInfo* type) {
+    std::string str = QoreTypeInfo::getName(type);
+    if (str.compare(0, 7, "object<") == 0 && !str.empty() && str.back() == '>') {
+        return str.substr(7, str.size() - 8);
+    }
+    return str;
+}
+
+//! collects the instantiations of the generic classes that \a cls inherits through all paths, in the order of the
+//! parent classes; returns false and fills \a first and \a second if one class has two different instantiations
+bool collect_generic_parents(const qore_class_private& cls, const QoreTypeInfo* source, const std::string& via,
+        std::vector<GenericParentSeen>& seen, std::unordered_set<const qore_class_private*>& path,
+        GenericParentSeen*& first, GenericParentSeen& second) {
+    if (!cls.scl || !cls.scl->valid) {
+        return true;
+    }
+    for (auto& i : *cls.scl) {
+        QoreClass* pc = i->sclass;
+        if (!pc) {
+            continue;
+        }
+        const qore_class_private* pcp = qore_class_private::get(*pc);
+        // the direct parent of the class that is checked, through which the path goes
+        const std::string pvia = via.empty() ? std::string(pc->getName()) : via;
+        const QoreTypeInfo* subst = nullptr;
+        if (i->type_info) {
+            subst = source ? qore_substitute_type_params_if_needed(i->type_info, source) : i->type_info;
+        }
+        const QoreParameterizedClassTypeInfo* pti = subst ? QoreTypeInfo::getParameterizedClassType(subst) : nullptr;
+        if (pti) {
+            // type arguments that contain a type parameter are known when the class is instantiated
+            const bool concrete = !qore_type_contains_type_parameter(subst);
+            for (auto& s : seen) {
+                if (qore_class_private::sameDeclaration(s.base, pti->getBaseClass()) && concrete
+                        && !qore_type_contains_type_parameter(s.type)
+                        && strcmp(QoreTypeInfo::getName(s.type), QoreTypeInfo::getName(subst))) {
+                    first = &s;
+                    second = {pti->getBaseClass(), subst, pvia};
+                    return false;
+                }
+            }
+            seen.push_back({pti->getBaseClass(), subst, pvia});
+        }
+        if (!path.insert(pcp).second) {
+            continue;
+        }
+        const bool ok = collect_generic_parents(*pcp, pti ? subst : nullptr, pvia, seen, path, first, second);
+        path.erase(pcp);
+        if (!ok) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
+int qore_class_private::parseCheckGenericParentInstantiations() const {
+    if (!scl || !scl->valid) {
+        return 0;
+    }
+    std::vector<GenericParentSeen> seen;
+    std::unordered_set<const qore_class_private*> path;
+    path.insert(this);
+    GenericParentSeen* first = nullptr;
+    GenericParentSeen second;
+    if (collect_generic_parents(*this, nullptr, std::string(), seen, path, first, second)) {
+        return 0;
+    }
+    parse_error(*loc, "class '%s' inherits generic class '%s' with different type arguments: '%s' through '%s' and "
+        "'%s' through '%s'", name.c_str(), second.base->getName(), generic_parent_name(first->type).c_str(),
+        first->via.c_str(), generic_parent_name(second.type).c_str(), second.via.c_str());
+    return -1;
+}
 
 int qore_class_private::parseCheckFinalHierarchy() const {
     // a hierarchy that was rejected (a class that is its own ancestor) has its parse error already
@@ -7672,43 +7961,45 @@ QoreValue UserMethodVariant::evalSynchronizedMethod(QoreObject* self, CodeEvalua
 }
 
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE void BuiltinConstructorValueVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+QORE_INTERN_ALWAYS_INLINE bool BuiltinConstructorValueVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     CodeContextHelper cch(xsink, CT_BUILTIN, "constructor", self, qore_class_private::get(thisclass));
 
     if (constructorPreludeImpl<Lexical>({}, thisclass, ceh, self, bcl, bceal, xsink))
-        return;
+        return false;
 
     constructor(self, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+    return !qore_constructor_has_event(xsink);
 }
 
-void BuiltinConstructorValueVariant::evalConstructor(const QoreClass& thisclass, QoreObject* self,
+bool BuiltinConstructorValueVariant::evalConstructor(const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     return evalConstructorImpl<false>({}, thisclass, self, ceh, bcl, bceal, xsink);
 }
 
-void BuiltinConstructorValueVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+bool BuiltinConstructorValueVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     return evalConstructorImpl<true>(policy, thisclass, self, ceh, bcl, bceal, xsink);
 }
 
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE void BuiltinExternalConstructorValueVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+QORE_INTERN_ALWAYS_INLINE bool BuiltinExternalConstructorValueVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     CodeContextHelper cch(xsink, CT_BUILTIN, "constructor", self, qore_class_private::get(thisclass));
 
     if (constructorPreludeImpl<Lexical>({}, thisclass, ceh, self, bcl, bceal, xsink))
-        return;
+        return false;
 
     constructor(*qmethod, ptr, self, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+    return !qore_constructor_has_event(xsink);
 }
 
-void BuiltinExternalConstructorValueVariant::evalConstructor(const QoreClass& thisclass, QoreObject* self,
+bool BuiltinExternalConstructorValueVariant::evalConstructor(const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     return evalConstructorImpl<false>({}, thisclass, self, ceh, bcl, bceal, xsink);
 }
 
-void BuiltinExternalConstructorValueVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+bool BuiltinExternalConstructorValueVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     return evalConstructorImpl<true>(policy, thisclass, self, ceh, bcl, bceal, xsink);
 }
@@ -7755,11 +8046,11 @@ void UserConstructorVariant::setBCAList(BCAList* n_bcal) {
 }
 
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE void UserConstructorVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, QoreObject* self,
+QORE_INTERN_ALWAYS_INLINE bool UserConstructorVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     UserVariantExecHelper uveh(this, &ceh, xsink);
     if (!uveh)
-        return;
+        return false;
 
     CodeContextHelper cch(xsink, CT_USER, "constructor", self, qore_class_private::get(thisclass), false);
 
@@ -7777,8 +8068,11 @@ QORE_INTERN_ALWAYS_INLINE void UserConstructorVariant::evalConstructorImpl(Lexic
         ArgvContextHelper argv_helper(argv ? argv->listRefSelf() : nullptr, xsink);
     }
 
+    // Capture completion before argv and UVEH parameter cleanup can raise (#6086).
+    bool completed = false;
     if (!constructorPreludeImpl<Lexical>({}, thisclass, ceh, self, bcl, bceal, xsink)) {
-        evalIntern("constructor", uveh.getArgv(), 0, xsink).discard(xsink);
+        evalIntern("constructor", uveh.getArgv(), nullptr, xsink,
+            QoreConstructorCompletion{completed}).discard(xsink);
     }
 
     // uninstantiate argv
@@ -7786,14 +8080,15 @@ QORE_INTERN_ALWAYS_INLINE void UserConstructorVariant::evalConstructorImpl(Lexic
         signature.argvid->uninstantiate(xsink);
 
     // self uninstantiation now handled by SelfInstantiationHelper RAII above
+    return completed;
 }
 
-void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObject* self,
+bool UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     return evalConstructorImpl<false>({}, thisclass, self, ceh, bcl, bceal, xsink);
 }
 
-void UserConstructorVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass &thisclass, QoreObject* self,
+bool UserConstructorVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass &thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     return evalConstructorImpl<true>(policy, thisclass, self, ceh, bcl, bceal, xsink);
 }
@@ -7993,7 +8288,7 @@ void BuiltinCopyVariantBase::evalCopyImpl(LexicalSemanticPolicy policy, const Qo
 }
 
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE void ConstructorMethodFunction::evalConstructorImpl(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant,
+QORE_INTERN_ALWAYS_INLINE bool ConstructorMethodFunction::evalConstructorImpl(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant,
         const QoreClass& thisclass, QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal,
         RuntimeConfig& rc, ExceptionSink* xsink, bool tmp_args) const {
     // setup call, save runtime position, and evaluate arguments; a temporary list gives its values to the call (see
@@ -8011,21 +8306,21 @@ QORE_INTERN_ALWAYS_INLINE void ConstructorMethodFunction::evalConstructorImpl(Le
         printd(5, "ConstructorMethodFunction::evalConstructor() %s variant=%p args=%p nargs=%d EXCEPTION in CEH\n",
             thisclass.getName(), static_cast<const void*>(variant), static_cast<const void*>(args),
             args ? static_cast<int>(args->size()) : 0);
-        return;
+        return false;
     }
 
-    if constexpr (Lexical) CONMV_const(variant)->evalLexicalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
-    else CONMV_const(variant)->evalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
+    if constexpr (Lexical) return CONMV_const(variant)->evalLexicalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
+    else return CONMV_const(variant)->evalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
 }
 
-void ConstructorMethodFunction::evalConstructor(
+bool ConstructorMethodFunction::evalConstructor(
         const AbstractQoreFunctionVariant* variant,
         const QoreClass& thisclass, QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal,
         RuntimeConfig& rc, ExceptionSink* xsink, bool tmp_args) const {
     return evalConstructorImpl<false>({}, variant, thisclass, self, args, bcl, bceal, rc, xsink, tmp_args);
 }
 
-void ConstructorMethodFunction::evalConstructor(
+bool ConstructorMethodFunction::evalConstructor(
         LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant,
         const QoreClass& thisclass, QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal,
         RuntimeConfig& rc, ExceptionSink* xsink, bool tmp_args) const {
@@ -8112,6 +8407,28 @@ QORE_INTERN_ALWAYS_INLINE QoreValue NormalMethodFunction::evalMethodImpl(Lexical
 
     if constexpr (Lexical) return mv->evalLexicalMethod(self, ceh, xsink);
     else return mv->evalMethod(self, ceh, xsink);
+}
+
+QoreValue NormalMethodFunction::evalMethodGivenArgs(ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, QoreObject* self, QoreListNode* args,
+        const qore_class_private* cctx, QoreProgram* pgm_ctx) const {
+    // as evalMethod(), with the temporary argument list, whose values the parameters take over
+    const char* cname = getClassName();
+    const char* mname = getName();
+    const qore_class_private* method_qc = qore_class_private::get(*qc);
+    QoreSourceProgramHolder spgm_holder(xsink);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, self, method_qc, CT_UNUSED, false, cctx,
+        qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx));
+    if (*xsink)
+        return QoreValue();
+
+    const MethodVariant* mv = METHV_const(variant);
+    if (mv->isAbstract()) {
+        xsink->raiseException("ABSTRACT-VARIANT-ERROR", "cannot call abstract variant %s::%s(%s) directly", cname,
+            mname, mv->getSignature()->getSignatureText());
+        return QoreValue();
+    }
+    return mv->evalMethod(self, ceh, xsink);
 }
 
 // raises the exception for a call of an abstract variant
@@ -8263,6 +8580,22 @@ QoreValue StaticMethodFunction::evalMethod(
     return evalMethodImpl<true>(policy, xsink, rc, variant, args, cctx, pgm_ctx, receiver_type_info, explicit_type_param_instantiation);
 }
 
+QoreValue StaticMethodFunction::evalMethodGivenArgs(ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
+        QoreProgram* pgm_ctx, const QoreTypeInfo* receiver_type_info) const {
+    // as evalMethod(), with the temporary argument list, whose values the parameters take over
+    const char* mname = getName();
+    QoreSourceProgramHolder spgm_holder(xsink);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
+        CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx), receiver_type_info);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // issue #4964: set class ctx
+    ObjectSubstitutionHelper osh(nullptr, cctx);
+    return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
+}
+
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified
 // at run time
 template <bool Lexical>
@@ -8335,16 +8668,16 @@ static QoreValue eval_normal_method_named(const NormalMethodFunction& f, Excepti
 QoreValue NormalMethodFunction::evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
         const QoreListNode* args, const qore_class_private* cctx,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-        LexicalSemanticPolicy policy) const {
-    return eval_normal_method_named(*this, xsink, rc, self, args, cctx, nullptr, explicit_type_param_instantiation,
+        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx) const {
+    return eval_normal_method_named(*this, xsink, rc, self, args, cctx, pgm_ctx, explicit_type_param_instantiation,
         arg_names, policy);
 }
 
 QoreValue NormalMethodFunction::evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
         QoreListNode* args, const qore_class_private* cctx,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-        LexicalSemanticPolicy policy) const {
-    return eval_normal_method_named(*this, xsink, rc, self, args, cctx, nullptr, explicit_type_param_instantiation,
+        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx) const {
+    return eval_normal_method_named(*this, xsink, rc, self, args, cctx, pgm_ctx, explicit_type_param_instantiation,
         arg_names, policy);
 }
 
@@ -8378,13 +8711,13 @@ template <typename ArgList>
 static QoreValue eval_static_method_named(const StaticMethodFunction& f, ExceptionSink* xsink, RuntimeConfig& rc,
         ArgList args, const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-        LexicalSemanticPolicy policy) {
+        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx) {
     const QoreClass* qc = f.getClass();
     const AbstractQoreFunctionVariant* variant = nullptr;
     QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, &f, variant, f.getName(), args, nullptr, qore_class_private::get(*qc), cctx,
-        qore_get_method_pgm_context(*qc, spgm_holder), receiver_type_info, explicit_type_param_instantiation, false,
-        arg_names, policy);
+        qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx), receiver_type_info, explicit_type_param_instantiation,
+        false, arg_names, policy);
     if (*xsink) {
         return QoreValue();
     }
@@ -8398,17 +8731,17 @@ static QoreValue eval_static_method_named(const StaticMethodFunction& f, Excepti
 QoreValue StaticMethodFunction::evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, const QoreListNode* args,
         const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-        LexicalSemanticPolicy policy) const {
+        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx) const {
     return eval_static_method_named(*this, xsink, rc, args, cctx, receiver_type_info,
-        explicit_type_param_instantiation, arg_names, policy);
+        explicit_type_param_instantiation, arg_names, policy, pgm_ctx);
 }
 
 QoreValue StaticMethodFunction::evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreListNode* args,
         const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-        LexicalSemanticPolicy policy) const {
+        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx) const {
     return eval_static_method_named(*this, xsink, rc, args, cctx, receiver_type_info,
-        explicit_type_param_instantiation, arg_names, policy);
+        explicit_type_param_instantiation, arg_names, policy, pgm_ctx);
 }
 
 const qore_class_private* MethodVariantBase::getClassPriv() const {

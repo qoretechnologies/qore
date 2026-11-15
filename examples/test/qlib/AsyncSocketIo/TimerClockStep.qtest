@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - event loop timers (epoll, kqueue) on the monotonic and the system clock
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AsyncSocketIo
+
+%exec-class TimerClockStepTest
+
+#! Timers of AsyncIoController::addTimerDelay() and a step of the system clock
+/** A timer for an interval was armed with addTimer() for now_us() plus the interval, a deadline of the system clock,
+    which the event loop compares with the system clock: a step forward fired it at once, and a step back delayed it by
+    the size of the step.  addTimerDelay() arms it on the monotonic clock.  The cases that step the system clock use
+    dbg_set_realtime_offset(), which only debug builds have.
+*/
+public class TimerClockStepTest inherits QUnit::Test {
+    public {
+        #! the longest wait for a timer that is due
+        const HangGuard = 20s;
+
+        #! a step of the system clock
+        const Step = 3600 * 1000000;
+    }
+
+    constructor() : Test("TimerClockStepTest", "1.0") {
+        # all timers run in one I/O thread: a timer armed after a step of the system clock wakes the thread that has
+        # the timers armed before it, which then checks them after the step
+        AsyncIoController::setMaxIoThreads(1);
+        addTestCase("addTimerDelay() fires after its delay", \delayFiresTest());
+        addTestCase("cancelTimer() stops an addTimerDelay() timer", \delayCancelTest());
+        addTestCase("a step forward of the system clock does not fire an addTimerDelay() timer early",
+            \stepForwardTest());
+        addTestCase("a step back of the system clock does not delay an addTimerDelay() timer", \stepBackTest());
+        set_return_value(main());
+    }
+
+    delayFiresTest() {
+        AsyncSocketIoController ctrl = getGlobalAsyncIoController();
+        Counter fired(1);
+        int start = clock_get_monotonic_us();
+        ctrl.addTimerDelay(50ms, sub () { fired.dec(); });
+        assertEq(0, fired.waitForZero(HangGuard), "the timer fires");
+        assertGe(50000, clock_get_monotonic_us() - start, "not before its delay");
+
+        Counter owned(1);
+        ctrl.addTimerDelay(1ms, sub () { owned.dec(); }, "timer-clock-step-owner");
+        assertEq(0, owned.waitForZero(HangGuard), "the owner-tagged timer fires");
+        ctrl.flushCallbacksByOwner("timer-clock-step-owner");
+    }
+
+    delayCancelTest() {
+        AsyncSocketIoController ctrl = getGlobalAsyncIoController();
+        Counter fired(1);
+        int id = ctrl.addTimerDelay(HangGuard, sub () { fired.dec(); });
+        assertTrue(ctrl.cancelTimer(id), "the timer is canceled");
+        assertFalse(ctrl.cancelTimer(id), "a canceled timer cannot be canceled again");
+    }
+
+    stepForwardTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build (dbg_set_realtime_offset())");
+        }
+        AsyncSocketIoController ctrl = getGlobalAsyncIoController();
+        Counter delay_fired(1);
+        Counter deadline_fired(1);
+        int delay_id = ctrl.addTimerDelay(HangGuard, sub () { delay_fired.dec(); });
+        int deadline_id = ctrl.addTimer(now_us() + HangGuard, sub () { deadline_fired.dec(); });
+        on_exit {
+            ctrl.cancelTimer(delay_id);
+            ctrl.cancelTimer(deadline_id);
+        }
+        {
+            call_function("dbg_set_realtime_offset", Step);
+            on_exit call_function("dbg_set_realtime_offset", 0);
+            # a timer armed now wakes the I/O thread, which then checks its timers after the step
+            Counter woken(1);
+            ctrl.addTimerDelay(10ms, sub () { woken.dec(); });
+            assertEq(0, woken.waitForZero(HangGuard), "the timer armed after the step fires");
+            # the timer armed on the system clock is due now: it shows that the event loop sees the step
+            assertEq(0, deadline_fired.waitForZero(HangGuard), "a timer armed for a time of the system clock fires");
+            assertEq(1, delay_fired.getCount(), "the timer armed for a delay does not");
+        }
+    }
+
+    stepBackTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build (dbg_set_realtime_offset())");
+        }
+        AsyncSocketIoController ctrl = getGlobalAsyncIoController();
+        Counter delay_fired(1);
+        Counter deadline_fired(1);
+        int delay_id = ctrl.addTimerDelay(50ms, sub () { delay_fired.dec(); });
+        # due in 2 seconds, so that it cannot fire before the step even if the thread stalls
+        int deadline_id = ctrl.addTimer(now_us() + 2s, sub () { deadline_fired.dec(); });
+        on_exit {
+            ctrl.cancelTimer(delay_id);
+            ctrl.cancelTimer(deadline_id);
+        }
+        # the system clock steps back after the timers are armed
+        call_function("dbg_set_realtime_offset", -Step);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        assertEq(0, delay_fired.waitForZero(HangGuard), "the timer armed for a delay fires after its delay");
+        # the timer armed on the system clock would fire when the system clock is back at its deadline, an hour later
+        assertNeq(0, deadline_fired.waitForZero(2500ms), "a timer armed for a time of the system clock does not fire");
+    }
+}

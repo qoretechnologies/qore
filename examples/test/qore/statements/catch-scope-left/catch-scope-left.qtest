@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the exception paths of catch blocks and threads
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CatchScopeLeftTest
+
+#! A catch block that an exception or a thread_exit leaves is left before the code that runs after it (#5969)
+/** When a call in a catch block raised an exception (or the catch block ran a thread_exit) that left the catch block
+    for a try statement of the same function or for the caller, the IR interpreter and native code kept the catch
+    block open until the function ended: the exception that it caught stayed the current one (td->catchException), so
+    that a rethrow in the handlers of the enclosing blocks and after the try statement that caught the new exception
+    raised it again instead of the one that the enclosing catch block caught.  The AST interpreter leaves the catch
+    block as the exception leaves it.  A break or continue out of a catch block, and handlers that run without an
+    exception, leave the enclosing catch blocks open (b1-b4, which the first version of the fix broke).
+    CatchScopeLeft.q gives the output of the AST interpreter in every execution
+    mode and compiled with qcc.
+*/
+class CatchScopeLeftTest inherits QUnit::Test {
+    public {
+        #! the output of CatchScopeLeft.q with the AST interpreter
+        const Expected = "c1: [\"caught:CALL\", \"after:OUTER\", \"oh:OUTER\"]
+c1: [\"caught:CALL\", \"after:OUTER\", \"oh:OUTER\"]
+c2: [\"tb:OUTER\", \"caught:CALL\", \"after:OUTER\"]
+c2: [\"tb:OUTER\", \"caught:CALL\", \"after:OUTER\"]
+c3: [\"ih:A\", \"caught:CALL\", \"after:OUTER\"]
+c3: [\"ih:A\", \"caught:CALL\", \"after:OUTER\"]
+c4: [\"oh:OUTER\", \"caught:CALL\"]
+c4: [\"oh:OUTER\", \"caught:CALL\"]
+c5: [\"oh:OUTER\", \"caught:CALL\", \"after:OUTER\"]
+c5: [\"oh:OUTER\", \"caught:CALL\", \"after:OUTER\"]
+b1: [\"x\", \"after:OUTER\"]
+b1: [\"x\", \"after:OUTER\"]
+b2: [\"after:OUTER\"]
+b2: [\"after:OUTER\"]
+b3: [\"after:OUTER\"]
+b3: [\"after:OUTER\"]
+b4: [\"caller:C\"]
+b4: [\"caller:C\"]
+t1: [\"oh:OUTER\"]
+t1: [\"oh:OUTER\"]
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("CatchScopeLeftTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/CatchScopeLeft.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": a catch block that an exception leaves", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: a catch block that an exception leaves", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-catch-scope-left-");
+        string exe = tmp.path + DirSep + "catch-scope-left";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

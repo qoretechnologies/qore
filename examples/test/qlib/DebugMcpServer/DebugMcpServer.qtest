@@ -36,7 +36,7 @@ public class DebugMcpServerTest inherits QUnit::Test {
         #! a program that ends with an exception that matches a common pitfall
         const TrapProgram = "%modern\n"                                     # 1
             "sub f() {\n"                                                    # 2
-            "    *int src;\n"                                                # 3
+            "    *int src = (*int sub () { return; })();\n"                  # 3
             "    int count = src;\n"                                         # 4
             "}\n"                                                            # 5
             "f();\n";                                                        # 6

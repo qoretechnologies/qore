@@ -60,7 +60,7 @@ static const VarRefNode* get_lvalue_root_var_ref(QoreValue value) {
             value = op->getLeft();
             continue;
         }
-        if (const auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        if (const auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             value = op->getLeft();
             continue;
         }
@@ -327,6 +327,16 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     // check for illegal assignment to $self
     if (parse_context.oflag && check_self_assignment(loc, left, parse_context.oflag) && !err) {
         err = -1;
+    }
+
+    // a local variable that cannot have been assigned gives NOTHING (qore#5937); an assignment through a reference
+    // stores the value in the target of the reference
+    if (!lvalue_err && mode == AssignmentMode::Normal) {
+        const QoreTypeInfo* target_ti = QoreTypeInfo::isReference(ti) ? QoreTypeInfo::getReferenceTarget(ti) : ti;
+        if (qore_parse_check_unassigned_read(parse_context.pgm, loc, right, target_ti, "the assigned lvalue")
+                && !err) {
+            err = -1;
+        }
     }
 
     //printd(5, "QoreAssignmentOperatorNode::parseInitImpl() this: %p left: %s ti: %p '%s', right: %s ti: %s\n",

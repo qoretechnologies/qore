@@ -108,6 +108,7 @@
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreSelectOperatorNode.h"
 #include "qore/intern/QoreStreamingOperatorNode.h"
+#include "qore/intern/FindNode.h"
 #include "qore/intern/QoreElementsOperatorNode.h"
 #include "qore/intern/QoreDeleteOperatorNode.h"
 #include "qore/intern/QoreRemoveOperatorNode.h"
@@ -299,7 +300,7 @@ int qore_aot_apply_named_call_args(QoreValue& call, QoreAOTNamedCallArgs& named,
 
 static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
-    if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (auto* call = qore_get_function_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL));
         // Emit the namespace-qualified name, not the bare base name.
         // Without qualification, a caller in namespace `OMQ` whose body
@@ -1328,7 +1329,7 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
 
 static bool write_expr_runtime_const_ref(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
-    if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+    if (auto* rcr = qore_get_runtime_constant_ref_node(node)) {
         std::string path;
         if (qore_aot_resolve_runtime_constant_path(rcr, ctx.const_reverse_map, path)) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
@@ -1413,15 +1414,85 @@ static bool write_expr_local_varref(AOTExprWriteCtx& ctx) {
                     return true;
                 }
             }
+            std::string top_ref;
+            if (qore_aot_top_level_local_ref(ctx.writer, varref, top_ref)) {
+                ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOCAL_VARREF));
+                ctx.writer.writeStringRef(top_ref.c_str());
+                return true;
+            }
         }
     }
     return false;
+}
+
+//! The result of finding a top-level local of a Program from its serialized reference
+enum class AOTTopLevelLocalResult {
+    Found,
+    //! the Program has no such top-level local yet: they exist when its top-level code is registered
+    Deferred,
+    Error,
+};
+
+//! Finds the top-level local of the Program that a reference "top:<index>:<name>" names (qore#5868)
+/** The index names the variable if the name is that of the variable at the index; else the variable that has the
+    name, if it is the only one (a name that two top-level locals have cannot be told apart).  \a ref is the text
+    after "top:".
+*/
+static AOTTopLevelLocalResult aot_find_top_level_local(QoreProgram* pgm, const char* ref, LocalVar*& found,
+        std::string& error) {
+    char* end = nullptr;
+    unsigned long index = strtoul(ref, &end, 10);
+    if (!end || *end != ':' || !end[1]) {
+        error = "invalid top-level local reference 'top:";
+        error += ref;
+        error += "'";
+        return AOTTopLevelLocalResult::Error;
+    }
+    const char* name = end + 1;
+    const LVList* top = pgm ? qore_program_private::get(*pgm)->sb.getLVList() : nullptr;
+    found = nullptr;
+    if (top) {
+        if (index < top->size() && top->lv[index] && top->lv[index]->getName()
+                && !strcmp(top->lv[index]->getName(), name)) {
+            found = top->lv[index];
+        } else {
+            unsigned matches = 0;
+            for (unsigned i = 0; i < top->size(); ++i) {
+                if (top->lv[i] && top->lv[i]->getName() && !strcmp(top->lv[i]->getName(), name)) {
+                    found = top->lv[i];
+                    ++matches;
+                }
+            }
+            if (matches > 1) {
+                error = "ambiguous top-level local '";
+                error += name;
+                error += "'";
+                return AOTTopLevelLocalResult::Error;
+            }
+        }
+    }
+    return found ? AOTTopLevelLocalResult::Found : AOTTopLevelLocalResult::Deferred;
 }
 
 static QoreValue read_expr_local_varref(AOTExprReadCtx& ctx) {
     const char* index_str = ctx.reader.readStringRef(ctx.ptr);
     if (!index_str) {
         return QoreValue();
+    }
+    if (!strncmp(index_str, "top:", 4)) {
+        // a top-level local of the Program, by its index in the top-level local list and its name (qore#5868)
+        LocalVar* found = nullptr;
+        switch (aot_find_top_level_local(ctx.pgm, index_str + 4, found, ctx.error)) {
+            case AOTTopLevelLocalResult::Error:
+                return QoreValue();
+            case AOTTopLevelLocalResult::Deferred:
+                // the top-level locals exist when the top-level code is registered: the expression is read again then
+                ctx.error = QORE_AOT_DEFER_TOP_LEVEL_LOCAL;
+                return QoreValue();
+            case AOTTopLevelLocalResult::Found:
+                break;
+        }
+        return QoreValue(new VarRefNode(&loc_builtin, found->getName(), found, false));
     }
     int local_slot = std::atoi(index_str);
     if (local_slot < 0 || local_slot >= ctx.num_locals || !ctx.locals || !ctx.locals[local_slot]) {
@@ -1761,6 +1832,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     uint16_t num_captured = QoreAOTBinaryReader::readU16(ctx.ptr);
     std::vector<std::string> captured_names(num_captured);
     std::vector<int32_t> captured_parent_slots(num_captured, -1);
+    // the top-level locals that the closure captures by their index (a closure in a default argument, qore#5998)
+    std::vector<LocalVar*> captured_top_locals(num_captured, nullptr);
     for (uint16_t c = 0; c < num_captured; ++c) {
         if (!have(8)) {
             return fail("capture");
@@ -1768,6 +1841,29 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         const char* cname = ctx.reader.readStringRef(ctx.ptr);
         captured_names[c] = cname ? cname : "";
         captured_parent_slots[c] = static_cast<int32_t>(QoreAOTBinaryReader::readU32(ctx.ptr));
+        if (cname && !strncmp(cname, "top:", 4)) {
+            std::string top_error;
+            switch (aot_find_top_level_local(ctx.pgm, cname + 4, captured_top_locals[c], top_error)) {
+                case AOTTopLevelLocalResult::Error:
+                    for (QoreValue& v : defaults) {
+                        v.discard(nullptr);
+                    }
+                    ctx.ptr = ctx.end;
+                    ctx.error = std::move(top_error);
+                    return QoreValue();
+                case AOTTopLevelLocalResult::Deferred:
+                    // the top-level locals exist when the top-level code is registered: the closure is read again then
+                    for (QoreValue& v : defaults) {
+                        v.discard(nullptr);
+                    }
+                    ctx.ptr = ctx.end;
+                    ctx.error = QORE_AOT_DEFER_TOP_LEVEL_LOCAL;
+                    return QoreValue();
+                case AOTTopLevelLocalResult::Found:
+                    captured_names[c] = captured_top_locals[c]->getName();
+                    break;
+            }
+        }
     }
 
     // Read closure body IR
@@ -1850,6 +1946,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         if (parent_slot >= 0 && parent_slot < ctx.num_locals
                 && ctx.locals[parent_slot]) {
             enclosing_locals[captured_names[ci]] = ctx.locals[parent_slot];
+        } else if (captured_top_locals[ci]) {
+            enclosing_locals[captured_names[ci]] = captured_top_locals[ci];
         }
     }
     // 1c. Top-level locals live in the program LVList, not in the enclosing
@@ -1925,6 +2023,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         if (parent_slot >= 0 && parent_slot < ctx.num_locals
                 && ctx.locals[parent_slot]) {
             lv = ctx.locals[parent_slot];
+        } else if (captured_top_locals[ci]) {
+            lv = captured_top_locals[ci];
         } else {
             auto it = enclosing_locals.find(captured_names[ci]);
             if (it != enclosing_locals.end()) {
@@ -2078,6 +2178,42 @@ static QoreValue read_expr_call_ref(AOTExprReadCtx& ctx) {
     return QoreValue(fcr);
 }
 
+bool qore_aot_write_callref_arg_names(QoreAOTBinaryWriter& writer, const name_vec_t& names) {
+    if (names.size() > 255) {
+        return false;
+    }
+    writer.writeU8(static_cast<uint8_t>(names.size()));
+    for (const std::string& name : names) {
+        writer.writeStringRef(name.c_str(), name.size());
+    }
+    return true;
+}
+
+const name_vec_t* qore_aot_read_callref_arg_names(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        const uint8_t* end, std::string& error) {
+    if (ptr >= end) {
+        error = "truncated named call reference call: no argument name count";
+        return nullptr;
+    }
+    uint8_t num = QoreAOTBinaryReader::readU8(ptr);
+    name_vec_t names;
+    names.reserve(num);
+    for (uint8_t i = 0; i < num; ++i) {
+        if (end - ptr < 4) {
+            error = "truncated named call reference call: argument name " + std::to_string(i);
+            return nullptr;
+        }
+        const char* name = reader.readStringRef(ptr);
+        if (!name) {
+            error = "invalid named call reference call: argument name " + std::to_string(i) + " is not in the "
+                "string pool";
+            return nullptr;
+        }
+        names.emplace_back(name);
+    }
+    return qore_intern_call_arg_names(std::move(names));
+}
+
 static bool write_expr_callref_call(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     auto* crc = dynamic_cast<const CallReferenceCallNode*>(node);
@@ -2092,7 +2228,9 @@ static bool write_expr_callref_call(AOTExprWriteCtx& ctx) {
         return false;
     }
 
-    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CALLREF_CALL));
+    // a named call is written with the names of its arguments after them (AOTExprKind::CALLREF_CALL_NAMED)
+    const name_vec_t* arg_names = crc->getRuntimeArgNames();
+    ctx.writer.writeU8(static_cast<uint8_t>(arg_names ? AOTExprKind::CALLREF_CALL_NAMED : AOTExprKind::CALLREF_CALL));
     if (!classifyAndWriteExpr(ctx.writer, crc->getExp(), ctx.parent_locals,
             ctx.parent_globals, ctx.const_reverse_map)) {
         return false;
@@ -2105,10 +2243,10 @@ static bool write_expr_callref_call(AOTExprWriteCtx& ctx) {
             return false;
         }
     }
-    return true;
+    return !arg_names || qore_aot_write_callref_arg_names(ctx.writer, *arg_names);
 }
 
-static QoreValue read_expr_callref_call(AOTExprReadCtx& ctx) {
+static QoreValue read_expr_callref_call_intern(AOTExprReadCtx& ctx, bool named) {
     std::string callee_err;
     QoreValue callee = readOneExpr(ctx.reader, ctx.ptr, ctx.end, callee_err,
         ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
@@ -2139,9 +2277,27 @@ static QoreValue read_expr_callref_call(AOTExprReadCtx& ctx) {
             args->add(arg, &loc_builtin);
         }
     }
+    const name_vec_t* arg_names = nullptr;
+    if (named) {
+        arg_names = qore_aot_read_callref_arg_names(ctx.reader, ctx.ptr, ctx.end, ctx.error);
+        if (!arg_names) {
+            delete args;
+            callee.discard(nullptr);
+            return QoreValue();
+        }
+    }
     auto* call = new CallReferenceCallNode(&loc_builtin, callee, args);
     call->resolveParseArgs();
+    call->setRuntimeArgNames(arg_names);
     return QoreValue(call);
+}
+
+static QoreValue read_expr_callref_call(AOTExprReadCtx& ctx) {
+    return read_expr_callref_call_intern(ctx, false);
+}
+
+static QoreValue read_expr_callref_call_named(AOTExprReadCtx& ctx) {
+    return read_expr_callref_call_intern(ctx, true);
 }
 
 // ============================================================================
@@ -3075,7 +3231,9 @@ static QoreValue read_expr_hash_deref(AOTExprReadCtx& ctx) {
         if (type_path && *type_path) {
             QoreAOTTypeResolver type_resolver(ctx.pgm);
             std::string type_error;
-            result_type_info = type_resolver.resolve(type_path, type_error);
+            // the type can name the type parameters of the generic function that the expression is in (qore#6121)
+            result_type_info = type_resolver.resolveForSignature(type_path, type_error,
+                qore_aot_get_type_param_owner());
             if (!result_type_info || !type_error.empty()) {
                 ctx.error = "cannot resolve hash-dereference result type '";
                 ctx.error += type_path;
@@ -3164,7 +3322,8 @@ static QoreValue read_expr_parse_ref(AOTExprReadCtx& ctx) {
     if (type_path && *type_path) {
         std::string type_error;
         QoreAOTTypeResolver type_resolver(ctx.pgm);
-        ref_ti = type_resolver.resolve(type_path, type_error);
+        // the type of a reference to a local of a generic function can name its type parameters (qore#5885)
+        ref_ti = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
         if (!ref_ti) {
             inner.discard(nullptr);
             ctx.error = "cannot resolve parse-reference type '" + std::string(type_path) + "': " + type_error;
@@ -3727,6 +3886,10 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
             if (!resolved_m) {
                 resolved_m = resolved_qc->findStaticMethod(method_name);
             }
+            if (!resolved_m && !is_pseudo) {
+                // a method of the class whatever its access, which the compiler checked (qore#5975)
+                resolved_m = qore_aot_find_named_method(resolved_qc, method_name);
+            }
         }
     }
     if (resolved_qc && resolved_m) {
@@ -3853,7 +4016,7 @@ static QoreValue read_expr_plus(AOTExprReadCtx& ctx) {
 
 static bool write_expr_square_bracket(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
-    auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node);
+    auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node);
     if (!op) {
         return false;
     }
@@ -5127,6 +5290,48 @@ static QoreValue read_expr_streaming(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
     return QoreValue(new QoreStreamingOperatorNode(&loc_builtin, kind, predicate, source));
+}
+
+// ============================================================================
+// FIND (127)
+// ============================================================================
+
+static bool write_expr_find(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* op = dynamic_cast<const FindNode*>(node);
+    if (!op) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::FIND));
+    ctx.writer.writeU8(static_cast<uint8_t>(op->getMode()));
+    return classifyAndWriteExpr(ctx.writer, op->exp, ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->find_exp, ctx.parent_locals, ctx.parent_globals,
+            ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->where, ctx.parent_locals, ctx.parent_globals,
+            ctx.const_reverse_map);
+}
+
+static QoreValue read_expr_find(AOTExprReadCtx& ctx) {
+    uint8_t mode_byte = QoreAOTBinaryReader::readU8(ctx.ptr);
+    if (mode_byte > static_cast<uint8_t>(FindNode::One)) {
+        ctx.error = "invalid find expression mode " + std::to_string(mode_byte);
+        return QoreValue();
+    }
+    QoreValue operands[3];
+    for (unsigned i = 0; i < 3; ++i) {
+        std::string err;
+        operands[i] = readOneExpr(ctx.reader, ctx.ptr, ctx.end, err, ctx.pgm, ctx.locals, ctx.num_locals,
+            ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+        if (!err.empty()) {
+            for (unsigned j = 0; j <= i; ++j) {
+                operands[j].discard(nullptr);
+            }
+            ctx.error = err;
+            return QoreValue();
+        }
+    }
+    return QoreValue(new FindNode(&loc_builtin, operands[0], operands[1], operands[2],
+        static_cast<FindNode::Mode>(mode_byte)));
 }
 
 // ============================================================================

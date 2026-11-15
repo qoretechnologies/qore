@@ -26,6 +26,7 @@
 # a poll operation refers back to the controller that owns it; see the "@=" comments
 # on those members for why the collector must not follow those edges
 %allow-opaque-references
+%allow-weak-references
 
 %requires Logger
 %requires HttpServerUtil

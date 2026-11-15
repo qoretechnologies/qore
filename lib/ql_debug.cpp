@@ -74,6 +74,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QC_QoreParseOptions.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/QC_Http3ServerPollOperation.h"
@@ -96,6 +97,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBatchMemory.h"
 #include "qore/intern/FileStreamIo.h"
+#include "qore/intern/qore_enum_decl_private.h"
 
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -328,6 +330,18 @@ static QoreValue f_dbg_generic_cache_counts(const QoreListNode* params, RuntimeC
     h->setKeyValue("hashdecls", qore_live_parameterized_hashdecls.load(std::memory_order_relaxed), xsink);
     h->setKeyValue("registered_types", static_cast<int64>(qore_generic_cache_registered_type_count()), xsink);
     return h.release();
+}
+
+//! Returns the number of class, hashdecl and enum declarations kept after they were destroyed because derived types
+//! name their types (issue #5790)
+static QoreValue f_dbg_retired_type_declarations(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(qore_retired_type_owner_count());
+}
+
+//! Returns the number of groups of declarations that survived their Program and are not collected yet (issue #5790)
+static QoreValue f_dbg_type_declaration_groups(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_type_owner_group_count());
 }
 
 static QoreValue f_dbg_global_vars(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -648,6 +662,17 @@ static void ut_string_compare_soft_and_concat_chars(UnitTestCounters& c) {
     UT_ASSERT_EQ(c, 1, ab.compareSoft(&empty, &xsink), "compareSoft(): a string is greater than an empty one");
     UT_ASSERT_EQ(c, 0, empty.compareSoft(&empty, &xsink), "compareSoft(): empty strings are equal");
     UT_ASSERT_EQ(c, -1, abc.compareSoft(&b, &xsink), "compareSoft(): the first different byte decides");
+    // compare() orders an empty string before any other string, as compareSoft() does (qore#6090)
+    UT_ASSERT_EQ(c, -1, empty.compare(&ab), "compare(): an empty string is less");
+    UT_ASSERT_EQ(c, 1, ab.compare(&empty), "compare(): a string is greater than an empty one");
+    UT_ASSERT_EQ(c, 0, empty.compare(&empty), "compare(): empty strings are equal");
+    UT_ASSERT(c, empty.compare("ab") < 0, "compare(const char*): an empty string is less");
+    UT_ASSERT_EQ(c, 0, empty.compare(""), "compare(const char*): an empty string equals \"\"");
+    UT_ASSERT_EQ(c, 0, empty.compare(static_cast<const char*>(nullptr)), "compare(const char*): an empty string "
+        "equals a null string");
+    UT_ASSERT(c, ab.compare(static_cast<const char*>(nullptr)) > 0, "compare(const char*): a string is greater "
+        "than a null string");
+    UT_ASSERT(c, ab.compare("") > 0, "compare(const char*): a string is greater than \"\"");
     {
         QoreString latin1("ab", QCS_ISO_8859_1);
         UT_ASSERT_EQ(c, -1, latin1.compareSoft(&abc, &xsink), "compareSoft(): converted prefix");
@@ -5699,6 +5724,8 @@ public:
         runMappedAddress(c);
 #ifdef DARWIN
         runCancelledScan(c);
+        runDescriptorScans(c);
+        runDescendantSockets(c);
 #endif
     }
 
@@ -5841,6 +5868,198 @@ private:
             "specific bind: a bind without a sink is checked against the socket table");
         UT_ASSERT(c, qore_is_thread_cancel_requested(),
             "specific bind: a scan without a sink leaves the cancellation request pending");
+    }
+
+    //! The process descriptors are scanned for a port check only if the socket table can omit a socket
+    /** Whether the table lists the sockets of the accessible processes is decided once for each socket type, by the
+        first check that finds no holder in the table (the checks above have made it).  If the table lists them, a
+        check scans no descriptors; otherwise, a check that finds no holder scans them once.  Either way the port is
+        refused as before.  The scans are counted for the calling thread only, so the checks of other threads do not
+        change the count.
+    */
+    static void runDescriptorScans(UnitTestCounters& c) {
+        int mode = qore_socket_table_check_mode(SOCK_STREAM);
+        UT_ASSERT(c, mode == 1 || mode == -1 || mode == 0,
+            "specific bind: the socket table check mode is a known value");
+        printf("  specific bind: TCP port checks use %s\n", mode == 1 ? "the socket table alone"
+            : (mode == -1 ? "the socket table and the process descriptors" : "an undecided socket table check"));
+        for (int i = 0; i < 3; ++i) {
+            Fd l{open(AF_INET, false, true)};
+            UT_ASSERT(c, l.fd >= 0, "specific bind: the scan count socket is opened");
+            if (l.fd < 0) {
+                return;
+            }
+            UT_ASSERT_EQ(c, 0, bindTo(l.fd, AF_INET, "0.0.0.0", 0), "specific bind: the scan count socket is bound");
+            mode = qore_socket_table_check_mode(SOCK_STREAM);
+            size_t before = qore_socket_descriptor_scan_count();
+            UT_ASSERT_EQ(c, 0, listenOn(l.fd), "specific bind: the scan count socket listens");
+            size_t scans = qore_socket_descriptor_scan_count() - before;
+            if (mode == 1) {
+                UT_ASSERT_EQ(c, (size_t)0, scans,
+                    "specific bind: a listen scans no process descriptors when the socket table lists their sockets");
+            } else if (mode == -1) {
+                UT_ASSERT_EQ(c, (size_t)1, scans,
+                    "specific bind: a listen that finds no holder scans the process descriptors once when the socket "
+                    "table can omit sockets");
+            }
+            // a specific address of the port of the listener on the wildcard address is refused, as before, by the
+            // check that finds the listener
+            Fd s{open(AF_INET, false, true)};
+            UT_ASSERT_EQ(c, EADDRINUSE, s.fd >= 0 ? bindTo(s.fd, AF_INET, "127.0.0.1", portOf(l.fd)) : -1,
+                "specific bind: 127.0.0.1 with SO_REUSEADDR is refused the port of a listener on 0.0.0.0");
+        }
+    }
+
+    //! A child process that waits until its parent ends it
+    struct Child {
+        pid_t pid = -1;
+        //! the write end of the pipe on which the child waits; closing it ends the child
+        int wfd = -1;
+
+        DLLLOCAL ~Child() {
+            end();
+        }
+
+        //! ends the child and returns its exit status (see ut_wait_child()), or 0 if there is no child
+        DLLLOCAL int end() {
+            if (wfd >= 0) {
+                ::close(wfd);
+                wfd = -1;
+            }
+            int rc = 0;
+            if (pid > 0) {
+                rc = ut_wait_child(pid);
+                pid = -1;
+            }
+            return rc;
+        }
+    };
+
+    //! Starts a child that keeps the descriptors that it inherits until @a child ends it
+    /** The child makes only async-signal-safe calls.  A child started later inherits the pipe of an earlier one, so
+        children are ended in the reverse order of their start.
+
+        @param own_listener if true, the child first makes a TCP socket of its own that reuses the address and listens
+        on 0.0.0.0 on a port that the system assigns
+
+        @return the port of the child's listener if @a own_listener is true, 0 if not, -1 for an error
+    */
+    static int startChild(Child& child, bool own_listener) {
+        int wait_pipe[2];
+        if (pipe(wait_pipe)) {
+            return -1;
+        }
+        int port_pipe[2] = {-1, -1};
+        if (own_listener && pipe(port_pipe)) {
+            ::close(wait_pipe[0]);
+            ::close(wait_pipe[1]);
+            return -1;
+        }
+        pid_t pid = fork();
+        if (!pid) {
+            ::close(wait_pipe[1]);
+            if (own_listener) {
+                ::close(port_pipe[0]);
+                int port = -1;
+                int fd = socket(AF_INET, SOCK_STREAM, 0);
+                int one = 1;
+                struct sockaddr_in sin = {};
+                sin.sin_len = sizeof(sin);
+                sin.sin_family = AF_INET;
+                socklen_t len = sizeof(sin);
+                if (fd >= 0 && !setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one))
+                    && !::bind(fd, reinterpret_cast<struct sockaddr*>(&sin), sizeof(sin)) && !::listen(fd, 5)
+                    && !getsockname(fd, reinterpret_cast<struct sockaddr*>(&sin), &len)) {
+                    port = ntohs(sin.sin_port);
+                }
+                if (write(port_pipe[1], &port, sizeof(port)) != sizeof(port)) {
+                    _exit(1);
+                }
+                ::close(port_pipe[1]);
+            }
+            char ch;
+            while (read(wait_pipe[0], &ch, 1) < 0 && errno == EINTR) {
+            }
+            _exit(0);
+        }
+        ::close(wait_pipe[0]);
+        if (pid < 0) {
+            ::close(wait_pipe[1]);
+            if (own_listener) {
+                ::close(port_pipe[0]);
+                ::close(port_pipe[1]);
+            }
+            return -1;
+        }
+        child.pid = pid;
+        child.wfd = wait_pipe[1];
+        if (!own_listener) {
+            return 0;
+        }
+        ::close(port_pipe[1]);
+        int port = -1;
+        ssize_t n;
+        while ((n = read(port_pipe[0], &port, sizeof(port))) < 0 && errno == EINTR) {
+        }
+        ::close(port_pipe[0]);
+        return n == sizeof(port) ? port : -1;
+    }
+
+    //! A socket that this process shares with a child process does not make the socket table look complete
+    /** For a process whose socket table it filters, macOS 27 lists only the sockets that the process created, also
+        when a child process holds them too, and the process descriptors show such a socket in the child as well.  The
+        decision of the port checks, made while a child shares a listener of this process, must not take the table to
+        list the sockets of other processes: the listener of another program on 0.0.0.0, which the table of this
+        process does not list then, refuses a bind of 127.0.0.1 to its port.
+
+        The test scope of the checks of this thread makes the outcome independent of the host: the table lists only
+        the sockets that this process holds, as a filtered table would, and only this process and its descendants are
+        scanned, so that sockets of other processes of the user, which make a filtered table look incomplete, do not
+        decide it.  The decision is made again in this test, and the one made before, and the test scope, are restored
+        at its end.
+    */
+    static void runDescendantSockets(UnitTestCounters& c) {
+        struct Restore {
+            int state;
+            int scope;
+            DLLLOCAL ~Restore() {
+                qore_socket_port_check_test_scope(scope);
+                qore_socket_table_check_exchange(SOCK_STREAM, state);
+            }
+        } restore{qore_socket_table_check_exchange(SOCK_STREAM, 0),
+            qore_socket_port_check_test_scope(QORE_SOCKET_TEST_OWN_TREE | QORE_SOCKET_TEST_FILTERED_TABLE)};
+
+        // a listener of this process that a child shares; bound and listening without the port checks
+        Fd s{open(AF_INET, false, true)};
+        UT_ASSERT(c, s.fd >= 0 && !bindTo(s.fd, AF_INET, "0.0.0.0", 0) && !::listen(s.fd, 5),
+            "specific bind: the shared listener listens");
+        Child sharer;
+        UT_ASSERT_EQ(c, 0, startChild(sharer, false), "specific bind: the child that shares the listener is started");
+
+        // the first listen that finds no holder in the table makes the decision
+        Fd l{open(AF_INET, false, true)};
+        UT_ASSERT(c, l.fd >= 0 && !bindTo(l.fd, AF_INET, "0.0.0.0", 0) && !listenOn(l.fd),
+            "specific bind: the listener that makes the decision listens");
+        int mode = qore_socket_table_check_mode(SOCK_STREAM);
+        printf("  specific bind: with a shared socket, TCP port checks use %s\n", mode == 1
+            ? "the socket table alone" : (mode == -1 ? "the socket table and the process descriptors"
+            : "an undecided socket table check"));
+        // within the test scope, the only sockets of other processes that the table lists are those that this process
+        // shares with its child
+        UT_ASSERT(c, mode != 1, "specific bind: a socket shared with a child does not make the socket table look "
+            "complete");
+
+        Child holder;
+        int port = startChild(holder, true);
+        UT_ASSERT(c, port > 0, "specific bind: the other program listens on 0.0.0.0");
+        if (port > 0) {
+            Fd b{open(AF_INET, false, true)};
+            UT_ASSERT_EQ(c, EADDRINUSE, b.fd >= 0 ? bindTo(b.fd, AF_INET, "127.0.0.1", port) : -1,
+                "specific bind: 127.0.0.1 with SO_REUSEADDR is refused the port of another program's listener on "
+                "0.0.0.0 after the decision was made while a child shared a socket of this process");
+        }
+        UT_ASSERT_EQ(c, 0, holder.end(), "specific bind: the other program ends");
+        UT_ASSERT_EQ(c, 0, sharer.end(), "specific bind: the child that shares the listener ends");
     }
 #endif
 
@@ -17248,6 +17467,17 @@ static QoreValue f_dbg_poll_wait_close_before_open_state(const QoreListNode* par
 #endif
 
 #ifdef DEBUG
+//! Debug-only: dbg_set_realtime_offset(us): sets the offset in microseconds that is added to the system clock (now_us(),
+//! clock_getmillis(), clock_getmicros() and the deadlines of AsyncIoController::addTimer()), as a step of the system
+//! clock would change it, and returns the previous offset; the monotonic clock is not affected.  A test that sets it
+//! must set it back to 0, also when it fails, as the offset is process-wide
+static QoreValue f_dbg_set_realtime_offset(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 off_us = get_param_value(params, 0).getAsBigInt();
+    return qore_dbg_realtime_offset_us.exchange(off_us, std::memory_order_relaxed);
+}
+#endif
+
+#ifdef DEBUG
 //! Debug-only: runs Http1DuplexSendFailureTest: response recovery after a concurrent write of the request body
 //! (buffered or streamed) fails, before and after the final response header, on a new and on a reused connection
 static QoreValue f_dbg_run_http1_duplex_tests(const QoreListNode* params, RuntimeConfig& rc,
@@ -18078,8 +18308,213 @@ static void ut_quic_send_batch_take_back(UnitTestCounters& c) {
 }
 #endif
 
+//! a scratch object of QoreThreadScratch that counts its live objects; each test case uses a type of its own
+template <int N>
+struct UtCountedScratch {
+    static std::atomic<int> live;
+    static std::atomic<int> created;
+    UtCountedScratch() {
+        ++live;
+        ++created;
+    }
+    ~UtCountedScratch() {
+        --live;
+    }
+    UtCountedScratch(const UtCountedScratch&) = delete;
+    UtCountedScratch& operator=(const UtCountedScratch&) = delete;
+};
+
+template <int N>
+std::atomic<int> UtCountedScratch<N>::live{0};
+template <int N>
+std::atomic<int> UtCountedScratch<N>::created{0};
+
+//! uses the scratch object of type UtCountedScratch<N> of the calling thread
+template <int N>
+static void ut_use_counted_scratch(void*) {
+    QoreThreadScratch<UtCountedScratch<N>> scratch;
+    // the object exists while it is used
+    assert(scratch && UtCountedScratch<N>::live.load() > 0);
+}
+
+//! Per-thread scratch objects (QoreThreadScratch) are released in every thread that uses them
+/** A registered thread keeps its object and releases it when the thread's data is deleted, also when it is first used
+    by the destructor of thread-local data, which runs after the thread's objects were released; a thread without
+    thread data does not keep one, and frees the object of each use (nothing would release one that it kept).
+*/
+static void ut_thread_scratch(UnitTestCounters& c) {
+    typedef UtCountedScratch<1> Unregistered;
+    typedef UtCountedScratch<2> Registered;
+    typedef UtCountedScratch<3> TldDestructor;
+    typedef UtCountedScratch<4> AllocFails;
+    // the counters are static: each run of the unit tests in the process starts them again (the objects of the
+    // previous run were all released)
+    Unregistered::created = 0;
+    Registered::created = 0;
+    TldDestructor::created = 0;
+    AllocFails::created = 0;
+
+    // a thread without thread data frees the object after each use; it sends QUIC datagrams too (their buffers are
+    // freed after the send: run under valgrind, no memory is left)
+    int unregistered_live_in_use = -1;
+    int unregistered_live_after = -1;
+    int unregistered_sent = 0;
+    std::thread unregistered([&] () {
+        for (int i = 0; i < 2; ++i) {
+            QoreThreadScratch<Unregistered> scratch;
+            unregistered_live_in_use = scratch ? Unregistered::live.load() : -1;
+        }
+        unregistered_live_after = Unregistered::live.load();
+        int fd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (fd < 0) {
+            return;
+        }
+        ON_BLOCK_EXIT([fd] () { ::close(fd); });
+        struct sockaddr_in addr = {};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        socklen_t len = sizeof(addr);
+        if (::bind(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr))
+                || getsockname(fd, reinterpret_cast<struct sockaddr*>(&addr), &len)) {
+            return;
+        }
+        QuicPacketBatch batch;
+        static const uint8_t data[] = {'q', 'u', 'i', 'c'};
+        batch.addPacket(data, sizeof(data));
+        for (int i = 0; i < 2; ++i) {
+            int rc = sendQuicPacketsBatch(fd, batch, reinterpret_cast<struct sockaddr*>(&addr), len);
+            if (rc > 0) {
+                unregistered_sent += rc;
+            }
+        }
+    });
+    unregistered.join();
+    UT_ASSERT_EQ(c, 2, unregistered_sent, "thread scratch: a thread without thread data sends QUIC datagrams");
+    UT_ASSERT_EQ(c, 1, unregistered_live_in_use,
+        "thread scratch: a thread without thread data has an object while it uses it");
+    UT_ASSERT_EQ(c, 0, unregistered_live_after,
+        "thread scratch: a thread without thread data frees the object after each use");
+    UT_ASSERT_EQ(c, 2, Unregistered::created.load(),
+        "thread scratch: a thread without thread data allocates an object for each use");
+
+    // a registered thread keeps one object for all uses and releases it when the thread's data is deleted
+    bool same_object = false;
+    int registered_live_kept = -1;
+    std::thread registered([&] () {
+        QoreForeignThreadHelper foreign;
+        Registered* first;
+        {
+            QoreThreadScratch<Registered> scratch;
+            first = scratch ? &*scratch : nullptr;
+        }
+        {
+            QoreThreadScratch<Registered> scratch;
+            same_object = first && scratch && &*scratch == first;
+        }
+        registered_live_kept = Registered::live.load();
+    });
+    registered.join();
+    UT_ASSERT(c, same_object, "thread scratch: a registered thread keeps its object between uses");
+    UT_ASSERT_EQ(c, 1, registered_live_kept, "thread scratch: a registered thread's object is kept after its use");
+    UT_ASSERT_EQ(c, 0, Registered::live.load(),
+        "thread scratch: a registered thread's object is released when the thread's data is deleted");
+    UT_ASSERT_EQ(c, 1, Registered::created.load(), "thread scratch: a registered thread allocates one object");
+
+    // an object first used by the destructor of thread-local data, which runs after the thread's objects were
+    // released, is released too
+    std::thread tld_thread([] () {
+        QoreForeignThreadHelper foreign;
+        q_save_thread_local_data(q_get_unique_thread_local_data_key(), nullptr, ut_use_counted_scratch<3>);
+    });
+    tld_thread.join();
+    UT_ASSERT_EQ(c, 1, TldDestructor::created.load(),
+        "thread scratch: the destructor of thread-local data uses a scratch object");
+    UT_ASSERT_EQ(c, 0, TldDestructor::live.load(),
+        "thread scratch: an object first used by the destructor of thread-local data is released");
+
+#ifdef DEBUG
+    // an object that cannot be allocated is reported, and is allocated by a later use
+    bool failed_unregistered = false;
+    std::thread fail_unregistered([&] () {
+        qore_thread_test_set_alloc_fails(true);
+        QoreThreadScratch<AllocFails> scratch;
+        failed_unregistered = !scratch;
+        qore_thread_test_set_alloc_fails(false);
+    });
+    fail_unregistered.join();
+    UT_ASSERT(c, failed_unregistered,
+        "thread scratch: an allocation failure is reported in a thread without thread data");
+
+    bool failed_registered = false;
+    bool allocated_later = false;
+#ifdef __linux__
+    int send_rc = 0;
+    int send_errno = 0;
+#endif
+    int recv_rc = 0;
+    std::string recv_err;
+    int recv_errno = 0;
+    std::thread fail_registered([&] () {
+        QoreForeignThreadHelper foreign;
+        qore_thread_test_set_alloc_fails(true);
+        {
+            QoreThreadScratch<AllocFails> scratch;
+            failed_registered = !scratch;
+        }
+        int fd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (fd >= 0) {
+            ON_BLOCK_EXIT([fd] () { ::close(fd); });
+            struct sockaddr_in addr = {};
+            addr.sin_family = AF_INET;
+            addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            socklen_t len = sizeof(addr);
+            if (!::bind(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr))
+                    && !getsockname(fd, reinterpret_cast<struct sockaddr*>(&addr), &len)) {
+#ifdef __linux__
+                // only sendmmsg() takes its buffers from the thread's scratch object; the send fails, so the socket
+                // has no datagram for the receive below
+                QuicPacketBatch batch;
+                static const uint8_t data[] = {'q', 'u', 'i', 'c'};
+                batch.addPacket(data, sizeof(data));
+                errno = 0;
+                send_rc = sendQuicPacketsBatch(fd, batch, reinterpret_cast<struct sockaddr*>(&addr), len);
+                send_errno = errno;
+#endif
+                ExceptionSink xsink;
+                recv_rc = qore_quic_test_recv_dispatch(fd, &xsink);
+                if (xsink) {
+                    QoreValue err = xsink.getExceptionErr();
+                    recv_err = err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "?";
+                    QoreValue arg = xsink.getExceptionArg();
+                    recv_errno = static_cast<int>(arg.getAsBigInt());
+                    xsink.clear();
+                }
+            }
+        }
+        qore_thread_test_set_alloc_fails(false);
+        QoreThreadScratch<AllocFails> scratch;
+        allocated_later = static_cast<bool>(scratch);
+    });
+    fail_registered.join();
+    UT_ASSERT(c, failed_registered, "thread scratch: an allocation failure is reported in a registered thread");
+    UT_ASSERT(c, allocated_later, "thread scratch: the object is allocated by a use after a failure");
+    UT_ASSERT_EQ(c, 0, AllocFails::live.load(), "thread scratch: no object is left after the threads end");
+#ifdef __linux__
+    // sendmmsg() and recvmmsg() take their buffers from the thread's scratch objects
+    UT_ASSERT_EQ(c, -1, send_rc, "thread scratch: a QUIC send fails without its buffers");
+    UT_ASSERT_EQ(c, ENOMEM, send_errno, "thread scratch: a QUIC send without its buffers fails with ENOMEM");
+#endif
+    UT_ASSERT_EQ(c, -1, recv_rc, "thread scratch: a QUIC receive fails without its buffers");
+    UT_ASSERT(c, recv_err == "QUIC-RECV-ERROR",
+        "thread scratch: a QUIC receive without its buffers raises QUIC-RECV-ERROR");
+    UT_ASSERT_EQ(c, ENOMEM, recv_errno, "thread scratch: a QUIC receive without its buffers fails with ENOMEM");
+#endif
+}
+
 static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
+
+    ut_thread_scratch(c);
 
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);
@@ -19118,6 +19553,24 @@ static QoreValue f_dbg_get_lvalue_scan_count(const QoreListNode* params, Runtime
     return q_get_lvalue_scan_count();
 }
 
+//! returns the number of values visited by removal bookkeeping in the current thread
+static QoreValue f_dbg_get_lvalue_removal_visit_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_lvalue_removal_visit_count();
+}
+
+//! returns the number of object identity probes made by removal bookkeeping in the current thread
+static QoreValue f_dbg_get_lvalue_removal_probe_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_lvalue_removal_probe_count();
+}
+
+//! returns the number of lazy removal-tracker states allocated in the current thread
+static QoreValue f_dbg_get_lvalue_removal_allocation_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_lvalue_removal_allocation_count();
+}
+
 //! returns the number of objects that recursive-reference scans have entered in the current thread
 /** A scan takes the rsection of every object it enters and follows all of its references, so this reports the
     size of the graph the scans of the current thread have walked; tests use it to verify that a scan does not
@@ -19197,6 +19650,22 @@ static QoreValue f_dbg_get_jit_compiled_function_count(const QoreListNode* param
 */
 static QoreValue f_dbg_get_live_bigfloat_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return q_get_live_bigfloat_count();
+}
+
+//! returns the names of the restrictions that a module parse option mask added to the Program of a loaded module and
+//! that are recorded for the errors of the module's own directives; the record is cleared when the module's code has
+//! been parsed (qore#5682)
+static QoreValue f_dbg_get_module_mask_added(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    QoreAbstractModule* mi = QMM.findModule(name->c_str());
+    if (!mi) {
+        return xsink->raiseException("DBG-MODULE-ERROR", "module '%s' is not loaded", name->c_str());
+    }
+    QoreProgram* mpgm = mi->getModuleProgram();
+    if (!mpgm) {
+        return new QoreListNode(stringTypeInfo);
+    }
+    return QoreParseOptionsData(qore_program_private::getModuleMaskAddedParseOptions(*mpgm)).toStringList(xsink);
 }
 
 //! returns the number of Program objects that exist (created and not yet destroyed; qore#5822)
@@ -19398,6 +19867,19 @@ static QoreValue f_dbg_get_rset_restart_count(const QoreListNode* params, Runtim
 static QoreValue f_dbg_get_deref_rsection_count(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     return q_get_deref_rsection_count();
+}
+
+//! returns the number of references to the declaration of an enum value, or -1 if the value is not an enum value
+/** An enum value holds a reference to its declaration; tests use this to verify that the code that releases enum
+    values releases each reference that it took (qore#6091).
+*/
+static QoreValue f_dbg_enum_decl_reference_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreValue v = get_param_value(params, 0);
+    if (!v.isEnum()) {
+        return -1;
+    }
+    return qore_enum_decl_private::get(*v.getEnumMember()->getEnumDecl())->referenceCount();
 }
 
 //! returns the number of dereferences in the current thread that took the locking path
@@ -22208,6 +22690,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_global_vars", f_dbg_global_vars, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, listTypeInfo);
     qns.addBuiltinVariant("dbg_generic_cache_counts", f_dbg_generic_cache_counts, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
+    qns.addBuiltinVariant("dbg_retired_type_declarations", f_dbg_retired_type_declarations, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_type_declaration_groups", f_dbg_type_declaration_groups, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
@@ -22237,6 +22723,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QORE_PARAM_NO_ARG, "site");
     qns.addBuiltinVariant("dbg_poll_wait_close_before_open_state", f_dbg_poll_wait_close_before_open_state,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_set_realtime_offset", f_dbg_set_realtime_offset, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "us");
     qns.addBuiltinVariant("dbg_aot_split_method_ref", f_dbg_aot_split_method_ref, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "encoded");
     qns.addBuiltinVariant("dbg_run_method_cache_lifetime_tests", f_dbg_run_method_cache_lifetime_tests,
@@ -22473,6 +22961,12 @@ void init_debug_functions(QoreNamespace& qns) {
         listTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_lvalue_removal_visit_count", f_dbg_get_lvalue_removal_visit_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_lvalue_removal_allocation_count", f_dbg_get_lvalue_removal_allocation_count,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_lvalue_removal_probe_count", f_dbg_get_lvalue_removal_probe_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_object_count", f_dbg_get_scan_object_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_edge_count", f_dbg_get_scan_edge_count, QCF_NO_FLAGS,
@@ -22487,6 +22981,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_program_count", f_dbg_get_live_program_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_module_mask_added", f_dbg_get_module_mask_added, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        listTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "module");
     qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "func");
     qns.addBuiltinVariant("dbg_wait_batch_collection_held", f_dbg_wait_batch_collection_held, QCF_NO_FLAGS,
@@ -22537,6 +23033,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_deref_locked_count", f_dbg_get_deref_locked_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_enum_decl_reference_count", f_dbg_enum_decl_reference_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, anyTypeInfo, QORE_PARAM_NO_ARG, "v");
     qns.addBuiltinVariant("dbg_scan_wait_notify", f_dbg_scan_wait_notify, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "c");
     qns.addBuiltinVariant("dbg_hold_object_lock", f_dbg_hold_object_lock, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

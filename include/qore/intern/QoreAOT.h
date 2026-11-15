@@ -43,6 +43,7 @@
 #include <memory>
 #include <list>
 #include <mutex>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -284,6 +285,17 @@ struct QoreAOTNamedCallArgs {
 };
 
 class FunctionCallBase;
+class QoreAOTBinaryWriter;
+class QoreAOTBinaryReader;
+
+//! writes the names of the arguments of a named call reference call (AOTExprKind::CALLREF_CALL_NAMED): u8 count, then
+//! a string ref per name; returns false if there are more than 255
+DLLLOCAL bool qore_aot_write_callref_arg_names(QoreAOTBinaryWriter& writer, const name_vec_t& names);
+
+//! reads the names written by qore_aot_write_callref_arg_names(); returns the interned names, or nullptr with \a error
+//! set if the data is truncated
+DLLLOCAL const name_vec_t* qore_aot_read_callref_arg_names(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        const uint8_t* end, std::string& error);
 
 //! returns the serialized binding of the arguments of a named call ("" for any other call)
 /** @param with_map true to include the parameter positions of a call bound at parse time (an expression tree, whose
@@ -511,6 +523,11 @@ struct AOTSlotMap {
         instruction evaluates for them (qore#5939)
     */
     std::unordered_set<uint64_t> ast_expr_bits;
+    //! the handler functions whose slots buildAOTSlotMap() has added, with the function whose handler each is
+    /** A handler function can be shared by several handlers (QoreIROnBlockExitInstruction::handler_ir, #6087); its
+        slots are added once for each function that it is a handler of.
+    */
+    std::set<std::pair<const void*, const void*>> handler_slot_maps_built;
 
     //! Check if a slot already exists for a LocalVar*
     bool hasLocalSlot(const void* local) const {
@@ -871,6 +888,20 @@ DLLLOCAL std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo 
 */
 DLLLOCAL const char* qore_aot_find_class_ref_end(const char* ref);
 
+//! finds the method of a class that an AOT image names, whatever its access
+/** The compiler checked the access when it resolved the method: an image is loaded without the class context of the
+    code that calls it, in which QoreClass::findMethod() and QoreClass::findStaticMethod() do not find a
+    private:internal method of the class, such as one that a closure in a method of a final class calls through self,
+    which the compiler resolves itself (qore#5975); the class's own context finds it, a normal method before a static
+    one
+
+    @param qc the class
+    @param method_name the name of the method
+
+    @return the method, or nullptr if the class has none of that name
+*/
+DLLLOCAL const QoreMethod* qore_aot_find_named_method(const QoreClass* qc, const char* method_name);
+
 //! Resolves a class reference emitted by qore_aot_encode_class_ref().
 DLLLOCAL const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
         const char* class_ref, bool pseudo = false);
@@ -894,6 +925,15 @@ DLLLOCAL const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, con
     user-module teardown.
  */
 DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink);
+
+//! Runs the del closures of all registered AOT user modules, in the order in which source modules run theirs
+/** Called at shutdown before any module data is cleared, with the del callbacks of the source user modules, while
+    the Programs and the data of all modules still exist (see QoreModuleManager::delUser(), issue #5164): a closure
+    can use the static variables and the code of its own module and of the modules that it requires.  A module whose
+    closure has run is not run again when the module is deleted (qore_aot_module_delete()).  A module that requires
+    another module has its closure run first.
+ */
+DLLLOCAL void qore_aot_run_all_module_del_closures();
 
 //! Breaks the cycles held up by opaque references that the Programs of all registered AOT user modules own
 /** Called at shutdown while the Programs of all modules still exist, so that the destructors of the objects

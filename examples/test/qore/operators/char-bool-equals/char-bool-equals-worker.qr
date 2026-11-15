@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks == and != of a char and a bool; run by char-bool-equals.qtest
+
+/** A char compared with a bool by == or != is compared as an int with the same code point (qore#6048): c'a' == True
+    and c'a' == False are False, c'\0' == False and c'\x01' == True are True, with either operand order and whether
+    the operands are typed or not.  Before, the AST interpreter compared a char operand with an operand of type bool
+    as bools (c'a' == True was True), while the other execution modes and the other types compared the code point.
+    Each check prints "name=result".
+*/
+
+#! the results of ==, != and both with the operands reversed, for typed operands
+string sub typed(char c, bool b) {
+    return sprintf("%y %y %y %y", c == b, c != b, b == c, b != c);
+}
+
+#! the same with optional types
+string sub or_nothing(*char c, *bool b) {
+    return sprintf("%y %y %y %y", c == b, c != b, b == c, b != c);
+}
+
+#! an optional char with a bool
+string sub or_nothing_char(*char c, bool b) {
+    return sprintf("%y %y %y %y", c == b, c != b, b == c, b != c);
+}
+
+#! a union of char and bool with a bool
+string sub union_char_bool(union<char, bool> x, bool b) {
+    return sprintf("%y %y %y %y", x == b, x != b, b == x, b != x);
+}
+
+#! a softchar with a bool
+string sub soft_char(softchar c, bool b) {
+    return sprintf("%y %y %y %y", c == b, c != b, b == c, b != c);
+}
+
+#! the same with untyped operands
+string sub untyped(auto c, auto b) {
+    return sprintf("%y %y %y %y", c == b, c != b, b == c, b != c);
+}
+
+hash<string, string> sub checks() {
+    hash<string, string> rv = {};
+    hash<string, char> chars = {
+        "a": c'a',
+        "nul": c'\0',
+        "one": c'\x01',
+    };
+    foreach hash<auto> i in (chars.pairIterator()) {
+        foreach bool b in ((True, False)) {
+            string sfx = sprintf("%s-%s", i.key, b ? "true" : "false");
+            rv{"typed-" + sfx} = typed(i.value, b);
+            rv{"or-nothing-" + sfx} = or_nothing(i.value, b);
+            rv{"untyped-" + sfx} = untyped(i.value, b);
+            rv{"or-nothing-char-" + sfx} = or_nothing_char(i.value, b);
+            rv{"union-" + sfx} = union_char_bool(i.value, b);
+            rv{"softchar-" + sfx} = soft_char(i.value, b);
+        }
+    }
+    # no value is False, as for an optional int
+    rv."or-nothing-char-nothing" = or_nothing_char(NOTHING, False);
+    # a bool in the union is compared as a bool
+    rv."union-bool" = union_char_bool(True, True);
+    # constant operands, which are compared at parse time
+    rv."constant" = sprintf("%y %y %y %y", c'a' == True, c'a' != True, False == c'\0', True != c'\x01');
+    return rv;
+}
+
+# called three times, so that the checks run again after their first call
+hash<string, string> first = checks();
+bool stable = True;
+for (int i = 0; i < 2; ++i) {
+    if (checks() != first) {
+        stable = False;
+    }
+}
+map printf("%s=%s\n", $1.key, $1.value), first.pairIterator();
+printf("stable=%y\n", stable);

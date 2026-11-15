@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/StatementBlock.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/qore_program_private.h"
 
@@ -193,8 +194,20 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         parse_qc = parse_get_class_priv();
         parse_ns = parse_get_ns();
         //printd(5, "QoreClosureParseNode::parseInitImpl() this: %p set deferred\n", this);
-        // Use generic closure type for deferred initialization
+        // the code and the default values of the closure can refer to constants, so their initialization is
+        // deferred (#4903), but the types of its signature are resolved now: the closure has the code type of its
+        // signature in the expression, as outside a constant expression, also behind an operator and as the value
+        // of a constant (qore#6046); the generic closure type is left for a signature whose types cannot be resolved
         parse_context.typeInfo = runTimeClosureTypeInfo;
+        if (uf->getUniqueSignature()) {
+            UserSignature* sig = static_cast<UserSignature*>(uf->getUniqueSignature());
+            // as for the deferred initialization: a constant can be initialized while generic code is parsed, whose
+            // type parameters the closure does not name (qore#5733)
+            UserSignatureTypeParamContextHelper type_param_context(nullptr);
+            if (!sig->resolveTypes()) {
+                parse_context.typeInfo = qore_get_complex_code_type_from_signature(sig);
+            }
+        }
     } else {
         // in generic code, the closure names its type parameters (see UserSignatureTypeParamContextHelper), or
         // those of its class
@@ -202,7 +215,14 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             const qore_class_private* qc = parse_get_class_priv();
             needs_type_context = parse_get_signature_type_param_context() || (qc && qc->hasTypeParams());
         }
-        err = uf->parseInitClosure();
+        {
+            // the closure runs when it is called: any number of times, including none, and after the code parsed after
+            // it, so its code is a deferred scope whose assignments and deletions of the variables it captures may
+            // have run after its creation (qore#5937)
+            ParseDeferredScopeHelper deferred_scope;
+            ParseLoopAssignedStateHelper loop_assigned_state;
+            err = uf->parseInitClosure();
+        }
         uf->parseCommit();
         if (uf->defaultsNeedObject()) {
             defaults_need_object = true;
@@ -252,7 +272,7 @@ const char* QoreClosureParseNode::getTypeName() const {
 }
 
 QoreValue QoreClosureParseNode::exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
-        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const {
+        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args) const {
     if (is_deferred) {
         // A closure inside a constant expression has its parse-init deferred (deferCodeInitialization() in
         // parseInitImpl()) so that recursive constant values are available when it is initialized (#4903).  The
@@ -272,7 +292,20 @@ QoreValue QoreClosureParseNode::exec(const QoreClosureBase& closure_base, QorePr
         }
     }
     assert(uf);
-    return uf->evalClosure(closure_base, pgm, args, self, class_ctx, xsink);
+    return uf->evalClosure(closure_base, pgm, args, self, class_ctx, xsink, tmp_args);
+}
+
+QoreValue QoreClosureParseNode::execNamed(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, const name_vec_t& arg_names, QoreObject* self, const qore_class_private* class_ctx,
+        ExceptionSink* xsink) const {
+    // a deferred closure is initialized as for a call with positional arguments (see exec())
+    if (is_deferred && const_cast<QoreClosureParseNode*>(this)->parseInitDeferred()) {
+        xsink->raiseException("CLOSURE-INITIALIZATION-ERROR", "the closure used in this constant expression could "
+            "not be initialized");
+        return QoreValue();
+    }
+    assert(uf);
+    return uf->evalClosureNamed(closure_base, pgm, args, arg_names, self, class_ctx, xsink);
 }
 
 QoreClosureBase* QoreClosureParseNode::evalBackground(ExceptionSink* xsink) const {

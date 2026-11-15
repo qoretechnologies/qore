@@ -527,7 +527,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
         for (const auto& inst : block->instructions) {
             out << "  " << opcodeName(inst->opcode);
             if (inst->opcode == QoreIROpcode::Invoke) {
-                auto* invoke_inst = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get());
+                auto* invoke_inst = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst.get());
                 if (invoke_inst && invoke_inst->invoke_opcode != QoreIROpcode::Invoke) {
                     out << "." << opcodeName(invoke_inst->invoke_opcode);
                 }
@@ -536,7 +536,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::InstantiateLocal
                     || inst->opcode == QoreIROpcode::UninstantiateLocal
                     || inst->opcode == QoreIROpcode::LoadClosure || inst->opcode == QoreIROpcode::StoreClosure) {
-                auto* local_inst = dynamic_cast<const QoreIRLocalInstruction*>(inst.get());
+                auto* local_inst = qore_ir_inst_cast<const QoreIRLocalInstruction*>(inst.get());
                 if (local_inst && local_inst->local) {
                     out << " @" << local_inst->local->getName();
                     if ((inst->opcode == QoreIROpcode::StoreLocal
@@ -549,12 +549,12 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
             } else if (inst->opcode == QoreIROpcode::LoadGlobal || inst->opcode == QoreIROpcode::StoreGlobal
                     || inst->opcode == QoreIROpcode::LoadThreadLocal
                     || inst->opcode == QoreIROpcode::StoreThreadLocal) {
-                auto* var_inst = dynamic_cast<const QoreIRVarInstruction*>(inst.get());
+                auto* var_inst = qore_ir_inst_cast<const QoreIRVarInstruction*>(inst.get());
                 if (var_inst && var_inst->var) {
                     out << " $" << var_inst->var->getName();
                 }
             } else if (inst->opcode == QoreIROpcode::LoadImplicitArg) {
-                auto* impl_arg_inst = dynamic_cast<const QoreIRImplicitArgInstruction*>(inst.get());
+                auto* impl_arg_inst = qore_ir_inst_cast<const QoreIRImplicitArgInstruction*>(inst.get());
                 if (impl_arg_inst) {
                     out << " $" << (impl_arg_inst->offset + 1);  // $1 is offset 0, etc.
                 }
@@ -570,7 +570,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::ShiftLValue
                     || inst->opcode == QoreIROpcode::UnshiftLValue
                     || inst->opcode == QoreIROpcode::SpliceLValue) {
-                auto* lv_inst = dynamic_cast<const QoreIRLValueInstruction*>(inst.get());
+                auto* lv_inst = qore_ir_inst_cast<const QoreIRLValueInstruction*>(inst.get());
                 if (lv_inst && lv_inst->lvalue.hasNode()) {
                     out << " <lvalue>";
                 }
@@ -578,7 +578,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::HashKeyAccessInt
                     || inst->opcode == QoreIROpcode::HashKeyAccessHash
                     || inst->opcode == QoreIROpcode::HashKeyAccessHashGuarded) {
-                auto* hka_inst = dynamic_cast<const QoreIRHashKeyAccessInstruction*>(inst.get());
+                auto* hka_inst = qore_ir_inst_cast<const QoreIRHashKeyAccessInstruction*>(inst.get());
                 if (hka_inst) {
                     out << " ." << hka_inst->key_name;
                 }
@@ -589,7 +589,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::MapHashKeyOffsetAny
                     || inst->opcode == QoreIROpcode::HashMapTwoKeys
                     || inst->opcode == QoreIROpcode::SelectHashKeyPositiveInt) {
-                auto* mhk_inst = dynamic_cast<const QoreIRMapHashKeyInstruction*>(inst.get());
+                auto* mhk_inst = qore_ir_inst_cast<const QoreIRMapHashKeyInstruction*>(inst.get());
                 if (mhk_inst) {
                     out << " ." << mhk_inst->key1;
                     if (!mhk_inst->key2.empty()) {
@@ -597,17 +597,17 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::LoadSelfMember) {
-                auto* sm_inst = dynamic_cast<const QoreIRSelfMemberInstruction*>(inst.get());
+                auto* sm_inst = qore_ir_inst_cast<const QoreIRSelfMemberInstruction*>(inst.get());
                 if (sm_inst) {
                     out << " @" << sm_inst->member_name;
                 }
             } else if (inst->opcode == QoreIROpcode::LoadStaticVar) {
-                auto* sv_inst = dynamic_cast<const QoreIRStaticVarInstruction*>(inst.get());
+                auto* sv_inst = qore_ir_inst_cast<const QoreIRStaticVarInstruction*>(inst.get());
                 if (sv_inst) {
                     out << " $" << sv_inst->var_name;
                 }
             } else if (inst->opcode == QoreIROpcode::NewObject) {
-                auto* no_inst = dynamic_cast<const QoreIRNewObjectInstruction*>(inst.get());
+                auto* no_inst = qore_ir_inst_cast<const QoreIRNewObjectInstruction*>(inst.get());
                 if (no_inst && no_inst->qc) {
                     out << " @" << no_inst->qc->getName();
                 }
@@ -622,7 +622,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
             } else if (inst->opcode == QoreIROpcode::CreateParseRef) {
                 out << " <parse-ref>";
             } else if (inst->opcode == QoreIROpcode::NewHashDecl) {
-                auto* nhd_inst = dynamic_cast<const QoreIRNewHashDeclInstruction*>(inst.get());
+                auto* nhd_inst = qore_ir_inst_cast<const QoreIRNewHashDeclInstruction*>(inst.get());
                 if (nhd_inst && nhd_inst->node && nhd_inst->node->hd) {
                     out << " @" << nhd_inst->node->hd->getName();
                 }
@@ -632,7 +632,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 out << " <complex-list>";
             } else if (inst->opcode == QoreIROpcode::NewComplexBuffer) {
                 out << " <complex-buffer>";
-            } else if (auto* plugin_inst = dynamic_cast<const QoreIRPluginInstruction*>(inst.get())) {
+            } else if (auto* plugin_inst = qore_ir_inst_cast<const QoreIRPluginInstruction*>(inst.get())) {
                 out << " <plugin";
                 if (plugin_inst->operation.global_operation_id) {
                     out << " global:" << plugin_inst->operation.global_operation_id;
@@ -648,7 +648,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
             } else if (inst->opcode == QoreIROpcode::VrnConstruct) {
                 out << " <vrn-construct>";
             } else if (inst->opcode == QoreIROpcode::NewHashDeclFromHash) {
-                auto* nhdfh_inst = dynamic_cast<const QoreIRNewHashDeclFromHashInstruction*>(inst.get());
+                auto* nhdfh_inst = qore_ir_inst_cast<const QoreIRNewHashDeclFromHashInstruction*>(inst.get());
                 if (nhdfh_inst && nhdfh_inst->hd) {
                     out << " <" << nhdfh_inst->hd->getName() << ">";
                 } else if (nhdfh_inst && !nhdfh_inst->hd_path.empty()) {
@@ -656,13 +656,13 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 }
             } else if (inst->opcode == QoreIROpcode::CallMethodDirect) {
                 // Print the devirtualized method name
-                auto* direct_inst = dynamic_cast<const QoreIRCallMethodDirectInstruction*>(inst.get());
+                auto* direct_inst = qore_ir_inst_cast<const QoreIRCallMethodDirectInstruction*>(inst.get());
                 if (direct_inst && direct_inst->method && direct_inst->qc) {
                     out << " @" << direct_inst->qc->getName() << "::" << direct_inst->method->getName();
                 }
             } else if (inst->opcode == QoreIROpcode::InvokeMethodDirect) {
                 // Print the devirtualized method name and targets
-                auto* invoke_inst = dynamic_cast<const QoreIRInvokeMethodDirectInstruction*>(inst.get());
+                auto* invoke_inst = qore_ir_inst_cast<const QoreIRInvokeMethodDirectInstruction*>(inst.get());
                 if (invoke_inst && invoke_inst->method && invoke_inst->qc) {
                     out << " @" << invoke_inst->qc->getName() << "::" << invoke_inst->method->getName();
                     if (invoke_inst->normal_target) {
@@ -673,13 +673,13 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::CallStaticDirect) {
-                auto* direct_inst = dynamic_cast<const QoreIRCallStaticDirectInstruction*>(inst.get());
+                auto* direct_inst = qore_ir_inst_cast<const QoreIRCallStaticDirectInstruction*>(inst.get());
                 if (direct_inst && direct_inst->method) {
                     out << " @" << direct_inst->method->getClass()->getName()
                         << "::" << direct_inst->method->getName();
                 }
             } else if (inst->opcode == QoreIROpcode::DotEvalMethodDirect) {
-                auto* direct_inst = dynamic_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst.get());
+                auto* direct_inst = qore_ir_inst_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst.get());
                 if (direct_inst && direct_inst->method && direct_inst->qc) {
                     out << " @" << direct_inst->qc->getName() << "::" << direct_inst->method->getName();
                     if (direct_inst->pseudo) {
@@ -687,7 +687,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
-                auto* invoke_inst = dynamic_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst.get());
+                auto* invoke_inst = qore_ir_inst_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst.get());
                 if (invoke_inst && invoke_inst->method && invoke_inst->qc) {
                     out << " @" << invoke_inst->qc->getName() << "::" << invoke_inst->method->getName();
                     if (invoke_inst->pseudo) {
@@ -700,7 +700,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                         out << " exception:" << invoke_inst->exception_target->name;
                     }
                 }
-            } else if (auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get())) {
+            } else if (auto* bg_inst = qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst.get())) {
                 if (bg_inst->kind == QoreIRBackgroundKind::Helper) {
                     // the helper is printed after this function
                     out << " helper @" << (bg_inst->helper_ir ? bg_inst->helper_ir->name : std::string("<none>"))
@@ -710,7 +710,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                     out << ")";
                     if (bg_inst->helper_uses_self) {
-                        out << " uses-self";
+                        out << (bg_inst->helper_uses_self == QBHS_CHECKED ? " uses-self" : " holds-self");
                     }
                 } else {
                     const char* kind = "unknown";
@@ -753,12 +753,12 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::HashMap
                     || inst->opcode == QoreIROpcode::HashMapSelectAny
                     || inst->opcode == QoreIROpcode::HashMapSelect) {
-                auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());
+                auto* expr_inst = qore_ir_inst_cast<const QoreIRExprInstruction*>(inst.get());
                 if (expr_inst && expr_inst->expr.hasNode()) {
                     out << " <expr>";
                 }
             } else if (inst->opcode == QoreIROpcode::Invoke) {
-                auto* invoke_inst = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get());
+                auto* invoke_inst = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst.get());
                 if (invoke_inst && invoke_inst->expr.hasNode()) {
                     out << " <expr>";
                 }
@@ -785,18 +785,18 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::ConstString
                     || inst->opcode == QoreIROpcode::ConstDate
                     || inst->opcode == QoreIROpcode::ConstEnum) {
-                auto* cinst = dynamic_cast<const QoreIRConstInstruction*>(inst.get());
+                auto* cinst = qore_ir_inst_cast<const QoreIRConstInstruction*>(inst.get());
                 if (cinst) {
                     out << " = ";
                     printConstant(*cinst, out);
                 }
             } else if (inst->opcode == QoreIROpcode::Br) {
-                auto* br = dynamic_cast<const QoreIRBranchInstruction*>(inst.get());
+                auto* br = qore_ir_inst_cast<const QoreIRBranchInstruction*>(inst.get());
                 if (br && br->target) {
                     out << " -> " << br->target->name;
                 }
             } else if (inst->opcode == QoreIROpcode::BrIf) {
-                auto* br = dynamic_cast<const QoreIRBranchIfInstruction*>(inst.get());
+                auto* br = qore_ir_inst_cast<const QoreIRBranchIfInstruction*>(inst.get());
                 if (br) {
                     out << " %" << br->condition.id;
                     if (br->true_target) {
@@ -807,7 +807,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::Invoke) {
-                auto* invoke_inst = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get());
+                auto* invoke_inst = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst.get());
                 if (invoke_inst) {
                     if (invoke_inst->normal_target) {
                         out << " then " << invoke_inst->normal_target->name;
@@ -817,7 +817,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::Phi) {
-                auto* phi = dynamic_cast<const QoreIRPhiInstruction*>(inst.get());
+                auto* phi = qore_ir_inst_cast<const QoreIRPhiInstruction*>(inst.get());
                 if (phi) {
                     if (phi->value_kind == QoreIRPhiValueKind::NativeInt) {
                         out << "<native-int>";
@@ -841,7 +841,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::Return || inst->opcode == QoreIROpcode::ReturnNothing) {
-                auto* ret = dynamic_cast<const QoreIRReturnInstruction*>(inst.get());
+                auto* ret = qore_ir_inst_cast<const QoreIRReturnInstruction*>(inst.get());
                 if (ret && ret->has_value) {
                     out << " %" << ret->value.id;
                 }
@@ -849,7 +849,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::IteratorCreateIterate
                     || inst->opcode == QoreIROpcode::IteratorCreateSelectors
                     || inst->opcode == QoreIROpcode::IteratorCreateSource) {
-                auto* iter = dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst.get());
+                auto* iter = qore_ir_inst_cast<const QoreIRIteratorCreateInstruction*>(inst.get());
                 if (iter) {
                     out << " %" << iter->iterable.id;
                     if (iter->iterator_func) {
@@ -862,7 +862,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::TypedForeachNextFloat
                     || inst->opcode == QoreIROpcode::TypedForeachNextBool
                     || inst->opcode == QoreIROpcode::TypedForeachNextString) {
-                auto* iter = dynamic_cast<const QoreIRIteratorNextInstruction*>(inst.get());
+                auto* iter = qore_ir_inst_cast<const QoreIRIteratorNextInstruction*>(inst.get());
                 if (iter) {
                     out << " %" << iter->iterator.id;
                     if (inst->opcode != QoreIROpcode::IteratorNext
@@ -883,12 +883,12 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::RefForeachInit) {
-                auto* rfi = dynamic_cast<const QoreIRRefForeachInitInstruction*>(inst.get());
+                auto* rfi = qore_ir_inst_cast<const QoreIRRefForeachInitInstruction*>(inst.get());
                 if (rfi) {
                     out << " <expr>";
                 }
             } else if (inst->opcode == QoreIROpcode::Context) {
-                auto* ci = dynamic_cast<const QoreIRContextInstruction*>(inst.get());
+                auto* ci = qore_ir_inst_cast<const QoreIRContextInstruction*>(inst.get());
                 if (ci) {
                     if (!ci->name.empty()) {
                         out << " name=\"" << ci->name << "\"";
@@ -903,13 +903,13 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::Backquote) {
-                auto* bi = dynamic_cast<const QoreIRBackquoteInstruction*>(inst.get());
+                auto* bi = qore_ir_inst_cast<const QoreIRBackquoteInstruction*>(inst.get());
                 if (bi) {
                     out << " command=\"" << bi->command << "\"";
                 }
             } else if (inst->opcode == QoreIROpcode::Find) {
                 out << " exp=<expr> in=<expr>";
-                auto* fi = dynamic_cast<const QoreIRFindInstruction*>(inst.get());
+                auto* fi = qore_ir_inst_cast<const QoreIRFindInstruction*>(inst.get());
                 if (fi && fi->where) {
                     out << " where=<expr>";
                 }
@@ -917,12 +917,12 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     out << " mode=" << fi->mode;
                 }
             } else if (inst->opcode == QoreIROpcode::ContextRef) {
-                auto* cri = dynamic_cast<const QoreIRContextRefInstruction*>(inst.get());
+                auto* cri = qore_ir_inst_cast<const QoreIRContextRefInstruction*>(inst.get());
                 if (cri) {
                     out << " key=\"" << cri->key << "\" offset=" << cri->stack_offset;
                 }
             } else if (inst->opcode == QoreIROpcode::SwitchInt) {
-                auto* sw = dynamic_cast<const QoreIRSwitchIntInstruction*>(inst.get());
+                auto* sw = qore_ir_inst_cast<const QoreIRSwitchIntInstruction*>(inst.get());
                 if (sw) {
                     out << " %" << sw->switch_val.id;
                     if (sw->default_target) {
@@ -938,7 +938,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     out << "]";
                 }
             } else if (inst->opcode == QoreIROpcode::SwitchString) {
-                auto* sw = dynamic_cast<const QoreIRSwitchStringInstruction*>(inst.get());
+                auto* sw = qore_ir_inst_cast<const QoreIRSwitchStringInstruction*>(inst.get());
                 if (sw) {
                     out << " %" << sw->switch_val.id;
                     if (sw->default_target) {
@@ -954,7 +954,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     out << "]";
                 }
             } else if (inst->opcode == QoreIROpcode::LandingPad) {
-                auto* lp = dynamic_cast<const QoreIRLandingPadInstruction*>(inst.get());
+                auto* lp = qore_ir_inst_cast<const QoreIRLandingPadInstruction*>(inst.get());
                 if (lp) {
                     out << " scope_depth=" << lp->scope_depth;
                     if (lp->try_scope_id) {
@@ -962,12 +962,12 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::ScopeEnter) {
-                auto* se = dynamic_cast<const QoreIRScopeEnterInstruction*>(inst.get());
+                auto* se = qore_ir_inst_cast<const QoreIRScopeEnterInstruction*>(inst.get());
                 if (se) {
                     out << " scope=" << se->scope_id;
                 }
             } else if (inst->opcode == QoreIROpcode::ScopeExit) {
-                auto* sx = dynamic_cast<const QoreIRScopeExitInstruction*>(inst.get());
+                auto* sx = qore_ir_inst_cast<const QoreIRScopeExitInstruction*>(inst.get());
                 if (sx) {
                     out << " scope=" << sx->scope_id;
                     if (sx->is_error) {
@@ -994,7 +994,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
     // the helpers of the background expressions of the function
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
-            auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+            auto* bg_inst = qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst.get());
             if (bg_inst && bg_inst->helper_ir) {
                 print(*bg_inst->helper_ir, out);
             }
