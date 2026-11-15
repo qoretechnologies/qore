@@ -17622,6 +17622,10 @@ private:
         }
         UT_ASSERT(c, dns.getQueries() > 0, "connect error: Happy Eyeballs last error: the name is resolved by the "
             "DNS server");
+        // the order of the failures does not depend on the order in which the attempts are checked: the first check
+        // that reads the pending error as 0, of whichever attempt, takes ECONNREFUSED and every later check
+        // ETIMEDOUT, and a check that fails gives its attempt up at once, so the attempt that fails last always fails
+        // with ETIMEDOUT
         HookHelper hook(ETIMEDOUT, ECONNREFUSED, CloseErrno);
         QoreSocket client;
         rc = client.connectINET2(name, service.c_str(), Q_AF_UNSPEC, Q_SOCK_STREAM, 0, 30000, &xsink);
