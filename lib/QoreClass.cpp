@@ -41,8 +41,6 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreParseClass.h"
 #include "qore/intern/RuntimeConfig.h"
-
-#include <optional>
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreForkHandlers.h"
 
@@ -50,6 +48,7 @@
 #include <atomic>
 #include <climits>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
 #include <unordered_set>
