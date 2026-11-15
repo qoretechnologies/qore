@@ -115,7 +115,7 @@ protected:
     path alone.
 */
 static inline QoreVarInfo* qore_static_var_ref_info(const QoreValue& expr) {
-    const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(expr.getInternalNode());
+    const auto* static_var = qore_exact_node_cast<StaticClassVarRefNode>(expr.getInternalNode());
     return static_var ? &static_var->vi : nullptr;
 }
 

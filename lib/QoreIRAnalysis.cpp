@@ -53,8 +53,18 @@ const VarRefNode* extractLValueBaseVarRef(const QoreValue& lvalue) {
             return nullptr;
         }
         const AbstractQoreNode* node = cur.getInternalNode();
-        if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+        if (auto* var = qore_get_var_ref_node(node)) {
             return var;
+        }
+        // the steps of a hash or list element path, tested first by their exact (final) class, which is none of the
+        // classes tested after them
+        if (auto* op = qore_exact_node_cast<QoreHashObjectDereferenceOperatorNode>(node)) {
+            cur = op->getLeft();
+            continue;
+        }
+        if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
+            cur = op->getLeft();
+            continue;
         }
         if (auto* op = dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)) {
             cur = op->getLeft();
@@ -64,16 +74,8 @@ const VarRefNode* extractLValueBaseVarRef(const QoreValue& lvalue) {
             cur = op->getLeft();
             continue;
         }
-        if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
-            cur = op->getLeft();
-            continue;
-        }
         if (auto* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
             cur = op->get(0);
-            continue;
-        }
-        if (auto* op = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
-            cur = op->getLeft();
             continue;
         }
         if (auto* op = dynamic_cast<const QoreShiftOperatorNode*>(node)) {
