@@ -1482,7 +1482,7 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
         } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
             evaluated += hop->getRight().needsEval() ? 1 : 0;
             c = hop->getLeft();
-        } else if (auto* cop = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+        } else if (auto* cop = qore_get_cast_operator_node(node)) {
             c = cop->getExp();
         } else {
             break;
@@ -1503,7 +1503,7 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
         } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
             keys.push_back(hop->getRight());
             c = hop->getLeft();
-        } else if (auto* cop = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+        } else if (auto* cop = qore_get_cast_operator_node(node)) {
             c = cop->getExp();
         } else {
             break;
@@ -2345,7 +2345,7 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
                 return -1;
             }
         } else {
-            const QoreCastOperatorNode* cast_op = dynamic_cast<const QoreCastOperatorNode*>(n.getInternalNode());
+            const QoreCastOperatorNode* cast_op = qore_get_cast_operator_node(n.getInternalNode());
             if (cast_op) {
                 if (doLValue(cast_op->getExp(), for_remove)) {
                     clearPtr();
@@ -2483,7 +2483,7 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
                 return -1;
             }
         } else {
-            const QoreCastOperatorNode* cast_op = dynamic_cast<const QoreCastOperatorNode*>(n.getInternalNode());
+            const QoreCastOperatorNode* cast_op = qore_get_cast_operator_node(n.getInternalNode());
             if (cast_op) {
                 if (doLValue(cast_op->getExp(), rc, for_remove)) {
                     clearPtr();
@@ -4094,7 +4094,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
     }
 
     {
-        const QoreSquareBracketsRangeOperatorNode* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(lvalue.getInternalNode());
+        const QoreSquareBracketsRangeOperatorNode* op = qore_exact_node_cast<QoreSquareBracketsRangeOperatorNode>(lvalue.getInternalNode());
         if (op) {
             doRemove(op);
             return;

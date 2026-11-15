@@ -5902,12 +5902,12 @@ static const type_vec_t* qore_aot_get_call_parsed_arg_types(const QoreValue& exp
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
     }
-    if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (const auto* call = qore_get_static_method_call_node(node)) {
         parse_args = call->getParseArgs();
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
     }
-    if (const auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_self_function_call_node(node)) {
         parse_args = call->getParseArgs();
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
@@ -5929,10 +5929,10 @@ static const QoreTypeInfo* qore_aot_get_call_receiver_type_info(const QoreValue&
     if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         node = dot->getMethodCall();
     }
-    if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (const auto* call = qore_get_static_method_call_node(node)) {
         return call->getReceiverTypeInfo();
     }
-    if (const auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_self_function_call_node(node)) {
         return call->getReceiverTypeInfo();
     }
     if (const auto* call = dynamic_cast<const MethodCallNode*>(node)) {
@@ -5953,10 +5953,10 @@ static const QoreTypeParamInstantiation* qore_aot_get_call_type_instantiation(
     if (const auto* call = qore_get_function_call_node(node)) {
         return call->getTypeParamInstantiation();
     }
-    if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (const auto* call = qore_get_static_method_call_node(node)) {
         return call->getTypeParamInstantiation();
     }
-    if (const auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_self_function_call_node(node)) {
         return call->getTypeParamInstantiation();
     }
     if (const auto* call = dynamic_cast<const MethodCallNode*>(node)) {
@@ -6042,7 +6042,7 @@ static bool qore_aot_get_direct_call_target(
         const auto* call = qore_get_function_call_node(node);
         variant = call ? call->getVariant() : nullptr;
     } else {
-        const auto* call = dynamic_cast<const StaticMethodCallNode*>(node);
+        const auto* call = qore_get_static_method_call_node(node);
         variant = call ? call->getVariant() : nullptr;
     }
     return variant && expr;
@@ -32706,7 +32706,7 @@ static bool qoreAOTDecomposedBackgroundUsesExprSlot(const QoreValue& expr) {
         return false;
     }
     const AbstractQoreNode* inner = bg_op->getExp().getInternalNode();
-    return qore_get_function_call_node(inner) || dynamic_cast<const StaticMethodCallNode*>(inner)
+    return qore_get_function_call_node(inner) || qore_get_static_method_call_node(inner)
         || dynamic_cast<const QoreDotEvalOperatorNode*>(inner) || dynamic_cast<const CallReferenceCallNode*>(inner);
 }
 
@@ -34082,7 +34082,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                         }
                         // Pre-resolve static method or self method call target
                         if (!call) {
-                            const auto* static_call = dynamic_cast<const StaticMethodCallNode*>(
+                            const auto* static_call = qore_get_static_method_call_node(
                                 expr_val.getInternalNode());
                             if (static_call && static_call->getMethod()) {
                                 ctx->call_targets[slot].method = static_call->getMethod();
@@ -34097,7 +34097,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                                     ctx->call_targets[slot].uvb = v->getUserVariantBase();
                                 }
                             } else {
-                                const auto* self_call = dynamic_cast<const SelfFunctionCallNode*>(
+                                const auto* self_call = qore_get_self_function_call_node(
                                     expr_val.getInternalNode());
                                 if (self_call && self_call->getMethod()) {
                                     ctx->call_targets[slot].method = self_call->getMethod();
@@ -34806,7 +34806,7 @@ class ExprTreeSerializer {
         }
 
         // SelfFunctionCallNode: self method call
-        if (auto* sfc = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+        if (auto* sfc = qore_get_self_function_call_node(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_SELF_CALL));
             const QoreMethod* method = sfc->getMethod();
             const QoreClass* qc = method ? method->getClass() : sfc->getClass();
@@ -34832,7 +34832,7 @@ class ExprTreeSerializer {
         }
 
         // StaticMethodCallNode: static method call
-        if (auto* smc = dynamic_cast<const StaticMethodCallNode*>(node)) {
+        if (auto* smc = qore_get_static_method_call_node(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STATIC_CALL));
             const QoreMethod* method = smc->getMethod();
             if (method) {
@@ -35783,7 +35783,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
 
     // SelfFunctionCallNode: method call on self
-    if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (auto* call = qore_get_self_function_call_node(node)) {
         id.kind = AOTExprKind::SELF_METHOD_CALL;
         const QoreMethod* method = call->getMethod();
         // Preserve the parse-time self-call class.  It can differ from the
@@ -35815,7 +35815,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
 
     // StaticMethodCallNode: static method call
-    if (auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (auto* call = qore_get_static_method_call_node(node)) {
         id.kind = AOTExprKind::STATIC_METHOD_CALL;
         const QoreMethod* method = call->getMethod();
         if (method) {

@@ -13147,7 +13147,7 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
         const AbstractQoreNode* inner = inner_expr.getInternalNode();
 
         // background self.method(args)
-        if (auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(inner)) {
+        if (auto* sfcn = qore_get_self_function_call_node(inner)) {
             // a named call resolved at run time by parameter name is not decomposed: its call node binds its
             // arguments by name, which the call made by the thread from the method alone would not
             if (sfcn->getMethod() && !sfcn->getMethod()->isStatic() && !sfcn->getRuntimeArgNames()
@@ -13183,7 +13183,7 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
             }
         }
         // background Class::staticMethod(args)
-        else if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(inner)) {
+        else if (auto* smcn = qore_get_static_method_call_node(inner)) {
             std::string class_path = smcn->getClassPath();
             if ((smcn->getMethod() || !class_path.empty())
                     && qore_ir_background_args_are_start_values(smcn->getParseArgs(), smcn->getArgs())) {
@@ -13495,7 +13495,7 @@ QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const Q
     // the AST interpreter runs only that thread with the object as its context; a call elsewhere in the expression
     // checks it when it is made (qore#5973)
     if (state.uses_self) {
-        const SelfFunctionCallNode* root_call = dynamic_cast<const SelfFunctionCallNode*>(
+        const SelfFunctionCallNode* root_call = qore_get_self_function_call_node(
             op->getExp().getInternalNode());
         inst->helper_uses_self = root_call && (!root_call->getMethod() || !root_call->getMethod()->isStatic())
             ? QBHS_CHECKED : QBHS_HELD;
@@ -13834,7 +13834,7 @@ bool QoreIRLowering::valueMayBeNothingDespiteType(const QoreValue& elem) const {
             break;
     }
     if (dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)
-            || dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+            || qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
         return true;
     }
     // +, - and * give NOTHING only for two operands without a value (one is taken as 0)
@@ -16510,7 +16510,7 @@ void QoreIRLowering::emitSelfCallTargetCheck(const QoreValue& call, const QorePr
 
 QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    auto* call = dynamic_cast<const SelfFunctionCallNode*>(node);
+    auto* call = qore_get_self_function_call_node(node);
     if (!call) {
         return QoreIRValue();
     }
@@ -16609,7 +16609,7 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
 
 QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    auto* call = dynamic_cast<const StaticMethodCallNode*>(node);
+    auto* call = qore_get_static_method_call_node(node);
     if (!call) {
         return QoreIRValue();
     }

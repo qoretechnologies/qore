@@ -115,29 +115,8 @@ static bool qore_ir_interpreter_use_unique_hash_literal_insert() {
     return enabled;
 }
 
-// Casts of the call nodes that the call paths read on every call.  The node type identifies the class
-// (include/qore/node_types.h): FunctionCallNode is the only class constructed with NT_FUNCTION_CALL and the base of the
-// only one with NT_PROGRAM_FUNC_CALL (ProgramFunctionCallNode), and StaticMethodCallNode the only class with
-// NT_STATIC_METHOD_CALL; a copy keeps the type of the node copied.  A test of the type replaces a dynamic_cast, which
-// compares the names of the classes (strcmp) on every call, at a cost that depends on where the names are in memory.
-static inline const FunctionCallNode* qore_ir_function_call_node(const AbstractQoreNode* node) {
-    // a plain function call is the common case: it is tested first in any build
-    const FunctionCallNode* rv = node && (__builtin_expect(node->getType() == NT_FUNCTION_CALL, 1)
-            || node->getType() == NT_PROGRAM_FUNC_CALL)
-        ? static_cast<const FunctionCallNode*>(node) : nullptr;
-    assert(rv == dynamic_cast<const FunctionCallNode*>(node));
-    return rv;
-}
-
-static inline const StaticMethodCallNode* qore_ir_static_method_call_node(const AbstractQoreNode* node) {
-    const StaticMethodCallNode* rv = node && node->getType() == NT_STATIC_METHOD_CALL
-        ? static_cast<const StaticMethodCallNode*>(node) : nullptr;
-    assert(rv == dynamic_cast<const StaticMethodCallNode*>(node));
-    return rv;
-}
-
 static bool qore_ir_interpreter_is_type_name_builtin_call(const QoreValue& expr) {
-    const auto* call = expr.hasNode() ? qore_ir_function_call_node(expr.getInternalNode()) : nullptr;
+    const auto* call = expr.hasNode() ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
     // only the Qore builtins, never a user or module function with the same name
     if (!call || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         return false;
@@ -2001,7 +1980,7 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
     const size_t nargs_ops = operands.size();
 
     // background self.method(args)
-    if (auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(inner)) {
+    if (auto* sfcn = qore_get_self_function_call_node(inner)) {
         if (!sfcn->getMethod()) {
             return {false, QoreValue()};
         }
@@ -2030,7 +2009,7 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
         return {true, result};
     }
     // background Class::staticMethod(args)
-    if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(inner)) {
+    if (auto* smcn = qore_get_static_method_call_node(inner)) {
         const QoreParseListNode* pargs = smcn->getParseArgs();
         const QoreListNode* sargs = smcn->getArgs();
         size_t actual_nargs = pargs ? pargs->size() : (sargs ? sargs->size() : 0);
@@ -7234,7 +7213,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     used_operands = true;
                 }
             } else if (op == QoreIROpcode::CallMethod) {
-                if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(
+                if (auto* call = qore_get_self_function_call_node(
                         inv->expr.getInternalNode())) {
                     // Direct evalImpl() — avoids evalExprNode() overhead
                     SelfFunctionCallNode clone(*call, arg_list);
@@ -7249,13 +7228,13 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     used_operands = true;
                 }
             } else if (op == QoreIROpcode::CallStatic || op == QoreIROpcode::CallStaticDirect) {
-                if (auto* call = dynamic_cast<const StaticMethodCallNode*>(
+                if (auto* call = qore_get_static_method_call_node(
                         inv->expr.getInternalNode())) {
                     // Direct evalImpl() — avoids evalExprNode() overhead
                     StaticMethodCallNode clone(*call, arg_list);
                     res = evalTmpCallAndRef(&clone, xsink);
                     used_operands = true;
-                } else if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(
+                } else if (auto* call = qore_get_self_function_call_node(
                         inv->expr.getInternalNode())) {
                     // Scoped self call (Class::method(args)) lowered through a CallStatic slot
                     // but keeping its SelfFunctionCallNode expr — dispatch with the IR operand
@@ -8536,7 +8515,7 @@ static QORE_IR_INLINE_SITE void irDotEvalMethodDirect(Given& given, QoreIRDotEva
         const auto* synthetic_global_call =
             direct_inst->fallback_method_name
                 && direct_inst->expr.hasNode()
-            ? qore_ir_function_call_node(direct_inst->expr.getInternalNode()) : nullptr;
+            ? qore_get_function_call_node(direct_inst->expr.getInternalNode()) : nullptr;
         // Fast-path optimizations for common pseudo-methods
         const char* method_name = direct_inst->method
             ? direct_inst->method->getName()
@@ -8657,7 +8636,7 @@ static QORE_IR_INLINE_SITE void irInvokeDotEvalMethodDirect(Given& given,
         const auto* synthetic_global_call =
             de_invoke_inst->fallback_method_name
                 && de_invoke_inst->expr.hasNode()
-            ? qore_ir_function_call_node(de_invoke_inst->expr.getInternalNode()) : nullptr;
+            ? qore_get_function_call_node(de_invoke_inst->expr.getInternalNode()) : nullptr;
         // Fast-path optimizations for common pseudo-methods
         const char* method_name = de_invoke_inst->method
             ? de_invoke_inst->method->getName()
@@ -10934,7 +10913,11 @@ next_instruction:
             ++ip;
             goto next_instruction;
         }
-        if (inst->cached_start_line >= 0 && inst->cached_start_line != last_ephemeral_line) {
+        // the line usually does not change from one instruction to the next: that test comes first, as GCC otherwise
+        // may order the two tests either way, and the sign test first costs two more instructions per instruction
+        // executed (8-20 per iteration of the benchmark loops); no branch hint, as the line changes often enough that
+        // moving the update out of line costs more
+        if (inst->cached_start_line != last_ephemeral_line && inst->cached_start_line >= 0) {
             // Update runtime_loc for exception/callstack reporting via cached pointers; while a debugger is attached,
             // the current statement is set by the DebugStatement instruction of each statement and kept, so that the
             // call stack gives the statement of each frame (QoreThreadList::getCallStackHash())
@@ -19122,7 +19105,7 @@ load_local_done:
                     const QoreTypeParamInstantiation* explicit_inst =
                         direct_inst->explicit_type_param_inst;
                     if (!explicit_inst) {
-                        const auto* call = qore_ir_function_call_node(direct_inst->expr.getInternalNode());
+                        const auto* call = qore_get_function_call_node(direct_inst->expr.getInternalNode());
                         explicit_inst = call
                             ? call->getExplicitTypeParamInstantiation()
                             : nullptr;
@@ -19226,7 +19209,7 @@ load_local_done:
                 // the call stack frame of the called code is located at the call
                 QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
                 auto* static_inst = static_cast<QoreIRCallStaticDirectInstruction*>(inst);
-                const StaticMethodCallNode* static_call_expr = qore_ir_static_method_call_node(
+                const StaticMethodCallNode* static_call_expr = qore_get_static_method_call_node(
                     static_inst->expr.getInternalNode());
                 if (static_inst->variant && static_call_expr) {
                     int nargs = static_cast<int>(static_inst->operands.size());
@@ -19442,7 +19425,7 @@ load_local_done:
                             used_operands = true;
                         }
                     } else if (effective_opcode == QoreIROpcode::CallMethod) {
-                        if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(call_expr.getInternalNode())) {
+                        if (auto* call = qore_get_self_function_call_node(call_expr.getInternalNode())) {
                             // Direct evalImpl() — avoids evalExprNode() overhead
                             SelfFunctionCallNode clone(*call, arg_list);
                             res = evalTmpCallAndRef(&clone, xsink);
@@ -19456,12 +19439,12 @@ load_local_done:
                             used_operands = true;
                         }
                     } else if (effective_opcode == QoreIROpcode::CallStatic) {
-                        if (auto* call = dynamic_cast<const StaticMethodCallNode*>(call_expr.getInternalNode())) {
+                        if (auto* call = qore_get_static_method_call_node(call_expr.getInternalNode())) {
                             // Direct evalImpl() — avoids evalExprNode() overhead
                             StaticMethodCallNode clone(*call, arg_list);
                             res = evalTmpCallAndRef(&clone, xsink);
                             used_operands = true;
-                        } else if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(
+                        } else if (auto* call = qore_get_self_function_call_node(
                                 call_expr.getInternalNode())) {
                             // A scoped self call (Class::method(args) within the class hierarchy)
                             // is lowered through a CallStatic slot but keeps its SelfFunctionCallNode

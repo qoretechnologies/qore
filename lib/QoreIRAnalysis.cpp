@@ -1426,7 +1426,7 @@ static const AbstractQoreFunctionVariant* qore_ir_get_resolved_effect_callee(
                     ? call->func->first() : nullptr;
             }
             if (call->invoke_opcode == QoreIROpcode::CallStaticDirect) {
-                const auto* expr = dynamic_cast<const StaticMethodCallNode*>(
+                const auto* expr = qore_get_static_method_call_node(
                     call->expr.getInternalNode());
                 return expr ? expr->getVariant() : nullptr;
             }

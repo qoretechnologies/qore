@@ -4277,7 +4277,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_closure_aot(QoreAOTContext* ctx, in
         ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_exprs);
     QoreValue expr = fromBits(ctx->exprs[idx]);
-    auto* cn = dynamic_cast<const QoreClosureParseNode*>(expr.getInternalNode());
+    auto* cn = qore_get_closure_parse_node(expr.getInternalNode());
     if (!cn) {
         xsink->raiseException("AOT-ERROR", "invalid expression for closure creation AOT call");
         return toBits(QoreValue());
@@ -4299,7 +4299,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_cast_with_inner(uint64_t cast_expr_bits, u
         return toBits(QoreValue());
     }
 
-    auto* cast_node = dynamic_cast<const QoreCastOperatorNode*>(cast_expr.getInternalNode());
+    auto* cast_node = qore_get_cast_operator_node(cast_expr.getInternalNode());
     if (!cast_node) {
         if (xsink) {
             xsink->raiseException("IR-CAST-ERROR", "cast expression is not a resolved cast operator");
@@ -11799,7 +11799,7 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
             result = result.refSelf();
         }
         used_operands = true;
-    } else if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(expr.getInternalNode())) {
+    } else if (auto* call = qore_get_self_function_call_node(expr.getInternalNode())) {
         QoreValue call_expr(new SelfFunctionCallNode(*call, arg_list.release()));
         ValueHolder call_holder(call_expr, nullptr);
         bool needs_deref = true;
@@ -11808,7 +11808,7 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
             result = result.refSelf();
         }
         used_operands = true;
-    } else if (auto* call = dynamic_cast<const StaticMethodCallNode*>(expr.getInternalNode())) {
+    } else if (auto* call = qore_get_static_method_call_node(expr.getInternalNode())) {
         QoreValue call_expr(new StaticMethodCallNode(*call, arg_list.release()));
         ValueHolder call_holder(call_expr, nullptr);
         bool needs_deref = true;
@@ -16199,7 +16199,7 @@ static bool qore_rt_is_implicit_self_copy_slot(QoreAOTContext* ctx, int32_t slot
     }
     QoreValue expr;
     std::memcpy(&expr, &ctx->exprs[slot], sizeof(expr));
-    const auto* self_call = dynamic_cast<const SelfFunctionCallNode*>(expr.getInternalNode());
+    const auto* self_call = qore_get_self_function_call_node(expr.getInternalNode());
     return self_call && self_call->getName() && !strcmp(self_call->getName(), "copy");
 }
 
@@ -23523,7 +23523,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_static_method_call_aot(
     if (!bg_op) {
         return 0;
     }
-    auto* smcn = dynamic_cast<const StaticMethodCallNode*>(bg_op->getExp().getInternalNode());
+    auto* smcn = qore_get_static_method_call_node(bg_op->getExp().getInternalNode());
     if (!smcn) {
         xsink->raiseException("AOT-BACKGROUND-ERROR",
             "background expression slot %d is not a static method call", slot);
