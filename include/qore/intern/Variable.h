@@ -734,8 +734,8 @@ protected:
     }
 
     //! Replaces the enum value \a current that the lvalue holds with an owned copy of its base value
-    /** see qore_enum_value_copy_for_write(); the reference to the enum member is released with the lvalue's other
-        temporary values
+    /** see qore_enum_value_copy_for_write(); the lvalue's reference to the enum member is released here (releasing
+        it executes no Qore code)
     */
     DLLLOCAL void replaceEnumForWrite(const QoreValue& current);
 

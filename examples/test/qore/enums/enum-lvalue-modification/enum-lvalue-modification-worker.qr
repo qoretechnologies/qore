@@ -351,6 +351,13 @@ hash<string, string> sub check() {
         r."ref-number" = sprintf("%y", v);
     }
     {
+        auto v = ES::Padded;
+        trim(\v);
+        auto w = ES::Line;
+        chomp(\w);
+        r."ref-functions" = sprintf("%y %y", v, w);
+    }
+    {
         auto v = ES::Long;
         reference<auto> rv = \v;
         rv += "x";

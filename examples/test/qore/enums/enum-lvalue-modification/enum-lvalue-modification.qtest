@@ -72,6 +72,7 @@ class EnumLvalueModificationTest inherits QUnit::Test {
             "ref-splice": "\"short string value that is not short\"",
             "ref-hash-member": "{a: \"a long string value that is not shortx\"}",
             "ref-number": "12345678901234567892.25",
+            "ref-functions": "\"padded value\" \"a line of text\"",
             "ref-variable": "\"a long string value that is not shortx\"",
             "foreach-ref": "[\"a long string value that is not shortx\", \"42x\"]",
             "global": "\"a long string value that is not shortx\" 12345678901234567891.25",
