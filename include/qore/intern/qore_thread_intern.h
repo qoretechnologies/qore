@@ -927,9 +927,10 @@ DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
     This helper sets the runtime parse options to the given options of the code being loaded and suspends any such
     override for its lifetime, which makes load-time resolution what parse-time resolution is for the same source.
     It must only be used around the loading of AOT-compiled code (deserialization, slot-map context construction and
-    module initialization), never around the evaluation of code on behalf of a caller: a variant resolved when code is
-    evaluated is checked against the options in effect for that evaluation, including the restrictions of the
-    Program it runs in.
+    module initialization, including the constant initializers of compiled modules and scripts, eager or run when a
+    constant is first read: qore#6189), never around the evaluation of code on behalf of a caller: a variant resolved
+    when code is evaluated is checked against the options in effect for that evaluation, including the restrictions
+    of the Program it runs in.
 */
 class LoadTimeParseOptionsHelper {
 public:
