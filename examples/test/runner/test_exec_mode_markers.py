@@ -204,12 +204,15 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   encodings differ
         # - relative-date-range (#6101): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - deleted-object-generic-variant (#6152): its probes run in child processes that set their own --exec-mode
+        #   and in qcc executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/classes/deleted-program-types.qtest",
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
+                                 "examples/test/qore/classes/deleted-object-generic-variant.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
