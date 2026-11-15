@@ -1462,30 +1462,6 @@ enum class QoreIRInstClass : uint8_t {
     CallAOTHelper,
 };
 
-//! The class tag of an IR instruction object: a copy of the object has the same class, an assignment keeps it
-/** An assignment to the QoreIRInstruction part of an instruction (copying the common fields from an instruction of
-    another class) must not change the class of the object assigned to.
-*/
-class QoreIRInstClassTag {
-public:
-    constexpr QoreIRInstClassTag(QoreIRInstClass c) : cls(c) {
-    }
-
-    QoreIRInstClassTag(const QoreIRInstClassTag&) = default;
-
-    //! Keeps the class of the object assigned to
-    QoreIRInstClassTag& operator=(const QoreIRInstClassTag&) {
-        return *this;
-    }
-
-    constexpr operator QoreIRInstClass() const {
-        return cls;
-    }
-
-private:
-    QoreIRInstClass cls;
-};
-
 //! Declares the instruction class tag of an IR instruction class without subclasses
 #define QORE_IR_INST_CLASS(name) \
     static constexpr QoreIRInstClass inst_class_id = QoreIRInstClass::name; \
@@ -1511,9 +1487,13 @@ public:
 
     virtual ~QoreIRInstruction() = default;
 
+    //! Instructions are not copied: the class tag of an object must be that of its class (see qore_ir_inst_cast())
+    QoreIRInstruction(const QoreIRInstruction&) = delete;
+    QoreIRInstruction& operator=(const QoreIRInstruction&) = delete;
+
     QoreIROpcode opcode;
-    //! The class of this object; set on construction and never changed (see qore_ir_inst_cast())
-    QoreIRInstClassTag inst_class;
+    //! The class of this object, set by the constructor of its class (see qore_ir_inst_cast())
+    const QoreIRInstClass inst_class;
     // -1 = no loc, >=0 = loc->start_line (fills the padding after the opcode, so 32 bits are free here); must be
     // 32-bit to match QoreProgramLineLocation::start_line, or lines > 32767 wrap to negative values and the
     // debug line-change gate below reports the wrong line

@@ -664,12 +664,12 @@ static const type_vec_t* qore_ir_get_call_parsed_arg_types(const QoreValue& expr
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
     }
-    if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (const auto* call = qore_get_static_method_call_node(node)) {
         parse_args = call->getParseArgs();
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
     }
-    if (const auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_self_function_call_node(node)) {
         parse_args = call->getParseArgs();
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
@@ -696,10 +696,10 @@ static const QoreTypeInfo* qore_ir_get_call_receiver_type_info(
     if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         node = dot->getMethodCall();
     }
-    if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (const auto* call = qore_get_static_method_call_node(node)) {
         return call->getReceiverTypeInfo();
     }
-    if (const auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_self_function_call_node(node)) {
         return call->getReceiverTypeInfo();
     }
     if (const auto* call = dynamic_cast<const MethodCallNode*>(node)) {
@@ -720,10 +720,10 @@ qore_ir_get_call_type_instantiation(const QoreValue& expr) {
     if (const auto* call = qore_get_function_call_node(node)) {
         return call->getTypeParamInstantiation();
     }
-    if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (const auto* call = qore_get_static_method_call_node(node)) {
         return call->getTypeParamInstantiation();
     }
-    if (const auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_self_function_call_node(node)) {
         return call->getTypeParamInstantiation();
     }
     if (const auto* call = dynamic_cast<const MethodCallNode*>(node)) {
@@ -12398,7 +12398,7 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
     };
 
     // background self.method(args) — supported in JIT and AOT (existing path)
-    if (auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(inner)) {
+    if (auto* sfcn = qore_get_self_function_call_node(inner)) {
         if (!sfcn->getMethod()) {
             return false;
         }
@@ -12460,7 +12460,7 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
             fcn, 0, actual_nargs, result_out);
     }
     // background Class::staticMethod(args)
-    if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(inner)) {
+    if (auto* smcn = qore_get_static_method_call_node(inner)) {
         if (!smcn->getMethod()) {
             return false;
         }
@@ -13265,7 +13265,7 @@ static const QoreTypeParamInstantiation* qore_ir_get_explicit_dot_eval_type_inst
 //! Returns the method of a static method call expression, or nullptr if it is not one or its method is not resolved
 static const QoreMethod* qore_ir_static_call_node_method(const QoreValue& expr) {
     const auto* static_call = expr.hasNode()
-        ? dynamic_cast<const StaticMethodCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_static_method_call_node(expr.getInternalNode()) : nullptr;
     return static_call ? static_call->getMethod() : nullptr;
 }
 
@@ -21498,7 +21498,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 } else if (inv->invoke_opcode
                         == QoreIROpcode::CallStaticDirect) {
-                    const auto* call = dynamic_cast<const StaticMethodCallNode*>(
+                    const auto* call = qore_get_static_method_call_node(
                         inv->expr.getInternalNode());
                     if (call) {
                         if (!invoke_explicit_inst) {
@@ -21521,7 +21521,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             variant = aot_invoke_direct_call->getVariant();
                         }
                     } else if (inv->invoke_opcode == QoreIROpcode::CallStaticDirect) {
-                        aot_invoke_static_call = dynamic_cast<const StaticMethodCallNode*>(expr_node);
+                        aot_invoke_static_call = qore_get_static_method_call_node(expr_node);
                         if (aot_invoke_static_call) {
                             variant = aot_invoke_static_call->getVariant();
                             method_call = true;
@@ -22040,7 +22040,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
                     const StaticMethodCallNode* static_call = aot_invoke_static_call
                         ? aot_invoke_static_call
-                        : dynamic_cast<const StaticMethodCallNode*>(inv->expr.getInternalNode());
+                        : qore_get_static_method_call_node(inv->expr.getInternalNode());
                     const BatchCalleeInfo* aot_static_batch_callee = nullptr;
                     llvm::Function* aot_static_batch_fn = nullptr;
                     // the date kind checks of a fast entry call with date arguments for date<absolute>/
@@ -26242,7 +26242,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === CallStaticDirect (resolved static method call, skips AST round-trip) ===
         case QoreIROpcode::CallStaticDirect: {
             const auto* direct_inst = static_cast<const QoreIRCallStaticDirectInstruction*>(inst);
-            const auto* static_call = dynamic_cast<const StaticMethodCallNode*>(
+            const auto* static_call = qore_get_static_method_call_node(
                 direct_inst->expr.getInternalNode());
             const QoreTypeInfo* receiver_type_info =
                 direct_inst->receiver_type_info

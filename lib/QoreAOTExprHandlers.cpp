@@ -564,7 +564,7 @@ static QoreValue make_unresolved_aot_self_method_call(const char* method_ref, Qo
 
 static bool write_expr_self_method_call(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
-    if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (auto* call = qore_get_self_function_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
         const QoreClass* qc = call->getRecordedClass();
@@ -826,7 +826,7 @@ static QoreValue make_unresolved_aot_static_method_call(const char* class_path,
 
 static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
-    if (auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (auto* call = qore_get_static_method_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
         if (method) {

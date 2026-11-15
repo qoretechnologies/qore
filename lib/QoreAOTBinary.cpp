@@ -10589,7 +10589,7 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                 //   `string boundary = MultiPartMessage::getBoundary()`. Serialize
                 //   the class path and method name; the reader rebuilds a
                 //   StaticMethodCallNode bound to the resolved QoreMethod.
-                if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(node)) {
+                if (auto* smcn = qore_get_static_method_call_node(node)) {
                     const QoreListNode* args = smcn->getArgs();
                     bool no_args = !args || args->size() == 0;
                     const QoreMethod* m = smcn->getMethod();
@@ -12977,7 +12977,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     }
 
     // SelfFunctionCallNode: method call on self
-    if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (auto* call = qore_get_self_function_call_node(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
         const QoreClass* qc = call->getRecordedClass();
@@ -13009,7 +13009,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     }
 
     // StaticMethodCallNode: static method call
-    if (auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (auto* call = qore_get_static_method_call_node(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
         if (method) {
