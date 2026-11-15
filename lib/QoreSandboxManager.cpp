@@ -33,6 +33,7 @@
 #include <qore/QoreSandboxManager.h>
 #include <qore/TypedHashDecl.h>
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreSandboxProvenance.h"
@@ -343,18 +344,41 @@ int QoreFilesystemSecurityManager::addDeniedPath(const char* path, ExceptionSink
     return 0;
 }
 
+// removes the allowed path rule that setSandboxRoot() added for the root; does not throw
+static void remove_sandbox_root_rule(std::vector<PathRule>& rules, const std::string& root) noexcept {
+    if (root.empty()) {
+        return;
+    }
+    for (auto i = rules.rbegin(), e = rules.rend(); i != e; ++i) {
+        if (i->mode == QSEC_ALL && i->path == root) {
+            rules.erase(std::next(i).base());
+            return;
+        }
+    }
+}
+
 int QoreFilesystemSecurityManager::setSandboxRoot(const char* path, ExceptionSink* xsink) {
     std::string canon = priv->canonicalize(path, xsink);
     if (*xsink) return -1;
 
-    priv->sandbox_root = canon;
+    // everything that can throw is done first, so that a failure leaves the old root and the old rules untouched:
+    // the rule that implicitly allows the sandbox root with all access, and room for it
+    PathRule rule(canon, QSEC_ALL);
+    priv->allowed_paths.reserve(priv->allowed_paths.size() + 1);
 
-    // Implicitly allow the sandbox root with all access
-    priv->allowed_paths.emplace_back(canon, QSEC_ALL);
+    // commit with operations that do not throw: replacing a root removes the rule of the previous one
+    remove_sandbox_root_rule(priv->allowed_paths, priv->sandbox_root);
+    priv->allowed_paths.push_back(std::move(rule));
+    priv->sandbox_root = std::move(canon);
     return 0;
 }
 
 void QoreFilesystemSecurityManager::clearSandboxRoot() {
+    // setSandboxRoot() adds exactly one allowed path rule for the root (and changes nothing else, in particular not
+    // the default policy); remove that rule, so that the configuration is the one from before the root was set.  A
+    // rule equal to it that was added separately is indistinguishable from it, and one of the two remains; rules
+    // added after the root remain
+    remove_sandbox_root_rule(priv->allowed_paths, priv->sandbox_root);
     priv->sandbox_root.clear();
 }
 
@@ -364,6 +388,21 @@ void QoreFilesystemSecurityManager::setDefaultPolicy(bool allow) {
 
 bool QoreFilesystemSecurityManager::getDefaultPolicy() const {
     return priv->default_allow;
+}
+
+bool QoreFilesystemSecurityManager::isRestricting() const {
+    // a composition holds no state of its own: it restricts if any member does
+    if (priv->composition) {
+        for (const auto* manager : priv->composition->managers) {
+            if (manager->filesystem().isRestricting()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    // the sandbox root confines every access to a subtree, so it restricts like a path rule
+    return !priv->default_allow || !priv->allowed_paths.empty() || !priv->denied_paths.empty()
+        || !priv->sandbox_root.empty();
 }
 
 bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, ExceptionSink* xsink) {
@@ -854,6 +893,22 @@ bool QoreNetworkSecurityManager::getDefaultPolicy() const {
     return priv->default_allow;
 }
 
+bool QoreNetworkSecurityManager::isRestricting() const {
+    // a composition holds no state of its own: it restricts if any member does
+    if (priv->composition) {
+        for (const auto* manager : priv->composition->managers) {
+            if (manager->network().isRestricting()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    // allowed host patterns alone are not a restriction: with the default policy "allow" they restrict nothing, and
+    // with "deny" the default policy counts
+    return !priv->default_allow || !priv->allowed_ranges.empty() || !priv->denied_ranges.empty()
+        || !priv->allowed_ports.empty();
+}
+
 bool QoreNetworkSecurityManager::checkConnect(const struct sockaddr* addr, socklen_t len,
                                                int proto, ExceptionSink* xsink) {
     return checkConnect(nullptr, addr, len, proto, xsink);
@@ -1157,6 +1212,11 @@ bool QoreSandboxManager::getUncontrolledApiPolicy() const {
     return fs_mgr.priv->uncontrolled_api_allowed.load(std::memory_order_acquire);
 }
 
+bool QoreSandboxManager::trustsUncontrolledApis() const {
+    // there is no unreadable state; a composition is true only if every member is (getUncontrolledApiPolicy())
+    return getUncontrolledApiPolicy();
+}
+
 void QoreSandboxManager::setMaxThreads(int count) {
     max_threads = count;
     // a raised limit frees slots for the thread pools waiting for one
@@ -1202,6 +1262,24 @@ void QoreSandboxManager::setMaxStackSize(int64 bytes) {
 
 int64 QoreSandboxManager::getMaxStackSize() const {
     return sandbox_intersection_limit<int64>(this, max_stack_size.load(), &QoreSandboxManager::getMaxStackSize);
+}
+
+bool QoreSandboxManager::networkRestricts() const {
+    return net_mgr.isRestricting();
+}
+
+bool QoreSandboxManager::filesystemRestricts() const {
+    return fs_mgr.isRestricting();
+}
+
+bool QoreSandboxManager::limitsRestrict() const {
+    // the getters report the tightest positive limit of the members of a composition
+    return getMaxThreads() > 0 || getWallTimeLimit() > 0 || getCPUTimeLimit() > 0 || getMaxStackSize() > 0
+        || getMemoryLimit() > 0;
+}
+
+bool QoreSandboxManager::restricts() const {
+    return networkRestricts() || filesystemRestricts() || limitsRestrict();
 }
 
 int QoreSandboxManager::acquireThreadSlot(ExceptionSink* xsink) {
@@ -1698,6 +1776,9 @@ void qore_release_module_program_pins() {
         qore_module_lifetime_flag.store(false, std::memory_order_release);
         pgms.swap(pins.pgms);
     }
+    // the method lookups cached for classes of Programs with module lifetime are no longer known to be stable
+    // (QoreCallTargetCheckCache, issue #5824)
+    qore_bump_method_dispatch_epoch();
     for (QoreProgram* pgm : pgms) {
         pgm->depDeref();
     }

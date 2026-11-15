@@ -137,8 +137,9 @@ public:
         int idle_timeout_ms = 60000;
 
         //! Born-at TTL for pooled connections in milliseconds.
-        /** Curl analog: @c CURLOPT_MAXAGE_CONN.  Bounds the wall-clock age
-            of a pooled connection.  When set, a connection whose age (now −
+        /** Curl analog: @c CURLOPT_MAXAGE_CONN.  Bounds the age of a pooled
+            connection, measured on the monotonic clock, which a step of the
+            system clock does not change.  When set, a connection whose age (now −
             @ref HttpClientConnectionBase::getCreatedUs) reaches this value
             is evicted at the next pool checkout — closed and dropped from
             the pool via the close-after-lock-drop machinery in
@@ -867,11 +868,14 @@ private:
         @param key the pool key
         @param streaming_send true to claim the incremental-body sender slot as well
         @param scan the network sandbox of the calling code, which receives the decisions of the scan
+        @param check_age true to skip the connections that have reached @ref Options::max_age_ms (the lock-free scan
+        of a checkout); false after evictDeadLocked() has removed them under the same lock, so that a connection that
+        it kept is not then left out of both reuse and eviction (#6150)
 
         @return a connection with a stream reserved, or nullptr
     */
     DLLLOCAL HttpClientConnectionBase* findReusableLocked(const std::string& key,
-        bool streaming_send, SandboxScan& scan);
+        bool streaming_send, SandboxScan& scan, bool check_age = true);
 
     //! Internal: removes closed and (optionally) max-age-expired connections
     //! from @c pool_[key] (caller must hold the unique lock).

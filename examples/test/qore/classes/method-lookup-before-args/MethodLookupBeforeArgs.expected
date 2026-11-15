@@ -1,0 +1,333 @@
+round 0
+private method:
+  METHOD-IS-PRIVATE: C::p() is private and cannot be accessed externally
+missing method:
+  METHOD-DOES-NOT-EXIST: no method C::nomethod() has been defined and no pseudo-method <object>::nomethod() is available (class lang: Qore)
+missing method on auto:
+  METHOD-DOES-NOT-EXIST: no method C::nomethod() has been defined and no pseudo-method <object>::nomethod() is available (class lang: Qore)
+missing method, literal argument:
+  METHOD-DOES-NOT-EXIST: no method C::nomethod() has been defined and no pseudo-method <object>::nomethod() is available (class lang: Qore)
+private override:
+  METHOD-IS-PRIVATE: PrivateChild::m() is private and cannot be accessed externally
+private method from the class:
+  arg private from the class
+  C::p() called
+member closure:
+  arg member closure
+  member closure called
+pseudo-method of an object:
+  arg pseudo
+  True
+public override:
+  arg public override
+  Child::m() called
+overloaded method:
+  arg overloaded
+  C::m(int) called
+overloaded, deleted:
+  OBJECT-ALREADY-DELETED: cannot call C::m(int a) on an object that has already been deleted
+overloaded, deleted, string:
+  OBJECT-ALREADY-DELETED: cannot call C::m(string a) on an object that has already been deleted
+qualified self call:
+  QChild::m() called
+  arg qualified
+  QBase::m() called
+qualified self call, subclass:
+  QChild::m() called
+  arg qualified
+  QBase::m() called
+qualified self call, deleted:
+  OBJECT-ALREADY-DELETED: cannot call QBase::m() on an object that has already been deleted
+qualified self call, subclass, deleted:
+  OBJECT-ALREADY-DELETED: cannot call QBase::m() on an object that has already been deleted
+qualified abstract call, private implementation:
+  arg qualified abstract
+  AbsPrivate::a() called
+qualified abstract call with a literal, private implementation:
+  AbsPrivate::a() called
+abstract call, private implementation:
+  arg unqualified abstract
+  AbsPrivate::a() called
+qualified abstract call, public implementation:
+  arg qualified abstract
+  AbsPublic::a() called
+abstract call, public implementation:
+  arg unqualified abstract
+  AbsPublic::a() called
+redeclared abstract, no arguments:
+  RedeclaredImpl::c() called
+redeclared abstract, arguments:
+  arg redeclared abstract
+  RedeclaredImpl::b() called
+redeclared abstract, deleted:
+  OBJECT-ALREADY-DELETED: cannot call RedeclaredImpl::b() on an object that has already been deleted
+mixed variants, int:
+  arg mixed variants
+  RUNTIME-OVERLOAD-ERROR: no variant matching '::MixedMid::a(integer)' can be found; the following variants were tested:
+   ::MixedMid::a(string s)
+mixed variants, string:
+  MixedMid::a(string) called
+redeclared abstract in a default argument:
+  3000
+abstract in a default argument, unqualified:
+  2000
+argument deletes, typed:
+  arg typed
+  OBJECT-ALREADY-DELETED: cannot call DelBase::n() on an object that has already been deleted
+argument deletes, typed exact class:
+  arg exact class
+  OBJECT-ALREADY-DELETED: cannot call DelSub::over() on an object that has already been deleted
+argument deletes, untyped:
+  arg untyped
+  OBJECT-ALREADY-DELETED: cannot call DelSub::over() on an object that has already been deleted
+argument deletes, inherited method:
+  arg inherited
+  OBJECT-ALREADY-DELETED: cannot call DelBase::n() on an object that has already been deleted
+argument deletes, self call:
+  arg self call
+  OBJECT-ALREADY-DELETED: cannot call DelBase::n() on an object that has already been deleted
+argument deletes, self.n():
+  arg self.n()
+  OBJECT-ALREADY-DELETED: cannot call DelBase::n() on an object that has already been deleted
+argument deletes, qualified self call:
+  arg qualified self call
+  OBJECT-ALREADY-DELETED: cannot call DelBase::over() on an object that has already been deleted
+argument deletes, abstract self call:
+  arg abstract self call
+  OBJECT-ALREADY-DELETED: cannot call DelSub::abs() on an object that has already been deleted
+argument deletes, self call with a closure argument (#6057):
+  SelfDelete destructor
+  deleted
+  OBJECT-ALREADY-DELETED: cannot call SelfDelete::m() on an object that has already been deleted
+argument deletes, builtin method:
+  OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+argument deletes, builtin method, untyped:
+  OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+argument deletes, builtin self call:
+  OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+argument deletes, builtin self.m():
+  OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+deleted object, builtin self call:
+  OBJECT-ALREADY-DELETED: cannot call DelMutex::lock() on an object that has already been deleted
+round 1
+private method:
+  METHOD-IS-PRIVATE: C::p() is private and cannot be accessed externally
+missing method:
+  METHOD-DOES-NOT-EXIST: no method C::nomethod() has been defined and no pseudo-method <object>::nomethod() is available (class lang: Qore)
+missing method on auto:
+  METHOD-DOES-NOT-EXIST: no method C::nomethod() has been defined and no pseudo-method <object>::nomethod() is available (class lang: Qore)
+missing method, literal argument:
+  METHOD-DOES-NOT-EXIST: no method C::nomethod() has been defined and no pseudo-method <object>::nomethod() is available (class lang: Qore)
+private override:
+  METHOD-IS-PRIVATE: PrivateChild::m() is private and cannot be accessed externally
+private method from the class:
+  arg private from the class
+  C::p() called
+member closure:
+  arg member closure
+  member closure called
+pseudo-method of an object:
+  arg pseudo
+  True
+public override:
+  arg public override
+  Child::m() called
+overloaded method:
+  arg overloaded
+  C::m(int) called
+overloaded, deleted:
+  OBJECT-ALREADY-DELETED: cannot call C::m(int a) on an object that has already been deleted
+overloaded, deleted, string:
+  OBJECT-ALREADY-DELETED: cannot call C::m(string a) on an object that has already been deleted
+qualified self call:
+  QChild::m() called
+  arg qualified
+  QBase::m() called
+qualified self call, subclass:
+  QChild::m() called
+  arg qualified
+  QBase::m() called
+qualified self call, deleted:
+  OBJECT-ALREADY-DELETED: cannot call QBase::m() on an object that has already been deleted
+qualified self call, subclass, deleted:
+  OBJECT-ALREADY-DELETED: cannot call QBase::m() on an object that has already been deleted
+qualified abstract call, private implementation:
+  arg qualified abstract
+  AbsPrivate::a() called
+qualified abstract call with a literal, private implementation:
+  AbsPrivate::a() called
+abstract call, private implementation:
+  arg unqualified abstract
+  AbsPrivate::a() called
+qualified abstract call, public implementation:
+  arg qualified abstract
+  AbsPublic::a() called
+abstract call, public implementation:
+  arg unqualified abstract
+  AbsPublic::a() called
+redeclared abstract, no arguments:
+  RedeclaredImpl::c() called
+redeclared abstract, arguments:
+  arg redeclared abstract
+  RedeclaredImpl::b() called
+redeclared abstract, deleted:
+  OBJECT-ALREADY-DELETED: cannot call RedeclaredImpl::b() on an object that has already been deleted
+mixed variants, int:
+  arg mixed variants
+  RUNTIME-OVERLOAD-ERROR: no variant matching '::MixedMid::a(integer)' can be found; the following variants were tested:
+   ::MixedMid::a(string s)
+mixed variants, string:
+  MixedMid::a(string) called
+redeclared abstract in a default argument:
+  3000
+abstract in a default argument, unqualified:
+  2000
+argument deletes, typed:
+  arg typed
+  OBJECT-ALREADY-DELETED: cannot call DelBase::n() on an object that has already been deleted
+argument deletes, typed exact class:
+  arg exact class
+  OBJECT-ALREADY-DELETED: cannot call DelSub::over() on an object that has already been deleted
+argument deletes, untyped:
+  arg untyped
+  OBJECT-ALREADY-DELETED: cannot call DelSub::over() on an object that has already been deleted
+argument deletes, inherited method:
+  arg inherited
+  OBJECT-ALREADY-DELETED: cannot call DelBase::n() on an object that has already been deleted
+argument deletes, self call:
+  arg self call
+  OBJECT-ALREADY-DELETED: cannot call DelBase::n() on an object that has already been deleted
+argument deletes, self.n():
+  arg self.n()
+  OBJECT-ALREADY-DELETED: cannot call DelBase::n() on an object that has already been deleted
+argument deletes, qualified self call:
+  arg qualified self call
+  OBJECT-ALREADY-DELETED: cannot call DelBase::over() on an object that has already been deleted
+argument deletes, abstract self call:
+  arg abstract self call
+  OBJECT-ALREADY-DELETED: cannot call DelSub::abs() on an object that has already been deleted
+argument deletes, self call with a closure argument (#6057):
+  SelfDelete destructor
+  deleted
+  OBJECT-ALREADY-DELETED: cannot call SelfDelete::m() on an object that has already been deleted
+argument deletes, builtin method:
+  OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+argument deletes, builtin method, untyped:
+  OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+argument deletes, builtin self call:
+  OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+argument deletes, builtin self.m():
+  OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+deleted object, builtin self call:
+  OBJECT-ALREADY-DELETED: cannot call DelMutex::lock() on an object that has already been deleted
+round 2
+private method:
+  METHOD-IS-PRIVATE: C::p() is private and cannot be accessed externally
+missing method:
+  METHOD-DOES-NOT-EXIST: no method C::nomethod() has been defined and no pseudo-method <object>::nomethod() is available (class lang: Qore)
+missing method on auto:
+  METHOD-DOES-NOT-EXIST: no method C::nomethod() has been defined and no pseudo-method <object>::nomethod() is available (class lang: Qore)
+missing method, literal argument:
+  METHOD-DOES-NOT-EXIST: no method C::nomethod() has been defined and no pseudo-method <object>::nomethod() is available (class lang: Qore)
+private override:
+  METHOD-IS-PRIVATE: PrivateChild::m() is private and cannot be accessed externally
+private method from the class:
+  arg private from the class
+  C::p() called
+member closure:
+  arg member closure
+  member closure called
+pseudo-method of an object:
+  arg pseudo
+  True
+public override:
+  arg public override
+  Child::m() called
+overloaded method:
+  arg overloaded
+  C::m(int) called
+overloaded, deleted:
+  OBJECT-ALREADY-DELETED: cannot call C::m(int a) on an object that has already been deleted
+overloaded, deleted, string:
+  OBJECT-ALREADY-DELETED: cannot call C::m(string a) on an object that has already been deleted
+qualified self call:
+  QChild::m() called
+  arg qualified
+  QBase::m() called
+qualified self call, subclass:
+  QChild::m() called
+  arg qualified
+  QBase::m() called
+qualified self call, deleted:
+  OBJECT-ALREADY-DELETED: cannot call QBase::m() on an object that has already been deleted
+qualified self call, subclass, deleted:
+  OBJECT-ALREADY-DELETED: cannot call QBase::m() on an object that has already been deleted
+qualified abstract call, private implementation:
+  arg qualified abstract
+  AbsPrivate::a() called
+qualified abstract call with a literal, private implementation:
+  AbsPrivate::a() called
+abstract call, private implementation:
+  arg unqualified abstract
+  AbsPrivate::a() called
+qualified abstract call, public implementation:
+  arg qualified abstract
+  AbsPublic::a() called
+abstract call, public implementation:
+  arg unqualified abstract
+  AbsPublic::a() called
+redeclared abstract, no arguments:
+  RedeclaredImpl::c() called
+redeclared abstract, arguments:
+  arg redeclared abstract
+  RedeclaredImpl::b() called
+redeclared abstract, deleted:
+  OBJECT-ALREADY-DELETED: cannot call RedeclaredImpl::b() on an object that has already been deleted
+mixed variants, int:
+  arg mixed variants
+  RUNTIME-OVERLOAD-ERROR: no variant matching '::MixedMid::a(integer)' can be found; the following variants were tested:
+   ::MixedMid::a(string s)
+mixed variants, string:
+  MixedMid::a(string) called
+redeclared abstract in a default argument:
+  3000
+abstract in a default argument, unqualified:
+  2000
+argument deletes, typed:
+  arg typed
+  OBJECT-ALREADY-DELETED: cannot call DelBase::n() on an object that has already been deleted
+argument deletes, typed exact class:
+  arg exact class
+  OBJECT-ALREADY-DELETED: cannot call DelSub::over() on an object that has already been deleted
+argument deletes, untyped:
+  arg untyped
+  OBJECT-ALREADY-DELETED: cannot call DelSub::over() on an object that has already been deleted
+argument deletes, inherited method:
+  arg inherited
+  OBJECT-ALREADY-DELETED: cannot call DelBase::n() on an object that has already been deleted
+argument deletes, self call:
+  arg self call
+  OBJECT-ALREADY-DELETED: cannot call DelBase::n() on an object that has already been deleted
+argument deletes, self.n():
+  arg self.n()
+  OBJECT-ALREADY-DELETED: cannot call DelBase::n() on an object that has already been deleted
+argument deletes, qualified self call:
+  arg qualified self call
+  OBJECT-ALREADY-DELETED: cannot call DelBase::over() on an object that has already been deleted
+argument deletes, abstract self call:
+  arg abstract self call
+  OBJECT-ALREADY-DELETED: cannot call DelSub::abs() on an object that has already been deleted
+argument deletes, self call with a closure argument (#6057):
+  SelfDelete destructor
+  deleted
+  OBJECT-ALREADY-DELETED: cannot call SelfDelete::m() on an object that has already been deleted
+argument deletes, builtin method:
+  OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+argument deletes, builtin method, untyped:
+  OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+argument deletes, builtin self call:
+  OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+argument deletes, builtin self.m():
+  OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+deleted object, builtin self call:
+  OBJECT-ALREADY-DELETED: cannot call DelMutex::lock() on an object that has already been deleted

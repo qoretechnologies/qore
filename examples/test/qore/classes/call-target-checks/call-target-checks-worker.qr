@@ -1,0 +1,235 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks what a method call raises before and after its arguments are evaluated; run by call-target-checks.qtest
+
+/** The AST interpreter dispatches a method call before it evaluates the arguments: the call of a private or missing
+    method, or a call on a deleted object, raises its error without evaluating them, and the error of a deleted object
+    names the variant that parse initialization resolved; an argument that deletes the object makes the call raise
+    the error of the call of a deleted object's method (qore#5824).  Each check prints "name=result", where the result
+    gives the arguments that were evaluated and the exception raised.
+*/
+
+%allow-weak-references
+
+class Priv {
+    private p(auto a) {
+    }
+
+    pub(auto a) {
+    }
+}
+
+class Base {
+    m(auto a) {
+    }
+}
+
+class PrivOverride inherits Base {
+    private m(auto a) {
+    }
+}
+
+class Over {
+    m(int a) {
+    }
+
+    m(string a) {
+    }
+}
+
+class Base2 {
+    m2(int x) {
+    }
+}
+
+class Gone inherits Base2 {
+}
+
+class GateClass {
+    string methodGate(string name, auto a) {
+        return sprintf("gate %s(%y)", name, a);
+    }
+}
+
+class MemberClosure {
+    public {
+        code f = string sub (auto a) { return sprintf("closure %y", a); };
+    }
+}
+
+class PrivateBase {
+    int m(int a) {
+        return a;
+    }
+}
+
+#! a class that inherits PrivateBase::m() through a private base class
+class PrivateInherit inherits private PrivateBase {
+    #! calls m() on another object in the class context of the class
+    int callInClass(object o) {
+        return o.m(arg("a"));
+    }
+}
+
+#! a class whose methods call a private method on other objects in its class context
+class PrivateCaller {
+    private int p(int a) {
+        return a;
+    }
+
+    int callOther(object o) {
+        return o.p(arg("a"));
+    }
+}
+
+#! a class whose method deletes the object in the argument of a call on a variable holding it
+class DeleteCurrent {
+    int m2(int a) {
+        return a;
+    }
+
+    int run() {
+        DeleteCurrent o = self;
+        return o.m2((int sub () { delete self; return 5; })());
+    }
+}
+
+#! calls m() at one call site, which sees objects of several classes
+auto sub call_m(Base o) {
+    return o.m(arg("a"));
+}
+
+#! the labels of the arguments evaluated by the current check
+list<string> evaluated;
+
+#! records the evaluation of an argument
+int sub arg(string label) {
+    evaluated += label;
+    return 1;
+}
+
+#! returns a deleted object of the class given
+auto sub deleted(string cls) {
+    object o = create_object(cls);
+    object h = o;
+    delete h;
+    return o;
+}
+
+#! returns the arguments evaluated and the exception raised or the value returned by the call
+string sub check(code c) {
+    evaluated = ();
+    string rv;
+    try {
+        rv = sprintf("%y", c());
+    } catch (hash<ExceptionInfo> ex) {
+        rv = sprintf("%s: %s", ex.err, ex.desc);
+    }
+    return sprintf("args %y; %s", evaluated, rv);
+}
+
+hash<string, string> sub checks() {
+    return {
+        # a private or missing method found when the call is made
+        "private-object": check(sub () { object o = new Priv(); o.p(arg("a")); }),
+        "private-any": check(sub () { any o = new Priv(); o.p(arg("a")); }),
+        "private-auto": check(sub () { auto o = new Priv(); o.p(arg("a")); }),
+        "private-hash-member": check(sub () { hash<auto> h = {"o": new Priv()}; h.o.p(arg("a")); }),
+        "missing-object": check(sub () { object o = new Priv(); o.nope(arg("a")); }),
+        "missing-any": check(sub () { any o = new Priv(); o.nope(arg("a")); }),
+        "private-override": check(sub () { Base o = new PrivOverride(); o.m(arg("a")); }),
+        # calls dispatched by name that evaluate their arguments
+        "public-object": check(sub () { object o = new Priv(); o.pub(arg("a")); }),
+        "method-gate": check(auto sub () { object o = new GateClass(); return o.anything(arg("a")); }),
+        "member-closure": check(auto sub () { object o = new MemberClosure(); return o.f(arg("a")); }),
+        "pseudo-method": check(auto sub () { object o = new Priv(); return o.hasCallableMethod(arg("a") ? "pub" : ""); }),
+        "copy": check(auto sub () { object o = new Priv(); return o.copy().className(); }),
+        # an overloaded method called on a deleted object
+        "overloaded-deleted": check(sub () { Over o = deleted("Over"); o.m(1); }),
+        "overloaded-deleted-string": check(sub () { Over o = deleted("Over"); o.m("x"); }),
+        "overloaded-deleted-argument": check(sub () { Over o = deleted("Over"); o.m(arg("a")); }),
+        # an argument that deletes the object
+        "argument-deletes-subclass": check(sub () {
+            Base2 o = new Gone();
+            o.m2((int sub () { delete o; return 1; })());
+        }),
+        "argument-deletes-same-class": check(sub () {
+            Base2 o = new Base2();
+            o.m2((int sub () { delete o; return 1; })());
+        }),
+        "argument-deletes-auto": check(sub () {
+            auto o = new Gone();
+            o.m2((int sub () { delete o; return 1; })());
+        }),
+        "argument-deletes-object": check(sub () {
+            object o = new Gone();
+            object h = o;
+            o.m2((int sub () { delete h; return 1; })());
+        }),
+        "argument-deletes-overloaded": check(sub () {
+            Over o = new Over();
+            o.m((int sub () { delete o; return 1; })());
+        }),
+        "argument-deletes-weak-reference": check(sub () {
+            Base2 o = new Gone();
+            auto w := o;
+            w.m2((int sub () { delete o; return 1; })());
+        }),
+        "argument-deletes-current-object": check(auto sub () { return (new DeleteCurrent()).run(); }),
+        # calls found by name in a class context
+        "private-in-class-context": check(auto sub () { return (new PrivateCaller()).callOther(new PrivateCaller()); }),
+        "private-base-in-class-context": check(auto sub () {
+            PrivateInherit o();
+            return o.callInClass(new PrivateInherit());
+        }),
+        "private-base": check(auto sub () { object o = new PrivateInherit(); return o.m(arg("a")); }),
+        "hash-member-closure": check(auto sub () {
+            hash<auto> h = {"f": auto sub (auto a) { return a; }};
+            return h.f(arg("a"));
+        }),
+        # a call site that dispatches the call for the class of each object
+        "call-site-public": check(sub () { call_m(new Base()); }),
+        "call-site-private": check(sub () { call_m(new PrivOverride()); }),
+    };
+}
+
+# called three times, so that the checks run again after their first call
+hash<string, string> first = checks();
+bool stable = True;
+for (int i = 0; i < 2; ++i) {
+    if (checks() != first) {
+        stable = False;
+    }
+}
+# checks made in top-level code
+{
+    evaluated = ();
+    object o = new Priv();
+    try {
+        o.p(arg("a"));
+        first."top-level-private" = sprintf("args %y; no exception", evaluated);
+    } catch (hash<ExceptionInfo> ex) {
+        first."top-level-private" = sprintf("args %y; %s: %s", evaluated, ex.err, ex.desc);
+    }
+}
+{
+    Over o = deleted("Over");
+    try {
+        o.m(1);
+        first."top-level-overloaded-deleted" = "no exception";
+    } catch (hash<ExceptionInfo> ex) {
+        first."top-level-overloaded-deleted" = sprintf("%s: %s", ex.err, ex.desc);
+    }
+}
+{
+    Base2 o = new Gone();
+    try {
+        o.m2((int sub () { delete o; return 1; })());
+        first."top-level-argument-deletes" = "no exception";
+    } catch (hash<ExceptionInfo> ex) {
+        first."top-level-argument-deletes" = sprintf("%s: %s", ex.err, ex.desc);
+    }
+}
+map printf("%s=%s\n", $1.key, $1.value), first.pairIterator();
+printf("stable=%y\n", stable);
