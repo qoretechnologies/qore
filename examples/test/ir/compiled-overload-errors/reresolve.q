@@ -36,8 +36,8 @@ class D6 inherits B6 {
 # functions
 string sub fn(int a, int p) { return "fn(int, int)"; }
 string sub fn(auto a, auto p) { return sprintf("fn(auto, auto) a=%y p=%y", a, p); }
-# a deleted object matches the declared type of an object parameter at parse time, but not at run time: the variant
-# resolved again gets the argument
+# a deleted object keeps its class for the selection of a variant, at parse time and at run time (qore#6159): the
+# variant of its class is called
 class X {
 }
 string sub dobj(X x) { return "dobj(X)"; }

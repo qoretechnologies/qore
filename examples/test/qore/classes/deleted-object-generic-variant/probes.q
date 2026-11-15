@@ -146,7 +146,7 @@ string sub threads(Obj o, Obj d) {
             bool ok = True;
             for (int i = 0; i < 200; ++i) {
                 bool del = ((i + t) % 2) != 0;
-                if (site(new Derived(), del ? d : o) != (del ? "base-auto" : "base-X")) {
+                if (site(new Derived(), del ? d : o) != "base-X") {
                     ok = False;
                 }
             }

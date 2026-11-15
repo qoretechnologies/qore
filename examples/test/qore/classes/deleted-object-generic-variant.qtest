@@ -14,24 +14,32 @@
 #! A call with explicit type arguments of a generic variant beside a variant without type parameters selects the same
 #! variant in every mode, at parse time and at run time (qore#6152)
 /** The run-time search keeps a variant without type parameters as a candidate of a call with explicit type arguments,
-    while the parse-time search left it out: m<Obj>(o) with m<X>(X x) and m(auto x) was committed to m<X>(X x) at
-    parse time and resolved among both variants at run time.  Both searches now take the same candidates, and an
-    untyped parameter does not tie with a typed one at parse time, so the call is committed to m<X>(X x) as m(Obj x)
-    beside m(auto x) is.  The probes (deleted-object-generic-variant/probes.q) call generic methods, static methods and
-    functions with explicit type arguments, with typed, untyped, named and captured arguments and from a generic class
-    (also with the class's type parameter as the type argument), with non-generic overloads, inferred type arguments
-    and a generic class's own method as controls; also with an argument that only the variant without type parameters
-    accepts, with a method of a child class beside a generic method of its parent class, without arguments, and with
-    explicit type arguments that no generic variant takes; they run in each execution mode in a child process, with
-    tiered execution at the IR tier and promoted to native code, and as qcc-compiled executables (-O0, -O3).
+    while the parse-time search left it out: m<Obj>(o) with m<X>(X x) and m(auto x) was committed to m<X>(X x) at parse
+    time and resolved among both variants at run time. Both searches now take the same candidates, and an untyped
+    parameter does not tie with a typed one at parse time, so the call is committed to m<X>(X x) as m(Obj x) beside
+    m(auto x) is. A deleted object keeps its class for the selection (qore#6159), so it selects m<X>(X x) as a live
+    object does, also when the call is resolved at run time. The probes (deleted-object-generic-variant/probes.q) call
+    generic methods, static methods and functions with explicit type arguments, with typed, untyped, named and captured
+    arguments and from a generic class (also with the class's type parameter as the type argument), with non-generic
+    overloads, inferred type arguments and a generic class's own method as controls; also with an argument that only the
+    variant without type parameters accepts, with a method of a child class beside a generic method of its parent class,
+    without arguments, and with explicit type arguments that no generic variant takes, for a live and a deleted object,
+    and through shared call sites with live and deleted objects in turn, other receivers, the calling generic function's
+    type parameter and four threads; they run in each execution mode in a child process, with tiered execution at the IR
+    tier and promoted to native code, and as qcc-compiled executables (-O0, -O3).
 */
 class DeletedObjectGenericVariantTest inherits QUnit::Test {
     public {
         const ExecModes = ("ast", "ir", "jit", "tiered");
 
-        const Live = (map "\"X\"", xrange(12)).join("|") + "|" + (map "\"Obj\"", xrange(5)).join("|")
-            + "|\"plain-auto\"|\"plain-auto\"|\"X\"|\"T\"|\"child-auto\"|PARSE-TYPE-ERROR|PARSE-TYPE-ERROR|"
-            "PARSE-TYPE-ERROR|\"X\"|\"plain\"|\"plain-T\"";
+        #! the results of the calls made with a live and with a deleted object, which keeps its class (qore#6159)
+        const Common = (map "\"X\"", xrange(12)).join("|") + "|" + (map "\"Obj\"", xrange(5)).join("|")
+            + "|\"plain-auto\"|\"plain-auto\"|\"X\"|\"T\"|\"child-auto\"";
+        const Live = Common + "|PARSE-TYPE-ERROR|PARSE-TYPE-ERROR|PARSE-TYPE-ERROR|\"X\"|\"plain\"|\"plain-T\"";
+        #! the calls through shared call sites: live and deleted objects in turn, other receivers, type arguments of
+        #! the calling generic function, and four threads
+        const Deleted = Common + "|base-X,base-X,base-X,base-X,base-X,base-X|base-X,override-auto,base-X,"
+            "override-auto|base-X,override-auto|X,plain-auto,X|[True, True, True, True]";
     }
 
     private {
@@ -46,7 +54,7 @@ class DeletedObjectGenericVariantTest inherits QUnit::Test {
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
         for (int i = 0; i < 4; ++i) {
-            expected += sprintf("%d: live: %s\n", i, Live);
+            expected += sprintf("%d: deleted: %s\n%d: live: %s\n", i, Deleted, i, Live);
         }
 
         addTestCase("explicit type arguments beside a variant without type parameters", \testModes());
@@ -60,7 +68,8 @@ class DeletedObjectGenericVariantTest inherits QUnit::Test {
         f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "deleted-object-generic-variant" + DirSep
             + "probes.q")
-            + "\nfor (int i = 0; i < 4; ++i) {\n    printf(\"%d: live: %s\\n\", i, probes(False));\n}\n");
+            + "\nfor (int i = 0; i < 4; ++i) {\n    printf(\"%d: deleted: %s\\n%d: live: %s\\n\", i, probes(True), "
+            "i, probes(False));\n}\n");
         f.close();
 
         string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=2 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",

@@ -1897,8 +1897,9 @@ CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArgumentsImp
         const AbstractQoreFunctionVariant* v = variant;
         ExceptionSink xsink2;
         CodeEvaluationArgRestoreHelper saved(xsink);
-        // A parse-time commitment may fail because a value is NOTHING or a deleted object. Retry with the
-        // caller's original arguments; the newly selected variant supplies its own argument-binding entry.
+        // A parse-time commitment may fail because a value is NOTHING (a deleted object keeps its class, issue #6159).
+        // Retry with the caller's original arguments; the newly selected variant supplies its own argument-binding
+        // entry.
         if (prepareDefaultArgsImpl<ARG_OTHER>(&xsink2, sig, is_copy, self, &saved.args, policy)) {
             saved.restore(tmp);
             // A closure keeps the generic bindings of the code that created it when an argument is rejected.
@@ -6082,8 +6083,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
         return !QoreTypeInfo::hasType(t) || sig->hasDefaultArg(p) || QoreTypeInfo::parseAcceptsReturns(t, NT_NOTHING);
     };
     // for a committed variant, the positions where an argument can make it resolved again: an argument without a
-    // value that it does not accept, or a deleted object for a typed parameter; another variant is selected then
-    // only if it accepts that argument there
+    // value that it does not accept; another variant is selected then only if it accepts that argument there.  An
+    // object for a typed parameter is counted as well, though a deleted object keeps its class for the selection of
+    // a variant (issue #6159): it can only keep a named call from being bound at parse time
     std::vector<bool> nothing_trigger(supplied.size(), false), object_trigger(supplied.size(), false);
     if (committed) {
         bool may_reresolve = false;
@@ -6201,8 +6203,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
 // args_with_value tells which arguments always have a value (parse_arg_always_has_value()), so that a literal, a
 // call or a definitely assigned local variable does not keep the call from being committed.  The arguments can then
 // not match the committed variant only because of the state of a value (no value in an unassigned member or
-// variable, a deleted object), which CodeEvaluationHelper::init() handles by resolving the variant again (issue
-// #5686).
+// variable), which CodeEvaluationHelper::init() handles by resolving the variant again (issue #5686); a deleted object
+// keeps its class for the selection of a variant, at parse time and at run time (issue #6159).
 const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProgramLocation* loc,
         const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
         const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst,
