@@ -168,7 +168,8 @@ Before a cached module is used:
 6. the stored depfile must name the module's path (the loader uses a depfile only for the module its rule names);
 7. the stored module must have a version 2 metadata record.
 
-The depfile, the fingerprints and then the module are each renamed into place, and the module and depfile are
+The depfile, the fingerprints, the paths of the optional modules (`<qmod>.d.optional`, see
+`aot-linked-module-sources.md`) and then the module are each renamed into place, and the module and depfile are
 compared with the entry's digests after the copy.  Anything unexpected makes the module a miss.
 
 Reading the cache never fails a build: any exception while an entry is read or checked (malformed JSON, JSON nested
@@ -178,7 +179,7 @@ a failure while trimming the entries of a base key after a store is only logged.
 
 ### When storing
 
-A module is stored only when qcc wrote the module, the depfile and the fingerprints, the module contains the
+A module is stored only when qcc wrote the module, the depfile, the fingerprints and the optional module paths, the module contains the
 build's identity, the depfile names the module, every source still has the size and modification time qcc recorded
 in its fingerprint and every dependency has one (a source written during the compile, or one qcc could not hash, is
 no stable input), every dependency can be covered (see
@@ -226,8 +227,9 @@ way no hit can be trusted, so the build fails.  CI audits a small sample in ever
 
 ## The cache directory
 
-`<dir>/qore-qmod-cache-1/entries/<base key>/<result key>.json` and `<dir>/qore-qmod-cache-1/objects/<result key>/`
-(`qmod`, `qmod.d`, `qmod.d.fingerprints`).  An object is written to a temporary directory and renamed into place,
+`<dir>/qore-qmod-cache-2/entries/<base key>/<result key>.json` and `<dir>/qore-qmod-cache-2/objects/<result key>/`
+(`qmod`, `qmod.d`, `qmod.d.fingerprints`, `qmod.d.optional`).  An object is written to a temporary directory and
+renamed into place,
 an entry with a temporary file renamed over it, so concurrent builds (`make -j`, several jobs sharing a host
 directory) never see a partial entry; the first object stored for a key wins.  At most 8 entries are kept under one
 base key.

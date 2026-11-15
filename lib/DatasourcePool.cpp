@@ -46,10 +46,22 @@ DatasourcePoolActionHelper::~DatasourcePoolActionHelper() {
         dsp.freeDS(xsink);
 }
 
+DatasourceConfig::DatasourceConfig(DBIDriver* n_driver, const char* n_user, const char* n_pass, const char* n_db,
+        const char* n_encoding, const char* n_host, int n_port, const QoreHashNode* n_opts, Queue* n_q,
+        QoreValue n_arg) :
+        driver(n_driver), user(n_user ? n_user : ""), pass(n_pass ? n_pass : ""), db(n_db ? n_db : ""),
+        encoding(n_encoding ? n_encoding : ""), host(n_host ? n_host : ""), port(n_port),
+        // the code that creates the pool configures the options of all of its connections (qore#5741); created
+        // before the reference to the options is taken, as it can fail
+        opt_setter(qore_ds_option_setter::getCaller()),
+        opts(n_opts ? n_opts->hashRefSelf() : nullptr), q(n_q), arg(n_arg) {
+}
+
 // the first connection (opened in the DatasourcePool constructor) is passed with an xsink obj
 // because invalid options can cause an exception to be thrown
 Datasource* DatasourceConfig::get(DatasourceStatementHelper* dsh, ExceptionSink* xsink) const {
-    Datasource* ds = new Datasource(driver, dsh);
+    // owned here until it is returned, so that it is freed if its configuration cannot be stored
+    std::unique_ptr<Datasource> ds(new Datasource(driver, dsh));
 
     if (!user.empty())
         ds->setPendingUsername(user.c_str());
@@ -77,28 +89,33 @@ Datasource* DatasourceConfig::get(DatasourceStatementHelper* dsh, ExceptionSink*
         ds->setMutationContext(mctx->refSelf(), xsink);
     }
 
-    // set options
+    // set options; they are recorded as set by the code that created the pool, not by the code running on this
+    // thread, which can be any code that uses the pool (qore#5741)
+    assert(opt_setter);
+    qore_ds_private* dspriv = qore_ds_private::get(*ds.get());
     ConstHashIterator hi(opts);
     while (hi.next()) {
         // skip "min" and "max" options
-        if (!strcmp(hi.getKey(), "min") || !strcmp(hi.getKey(), "max"))
+        if (!strcmp(hi.getKey(), "min") || !strcmp(hi.getKey(), "max")) {
             continue;
+        }
 
-        if (ds->setOption(hi.getKey(), hi.get(), xsink))
+        if (dspriv->setOption(hi.getKey(), hi.get(), opt_setter, xsink)) {
             break;
+        }
     }
 
     // turn off autocommit
     ds->setAutoCommit(false);
 
-    return ds;
+    return ds.release();
 }
 
 DatasourcePool::DatasourcePool(ExceptionSink* xsink, DBIDriver* ndsl, const char* user, const char* pass,
                                const char* db, const char* charset, const char* hostname, unsigned mn, unsigned mx, int port, const QoreHashNode* opts,
                                Queue* q, QoreValue a) :
-    pool(new Datasource*[mx]),
-    tid_list(new int[mx]),
+    pool(new Datasource*[mx]()),
+    tid_list(new int[mx]()),
     min(mn),
     max(mx),
     cmax(0),
@@ -117,12 +134,10 @@ DatasourcePool::DatasourcePool(ExceptionSink* xsink, DBIDriver* ndsl, const char
 
     assert(!(a && !q));
 
-    std::fill(tid_list, tid_list + mx, 0);
-
     // create minimum datasources if possible
     printd(5, "DatasourcePool::DatasourcePool(driver: %p user: %s pass: %s db: %s charset: %s host: %s min: %d max: %d port: %d) pool: %p\n",
             ndsl, user ? user : "(null)", pass ? pass : "(null)", db ? db : "(null)", charset ? charset : "(null)",
-            hostname ? hostname : "(null)", min, max, port, pool);
+            hostname ? hostname : "(null)", min, max, port, pool.get());
 
     init(xsink);
     forkRegister();
@@ -135,8 +150,8 @@ DatasourcePool::DatasourcePool(const DatasourcePool& old, ExceptionSink* xsink) 
 // the configuration, the timeouts and the warning callback of the pool that is copied are changed with its lock held,
 // so they are copied with it held as well
 DatasourcePool::DatasourcePool(const DatasourcePool& old, CopyLock&& lock, ExceptionSink* xsink) :
-    pool(new Datasource*[old.max]),
-    tid_list(new int[old.max]),
+    pool(new Datasource*[old.max]()),
+    tid_list(new int[old.max]()),
     min(old.min),
     max(old.max),
     cmax(0),
@@ -146,11 +161,12 @@ DatasourcePool::DatasourcePool(const DatasourcePool& old, CopyLock&& lock, Excep
     tl_timeout_ms(old.tl_timeout_ms),
     stats_reqs(0),
     stats_hits(0),
-    warning_callback(old.warning_callback ? old.warning_callback->refRefSelf() : nullptr),
-    callback_arg(old.callback_arg.refSelf()),
+    warning_callback(nullptr),
     config(old.config),
     valid(false) {
-    std::fill(tid_list, tid_list + old.max, 0);
+    // the references are taken once the members that can fail are created, so that they cannot leak
+    warning_callback = old.warning_callback ? old.warning_callback->refRefSelf() : nullptr;
+    callback_arg = old.callback_arg.refSelf();
     // the connections of the copy are opened without the lock of the pool that was copied
     lock.unlock();
     init(xsink);
@@ -162,8 +178,6 @@ DatasourcePool::~DatasourcePool() {
     //printd(5, "DatasourcePool::~DatasourcePool() this: %p\n", this);
     for (unsigned i = 0; i < cmax; ++i)
         delete pool[i];
-    delete [] tid_list;
-    delete [] pool;
     assert(!warning_callback);
     assert(!callback_arg);
 }

@@ -5195,6 +5195,19 @@ protected:
     //! The declarations named by the types of the members, static variables and method signatures
     DLLLOCAL void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const;
 
+    //! The base classes (the special method list of the class holds a reference to each) and the source of an imported
+    //! class
+    DLLLOCAL void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const {
+        if (scl) {
+            for (auto& i : scl->sml) {
+                refs.push_back(&i.first->priv->type_owner);
+            }
+        }
+        if (import_source) {
+            refs.push_back(&import_source->type_owner);
+        }
+    }
+
     DLLLOCAL void refTypeOwner() {
         ref();
     }

@@ -172,9 +172,13 @@ DateTimeNode* QoreLoggerEvent::getTimeStamp() const {
 
     @see @ref getStartTime()
 */
-DateTimeNode* QoreLoggerEvent::getRelativeTime() const {
+DateTimeNode* QoreLoggerEvent::getRelativeTime(ExceptionSink* xsink) const {
     AutoLocker al(m);
-    return timeStamp->subtractBy(*startTime);
+    // the start time is passed as a date, not as the pointer that its holder's operator*() gives: a pointer converts
+    // to a DateTime through DateTime(bool), as a relative date of zero, and the timestamp itself was returned
+    const DateTimeNode* start = *startTime;
+    // a difference out of range raises INVALID-DATE (qore#6103)
+    return timeStamp->subtractBy(*start, xsink);
 }
 
 //! Returns throwable info, if any

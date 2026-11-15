@@ -29,6 +29,7 @@ class ColumnarResultTest inherits QUnit::Test {
         addTestCase("sliced buffer round trip", \slicedBufferRoundTrip());
         addTestCase("row result round trip", \rowResultRoundTrip());
         addTestCase("scale-0 numeric narrowing", \scaleZeroNumericNarrowing());
+        addTestCase("large ints in a dense int64 column", \largeIntColumn());
         addTestCase("NUL characters in names and descriptions", \nulNames());
         addTestCase("NUL characters in strings passed on as C strings", \nulCStrings());
         addTestCase("a cycle through an object in a ColumnarResult column is collected", \cycleCollection());
@@ -89,6 +90,26 @@ class ColumnarResultTest inherits QUnit::Test {
         assertEq("buffer<*decimal128>", columns.n15_2.fullType(), "n15_2 stays decimal128");
         # precision >= 19 -> number
         assertEq("buffer<*decimal128>", columns.n20_0.fullType(), "n20_0 stays decimal128");
+    }
+
+    #! ints outside of the inline range are stored in and read from a dense int64 buffer (qore#6146)
+    /** The values were stored correctly, but each one leaked the temporary node that held it, which valgrind shows
+        (definitely lost); this checks the values on the same path
+    */
+    private largeIntColumn() {
+        list<auto> ints = (1 << 50, -(1 << 60), 9223372036854775807, -9223372036854775807 - 1, 3, NOTHING);
+        ColumnarResult result = ColumnarResult::fromColumnHash({
+            "i": ints,
+            "n18_0": (123456789012345678n, -123456789012345678n, NOTHING, 1n, 2n, 3n),
+        }, {
+            "i": {"native_type": "bigint", "nullable": True},
+            "n18_0": {"native_type": "numeric(18,0)", "nullable": True},
+        });
+        hash<auto> columns = result.toColumnHash();
+        assertEq("buffer<*int64>", columns.i.fullType());
+        assertEq(ints, columns.i.toList());
+        assertEq("buffer<*int64>", columns.n18_0.fullType());
+        assertEq((123456789012345678, -123456789012345678, NOTHING, 1, 2, 3), columns.n18_0.toList());
     }
 
     private ColumnarResult makeMixedResult() {

@@ -29,10 +29,18 @@ class IsSandboxedTest inherits QUnit::Test {
         code barrier;
         #! the queries in a system-policy capability
         code capability = SandboxManager::createSystemPolicyCall(\queries());
-        #! the queries in a thread that the calling code starts
-        code thread = hash<auto> sub () {
+        #! the queries in a thread that the calling code starts, or the error that they raised there
+        /** the thread passes on an error instead of leaving the caller waiting
+        */
+        code thread = auto sub () {
             Queue q();
-            background sub () { q.push(queries()); }();
+            background sub () {
+                try {
+                    q.push(queries());
+                } catch (hash<ExceptionInfo> ex) {
+                    q.push(sprintf("%s: %s", ex.err, ex.desc));
+                }
+            }();
             return q.get();
         };
     }
@@ -54,19 +62,37 @@ class IsSandboxedTest inherits QUnit::Test {
     }
 
     sandboxedTest() {
+        # isGoverned() and callWithSystemPolicy() are judged by the Program of the code that calls them: the trusted
+        # test's code calls them for the sandboxed code, under the default sandbox as under one that allows
+        # uncontrolled APIs (qore#5741)
+        foreach bool allow in ((False, True)) {
+            Program p = sandboxed(allow);
+            string label = allow ? "a sandbox that allows uncontrolled APIs" : "the default sandbox";
+            assertEq({"isSandboxed": True, "isGoverned": True}, p.callFunction("run", plain), label);
+            # a policy barrier masks the sandbox's policy, not the sandbox
+            assertEq({"isSandboxed": True, "isGoverned": False}, p.callFunction("run", barrier), label);
+            assertEq({"isSandboxed": True, "isGoverned": False}, p.callFunction("run", capability), label);
+        }
+        # the sandboxed code's own calls are refused by the default sandbox; isSandboxed() is not an uncontrolled API
         Program p = sandboxed();
-        assertEq({"isSandboxed": True, "isGoverned": True}, p.callFunction("run", plain));
-        # a policy barrier masks the sandbox's policy, not the sandbox
-        assertEq({"isSandboxed": True, "isGoverned": False}, p.callFunction("run", barrier));
-        assertEq({"isSandboxed": True, "isGoverned": False}, p.callFunction("run", capability));
+        assertTrue(p.callFunction("own_is_sandboxed"), "the sandboxed code's own isSandboxed()");
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*isGoverned", \p.callFunction(),
+            ("own_is_governed",), "the sandboxed code's own isGoverned()");
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*callWithSystemPolicy", \p.callFunction(),
+            ("own_barrier",), "the sandboxed code's own policy barrier");
     }
 
     inheritedTest() {
-        Program p = sandboxed();
-        assertEq({"isSandboxed": True, "isGoverned": True}, p.callFunction("run", thread));
-        # the method of an object that sandboxed code created runs under its sandbox, also when trusted code calls it
-        object o = p.callFunction("make");
-        assertTrue(o.isSandboxed());
+        foreach bool allow in ((False, True)) {
+            Program p = sandboxed(allow);
+            string label = allow ? "a sandbox that allows uncontrolled APIs" : "the default sandbox";
+            # trusted code in a thread that sandboxed code starts: it inherits the sandbox
+            assertEq({"isSandboxed": True, "isGoverned": True}, p.callFunction("run", thread), label);
+            # the method of an object that sandboxed code created runs under its sandbox, also when trusted code
+            # calls it
+            object o = p.callFunction("make");
+            assertTrue(o.isSandboxed(), label);
+        }
     }
 
     restrictedTest() {
@@ -78,12 +104,20 @@ class IsSandboxedTest inherits QUnit::Test {
     }
 
     #! Returns a sandboxed Program that calls the code given
-    private Program sandboxed() {
+    /** @param allow_uncontrolled_apis whether the sandbox allows the code that it governs uncontrolled APIs
+        (SandboxManager::setUncontrolledApiPolicy())
+    */
+    private Program sandboxed(bool allow_uncontrolled_apis = False) {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
-        p.parse("hash<auto> sub run(code c) { return c(); }\n"
+        p.parse("auto sub run(code c) { return c(); }\n"
+            "bool sub own_is_sandboxed() { return SandboxManager::isSandboxed(); }\n"
+            "bool sub own_is_governed() { return SandboxManager::isGoverned(); }\n"
+            "auto sub own_barrier() { return SandboxManager::callWithSystemPolicy(sub () {}); }\n"
             "class Probe { bool isSandboxed() { return SandboxManager::isSandboxed(); } }\n"
             "object sub make() { return new Probe(); }\n", "sandboxed");
-        p.setSandboxManager(new SandboxManager());
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(allow_uncontrolled_apis);
+        p.setSandboxManager(sm);
         return p;
     }
 }

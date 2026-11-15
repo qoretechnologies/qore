@@ -170,24 +170,36 @@ DateTimeNode* DateTimeNode::copy() const {
     return new DateTimeNode(*this);
 }
 
+// the unchecked (deprecated) functions below saturate a result out of range: they call the checked implementation
+// with no exception sink (qore#6103)
 DateTimeNode* DateTimeNode::add(const DateTime* dt) const {
     assert(dt);
-    return add(*dt);
+    if (!dt->hasValue()) {
+        return refSelf();
+    }
+    DateTimeNode* rv = new DateTimeNode(isRelative() ? *dt : *this);
+    rv->priv->add(isRelative() ? *priv : *dt->priv, nullptr);
+    return rv;
 }
 
 DateTimeNode* DateTimeNode::add(const DateTime& dt) const {
-    DateTimeNode* rv;
-    if (!dt.hasValue())
+    if (!dt.hasValue()) {
         return refSelf();
-
-    if (isRelative()) {
-        rv = new DateTimeNode(dt);
-        rv->priv->add(*priv);
-    } else {
-        rv = new DateTimeNode(*this);
-        rv->priv->add(*dt.priv);
     }
+    DateTimeNode* rv = new DateTimeNode(isRelative() ? dt : *this);
+    rv->priv->add(isRelative() ? *priv : *dt.priv, nullptr);
     return rv;
+}
+
+DateTimeNode* DateTimeNode::add(const DateTime& dt, ExceptionSink* xsink) const {
+    if (!dt.hasValue()) {
+        return refSelf();
+    }
+    SimpleRefHolder<DateTimeNode> rv(new DateTimeNode(isRelative() ? dt : *this));
+    if (rv->priv->add(isRelative() ? *priv : *dt.priv, xsink) && xsink) {
+        return nullptr;
+    }
+    return rv.release();
 }
 
 DateTimeNode* DateTimeNode::refSelf() const {
@@ -196,7 +208,14 @@ DateTimeNode* DateTimeNode::refSelf() const {
 }
 
 DateTimeNode* DateTimeNode::subtractBy(const DateTime* dt) const {
-    return subtractBy(*dt);
+    assert(dt);
+    if (!dt->hasValue() && dt->isRelative()) {
+        return refSelf();
+    }
+
+    DateTimeNode* rv = new DateTimeNode(*this);
+    rv->priv->subtractBy(*dt->priv, nullptr);
+    return rv;
 }
 
 DateTimeNode* DateTimeNode::subtractBy(const DateTime& dt) const {
@@ -205,8 +224,20 @@ DateTimeNode* DateTimeNode::subtractBy(const DateTime& dt) const {
     }
 
     DateTimeNode* rv = new DateTimeNode(*this);
-    rv->priv->subtractBy(*dt.priv);
+    rv->priv->subtractBy(*dt.priv, nullptr);
     return rv;
+}
+
+DateTimeNode* DateTimeNode::subtractBy(const DateTime& dt, ExceptionSink* xsink) const {
+    if (!dt.hasValue() && dt.isRelative()) {
+        return refSelf();
+    }
+
+    SimpleRefHolder<DateTimeNode> rv(new DateTimeNode(*this));
+    if (rv->priv->subtractBy(*dt.priv, xsink) && xsink) {
+        return nullptr;
+    }
+    return rv.release();
 }
 
 // note that ISO-8601 week days go from 1 - 7 = Mon - Sun
@@ -221,8 +252,16 @@ DateTimeNode* DateTimeNode::getDateFromISOWeek(int year, int week, int day, Exce
 
 DateTimeNode* DateTimeNode::unaryMinus() const {
     DateTimeNode* rv = new DateTimeNode(*this);
-    rv->priv->unaryMinus();
+    rv->priv->unaryMinus(nullptr);
     return rv;
+}
+
+DateTimeNode* DateTimeNode::unaryMinus(ExceptionSink* xsink) const {
+    SimpleRefHolder<DateTimeNode> rv(new DateTimeNode(*this));
+    if (rv->priv->unaryMinus(xsink) && xsink) {
+        return nullptr;
+    }
+    return rv.release();
 }
 
 DateTimeNode* DateTimeNode::makeNow(const AbstractQoreZoneInfo* zone) {
@@ -263,7 +302,15 @@ DateTimeNode* DateTimeNode::makeRelativeUnnormalized(int y, int mo, int d, int h
 
 DateTimeNode* DateTimeNode::makeRelativeFromSeconds(int64 s, int u) {
     SimpleRefHolder<DateTimeNode> rv(new DateTimeNode(true));
-    rv->setRelativeDateSeconds(s, u);
+    rv->priv->setRelativeDateSeconds(s, u, nullptr);
+    return rv.release();
+}
+
+DateTimeNode* DateTimeNode::makeRelativeFromSeconds(int64 s, int u, ExceptionSink* xsink) {
+    SimpleRefHolder<DateTimeNode> rv(new DateTimeNode(true));
+    if (rv->priv->setRelativeDateSeconds(s, u, xsink) && xsink) {
+        return nullptr;
+    }
     return rv.release();
 }
 
@@ -288,21 +335,50 @@ DateTimeValueHelper::DateTimeValueHelper(const AbstractQoreNode* n) {
     }
 }
 
-DateTimeValueHelper::DateTimeValueHelper(const QoreValue& n) {
+DateTimeValueHelper::DateTimeValueHelper(const QoreValue& n) : DateTimeValueHelper(n, nullptr) {
+}
+
+DateTimeValueHelper::DateTimeValueHelper(const QoreValue& n, ExceptionSink* xsink) {
     if (!n.isNullOrNothing()) {
         qore_type_t t = n.getType();
         if (t == NT_BOOLEAN) {
-            dt = DateTime::makeRelativeFromSeconds(n.getAsBool() ? 1 : 0);
+            dt = DateTime::makeRelativeFromSeconds(n.getAsBool() ? 1 : 0, 0, xsink);
             del = true;
             return;
-        } else if (t == NT_INT) {
-            dt = DateTime::makeRelativeFromSeconds(n.getAsBigInt());
-            del = true;
-            return;
-        } else if (t == NT_FLOAT) {
-            double f = n.getAsFloat();
-            int64 seconds = static_cast<int64>(f);
-            dt = DateTime::makeRelativeFromSeconds(seconds, static_cast<int>((f - seconds) * 1000000));
+        } else if (t == NT_INT || t == NT_FLOAT) {
+            // a number of seconds; with no exception sink, a value out of range is saturated (qore#6103)
+            int64 seconds;
+            int us = 0;
+            int code = QDO_NONE;
+            if (t == NT_INT) {
+                seconds = n.getAsBigInt();
+            } else {
+                double f = n.getAsFloat();
+                code = qore_split_float_seconds(f, seconds, us);
+                if (code == QDO_HOURS) {
+                    // saturated
+                    seconds = f > 0 ? std::numeric_limits<int64>::max() : std::numeric_limits<int64>::min();
+                    us = 0;
+                    code = QDO_NONE;
+                    if (xsink) {
+                        qore_date_private::raiseOverflow(QDO_HOURS, "conversion to a relative date", xsink);
+                        dt = ZeroDate;
+                        del = false;
+                        return;
+                    }
+                } else if (code == QDO_NOT_FINITE) {
+                    qore_date_private::raiseOverflow(code, "conversion to a relative date", xsink);
+                    dt = ZeroDate;
+                    del = false;
+                    return;
+                }
+            }
+            dt = DateTime::makeRelativeFromSeconds(seconds, us, xsink);
+            if (!dt) {
+                dt = ZeroDate;
+                del = false;
+                return;
+            }
             del = true;
             return;
         } else if (t == NT_STRING) {
@@ -357,17 +433,27 @@ DateTimeNodeValueHelper::DateTimeNodeValueHelper(const QoreValue& n) {
     if (!n.isNullOrNothing()) {
         qore_type_t t = n.getType();
         if (t == NT_BOOLEAN) {
-            dt = DateTimeNode::makeRelativeFromSeconds(n.getAsBool() ? 1 : 0);
+            dt = DateTimeNode::makeRelativeFromSeconds(n.getAsBool() ? 1 : 0, 0, nullptr);
             del = true;
             return;
         } else if (t == NT_INT) {
-            dt = DateTimeNode::makeRelativeFromSeconds(n.getAsBigInt());
+            // with no exception sink, a value out of range is saturated (qore#6103)
+            dt = DateTimeNode::makeRelativeFromSeconds(n.getAsBigInt(), 0, nullptr);
             del = true;
             return;
         } else if (t == NT_FLOAT) {
             double f = n.getAsFloat();
-            int64 seconds = static_cast<int64>(f);
-            dt = DateTimeNode::makeRelativeFromSeconds(seconds, static_cast<int>((f - seconds) * 1000000));
+            int64 seconds;
+            int us;
+            int code = qore_split_float_seconds(f, seconds, us);
+            if (code == QDO_HOURS) {
+                seconds = f > 0 ? std::numeric_limits<int64>::max() : std::numeric_limits<int64>::min();
+                us = 0;
+            } else if (code == QDO_NOT_FINITE) {
+                seconds = 0;
+                us = 0;
+            }
+            dt = DateTimeNode::makeRelativeFromSeconds(seconds, us, nullptr);
             del = true;
             return;
         } else if (t == NT_STRING) {

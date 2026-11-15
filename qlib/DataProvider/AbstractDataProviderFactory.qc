@@ -134,7 +134,7 @@ public class AbstractDataProviderFactory {
     */
     private:internal checkSandboxCreate() {
         # the common path is one call: only a sandboxed caller is checked
-        if (SandboxManager::isSandboxed() && sandbox_check.needsCheck(True)) {
+        if (SandboxManager::isRestricted() && sandbox_check.needsCheck(True)) {
             sandbox_check.check("data provider factory", getName(), (Class::getClass(self), getClass()), True);
         }
     }

@@ -683,8 +683,9 @@ static QoreIRValue tryDescriptorPluginSubscriptLowering(QoreIRLowering& lowering
     if (!rhs.isValid()) {
         return QoreIRValue();
     }
-    return builder.createPluginOp(QoreIROpcode::PluginSubscript,
-        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {lhs, rhs}, op->loc)->result;
+    return lowering.withPluginExceptionTarget(builder.createPluginOp(QoreIROpcode::PluginSubscript,
+        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {lhs, rhs},
+        op->loc))->result;
 }
 
 static QoreIRValue tryDescriptorPluginSliceLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
@@ -716,9 +717,9 @@ static QoreIRValue tryDescriptorPluginSliceLowering(QoreIRLowering& lowering, Qo
     if (!end.isValid()) {
         return QoreIRValue();
     }
-    return builder.createPluginOp(QoreIROpcode::PluginCall,
+    return lowering.withPluginExceptionTarget(builder.createPluginOp(QoreIROpcode::PluginCall,
         pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {seq, start, end},
-        op->loc)->result;
+        op->loc))->result;
 }
 
 static QoreIRValue tryDescriptorPluginBinaryLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
@@ -746,8 +747,9 @@ static QoreIRValue tryDescriptorPluginBinaryLowering(QoreIRLowering& lowering, Q
     if (!rhs.isValid()) {
         return QoreIRValue();
     }
-    return builder.createPluginOp(QoreIROpcode::PluginBinary,
-        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {lhs, rhs}, op->loc)->result;
+    return lowering.withPluginExceptionTarget(builder.createPluginOp(QoreIROpcode::PluginBinary,
+        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {lhs, rhs},
+        op->loc))->result;
 }
 
 static QoreIRValue tryDescriptorPluginUnaryLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
@@ -770,8 +772,9 @@ static QoreIRValue tryDescriptorPluginUnaryLowering(QoreIRLowering& lowering, Qo
     if (!value.isValid()) {
         return QoreIRValue();
     }
-    return builder.createPluginOp(QoreIROpcode::PluginUnary,
-        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {value}, op->loc)->result;
+    return lowering.withPluginExceptionTarget(builder.createPluginOp(QoreIROpcode::PluginUnary,
+        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {value},
+        op->loc))->result;
 }
 
 static QoreIRValue tryDescriptorPluginLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
@@ -3903,6 +3906,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         builder.setBlock(try_block);
         QoreIRBasicBlock* prev_guard_override = guard_exception_target_override;
+        // the exception target outside the try statement (see BlockCleanupEntry::try_outer_target)
+        QoreIRBasicBlock* try_outer_target = getCurrentExceptionTarget();
         guard_exception_target_override = catch_block;
         exception_stack.push_back(catch_block);
         size_t try_scope_depth = scope_stack.size();
@@ -3930,6 +3935,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             scope_entry.handler_start = block_handlers.size();
             // the end of the try statement for an exit from its try block (#5992)
             scope_entry.try_end_depth = try_depth;
+            scope_entry.try_outer_target = try_outer_target;
             pushBlockCleanup(scope_entry);
         }
         builder.createScopeEnter(try_scope_id);
@@ -4002,6 +4008,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             catch_scope_entry.loc = stmt->loc;
             // the end of the try statement for an exit from its catch block (#5992)
             catch_scope_entry.try_end_depth = try_depth;
+            catch_scope_entry.try_outer_target = try_outer_target;
             pushBlockCleanup(catch_scope_entry);
         }
         LocalVar* catch_var = try_stmt->getCatchVar();
@@ -5009,6 +5016,11 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 if (try_replaced_return_base.isValid() && try_replaced_return_base.id != try_replaced_return.id) {
                     builder.createReleaseOwnedTemp(try_replaced_return_base, entry.loc);
                 }
+                // an exception that the release raises (a destructor) is raised once the try statement has ended, as
+                // by the AST interpreter's try statement, which replaces the value after it has left its try and catch
+                // blocks: it goes past the statement's catch block, which would release the value of the try
+                // block's return, the value that the return goes on with (#6128)
+                builder.createCheckException(entry.loc)->exception_target = entry.try_outer_target;
             }
             try_replaced_depth = 0;
         }
