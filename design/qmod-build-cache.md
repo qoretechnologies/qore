@@ -309,7 +309,10 @@ Several jobs can share the directory.  Each object has a lock file, `objects/<re
   when the cache can be written (a hit from a cache that cannot be written, or with `QORE_QMOD_CACHE_READONLY=1`,
   still succeeds and records nothing);
 - one job prunes at a time (`prune.lock`, taken without waiting: a job that finds another one pruning skips its own
-  prune and says so).
+  prune and says so);
+- a lock file is created with `O_CREAT | O_EXCL`, and a job that gets `EEXIST` opens the file that exists (created
+  again if it was removed meanwhile): macOS's `openat()` with `O_CREAT` and without `O_EXCL` fails with `ENOENT` in a
+  process that loses the race to create a file, so jobs started at once failed (qore#6234).
 
 The hits of the jobs that only read the cache (the jobs of other refs) are not recorded, so an entry that only they
 use ages out after `--max-age-days` without a hit by a job of a protected ref.  Recording them was considered and
