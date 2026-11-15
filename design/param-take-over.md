@@ -120,10 +120,12 @@ The helpers are compiled in `lib/JITRuntimeTakeOver.cpp`, outside the single com
 
 ## Measurements (2026-11-15)
 
-callgrind, cuttah Release, per call slope (two sizes), `QORE_JIT_SYNC_COMPILE=1`, `qbuild --count`, develop 82c07846f2
-against the per-site inline rule with the storage as on develop (uncommitted state "step 2"): the reviewer's rows
-(`fh(hash<auto>, int)`, `fl(list<auto>, int)`, `fa(auto, int)`, `fi(int, int)`, `C::m(hash<auto>, int)`), the
-variable-argument writing rows (`f_var_hwrite`, `f_var_lwrite`, `f_var_awrite`, `m_var_hwrite`) and `f_tmp_read`,
-`f_tmp_write`, `m_tmp_read`, in ast, ir, jit, tiered, tiered with thresholds 1, qcc -O0 and -O3: every delta is 0 in
-the code (at most ±0.4 per call, rounding), and the only other deltas are in libc alone (±4..21, the placement noise
-classified before).  e317abfe88 had `fh` +4775 per call (+21.7%) and `fl` +4290 in IR mode.
+callgrind, cuttah Release, per-call slope (two sizes, `scripts/an.py`), `QORE_JIT_SYNC_COMPILE=1`, `qbuild --count`;
+ast, ir, jit, tiered, tiered with thresholds 1 (tlow), qcc -O0 and -O3.
+
+- Option 1 at 8d373dfedd against develop 82c07846f2 (results-n): the reviewer's rows (`fh(hash<auto>, int)`,
+  `fl(list<auto>, int)`, `fa(auto, int)`, `fi(int, int)`, `C::m(hash<auto>, int)`), the variable-argument writing
+  rows (`f_var_hwrite`, `f_var_lwrite`, `f_var_awrite`, `m_var_hwrite`), `f_tmp_read` and `m_tmp_read`: the code
+  delta is 0 in every row; the only deltas are in libc alone (±7..21 per call, the placement class).  e317abfe88 had
+  `fh` +4775 per call (+21.7%) and `fl` +4290 in IR mode.  `f_tmp_write` (a giving site) is -246 in IR mode, in libc.
+- The full matrix against batch R (8a1ac4346b) after the merge: see branch1-notes.txt (table-<tag>.txt on cuttah).
