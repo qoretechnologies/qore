@@ -5720,6 +5720,8 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
     }
     bool found = false;
     QoreValue discard_udata;
+    // the timer's options, released after the lock, as their references to Programs can be the last ones (qore#6208)
+    AsyncIoRuntimeOptions discard_po;
     // module code running for an application with restrictions can cancel only the timers added for it
     qore_program_id_t app_pgm_id = 0;
     bool for_app = runtime_get_module_caller_app(app_pgm_id);
@@ -5738,6 +5740,7 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
 
         // Always remove from timer_info_map immediately (so a second cancel returns False)
         discard_udata = it->second.udata;
+        discard_po = std::move(it->second.runtime_po);
         timer_info_map.erase(it);
 
         // the timer's I/O thread removes it from its event loop; a stopped thread has already discarded it
@@ -7430,8 +7433,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 #ifdef DEBUG
             if (is_code) {
                 // a test can hold the callback of a fired timer and run it later (see dbgHoldTimerCallbacks())
-                AsyncIoRuntimeOptions held_po = is_code ? te.runtime_po : cb_snapshot_po;
-                if (dbgHoldTimerCallback(*code_ref, te.owner, te.sandbox_ctx, held_po)) {
+                if (dbgHoldTimerCallback(*code_ref, te.owner, te.sandbox_ctx, te.runtime_po)) {
                     code_ref.release();
                     continue;
                 }
@@ -7499,6 +7501,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     // released after the lock below, as the cleanup takes it (see cleanupAbandonedCommand())
     std::vector<Command> abandoned_cmds;
     std::vector<AsyncIoDeferredRelease> exit_timer_refs;
+    // the options of the remaining timers, released after the lock with their references (qore#6208)
+    std::vector<AsyncIoRuntimeOptions> exit_timer_pos;
     std::unordered_map<std::string, std::shared_ptr<void>> exit_holds;
     // sockets that waited for a barrier and the completions waiting for them: closed and signaled after the lock is
     // released, as closing a socket can run its destructor and other code that must not run under the controller lock
@@ -7570,6 +7574,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             refs.module_cleanup_delegate = async_io_module_cleanup_delegate(tinfo.sandbox_ctx);
             tinfo.udata = QoreValue();
             exit_timer_refs.push_back(refs);
+            exit_timer_pos.push_back(std::move(tinfo.runtime_po));
         }
         timer_info_map.clear();
 

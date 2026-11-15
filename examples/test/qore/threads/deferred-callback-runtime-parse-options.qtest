@@ -189,7 +189,10 @@ class DeferredTestLogger inherits LoggerInterfaceBase {
         string m = vsprintf(message, format_args);
         if (m =~ /exception/) {
             stderr.printf(\"logged: %s\\n\", m);
-            DeferredTestLogger::logged.push(\"logged: \" + m);
+            # only the exceptions of the callbacks that the cases wait for
+            if (m =~ /ILLEGAL-EXPRESSION|FILE-LOCK-ERROR/) {
+                DeferredTestLogger::logged.push(\"logged: \" + m);
+            }
         }
     }
     bool isEnabledFor(int level) {
@@ -351,7 +354,8 @@ class L inherits LoggerInterfaceBase {
     }
     logArgs(int level, string message, *softlist<auto> format_args) {
         string m = vsprintf(message, format_args);
-        if (m =~ /exception/) {
+        # only the exceptions of the timer's callback
+        if (m =~ /exception/ && m =~ /ILLEGAL-EXPRESSION|FILE-LOCK-ERROR/) {
             L::logged.push(m);
         }
     }
