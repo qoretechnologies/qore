@@ -2477,6 +2477,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             BlockCleanupEntry ref_foreach_entry;
             ref_foreach_entry.type = BlockCleanupEntry::RefForeach;
             ref_foreach_entry.ref_foreach_state = state;
+            ref_foreach_entry.ref_foreach_exception_target = getCurrentExceptionTarget();
             ref_foreach_entry.loc = stmt->loc;
             pushBlockCleanup(ref_foreach_entry);
 
@@ -2658,14 +2659,21 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createRefForeachRecord(state, break_modified, stmt->loc);
             builder.createScopeExit(try_scope_id, false);
             QoreIRValue fill_true = builder.createConstInt(1, stmt->loc)->result;
-            builder.createRefForeachFinalize(state, fill_true, stmt->loc);
+            // the write-back assigns the list to the lvalue, which can refuse it, and releases the list it replaces,
+            // which can run a destructor: an exception goes to the handler of an enclosing try block, as in the AST
+            // interpreter, where the statement raises it (ForEachStatement::execRef(), qore#6197); the handler of the
+            // loop was popped above
+            builder.createRefForeachFinalize(state, fill_true, stmt->loc)->exception_target
+                = getCurrentExceptionTarget();
             builder.createBranch(merge_block);
 
             // Exit normal: scope exit, finalize without fill remaining
             builder.setBlock(exit_normal_block);
             builder.createScopeExit(try_scope_id, false);
             QoreIRValue fill_false = builder.createConstInt(0, stmt->loc)->result;
-            builder.createRefForeachFinalize(state, fill_false, stmt->loc);
+            // an exception raised by the write-back goes to the handler of an enclosing try block (see above)
+            builder.createRefForeachFinalize(state, fill_false, stmt->loc)->exception_target
+                = getCurrentExceptionTarget();
             builder.createBranch(merge_block);
 
             // Catch: landing pad, cleanup without write-back, rethrow to outer handler
@@ -4981,7 +4989,9 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 // Finalize ref foreach: write back to reference (with or without fill remaining)
                 QoreIRValue fill = builder.createConstInt(
                     (flags & CF_FILL_REMAINING) ? 1 : 0, entry.loc)->result;
-                builder.createRefForeachFinalize(entry.ref_foreach_state, fill, entry.loc);
+                // an exception raised by the write-back goes to the handler outside the statement (qore#6197)
+                builder.createRefForeachFinalize(entry.ref_foreach_state, fill, entry.loc)->exception_target
+                    = entry.ref_foreach_exception_target;
                 break;
             }
             case BlockCleanupEntry::Context: {

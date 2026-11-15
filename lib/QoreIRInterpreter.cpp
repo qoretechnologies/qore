@@ -16194,6 +16194,11 @@ load_local_done:
                     static_cast<uint64_t>(state_val.getAsBigInt()),
                     fill_val.getAsBigInt(), xsink);
                 if (xsink && *xsink) {
+                    // the write-back raised an exception (the lvalue refused the list, or a destructor of a value
+                    // released): it goes to the handler of an enclosing try block (qore#6197)
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
                     unwindForException();
                     cleanupLocalCaches();
                     return exitAfterUnwind();
