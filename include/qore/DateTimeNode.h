@@ -88,8 +88,11 @@ public:
     //! constructor for an empty object
     /**
         @param r sets the "relative" flag for the object
+
+        @note explicit since %Qore 3.0: before, any pointer converted implicitly to an empty DateTimeNode through
+        this constructor
     */
-    DLLEXPORT DateTimeNode(bool r = false);
+    DLLEXPORT explicit DateTimeNode(bool r = false);
 
     //! constructor for setting all parameters
     /**
@@ -107,8 +110,13 @@ public:
     //! constructor for setting an absolute date based on the number of seconds from January 1, 1970
     /**
         @param seconds the number of seconds from January 1, 1970
+
+        @note explicit since %Qore 3.0: before, an integer, a floating-point value or a \c bool converted
+        implicitly to an absolute date through this constructor (\c true to 1970-01-01 00:00:01); construct it
+        explicitly from an \c int64 (<tt>new DateTimeNode((int64)secs)</tt>: an argument of another integer type
+        is ambiguous with DateTimeNode(bool))
     */
-    DLLEXPORT DateTimeNode(int64 seconds);
+    DLLEXPORT explicit DateTimeNode(int64 seconds);
 
     //! constructor for setting an absolute date based on the number of seconds from January 1, 1970 (plus milliseconds)
     /**

@@ -150,8 +150,13 @@ public:
    //! constructor for setting an absolute date based on the number of seconds from January 1, 1970
    /** note that the local time zone will be assumed
        @param seconds the number of seconds from January 1, 1970
+
+       @note explicit since %Qore 3.0: before, an integer, a floating-point value or a \c bool converted
+       implicitly to an absolute date through this constructor (\c true to 1970-01-01 00:00:01); construct it
+       explicitly from an \c int64 (<tt>DateTime((int64)secs)</tt>: an argument of another integer type is
+       ambiguous with DateTime(bool))
    */
-   DLLEXPORT DateTime(int64 seconds);
+   DLLEXPORT explicit DateTime(int64 seconds);
 
    //! constructor for setting an absolute date based on the number of seconds from January 1, 1970 (plus milliseconds)
    /** note that the local time zone will be assumed

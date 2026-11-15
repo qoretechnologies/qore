@@ -640,6 +640,11 @@
       \c DateTime(const DateTime*) shows; it was converted through \c DateTime(bool) to an empty date
     - \c DateTime(bool) is \c explicit, so a pointer of another type (ex: <tt>const AbstractQoreNode*</tt>) is no
       longer converted implicitly to an empty \c DateTime; write <tt>DateTime(true)</tt> for an empty relative date
+    - \c DateTime(int64) is \c explicit, so an integer, a floating-point value or a \c bool (\c true gave
+      1970-01-01 00:00:01) is no longer converted implicitly to an absolute date; construct it from an \c int64
+      (<tt>DateTime((int64)secs)</tt>, as another integer type is ambiguous with \c DateTime(bool))
+    - \c DateTimeNode(bool) and \c DateTimeNode(int64) are \c explicit like those of \c DateTime, which affects
+      only code that can create a \c DateTimeNode temporary (its destructor is protected)
     @endparblock
 
     @par qget Command-Line Changes
