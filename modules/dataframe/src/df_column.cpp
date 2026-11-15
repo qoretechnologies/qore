@@ -10,6 +10,7 @@
 
 #include "df_column.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <limits>
@@ -71,7 +72,7 @@ static DateTimeNode* makeDateFromMicros(int64_t micros, bool duration) {
     int microseconds = 0;
     splitMicros(micros, seconds, microseconds);
     if (duration) {
-        return DateTimeNode::makeRelative(0, 0, 0, 0, 0, seconds, microseconds);
+        return dataFrameMakeDuration(seconds, microseconds);
     }
     return DateTimeNode::makeAbsolute(currentTZ(), seconds, microseconds);
 }
@@ -236,6 +237,391 @@ void ColumnData::appendAutoValue(QoreValue value) {
     auto_data.push_back(value.refSelf());
 }
 
+bool dataFrameMergeColumnSchema(bool& has_schema, QoreColumnarTypeDescriptor& schema,
+        const ColumnData& first, const ColumnData& src) {
+    if (src.type != first.type) {
+        return false;
+    }
+    if (src.type == ColumnType::DATE) {
+        if (src.isDuration() != first.isDuration()) {
+            return false;
+        }
+    } else if (has_schema != src.has_columnar_schema) {
+        return false;
+    }
+    if (!src.has_columnar_schema) {
+        if (has_schema) {
+            // a plain date column: absolute dates in microseconds with no time zone and no native type, so a native
+            // type of the schema describes the cells of the schema's columns only
+            if (schema.time_unit != "us") {
+                schema.time_unit = "us";
+            }
+            if (!schema.timezone.empty()) {
+                schema.timezone = "UTC";
+            }
+            schema.native_type.clear();
+        }
+        return true;
+    }
+    const QoreColumnarTypeDescriptor& other = src.columnar_schema;
+    if (!has_schema) {
+        // a temporal schema merged into a plain date column, which has no native type
+        schema = other;
+        schema.name.clear();
+        has_schema = true;
+        if (schema.time_unit != "us") {
+            schema.time_unit = "us";
+        }
+        if (!schema.timezone.empty()) {
+            schema.timezone = "UTC";
+        }
+        schema.native_type.clear();
+        return true;
+    }
+    if (schema.kind != other.kind || schema.buffer_type != other.buffer_type || schema.fixed_size != other.fixed_size
+            || !schema.children.empty() || !other.children.empty()) {
+        return false;
+    }
+    if (schema.kind == QoreColumnarTypeKind::Decimal128
+            && (schema.precision != other.precision || schema.scale != other.scale)) {
+        int32_t int_digits = std::max(schema.precision - schema.scale, other.precision - other.scale);
+        int32_t scale = std::max(schema.scale, other.scale);
+        if (int_digits + scale > 38) {
+            return false;
+        }
+        schema.precision = int_digits + scale;
+        schema.scale = scale;
+        schema.native_type.clear();
+    } else if (schema.precision != other.precision || schema.scale != other.scale) {
+        return false;
+    }
+    if (schema.time_unit != other.time_unit) {
+        schema.time_unit = "us";
+        schema.native_type.clear();
+    }
+    if (schema.timezone != other.timezone) {
+        schema.timezone = "UTC";
+        schema.native_type.clear();
+    }
+    if (other.nullable) {
+        schema.nullable = true;
+    }
+    // a native type that is not the same for all columns describes none of them
+    if (schema.native_type != other.native_type) {
+        schema.native_type.clear();
+    }
+    return true;
+}
+
+bool dataFrameIntDecimalSchema(const std::vector<const ColumnData*>& cols, bool& has_schema,
+        QoreColumnarTypeDescriptor& schema) {
+    // the types first, with no scan of the cells
+    if (!dataFrameIntDecimalTypes(cols)) {
+        return false;
+    }
+    const ColumnData* first_decimal = nullptr;
+    bool nullable = false;
+    // an int64 holds at most 19 digits
+    int32_t int_digits = 19;
+    int32_t scale = 0;
+    for (const ColumnData* cd : cols) {
+        if (cd->type == ColumnType::INT64) {
+            nullable = nullable || cd->countNull() > 0;
+        } else {
+            if (!first_decimal) {
+                first_decimal = cd;
+            }
+            const QoreColumnarTypeDescriptor& d = cd->columnar_schema;
+            int_digits = std::max(int_digits, d.precision - d.scale);
+            scale = std::max(scale, d.scale);
+            nullable = nullable || d.nullable;
+        }
+    }
+    assert(first_decimal);
+    if (int_digits + scale > 38) {
+        has_schema = false;
+        return true;
+    }
+    schema = first_decimal->columnar_schema;
+    schema.name.clear();
+    schema.native_type.clear();
+    schema.precision = int_digits + scale;
+    schema.scale = scale;
+    schema.nullable = nullable;
+    has_schema = true;
+    return true;
+}
+
+bool dataFrameIntDecimalTypes(const std::vector<const ColumnData*>& cols) {
+    bool any_int = false;
+    bool any_decimal = false;
+    for (const ColumnData* cd : cols) {
+        if (cd->type == ColumnType::INT64) {
+            any_int = true;
+        } else if (dataFrameIsDecimalColumn(*cd)) {
+            any_decimal = true;
+        } else {
+            return false;
+        }
+    }
+    return any_int && any_decimal;
+}
+
+QoreValue dataFrameDecimalValue(const ColumnData& cd, int64_t row, ExceptionSink* xsink) {
+    if (cd.isNull(row)) {
+        return QoreValue();
+    }
+    if (cd.type == ColumnType::INT64) {
+        return new QoreNumberNode(static_cast<int64>(cd.int_data[row]));
+    }
+    return cd.getValueAt(row, xsink);
+}
+
+void dataFrameSetDurationSchema(ColumnData& col) {
+    col.columnar_schema = QoreColumnarTypeDescriptor();
+    col.columnar_schema.kind = QoreColumnarTypeKind::Duration;
+    col.columnar_schema.column_type = QoreColumnarColumnType::Date;
+    col.columnar_schema.time_unit = "us";
+    col.columnar_schema.nullable = true;
+    col.has_columnar_schema = true;
+}
+
+namespace {
+//! appends the length of a part of a key and the part
+void appendKeyBytes(std::string& key, const char* data, size_t len) {
+    uint64_t n = len;
+    key.append(reinterpret_cast<const char*>(&n), sizeof(n));
+    key.append(data, len);
+}
+
+//! returns the value that a value of a column that holds any value stands for, and its type (qore#6107)
+/** An enum member stands for its value, as with the core operators, and an opaque or weak reference for the value
+    that it refers to (a weak reference to an object is keyed as the object; one whose object is deleted as no
+    value, which makes a key of its own, apart from the null cells of the column).  The tags of the value are
+    checked inline, and the reference is resolved only for a reference.
+*/
+static inline QoreValue resolveKeyValue(QoreValue v, qore_type_t& t) {
+    // a float, held in the value, is told with no call into the library
+    if (v.isFloat()) {
+        t = NT_FLOAT;
+        return v;
+    }
+    if (v.isEnum()) {
+        v = v.getEnumBaseValue();
+    }
+    if (v.isOpaque()) {
+        v = v.resolveIndirect();
+    }
+    t = v.getType();
+    if (t == NT_WEAKREF || t == NT_WEAKREF_HASH || t == NT_WEAKREF_LIST) {
+        v = v.resolveIndirect();
+        t = v.getType();
+    }
+    return v;
+}
+
+//! appends the key of a date: its kind and microseconds, so that two dates make one key if they are equal
+/** An absolute date is keyed by its microseconds since the epoch in UTC, so that two dates at the same instant in
+    different time zones make one key, as they are equal with the == operator; a relative date (a duration) by its
+    length in microseconds, as a column of durations orders them, so that 24h and 1D make one key (a month is 31
+    days and a year 365 days); a date whose microseconds do not fit in an int64 by its seconds and microseconds, or
+    by its parts (qore#6107).
+*/
+static void appendDateKey(std::string& key, const DateTimeNode* dt) {
+    int64 micros;
+    switch (dt->getEpochMicrosecondsUTCCheckedKind(micros)) {
+        case 1:
+            key += 'd';
+            key.append(reinterpret_cast<const char*>(&micros), sizeof(micros));
+            return;
+        case 2:
+            key += 'r';
+            key.append(reinterpret_cast<const char*>(&micros), sizeof(micros));
+            return;
+        default:
+            break;
+    }
+    if (dt->isRelative()) {
+        qore_tm parts;
+        dt->getInfo(parts);
+        int fields[] = {parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second, parts.us};
+        key += 'R';
+        key.append(reinterpret_cast<const char*>(fields), sizeof(fields));
+        return;
+    }
+    int64 seconds = dt->getEpochSecondsUTC();
+    int us = dt->getMicrosecond();
+    key += 'D';
+    key.append(reinterpret_cast<const char*>(&seconds), sizeof(seconds));
+    key.append(reinterpret_cast<const char*>(&us), sizeof(us));
+}
+
+//! appends the key of an arbitrary-precision number: its exact value, whatever its precision, so that two numbers
+//! make one key if and only if they are equal; NaN numbers make one key, and -0 and 0 one key (qore#6107)
+/** The key of QoreNumberNode::appendExactKey() does not delimit itself, so it is appended with its length.
+*/
+static void appendNumberKey(std::string& key, const QoreNumberNode* n) {
+    key += 'n';
+    size_t len_pos = key.size();
+    key.append(sizeof(uint64_t), '\0');
+    n->appendExactKey(key);
+    uint64_t len = key.size() - len_pos - sizeof(uint64_t);
+    memcpy(&key[len_pos], &len, sizeof(len));
+}
+
+//! appends the key of a value that is not a list or a hash, whose type is given (see appendAutoValueKey())
+void appendScalarValueKey(std::string& key, QoreValue v, qore_type_t t) {
+    switch (t) {
+        case NT_NOTHING:
+            key += 'N';
+            break;
+        // NULL != NOTHING with the == operator (a null cell of a column has a key of its own at the top level)
+        case NT_NULL:
+            key += 'U';
+            break;
+        case NT_FLOAT:
+            appendDataFrameFloatKey(key, 'g', v.isFloat() ? v.getDouble() : v.getAsFloat());
+            break;
+        case NT_DATE:
+            appendDateKey(key, v.get<const DateTimeNode>());
+            break;
+        case NT_NUMBER:
+            appendNumberKey(key, v.get<const QoreNumberNode>());
+            break;
+        case NT_INT: {
+            int64 iv = v.getAsBigInt();
+            key += 'i';
+            key.append(reinterpret_cast<const char*>(&iv), sizeof(iv));
+            break;
+        }
+        case NT_BOOLEAN:
+            key += v.getAsBool() ? 'T' : 'F';
+            break;
+        case NT_STRING: {
+            // a string is compared in UTF-8, the encoding of the string cells, so that equal strings in different
+            // encodings make the same key; a UTF-8 string (a short string too) is appended with no copy
+            key += 's';
+            QoreStringDataHelper str(v);
+            if (str.getEncoding() == QCS_UTF8) {
+                appendKeyBytes(key, str.c_str(), str.size());
+            } else {
+                std::string utf8 = dataFrameUtf8Key(v);
+                appendKeyBytes(key, utf8.data(), utf8.size());
+            }
+            break;
+        }
+        case NT_BINARY: {
+            const BinaryNode* b = v.get<const BinaryNode>();
+            key += 'x';
+            appendKeyBytes(key, static_cast<const char*>(b->getPtr()), b->size());
+            break;
+        }
+        case NT_OBJECT:
+        case NT_RUNTIME_CLOSURE:
+        case NT_FUNCREF: {
+            // keyed by identity
+            const void* p = v.getInternalNode();
+            key += 'O';
+            key.append(reinterpret_cast<const char*>(&p), sizeof(p));
+            break;
+        }
+        default: {
+            // another value (a char, for example): its type and its string form
+            key += 'a';
+            key.append(reinterpret_cast<const char*>(&t), sizeof(t));
+            std::string str = dataFrameUtf8Key(v);
+            appendKeyBytes(key, str.data(), str.size());
+            break;
+        }
+    }
+}
+
+//! appends the key of a value of a column that holds any value (qore#6107)
+/** A float is keyed by its bits, as in a float64 column, as its string form can be the same for different floats; a
+    date by its kind and microseconds (see appendDateKey()); an arbitrary-precision number by its exact value; a
+    binary value by its bytes; a list by its elements and a hash by its keys and values (in the order of its sorted
+    keys, so that equal hashes with their keys in another order make the same key), so that two lists or hashes have
+    the same key only if they are equal; an object, a closure or a call reference by its identity; an enum member,
+    an opaque or a weak reference as the value it stands for (see resolveKeyValue()); an int, a bool or a string by
+    its value; any other value by its type and string form.  A string is compared in UTF-8, the encoding of the
+    string cells, so that equal strings in different encodings make the same key.  Values of different types never
+    make the same key: 1, 1.0, "1" and True make four keys.  Each part has its tag and a part of any length its
+    length, so that two different values never make the same key.  The elements are walked with a stack of their
+    own, so that a deeply nested value cannot exhaust the thread's stack.
+*/
+void appendAutoValueKey(std::string& key, QoreValue top) {
+    // a value that is not a list or a hash needs no stack
+    qore_type_t top_type;
+    top = resolveKeyValue(top, top_type);
+    if (top_type != NT_LIST && top_type != NT_HASH) {
+        appendScalarValueKey(key, top, top_type);
+        return;
+    }
+    // a value to key, after the bytes of the hash key of the value, if any
+    struct Item {
+        QoreValue v;
+        const char* hash_key;
+    };
+    std::vector<Item> pending;
+    pending.push_back({top, nullptr});
+    while (!pending.empty()) {
+        Item item = pending[pending.size() - 1];
+        pending.pop_back();
+        if (item.hash_key) {
+            appendKeyBytes(key, item.hash_key, strlen(item.hash_key));
+        }
+        qore_type_t t;
+        QoreValue v = resolveKeyValue(item.v, t);
+        switch (t) {
+            case NT_LIST: {
+                const QoreListNode* l = v.get<const QoreListNode>();
+                key += 'L';
+                uint64_t n = l->size();
+                key.append(reinterpret_cast<const char*>(&n), sizeof(n));
+                // the elements are keyed in order: they are pushed in reverse
+                for (size_t i = l->size(); i > 0; --i) {
+                    pending.push_back({l->retrieveEntry(i - 1), nullptr});
+                }
+                break;
+            }
+            case NT_HASH: {
+                const QoreHashNode* h = v.get<const QoreHashNode>();
+                key += 'H';
+                uint64_t n = h->size();
+                key.append(reinterpret_cast<const char*>(&n), sizeof(n));
+                // a hash key is in the default encoding, as in every hash; the members are keyed in the order of
+                // their sorted keys
+                std::vector<std::pair<const char*, QoreValue>> members;
+                members.reserve(h->size());
+                ConstHashIterator hi(h);
+                while (hi.next()) {
+                    members.emplace_back(hi.getKey(), hi.get());
+                }
+                std::sort(members.begin(), members.end(), [] (const std::pair<const char*, QoreValue>& a,
+                        const std::pair<const char*, QoreValue>& b) {
+                    return strcmp(a.first, b.first) < 0;
+                });
+                for (size_t i = members.size(); i > 0; --i) {
+                    pending.push_back({members[i - 1].second, members[i - 1].first});
+                }
+                break;
+            }
+            default:
+                appendScalarValueKey(key, v, t);
+                break;
+        }
+    }
+}
+}
+
+void dataFrameAppendAutoValueKey(std::string& key, QoreValue v) {
+    appendAutoValueKey(key, v);
+}
+
+void dataFrameAppendNumberKey(std::string& key, const QoreNumberNode* n) {
+    appendNumberKey(key, n);
+}
+
 std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {
     if (cd.isNull(row)) {
         return std::string("\xffnull", 5);
@@ -243,17 +629,9 @@ std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {
 
     std::string key;
     switch (cd.type) {
-        case ColumnType::FLOAT64: {
-            double value = cd.float_data(row);
-            if (value == 0.0) {
-                value = 0.0;  // Normalize -0.0 to match numeric equality.
-            }
-            uint64_t bits;
-            std::memcpy(&bits, &value, sizeof(bits));
-            key.assign("f", 1);
-            key.append(reinterpret_cast<const char*>(&bits), sizeof(bits));
+        case ColumnType::FLOAT64:
+            appendDataFrameFloatKey(key, 'f', cd.float_data(row));
             return key;
-        }
         case ColumnType::INT64: {
             int64_t value = cd.int_data[row];
             key.assign("i", 1);
@@ -273,10 +651,7 @@ std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {
             return key;
         }
         case ColumnType::AUTO:
-            // a string is compared in UTF-8, the encoding of the string cells, so that equal strings in different
-            // encodings make the same key
-            key.assign("a", 1);
-            key.append(dataFrameUtf8Key(cd.auto_data[row]));
+            appendAutoValueKey(key, cd.auto_data[row]);
             return key;
         default:
             return {};
@@ -443,6 +818,10 @@ int dataFrameDateOutOfRange(const DateTimeNode* dt, ExceptionSink* xsink) {
         dt->getInfo(parts);
         desc.sprintf("the time value of %d years, %d months, %d days, %d hours, %d minutes, %d seconds and %d "
             "microseconds", parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second, parts.us);
+        // a time value is stored as its microseconds (qore#6107)
+        xsink->raiseException("DATAFRAME-DATE-RANGE-ERROR", "%s is outside the range of a DataFrame time value, "
+            "which is stored in microseconds in an int64 (about 292471 years either way)", desc.c_str());
+        return -1;
     } else {
         desc.sprintf("the date " QLLD " seconds after the epoch", (int64)dt->getEpochSecondsUTC());
     }
@@ -704,6 +1083,12 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
         }
     } deferred;
 
+    // the kind of the dates of a date column (a DataFrameDateKind value, -1 before the first date, never 0, the
+    // value of a date that cannot be stored, so that such a date is never taken for one of that kind): a column of
+    // absolute and relative dates (durations) holds any value, as a concatenation of the two does, and a column of
+    // relative dates is a column of durations (qore#6107)
+    int date_kind = -1;
+
     for (int64_t i = 0; i < n; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column")) {
             return nullptr;
@@ -782,9 +1167,31 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                 } else if (col->type != ColumnType::DATE) {
                     return buildMixedColumnData(values, i, xsink);
                 }
-                if (!deferred.raised
-                        && dataFrameDateMicros(v.get<const DateTimeNode>(), col->date_data[i], &deferred.xsink)) {
-                    deferred.raised = true;
+                {
+                    const DateTimeNode* dt = v.get<const DateTimeNode>();
+                    int64 micros;
+                    // a date of the kind of the others is stored with one comparison
+                    int kind = deferred.raised ? 0 : dt->getEpochMicrosecondsUTCCheckedKind(micros);
+                    if (kind == date_kind) {
+                        col->date_data[i] = micros;
+                        break;
+                    }
+                    if (!kind) {
+                        // a date that cannot be stored in a date cell; its kind is needed to tell whether the column
+                        // holds any value, which stores any date
+                        if (!deferred.raised) {
+                            dataFrameDateOutOfRange(dt, &deferred.xsink);
+                            deferred.raised = true;
+                        }
+                        kind = dt->isRelative() ? DFDK_RELATIVE : DFDK_ABSOLUTE;
+                    } else {
+                        col->date_data[i] = micros;
+                    }
+                    if (date_kind < 0) {
+                        date_kind = kind;
+                    } else if (kind != date_kind) {
+                        return buildColumnData(values, ColumnType::AUTO, xsink);
+                    }
                 }
                 break;
 
@@ -796,6 +1203,10 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
     if (deferred.raised) {
         xsink->assimilate(deferred.xsink);
         return nullptr;
+    }
+
+    if (date_kind == DFDK_RELATIVE) {
+        dataFrameSetDurationSchema(*col);
     }
 
     if (col->type == ColumnType::AUTO) {

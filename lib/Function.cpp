@@ -1546,6 +1546,78 @@ private:
 };
 }
 
+//! Returns true if the variant is one of the uncontrolled APIs that are judged by the Program that calls them
+/** SandboxManager::isGoverned(), SandboxManager::getGoverningPolicies() and SandboxManager::callWithSystemPolicy()
+    exist for trusted infrastructure acting for sandboxed code: they report the sandbox of the code that called the
+    infrastructure, or lift its policy for the infrastructure's own I/O.  A call of one of them is therefore refused
+    only if the Program of the code that makes it (the Program running when the call is made: for a call reference or
+    a closure, the Program that created it) is sandboxed (qore_program_is_sandboxed(): it has a sandbox, or sandboxed
+    code created it or loaded it by a path that it chose), and then by every sandbox that governs the call, so
+    sandboxed code cannot establish a barrier of its own, nor can a Program that it creates.  Code of a Program that
+    is not sandboxed may call them for a sandboxed caller further down the call stack, for the provenance of the
+    object or callback that it runs, and in a thread that sandboxed code started.
+
+    Only reached when a governing sandbox refuses the call, so the comparisons do not cost the calls that are
+    allowed.
+*/
+static bool is_caller_judged_uncontrolled_api(const QoreFunction* func, const AbstractQoreFunctionVariant* variant) {
+    const QoreClass* cls = variant->getClass();
+    if (!cls || cls->getID() != CID_SANDBOXMANAGER) {
+        return false;
+    }
+    const char* name = func->getName();
+    return !strcmp(name, "isGoverned") || !strcmp(name, "getGoverningPolicies")
+        || !strcmp(name, "callWithSystemPolicy");
+}
+
+//! Refuses a call of an uncontrolled API to code that a sandbox governs, unless the sandbox allows them (qore#5741)
+/** Uncontrolled APIs (QDOM_UNCONTROLLED_API: the Java classes of the jni module, the Python objects of the python
+    module, ...) do I/O and run code that the sandbox does not see.  The sandbox is resolved as for a filesystem or
+    network policy check: the Programs on the call stack, the provenance of the object or callback being run, and a
+    sandbox inherited by the thread; a system-policy capability of trusted code is not governed.  Called once the
+    variant of the call is fixed and before any default argument is evaluated, so that a variant found when the call
+    was parsed is checked as well and a refused call runs no code; the variants of other functional domains do not
+    resolve the sandbox.
+
+    Only builtin variants are checked: the functionality of a user variant includes the domain of its class, so a
+    user class that inherits a builtin class of the domain (a Qore class that extends a Java class, for example) has
+    the domain on each of its methods, but its user code runs in %Qore, which the sandbox controls; the builtin
+    methods that the user code calls are checked when they are called.  The destructor of a builtin class is not
+    checked either: it releases what the object holds, and the object is destroyed whatever the sandbox decides.
+
+    The sandbox introspection and barrier APIs (SandboxManager::isGoverned(), SandboxManager::getGoverningPolicies()
+    and SandboxManager::callWithSystemPolicy(); see is_caller_judged_uncontrolled_api()) are judged by the Program of
+    the code that makes the call only: trusted code calls them for the sandboxed code that calls it.
+
+    @return 0 if the call may proceed, -1 if it is refused (INVALID-FUNCTION-ACCESS raised)
+*/
+static int check_sandbox_uncontrolled_api(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
+        ExceptionSink* xsink) {
+    assert(variant);
+    if (variant->isUser() || !(variant->getFunctionality() & QDOM_UNCONTROLLED_API)) {
+        return 0;
+    }
+    if (qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy)) {
+        return 0;
+    }
+    // the destructor of a builtin class is not refused: it only releases what the object holds, and the object is
+    // destroyed in any case (when its last reference is released, also at the end of a scope); refusing it would only
+    // leave its resources unreleased
+    if (dynamic_cast<const DestructorMethodFunction*>(func)) {
+        return 0;
+    }
+    // the sandbox introspection and barrier APIs: trusted code calls them for its sandboxed callers
+    if (is_caller_judged_uncontrolled_api(func, variant) && !qore_program_is_sandboxed(::getProgram())) {
+        return 0;
+    }
+    std::string class_path = func->classPath();
+    xsink->raiseException("INVALID-FUNCTION-ACCESS", "the sandbox that governs the calling code does not allow access "
+        "to uncontrolled API %s '%s%s%s(%s)' (see SandboxManager::setUncontrolledApiPolicy())",
+        !class_path.empty() ? "method" : "function", !class_path.empty() ? class_path.c_str() : "",
+        !class_path.empty() ? "::" : "", func->getName(), variant->getSignature()->getSignatureText());
+    return -1;
+}
+
 #ifdef DEBUG
 thread_local bool qore_dbg_runtime_chosen_variant = false;
 #endif
@@ -1565,12 +1637,9 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 
+    // the callee's receiver is made current after the variant search below (qore#5892)
     if (!receiver_type_info && self) {
         receiver_type_info = qore_get_object_receiver_type_info(self);
-    }
-    if (receiver_type_info) {
-        old_receiver_type_info = runtime_set_receiver_type_info(receiver_type_info);
-        restore_receiver_type_info = true;
     }
 
 #ifdef QORE_MANAGE_STACK
@@ -1626,9 +1695,17 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
         }
     }
 
+    // the variant is searched for in the caller's context: an explicit type argument of the call can be a type
+    // parameter of the caller's class (u.m<T>() in a method of a generic class C<T>), which is resolved with the
+    // receiver that is current; the parameter types of the candidates are substituted with the callee's receiver,
+    // which the search takes as an argument (qore#5892)
     bool runtime_resolved = !variant;
     if (runtime_resolved && findVariantImpl<LexicalInvocation, NAMED>(func, variant, cctx, invocation_policy)) {
         return;
+    }
+    if (receiver_type_info) {
+        old_receiver_type_info = runtime_set_receiver_type_info(receiver_type_info);
+        restore_receiver_type_info = true;
     }
     PreparedCall prepared;
     if constexpr (LexicalInvocation) {
@@ -1728,6 +1805,42 @@ struct LexicalUserArgumentFilter {
 };
 }
 
+namespace {
+//! makes the caller's receiver current for its scope and restores the callee's on every exit, also when an exception
+//! (std::bad_alloc) leaves it
+/** an explicit type argument of a call can be a type parameter of the CALLER's class (g.m<A>() in a method of a generic
+    class H<A>), which is resolved with the receiver that is current when it is substituted, but init() has made the
+    receiver of the callee current already (qore#5892)
+*/
+struct CallerReceiverScope {
+    const QoreTypeInfo* callee_receiver_type_info = nullptr;
+    bool active = false;
+
+    CallerReceiverScope(bool n_active, const QoreTypeInfo* caller_receiver_type_info) : active(n_active) {
+        if (active) {
+            callee_receiver_type_info = runtime_set_receiver_type_info(caller_receiver_type_info);
+        }
+    }
+
+    ~CallerReceiverScope() {
+        if (active) {
+            runtime_set_receiver_type_info(callee_receiver_type_info);
+        }
+    }
+};
+}
+
+// a call whose variant committed at parse time rejected its arguments searches for another one after init() has made
+// the callee's receiver current: explicit type arguments, which can name type parameters of the caller's class, are
+// resolved with the caller's receiver, as in the search that init() makes before (qore#5892)
+template <bool LexicalInvocation>
+__attribute__((noinline, cold)) int CodeEvaluationHelper::findVariantRetry(const QoreFunction* func,
+        const AbstractQoreFunctionVariant*& variant, const qore_class_private* cctx,
+        LexicalSemanticPolicy invocation_policy, bool explicit_type_args) {
+    CallerReceiverScope caller_receiver(explicit_type_args && restore_receiver_type_info, old_receiver_type_info);
+    return findVariantImpl<LexicalInvocation>(func, variant, cctx, invocation_policy);
+}
+
 CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArguments(const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, AbstractFunctionSignature* sig, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, bool runtime_resolved) {
@@ -1781,7 +1894,8 @@ CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArgumentsImp
             if (closure_type_args) {
                 explicit_type_param_instantiation = runtime_get_type_param_instantiation();
             }
-            int find_rc = findVariantImpl<LexicalInvocation>(func, variant, cctx, invocation_policy);
+            int find_rc = findVariantRetry<LexicalInvocation>(func, variant, cctx, invocation_policy,
+                old_explicit_inst);
             if (closure_type_args) {
                 explicit_type_param_instantiation = old_explicit_inst;
             }
@@ -1818,12 +1932,18 @@ CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArgumentsImp
                 }
             }
 #endif
+            // the variant resolved again is checked by the call for it below, as one resolved at run time
             if constexpr (LexicalInvocation) {
                 return variant->prepareLexicalInvocationArguments(*this, func, variant, is_copy, cctx, self, true,
                     invocation_policy);
             } else {
                 return variant->prepareCallArguments(*this, func, variant, is_copy, cctx, self, true);
             }
+        }
+        // the variant is fixed: a sandbox that governs the call refuses an uncontrolled API before any default
+        // argument is evaluated (qore#5741)
+        if (check_sandbox_uncontrolled_api(func, variant, xsink)) {
+            return {};
         }
         if (prepareDefaultArgsImpl<ARG_DEF>(xsink, sig, is_copy, self, nullptr, policy)) {
             return {};
@@ -1832,7 +1952,13 @@ CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArgumentsImp
             return {};
         }
         return {sig->getReturnTypeInfo(), true};
-    } else if (prepareDefaultArgsImpl<ARG_DEF | ARG_OTHER>(xsink, sig, is_copy, self, nullptr, policy)) {
+    }
+    // the variant is fixed: a sandbox that governs the call refuses an uncontrolled API before any default
+    // argument is evaluated (qore#5741)
+    if (check_sandbox_uncontrolled_api(func, variant, xsink)) {
+        return {};
+    }
+    if (prepareDefaultArgsImpl<ARG_DEF | ARG_OTHER>(xsink, sig, is_copy, self, nullptr, policy)) {
         return {};
     }
     if (processDefaultArgs(xsink, func, variant, sig, is_copy, self)) {
@@ -1971,24 +2097,6 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     // H<A>), which is resolved with the receiver that is current when the arguments are inferred: init() has made the
     // receiver of the callee current already, so the caller's receiver is made current again for the inference.  Only
     // a call of a generic variant with explicit type arguments and a receiver gets here, so no other call is touched
-    //! makes the caller's receiver current for its scope and restores the callee's on every exit, also when an exception
-    //! (std::bad_alloc) leaves the inference
-    struct CallerReceiverScope {
-        const QoreTypeInfo* callee_receiver_type_info = nullptr;
-        bool active = false;
-
-        CallerReceiverScope(bool n_active, const QoreTypeInfo* caller_receiver_type_info) : active(n_active) {
-            if (active) {
-                callee_receiver_type_info = runtime_set_receiver_type_info(caller_receiver_type_info);
-            }
-        }
-
-        ~CallerReceiverScope() {
-            if (active) {
-                runtime_set_receiver_type_info(callee_receiver_type_info);
-            }
-        }
-    };
     bool inferred;
     {
         CallerReceiverScope caller_receiver(explicit_type_param_instantiation && restore_receiver_type_info,
@@ -5788,6 +5896,121 @@ const QoreTypeInfo* QoreFunction::parseRuntimeNamedReturnType(const type_vec_t& 
                 return nullptr;
             }
             const QoreTypeInfo* vrt = v->parseGetReturnTypeInfo();
+            rv = found ? qore_union_return_type(rv, vrt) : vrt;
+            found = true;
+            // a variant without a return type, or return types that have no union: the type is not known
+            if (!rv) {
+                return nullptr;
+            }
+        }
+        if (stop) {
+            break;
+        }
+    }
+    return rv;
+}
+
+//! Returns true if the type accepts only values of the types that it returns, as they are
+/** No accepted value is converted (a type that converts, such as softint or float, which takes an int, gives other
+    values than the ones it accepts), and no accepted value is a container whose elements can be converted.
+
+    Only basic types qualify: a class or a hashdecl also accepts a value of a child class or hashdecl, which a type
+    argument inferred at run time is, and which has members that the parent lacks; with the parent's type, access to
+    them would be a parse error
+*/
+static bool qore_type_accepts_values_as_returned(const QoreTypeInfo* ti) {
+    if (!QoreTypeInfo::hasType(ti)) {
+        return false;
+    }
+    for (const QoreAcceptSpec& as : ti->getAcceptSpecs()) {
+        if (as.map || as.lexical_map || as.spec.getTypeSpec() != QTS_TYPE) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//! Gives the type arguments that a call resolved at run time is known to bind the type parameters of a generic
+//! variant to: the explicit type arguments of the call, and for each other type parameter its bound if the bound
+//! is a basic type that accepts only values of the types that it returns, or else auto
+/** @return false if the explicit type arguments cannot instantiate the variant, so that the call cannot resolve to it
+
+    A type argument inferred from the arguments at run time can be another type than one inferred from the types that
+    the arguments have at parse time; it is accepted by the bound of its type parameter, and is one of the types that
+    the bound returns only if the bound converts no value (a value of type string is accepted by "X: softint", which
+    returns int)
+*/
+static bool qore_runtime_call_type_args(const AbstractQoreFunctionVariant* variant,
+        const type_vec_t* explicit_type_args, QoreTypeParamInstantiation& type_param_inst) {
+    type_param_inst.clear();
+    const UserSignature* sig = qore_get_variant_generic_signature(variant);
+    if (!sig) {
+        return !explicit_type_args || explicit_type_args->empty();
+    }
+    if (const_cast<UserSignature*>(sig)->resolve()) {
+        return false;
+    }
+    size_t count = sig->getTypeParameterCount();
+    if (explicit_type_args && explicit_type_args->size() > count) {
+        return false;
+    }
+    type_param_inst.owner = sig;
+    type_param_inst.type_args.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        const QoreTypeInfo* bound = sig->getTypeParameterBoundTypeInfo(i);
+        if (explicit_type_args && i < explicit_type_args->size()) {
+            const QoreTypeInfo* explicit_type = (*explicit_type_args)[i];
+            if (!explicit_type || !QoreTypeInfo::hasType(explicit_type)) {
+                return false;
+            }
+            // an explicit type argument that names a type parameter of the code that makes the call is bound at run
+            // time, when it may satisfy the bound: the variant is kept
+            if (!qore_type_contains_type_parameter(explicit_type)
+                    && !qore_signature_type_arg_satisfies_bound(bound, explicit_type)) {
+                return false;
+            }
+            type_param_inst.type_args.push_back(explicit_type);
+        } else {
+            type_param_inst.type_args.push_back(qore_type_accepts_values_as_returned(bound) ? bound : autoTypeInfo);
+        }
+    }
+    return true;
+}
+
+const QoreTypeInfo* QoreFunction::parseRuntimeCallReturnType(const qore_class_private* class_ctx,
+        const QoreTypeInfo* receiver_type_info, const type_vec_t* explicit_type_args, bool all_variants) {
+    const QoreTypeInfo* rt = parseGetUniqueReturnTypeInfo();
+    if (!qore_type_contains_type_parameter(rt)) {
+        return rt;
+    }
+    QoreParseOptions po = parse_get_parse_options();
+    const QoreTypeInfo* rv = nullptr;
+    bool found = false;
+    const qore_class_private* last_class = nullptr;
+    bool internal_access = false;
+    for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
+        bool stop = false;
+        QoreFunction* aqf = all_variants
+            ? (*aqfi).func
+            : ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        if (!aqf) {
+            break;
+        }
+        for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
+            const AbstractQoreFunctionVariant* v = *i;
+            if (!all_variants && last_class && skip_method_variant(v, class_ctx, internal_access)) {
+                continue;
+            }
+            bool strict_args = static_cast<bool>(v->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
+            if (strict_args && (v->getFlags() & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
+                continue;
+            }
+            QoreTypeParamInstantiation inst;
+            if (!qore_runtime_call_type_args(v, explicit_type_args, inst)) {
+                continue;
+            }
+            const QoreTypeInfo* vrt = qore_substitute_type_params_if_needed(v->parseGetReturnTypeInfo(),
+                receiver_type_info, inst.empty() ? nullptr : &inst);
             rv = found ? qore_union_return_type(rv, vrt) : vrt;
             found = true;
             // a variant without a return type, or return types that have no union: the type is not known

@@ -1176,6 +1176,15 @@ public:
     */
     DLLLOCAL void removedValue(const QoreValue& v);
 
+private:
+    //! removedValue() for a value at the given nesting depth below the removed value
+    DLLLOCAL void removedValueIntern(const QoreValue& v, unsigned depth);
+
+    //! removedValue() for a deeply nested list or hash, with a work stack instead of recursion (qore#6117)
+    DLLLOCAL void removedValueWithoutRecursion(const QoreValue& v);
+
+public:
+
     DLLLOCAL void objectRemoved(RObject& obj, bool scan_value_removed) {
         removal_object_reported = true;
         if (scan_value_removed) {

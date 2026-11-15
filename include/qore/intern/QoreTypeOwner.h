@@ -125,6 +125,14 @@ public:
     //! Adds the declarations that the declaration's member, static variable and signature types name directly
     DLLLOCAL virtual void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const = 0;
 
+    //! Adds the declarations that this one holds a reference to beyond the names (type_owner_refs): the base classes
+    //! of a class, the source of an imported class, the parent and the source of a hashdecl
+    /** Every reference is added (once per reference held), so that the references that only declarations of a cycle
+        hold can be told from the others at library cleanup (delete_qore_types()); a reference that is not listed
+        counts as held from outside the cycle, which keeps the cycle
+    */
+    DLLLOCAL virtual void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const = 0;
+
     //! Takes a reference to the declaration (QoreTypeOwnerBatch)
     DLLLOCAL virtual void refTypeOwner() = 0;
 
@@ -207,6 +215,10 @@ public:
         owner->getTypeOwnerNames(names);
     }
 
+    DLLLOCAL virtual void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const {
+        owner->getTypeOwnerHeldRefs(refs);
+    }
+
     DLLLOCAL virtual void refTypeOwner() {
         owner->refTypeOwner();
     }
@@ -222,6 +234,12 @@ private:
 #ifdef DEBUG
 //! Returns true if \a owner is a declaration that has not been freed (debug builds)
 DLLLOCAL bool qore_type_owner_is_live(const QoreTypeOwner* owner);
+
+//! Returns the number of declarations of Programs (not builtin ones) that have not been freed (debug builds)
+/** Called at the end of qore_cleanup(): a declaration that is still alive then was leaked, unless its owner keeps it
+    on purpose (a Program held at static scope)
+*/
+DLLLOCAL size_t qore_count_live_user_type_owners();
 #endif
 
 //! Called by a declaration whose last reference was released; see QoreTypeOwner
@@ -260,5 +278,9 @@ DLLLOCAL size_t qore_retired_type_owner_count();
 
 //! Returns the number of groups of declarations that survived their Program and are not collected yet
 DLLLOCAL size_t qore_type_owner_group_count();
+
+//! Returns the number of survivors of deleted Programs that only each other keep (see delete_qore_types()), which the
+//! library cleanup frees; nothing is freed
+DLLLOCAL size_t qore_cyclic_type_owner_count();
 
 #endif

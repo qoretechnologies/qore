@@ -188,8 +188,11 @@ x=null@endverbatim
     the type allows it, and objects of an equal class (a class of the same name and signature, from another Program);
     assigning \c NOTHING to an element of a \c list<*Foo> works, and assigning an object of another class raises the
     usual type error.  A class
-    or hashdecl imported from the Program keeps its source declaration; the methods of an imported class are code of
-    the deleted Program, so calling them or creating an object of the class raises a \c PROGRAM-ERROR exception.
+    or hashdecl imported from the Program keeps its source declaration; declarations of the deleted Program that
+    only each other keep (classes that name or inherit each other, after the last value that referenced them was
+    released) are freed when the library is cleaned up, with the Program's data; the methods of an imported class are
+    code of the deleted Program, so calling them or creating an object of the class raises a \c PROGRAM-ERROR
+    exception.
 
     @section thread_synchronization Thread Management and Inter-Thread Communication
 
