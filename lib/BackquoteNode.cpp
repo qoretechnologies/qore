@@ -405,6 +405,15 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
     // ends the whole command; this is not a policy check, and a system-policy capability does not change it
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
     const bool use_pgroup = (bool)smh;
+#ifndef _Q_WINDOWS
+    // the command is run by the shell, which the sandbox's policy must allow to be executed, as for system()
+    {
+        QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
+        if (policy && !policy->checkFilesystemAccess("/bin/sh", QSEC_EXECUTE, xsink)) {
+            return nullptr;
+        }
+    }
+#endif
 #ifdef QORE_BACKQUOTE_POSIX_SPAWN
     {
         int pipefd[2];

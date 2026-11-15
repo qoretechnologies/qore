@@ -15,8 +15,10 @@
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
+#include <arrow/util/base64.h>
 #include <arrow/util/decimal.h>
 #include <arrow/util/float16.h>
+#include <arrow/util/key_value_metadata.h>
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
 #include <parquet/parquet_version.h>
@@ -2986,11 +2988,13 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
     }
     auto infile = maybe_infile.ValueOrDie();
 
-    // Open Parquet reader via FileReaderBuilder
+    // Open Parquet reader via FileReaderBuilder; the Parquet file reader (pages, decompression, page indexes) gets
+    // the same memory pool as the Arrow reader: default_reader_properties() would give it Arrow's default pool
+    // instead (mimalloc or jemalloc in most Arrow builds), see issue #6171
     std::unique_ptr<parquet::arrow::FileReader> reader;
     auto st_builder = parquet::arrow::FileReaderBuilder();
     st_builder.memory_pool(pool);
-    auto status = st_builder.Open(infile);
+    auto status = st_builder.Open(infile, parquet::ReaderProperties(pool));
     if (!status.ok()) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "cannot open Parquet reader for '%s': %s", path.c_str(),
@@ -3165,8 +3169,12 @@ QoreDataFrame* QoreDataFrame::fromArrowIpc(const BinaryNode* data,
     if (*xsink) {
         return nullptr;
     }
+    // the IPC readers allocate (for decompression, for example) from the same pool as the rest of the module, not
+    // from Arrow's default pool (issue #6171)
+    auto read_options = arrow::ipc::IpcReadOptions::Defaults();
+    read_options.memory_pool = arrow::system_memory_pool();
     auto stream_source = std::make_shared<arrow::io::BufferReader>(buffer);
-    auto maybe_stream_reader = arrow::ipc::RecordBatchStreamReader::Open(stream_source);
+    auto maybe_stream_reader = arrow::ipc::RecordBatchStreamReader::Open(stream_source, read_options);
 
     std::shared_ptr<arrow::Table> table;
     if (maybe_stream_reader.ok()) {
@@ -3179,7 +3187,7 @@ QoreDataFrame* QoreDataFrame::fromArrowIpc(const BinaryNode* data,
         table = maybe_table.ValueOrDie();
     } else {
         auto file_source = std::make_shared<arrow::io::BufferReader>(buffer);
-        auto maybe_file_reader = arrow::ipc::RecordBatchFileReader::Open(file_source);
+        auto maybe_file_reader = arrow::ipc::RecordBatchFileReader::Open(file_source, read_options);
         if (!maybe_file_reader.ok()) {
             xsink->raiseException("DATAFRAME-IO-ERROR",
                 "cannot open Arrow IPC data as stream or file; stream error: %s; file error: %s",
@@ -3294,6 +3302,33 @@ BinaryNode* QoreDataFrame::toArrowIpc(ExceptionSink* xsink) const {
     return out.release();
 }
 
+//! returns the key-value metadata that ArrowWriterProperties::store_schema() makes Parquet write for the schema
+/** the same metadata as parquet::arrow::FileWriter writes with store_schema(): the metadata of the schema followed by
+    "ARROW:schema", the base64 encoding of the schema serialized as an Arrow IPC schema message; that serializes the
+    schema with arrow::ipc::SerializeSchema(), which builds the flatbuffer message with IpcWriteOptions::Defaults()
+    and therefore in Arrow's default memory pool whatever pool it is given (Arrow 23.0.1, and Arrow's main branch in
+    November 2026), so the message is built here as SerializeSchema() builds it, but in the pool given; the metadata
+    is byte for byte the same (issue #6171)
+*/
+static arrow::Result<std::shared_ptr<const arrow::KeyValueMetadata>> qoreParquetArrowSchemaMetadata(
+        const arrow::Schema& schema, arrow::MemoryPool* pool) {
+    ARROW_ASSIGN_OR_RAISE(auto stream, arrow::io::BufferOutputStream::Create(1024, pool));
+    auto options = arrow::ipc::IpcWriteOptions::Defaults();
+    options.memory_pool = pool;
+    arrow::ipc::DictionaryFieldMapper mapper(schema);
+    arrow::ipc::IpcPayload payload;
+    ARROW_RETURN_NOT_OK(arrow::ipc::GetSchemaPayload(schema, options, mapper, &payload));
+    int32_t metadata_length = 0;
+    ARROW_RETURN_NOT_OK(arrow::ipc::WriteIpcPayload(payload, options, stream.get(), &metadata_length));
+    ARROW_ASSIGN_OR_RAISE(auto serialized, stream->Finish());
+
+    std::shared_ptr<arrow::KeyValueMetadata> result = schema.metadata()
+        ? schema.metadata()->Copy()
+        : arrow::key_value_metadata({}, {});
+    result->Append("ARROW:schema", arrow::util::base64_encode(serialized->ToString()));
+    return std::shared_ptr<const arrow::KeyValueMetadata>(std::move(result));
+}
+
 void QoreDataFrame::writeParquet(const std::string& path, const QoreHashNode* options,
         ExceptionSink* xsink) const {
     if (qore_check_cancel(xsink, "writing Parquet file")) {
@@ -3330,6 +3365,9 @@ void QoreDataFrame::writeParquet(const std::string& path, const QoreHashNode* op
     auto outfile = maybe_outfile.ValueOrDie();
 
     parquet::WriterProperties::Builder properties_builder;
+    // the column writers allocate from the pool of the writer properties, which is Arrow's default pool unless set
+    // (issue #6171)
+    properties_builder.memory_pool(pool);
     if (write_options.has_compression) {
         properties_builder.compression(write_options.compression);
     }
@@ -3359,17 +3397,24 @@ void QoreDataFrame::writeParquet(const std::string& path, const QoreHashNode* op
     if (write_options.has_use_threads) {
         arrow_properties_builder.set_use_threads(write_options.use_threads);
     }
-    if (write_options.store_schema) {
-        arrow_properties_builder.store_schema();
-    }
+    // store_schema() is not set: the writer would serialize the schema in Arrow's default pool; the same metadata is
+    // added below instead (issue #6171)
 
     int64_t row_group_size = write_options.has_row_group_size
         ? write_options.row_group_size
         : (table->num_rows() > 0 ? table->num_rows() : 1024);
 
-    // Write table
-    auto status = parquet::arrow::WriteTable(*table, pool, outfile, row_group_size,
-        properties_builder.build(), arrow_properties_builder.build());
+    // Write table, as parquet::arrow::WriteTable() does
+    auto status = [&]() -> arrow::Status {
+        ARROW_ASSIGN_OR_RAISE(auto writer, parquet::arrow::FileWriter::Open(*table->schema(), pool, outfile,
+            properties_builder.build(), arrow_properties_builder.build()));
+        if (write_options.store_schema) {
+            ARROW_ASSIGN_OR_RAISE(auto metadata, qoreParquetArrowSchemaMetadata(*table->schema(), pool));
+            ARROW_RETURN_NOT_OK(writer->AddKeyValueMetadata(metadata));
+        }
+        ARROW_RETURN_NOT_OK(writer->WriteTable(*table, row_group_size));
+        return writer->Close();
+    }();
     if (!status.ok()) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "error writing Parquet file '%s': %s", path.c_str(),
