@@ -4943,7 +4943,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 return QoreValue();
             }
             int64_t epoch_us = readI64(ptr);
-            uint32_t name_len = readU32(ptr);
+            (void)readU32(ptr);  // the length of the string, which is found by its offset in the string pool
             if (ptr + 4 > end) {
                 error = "unexpected end of data reading region name offset";
                 return QoreValue();
@@ -4993,7 +4993,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 error = "unexpected end of data reading number value";
                 return QoreValue();
             }
-            uint32_t len = readU32(ptr);
+            (void)readU32(ptr);  // the length of the string, which is found by its offset in the string pool
             uint32_t str_offset = readU32(ptr);
             const char* str = getString(str_offset);
             if (!str) {
@@ -5167,7 +5167,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 error = "unexpected end of data reading enum path";
                 return QoreValue();
             }
-            uint32_t path_len = readU32(ptr);
+            (void)readU32(ptr);  // the length of the string, which is found by its offset in the string pool
             uint32_t path_offset = readU32(ptr);
             const char* path = getString(path_offset);
             if (!path) {
@@ -5178,7 +5178,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 error = "unexpected end of data reading enum member name";
                 return QoreValue();
             }
-            uint32_t name_len = readU32(ptr);
+            (void)readU32(ptr);  // the length of the string, which is found by its offset in the string pool
             uint32_t name_offset = readU32(ptr);
             const char* member_name = getString(name_offset);
             if (!member_name) {
@@ -5204,7 +5204,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 error = "unexpected end of data reading new_object class path";
                 return QoreValue();
             }
-            uint32_t path_len = readU32(ptr);
+            (void)readU32(ptr);  // the length of the string, which is found by its offset in the string pool
             uint32_t path_offset = readU32(ptr);
             const char* class_path = getString(path_offset);
             if (!class_path) {
@@ -5405,7 +5405,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 error = "unexpected end of data reading const_ref name";
                 return QoreValue();
             }
-            uint32_t name_len = readU32(ptr);
+            (void)readU32(ptr);  // the length of the string, which is found by its offset in the string pool
             uint32_t name_offset = readU32(ptr);
             const char* fqn = getString(name_offset);
             if (!fqn) {
@@ -16846,7 +16846,6 @@ bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {
         error = "invalid NAMESPACES section data";
         return false;
     }
-    const uint8_t* end = ptr + sec->size;
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
     ns_list.resize(count);
@@ -20767,7 +20766,6 @@ bool QoreAOTBinaryDeserializer::deserializeEmbeddedSource(std::string& error) {
         error = "invalid FUNC_SOURCES section data";
         return false;
     }
-    const uint8_t* end = ptr + sec->size;
 
     // Read the full source text reference
     const char* src = reader.readStringRef(ptr);

@@ -7605,6 +7605,7 @@ AbstractPollOperation<auto> Socket::startPollReadHttp2Request(*hash<auto> option
 */
 AbstractPollOperation<auto> Socket::startPollSendHttp2Response(int stream_id, int status_code, *hash<auto> headers,
         *data body) [flags=NAMED_ARGS] {
+    (void)body;  // the body is read from the argument, where a short string is handled
     s->ref();
 
     // Get body data
@@ -7745,6 +7746,7 @@ int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> heade
 */
 nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> headers,
         *data body) [flags=NAMED_ARGS] {
+    (void)body;  // the body is read from the argument, where a short string is handled
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     char body_short_buf[7];
@@ -8252,6 +8254,7 @@ AbstractPollOperation<auto> Socket::startPollHttp2ClientMultiplex() {
     @since %Qore 3.0
 */
 int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = False) [flags=NAMED_ARGS] {
+    (void)body;  // the body is read from the argument, where a short string is handled
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     char body_short_buf[7];
@@ -8471,6 +8474,7 @@ AbstractPollOperation<auto> Socket::startPollQuicAccept(*hash<auto> options) [fl
 */
 AbstractPollOperation<auto> Socket::startPollQuicSendResponse(int session_id, int stream_id, int status_code,
         *hash<auto> headers, *data body) [flags=NAMED_ARGS] {
+    (void)body;  // the body is read from the argument, where a short string is handled
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8554,6 +8558,7 @@ bool Socket::isQuic() [flags=CONSTANT] {
 */
 int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *data body,
         bool suppress_wake = False) [flags=NAMED_ARGS] {
+    (void)body;  // the body is read from the argument, where a short string is handled
     // the method and path are sent as C strings, which would be cut at a NUL character
     if (q_check_http_request(method, path, nullptr, "QUIC-ERROR", "QUIC-ERROR", nullptr, xsink)) {
         return QoreValue();
@@ -8740,6 +8745,7 @@ nothing Socket::sendQuicClientTrailers(int stream_id, hash<string, string> trail
     @since %Qore 3.0
 */
 int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_stream = False) [flags=NAMED_ARGS] {
+    (void)body;  // the body is read from the argument, where a short string is handled
     if (stream_id < 0) {
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0",
             (long long)stream_id);
@@ -8917,6 +8923,7 @@ nothing Socket::cancelQuicStreamRead(int session_id, int stream_id) {
 */
 nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_code, *hash<auto> headers,
         *data body) [flags=NAMED_ARGS] {
+    (void)body;  // the body is read from the argument, where a short string is handled
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -9312,6 +9319,7 @@ int Socket::submitQuicStreamWebSocketClose(int session_id, int stream_id, binary
 */
 int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
         softbool end_stream = False) [flags=NAMED_ARGS] {
+    (void)body;  // the body is read from the argument, where a short string is handled
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return -1;

@@ -1490,7 +1490,6 @@ static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const 
     if (!pgm) {
         return 0;
     }
-    qore_program_private* pp = qore_program_private::get(*pgm);
 
     switch (kind) {
         case AOTExprKind::FUNC_CALL: {
@@ -2025,8 +2024,6 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
     if (!ref1 || !*ref1) {
         return 0;
     }
-    qore_program_private* pp = qore_program_private::get(*pgm);
-    qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
 
     switch (kind) {
         case AOTExprKind::CAST_HASHDECL: {
@@ -2817,7 +2814,6 @@ QoreValue readOneExpr(
     // Deferred defaults can be reconstructed after the main load phases, even during a legacy source parse.
     LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     uint8_t ekind = QoreAOTBinaryReader::readU8(p);
-    AOTExprKind ek = static_cast<AOTExprKind>(ekind);
 
     // Dispatch via registry
     const auto* kinfo = getAOTExprKindInfo(ekind);
@@ -3834,7 +3830,6 @@ static QoreAOTContext* buildContextFromSlotMap(
             delete ctx;
             return nullptr;
         }
-        const uint8_t* before_expr = ptr;  // Track ptr position for validation
         uint8_t kind_byte = QoreAOTBinaryReader::readU8(ptr);
         AOTExprKind kind = static_cast<AOTExprKind>(kind_byte);
         const auto* expr_kind_info = getAOTExprKindInfo(kind_byte);
@@ -7052,12 +7047,10 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     if (!validateAOTIROpcode(opcode_raw, error)) {
         return nullptr;
     }
-    auto opcode = static_cast<QoreIROpcode>(opcode_raw);
     if (!need(1, "instruction group")) {
         return nullptr;
     }
     uint8_t group_byte = QoreAOTBinaryReader::readU8(ptr);
-    auto group = static_cast<QoreIRInstGroup>(group_byte);
     if (!qore_aot_validate_ir_layout(opcode_raw, group_byte, error)) {
         return nullptr;
     }
@@ -12561,7 +12554,6 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
         }
 
         // Register pre-compiled function pointers
-        QoreProgram* fallback_pgm = nullptr;
         if (num_functions > 0 && functions) {
             std::unordered_map<std::string, const QoreAOTFunc*> func_map;
             const QoreAOTFunc* toplevel_func = nullptr;

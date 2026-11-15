@@ -225,17 +225,6 @@ void WebSocketFrameDecoder::compact() {
 
 BinaryNode* WebSocketFrameEncoder::encode(WsOpcode opcode, const void* payload,
         size_t payload_len, bool fin, bool mask, uint8_t rsv) {
-    // Calculate header size
-    size_t header_size = 2;
-    if (payload_len >= 126 && payload_len < 65536) {
-        header_size += 2;
-    } else if (payload_len >= 65536) {
-        header_size += 8;
-    }
-    if (mask) {
-        header_size += 4;
-    }
-
     SimpleRefHolder<BinaryNode> result(new BinaryNode());
 
     // Byte 0: FIN + RSV + Opcode

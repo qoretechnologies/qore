@@ -1122,10 +1122,6 @@ FtpPortAcceptPollOperation::constructor(Socket[QoreSocketObject] listener_socket
     }
 
     // Set sock member to listener (controller polls this fd)
-    // listener_sock is a ReferenceHolder<QoreSocketObject> from QPP — get QoreObject wrapper
-    QoreObject* listener_obj = self->getReferencedMemberNoMethod("sock", xsink) ?
-        nullptr : nullptr;  // not set yet — need to create wrapper
-    // Actually, we need the caller to pass the Socket QoreObject. Use the inner obj ref:
     {
         // Get the Socket QoreObject from the accept_operation's sock member
         ValueHolder sock_val(const_cast<QoreObject*>(accept_operation)->getReferencedMemberNoMethod("sock", xsink), xsink);

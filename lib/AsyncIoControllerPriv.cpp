@@ -4632,7 +4632,6 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     }
 
     // Check autostop
-    bool stopped = false;
     {
         AutoLocker al(m);
         // Autostop handled by I/O thread main loop (cache is I/O-thread-only)
