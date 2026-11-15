@@ -533,6 +533,16 @@ DLLLOCAL RuntimeLocationCache get_runtime_location_cache();
     sandboxed application program inherits the caller's sandbox. */
 DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
 
+//! returns true if a sandbox governs the calling code itself, not counting the sandbox that the thread inherited from
+//! the code that started it
+/** For Qore::Thread::ThreadCapabilityScope: whether code may set the capabilities of a thread is decided by that
+    code (its Program and the Programs of its callers on the thread, including Programs sandboxed by their flag only,
+    a continued operation's or a task's sandbox, and the provenance of the objects and callbacks it runs in), never
+    by the sandbox of the thread's creator alone: a host's code that no sandbox governs sets the capabilities of the
+    code it runs also in a thread that sandboxed code started.
+*/
+DLLLOCAL bool qore_scope_creator_is_sandboxed();
+
 #ifdef DEBUG
 //! Debug-only: like qore_find_thread_sandbox_manager_ref(), and sets @a pgm_id to the ID of the Program the manager
 //! was found on (0 if none); for the unit tests
@@ -821,6 +831,11 @@ public:
     //! thread): it can enter the Programs of the modules while the cleanup has closed them, applied with
     //! QoreModuleCleanupDelegateHelper (see qore_close_module_programs())
     bool module_cleanup_delegate = false;
+    //! True if only the sandbox that the capturing thread inherited from the code that started it governed the
+    //! capture (no sandboxed Program, continued operation or provenance of its own): host code that ran in a thread
+    //! that sandboxed code started.  Such a context does not count for qore_scope_creator_is_sandboxed(),
+    //! as the inherited sandbox itself does not
+    bool inherited_only = false;
 };
 
 //! Makes the sandbox manager lookups of the current thread return a captured context while the object exists
@@ -899,6 +914,7 @@ public:
 
 private:
     const QoreSandboxContext* old_ctx = nullptr;
+    const QoreSandboxContext* old_start_ctx = nullptr;
     bool active = false;
 };
 

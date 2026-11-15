@@ -109,6 +109,42 @@ used by a module loads the module itself before the restricted code does.
 A scope cannot be set by code that a sandbox governs (S3): its set stays in effect for the code that runs on the thread
 after the call that set it, the host's code included.  The capability code given to a scope must pass the same check.
 
+### Who is governed: the creator, not the thread's inheritance
+
+**Whether a sandbox governs the code that creates a scope is decided by that code, never by the sandbox that the thread
+inherited from the code that started it** (`thread_capability_check_creator()`,
+`qore_scope_creator_is_sandboxed()`).  The creating code is governed, and refused, if a sandbox governs:
+
+- its Program, or a Program of the code that called it on the thread (sandboxed code that calls host code, by a call
+  reference or a closure, or through module code that calls the host code back), also a Program that is sandboxed by
+  its flag only: one that sandboxed code created, which has no sandbox manager of its own (qore#5659), counts wherever
+  it is on the thread's program-context stack;
+- an operation that the thread continues for another thread (`QoreSandboxContextHelper`), or a task that a native
+  bridge runs for a sandboxed submitter (`QoreSandboxCaptureHelper`: the capture takes the place of the thread's
+  inherited sandbox, but it is the submitter's operation and counts);
+- the object whose method it is, or the callback it runs in (sandbox provenance), when sandboxed code governed their
+  creation.
+
+The sandbox that the thread inherited from the code that started it (design/thread-sandbox-inheritance.md;
+`ThreadData::thread_start_sandbox_context`, applied by `QoreInheritedSandboxHelper`) does not count by itself, nor
+does a continued operation or a provenance that only that inherited sandbox governed when it was captured
+(`QoreSandboxContext::inherited_only`, never set for a capture made in a Program that is sandboxed, by a manager or its
+flag; it is computed only when such a sandbox or context is present, so the common capture of sandboxed code does no
+extra lookup): host code that runs in a thread started for sandboxed code, such as the thread
+that a host's API (an application server's `startThread()`) starts for a sandboxed caller, sets the capabilities of
+the code it runs in that thread, as it does in any other.  Everything else is unchanged:
+
+- the sandboxed code that runs in that thread is governed by its own Program and cannot set a scope;
+- the capabilities' code must still be code that no sandbox governs (`thread_capability_check_code()`), so a scope
+  never runs sandboxed code as a capability;
+- the lookup (`get_thread_capability()`) follows the same rule for code that is not module code: the host's code in
+  that thread sees its capabilities, sandboxed code sees none;
+- the threads that a capability starts there inherit the sandbox as before: the sandbox still governs everything that
+  the module code does for the sandboxed caller.
+
+A thread that sandboxed code starts itself (its own `background`) begins in the sandboxed Program: host code that it
+calls is called by sandboxed code and is refused.
+
 ### Independent objects
 
 A module that creates a shared or independent object (a module-wide cache, poller or connection) from inside the code
@@ -196,6 +232,13 @@ change.
   open scopes; a new thread starts with an empty set;
 - the lookup from module code, host code, sandboxed code and code without thread control; a scope set by code
   without thread control, and with a capability of code without thread control, is refused;
+- sandboxed code cannot set a scope directly, through a call reference or a closure of the host, from a callback that
+  module code makes, through a host object created for it, nor in a thread it starts itself; nor can the code of a
+  Program it creates (sandboxed by its flag only), in a thread of its own or in a closure or call reference that the
+  host calls with its capabilities set; host code run for a sandboxed capture (`sb_capture_applied_call()`,
+  `module-cpp-api/sandbox-capture`) cannot either; host code sets one in a
+  thread started for sandboxed code by host code, where sandboxed code still cannot set one or see the capabilities and
+  sandboxed capability code is refused (`thread-capability-scope.qtest`);
 - each module takes the capability when no option is given, keeps an explicit option, and keeps the capability after
   the scope;
 - every execution mode; valgrind.
@@ -208,3 +251,6 @@ change.
   scope) for objects that belong to no interface (qorus#867, decision 1).
 - Domain declarations widen only the parse-option domains of the module's own code, never the caller's sandbox
   (decision 4); the thread-starting library modules declare `THREAD_CONTROL`.
+- The creator of a scope decides whether a sandbox governs it, never the thread's inherited sandbox; the capability
+  code must still be unsandboxed, and sandboxed code can never create a scope or reach a provider (prof for David,
+  2026-11-15, with an independent security review of the change).
