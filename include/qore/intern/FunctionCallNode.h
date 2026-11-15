@@ -711,6 +711,11 @@ public:
     template <bool Lexical>
     DLLLOCAL QoreValue execImpl(LexicalSemanticPolicy policy, QoreObject* o, const char* cstr, const qore_class_private* ctx, ExceptionSink* xsink)
             const;
+    //! calls the method looked up by name in the class of the object, as execImpl() does when the method resolved at
+    //! parse time does not apply (the location of the call must be set)
+    template <bool Lexical>
+    DLLLOCAL QoreValue execByNameImpl(LexicalSemanticPolicy policy, QoreObject* o, const char* cstr,
+            const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const;
     //! Raises the exception that exec() raises for an object that has been deleted before it evaluates the
     //! arguments (issue #5784)
     /** @return -1 if the exception was raised, 0 if the object is valid

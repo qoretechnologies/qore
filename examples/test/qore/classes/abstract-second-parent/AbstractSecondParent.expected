@@ -1,0 +1,27 @@
+round 0
+unqualified self call: Impl::m 1
+qualified self call: Impl::m 2
+overloaded abstract variants: Impl::o(int) 3, Impl::o(string) x
+call through the object: Impl::m 6
+subclass override: E::m 1
+subclass override, qualified: E::m 2
+implementing class first: Impl::m 4
+implementation from a grandparent: GrandImpl::m 5
+round 1
+unqualified self call: Impl::m 1
+qualified self call: Impl::m 2
+overloaded abstract variants: Impl::o(int) 3, Impl::o(string) x
+call through the object: Impl::m 6
+subclass override: E::m 1
+subclass override, qualified: E::m 2
+implementing class first: Impl::m 4
+implementation from a grandparent: GrandImpl::m 5
+round 2
+unqualified self call: Impl::m 1
+qualified self call: Impl::m 2
+overloaded abstract variants: Impl::o(int) 3, Impl::o(string) x
+call through the object: Impl::m 6
+subclass override: E::m 1
+subclass override, qualified: E::m 2
+implementing class first: Impl::m 4
+implementation from a grandparent: GrandImpl::m 5

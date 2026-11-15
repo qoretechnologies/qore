@@ -495,6 +495,12 @@ QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execImpl(LexicalSema
             : qore_method_private::evalWithPolicy<Lexical>(policy, *method, xsink, rc, o, args, ctx, nullptr, nullptr,
                 explicit_inst);
     }
+    return execByNameImpl<Lexical>(policy, o, c_str, ctx, rc, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execByNameImpl(LexicalSemanticPolicy policy, QoreObject* o,
+        const char* c_str, const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const {
     // the method is looked up by name in the class of the object
     if (runtime_arg_names) {
         // resolved on the method of the class of the object, as a call with positional arguments (see execNamed())
@@ -1079,14 +1085,24 @@ QORE_INTERN_ALWAYS_INLINE QoreValue SelfFunctionCallNode::evalCommon(LexicalSema
         // list.  Binding to the parse-time variant instead silently skipped such overrides.
         // must have a class context here
         assert(class_ctx || runtime_cls);
+        if (is_abstract) {
+            // issue #3070: the method resolved at parse time is abstract, and the class of the object implements it,
+            // also when it inherits the implementation from another parent class than the one that declares the
+            // method: it is looked up by name, also for an object of the class of the call
+            QoreRcCallSiteHelper call_site(rc, loc);
+            return execByNameImpl<Lexical>(policy, self, ns.ostr, class_ctx ? class_ctx : runtime_cls, rc, xsink);
+        }
         // exec() sets the call site
         return execImpl<Lexical>(policy, self, ns.ostr, class_ctx ? class_ctx : runtime_cls, xsink);
     }
 
     if (is_abstract) {
         // issue #5933: a qualified call of an abstract method is dispatched by the name of the method (not the
-        // qualified name) on the class of the object, which implements it; exec() sets the call site
-        return execImpl<Lexical>(policy, self, ns.getIdentifier(), class_ctx ? class_ctx : runtime_cls, xsink);
+        // qualified name) on the class of the object, which implements it, also for an object of the class of the
+        // call (issue #3070)
+        QoreRcCallSiteHelper call_site(rc, loc);
+        return execByNameImpl<Lexical>(policy, self, ns.getIdentifier(), class_ctx ? class_ctx : runtime_cls, rc,
+            xsink);
     }
 
     if (!method) {
