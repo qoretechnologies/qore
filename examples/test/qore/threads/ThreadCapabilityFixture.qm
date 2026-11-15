@@ -69,6 +69,11 @@ public namespace ThreadCapabilityFixture {
         return call_function(call_wrapper, auto sub () { return call_function(c); });
     }
 
+    #! calls \a c back: module code between its caller and the callback
+    public auto sub callBack(code c) {
+        return call_function(c);
+    }
+
     #! passes \a c itself to the host's call_wrapper capability, which runs only code that may control threads
     public auto sub wrapDirect(code c) {
         *code call_wrapper = get_thread_capability("call_wrapper");

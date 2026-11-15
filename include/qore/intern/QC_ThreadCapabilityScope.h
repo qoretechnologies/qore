@@ -75,6 +75,15 @@ DLLLOCAL bool thread_capabilities_visible();
 DLLLOCAL int thread_capability_check_code(const QoreValue v, const char* name, const char* what,
         ExceptionSink* xsink);
 
+//! Checks that the calling code may set the capabilities of a thread: no sandbox governs it (qorus#867)
+/** Decided by the calling code (its Program and its callers on the thread, a continued operation's sandbox, the
+    provenance of the callbacks it runs in), not by the sandbox that the thread inherited from the code that started
+    it alone (see qore_scope_creator_is_sandboxed())
+
+    @return 0 if it may, -1 if an exception was raised in \a xsink
+*/
+DLLLOCAL int thread_capability_check_creator(ExceptionSink* xsink);
+
 //! The guard of a thread capability: the call reference that get_thread_capability() returns (qorus#867)
 /** A call passes the arguments to the capability's code once each argument that is code has been checked
     (thread_capability_check_code()): the capability runs only code that could control threads itself, whoever holds

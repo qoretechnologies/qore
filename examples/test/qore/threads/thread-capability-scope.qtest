@@ -29,6 +29,14 @@ auto sub host_call_wrapper(code<auto()> c) {
     return c();
 }
 
+#! host code whose method sets a scope; an object carries the sandbox provenance of the code that created it
+class ScopeSetter {
+    bool set() {
+        ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
+        return True;
+    }
+}
+
 #! Thread capability scopes (qorus#867, design/thread-capability-scope.md)
 class ThreadCapabilityScopeTest inherits QUnit::Test {
     public {
@@ -66,6 +74,72 @@ int sub thief_steal(object t, Queue q) { return t.steal(q); }
 int sub holder_start(object t, Queue q, auto value) { return t.start(q, value); }
 ";
 
+        #! code of a sandboxed Program that may control threads, which tries to set a scope by every path it has
+        const SandboxedSource = "%new-style
+%require-types
+%strict-args
+*code sub own_lookup(string name) { return get_thread_capability(name); }
+sub set_scope() { Qore::Thread::ThreadCapabilityScope scope({\"start_thread\": int sub (code c) { return -42; }}); }
+sub set_independent() { Qore::Thread::ThreadCapabilityScope scope = Qore::Thread::ThreadCapabilityScope::independent(); }
+# calls host code: a call reference or a closure that sets a scope
+sub call_code(code c) { call_function(c); }
+# through module code, which calls the code back
+sub via_module(code c) { ThreadCapabilityFixture::callBack(c); }
+sub via_module_own() { ThreadCapabilityFixture::callBack(sub () { set_scope(); }); }
+# a thread that the sandboxed code starts itself, running host code or its own
+int sub start(code c) { return background call_function(c); }
+# host code that the sandboxed code calls, which starts a thread (as a host's API starts one for its caller)
+int sub call_starter(code c) { return call_function(c); }
+# host code that the sandboxed code calls, which creates an object
+object sub make(code c) { return call_function(c); }
+# a Program that the sandboxed code creates: sandboxed by its flag, without a manager of its own
+# kept, so that the closure and call reference of its code that the host calls stay valid
+our *Program child;
+hash<auto> sub child_thread(string src) {
+    child = new Program(PO_NEW_STYLE);
+    child.parse(src, \"sandboxed-child\");
+    return child.callFunction(\"run\");
+}
+int sub start_own(Queue q) {
+    return background sub () {
+        try {
+            set_scope();
+            q.push(\"set\");
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex.err);
+        }
+    }();
+}
+";
+
+        #! the code of a Program that sandboxed code creates, which tries to set a scope in a thread of its own (a named
+        #! function: no provenance of a closure), and returns a closure created there for the host to call
+        const SandboxedChildSource = "%new-style
+%require-types
+%strict-args
+hash<auto> sub try_scope() {
+    hash<auto!> r = {\"caps\": get_thread_capabilities()};
+    try {
+        Qore::Thread::ThreadCapabilityScope scope({}, True);
+        r.set = True;
+    } catch (hash<ExceptionInfo> ex) {
+        r.set = ex.err;
+    }
+    return r;
+}
+sub bg(Queue q) {
+    hash<auto!> r = try_scope();
+    r.cb = hash<auto> sub () { return try_scope(); };
+    r.ref = \\try_scope();
+    q.push(r);
+}
+hash<auto> sub run() {
+    Queue q();
+    background bg(q);
+    return q.get();
+}
+";
+
         #! a module of the restricted Program's own, which returns what it looks up
         const StealModuleSource = "%new-style
 %require-types
@@ -96,6 +170,8 @@ public namespace ThreadCapabilitySteal {
         addTestCase("a restricted Program's own module cannot use the capability for its code", \testOwnModule());
         addTestCase("a restricted subclass cannot use the capability that a module object keeps",
             \testSubclass());
+        addTestCase("sandboxed code cannot set a scope by any path", \testSandboxedPaths());
+        addTestCase("host code sets a scope in a thread that sandboxed code started", \testInheritedSandbox());
         set_return_value(main());
     }
 
@@ -347,6 +423,129 @@ object sub carrier(code c) { return new Carrier(c); }", "restricted-own");
             (stolen, r.callFunction("carrier", restricted_code)));
         assertEq(before, started.getCount(), "the host's start_thread was not called");
         assertEq(0, q.size(), "the restricted code did not run");
+    }
+
+    #! a sandboxed Program; \a sm is set as its sandbox
+    private static Program sandboxed(SandboxManager sm) {
+        Program p(PO_NEW_STYLE);
+        p.loadModule("ThreadCapabilityFixture");
+        p.parse(SandboxedSource, "sandboxed-paths");
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! sandboxed code cannot set a scope: directly, through a call reference or a closure of the host, or from a
+    #! callback that module code makes, nor in a thread that it starts
+    testSandboxedPaths() {
+        SandboxManager sm();
+        Program p = sandboxed(sm);
+        assertThrows("THREAD-CAPABILITY-ERROR", "sandbox governs", \p.callFunction(), "set_scope");
+        assertThrows("THREAD-CAPABILITY-ERROR", "sandbox governs", \p.callFunction(), "set_independent");
+        # host code called by sandboxed code: the sandboxed caller governs it
+        assertThrows("THREAD-CAPABILITY-ERROR", "sandbox governs", \p.callFunction(), ("call_code",
+            \ThreadCapabilityScopeTest::hostSetScope()));
+        assertThrows("THREAD-CAPABILITY-ERROR", "sandbox governs", \p.callFunction(), ("call_code", sub () {
+            ThreadCapabilityScope scope(Caps);
+        }));
+        # module code between the sandboxed caller and the code that sets the scope
+        assertThrows("THREAD-CAPABILITY-ERROR", "sandbox governs", \p.callFunction(), ("via_module", sub () {
+            ThreadCapabilityScope scope(Caps);
+        }));
+        assertThrows("THREAD-CAPABILITY-ERROR", "sandbox governs", \p.callFunction(), "via_module_own");
+        # the sandboxed code of a thread that the sandboxed code started
+        Queue q();
+        int tid = p.callFunction("start_own", q);
+        assertEq("THREAD-CAPABILITY-ERROR", q.get(60s), "sandboxed code in its own thread cannot set a scope");
+        thread_join(tid);
+        # a Program that the sandboxed code creates is sandboxed by its flag only: its code cannot set a scope in a
+        # thread that it starts, nor see the capabilities, and the closure and call reference it creates there cannot
+        # when the host calls them with its capabilities set
+        hash<auto> child = p.callFunction("child_thread", SandboxedChildSource);
+        assertEq("THREAD-CAPABILITY-ERROR", child.set, "the sandboxed child's own thread cannot set a scope");
+        assertEq(NOTHING, child.caps);
+        {
+            ThreadCapabilityScope scope(Caps);
+            foreach code c in ((child.cb, child.ref)) {
+                hash<auto> r = c();
+                assertEq(NOTHING, r.caps, "the child's code does not see the host's capabilities");
+                assertEq("THREAD-CAPABILITY-ERROR", r.set, "nor replace them");
+            }
+            assertEq(("call_wrapper", "start_thread"), sort(keys get_thread_capabilities()),
+                "the host's capabilities are kept");
+        }
+        # a host object created for sandboxed code carries its sandbox: its methods cannot set a scope, wherever
+        # they are called
+        object setter = p.callFunction("make", object sub () { return new ScopeSetter(); });
+        assertThrows("THREAD-CAPABILITY-ERROR", "sandbox governs", \setter.set());
+        assertEq(NOTHING, get_thread_capabilities(), "nothing was set");
+    }
+
+    #! the host's code of a thread that sandboxed code started (as a host's API starts a thread for a sandboxed
+    #! caller) sets a scope: the sandbox the thread inherited does not count by itself.  Sandboxed code in that thread
+    #! still cannot set one nor see the capabilities, and the capabilities' code must still be unsandboxed
+    testInheritedSandbox() {
+        SandboxManager sm();
+        Program p = sandboxed(sm);
+        Program sp(PO_NEW_STYLE);
+        sp.parse("code sub get() { return sub () {}; }", "sandboxed-capability");
+        SandboxManager sm2();
+        sp.setSandboxManager(sm2);
+        code sandboxed_code = sp.callFunction("get");
+
+        Queue q();
+        code host = sub () {
+            hash<auto!> h = {"sandboxed": SandboxManager::isSandboxed()};
+            try {
+                ThreadCapabilityScope scope(Caps);
+                h.set = True;
+                h.names = sort(keys get_thread_capabilities());
+                h.sandboxed_lookup = exists p.callFunction("own_lookup", "start_thread");
+                try {
+                    p.callFunction("set_scope");
+                    h.sandboxed_scope = "set";
+                } catch (hash<ExceptionInfo> ex) {
+                    h.sandboxed_scope = ex.err;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                h.set = ex.err + ": " + ex.desc;
+            }
+            try {
+                ThreadCapabilityScope scope({"start_thread": sandboxed_code});
+                h.sandboxed_code = "set";
+            } catch (hash<ExceptionInfo> ex) {
+                h.sandboxed_code = ex.err;
+            }
+            h.after = get_thread_capabilities();
+            # an object of the host created in this thread, where only the inherited sandbox governs
+            h.setter = new ScopeSetter();
+            q.push(h);
+        };
+        # the sandboxed code calls the host's code, which starts the thread
+        int tid = p.callFunction("call_starter", int sub () { return background host(); });
+        hash<auto> h = q.get(60s);
+        thread_join(tid);
+        assertTrue(h.sandboxed, "the thread inherited the sandbox of the code that started it");
+        assertEq(True, h.set, "the host's code sets a scope");
+        assertEq(("call_wrapper", "start_thread"), h.names, "with the host's capabilities");
+        assertFalse(h.sandboxed_lookup, "sandboxed code in the thread does not see them");
+        assertEq("THREAD-CAPABILITY-ERROR", h.sandboxed_scope, "sandboxed code in the thread cannot set a scope");
+        assertEq("THREAD-CAPABILITY-ERROR", h.sandboxed_code, "a sandboxed Program's code is refused as a capability");
+        assertEq(NOTHING, h.after, "the scopes ended with their blocks");
+        assertTrue(h.setter.set(), "a host object created there sets a scope: only the inherited sandbox governed it");
+
+        # a thread that the sandboxed code starts itself begins in its Program: the host code it calls is called by
+        # sandboxed code
+        tid = p.callFunction("start", host);
+        h = q.get(60s);
+        thread_join(tid);
+        assertTrue(h.sandboxed, "the thread inherited the sandbox");
+        assertRegex("^THREAD-CAPABILITY-ERROR", h.set, "host code that the sandboxed thread calls cannot set a scope");
+        assertEq(NOTHING, h.after, "nothing was set");
+    }
+
+    #! host code that sets a scope, for a call reference that sandboxed code calls
+    static hostSetScope() {
+        ThreadCapabilityScope scope(Caps);
     }
 
     #! S2: a restricted subclass reads the member where a module object keeps the capability: the guard runs no code

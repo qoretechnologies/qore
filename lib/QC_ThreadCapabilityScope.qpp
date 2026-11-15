@@ -48,7 +48,25 @@ bool thread_capabilities_visible() {
         return false;
     }
     QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
-    return !policy;
+    if (!policy) {
+        return true;
+    }
+    // as for the creator of a scope: a sandbox that the thread only inherited from the code that started it does not
+    // count by itself (thread_capability_check_creator())
+    return !qore_scope_creator_is_sandboxed();
+}
+
+int thread_capability_check_creator(ExceptionSink* xsink) {
+    // decided by the code that creates the scope, never by the sandbox that the thread inherited from its creator
+    // alone (see qore_scope_creator_is_sandboxed()): a host that no sandbox governs sets the capabilities of the
+    // code it runs also in a thread that sandboxed code started, and the capability code must still be code that no
+    // sandbox governs (thread_capability_check_code())
+    if (qore_scope_creator_is_sandboxed()) {
+        xsink->raiseException("THREAD-CAPABILITY-ERROR", "a sandbox governs the calling code, which cannot set the "
+            "capabilities of a thread");
+        return -1;
+    }
+    return 0;
 }
 
 int thread_capability_check_code(const QoreValue v, const char* name, const char* what, ExceptionSink* xsink) {
@@ -149,19 +167,22 @@ ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
     call reference to builtin code, or is code whose own Program does not allow thread control, is sandboxed, or has
     been deleted
 
-    @note the code of a capability must itself be allowed to control threads, as it is run for module code whose caller
-    may not; a host cannot pass on the code of the restricted code it runs this way
+    @note
+    - the code of a capability must itself be allowed to control threads, as it is run for module code whose caller
+      may not; a host cannot pass on the code of the restricted code it runs this way
+    - whether a sandbox governs the calling code is decided by that code: its Program, the Programs of the code that
+      called it on the thread, the sandbox of an operation that the thread continues for another, and the sandboxed
+      code whose callback it runs.  The sandbox that the thread inherited from the code that started it does not
+      count by itself: a host's code that no sandbox governs sets the capabilities of the code it runs also in a
+      thread that sandboxed code started (such as a thread that a sandboxed service started with the host's API);
+      the sandboxed code that runs in that thread still cannot set a scope, and the capabilities' code must still be
+      code that no sandbox governs
 */
 ThreadCapabilityScope::constructor(hash<auto> capabilities, *bool replace) {
     // the set of a scope stays in effect for the code that runs on the thread after the call that set it, the host's
     // code included: code that a sandbox governs cannot set one
-    {
-        QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::All);
-        if (policy) {
-            xsink->raiseException("THREAD-CAPABILITY-ERROR", "a sandbox governs the calling code, which cannot set "
-                "the capabilities of a thread");
-            return;
-        }
+    if (thread_capability_check_creator(xsink)) {
+        return;
     }
     ConstHashIterator i(capabilities);
     while (i.next()) {
@@ -206,13 +227,8 @@ ThreadCapabilityScope::destructor() {
     @throw THREAD-CAPABILITY-ERROR a sandbox governs the calling code
 */
 static ThreadCapabilityScope ThreadCapabilityScope::independent() {
-    {
-        QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::All);
-        if (policy) {
-            xsink->raiseException("THREAD-CAPABILITY-ERROR", "a sandbox governs the calling code, which cannot set "
-                "the capabilities of a thread");
-            return QoreValue();
-        }
+    if (thread_capability_check_creator(xsink)) {
+        return QoreValue();
     }
     ReferenceHolder<QoreHashNode> empty(new QoreHashNode(autoTypeInfo), xsink);
     size_t level;
