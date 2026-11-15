@@ -5824,6 +5824,121 @@ const QoreTypeInfo* QoreFunction::parseRuntimeNamedReturnType(const type_vec_t& 
     return rv;
 }
 
+//! Returns true if the type accepts only values of the types that it returns, as they are
+/** No accepted value is converted (a type that converts, such as softint or float, which takes an int, gives other
+    values than the ones it accepts), and no accepted value is a container whose elements can be converted.
+
+    Only basic types qualify: a class or a hashdecl also accepts a value of a child class or hashdecl, which a type
+    argument inferred at run time is, and which has members that the parent lacks; with the parent's type, access to
+    them would be a parse error
+*/
+static bool qore_type_accepts_values_as_returned(const QoreTypeInfo* ti) {
+    if (!QoreTypeInfo::hasType(ti)) {
+        return false;
+    }
+    for (const QoreAcceptSpec& as : ti->getAcceptSpecs()) {
+        if (as.map || as.lexical_map || as.spec.getTypeSpec() != QTS_TYPE) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//! Gives the type arguments that a call resolved at run time is known to bind the type parameters of a generic
+//! variant to: the explicit type arguments of the call, and for each other type parameter its bound if the bound
+//! is a basic type that accepts only values of the types that it returns, or else auto
+/** @return false if the explicit type arguments cannot instantiate the variant, so that the call cannot resolve to it
+
+    A type argument inferred from the arguments at run time can be another type than one inferred from the types that
+    the arguments have at parse time; it is accepted by the bound of its type parameter, and is one of the types that
+    the bound returns only if the bound converts no value (a value of type string is accepted by "X: softint", which
+    returns int)
+*/
+static bool qore_runtime_call_type_args(const AbstractQoreFunctionVariant* variant,
+        const type_vec_t* explicit_type_args, QoreTypeParamInstantiation& type_param_inst) {
+    type_param_inst.clear();
+    const UserSignature* sig = qore_get_variant_generic_signature(variant);
+    if (!sig) {
+        return !explicit_type_args || explicit_type_args->empty();
+    }
+    if (const_cast<UserSignature*>(sig)->resolve()) {
+        return false;
+    }
+    size_t count = sig->getTypeParameterCount();
+    if (explicit_type_args && explicit_type_args->size() > count) {
+        return false;
+    }
+    type_param_inst.owner = sig;
+    type_param_inst.type_args.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        const QoreTypeInfo* bound = sig->getTypeParameterBoundTypeInfo(i);
+        if (explicit_type_args && i < explicit_type_args->size()) {
+            const QoreTypeInfo* explicit_type = (*explicit_type_args)[i];
+            if (!explicit_type || !QoreTypeInfo::hasType(explicit_type)) {
+                return false;
+            }
+            // an explicit type argument that names a type parameter of the code that makes the call is bound at run
+            // time, when it may satisfy the bound: the variant is kept
+            if (!qore_type_contains_type_parameter(explicit_type)
+                    && !qore_signature_type_arg_satisfies_bound(bound, explicit_type)) {
+                return false;
+            }
+            type_param_inst.type_args.push_back(explicit_type);
+        } else {
+            type_param_inst.type_args.push_back(qore_type_accepts_values_as_returned(bound) ? bound : autoTypeInfo);
+        }
+    }
+    return true;
+}
+
+const QoreTypeInfo* QoreFunction::parseRuntimeCallReturnType(const qore_class_private* class_ctx,
+        const QoreTypeInfo* receiver_type_info, const type_vec_t* explicit_type_args, bool all_variants) {
+    const QoreTypeInfo* rt = parseGetUniqueReturnTypeInfo();
+    if (!qore_type_contains_type_parameter(rt)) {
+        return rt;
+    }
+    QoreParseOptions po = parse_get_parse_options();
+    const QoreTypeInfo* rv = nullptr;
+    bool found = false;
+    const qore_class_private* last_class = nullptr;
+    bool internal_access = false;
+    for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
+        bool stop = false;
+        QoreFunction* aqf = all_variants
+            ? (*aqfi).func
+            : ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        if (!aqf) {
+            break;
+        }
+        for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
+            const AbstractQoreFunctionVariant* v = *i;
+            if (!all_variants && last_class && skip_method_variant(v, class_ctx, internal_access)) {
+                continue;
+            }
+            bool strict_args = static_cast<bool>(v->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
+            if (strict_args && (v->getFlags() & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
+                continue;
+            }
+            QoreTypeParamInstantiation inst;
+            if (!qore_runtime_call_type_args(v, explicit_type_args, inst)) {
+                continue;
+            }
+            const QoreTypeInfo* vrt = qore_substitute_type_params_if_needed(v->parseGetReturnTypeInfo(),
+                receiver_type_info, inst.empty() ? nullptr : &inst);
+            rv = found ? qore_union_return_type(rv, vrt) : vrt;
+            found = true;
+            // a variant without a return type, or return types that have no union: the type is not known
+            if (!rv) {
+                return nullptr;
+            }
+        }
+        if (stop) {
+            break;
+        }
+    }
+    return rv;
+}
+
 const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
         const AbstractQoreFunctionVariant* bind_variant, const type_vec_t& param_types,
         const std::vector<bool>& supplied, const arg_value_vec_t& param_with_value, bool committed,

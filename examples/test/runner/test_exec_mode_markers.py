@@ -215,6 +215,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - dataframe-inline-mask-subscript (#6141): its probes run in child processes that set their own --exec-mode
         # - explicit-type-param-method-call (#5892): its probes run in child processes that set their own --exec-mode
         #   and in qcc executables
+        # - generic-call-parse-type (#5896, #6151): its probes run in child processes that set their own --exec-mode
+        #   and in qcc executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
@@ -228,6 +230,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/functions/relative-date-range.qtest",
                                  "examples/test/qore/operators/relative-date-overflow.qtest",
                                  "examples/test/qore/operators/relative-date-multiply.qtest",
+                                 "examples/test/qore/functions/generic-call-parse-type.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",

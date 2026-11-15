@@ -2838,6 +2838,21 @@ public:
     DLLLOCAL const QoreTypeInfo* parseRuntimeNamedReturnType(const type_vec_t& argTypeInfo, const name_vec_t& argNames,
             const qore_class_private* class_ctx, QoreParseOptions po) const;
 
+    //! Returns the return type of a call whose variant is resolved at run time (qore#5896, qore#6151)
+    /** The type parameters of a generic variant's return type are those of the callee, not of the code that makes the
+        call: they are substituted with the call's explicit type arguments, or else with their bounds if the bounds
+        are basic types that convert no value, or else with auto, as the type arguments that the call binds at run
+        time are not known; the type is the union of the return types of the variants that the call can be resolved
+        to, or nullptr if it is not known
+
+        @param class_ctx the class context of the call, which the variants that it can be resolved to are accessible
+        in
+        @param all_variants true to take every variant, accessible in the class context or not: the union is then the
+        type of the call or a wider one (for a call whose class context is not known)
+    */
+    DLLLOCAL const QoreTypeInfo* parseRuntimeCallReturnType(const qore_class_private* class_ctx,
+            const QoreTypeInfo* receiver_type_info, const type_vec_t* explicit_type_args, bool all_variants = false);
+
     //! Returns a variant that run-time resolution could select for a named call and that does not have the parameter
     //! names of the binding at the positions of the arguments, or nullptr if there is none
     /** The arguments of a named call are passed at the positions of the binding's variant at run time; resolving the

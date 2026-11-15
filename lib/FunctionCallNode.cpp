@@ -584,13 +584,18 @@ __attribute__((noinline, cold)) QoreValue AbstractMethodCallNode::execNamed(Lexi
         *runtime_arg_names, policy);
 }
 
-const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
+const QoreTypeInfo* FunctionCallBase::getCallReturnTypeInfo(QoreFunction* func) const {
     const QoreTypeInfo* rv = variant
         ? variant->parseGetReturnTypeInfo()
-        : (method
-            ? qore_method_private::get(*method)->getFunction()->parseGetUniqueReturnTypeInfo()
+        : (func
+            ? func->parseRuntimeCallReturnType(nullptr, receiver_type_info,
+                has_explicit_type_args ? &explicit_runtime_type_param_instantiation.type_args : nullptr, true)
             : nullptr);
     return qore_substitute_type_params_if_needed(rv, receiver_type_info, getTypeParamInstantiation());
+}
+
+const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
+    return getCallReturnTypeInfo(method ? qore_method_private::get(*method)->getFunction() : nullptr);
 }
 
 static void invalid_access(const QoreProgramLocation* loc, QoreFunction* func, const QoreParseOptions& denied,
@@ -1014,9 +1019,12 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             check_flags(loc, func, func->parseGetUniqueFlags(), parse_context.pflag);
         }
 
+        // a call resolved at run time has a type that does not name the callee's type parameters (qore#5896,
+        // qore#6151)
         parse_context.typeInfo = qore_substitute_type_params_if_needed(
             variant ? variant->parseGetReturnTypeInfo()
-                : (deferred_rt ? deferred_rt : func->parseGetUniqueReturnTypeInfo()),
+                : (deferred_rt ? deferred_rt : func->parseRuntimeCallReturnType(class_ctx, receiver_type_info,
+                    has_explicit_type_args ? &explicit_type_args : nullptr)),
             receiver_type_info, &type_param_instantiation);
         // a named call of a method that a class can override is resolved at run time, after the checks of its variant
         // and with its type (qore#5990)
@@ -2526,12 +2534,7 @@ __attribute__((noinline, cold)) QoreValue StaticMethodCallNode::evalNamed(Lexica
 }
 
 const QoreTypeInfo* StaticMethodCallNode::getTypeInfo() const {
-    const QoreTypeInfo* rv = variant
-        ? variant->parseGetReturnTypeInfo()
-        : (method
-            ? qore_method_private::get(*method)->getFunction()->parseGetUniqueReturnTypeInfo()
-            : 0);
-    return qore_substitute_type_params_if_needed(rv, receiver_type_info, getTypeParamInstantiation());
+    return getCallReturnTypeInfo(method ? qore_method_private::get(*method)->getFunction() : nullptr);
 }
 
 QoreValue SelfFunctionCallNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
