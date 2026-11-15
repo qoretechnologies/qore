@@ -197,12 +197,13 @@ public class HttpClientIdleReservedTest inherits QUnit::Test {
     h1Test() {
         skipIfNoDebug();
         HTTPClient hc = getClient({"url": "http://127.0.0.1:" + port});
-        int before = accepted.getCount();
+        # the count is read only after an answer: the accept loop counts the connection that getClient() opens
+        # asynchronously, but always before the connection is answered
         assertEq("ok", hc.get("/"));
-        assertEq(before + 1, accepted.getCount(), "one connection");
+        assertEq(1, accepted.getCount(), "one connection");
         *hash<ExceptionInfo> ex = postAcrossIdleTimeout(hc);
         assertNothing(ex, "the POST did not fail on a connection closed for its idle timeout");
-        assertEq(before + 1, accepted.getCount(), "the POST was sent on its reserved connection");
+        assertEq(1, accepted.getCount(), "the POST was sent on its reserved connection");
     }
 
     h2Test() {
