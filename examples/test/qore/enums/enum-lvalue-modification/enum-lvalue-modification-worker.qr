@@ -1,0 +1,442 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# modifies lvalues that hold enum values in place; run by enum-lvalue-modification.qtest
+
+/** An lvalue that holds an enum value holds the enum member, whose base value is shared and constant.  An operator
+    that modifies the lvalue in place must modify a copy of the base value that the lvalue owns, as if the lvalue had
+    been assigned the base value itself; the enum member never changes.  Each check prints "name=result", and the
+    last check prints the values of every enum member.
+*/
+
+enum ES : string {
+    Short = "42",
+    Long = "a long string value that is not short",
+    Padded = "  padded value  ",
+    Line = "a line of text\n",
+    PadShort = " ab ",
+    LineShort = "ab\n",
+}
+
+enum EN : number {
+    Small = 1.5n,
+    Big = 12345678901234567890.25n,
+}
+
+enum EF : float {
+    Half = 0.5,
+    Big = 2.5,
+}
+
+enum EI : int {
+    One = 1,
+    Seven = 7,
+}
+
+class Holder {
+    public {
+        auto a = ES::Long;
+        string s = ES::Long;
+        auto n = EN::Big;
+        auto i = EI::Seven;
+    }
+
+    string append() {
+        a += "-m";
+        a =~ s/long/LONG/;
+        return a;
+    }
+}
+
+hash<string, string> sub check() {
+    hash<string, string> r = {};
+
+    # string enums in local variables
+    {
+        auto v = ES::Short;
+        v += "x";
+        r."str-short-append" = sprintf("%y", v);
+    }
+    {
+        auto v = ES::Long;
+        v += "x";
+        r."str-long-append" = sprintf("%y", v);
+    }
+    {
+        auto v = ES::Short;
+        v += 1;
+        r."str-append-int" = sprintf("%y", v);
+    }
+    {
+        auto v = ES::Long;
+        v += ES::Short;
+        r."str-append-enum" = sprintf("%y", v);
+    }
+    {
+        auto v = ES::Long;
+        auto w = v;
+        w += "x";
+        r."str-copy-append" = sprintf("%y %y", v, w);
+    }
+    {
+        auto v = ES::Long;
+        for (int i = 0; i < 20; ++i) {
+            v += "x";
+        }
+        r."str-append-loop" = sprintf("%y", v);
+    }
+    {
+        auto v = ES::Long;
+        v =~ s/long/short/;
+        auto w = ES::Short;
+        w =~ s/4/5/;
+        r."str-regex-subst" = sprintf("%y %y", v, w);
+    }
+    {
+        auto v = ES::Long;
+        v =~ tr/a-z/A-Z/;
+        auto w = ES::Short;
+        w =~ tr/0-9/a-j/;
+        r."str-transliterate" = sprintf("%y %y", v, w);
+    }
+    {
+        auto v = ES::Long;
+        splice v, 0, 2;
+        auto w = ES::Short;
+        splice w, 0, 1;
+        r."str-splice" = sprintf("%y %y", v, w);
+    }
+    {
+        auto v = ES::Long;
+        splice v, 0, 1, "A";
+        auto w = ES::Short;
+        splice w, 1, 1, "3";
+        r."str-splice-replace" = sprintf("%y %y", v, w);
+    }
+    {
+        auto v = ES::Long;
+        auto e = extract v, 0, 2;
+        auto w = ES::Short;
+        auto f = extract w, 0, 1;
+        r."str-extract" = sprintf("%y %y %y %y", v, e, w, f);
+    }
+    {
+        auto v = ES::Padded;
+        trim v;
+        r."str-trim" = sprintf("%y", v);
+    }
+    {
+        auto v = ES::Line;
+        chomp v;
+        r."str-chomp" = sprintf("%y", v);
+    }
+    {
+        auto v = ES::Short;
+        v++;
+        auto w = ES::Short;
+        ++w;
+        auto x = ES::Short;
+        x--;
+        auto y = ES::Short;
+        --y;
+        r."str-inc-dec" = sprintf("%y %y %y %y", v, w, x, y);
+    }
+    {
+        auto v = ES::Short;
+        v -= 2;
+        auto w = ES::Short;
+        w *= 2;
+        auto x = ES::Short;
+        x /= 2;
+        auto y = ES::Short;
+        y %= 5;
+        r."str-int-ops" = sprintf("%y %y %y %y", v, w, x, y);
+    }
+    {
+        string v = ES::Long;
+        v += "x";
+        r."str-typed-local" = sprintf("%y", v);
+    }
+
+    # number, float and int enums
+    {
+        auto v = EN::Big;
+        v += 1n;
+        auto w = EN::Small;
+        w -= 1n;
+        auto x = EN::Big;
+        x *= 2n;
+        auto y = EN::Big;
+        y /= 2n;
+        r."num-ops" = sprintf("%y %y %y %y", v, w, x, y);
+    }
+    {
+        auto v = EN::Big;
+        v++;
+        auto w = EN::Big;
+        ++w;
+        auto x = EN::Big;
+        x--;
+        auto y = EN::Big;
+        --y;
+        r."num-inc-dec" = sprintf("%y %y %y %y", v, w, x, y);
+    }
+    {
+        auto v = EN::Small;
+        v += 1;
+        auto w = EN::Small;
+        w += 1.0;
+        r."num-mixed" = sprintf("%y %y", v, w);
+    }
+    {
+        auto v = EF::Half;
+        v += 1.0;
+        auto w = EF::Big;
+        w -= 1.0;
+        auto x = EF::Big;
+        x *= 2.0;
+        auto y = EF::Big;
+        y /= 2.0;
+        r."float-ops" = sprintf("%y %y %y %y", v, w, x, y);
+    }
+    {
+        auto v = EF::Half;
+        v++;
+        auto w = EF::Half;
+        --w;
+        r."float-inc-dec" = sprintf("%y %y", v, w);
+    }
+    {
+        auto v = EI::Seven;
+        v += 1;
+        auto w = EI::Seven;
+        w -= 1;
+        auto x = EI::Seven;
+        x *= 3;
+        auto y = EI::Seven;
+        y /= 2;
+        r."int-ops" = sprintf("%y %y %y %y", v, w, x, y);
+    }
+    {
+        auto v = EI::Seven;
+        v %= 4;
+        auto w = EI::Seven;
+        w |= 8;
+        auto x = EI::Seven;
+        x &= 3;
+        auto y = EI::Seven;
+        y ^= 1;
+        auto z = EI::Seven;
+        z <<= 2;
+        auto u = EI::Seven;
+        u >>= 1;
+        r."int-bit-ops" = sprintf("%y %y %y %y %y %y", v, w, x, y, z, u);
+    }
+    {
+        auto v = EI::Seven;
+        v++;
+        auto w = EI::Seven;
+        --w;
+        auto x = EI::Seven;
+        x += 0.5;
+        r."int-inc-dec" = sprintf("%y %y %y", v, w, x);
+    }
+
+    # hash and list members
+    {
+        hash<auto> h = {};
+        h.a = ES::Long;
+        h.b = ES::Short;
+        h.a += "x";
+        h.b += "y";
+        r."hash-append" = sprintf("%y", h);
+    }
+    {
+        hash<string, string> h = {"a": ES::Long, "b": ES::Long, "c": ES::Long};
+        h.a =~ s/long/short/;
+        splice h.b, 0, 2;
+        h.c += "x";
+        r."typed-hash-ops" = sprintf("%y", h);
+    }
+    {
+        hash<auto> h = {};
+        h.a = ES::Long;
+        h.b = ES::Padded;
+        h.c = ES::Line;
+        h.d = ES::Short;
+        auto e = extract h.a, 0, 2;
+        trim h.b;
+        chomp h.c;
+        splice h.d, 0, 1;
+        r."hash-member-ops" = sprintf("%y %y", h, e);
+    }
+    {
+        hash<auto> h = {};
+        h.n = EN::Big;
+        h.f = EF::Half;
+        h.i = EI::Seven;
+        h.n += 1n;
+        h.n++;
+        h.f *= 4.0;
+        h.i <<= 1;
+        r."hash-numeric" = sprintf("%y", h);
+    }
+    {
+        list<auto> l = ();
+        l[0] = ES::Long;
+        l[1] = ES::Short;
+        l[2] = EN::Big;
+        l[0] += "x";
+        l[1] += "y";
+        ++l[2];
+        r."list-append" = sprintf("%y", l);
+    }
+    {
+        list<auto> l = ();
+        l[0] = ES::Long;
+        l[1] = ES::Long;
+        splice l[0], 0, 2;
+        l[1] =~ s/long/short/;
+        r."list-element-ops" = sprintf("%y", l);
+    }
+    {
+        list<auto> l = (ES::Padded, ES::Long, 1);
+        hash<auto> h = {"a": ES::Padded, "b": 1};
+        trim l;
+        trim h;
+        r."container-trim" = sprintf("%y %y", l, h);
+    }
+    {
+        list<auto> l = (ES::Line, ES::Long, 1);
+        hash<auto> h = {"a": ES::Line, "b": 1};
+        chomp l;
+        chomp h;
+        r."container-chomp" = sprintf("%y %y", l, h);
+    }
+
+    {
+        # short string enum values (held inline) in containers
+        list<auto> l = (ES::PadShort, ES::LineShort);
+        hash<auto> h = {"a": ES::PadShort, "b": ES::LineShort};
+        hash<auto> m = {};
+        m.a = ES::PadShort;
+        m.b = ES::LineShort;
+        trim l;
+        chomp h;
+        trim m.a;
+        chomp m.b;
+        r."container-short" = sprintf("%y %y %y", l, h, m);
+    }
+
+    # object members
+    {
+        Holder o();
+        o.a += "x";
+        o.s += "y";
+        o.n += 1n;
+        o.i += 1;
+        r."object-members" = sprintf("%y %y %y %y", o.a, o.s, o.n, o.i);
+    }
+    {
+        Holder o();
+        r."object-method" = o.append();
+    }
+
+    # references
+    {
+        auto v = ES::Long;
+        append_ref(\v);
+        auto w = ES::Short;
+        append_ref(\w);
+        r."ref-local" = sprintf("%y %y", v, w);
+    }
+    {
+        auto v = ES::Long;
+        splice_ref(\v);
+        r."ref-splice" = sprintf("%y", v);
+    }
+    {
+        hash<auto> h = {};
+        h.a = ES::Long;
+        append_ref(\h.a);
+        r."ref-hash-member" = sprintf("%y", h);
+    }
+    {
+        auto v = EN::Big;
+        number_ref(\v);
+        r."ref-number" = sprintf("%y", v);
+    }
+    {
+        auto v = ES::Padded;
+        trim(\v);
+        auto w = ES::Line;
+        chomp(\w);
+        r."ref-functions" = sprintf("%y %y", v, w);
+    }
+    {
+        auto v = ES::Long;
+        reference<auto> rv = \v;
+        rv += "x";
+        r."ref-variable" = sprintf("%y", v);
+    }
+    {
+        list<auto> l = ();
+        l[0] = ES::Long;
+        l[1] = ES::Short;
+        foreach auto x in (\l) {
+            x += "x";
+        }
+        r."foreach-ref" = sprintf("%y", l);
+    }
+
+    # global variables
+    {
+        our auto gs;
+        our auto gn;
+        gs = ES::Long;
+        gs += "x";
+        gn = EN::Big;
+        gn += 1n;
+        r."global" = sprintf("%y %y", gs, gn);
+    }
+
+    # a member is never changed by a modification of a value copied from it
+    {
+        int bad = 0;
+        string expected = ES::Long + "x";
+        for (int i = 0; i < 1000; ++i) {
+            auto v = ES::Long;
+            v += "x";
+            if (v != expected || ES::Long != "a long string value that is not short") {
+                ++bad;
+            }
+            auto w = ES::Short;
+            w += "x";
+            if (w != "42x" || ES::Short != "42") {
+                ++bad;
+            }
+        }
+        r."loop" = sprintf("%d", bad);
+    }
+
+    r.members = replace(sprintf("%y", (ES::Short, ES::Long, ES::Padded, ES::Line, ES::PadShort, ES::LineShort,
+        EN::Small, EN::Big, EF::Half, EF::Big, EI::One, EI::Seven)), "\n", "\\n");
+    return r;
+}
+
+sub append_ref(reference<auto> r) {
+    r += "x";
+}
+
+sub splice_ref(reference<auto> r) {
+    splice r, 0, 2;
+    r =~ s/long/short/;
+}
+
+sub number_ref(reference<auto> r) {
+    r += 1n;
+    r++;
+}
+
+hash<string, string> results = check();
+map printf("%s=%s\n", $1.key, $1.value), results.pairIterator();

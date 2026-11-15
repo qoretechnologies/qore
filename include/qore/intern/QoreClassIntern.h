@@ -84,6 +84,9 @@ DLLLOCAL uint64_t qore_get_method_dispatch_epoch();
 //! Increments the epoch returned by qore_get_method_dispatch_epoch()
 DLLLOCAL void qore_bump_method_dispatch_epoch();
 
+//! Returns the address of the epoch returned by qore_get_method_dispatch_epoch(), which JIT code reads inline
+DLLLOCAL const std::atomic<uint64_t>* qore_get_method_dispatch_epoch_addr();
+
 //! Returns a new process-unique class instance serial number; never 0 and never reused
 /** Private hashdecls and enums take their serial numbers from the same sequence, so no two classes, hashdecls or
     enums ever have the same serial number; see qore_get_type_identity_serial()
@@ -373,8 +376,12 @@ public:
     DLLLOCAL ConstructorMethodVariant(ClassAccess n_access, int64 n_flags, bool n_is_user = false) : MethodVariantBase(n_access, false, n_flags, n_is_user) {
     }
     DLLLOCAL virtual const BCAList* getBaseClassArgumentList() const = 0;
-    DLLLOCAL virtual void evalConstructor(const QoreClass &thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const = 0;
-    DLLLOCAL virtual void evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
+    //! Returns whether construction completed, before releasing its arguments (#6086).
+    /** A true result can accompany an exception from parameter or argument cleanup.  In that case the completed
+        object must be released normally, rather than obliterated as a partially constructed object.
+    */
+    DLLLOCAL virtual bool evalConstructor(const QoreClass &thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const = 0;
+    DLLLOCAL virtual bool evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const = 0;
 };
 
@@ -510,32 +517,20 @@ public:
         return bcal;
     }
 
-    DLLLOCAL virtual void evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
+    DLLLOCAL virtual bool evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
         BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override;
 
-    DLLLOCAL void evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
+    DLLLOCAL bool evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
             CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
-        evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
+        return evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
     }
 
-    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL bool evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
     template <bool Lexical>
-    DLLLOCAL void evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInit(QoreFunction* f) override;
-
-    //! Move BCAList from another constructor variant (for AOT fallback transplanting)
-    /** Takes ownership of the source's BCAList, leaving the source with nullptr.
-        This is needed when the main program's constructor was deserialized without
-        BCA (no source), and the fallback source parse provides the correct BCAList.
-    */
-    DLLLOCAL void transplantBCAList(UserConstructorVariant* src) {
-        if (src && src->bcal && !bcal) {
-            bcal = src->bcal;
-            src->bcal = nullptr;
-        }
-    }
 
     //! Set the BCAList for AOT deserialization (takes ownership)
     DLLLOCAL void setBCAList(BCAList* n_bcal);  // defined in QoreClass.cpp
@@ -546,9 +541,9 @@ class LexicalBaseConstructorVariant : public UserConstructorVariant {
 public:
     using UserConstructorVariant::UserConstructorVariant;
 
-    DLLLOCAL void evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
+    DLLLOCAL bool evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
             BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
-        evalLexicalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
+        return evalLexicalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
     }
 };
 
@@ -786,17 +781,17 @@ public:
     DLLLOCAL BuiltinConstructorValueVariant(q_constructor_t m, ClassAccess n_access, int64 n_flags = QCF_USES_EXTRA_ARGS, int64 n_functionality = QDOM_DEFAULT, const type_vec_t &n_typeList = type_vec_t(), const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t()) : BuiltinConstructorVariantBase(n_access, n_flags, n_functionality, n_typeList, n_defaultArgList, n_names), constructor(m) {
     }
 
-    DLLLOCAL virtual void evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL virtual bool evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
-    DLLLOCAL void evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
+    DLLLOCAL bool evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
             CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
-        evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
+        return evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
     }
 
-    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL bool evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
     template <bool Lexical>
-    DLLLOCAL void evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 };
 
 class BuiltinExternalConstructorValueVariant : public BuiltinConstructorVariantBase {
@@ -808,17 +803,17 @@ public:
     DLLLOCAL BuiltinExternalConstructorValueVariant(const void* n_ptr, q_external_constructor_t m, ClassAccess n_access, int64 n_flags = QCF_USES_EXTRA_ARGS, int64 n_functionality = QDOM_DEFAULT, const type_vec_t &n_typeList = type_vec_t(), const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t()) : BuiltinConstructorVariantBase(n_access, n_flags, n_functionality, n_typeList, n_defaultArgList, n_names), constructor(m), ptr(n_ptr) {
     }
 
-    DLLLOCAL virtual void evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL virtual bool evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
-    DLLLOCAL void evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
+    DLLLOCAL bool evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
             CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
-        evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
+        return evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
     }
 
-    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL bool evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
     template <bool Lexical>
-    DLLLOCAL void evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 };
 
 class BuiltinDestructorVariantBase : public DestructorMethodVariant, public BuiltinFunctionVariantBase {
@@ -933,6 +928,12 @@ public:
             const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
+    //! as evalMethod(), with a temporary argument list that the caller owns, whose values the parameters take over,
+    //! as the AST interpreter's call moves its evaluated arguments into the parameters (issue #5882)
+    DLLLOCAL QoreValue evalMethodGivenArgs(ExceptionSink* xsink, RuntimeConfig& rc,
+            const AbstractQoreFunctionVariant* variant, QoreObject* self, QoreListNode* args,
+            const qore_class_private* cctx, QoreProgram* pgm_ctx) const;
+
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     // resolved_variant, if given, is set to the variant called if it can be reused for another call with arguments of
     // the same types, otherwise to nullptr (a variant selected by checking the elements of an argument)
@@ -1023,6 +1024,12 @@ public:
             const QoreTypeInfo* receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
+    //! as evalMethod(), with a temporary argument list that the caller owns, whose values the parameters take over,
+    //! as the AST interpreter's call moves its evaluated arguments into the parameters (issue #5882)
+    DLLLOCAL QoreValue evalMethodGivenArgs(ExceptionSink* xsink, RuntimeConfig& rc,
+            const AbstractQoreFunctionVariant* variant, QoreListNode* args,
+            const qore_class_private* cctx, QoreProgram* pgm_ctx, const QoreTypeInfo* receiver_type_info) const;
+
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     // resolved_variant, if given, is set to the variant called if it can be reused for another call with arguments of
     // the same types, otherwise to nullptr (a variant selected by checking the elements of an argument)
@@ -1073,16 +1080,16 @@ public:
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     //! @param tmp_args true if \a args is a temporary list with one reference, whose values the call takes over
     //! (see CodeEvaluationHelper), instead of copying the list to convert an argument
-    DLLLOCAL void evalConstructor(const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
+    DLLLOCAL bool evalConstructor(const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
             QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc,
             ExceptionSink* xsink, bool tmp_args = false) const;
 
-    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
+    DLLLOCAL bool evalConstructor(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
             QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc,
             ExceptionSink* xsink, bool tmp_args = false) const;
 
     template <bool Lexical>
-    DLLLOCAL void evalConstructorImpl(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
+    DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
             QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc,
             ExceptionSink* xsink, bool tmp_args = false) const;
 
@@ -2256,8 +2263,6 @@ public:
     DLLLOCAL const QoreVarInfo* parseFindVar(const char* name, const qore_class_private*& qc, ClassAccess& n_access,
             bool toplevel) const;
 
-    DLLLOCAL const QoreClass* findInHierarchy(const qore_class_private& qc);
-
     DLLLOCAL const QoreClass* getClass(qore_classid_t cid, ClassAccess& n_access, bool toplevel) const;
     DLLLOCAL const QoreClass* getClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
     DLLLOCAL const QoreClass* parseGetClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
@@ -2285,8 +2290,6 @@ public:
     DLLLOCAL QoreValue parseFindConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool &found,
             const qore_class_private* class_ctx, bool allow_internal,
             const QoreProgramLocation* consumer_loc = nullptr) const;
-
-    DLLLOCAL int addBaseClassesToSubclass(QoreClass* child, bool is_virtual);
 
     DLLLOCAL void initializeBuiltin();
 };
@@ -2406,13 +2409,11 @@ public:
 
     DLLLOCAL bool isBaseClass(QoreClass* qc, bool toplevel) const;
 
-    DLLLOCAL int addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bool is_virtual) {
-        for (auto& i : *this) {
-            if ((*i).addBaseClassesToSubclass(child, is_virtual))
-                return -1;
-        }
-        return sml.addBaseClassesToSubclass(thisparent, child, is_virtual);
-    }
+    //! adds the classes of the hierarchy of \a thisparent, whose base classes these are, to the hierarchy of \a child
+    /** Walks the hierarchy iteratively, as it can be as long as the code declares it (issue #6047); see
+        qore_class_private::addBaseClassesToSubclass()
+    */
+    DLLLOCAL int addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bool is_virtual);
 
     DLLLOCAL void rescanParents(QoreClass* cls);
 
@@ -3936,6 +3937,7 @@ public:
         scl->addAncestors(m);
     }
 
+    //! adds the static methods of the base classes that the method overrides, to the most distant base class
     DLLLOCAL void parseAddStaticAncestors(QoreMethod* m) {
         if (!scl) {
             return;
@@ -3944,12 +3946,14 @@ public:
         scl->parseAddStaticAncestors(m);
     }
 
+    //! adds the methods of the base classes that the method overrides, to the most distant base class
     DLLLOCAL void parseAddAncestors(QoreMethod* m) {
         //printd(5, "qore_class_private::parseAddAncestors(%p %s) this: %p cls: %p %s scl: %p\n", m, m->getName(), this, cls, name.c_str(), scl);
         assert(strcmp(m->getName(), "constructor"));
 
-        if (!scl)
+        if (!scl) {
             return;
+        }
 
         scl->parseAddAncestors(m);
     }
@@ -4065,6 +4069,9 @@ public:
                 taken = spgm.compare_exchange_strong(expected, nullptr);
             }
             if (taken) {
+                // the method lookups cached for the class are no longer known to be stable (QoreCallTargetCheckCache,
+                // issue #5824)
+                qore_bump_method_dispatch_epoch();
                 releaseSourceProgram(expected, xsink);
             }
         }
@@ -4082,6 +4089,8 @@ public:
                 }
             }
             if (p) {
+                // see above
+                qore_bump_method_dispatch_epoch();
                 releaseSourceProgram(p, xsink);
             }
         }
@@ -4370,6 +4379,32 @@ public:
     DLLLOCAL void generateBuiltinSignature(const char* nspath);
     DLLLOCAL void initializeBuiltin();
 
+    //! Raises the error that evalMethod() raises before it evaluates the arguments of a call (issue #5824)
+    /** The method looked up by name is private, or there is neither a method, a member holding a call reference,
+        a pseudo-method of the "<object>" class nor a methodGate; runs no Qore code.
+
+        @return -1 if the error was raised, 0 if the call can be made
+    */
+    DLLLOCAL int checkMethodForEval(const QoreObject* self, const char* nme, const qore_class_private* class_ctx,
+            ExceptionSink* xsink, bool* found_method = nullptr) const;
+
+    //! Returns true if the lookup of a method of the class by name depends only on the class and the class context
+    /** The class's source Program is the thread's current Program, which cannot be deleted while the thread runs in
+        it, or a module Program within the module lifetime: getMethodForEval() then raises no error for the lifecycle
+        of the source Program (see getSourceProgramForCall()), so a method found can be cached
+        (QoreCallTargetCheckCache, issue #5824)
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool runtimeMethodLookupIsStable() const {
+        return runtimeMethodLookupIsStable(::getProgram());
+    }
+
+    //! runtimeMethodLookupIsStable() with the thread's current Program @a current_pgm, which the caller knows
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool runtimeMethodLookupIsStable(const QoreProgram* current_pgm) const {
+        QoreProgram* p = spgm.load();
+        return p && (p == current_pgm
+            || (spgm_module_lifetime.load(std::memory_order_acquire) && qore_module_lifetime_active()));
+    }
+
     //! calls the named method of the object, resolved at run time
     /** @param pgm_ctx the Program that the call runs in, if not the current Program: a call reference created in
         another Program runs as a direct call there does (see RunTimeObjectMethodReferenceNode::execValue()); a user
@@ -4390,6 +4425,12 @@ public:
             const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             QoreProgram* pgm_ctx = nullptr) const;
+
+    //! as evalMethod() by name, with a temporary argument list that the caller owns, whose values the parameters of
+    //! a method found take over, as the AST interpreter's call moves its evaluated arguments into the parameters
+    //! (issue #5882)
+    DLLLOCAL QoreValue evalMethodGivenArgs(QoreObject* self, const char* nme, QoreListNode* args,
+            const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink, QoreProgram* pgm_ctx) const;
 
     DLLLOCAL QoreValue evalMethodGate(QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
 
@@ -4616,10 +4657,12 @@ public:
     DLLLOCAL qore_type_result_e runtimeCheckCompatibleClass(const qore_class_private& oc) const;
     DLLLOCAL qore_type_result_e runtimeCheckCompatibleClassIntern(const qore_class_private& oc) const;
 
-    // find the given class anywhere in the hierarchy regardless of access permissions or location
+    //! finds the given class anywhere in the hierarchy regardless of access permissions or location
+    /** The hierarchy is walked iteratively (see BCList::findInHierarchy()) */
     DLLLOCAL const QoreClass* findInHierarchy(const qore_class_private& qc) {
-        if (equal(qc))
+        if (equal(qc)) {
             return cls;
+        }
         return scl ? scl->findInHierarchy(qc) : nullptr;
     }
 
@@ -5139,6 +5182,19 @@ protected:
     //! The declarations named by the types of the members, static variables and method signatures
     DLLLOCAL void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const;
 
+    //! The base classes (the special method list of the class holds a reference to each) and the source of an imported
+    //! class
+    DLLLOCAL void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const {
+        if (scl) {
+            for (auto& i : scl->sml) {
+                refs.push_back(&i.first->priv->type_owner);
+            }
+        }
+        if (import_source) {
+            refs.push_back(&import_source->type_owner);
+        }
+    }
+
     DLLLOCAL void refTypeOwner() {
         ref();
     }
@@ -5412,22 +5468,22 @@ public:
     }
 
     template <bool Lexical, typename... Args>
-    DLLLOCAL void evalConstructorWithPolicy(LexicalSemanticPolicy policy, Args&&... args) {
-        if constexpr (Lexical) evalConstructor(policy, std::forward<Args>(args)...);
-        else evalConstructor(std::forward<Args>(args)...);
+    DLLLOCAL bool evalConstructorWithPolicy(LexicalSemanticPolicy policy, Args&&... args) {
+        if constexpr (Lexical) return evalConstructor(policy, std::forward<Args>(args)...);
+        else return evalConstructor(std::forward<Args>(args)...);
     }
 
-    DLLLOCAL void evalConstructor(const AbstractQoreFunctionVariant* variant, QoreObject* self,
+    DLLLOCAL bool evalConstructor(const AbstractQoreFunctionVariant* variant, QoreObject* self,
             const QoreListNode* args, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink,
             bool tmp_args = false) {
-        CONMF(func)->evalConstructor(variant, *parent_class, self, args, parent_class->priv->scl, bceal, rc, xsink,
+        return CONMF(func)->evalConstructor(variant, *parent_class, self, args, parent_class->priv->scl, bceal, rc, xsink,
             tmp_args);
     }
 
-    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, QoreObject* self,
+    DLLLOCAL bool evalConstructor(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, QoreObject* self,
             const QoreListNode* args, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink,
             bool tmp_args = false) {
-        CONMF(func)->evalConstructor(policy, variant, *parent_class, self, args, parent_class->priv->scl, bceal, rc, xsink,
+        return CONMF(func)->evalConstructor(policy, variant, *parent_class, self, args, parent_class->priv->scl, bceal, rc, xsink,
             tmp_args);
     }
 
@@ -5621,6 +5677,21 @@ public:
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) {
         return m.priv->eval(policy, xsink, rc, self, args, cctx, pgm_ctx, receiver_type_info,
             explicit_type_param_instantiation);
+    }
+
+    //! as eval(), with a temporary argument list that the caller owns, whose values the parameters take over, as the
+    //! AST interpreter's call moves its evaluated arguments into the parameters (issue #5882)
+    DLLLOCAL static QoreValue evalGivenArgs(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
+            QoreObject* self, QoreListNode* args, const qore_class_private* cctx = nullptr,
+            QoreProgram* pgm_ctx = nullptr) {
+        qore_method_private* priv = m.priv;
+        if (!priv->static_flag) {
+            assert(self);
+            return NMETHF(priv->func)->evalMethodGivenArgs(xsink, rc, nullptr, self, args, cctx, pgm_ctx);
+        }
+        // as eval(): the receiver of a static method called through an object is the object's type (issue #5769)
+        return SMETHF(priv->func)->evalMethodGivenArgs(xsink, rc, nullptr, args, cctx, pgm_ctx,
+            self ? qore_get_object_receiver_type_info(self) : nullptr);
     }
 
     DLLLOCAL static QoreValue evalTmpArgs(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,

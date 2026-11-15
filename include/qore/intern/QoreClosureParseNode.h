@@ -134,8 +134,12 @@ public:
     //! Returns true if the default values of the closure are evaluated with its object (issue #5931)
     DLLLOCAL bool defaultsNeedObject() const { return defaults_need_object; }
 
+    //! calls the closure
+    /** @param tmp_args true if \a args is a temporary list whose values the parameters can take over (see
+        UserClosureFunction::evalClosure())
+    */
     DLLLOCAL QoreValue exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
-        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;
+        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args = false) const;
 
     //! calls the closure with arguments in source order with the names in \a arg_names, which are bound to the
     //! parameters of the closure by name (M4 phase 3)
@@ -188,5 +192,18 @@ private:
     DLLLOCAL QoreClosureBase* evalClosure() const;
     DLLLOCAL QoreClosureBase* evalObjectClosure() const;
 };
+
+//! Returns the node as a QoreClosureParseNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const QoreClosureParseNode*>(), from the node type: QoreClosureParseNode has no
+    subclasses, and only its constructors give NT_CLOSURE.  A dynamic_cast searches the class hierarchy with string
+    comparisons of the type names, which costs about 47 instructions on every closure that AOT code creates.
+*/
+DLLLOCAL inline const QoreClosureParseNode* qore_get_closure_parse_node(const AbstractQoreNode* n) {
+    const QoreClosureParseNode* rv = (n && n->getType() == NT_CLOSURE)
+        ? static_cast<const QoreClosureParseNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const QoreClosureParseNode*>(n));
+    return rv;
+}
 
 #endif

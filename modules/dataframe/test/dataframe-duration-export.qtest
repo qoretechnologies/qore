@@ -80,6 +80,15 @@ class DataFrameDurationExportTest inherits QUnit::Test {
                 )}},
             }));
             assertThrows("DATAFRAME-IO-ERROR", \df.toArrowIpc(), (), sprintf("list of %s in %s", spec[0], spec[1]));
+            # the error gives the parts of a duration (qore#6116)
+            if (spec[0] == "duration") {
+                try {
+                    df.toArrowIpc();
+                } catch (hash<ExceptionInfo> ex) {
+                    assertRegex("the duration of 300000 years, 0 months, 0 days", ex.desc,
+                        sprintf("the error of a list of durations in %s", spec[1]));
+                }
+            }
         }
         # in the range, a list of durations in ms keeps its values
         DataFrame::DataFrame ok = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({

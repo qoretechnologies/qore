@@ -14,6 +14,7 @@
 #include <qore/QoreParseOptions.h>
 #include <qore/QoreValue.h>
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -155,6 +156,23 @@ DLLLOCAL int qore_plugin_get_type_info(const char* module_name, uint16_t local_t
 DLLLOCAL int qore_plugin_get_llvm_codegen_info(uint32_t global_operation_id,
     QorePluginLLVMCodegenInfo& info, ExceptionSink* xsink);
 DLLLOCAL bool qore_plugin_has_registered_operations();
+
+//! Returns true if a plugin operation of a module that the Program uses can apply to operands of the given types
+//! only for some of their values (an or-nothing or a union type that includes the plugin's type; qore#5911)
+/** An operation that applies to every value of the types is resolved at parse time
+    (qore_plugin_resolve_program_operation_info()); one that may apply is dispatched at runtime, so an operator
+    for such operands is not specialized for the other types, and its result type is not only that of the
+    operator without plugins.
+*/
+DLLLOCAL bool qore_plugin_operation_may_apply(QoreProgram* pgm, const QoreTypeInfo* lhs_type,
+        const QoreTypeInfo* rhs_type, const char* operation_name, QorePluginHelperAbi helper_abi);
+
+//! Returns true if a binary plugin operation can apply to operands of the given parse types (qore#5911)
+/** an operand without type information can have a value of any type
+*/
+DLLLOCAL bool qore_plugin_binary_operation_may_apply(QoreProgram* pgm, const QoreTypeInfo* lhs_type,
+        const QoreTypeInfo* rhs_type, const char* operation_name);
+
 DLLLOCAL int qore_plugin_get_lowering_infos(QoreProgram* pgm, qore_type_t node_type,
     std::vector<QorePluginLoweringInfo>& infos, ExceptionSink* xsink);
 DLLLOCAL int qore_plugin_resolve_program_operation_info(QoreProgram* pgm, const QoreTypeInfo* lhs_type,
@@ -207,6 +225,32 @@ DLLEXPORT uint64_t qore_rt_plugin_dense_buffer_binary_values(uint32_t global_ope
     uint64_t result_buffer_bits, uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
 DLLEXPORT int64_t qore_rt_guard_plugin_type_profiled(uint64_t value_bits, const QoreTypeInfo* type_info,
     const char* module_name, uint32_t local_type_id);
+//! Returns the process-global id of a plugin operation for AOT code, which dispatches the operation with it
+//! (qore#6136)
+/** Process-global operation ids are assigned when plugin modules are loaded, so they depend on the order in which
+    they are loaded; AOT code names an operation by its module-local reference (module name, plugin-local id and
+    signature hash), which is resolved on the first call of a site and stored in \a cache, which the site reads first.
+
+    @return the id, or 0 with an exception raised in \a xsink if the module is not loaded, has no operation with the
+    local id or the operation's signature differs (0 is not cached); the dispatch helpers raise no other exception
+    for id 0 then
+*/
+DLLEXPORT uint32_t qore_rt_plugin_operation_id_aot(const char* module_name, uint32_t local_operation_id,
+    uint32_t canonical_signature_version, uint64_t signature_hash, std::atomic<uint32_t>* cache,
+    ExceptionSink* xsink);
+//! Returns the runtime helper of a plugin operation for AOT code, which calls it in place of the operation's LLVM
+//! codegen extension (qore#6130)
+/** AOT code cannot call the symbol that an extension names: the symbol is in the plugin module, which is loaded at
+    run time, and not in libqore or the executable.  The operation is resolved by its module-local reference, as the
+    process-global operation id is assigned at run time, and the helper is stored in \a cache, which the call site
+    reads first.
+
+    @return the helper, or, if the operation cannot be resolved, a helper of the given ABI that returns NOTHING (with
+    the exception raised in \a xsink; it is not cached)
+*/
+DLLEXPORT void* qore_rt_plugin_operation_helper_aot(const char* module_name, uint32_t local_operation_id,
+    uint32_t canonical_signature_version, uint64_t signature_hash, uint32_t helper_abi, std::atomic<void*>* cache,
+    ExceptionSink* xsink);
 }
 
 #endif

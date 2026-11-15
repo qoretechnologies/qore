@@ -2942,6 +2942,45 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # file it ever depended on (see _QORE_DEPFILE_FRESH_READ_COMMAND())
     _QORE_DEPFILE_FRESH_READ_COMMAND(_qmod_depfile_fresh_read_command ${_name}-qmod)
 
+    # A module with %try-module directives is compiled without the modules that are not available then, which the
+    # module loader refuses once one of them is (AOT-MODULE-STALE): the .qmod depends on a stamp that is rewritten
+    # only when one of the paths where those modules could be installed exists, and that is checked by every build
+    # (cmake/QoreOptionalModuleStamp.cmake, qore#6145).  Only the modules whose sources have the directive get the
+    # check; a directive added to a module is seen when CMake runs again.
+    if (${_is_dir})
+        file(GLOB _qmod_try_sources "${_source_root}/*.qm" "${_source_root}/*.qc")
+    else()
+        set(_qmod_try_sources "${_source_root}")
+    endif()
+    set(_qmod_optional_stamp "")
+    foreach (_qmod_try_source IN LISTS _qmod_try_sources)
+        if (EXISTS "${_qmod_try_source}" AND NOT IS_DIRECTORY "${_qmod_try_source}")
+            file(STRINGS "${_qmod_try_source}" _qmod_try_lines LIMIT_COUNT 1
+                REGEX "^[ \t]*%try-(reexport-)?module[ \t(]")
+            if (_qmod_try_lines)
+                set(_qmod_optional_stamp ${_qmod_out}.optional.stamp)
+                break()
+            endif()
+        endif()
+    endforeach()
+    if (_qmod_optional_stamp)
+        # an output that is never made, so that the check runs in every build
+        set(_qmod_optional_check ${_qmod_out}.optional.check)
+        set_source_files_properties(${_qmod_optional_check} PROPERTIES SYMBOLIC TRUE)
+        add_custom_command(
+            OUTPUT ${_qmod_optional_check}
+            COMMAND ${CMAKE_COMMAND} -E echo_append ""
+            VERBATIM
+        )
+        add_custom_command(
+            OUTPUT ${_qmod_optional_stamp}
+            COMMAND ${CMAKE_COMMAND} -DCANDIDATES=${_qmod_dep}.optional -DSTAMP=${_qmod_optional_stamp}
+                -P ${QORE_CMAKE_DIR}/QoreOptionalModuleStamp.cmake
+            DEPENDS ${_qmod_optional_check} ${QORE_CMAKE_DIR}/QoreOptionalModuleStamp.cmake
+            VERBATIM
+        )
+    endif()
+
     # For split-dir modules, collect sibling resource files at cmake-time
     # so they can be declared as BYPRODUCTS of the copy step and tracked
     # by make for rebuild triggers when the source changes.  CONFIGURE_DEPENDS
@@ -3006,6 +3045,14 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     if (DEFINED QORE_AOT_PROBE_STAMP)
         set(_qmod_probe_dep ${QORE_AOT_PROBE_STAMP})
     endif()
+    # In the Qore build, each qmod also depends on the AOT runtime identity header, which qcc-format-version rewrites
+    # only when the identity changes (qore_aot_runtime_identity_targets() in cmake/QoreMacrosIntern.cmake): a qmod
+    # older than the header was compiled for a previous identity and is refused by the libqore built with the header,
+    # whatever the fingerprint's modification time says; this also rebuilds the qmods of a build tree in which the
+    # fingerprint was rewritten after its qmods had been compiled for the previous identity (qore#6221)
+    if (DEFINED QORE_AOT_RUNTIME_IDENTITY_HEADER)
+        list(APPEND _qmod_probe_dep ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
+    endif()
     # With the qmod build cache (QORE_QMOD_CACHE_DIR, see design/qmod-build-cache.md), qcc runs through the cache
     # tool, which supplies the module from the cache when every input is unchanged; without it the command is qcc's
     set(_qmod_cache_launcher "")
@@ -3031,7 +3078,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 ${_qmod_cache_launcher} ${_qore_qcc_command} ${_qmod_opt_flags} -m ${_source_root}
                 --depfile=${_qmod_dep} --depfile-module-deps=source -o ${_qmod_out}
-            DEPENDS ${ARGN} ${_qmod_jar_srcs} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep}
+            DEPENDS ${ARGN} ${_qmod_jar_srcs} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep} ${_qmod_optional_stamp}
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
@@ -3096,7 +3143,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 ${_qmod_cache_launcher} ${_qore_qcc_command} ${_qmod_opt_flags} -m ${_source_root}
                 --depfile=${_qmod_dep} --depfile-module-deps=source -o ${_qmod_out}
-            DEPENDS ${ARGN} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep}
+            DEPENDS ${ARGN} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep} ${_qmod_optional_stamp}
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
@@ -3672,8 +3719,8 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
                 ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
@@ -3684,8 +3731,8 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
                 ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
@@ -3697,8 +3744,8 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
                 ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
@@ -3709,8 +3756,8 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
                 ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
@@ -4110,8 +4157,8 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
             ${_qdx_qc_commands}
             # Run doxygen
             COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
-            COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/${f}/html/*.html
-            COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/${f}/html/search/*.html
+            COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/${f}/html/*.js
+            COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/${f}/html/search/*.js
 
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
             COMMENT "Generating API documentation with Doxygen for: ${f}" VERBATIM
@@ -4418,8 +4465,8 @@ MACRO (QORE_USER_MODULES _inputs)
             file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/docs/${file}/${qm_install_subdir}/)
             add_custom_target(docs-${file}
                 ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${file}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/html/*.html
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/html/search/*.html
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/html/*.html ${CMAKE_BINARY_DIR}/html/*.js
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/html/search/*.html ${CMAKE_BINARY_DIR}/html/search/*.js
                 WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                 COMMENT "Generating API documentation with Doxygen for: ${file}" VERBATIM
             )

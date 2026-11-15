@@ -97,6 +97,14 @@ public:
         ResolvedCallReferenceNode(n_needs_eval), CallReferenceNodeLocation(loc) {
     }
 
+    //! calls the code with a temporary argument list that the caller owns
+    /** A reference whose call can take the values of the list over for its parameters, as the AST interpreter's call
+        moves its evaluated arguments into the parameters (issue #5882), does so; the others call execValue()
+    */
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+        return execValue(args, xsink);
+    }
+
     //! returns the effective parse options of the context that created the reference value, or nullptr for a
     //! reference that its own code calls in place (a reference in the parse tree)
     /** a call through the reference runs with the permissions of the context that created it: the functional domains
@@ -174,6 +182,8 @@ public:
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const override;
 
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual QoreFunction* getFunction() const;
 
     DLLLOCAL const QoreMethod* getMethod() const {
@@ -212,6 +222,8 @@ public:
             LexicalSemanticPolicy policy, ExceptionSink* xsink) const override;
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const override;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return pgm;
@@ -324,6 +336,8 @@ public:
             LexicalSemanticPolicy policy, ExceptionSink* xsink) const override;
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const override;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 };
 
 class MethodCallReferenceNode : public LocalMethodCallReferenceNode {
@@ -345,6 +359,8 @@ public:
             LexicalSemanticPolicy policy, ExceptionSink* xsink) const override;
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const override;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 };
 
 //! a call reference to a user function from within the same QoreProgram object
@@ -358,6 +374,8 @@ public:
 
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
             const LexicalSemanticPolicy& policy) const override;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
         return LocalFunctionCallReferenceNode::is_equal_hard(v, xsink);
@@ -433,6 +451,8 @@ public:
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
             const LexicalSemanticPolicy& policy) const override;
 
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return pgm;
     }
@@ -470,8 +490,9 @@ class ImportedFunctionEntry;
 //! a run-time call reference to a method of a particular object
 class RunTimeObjectMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
-    //! Raises the exception that execValue() raises for an object that has been deleted before it evaluates the
-    //! arguments (issue #5784)
+    //! Raises the exception of a call of the method for an object that has been deleted, before the arguments are
+    //! evaluated (issue #5784) and when the call is made: naming the class of the method and the method, as the call
+    //! of the method raises it (issue #6083)
     /** @return -1 if the exception was raised, 0 if not
     */
     DLLLOCAL int checkObject(ExceptionSink* xsink) const;
@@ -484,6 +505,8 @@ public:
             LexicalSemanticPolicy policy, ExceptionSink* xsink) const override;
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const override;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreProgram* getProgram() const;
 
@@ -523,8 +546,9 @@ private:
 // is known when the method reference node object is created
 class RunTimeResolvedMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
-    //! Raises the exception that execValue() raises for an object that has been deleted before it evaluates the
-    //! arguments (issue #5784)
+    //! Raises the exception of a call of the method for an object that has been deleted, before the arguments are
+    //! evaluated (issue #5784) and when the call is made: naming the class of the method and the method, as the call
+    //! of the method raises it (issue #6083)
     /** @return -1 if the exception was raised, 0 if not
     */
     DLLLOCAL int checkObject(ExceptionSink* xsink) const;
@@ -541,6 +565,8 @@ public:
             LexicalSemanticPolicy policy, ExceptionSink* xsink) const override;
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const override;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreProgram* getProgram() const;
 

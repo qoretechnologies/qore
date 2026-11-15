@@ -85,11 +85,22 @@ protected:
     DLLEXPORT virtual ~DateTimeNode();
 
 public:
+    //! constructor for an empty absolute date/time value
+    /** Not explicit, like DateTime().
+
+        @since %Qore 3.0 as a separate constructor; before, DateTimeNode(bool) with the default argument \c false
+    */
+    DLLLOCAL DateTimeNode() : DateTimeNode(false) {
+    }
+
     //! constructor for an empty object
     /**
         @param r sets the "relative" flag for the object
+
+        @note explicit since %Qore 3.0: before, any pointer converted implicitly to an empty DateTimeNode through
+        this constructor; the default constructor is DateTimeNode()
     */
-    DLLEXPORT DateTimeNode(bool r = false);
+    DLLEXPORT explicit DateTimeNode(bool r);
 
     //! constructor for setting all parameters
     /**
@@ -107,8 +118,13 @@ public:
     //! constructor for setting an absolute date based on the number of seconds from January 1, 1970
     /**
         @param seconds the number of seconds from January 1, 1970
+
+        @note explicit since %Qore 3.0: before, an integer, a floating-point value or a \c bool converted
+        implicitly to an absolute date through this constructor (\c true to 1970-01-01 00:00:01); construct it
+        explicitly from an \c int64 (<tt>new DateTimeNode((int64)secs)</tt>: an argument of another integer type
+        is ambiguous with DateTimeNode(bool))
     */
-    DLLEXPORT DateTimeNode(int64 seconds);
+    DLLEXPORT explicit DateTimeNode(int64 seconds);
 
     //! constructor for setting an absolute date based on the number of seconds from January 1, 1970 (plus milliseconds)
     /**
@@ -134,8 +150,11 @@ public:
 
     //! constructor for setting the date from a string with a flexible format, silently accepts invalid date strings
     /** @param date the string to use to set the date
+
+        @note explicit since %Qore 3.0: before, any \c char pointer converted implicitly to a DateTimeNode through
+        this constructor
     */
-    DLLEXPORT DateTimeNode(const char* date);
+    DLLEXPORT explicit DateTimeNode(const char* date);
 
     //! constructor for setting the date from a string with a flexible format, throws a Qore-language exception if the date string is invalid
     /** @param date the string to use to set the date
@@ -165,8 +184,11 @@ public:
     //! constructor for setting an absolute date based on a "struct tm"
     /**
         @param tms a structure giving the absolute date to set
+
+        @note explicit since %Qore 3.0: before, a \c struct \c tm pointer converted implicitly to a DateTimeNode
+        through this constructor
     */
-    DLLEXPORT DateTimeNode(struct tm* tms);
+    DLLEXPORT explicit DateTimeNode(struct tm* tms);
 
     //! copy constructor
     DLLEXPORT DateTimeNode(const DateTimeNode& dt);
@@ -245,29 +267,117 @@ public:
     //! adds a DateTime value to the current value and returns the new value, the caller owns the pointer's reference count
     /**
         @return a new DateTimeNode value, the caller owns the pointer's reference count
+
+        @deprecated a result out of range is saturated (it wrapped before %Qore 3.0); use
+        add(const DateTime&, ExceptionSink*) const, which raises \c INVALID-DATE
     */
-    DLLEXPORT DateTimeNode* add(const DateTime* dt) const;
+    QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT DateTimeNode* add(const DateTime* dt) const;
 
     //! adds a DateTime value to the current value and returns the new value, the caller owns the pointer's reference count
     /**
         @return a new DateTimeNode value, the caller owns the pointer's reference count
+
+        @deprecated a result out of range is saturated (it wrapped before %Qore 3.0); use
+        add(const DateTime&, ExceptionSink*) const, which raises \c INVALID-DATE
     */
-    DLLEXPORT DateTimeNode* add(const DateTime& dt) const;
+    QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT DateTimeNode* add(const DateTime& dt) const;
+
+    //! adds a DateTime value to the current value and returns the new value
+    /** @param dt the value to add; a relative date cannot be added to an absolute date
+        @param xsink for an \c INVALID-DATE exception if the result is out of range: a component of a relative date
+        that does not fit a signed 32-bit integer, or an absolute date whose year is not from -2147483647 to
+        2147483646
+
+        @return a new DateTimeNode value, the caller owns the pointer's reference count; nullptr if an exception was
+        raised
+
+        @par Example
+        @code{.cpp}
+        ValueHolder rv(date->add(*period, xsink), xsink);
+        @endcode
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT DateTimeNode* add(const DateTime& dt, ExceptionSink* xsink) const;
+
+    //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+    /** There is no checked overload taking a pointer; pass the value that the pointer refers to
+        (<tt>date->add(*period, xsink)</tt> for a <tt>const DateTime* period</tt>; <tt>**holder</tt> for a
+        <tt>SimpleRefHolder&lt;DateTimeNode&gt; holder</tt>), which add(const DateTime&, ExceptionSink*) const
+        takes.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL DateTimeNode* add(const DateTime* dt, ExceptionSink* xsink) const = delete;
 
     //! subtracts a DateTime value from the current value and returns the new value, the caller owns the pointer's reference count
     /**
         @return a new DateTimeNode value, the caller owns the pointer's reference count
+
+        @deprecated a result out of range is saturated (it wrapped before %Qore 3.0); use
+        subtractBy(const DateTime&, ExceptionSink*) const, which raises \c INVALID-DATE
     */
-    DLLEXPORT DateTimeNode* subtractBy(const DateTime* dt) const;
+    QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT DateTimeNode* subtractBy(const DateTime* dt) const;
 
     //! subtracts a DateTime value from the current value and returns the new value, the caller owns the pointer's reference count
     /**
         @return a new DateTimeNode value, the caller owns the pointer's reference count
+
+        @deprecated a result out of range is saturated (it wrapped before %Qore 3.0); use
+        subtractBy(const DateTime&, ExceptionSink*) const, which raises \c INVALID-DATE
     */
-    DLLEXPORT DateTimeNode* subtractBy(const DateTime& dt) const;
+    QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT DateTimeNode* subtractBy(const DateTime& dt) const;
+
+    //! subtracts a DateTime value from the current value and returns the new value
+    /** @param dt the value to subtract; the difference of two absolute dates is a relative date in hours, minutes,
+        seconds and microseconds
+        @param xsink for an \c INVALID-DATE exception if the result is out of range: a component of a relative date
+        that does not fit a signed 32-bit integer, or an absolute date whose year is not from -2147483647 to
+        2147483646
+
+        @return a new DateTimeNode value, the caller owns the pointer's reference count; nullptr if an exception was
+        raised
+
+        @par Example
+        @code{.cpp}
+        ValueHolder elapsed(end_time->subtractBy(*start_time, xsink), xsink);
+        @endcode
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT DateTimeNode* subtractBy(const DateTime& dt, ExceptionSink* xsink) const;
+
+    //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+    /** There is no checked overload taking a pointer; pass the value that the pointer refers to
+        (<tt>end_time->subtractBy(*start_time, xsink)</tt> for a <tt>const DateTime* start_time</tt>;
+        <tt>**holder</tt> for a <tt>SimpleRefHolder&lt;DateTimeNode&gt; holder</tt>), which
+        subtractBy(const DateTime&, ExceptionSink*) const takes.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL DateTimeNode* subtractBy(const DateTime* dt, ExceptionSink* xsink) const = delete;
 
     //! returns the negative time from the current time
-    DLLEXPORT DateTimeNode* unaryMinus() const;
+    /** @deprecated a relative date with a component that is the smallest int gives a saturated result (it wrapped
+        before %Qore 3.0); use unaryMinus(ExceptionSink*) const, which raises \c INVALID-DATE
+    */
+    QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT DateTimeNode* unaryMinus() const;
+
+    //! returns the negative of the value
+    /** @param xsink for an \c INVALID-DATE exception if a component of a relative date is the smallest signed 32-bit
+        integer, whose negative does not fit
+
+        @return a new DateTimeNode value, the caller owns the pointer's reference count; nullptr if an exception was
+        raised
+
+        @par Example
+        @code{.cpp}
+        ValueHolder back(offset->unaryMinus(xsink), xsink);
+        @endcode
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT DateTimeNode* unaryMinus(ExceptionSink* xsink) const;
 
     //! returns this with an incremented ref count
     DLLEXPORT DateTimeNode* refSelf() const;
@@ -337,8 +447,30 @@ public:
         @note The normalized hour component must fit an int. Hours are never converted to calendar days.
         @par Example
         Return accumulated service uptime with makeRelativeFromSeconds(3600000000LL), yielding 1000000 hours.
+
+        @deprecated hours that do not fit an int are saturated (they wrapped before %Qore 3.0); use
+        makeRelativeFromSeconds(int64, int, ExceptionSink*), which raises \c INVALID-DATE
     */
-    DLLEXPORT static DateTimeNode* makeRelativeFromSeconds(int64 n_second, int n_us = 0);
+    QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT static DateTimeNode* makeRelativeFromSeconds(int64 n_second,
+        int n_us = 0);
+
+    //! static "constructor" to create a relative time from seconds and microseconds
+    /** @param n_second elapsed seconds
+        @param n_us additional microseconds, normalized with the seconds
+        @param xsink for an \c INVALID-DATE exception if the hours of the value do not fit a signed 32-bit integer
+        (hours are never converted to calendar days)
+
+        @return a newly allocated relative date node, the caller owns its reference; nullptr if an exception was
+        raised
+
+        @par Example
+        @code{.cpp}
+        return DateTimeNode::makeRelativeFromSeconds(uptime_secs, 0, xsink);
+        @endcode
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT static DateTimeNode* makeRelativeFromSeconds(int64 n_second, int n_us, ExceptionSink* xsink);
 };
 
 DLLEXPORT extern DateTimeNode* ZeroDate;
@@ -356,7 +488,27 @@ public:
     DLLEXPORT DateTimeValueHelper(const AbstractQoreNode* n);
 
     //! gets the DateTime value and set the delete flag
+    /** a number that gives a relative date whose hours do not fit a signed 32-bit integer gives a saturated value;
+        use DateTimeValueHelper(const QoreValue&, ExceptionSink*) where an exception can be raised
+    */
     DLLEXPORT DateTimeValueHelper(const QoreValue& n);
+
+    //! gets the DateTime value and set the delete flag
+    /** @param n the value; a number is converted to a relative date of that many seconds
+        @param xsink for an \c INVALID-DATE exception if the number gives a relative date whose hours do not fit a
+        signed 32-bit integer, or is a float that is not a finite number; the value is then the zero date
+
+        @par Example
+        @code{.cpp}
+        DateTimeValueHelper date(v, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        @endcode
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT DateTimeValueHelper(const QoreValue& n, ExceptionSink* xsink);
 
     //! deletes the DateTime value being managed if necessary
     DLLEXPORT ~DateTimeValueHelper();
@@ -407,6 +559,8 @@ public:
     DLLLOCAL DateTimeNodeValueHelper(const AbstractQoreNode* n, ExceptionSink* xsink);
 
     //! gets the DateTime value and set the delete flag
+    /** a number that gives a relative date whose hours do not fit a signed 32-bit integer gives a saturated value
+    */
     DLLEXPORT DateTimeNodeValueHelper(const QoreValue& n);
 
     //! dereferences the DateTimeNode value if necessary

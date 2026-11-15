@@ -418,12 +418,15 @@ void QoreValue::getShortString(char* buf) const {
 // Type conversions
 // ============================================================================
 
+// note: qore_plus_equals_int_operand_steps() in lib/QoreLib.cpp is a copy of these steps for the += operator (with a
+// char converted as its one-character string); keep it in step when a value tag is added or a step changes
 int64 QoreValue::getAsBigInt() const {
     if (isInt()) {
         return getInt();
     }
     if (isFloat()) {
-        return static_cast<int64>(getDouble());
+        // saturated; NaN gives 0, as for a number (issue #6181)
+        return q_float_to_int64(getDouble());
     }
     if (isBool()) {
         return getBool() ? 1 : 0;
@@ -447,6 +450,8 @@ int64 QoreValue::getAsBigInt() const {
     return 0;
 }
 
+// note: qore_plus_equals_nonfloat_float_operand() in lib/QoreLib.cpp is a copy of these steps for the += operator
+// (with a char converted as its one-character string); keep it in step when a value tag is added or a step changes
 double QoreValue::getAsFloat() const {
     if (isFloat()) {
         return getDouble();

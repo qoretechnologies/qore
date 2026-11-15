@@ -50,6 +50,7 @@
 #include <vector>
 #include <qore/QoreParseOptions.h>
 #include "qore/intern/QoreAOTBinary.h"
+#include "qore/intern/QoreCallTargetCheckCache.h"
 #include "qore/intern/qore_aot_deps.h"
 
 class AbstractStatement;
@@ -321,6 +322,13 @@ struct QoreAOTCallTarget {
     const UserVariantBase* uvb = nullptr;  //!< cached user variant base for inlined fast path
     const QoreMethod* method = nullptr;    //!< for static/self method calls (pre-resolved)
     const QoreClass* qc = nullptr;         //!< for dot-eval method calls (pre-resolved)
+    //! the class, method and variant of a dot-eval method call resolved at parse time, also for a call dispatched by
+    //! name: the check of the call's target before its arguments are evaluated uses them (issue #5824)
+    const QoreClass* check_qc = nullptr;
+    const QoreMethod* check_method = nullptr;
+    const AbstractQoreFunctionVariant* check_variant = nullptr;
+    //! the cache of the check of the call's target before its arguments (issue #5824)
+    QoreCallTargetCheckCache check_cache;
     const QoreTypeInfo* object_type_info = nullptr; //!< instantiated object type for constructor calls
     const QoreTypeInfo* receiver_type_info = nullptr; //!< parameterized receiver type for generic static calls
     const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr;
@@ -333,6 +341,11 @@ struct QoreAOTCallTarget {
         nullptr};
     //! Lazily populated bounded cache for polymorphic object method calls.
     std::atomic<QoreAOTMethodDispatchCache*> method_dispatch_cache{nullptr};
+    //! The native fast entry of a function of another module that the call reaches directly (qore#6035), resolved
+    //! at the first call by qore_rt_try_get_cross_module_fast_entry(): its state is 0 before, 1 if the fast entry
+    //! was found, 2 if the call keeps its runtime path
+    std::atomic<const void*> cross_module_fast_entry{nullptr};
+    std::atomic<uint8_t> cross_module_fast_state{0};
     bool is_pseudo = false;                //!< for dot-eval pseudo-method calls
     bool is_static_method = false;         //!< method is a static method target
     bool is_self_method = false;           //!< method target came from SelfFunctionCallNode
@@ -345,6 +358,31 @@ struct QoreAOTCallTarget {
     ~QoreAOTCallTarget() {
         delete object_member_descriptor.load(std::memory_order_relaxed);
         delete method_dispatch_cache.load(std::memory_order_relaxed);
+    }
+};
+
+//! Global builtin path entries are immutable and never replaced; contexts remember validated slots.
+static constexpr size_t QORE_AOT_BUILTIN_TYPE_PATH_TABLE_SIZE = 256;
+
+//! Concrete hashdecl paths are immutable AOT globals; their declarations belong to the context's Program.
+//! Slots are published once and never replaced. Collisions use the existing bounded path cache.
+struct QoreAOTConcreteHashDeclCache {
+    static constexpr size_t Size = 32;
+    struct Entry {
+        const char* path;
+        const TypedHashDecl* hd;
+    };
+    std::array<std::atomic<const Entry*>, Size> entries{};
+
+    static size_t slot(const char* path) {
+        uintptr_t address = reinterpret_cast<uintptr_t>(path);
+        return (address ^ (address >> 4) ^ (address >> 9)) & (Size - 1);
+    }
+
+    ~QoreAOTConcreteHashDeclCache() {
+        for (auto& entry : entries) {
+            delete entry.load(std::memory_order_relaxed);
+        }
     }
 };
 
@@ -407,6 +445,11 @@ struct QoreAOTContext {
     //! (they point into the map's nodes, which do not move); guarded by hashdecl_path_cache_mutex
     QoreAOTPathCacheOrder hashdecl_path_cache_order;
 
+    //! Allocated only for concrete hashdecl construction. Entries need neither TLS nor receiver epoch checks:
+    //! this context owns the cache and its Program owns the declarations. No-Program contexts do not use it.
+    //! Publication is guarded by hashdecl_path_cache_mutex; readers acquire the immutable cache/entry pointers.
+    std::atomic<QoreAOTConcreteHashDeclCache*> concrete_hashdecl_cache{nullptr};
+
     //! Lazily resolved full type paths used by source-stripped AOT typed-container helpers.
     std::mutex type_path_cache_mutex;
     //! Keyed as hashdecl_path_cache; guarded by type_path_cache_mutex
@@ -457,6 +500,20 @@ struct QoreAOTContext {
 
     //! Metadata-only statements registered for source-stripped ProgramControl lookups.
     std::vector<AbstractStatement*> owned_debug_statements;
+
+    //! A generated path remains immutable for this context's lifetime.  A bit avoids repeated text checks of a
+    //! global builtin path entry after this context validated it.  The global entry must still be acquire-loaded
+    //! and its path address checked first; entries are never replaced, so a bit cannot authorize a different entry.
+    //! Atomic words allow multiple threads to validate paths in the same context without losing other bits.
+    std::array<std::atomic<uint64_t>, QORE_AOT_BUILTIN_TYPE_PATH_TABLE_SIZE / 64> builtin_type_path_validated{};
+
+    bool hasValidatedBuiltinTypePath(size_t slot) const {
+        return builtin_type_path_validated[slot / 64].load(std::memory_order_relaxed) & (uint64_t{1} << (slot % 64));
+    }
+
+    void validateBuiltinTypePath(size_t slot) {
+        builtin_type_path_validated[slot / 64].fetch_or(uint64_t{1} << (slot % 64), std::memory_order_relaxed);
+    }
 
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
@@ -739,6 +796,75 @@ extern "C" QoreStringNode* qore_aot_module_init_v3(
     const char* mod_name,
     const QoreAOTFunc* functions, int num_functions
 );
+
+//! A native fast entry of a function of an AOT module, in the table that the module registers (qore#6035)
+/** The layout is the one that qcc generates (generateModuleABIV2()).
+*/
+struct QoreAOTFastEntry {
+    //! the function's standard native entry, which its variant holds (UserVariantBase::getCachedAOTFunction())
+    AotFunctionPtr fn;
+    //! the function's native fast entry
+    const void* fast_fn;
+    //! the symbol of the fast entry, which encodes its ABI contract (finalizeAOTBatchFastEntrySymbols())
+    const char* fast_symbol;
+};
+
+//! Registers the metadata and the native fast entries of an AOT module; called by its generated init function
+/** The fast entries let the code of another module call the module's functions natively
+    (qore_rt_try_get_cross_module_fast_entry()), and the metadata lets a module compiled against this one find their
+    ABI (qore_aot_get_module_metadata()).  The arrays are the module's own data, which stays valid until the module
+    unregisters them with qore_aot_unregister_module_fast_entries_v1().
+*/
+extern "C" void qore_aot_register_module_fast_entries_v1(const char* mod_name, const uint8_t* metadata,
+    int32_t metadata_len, const QoreAOTFastEntry* entries, int32_t num_entries);
+
+//! Removes the registration of qore_aot_register_module_fast_entries_v1(); called by the module's delete function
+extern "C" void qore_aot_unregister_module_fast_entries_v1(const char* mod_name, const QoreAOTFastEntry* entries,
+    int32_t num_entries);
+
+//! Returns the native fast entry of the function whose standard native entry is \a fn, or nullptr
+/** @param fn the standard native entry of the function
+    @param fast_symbol the symbol of the fast entry that the caller was compiled for; a fast entry with another symbol
+    (another ABI contract) is not returned
+*/
+DLLLOCAL const void* qore_aot_find_cross_module_fast_entry(AotFunctionPtr fn, const char* fast_symbol);
+
+//! Gets the metadata of a loaded AOT module that registered it; returns false if it did not
+DLLLOCAL bool qore_aot_get_module_metadata(const char* mod_name, const uint8_t*& metadata, int32_t& metadata_len);
+
+//! Returns the mark of the fast-entry registrations of the module loads that this thread is making (qore#6035)
+/** A module's init registers its fast entries (qore_aot_register_module_fast_entries_v1()) before its load is
+    complete; they are published by qore_aot_commit_pending_fast_entries() when it is, or dropped by
+    qore_aot_discard_pending_fast_entries() when it fails, as the image is then unloaded without its delete function.
+*/
+DLLLOCAL size_t qore_aot_pending_fast_entries_mark();
+//! Publishes the registrations made since \a mark
+DLLLOCAL void qore_aot_commit_pending_fast_entries(size_t mark);
+//! Drops the registrations made since \a mark
+DLLLOCAL void qore_aot_discard_pending_fast_entries(size_t mark);
+
+//! Publishes the fast-entry registrations of a module load when the load completes, or drops them (qore#6035)
+class QoreAOTPendingFastEntriesHelper {
+public:
+    DLLLOCAL QoreAOTPendingFastEntriesHelper() : mark(qore_aot_pending_fast_entries_mark()) {
+    }
+
+    DLLLOCAL ~QoreAOTPendingFastEntriesHelper() {
+        if (!committed) {
+            qore_aot_discard_pending_fast_entries(mark);
+        }
+    }
+
+    //! the load is complete
+    DLLLOCAL void commit() {
+        qore_aot_commit_pending_fast_entries(mark);
+        committed = true;
+    }
+
+private:
+    size_t mark;
+    bool committed = false;
+};
 
 //! Captures the module loader path before entering the generated AOT module init implementation.
 extern "C" void qore_aot_set_module_init_context_path(QoreModuleInitContext* ctx);

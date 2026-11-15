@@ -1,10 +1,10 @@
 round 0
 call reference:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 call reference of object:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 call reference, function argument:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 method call:
   OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
 method call of object:
@@ -36,9 +36,9 @@ local declared as a reference:
 closure reading a reference parameter:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 returned call reference:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 call reference from an immediate closure:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 call of an int in map:
   REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
 local try block:
@@ -48,7 +48,7 @@ call of an int:
 call of no value:
   REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'nothing')
 call reference, local argument:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 method call, local argument:
   OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
 method call on nothing, literal argument:
@@ -83,11 +83,11 @@ hash member call reference:
   arg destroyed
 round 1
 call reference:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 call reference of object:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 call reference, function argument:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 method call:
   OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
 method call of object:
@@ -119,9 +119,9 @@ local declared as a reference:
 closure reading a reference parameter:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 returned call reference:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 call reference from an immediate closure:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 call of an int in map:
   REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
 local try block:
@@ -131,7 +131,7 @@ call of an int:
 call of no value:
   REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'nothing')
 call reference, local argument:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 method call, local argument:
   OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
 method call on nothing, literal argument:
@@ -166,11 +166,11 @@ hash member call reference:
   arg destroyed
 round 2
 call reference:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 call reference of object:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 call reference, function argument:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 method call:
   OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
 method call of object:
@@ -202,9 +202,9 @@ local declared as a reference:
 closure reading a reference parameter:
   OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 returned call reference:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 call reference from an immediate closure:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 call of an int in map:
   REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
 local try block:
@@ -214,7 +214,7 @@ call of an int:
 call of no value:
   REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'nothing')
 call reference, local argument:
-  OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 method call, local argument:
   OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
 method call on nothing, literal argument:

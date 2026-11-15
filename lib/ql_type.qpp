@@ -40,10 +40,133 @@
 #include "qore/intern/QoreHashKeyHelper.h"
 
 #include <memory>
+#include <vector>
 
-static QoreValue auto_cast(const QoreValue v);
+// the nesting depth from which auto_cast() continues without recursion (qore#6117)
+static constexpr unsigned QORE_AUTO_CAST_RECURSION_LIMIT = 64;
 
-static QoreHashNode* auto_cast_hash(const QoreHashNode* h) {
+static QoreValue auto_cast(const QoreValue v, unsigned depth);
+
+namespace {
+// dereferences a node owned by the work stack of auto_cast()
+struct AutoCastNodeDeref {
+    void operator()(AbstractQoreNode* n) const {
+        n->deref(nullptr);
+    }
+};
+
+// a container that auto_cast() is copying without recursion; folds the types of its values as auto_cast_hash() and
+// auto_cast_list() do
+class AutoCastFrame {
+public:
+    explicit AutoCastFrame(const AbstractQoreNode* src) {
+        if (get_node_type(src) == NT_LIST) {
+            src_list = static_cast<const QoreListNode*>(src);
+            dst.reset(new QoreListNode(autoTypeInfo));
+        } else {
+            assert(get_node_type(src) == NT_HASH);
+            hash_iter.reset(new ConstHashIterator(static_cast<const QoreHashNode*>(src)));
+            dst.reset(new QoreHashNode(autoTypeInfo));
+        }
+    }
+
+    // moves to the next element of the source; returns false if there are no more
+    bool next() {
+        if (src_list) {
+            if (list_pos == src_list->size()) {
+                return false;
+            }
+            ++list_pos;
+            return true;
+        }
+        return hash_iter->next();
+    }
+
+    // returns the current element of the source
+    QoreValue current() const {
+        return src_list ? src_list->retrieveEntry(list_pos - 1) : hash_iter->get();
+    }
+
+    // adds the converted current element to the copy; takes over the reference of the value
+    void add(QoreValue new_val) {
+        const QoreTypeInfo* ctype = new_val.getTypeInfo();
+        bool first;
+        if (src_list) {
+            qore_list_private::get(*static_cast<QoreListNode*>(dst.get()))->pushIntern(new_val);
+            first = list_pos == 1;
+        } else {
+            qore_hash_private::get(*static_cast<QoreHashNode*>(dst.get()))->setKeyValueIntern(hash_iter->getKey(),
+                new_val);
+            first = hash_iter->first();
+        }
+        if (first) {
+            if (ctype && ctype != anyTypeInfo) {
+                vtype = ctype;
+                vcommon = true;
+            }
+        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, ctype)) {
+            vcommon = false;
+        }
+    }
+
+    // returns the copy, which the caller then owns, with the common type of its values
+    AbstractQoreNode* finish() {
+        // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
+        if (vcommon && vtype && vtype != anyTypeInfo) {
+            if (src_list) {
+                qore_list_private::get(*static_cast<QoreListNode*>(dst.get()))->complexTypeInfo
+                    = qore_get_complex_list_type(vtype);
+            } else {
+                qore_hash_private::get(*static_cast<QoreHashNode*>(dst.get()))->complexTypeInfo
+                    = qore_get_complex_hash_type(vtype);
+            }
+        }
+        return dst.release();
+    }
+
+private:
+    const QoreListNode* src_list = nullptr;
+    size_t list_pos = 0;
+    std::unique_ptr<ConstHashIterator> hash_iter;
+    std::unique_ptr<AbstractQoreNode, AutoCastNodeDeref> dst;
+    const QoreTypeInfo* vtype = nullptr;
+    bool vcommon = false;
+};
+}
+
+// auto_cast() of a deeply nested list or hash, with a work stack instead of recursion (qore#6117)
+/** each container is added to the container it is in once it is complete, when its type is known
+*/
+// cold and not inlined: it must not change how the recursive conversion, which converts the values met in practice, is
+// compiled
+__attribute__((cold, noinline)) static AbstractQoreNode* auto_cast_without_recursion(const AbstractQoreNode* n) {
+    std::vector<AutoCastFrame> stack;
+    stack.emplace_back(n);
+    while (true) {
+        bool descended = false;
+        while (stack.back().next()) {
+            QoreValue v = stack.back().current();
+            qore_type_t type = v.getType();
+            if (type == NT_LIST || type == NT_HASH) {
+                stack.emplace_back(v.getInternalNode());
+                descended = true;
+                break;
+            }
+            stack.back().add(v.refSelf());
+        }
+        if (descended) {
+            continue;
+        }
+        std::unique_ptr<AbstractQoreNode, AutoCastNodeDeref> done(stack.back().finish());
+        stack.pop_back();
+        if (stack.empty()) {
+            return done.release();
+        }
+        stack.back().add(QoreValue(done.release()));
+    }
+}
+
+static QoreHashNode* auto_cast_hash(const QoreHashNode* h, unsigned depth) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
 
     qore_hash_private* hash_priv = qore_hash_private::get(**rv);
@@ -61,7 +184,7 @@ static QoreHashNode* auto_cast_hash(const QoreHashNode* h) {
         // longer matches what is actually stored (e.g. hash<auto>), and
         // shape-preserving iterators / typed assignments downstream fail
         // strict type checks
-        QoreValue new_val = auto_cast(val);
+        QoreValue new_val = auto_cast(val, depth + 1);
         const QoreTypeInfo* ctype = new_val.getTypeInfo();
         hash_priv->setKeyValueIntern(key, new_val);
 
@@ -83,7 +206,7 @@ static QoreHashNode* auto_cast_hash(const QoreHashNode* h) {
     return rv.release();
 }
 
-static QoreListNode* auto_cast_list(const QoreListNode* l) {
+static QoreListNode* auto_cast_list(const QoreListNode* l, unsigned depth) {
     ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), nullptr);
 
     qore_list_private* list_priv = qore_list_private::get(**rv);
@@ -94,7 +217,7 @@ static QoreListNode* auto_cast_list(const QoreListNode* l) {
     ConstListIterator i(l);
     while (i.next()) {
         const QoreValue val = i.getValue();
-        QoreValue new_val = auto_cast(val);
+        QoreValue new_val = auto_cast(val, depth + 1);
         const QoreTypeInfo* ctype = new_val.getTypeInfo();
         list_priv->pushIntern(new_val);
 
@@ -116,13 +239,20 @@ static QoreListNode* auto_cast_list(const QoreListNode* l) {
     return rv.release();
 }
 
-static QoreValue auto_cast(const QoreValue v) {
+static QoreValue auto_cast(const QoreValue v, unsigned depth) {
     switch (v.getType()) {
         case NT_HASH: {
-            return auto_cast_hash(v.get<QoreHashNode>());
+            // a deeply nested value is copied without recursion, so that it cannot overflow the stack (qore#6117)
+            if (depth >= QORE_AUTO_CAST_RECURSION_LIMIT) {
+                return auto_cast_without_recursion(v.getInternalNode());
+            }
+            return auto_cast_hash(v.get<QoreHashNode>(), depth);
         }
         case NT_LIST: {
-            return auto_cast_list(v.get<QoreListNode>());
+            if (depth >= QORE_AUTO_CAST_RECURSION_LIMIT) {
+                return auto_cast_without_recursion(v.getInternalNode());
+            }
+            return auto_cast_list(v.get<QoreListNode>(), depth);
         }
         default:
             return v.refSelf();
@@ -246,6 +376,9 @@ int int(string value, int base = 10) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 int i = int("1");
 int j = int(NULL); // returns 0
     @endcode
+
+    @note a float or number value is truncated toward zero; a value out of the range of an integer gives the largest
+    or the smallest integer, and NaN gives 0 (see @ref float_to_int_conversion)
 */
 int int(*softint value) [flags=CONSTANT,NAMED_ARGS] {
     return value;
@@ -606,6 +739,6 @@ list<int> int_list = auto_cast(tmp);
     @since %Qore 0.9.3
  */
 auto auto_cast(auto value) [flags=CONSTANT,NAMED_ARGS] {
-    return auto_cast(value);
+    return auto_cast(value, 0);
 }
 ///@}

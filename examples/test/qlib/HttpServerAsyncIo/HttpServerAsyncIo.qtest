@@ -329,7 +329,107 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         addTestCase("POST Content-Length body pre-read", \postBodyReadTest());
         addTestCase("SSE close drains queued final frame after partial send",
             \sseCloseDrainsQueuedFinalFrameTest());
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("a step back of the system clock does not stop the SSE heartbeat",
+                \sseClockStepHeartbeatTest());
+            addTestCase("a step forward of the system clock does not time out an HttpIdlePollOperation",
+                \idleClockStepTest());
+            addTestCase("a step forward of the system clock does not time out an HttpKeepAlivePollOperation",
+                \keepAliveClockStepTest());
+        }
         set_return_value(main());
+    }
+
+    #! A step forward of the system clock does not time out an idle connection (#6150)
+    /** The idle timeout is measured on the monotonic clock: on the system clock, a step forward of an hour ended a
+        timeout of a minute at once.  The step is made with dbg_set_realtime_offset() (debug builds).
+    */
+    idleClockStepTest() {
+        list<Socket> sp = socketPair();
+        on_exit map $1.close(), sp;
+        HttpIdlePollOperation op(sp[1], 60s);
+        on_exit op.abort();
+        op.continuePoll();
+        call_function("dbg_set_realtime_offset", 3600 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        op.continuePoll();
+        assertFalse(op.timedOut(), "the idle timeout has not expired");
+        assertEq("idle", op.getState());
+    }
+
+    #! A step forward of the system clock does not time out a keep-alive connection, in its idle phase or while it
+    #! reads a request header (#6150)
+    /** The idle timeout and the header read timeout are measured on the monotonic clock: on the system clock, a step
+        forward of an hour ended them at once.  The step is made with dbg_set_realtime_offset() (debug builds).
+    */
+    keepAliveClockStepTest() {
+        list<Socket> sp = socketPair();
+        on_exit map $1.close(), sp;
+        HttpKeepAlivePollOperation op(sp[1], 60s);
+        on_exit op.abort();
+        op.continuePoll();
+        {
+            call_function("dbg_set_realtime_offset", 3600 * 1000000);
+            on_exit call_function("dbg_set_realtime_offset", 0);
+            op.continuePoll();
+            assertFalse(op.timedOut(), "the idle timeout has not expired");
+            assertEq("idle", op.getPhase());
+        }
+
+        # a partial request header starts the header phase
+        sp[0].send("GET / HTTP/1.1\r\n");
+        int deadline = clock_get_monotonic_us() + 5000000;
+        while (op.getPhase() == "idle" && clock_get_monotonic_us() < deadline) {
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (!info) {
+                break;
+            }
+            Socket::poll((info,), 50ms);
+        }
+        assertEq("header", op.getPhase());
+        call_function("dbg_set_realtime_offset", 3600 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        op.continuePoll();
+        assertFalse(op.timedOut(), "the header read timeout has not expired");
+        assertEq("header", op.getPhase());
+    }
+
+    #! A step back of the system clock does not stop the SSE heartbeat
+    /** The time since the last send is measured on the monotonic clock: on the system clock, a step back of an hour
+        made it negative, so no heartbeat was sent until the system clock was back where it was.  The step is made
+        with dbg_set_realtime_offset() (debug builds).
+    */
+    sseClockStepHeartbeatTest() {
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        Socket client();
+        client.connect("127.0.0.1:" + server.getSocketInfo().port);
+        Socket accepted = server.accept(5s);
+        on_exit {
+            try { accepted.close(); } catch (hash<ExceptionInfo> ex) {}
+            try { client.close(); } catch (hash<ExceptionInfo> ex) {}
+            try { server.close(); } catch (hash<ExceptionInfo> ex) {}
+        }
+
+        # the operation takes the time of its last send when it is created, before the system clock steps back
+        HttpServerAsyncIo::HttpSseStreamPollOperation op(accepted);
+        on_exit op.abort();
+        op.setHeartbeat(50, ":hb\n\n");
+        op.continuePoll();
+        call_function("dbg_set_realtime_offset", -3600 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+
+        # the operation is driven until the client receives the heartbeat, at most for 20 seconds
+        int deadline = clock_get_monotonic_us() + 20000000;
+        string received = "";
+        while (received !~ /:hb/ && clock_get_monotonic_us() < deadline) {
+            op.continuePoll();
+            if (client.isDataAvailable(20ms)) {
+                received += client.recv(0, 1s);
+            }
+        }
+        assertRegex(":hb", received, "the client receives the heartbeat after its interval");
     }
 
     #! Regression: an SSE frame queued behind an in-flight (partially-sent) frame

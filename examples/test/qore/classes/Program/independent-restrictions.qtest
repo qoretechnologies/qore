@@ -1,0 +1,367 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+# the debugger is allowed for the restricted creators of the evaluation Programs (ProgramControl); this Program has
+# no %no-child-restrictions, so its children inherit and lock its options
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class IndependentRestrictionsTest
+
+#! Tests that a Program that restricted code creates without becoming its parent keeps the restrictions of that code
+/** An independent Program (Program::constructor() with \c independent set) and an evaluation Program
+    (ProgramControl::createEvalProgram()) of another Program take and lock the restrictions of the code that creates
+    them as a child of it would; a child keeps the options it was created with as well
+    (design/locked-parse-options.md); a creator that may lift the restrictions of its children is tested in
+    independent-restrictions-sandboxed.qtest
+*/
+class IndependentRestrictionsTest inherits QUnit::Test {
+    public {
+        #! the restrictions tested: the legacy integer mask (0 for an extended option, which has none), code that
+        #! parses only without the restriction, and the error that the code raises with it
+        const Restrictions = {
+            "no-external-process": {
+                "mask": PO_NO_EXTERNAL_PROCESS,
+                "use": "auto sub f() { return backquote(\"echo escaped\"); }",
+                "err": "PARSE-EXCEPTION",
+            },
+            "no-process-control": {
+                "mask": PO_NO_PROCESS_CONTROL,
+                "use": "auto sub f() { exit(); return 1; }",
+                "err": "PARSE-EXCEPTION",
+            },
+            "no-thread-control": {
+                "mask": PO_NO_THREAD_CONTROL,
+                "use": "auto sub f() { return background sleep(0); }",
+                "err": "PARSE-EXCEPTION",
+            },
+            "no-network": {
+                "mask": PO_NO_NETWORK,
+                "use": "auto sub f() { return new Socket(); }",
+                "err": "ILLEGAL-CLASS-INSTANTIATION",
+            },
+            "no-filesystem": {
+                "mask": PO_NO_FILESYSTEM,
+                "use": "auto sub f() { return new File(); }",
+                "err": "ILLEGAL-CLASS-INSTANTIATION",
+            },
+            "no-new": {
+                "mask": 0,
+                "use": "auto sub f() { return new Mutex(); }",
+                "err": "PARSE-EXCEPTION",
+            },
+        };
+
+        #! runs in a creator that has the restriction: it creates an independent Program with an integer mask and
+        #! with a ParseOptions object and tries to remove the restriction from it
+        /** The code uses no \c new operator, which the \c no-new creator cannot parse
+        */
+        const Probe = "%modern
+hash<string, auto> sub probe(string name, int mask, string use) {
+    hash<string, auto> rv = {};
+    ParseOptions opts(name);
+
+    if (mask) {
+        Program int_pgm(PO_NEW_STYLE, True);
+        rv += check(\"int\", int_pgm, name, mask, use);
+    }
+    ParseOptions new_style(PO_NEW_STYLE);
+    Program obj_pgm(new_style, True);
+    rv += check(\"obj\", obj_pgm, name, opts, use);
+    return rv;
+}
+
+hash<string, auto> sub check(string prefix, Program pgm, string name, auto disable, string use) {
+    hash<string, auto> rv = {};
+    rv{prefix + \"-taken\"} = pgm.getFullParseOptions().hasAll(name);
+    try {
+        pgm.disableParseOptions(disable);
+        rv{prefix} = \"allowed\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv{prefix} = ex.err;
+    }
+    rv{prefix + \"-kept\"} = pgm.getFullParseOptions().hasAll(name);
+    try {
+        pgm.parse(use, \"use\");
+        rv{prefix + \"-use\"} = \"parsed\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv{prefix + \"-use\"} = ex.err;
+    }
+    return rv;
+}
+";
+
+        #! runs in a creator with a restriction and the debugger: it creates an evaluation Program of an
+        #! unrestricted Program that it is given; it uses no \c new operator, which a \c no-new creator cannot parse
+        const EvalProbe = "%modern
+hash<string, auto> sub eval_probe(ProgramControl pc, string name, string use) {
+    Program e = pc.createEvalProgram(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+    ParseOptions opts(name);
+    hash<string, auto!> rv = {
+        \"taken\": e.getFullParseOptions().hasAll(name),
+    };
+    try {
+        e.disableParseOptions(opts);
+        rv.disable = \"allowed\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv.disable = ex.err;
+    }
+    try {
+        e.parse(use, \"use\");
+        rv.use = \"parsed\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv.use = ex.err;
+    }
+    # the code of the Program evaluated can still be used
+    e.parse(\"int sub g() { return twice(2); }\", \"g\");
+    rv.g = e.callFunction(\"g\");
+    return rv;
+}
+";
+    }
+
+    constructor() : QUnit::Test("IndependentRestrictionsTest", "1.0", \ARGV) {
+        addTestCase("an independent Program of code without restrictions has the options it is given",
+            \unrestrictedCreator());
+        # one case per restriction, so that each one that an independent Program could lift is reported
+        foreach string name in (keys Restrictions) {
+            addTestCase(sprintf("an independent Program keeps the %s restriction of its creator", name),
+                independentCase(name, False));
+            addTestCase(sprintf("an independent Program of sandboxed code keeps the %s restriction of its creator",
+                name), independentCase(name, True));
+        }
+        addTestCase("an independent Program of restricted code keeps its independence", \independence());
+        addTestCase("an independent Program of restricted code does not get options that give more freedom",
+            \positiveOptions());
+        addTestCase("an independent Program of code without the system API does not get it", \noApi());
+        addTestCase("an independent Program of a locked Program without restrictions does not get options that give "
+            "more freedom", \lockedUnrestricted());
+        addTestCase("the children and independent Programs of an independent Program keep the restrictions",
+            \grandchildren());
+        addTestCase("an evaluation Program keeps the restrictions of the code that creates it", \evalProgram());
+        addTestCase("a child keeps the restrictions that it was created with", \creationOptions());
+        addTestCase("a restriction locked while a file is parsed is kept when its parse options are restored",
+            \lockedInFile());
+        set_return_value(main());
+    }
+
+    #! code without restrictions (this Program) creates an independent Program with the options it gives
+    unrestrictedCreator() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+        assertTrue(p.getFullParseOptions().hasAll(PO_ALLOW_REPARSE), "the positive option is kept");
+        Program r(PO_NEW_STYLE | PO_NO_NETWORK, True);
+        r.disableParseOptions(PO_NO_NETWORK);
+        assertFalse(r.getFullParseOptions().hasAll(PO_NO_NETWORK),
+            "a restriction that it was given and that its creator does not have can be disabled");
+    }
+
+    #! returns a test case that checks the restriction \a name with a plain or sandboxed creator
+    private code independentCase(string name, bool sandboxed) {
+        return sub () { checkIndependent(name, Restrictions{name}, sandboxed); };
+    }
+
+    #! creates a creator with the restriction (optionally sandboxed) and checks that its independent Programs keep it
+    private checkIndependent(string name, hash<auto> info, bool sandboxed) {
+        string label = sprintf("%s%s", name, sandboxed ? " (sandboxed creator)" : "");
+        Program creator();
+        creator.setParseOptions(new ParseOptions(name));
+        if (sandboxed) {
+            creator.setSandboxManager(SandboxManager::createLockdown());
+        }
+        creator.parse(Probe, "probe");
+        hash<string, auto> rv = creator.callFunction("probe", name, info.mask, info.use);
+
+        list<string> prefixes = info.mask ? ("int", "obj") : ("obj",);
+        foreach string prefix in (prefixes) {
+            string what = sprintf("%s (%s)", label, prefix == "int" ? "int mask" : "ParseOptions object");
+            assertTrue(rv{prefix + "-taken"}, what + ": the independent Program takes the restriction");
+            assertEq("OPTIONS-LOCKED", rv{prefix}, what + ": disabling it is refused");
+            assertTrue(rv{prefix + "-kept"}, what + ": the independent Program keeps it");
+            assertEq(info.err, rv{prefix + "-use"}, what + ": code that needs it does not parse");
+        }
+    }
+
+    #! the independent Program of restricted code has its own style and namespaces
+    independence() {
+        Program creator(PO_NEW_STYLE | PO_NO_NETWORK);
+        creator.parse("hash<string, auto> sub run() {
+    Program p(0, True);
+    p.parse('sub old() { $x = 1; }', 'old');
+    return {
+        \"new-style\": p.getFullParseOptions().hasAll(PO_NEW_STYLE),
+        \"network\": p.getFullParseOptions().hasAll(PO_NO_NETWORK),
+        \"creator-func\": p.existsFunction('creator_func'),
+    };
+}
+sub creator_func() {}", "creator");
+        assertEq({"new-style": False, "network": True, "creator-func": False}, creator.callFunction("run"),
+            "the independent Program has its own style and no code of its creator, but its restrictions");
+    }
+
+    #! options that give more freedom that restricted code does not have are not given to its independent Program
+    positiveOptions() {
+        Program creator(PO_NEW_STYLE | PO_NO_NETWORK);
+        creator.parse("hash<string, bool> sub run() {
+    Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_INJECTION | PO_ALLOW_REPARSE, True);
+    # PO_ALLOW_REPARSE only allows code to be parsed again
+    p.parse('sub a() {}', 'a');
+    p.parse('sub b() {}', 'b');
+    return {
+        \"no-child-restrictions\": p.getFullParseOptions().hasAll(PO_NO_CHILD_PO_RESTRICTIONS),
+        \"allow-injection\": p.getFullParseOptions().hasAll(PO_ALLOW_INJECTION),
+        \"allow-debugger\": p.getFullParseOptions().hasAll(PO_ALLOW_DEBUGGER),
+        \"allow-reparse\": p.getFullParseOptions().hasAll(PO_ALLOW_REPARSE) && p.existsFunction('b'),
+    };
+}", "creator");
+        assertTrue(creator.getFullParseOptions().hasAll(PO_ALLOW_DEBUGGER), "the creator has the debugger");
+        assertFalse(creator.getFullParseOptions().hasAll(PO_ALLOW_INJECTION), "but not injection");
+        assertEq({"no-child-restrictions": False, "allow-injection": False, "allow-debugger": False,
+            "allow-reparse": True}, creator.callFunction("run"),
+            "the positive options that the creator does not have are removed, but PO_ALLOW_REPARSE is kept");
+    }
+
+    #! code without the system API (PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS) cannot get it in an independent Program,
+    #! whose namespace is copied from the system namespace, not from its creator's
+    noApi() {
+        Program creator(PO_NEW_STYLE | PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS);
+        creator.parse("hash<string, auto> sub run() {
+    Program p(PO_NEW_STYLE, True);
+    hash<string, auto!> rv = {\"taken\": p.getFullParseOptions().hasAll(PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS)};
+    try {
+        p.parse(\"auto sub f() { return system('true'); }\", \"use\");
+        rv.use = \"parsed\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv.use = ex.err;
+    }
+    return rv;
+}", "creator");
+        assertEq({"taken": True, "use": "PARSE-EXCEPTION"}, creator.callFunction("run"),
+            "the independent Program has no system functions either");
+    }
+
+    #! a locked Program without restrictions (a child of this Program, which has no %no-child-restrictions) has no
+    #! positive options that this Program lacks, and cannot give them to an independent Program
+    lockedUnrestricted() {
+        Program creator(PO_NEW_STYLE);
+        assertFalse(creator.getFullParseOptions().hasAll(PO_ALLOW_INJECTION), "the creator has no injection");
+        creator.parse("hash<string, bool> sub run() {
+    Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_INJECTION | PO_ALLOW_WEAK_REFERENCES, True);
+    return {
+        \"no-child-restrictions\": p.getFullParseOptions().hasAll(PO_NO_CHILD_PO_RESTRICTIONS),
+        \"allow-injection\": p.getFullParseOptions().hasAll(PO_ALLOW_INJECTION),
+        \"allow-weak-references\": p.getFullParseOptions().hasAll(PO_ALLOW_WEAK_REFERENCES),
+    };
+}", "creator");
+        assertEq({"no-child-restrictions": False, "allow-injection": False, "allow-weak-references": False},
+            creator.callFunction("run"), "the positive options that the creator does not have are removed");
+    }
+
+    #! a child and an independent Program created by the code of an independent Program of restricted code keep its
+    #! restrictions
+    grandchildren() {
+        Program creator(PO_NEW_STYLE | PO_NO_EXTERNAL_PROCESS);
+        creator.parse("hash<string, auto> sub run() {
+    Program ip(PO_NEW_STYLE, True);
+    ip.parse(\"hash<string, auto> sub run() {
+    hash<string, auto> rv = {};
+    foreach bool independent in ((False, True)) {
+        Program g(PO_NEW_STYLE, independent);
+        string key = independent ? 'independent' : 'child';
+        rv{key + '-taken'} = g.getFullParseOptions().hasAll(PO_NO_EXTERNAL_PROCESS);
+        try {
+            g.disableParseOptions(PO_NO_EXTERNAL_PROCESS);
+            rv{key} = 'allowed';
+        } catch (hash<ExceptionInfo> ex) {
+            rv{key} = ex.err;
+        }
+    }
+    return rv;
+}\", \"ip\");
+    return ip.callFunction(\"run\");
+}", "creator");
+        assertEq({
+            "child-taken": True,
+            "child": "OPTIONS-LOCKED",
+            "independent-taken": True,
+            "independent": "OPTIONS-LOCKED",
+        }, creator.callFunction("run"), "the restriction is kept by every Program below the independent one");
+    }
+
+    #! the evaluation Program of an unrestricted Program that restricted code creates has the restrictions of that
+    #! code
+    evalProgram() {
+        Program target(PO_NEW_STYLE);
+        target.parse("int sub twice(int i) { return i * 2; }", "target");
+        *ProgramControl pc;
+        foreach ProgramControl c in (ProgramControl::getAllPrograms()) {
+            if (c.getProgramId() == target.getProgramId()) {
+                pc = c;
+                break;
+            }
+        }
+        assertEq(target.getProgramId(), pc.getProgramId(), "the control object of the target");
+        # an integer restriction, an extended one, and an integer one with a sandboxed creator
+        foreach hash<auto> i in (({"name": "no-external-process", "sandboxed": False},
+                {"name": "no-new", "sandboxed": False}, {"name": "no-external-process", "sandboxed": True})) {
+            string label = sprintf("%s%s", i.name, i.sandboxed ? " (sandboxed creator)" : "");
+            Program creator(PO_NEW_STYLE);
+            creator.setParseOptions(new ParseOptions(i.name));
+            if (i.sandboxed) {
+                creator.setSandboxManager(SandboxManager::createLockdown());
+            }
+            creator.parse(EvalProbe, "eval-probe");
+            assertEq({
+                "taken": True,
+                "disable": "OPTIONS-LOCKED",
+                "use": "PARSE-EXCEPTION",
+                "g": 4,
+            }, creator.callFunction("eval_probe", pc, i.name, Restrictions{i.name}.use),
+                label + ": the evaluation Program takes and keeps the restriction");
+        }
+
+        # the evaluation Program that this unrestricted Program creates has the options it gives
+        Program own = pc.createEvalProgram(PO_NEW_STYLE);
+        assertFalse(own.getFullParseOptions().hasAll(PO_NO_EXTERNAL_PROCESS), "no restriction from this Program");
+    }
+
+    #! a child of this Program (which has no %no-child-restrictions) keeps the restrictions it was created with,
+    #! with an integer mask and a ParseOptions object
+    creationOptions() {
+        {
+            Program child(PO_NEW_STYLE | PO_NO_NETWORK);
+            assertThrows("OPTIONS-LOCKED", \child.disableParseOptions(), PO_NO_NETWORK);
+            assertTrue(child.getFullParseOptions().hasAll(PO_NO_NETWORK), "the restriction is kept");
+            # an option of style may still be disabled
+            child.disableParseOptions(PO_NEW_STYLE);
+            assertFalse(child.getFullParseOptions().hasAll(PO_NEW_STYLE), "the style option is disabled");
+        }
+        {
+            ParseOptions opts(PO_NEW_STYLE);
+            opts.set("no-new");
+            Program child(opts);
+            assertThrows("OPTIONS-LOCKED", \child.disableParseOptions(), new ParseOptions("no-new"));
+            assertTrue(child.getFullParseOptions().hasAll("no-new"), "the extended restriction is kept");
+        }
+        {
+            # a restriction added after the creation may be disabled again
+            Program child(PO_NEW_STYLE);
+            child.setParseOptions(PO_NO_FILESYSTEM);
+            child.disableParseOptions(PO_NO_FILESYSTEM);
+            assertFalse(child.getFullParseOptions().hasAll(PO_NO_FILESYSTEM), "a restriction added later");
+        }
+    }
+
+    #! a file that saves its parse options (%push-parse-options), sets a restriction and locks the options keeps the
+    #! restriction when its options are restored at the end of the file
+    lockedInFile() {
+        Program pgm(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        pgm.parse("%push-parse-options\n%no-network\n%lock-options\nsub f() {}\n", "locked-in-file");
+        assertTrue(pgm.getFullParseOptions().hasAll(PO_NO_NETWORK), "the restriction is kept after the file");
+        assertThrows("OPTIONS-LOCKED", \pgm.disableParseOptions(), PO_NO_NETWORK);
+        assertTrue(pgm.getFullParseOptions().hasAll(PO_NO_NETWORK), "and cannot be disabled");
+    }
+}

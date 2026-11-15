@@ -33,6 +33,7 @@
 #include <qore/intern/QoreIRBuilder.h>
 #include <qore/intern/AbstractStatement.h>
 #include <qore/intern/FunctionCallNode.h>
+#include <qore/intern/QoreDotEvalOperatorNode.h>
 #include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/ScopedObjectCallNode.h>
@@ -1221,7 +1222,8 @@ QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreVa
 }
 
 QoreIRExprInstruction* QoreIRBuilder::createCheckCallTarget(const QoreValue& call, QoreIRValue target,
-        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc) {
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc,
+        const QoreClass* check_class, const QoreMethod* check_method) {
     auto inst = append<QoreIRExprInstruction>(QoreIROpcode::CheckCallTarget, call);
     // no target: the call is made through self, on the current object (issue #5823)
     if (target.isValid()) {
@@ -1229,6 +1231,20 @@ QoreIRExprInstruction* QoreIRBuilder::createCheckCallTarget(const QoreValue& cal
     }
     inst->exception_target = exception_target;
     inst->loc = loc;
+    if (check_class && check_method) {
+        inst->check_class = check_class;
+        inst->check_method_class = check_method->getClass();
+    }
+    // the cache of the call site, for the IR interpreter's inline test
+    if (const AbstractQoreNode* node = call.isPointer() ? call.getPtr() : nullptr) {
+        if (node->getType() == NT_SELF_CALL) {
+            inst->check_cache = &static_cast<const SelfFunctionCallNode*>(node)->check_cache;
+        } else if (const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+            if (dot->getMethodCall()) {
+                inst->check_cache = &dot->getMethodCall()->check_cache;
+            }
+        }
+    }
     return inst;
 }
 
@@ -1756,6 +1772,15 @@ QoreIRInstruction* QoreIRBuilder::createIteratorRelease(QoreIRValue iterator, co
 QoreIRInstruction* QoreIRBuilder::createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ReleaseOwnedTemp);
     inst->operands.push_back(value);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::HandlerReturn);
+    if (value.isValid()) {
+        inst->operands.push_back(value);
+    }
     inst->loc = loc;
     return inst;
 }

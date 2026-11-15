@@ -95,6 +95,11 @@ struct QorePluginLLVMCodegenContext {
     QorePluginLLVMCodegenContext::error_message to provide a diagnostic.
     libqore uses the operation's runtime-helper fallback only when no valid
     LLVM codegen extension is registered.
+
+    The callback is used for JIT code only: AOT code cannot link the symbols of
+    a plugin module that the callback's code may name, so it calls the
+    operation's registered runtime helper instead, through a pointer resolved
+    at run time.
 */
 typedef llvm::Value* (*QorePluginLLVMCodegenCallback)(QorePluginLLVMCodegenContext* ctx);
 

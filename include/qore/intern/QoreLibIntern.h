@@ -441,13 +441,45 @@ DLLLOCAL int parse_init_value(QoreValue& val, QoreParseContext& parse_context);
 */
 constexpr size_t QORE_PARSE_STACK_RESERVE = 64 * 1024;
 
+//! The error code of the parse error raised for code that cannot be parsed within the stack of the parsing thread
+/** Distinct from the other parse errors, as it depends on the thread that parses the code and not on the code: a
+    module that cannot be parsed for this reason is not a module that is unavailable, so the error of its load is
+    the error of the parse that loads it also with %%try-module (see QoreModuleManager::parseLoadModule())
+*/
+#define QORE_PARSE_STACK_ERR "PARSE-STACK-LIMIT-EXCEEDED"
+
+//! The description of the parse error QORE_PARSE_STACK_ERR
+#define QORE_PARSE_STACK_DESC "the code is nested too deeply to be parsed within the stack of this thread"
+
 //! Raises a parse error and returns -1 if the thread's stack has reached QORE_PARSE_STACK_RESERVE, otherwise 0
 /** Called before parse initialization recurses into a nested expression or statement: the parser accepts nesting
     that a thread with a small stack cannot initialize, which would otherwise overflow the stack
 
+    The error is QORE_PARSE_STACK_ERR.  Inline, so that the common case, with enough stack, is a comparison (see
+    q_thread_stack_reserve_exceeded()); defined after qore_thread_intern.h is included below.
+
     @param loc the location of the code being initialized, if known
 */
-DLLLOCAL int parse_check_stack(const QoreProgramLocation* loc);
+DLLLOCAL inline int parse_check_stack(const QoreProgramLocation* loc);
+
+//! Raises the parse error QORE_PARSE_STACK_ERR for parse_check_stack() and returns -1
+DLLLOCAL int parse_raise_stack_error(const QoreProgramLocation* loc);
+
+//! Returns true if the exception sink holds an error that depends on the stack of the thread, not on the code
+/** The parse error QORE_PARSE_STACK_ERR, raised where the parse of the code or of a module that it loads ran short of
+    the stack of the thread, always is.  \c STACK-LIMIT-EXCEEDED, raised where code that runs while a module is loaded
+    or initialized (the initialization of its constants, for example) ran short of it, is only in a thread whose stack
+    is smaller than the default thread stack size (q_thread_stack_smaller_than_default(), which compares the total
+    stack size, not the stack that remains): with at least that much stack, a module that exceeds it is assumed to
+    have a bug, such as a recursion without end, and is handled as a module that cannot be loaded.  A module whose
+    load fails with an error that depends on the thread is not a module that is not available (see
+    QoreModuleManager::parseLoadModule())
+*/
+DLLLOCAL bool qore_has_thread_stack_error(const ExceptionSink& xsink);
+
+//! Returns the first exception in the sink with an error that depends on the stack of the thread, or nullptr
+/** See qore_has_thread_stack_error() */
+DLLLOCAL const QoreException* qore_find_thread_stack_error(const ExceptionSink& xsink);
 
 //! Parse-initializes a node that is not a level of nesting of its own
 /** For a node that parse initialization replaces with another node in the same place, and for a node that the
@@ -480,6 +512,12 @@ DLLLOCAL q_method_t qore_get_lexical_program_method(q_method_t method);
 // returns true if the node needs to be scanned for recursive references or not
 DLLLOCAL bool needs_scan(const AbstractQoreNode* n);
 DLLLOCAL bool needs_scan(const QoreValue& v);
+
+#ifdef DEBUG
+//! the offset in microseconds that debug builds add to the system clock (q_epoch(), q_epoch_us(), q_epoch_ns()), to test
+//! code under a step of the system clock; set with dbg_set_realtime_offset(); the monotonic clock is not affected
+DLLLOCAL extern std::atomic<int64> qore_dbg_realtime_offset_us;
+#endif
 
 #ifdef DEBUG
 //! Returns the number of heap integers (QoreBigIntNode) that exist in the process
@@ -964,7 +1002,24 @@ DLLLOCAL void qore_process_params(unsigned num_params, type_vec_t& typeList, arg
 
 // call to get a node with reference count 1 (copy on write)
 void ensure_unique(AbstractQoreNode** v, ExceptionSink* xsink);
+//! Gives \a v a node with reference count 1 that the caller can modify in place (copy on write)
+/** A short string held inline is replaced with a string node, and an enum value with an owned copy of its base value
+    (see qore_enum_value_copy_for_write()).
+*/
 void ensure_unique(QoreValue& v, ExceptionSink* xsink);
+
+//! Returns an owned copy of the base value of the enum value \a v, which the caller can modify in place
+/** An enum value (QoreValue::isEnum()) holds a reference to its enum member, not to the member's base value, which is
+    shared and constant: a node reached through it with QoreValue::get() or QoreValue::getInternalNode() has a
+    reference count of 1 although the value that reaches it does not own it.  Code that modifies a value in place
+    replaces an enum value with this copy first, so that the enum member never changes.
+
+    @param v an enum value
+    @return a string base value as a new string node (also when it is held inline), any other base value held by a
+    node as a copy of the node, and a base value held inline (int, float) as it is; the caller owns the value
+    returned
+*/
+DLLLOCAL QoreValue qore_enum_value_copy_for_write(const QoreValue& v);
 
 //! Returns a value holding \a copy, a copy of the hash or list that \a v holds, in the representation of \a v
 /** A copy of a container held through an opaque reference (the \c \@= operator) is held through an opaque
@@ -984,7 +1039,10 @@ DLLLOCAL QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* co
     QoreValue::discard() or LValueHelper::saveTemp(): releasing it as a plain node would leave the registration of
     an opaque value with the opaque target registry (see design/dgc.md, "Opaque references").
 
-    @param v a value holding a node other than an object
+    An enum value does not own the node that it reaches (see qore_enum_value_copy_for_write()): the callers replace it
+    with an owned copy of its base value instead of calling this function.
+
+    @param v a value holding a node other than an object; not an enum value
     @return the value replaced, or NOTHING if the node was unique
 */
 DLLLOCAL QoreValue qore_value_copy_on_write(QoreValue& v);
@@ -1131,6 +1189,65 @@ DLLLOCAL int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo
 DLLLOCAL int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_int_float_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
+// makes sure the lvalue can be assigned a string value, else raises a parse exception and returns -1
+DLLLOCAL int check_lvalue_string(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
+
+//! returns the one-character UTF-8 string that the += operator adds for a char operand (a new reference)
+/** a char operand of += is added exactly as the one-character string is, for every lvalue type; out of line, as a
+    char operand is rare and its conversion must not enlarge the callers' common paths
+*/
+DLLLOCAL QORE_INTERN_NOINLINE QoreStringNode* qore_plus_equals_char_string(const QoreValue v);
+
+//! returns the integer that += adds to an integer lvalue for a char operand: the char converted as its
+//! one-character string is (\c "5" gives 5, \c "a" 0); out of line, as qore_plus_equals_char_string()
+DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_char_int_operand(const QoreValue v);
+
+//! returns the float that += adds to a float lvalue for a char operand: the char converted as its one-character
+//! string is (\c "5" gives 5.0, \c "a" 0.0); out of line, as qore_plus_equals_char_string()
+DLLLOCAL QORE_INTERN_NOINLINE double qore_plus_equals_char_float_operand(const QoreValue v);
+
+//! QoreValue::isNothing() with the test of an inline value made inline, for the compound assignment paths
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool qore_value_is_nothing(const QoreValue& v) {
+    if (v.rawBits() == QoreValue::makeNothing().rawBits()) {
+        return true;
+    }
+    return v.isPointer() && is_nothing(v.get<const AbstractQoreNode>());
+}
+
+//! QoreValue::isNullOrNothing() with the test of an inline value made inline, for the compound assignment paths
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool qore_value_is_null_or_nothing(const QoreValue& v) {
+    uint64_t bits = v.rawBits();
+    if (bits == QoreValue::makeNothing().rawBits() || bits == QoreValue::makeNull().rawBits()) {
+        return true;
+    }
+    if (!v.isPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* n = v.get<const AbstractQoreNode>();
+    return is_nothing(n) || is_null(n);
+}
+
+//! returns the integer that += adds to an integer lvalue for an operand that is not an inline integer: a char as its
+//! one-character string is, any other value as QoreValue::getAsBigInt() converts it
+/** It takes the same steps as QoreValue::getAsBigInt() after its test for an inline integer, which its callers make
+    (the slow path of native code, and qore_plus_equals_int_operand()), so that it costs no more than that conversion
+*/
+DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_boxed_int_operand(const QoreValue v);
+
+//! returns the integer that += adds to an integer lvalue for an operand: a char as its one-character string is, any
+//! other value as QoreValue::getAsBigInt() converts it, in the same steps, so that it costs no more than that
+//! conversion
+DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_int_operand(const QoreValue v);
+
+//! returns the float that += adds to a float lvalue for an operand that is not a float: a char as its one-character
+//! string is, any other value as QoreValue::getAsFloat() converts it (the same steps after its test for a float)
+DLLLOCAL QORE_INTERN_NOINLINE double qore_plus_equals_nonfloat_float_operand(const QoreValue v);
+
+//! returns the float that += adds to a float lvalue for an operand: a float itself, else as
+//! qore_plus_equals_nonfloat_float_operand()
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE double qore_plus_equals_float_operand(const QoreValue v) {
+    return v.isFloat() ? v.getDouble() : qore_plus_equals_nonfloat_float_operand(v);
+}
 
 DLLLOCAL extern QoreClass* QC_PSEUDOVALUE;
 DLLLOCAL extern QoreClass* QC_PSEUDONOTHING;
@@ -1288,6 +1405,10 @@ public:
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/lvalue_ref.h"
 #include "qore/intern/qore_thread_intern.h"
+
+DLLLOCAL inline int parse_check_stack(const QoreProgramLocation* loc) {
+    return q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE) ? parse_raise_stack_error(loc) : 0;
+}
 #include "qore/intern/Function.h"
 #include "qore/intern/CallReferenceCallNode.h"
 #include "qore/intern/CallReferenceNode.h"

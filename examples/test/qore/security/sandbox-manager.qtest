@@ -124,7 +124,7 @@ class SandboxManagerTest inherits QUnit::Test {
             assertTrue(sm.hasCallableMethod(method), method + "() exists");
         }
         assertEq(("filesystem", "network", "max_threads", "wall_time_limit", "cpu_time_limit", "max_stack_size",
-            "memory_limit", "interrupt_requested"), keys sm.getConfiguration(),
+            "memory_limit", "interrupt_requested", "uncontrolled_api_policy"), keys sm.getConfiguration(),
             "the configuration has the enforced resource limits only");
     }
 

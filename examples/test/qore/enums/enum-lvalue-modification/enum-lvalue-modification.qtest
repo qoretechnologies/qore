@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of in-place modifications of locals holding enum values
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class EnumLvalueModificationTest
+
+#! Tests the in-place modification of lvalues holding enum values
+/** An lvalue holding an enum value holds the enum member, whose base value is shared and constant.  The operators
+    that modify an lvalue in place (+=, the other compound assignments, ++ and --, splice, extract, trim, chomp, regex
+    substitution and transliteration) modified the member's own value instead of a copy: the AST interpreter crashed
+    on a string enum value, and the IR interpreter, the JIT and programs compiled with qcc appended to the member's
+    string, which then grew with every append.  The checks are in enum-lvalue-modification-worker.qr, which is run in
+    each execution mode, on the IR tier and as a program compiled with qcc at -O0 and -O3; every run must give the
+    results below, which are the results of the same operations on lvalues holding the base values themselves.
+*/
+class EnumLvalueModificationTest inherits QUnit::Test {
+    public {
+        #! the result of every check the worker makes
+        const Expected = {
+            "str-short-append": "\"42x\"",
+            "str-long-append": "\"a long string value that is not shortx\"",
+            "str-append-int": "\"421\"",
+            "str-append-enum": "\"a long string value that is not short42\"",
+            "str-copy-append": "\"a long string value that is not short\" \"a long string value that is not shortx\"",
+            "str-append-loop": "\"a long string value that is not shortxxxxxxxxxxxxxxxxxxxx\"",
+            "str-regex-subst": "\"a short string value that is not short\" \"52\"",
+            "str-transliterate": "\"A LONG STRING VALUE THAT IS NOT SHORT\" \"ec\"",
+            "str-splice": "\"long string value that is not short\" \"2\"",
+            "str-splice-replace": "\"A long string value that is not short\" \"43\"",
+            "str-extract": "\"long string value that is not short\" \"a \" \"2\" \"4\"",
+            "str-trim": "\"padded value\"",
+            "str-chomp": "\"a line of text\"",
+            "str-inc-dec": "43 43 41 41",
+            "str-int-ops": "40 84 21 2",
+            "str-typed-local": "\"a long string value that is not shortx\"",
+            "num-ops": "12345678901234567891.25 0.5 24691357802469135780.5 6172839450617283945.125",
+            "num-inc-dec": "12345678901234567891.25 12345678901234567891.25 12345678901234567889.25"
+                " 12345678901234567889.25",
+            "num-mixed": "2.5 2.5",
+            "float-ops": "1.5 1.5 5.0 1.25",
+            "float-inc-dec": "1.5 -0.5",
+            "int-ops": "8 6 21 3",
+            "int-bit-ops": "3 15 3 6 28 3",
+            "int-inc-dec": "8 6 7",
+            "hash-append": "{a: \"a long string value that is not shortx\", b: \"42y\"}",
+            "typed-hash-ops": "{a: \"a short string value that is not short\", b: \"long string value that is not"
+                " short\", c: \"a long string value that is not shortx\"}",
+            "hash-member-ops": "{a: \"long string value that is not short\", b: \"padded value\", c: \"a line of"
+                " text\", d: \"2\"} \"a \"",
+            "hash-numeric": "{n: 12345678901234567892.25, f: 2.0, i: 14}",
+            "list-append": "[\"a long string value that is not shortx\", \"42y\", 12345678901234567891.25]",
+            "list-element-ops": "[\"long string value that is not short\", \"a short string value that is not"
+                " short\"]",
+            "container-trim": "[\"padded value\", \"a long string value that is not short\", 1] {a: \"padded"
+                " value\", b: 1}",
+            "container-chomp": "[\"a line of text\", \"a long string value that is not short\", 1] {a: \"a line of"
+                " text\", b: 1}",
+            "container-short": "[\"ab\", \"ab\"] {a: \" ab \", b: \"ab\"} {a: \"ab\", b: \"ab\"}",
+            "object-members": "\"a long string value that is not shortx\" \"a long string value that is not"
+                " shorty\" 12345678901234567891.25 8",
+            "object-method": "a LONG string value that is not short-m",
+            "ref-local": "\"a long string value that is not shortx\" \"42x\"",
+            "ref-splice": "\"short string value that is not short\"",
+            "ref-hash-member": "{a: \"a long string value that is not shortx\"}",
+            "ref-number": "12345678901234567892.25",
+            "ref-functions": "\"padded value\" \"a line of text\"",
+            "ref-variable": "\"a long string value that is not shortx\"",
+            "foreach-ref": "[\"a long string value that is not shortx\", \"42x\"]",
+            "global": "\"a long string value that is not shortx\" 12345678901234567891.25",
+            "loop": "0",
+            "members": "[\"42\", \"a long string value that is not short\", \"  padded value  \", \"a line of"
+                " text\\n\", \" ab \", \"ab\\n\", 1.5, 12345678901234567890.25, 0.5, 2.5, 1, 7]",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("EnumLvalueModificationTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
+        addTestCase("compiled program -O0", \testCompiledProgram(), 0);
+        addTestCase("compiled program -O3", \testCompiledProgram(), 3);
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, getWorker()));
+            checkWorkerOutput(mode, out);
+        }
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testIrTier() {
+        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=tiered %s", libqore_dir, qore_bin, getWorker())));
+    }
+
+    testCompiledProgram(int opt) {
+        TmpDir tmp("qore-enum-lvalue-modification-");
+        string exe = tmp.path + DirSep + "enum-lvalue-modification";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d --strip-source -o %s %s 2>&1",
+            libqore_dir, qcc_bin, opt, exe, getWorker()));
+        assertTrue(is_file(exe), sprintf("compiled program -O%d: %s", opt, compile_out));
+        int rc;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe), \rc);
+        assertEq(0, rc, sprintf("compiled program -O%d exit code: %s", opt, out));
+        checkWorkerOutput(sprintf("aot-O%d", opt), out);
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "enum-lvalue-modification-worker.qr";
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them; any other output fails
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z0-9]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

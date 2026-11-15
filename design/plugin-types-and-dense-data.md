@@ -94,6 +94,24 @@ Implemented execution-tier support includes:
 - conservative fast-math gating through both operation metadata and the
   Program-level `%fp-fast-math` parse option
 
+An operation is resolved at parse time, and lowered to a plugin-dispatch
+opcode, only when the operand types match the operation's types for every
+value.  When they can hold a value of the operation's types only for some of
+their values (an or-nothing type, a union type that includes the plugin's
+type, `auto`, or no type), `qore_plugin_operation_may_apply()` reports it, and
+a comparison operator (`==`, `!=`, `<`, `<=`, `>`, `>=`) dispatches at runtime
+as the AST operator does: its parse type is `auto` rather than `bool`, and
+the lowering gives it a plugin comparison opcode (`EqPlugin` ... `GePlugin`)
+instead of the dynamic comparison (`EqAny` ... `GeAny`).  The IR interpreter
+evaluates it with `QoreIRInterpreter::evalPluginComparison()`; JIT and AOT code
+compare ints and floats natively and call `qore_rt_plugin_comparison_op()`
+otherwise; its result is never a native boolean, and the scalar
+comparison specializations and fusions do not apply to it.  Plugin
+comparisons are written to qmods as they are.  A switch case with an operator
+compares without plugins, as the AST's `CaseNodeWithOperator` does.
+Comparisons whose operands cannot hold a plugin value are lowered and compiled
+as without plugins (qore#5911).
+
 ## DataFrame and DataProvider Integration
 
 The dataframe module keeps the public DataFrame class/private-data ownership
@@ -315,3 +333,23 @@ Before committing changes in this area:
 - LLVM codegen extensions are opt-in and tied to the libqore LLVM major
   version. Runtime-helper fallback should remain available unless the module
   deliberately marks the LLVM extension as required.
+- LLVM codegen extensions are used only by the JIT. Their code can name symbols
+  of the plugin module, which the JIT resolves in the process but which AOT code
+  (a qcc executable or `.qmod`) cannot link: the module is loaded at run time
+  (qore#6130). AOT code calls the registered runtime helper of a unary, binary
+  or subscript value operation that has an extension through a pointer that
+  the call site resolves on its first call from the operation's module-local
+  reference (`qore_rt_plugin_operation_helper_aot()`) and caches, and
+  dispatches any other operation generically.
+- Process-global plugin operation ids are assigned when plugin modules are
+  loaded, so they depend on the load order and are never embedded in AOT code
+  (qore#6136). AOT code names an operation by its module-local reference: the
+  module name, the plugin-local operation id and the canonical signature hash
+  it was compiled for. A generic dispatch site resolves the process-global id
+  on its first call (`qore_rt_plugin_operation_id_aot()`) and caches it. A
+  module that is not loaded, a missing operation or a changed signature raises
+  an exception (`PLUGIN-REGISTRY-MODULE-NOT-LOADED`,
+  `PLUGIN-REGISTRY-OPERATION-NOT-REGISTERED` or
+  `QORD-PLUGIN-SIGNATURE-HASH-MISMATCH`) when the site is first called, and
+  the operation returns NOTHING. A qcc executable or module refuses a missing
+  plugin module already when it loads the modules that it depends on.

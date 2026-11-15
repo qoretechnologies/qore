@@ -399,20 +399,35 @@ static std::unordered_set<const void*> qore_ir_collect_local_keys(const QoreIRFu
     return keys;
 }
 
+//! Returns the locals assigned on entry to a block: the intersection of the assigned sets of its predecessors
+/** A predecessor not visited yet has the top element (every local assigned), the identity of the intersection, so
+    it is left out; with no predecessor visited, the result is \a universe.  A block without predecessors has none.
+*/
 static std::unordered_set<const void*> qore_ir_intersect_assigned(
-        const std::vector<std::unordered_set<const void*>>& out_sets,
-        const std::vector<size_t>& preds, bool* cancelled = nullptr) {
+        const std::vector<std::unordered_set<const void*>>& out_sets, const std::vector<char>& visited,
+        const std::unordered_set<const void*>& universe, const std::vector<size_t>& preds,
+        bool* cancelled = nullptr) {
     if (preds.empty()) {
         return {};
     }
-    std::unordered_set<const void*> rv = out_sets[preds.front()];
-    for (size_t i = 1; i < preds.size(); ++i) {
+    size_t first = 0;
+    while (first < preds.size() && !visited[preds[first]]) {
+        ++first;
+    }
+    if (first == preds.size()) {
+        return universe;
+    }
+    std::unordered_set<const void*> rv = out_sets[preds[first]];
+    for (size_t i = first + 1; i < preds.size(); ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr, "IR native local predecessor intersection")) {
             if (cancelled) {
                 *cancelled = true;
             }
             return rv;
+        }
+        if (!visited[preds[i]]) {
+            continue;
         }
         const auto& pred_out = out_sets[preds[i]];
         size_t local_count = 0;
@@ -467,6 +482,7 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
     }
 
     std::vector<std::vector<size_t>> preds(ir_func.blocks.size());
+    std::vector<std::vector<size_t>> succs(ir_func.blocks.size());
     for (size_t i = 0; i < ir_func.blocks.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "IR native local successor analysis")) {
             return incomplete();
@@ -477,6 +493,7 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
             auto it = block_index.find(succ);
             if (it != block_index.end()) {
                 preds[it->second].push_back(i);
+                succs[i].push_back(it->second);
             }
         }
         if (successor_cancelled) {
@@ -497,13 +514,47 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
     std::unordered_set<const void*> assigned_universe = all_keys;
     assigned_universe.insert(initially_assigned.begin(), initially_assigned.end());
     std::vector<std::unordered_set<const void*>> in_sets(ir_func.blocks.size());
+    // the assigned sets at the ends of the blocks; a block not visited yet has the top element (every local
+    // assigned), which is not stored: see qore_ir_intersect_assigned()
     std::vector<std::unordered_set<const void*>> out_sets(ir_func.blocks.size());
-    for (size_t i = 0; i < out_sets.size(); ++i) {
-        if (i && !(i % 10)
-                && qore_check_cancel(nullptr, "IR native local lattice initialization")) {
-            return incomplete();
+    std::vector<char> visited(ir_func.blocks.size(), 0);
+
+    // the blocks are visited in reverse postorder of the normal edges from the entry block, then from each block
+    // that they do not reach (a landing pad, for example), so that a block comes after its predecessors except
+    // across a loop's back edge; the result does not depend on the order, but the number of passes and of the
+    // assigned sets computed from the top element of a predecessor not visited yet does
+    std::vector<size_t> order;
+    order.reserve(ir_func.blocks.size());
+    {
+        std::vector<char> seen(ir_func.blocks.size(), 0);
+        std::vector<std::pair<size_t, size_t>> stack;
+        size_t steps = 0;
+        for (size_t root = 0; root < ir_func.blocks.size(); ++root) {
+            if (seen[root]) {
+                continue;
+            }
+            // the blocks that this root reaches first, in reverse postorder
+            size_t root_start = order.size();
+            seen[root] = 1;
+            stack.emplace_back(root, 0);
+            while (!stack.empty()) {
+                if (!(++steps % 1000) && qore_check_cancel(nullptr, "IR native local block order")) {
+                    return incomplete();
+                }
+                auto& top = stack.back();
+                if (top.second < succs[top.first].size()) {
+                    size_t succ = succs[top.first][top.second++];
+                    if (!seen[succ]) {
+                        seen[succ] = 1;
+                        stack.emplace_back(succ, 0);
+                    }
+                    continue;
+                }
+                order.push_back(top.first);
+                stack.pop_back();
+            }
+            std::reverse(order.begin() + root_start, order.end());
         }
-        out_sets[i] = assigned_universe;
     }
 
     auto transfer_block = [&](size_t block_id,
@@ -626,14 +677,15 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
         if (++iterations % 10 == 0 && qore_check_cancel(nullptr, "IR native local assigned-state analysis")) {
             return incomplete();
         }
-        for (size_t i = 0; i < ir_func.blocks.size(); ++i) {
-            if (i && !(i % 100)
+        for (size_t oi = 0; oi < order.size(); ++oi) {
+            if (oi && !(oi % 100)
                     && qore_check_cancel(nullptr, "IR native local assigned-state block transfer")) {
                 return incomplete();
             }
+            size_t i = order[oi];
             bool intersect_cancelled = false;
             std::unordered_set<const void*> assigned = i == 0
-                ? initially_assigned : qore_ir_intersect_assigned(out_sets,
+                ? initially_assigned : qore_ir_intersect_assigned(out_sets, visited, assigned_universe,
                     preds[i], &intersect_cancelled);
             if (intersect_cancelled) {
                 return incomplete();
@@ -645,7 +697,17 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
                 return incomplete();
             }
 
-            if (out_sets[i] != assigned) {
+            if (!visited[i]) {
+                // a successor visited before this block (across a back edge) took the top element for it
+                visited[i] = 1;
+                for (size_t succ : succs[i]) {
+                    if (visited[succ]) {
+                        changed = true;
+                        break;
+                    }
+                }
+                out_sets[i] = std::move(assigned);
+            } else if (out_sets[i] != assigned) {
                 out_sets[i] = std::move(assigned);
                 changed = true;
             }
@@ -1414,6 +1476,26 @@ bool QoreJIT::compileFunctionLocked(const QoreIRFunction& func, std::string& err
     fall back to the IR tier, which already executes the function.
     See QoreJIT::getMaxJITIRInstructions().
 */
+//! Returns false when \a handler_cost exceeds the limit of QoreJIT::getMaxJITHandlerCost() (qore#6104)
+/** Like jit_check_size_budget(), for a function with many on_block_exit handlers and locals: the code that runs the
+    handlers takes a number of instructions in the product of the two, which makes its compilation take minutes
+    though the function is small; it stays on the IR tier.
+*/
+static bool jit_check_handler_budget(const std::string& func_name, size_t handler_cost, std::string& error) {
+    const size_t budget = static_cast<size_t>(QoreJIT::getMaxJITHandlerCost());
+    if (!budget || handler_cost <= budget) {
+        return true;
+    }
+    error = "function '" + func_name + "' is too expensive for native compilation (about " + std::to_string(handler_cost)
+        + " instructions to run its on_block_exit handlers; limit " + std::to_string(budget)
+        + "); it remains on the IR tier";
+    if (q_env_is_set("QORE_JIT_TIMING")) {
+        fprintf(stderr, "[JIT] skipped native compilation of '%s' (handler budget exceeded; about %zu instructions; "
+            "limit %zu)\n", func_name.c_str(), handler_cost, budget);
+    }
+    return false;
+}
+
 static bool jit_check_size_budget(const std::string& func_name, size_t instruction_count,
         std::string& error) {
     const size_t budget = static_cast<size_t>(QoreJIT::getMaxJITIRInstructions());
@@ -1782,7 +1864,8 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
         }
     }
 
-    if (!jit_check_size_budget(func_name, func.getInstructionCount(), error)) {
+    if (!jit_check_size_budget(func_name, func.getInstructionCount(), error)
+            || !jit_check_handler_budget(func_name, func.getHandlerCostEstimate(), error)) {
         return false;
     }
 
@@ -1820,6 +1903,8 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
 
     // Run LLVM optimization passes
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
+    // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
+    QoreIRToLLVM::expandFloatToIntForTarget(*module, llvm::Triple(llvm::sys::getProcessTriple()));
 
     // Dump LLVM IR if requested (after optimization)
     if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
@@ -1994,6 +2079,17 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             }
         }
         if (!jit_check_size_budget(root_func_name, batch_instruction_count, error)) {
+            return false;
+        }
+        size_t batch_handler_cost = rewrite_root
+            ? rewrite_root->getHandlerCostEstimate()
+            : root_func.getHandlerCostEstimate();
+        for (const auto& callee : callees) {
+            if (callee.ir_func) {
+                batch_handler_cost += callee.ir_func->getHandlerCostEstimate();
+            }
+        }
+        if (!jit_check_handler_budget(root_func_name, batch_handler_cost, error)) {
             return false;
         }
     }
@@ -2373,6 +2469,8 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
 
     // Run LLVM optimization passes
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
+    // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
+    QoreIRToLLVM::expandFloatToIntForTarget(*module, llvm::Triple(llvm::sys::getProcessTriple()));
 
     // Dump LLVM IR if requested (after optimization)
     if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
@@ -2556,6 +2654,34 @@ uint64_t QoreJIT::getJITThreshold() {
 // compiler thread's stack on platforms with small thread stacks (musl), and even an unoptimized
 // native compile of such a function can stall Program teardown for minutes or exhaust the memory of
 // a constrained container.  Such functions therefore stay on the IR tier.
+uint64_t QoreJIT::getMaxJITHandlerCost() {
+    static constinit QoreLazyValue<uint64_t> cost_setting([]() -> uint64_t {
+        constexpr uint64_t default_max = 120000;
+        QoreEnvironmentValue env_holder("QORE_JIT_MAX_HANDLER_COST");
+        const char* env = env_holder.c_str();
+        if (!env || !*env) {
+            return default_max;
+        }
+        // only an unsigned decimal integer, as for QORE_JIT_MAX_IR_INSTRUCTIONS
+        const char* start = env;
+        while (*start == ' ' || *start == '\t' || *start == '\n' || *start == '\r' || *start == '\v'
+                || *start == '\f') {
+            ++start;
+        }
+        if (*start < '0' || *start > '9') {
+            return default_max;
+        }
+        char* end = nullptr;
+        unsigned long long value = strtoull(start, &end, 10);
+        if (!end || end == start || *end) {
+            return default_max;
+        }
+        // 0 means "no limit"
+        return static_cast<uint64_t>(value);
+    });
+    return cost_setting.get();
+}
+
 uint64_t QoreJIT::getMaxJITIRInstructions() {
     // function-local so the value cannot be read before its initializer runs, and is computed once
     static constinit QoreLazyValue<uint64_t> budget_setting([]() -> uint64_t {

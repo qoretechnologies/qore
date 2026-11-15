@@ -1730,6 +1730,7 @@ examples/test/qore/misc/hashdecl.qtest	0.5	0.0	0.5	0.5	1.0	0.2	-	0.5	0.5	0.0
 examples/test/qore/misc/imported-method-context.qtest	0.0	0.0	0.0	0.0	0.0	0.1	-	0.0	0.0	0.0
 examples/test/qore/misc/issue3179/issue3179.qtest	0.0	0.0	0.5	0.0	0.0	0.1	-	0.0	0.0	0.5
 examples/test/qore/misc/jobserver-client.qtest	0.0	0.0	0.0	0.0	0.0	0.1	-	0.0	0.0	0.0
+examples/test/qore/misc/libqore-dlopen/libqore-dlopen.qtest	1.0	1.0	1.0	1.0	1.0	1.0	-	1.0	1.0	1.0
 examples/test/qore/misc/llvm-target-init/llvm-target-init.qtest	31.0	19.1	25.0	45.5	16.5	11.6	-	16.0	18.5	16.0
 examples/test/qore/misc/locals-in-class.qtest	0.0	0.0	0.0	0.0	0.0	0.1	-	0.0	0.0	0.0
 examples/test/qore/misc/lvalue-delete-cycle-scan.qtest	0.0	0.0	0.0	0.0	0.5	0.1	-	0.0	0.0	0.5
@@ -1866,6 +1867,9 @@ examples/test/qore/parser/modern-default.qtest	0.5	0.5	-	0.5	0.5	0.4	-	0.5	0.5	0
 examples/test/qore/parser/module-path-directive.qtest	0.0	0.0	-	0.0	0.0	0.1	-	0.0	0.0	0.0
 examples/test/qore/parser/module-path-env-expansion.qtest	0.0	0.0	-	0.0	0.0	0.1	-	0.0	0.0	0.0
 examples/test/qore/parser/no-summarize.qtest	0.0	0.5	-	0.0	0.5	0.1	-	0.0	0.0	0.5
+examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-1.qtest	84.0	84.0	84.0	84.0	84.0	26.0	-	84.0	84.0	84.0
+examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-2.qtest	42.0	42.0	-	-	-	99.0	-	-	42.0	42.0
+examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-3.qtest	88.0	88.0	88.0	88.0	88.0	33.0	-	88.0	88.0	88.0
 examples/test/qore/parser/qore-namespace-priority.qtest	0.0	0.0	-	0.0	0.0	0.1	-	0.0	0.0	0.0
 examples/test/qore/parser/qpp_complex_code_types.qtest	0.5	0.0	-	0.5	0.0	0.1	-	0.5	0.0	0.0
 examples/test/qore/parser/try-module.qtest	0.0	0.0	-	0.0	0.0	0.1	-	0.5	0.0	0.0

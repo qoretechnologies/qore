@@ -93,6 +93,8 @@
 #include <netinet/in_pcb.h>
 #include <netinet/tcp_var.h>
 #include <netinet/tcp_fsm.h>
+#include <libproc.h>
+#include <unordered_set>
 #endif
 
 // maximum number of non-blocking network operations before returning
@@ -432,14 +434,137 @@ static int qore_socket_set_raw_error(int rc) {
 #endif
 }
 
-// returns 0 = connected, 1 = still in progress, -1 = error
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+std::atomic<int> qore_dbg_connect_error_after_so_error_read{0};
+std::atomic<int> qore_dbg_connect_first_error_after_so_error_read{0};
+std::atomic<int> qore_dbg_errno_after_connect_close{0};
+
+void qore_socket_dbg_errno_after_connect_close() {
+    int e = qore_dbg_errno_after_connect_close.load(std::memory_order_relaxed);
+    if (e) {
+        errno = e;
+    }
+}
+
+namespace {
+//! The socket state that qore_dbg_connect_error_after_so_error_read models during one check of a connect
+struct QoreSocketDbgConnectFailure {
+    //! the descriptor whose connect fails after its pending error was read as 0
+    int fd;
+    //! the connect's error, pending in SO_ERROR until it is read
+    int err;
+};
+
+//! The connect that fails during the calling thread's check of a connect; fd < 0 if none
+/** Set and cleared within one call of qore_socket_check_connect_ready(), which reads it only in its own thread
+*/
+thread_local QoreSocketDbgConnectFailure qore_socket_dbg_connect_failure = {-1, 0};
+
+//! Ends the connect failure that the hook models when the check of the connect returns
+struct QoreSocketDbgConnectFailureScope {
+    DLLLOCAL ~QoreSocketDbgConnectFailureScope() {
+        qore_socket_dbg_connect_failure = {-1, 0};
+    }
+};
+}
+#endif
+
+//! Reads the pending error of a socket (SO_ERROR), which the read clears
+/** @return 0 if read (in @p val), QORE_SOCKET_ERROR with the error in errno (WSAGetLastError() on Windows) if not
+*/
+static int qore_socket_read_pending_error(int fd, int& val) {
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+    if (qore_socket_dbg_connect_failure.fd >= 0 && qore_socket_dbg_connect_failure.fd == fd) {
+        // the connect's error is pending, as the kernel keeps it, until it is read
+        val = qore_socket_dbg_connect_failure.err;
+        qore_socket_dbg_connect_failure.err = 0;
+        return 0;
+    }
+#endif
+    val = 0;
+    socklen_t lon = sizeof(val);
+    return getsockopt(fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)&val, &lon);
+}
+
+//! Makes the zero-byte send that confirms the connection of a nonblocking connect
+/** @return 0 if sent, -1 with the error in errno (WSAGetLastError() on Windows) if not
+*/
+static int qore_socket_send_connect_probe(int fd) {
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+    if (qore_socket_dbg_connect_failure.fd >= 0 && qore_socket_dbg_connect_failure.fd == fd) {
+        // as on Darwin: the connect's failure has marked the socket unable to send, which the send reports before it
+        // checks the pending error
+        errno = EPIPE;
+        return -1;
+    }
+#endif
+    return ::send(fd, nullptr, 0, 0);
+}
+
+//! Confirms the connection of a nonblocking connect whose pending error (SO_ERROR) was read as 0
+/** Makes a zero-byte send; when the connect failed after its pending error was read, the error the send fails with
+    describes the state of the socket (EPIPE on Darwin), so the connect's own error, which is still pending, is taken
+    from SO_ERROR instead
+
+    @return 0 = connected, 1 = still in progress, -1 = the connect failed: errno (WSAGetLastError() on Windows) is the
+    connect's error
+*/
+static int qore_socket_confirm_connect(int fd) {
+    // Try a zero-byte send to confirm connection.  This is needed on macOS,
+    // where poll() may report writable readiness before connect completion.
+    unsigned loop = 0;
+    while (true) {
+        int rc = qore_socket_send_connect_probe(fd);
+        if (!rc) {
+            return 0;
+        }
+        int e = sock_get_error();
+        if (e == EINPROGRESS || e == EAGAIN || e == ENOTCONN) {
+            return 1;
+        }
+        if (e == EINTR) {
+            // Yield after a bounded number of immediate retries so a signal storm cannot monopolize an async I/O
+            // worker.  A zero-byte send has no partial-progress state, so retrying it is safe on every supported
+            // platform.
+            if (++loop >= max_nonblock_ops) {
+                return 1;
+            }
+            continue;
+        }
+        // The connect can fail after the caller read SO_ERROR as 0 and before this send: the send then reports the
+        // state the failure left the socket in, not why the connect failed (Darwin reports EPIPE for a connection
+        // that was refused or that timed out, as the failure marks the socket unable to send before the send
+        // checks the pending error), while the connect's own error is still pending in SO_ERROR
+        int raw = sock_get_raw_error();
+        // a read that a signal interrupts is made again, a bounded number of times; if it cannot be made, the
+        // send's error is reported
+        for (unsigned rloop = 0; rloop < max_nonblock_ops; ++rloop) {
+            int val;
+            if (qore_socket_read_pending_error(fd, val) != QORE_SOCKET_ERROR) {
+                if (val) {
+                    raw = val;
+                }
+                break;
+            }
+            if (sock_get_error() != EINTR) {
+                break;
+            }
+        }
+        qore_socket_set_raw_error(raw);
+        return -1;
+    }
+}
+
+// returns 0 = connected, 1 = still in progress, -1 = error with the connect's error in errno (WSAGetLastError() on
+// Windows)
 static int qore_socket_check_connect_ready(int fd) {
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+    QoreSocketDbgConnectFailureScope dbg_failure_scope;
+#endif
     unsigned loop = 0;
     int val;
     while (true) {
-        val = 0;
-        socklen_t lon = sizeof(val);
-        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)&val, &lon) != QORE_SOCKET_ERROR) {
+        if (qore_socket_read_pending_error(fd, val) != QORE_SOCKET_ERROR) {
             break;
         }
         int e = sock_get_error();
@@ -462,27 +587,25 @@ static int qore_socket_check_connect_ready(int fd) {
         return -1;
     }
 
-    // Try a zero-byte send to confirm connection.  This is needed on macOS,
-    // where poll() may report writable readiness before connect completion.
-    while (true) {
-        int rc = ::send(fd, nullptr, 0, 0);
-        if (!rc) {
-            return 0;
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+    {
+        // the first check that reads the pending error as 0 takes the first error, if set, and the others the error
+        // of every check
+        int err = 0;
+        if (qore_dbg_connect_first_error_after_so_error_read.load(std::memory_order_relaxed)) {
+            err = qore_dbg_connect_first_error_after_so_error_read.exchange(0, std::memory_order_relaxed);
         }
-        int e = sock_get_error();
-        if (e == EINPROGRESS || e == EAGAIN || e == ENOTCONN) {
-            return 1;
+        if (!err) {
+            err = qore_dbg_connect_error_after_so_error_read.load(std::memory_order_relaxed);
         }
-        if (e == EINTR) {
-            // As above, yield after a bounded number of immediate retries.  A zero-byte send
-            // has no partial-progress state, so retrying it is safe on every supported platform.
-            if (++loop >= max_nonblock_ops) {
-                return 1;
-            }
-            continue;
+        if (err) {
+            // the connect fails now, after its pending error was read as 0
+            qore_socket_dbg_connect_failure = {fd, err};
         }
-        return -1;
     }
+#endif
+
+    return qore_socket_confirm_connect(fd);
 }
 
 static void qore_socket_raise_poll_result_exception(const QoreHashNode* ex, ExceptionSink* xsink) {
@@ -2611,9 +2734,8 @@ private:
     DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events, bool stream_wait = false) {
         int64 poll_timeout_ms = -1;
         if (timeout_ms >= 0) {
-            int us;
-            int64 now_s = q_epoch_us(us);
-            int64 now_ms = now_s * 1000 + us / 1000;
+            // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+            int64 now_ms = q_get_monotonic_us() / 1000;
             if (!wait_deadline_ms) {
                 wait_deadline_ms = now_ms + timeout_ms;
             }
@@ -2663,9 +2785,8 @@ private:
         if (wait_deadline_ms <= 0) {
             return false;
         }
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (now_ms < wait_deadline_ms) {
             return false;
         }
@@ -2903,9 +3024,8 @@ private:
     DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events, bool output_wait = false) {
         int64 poll_timeout_ms = -1;
         if (timeout_ms >= 0) {
-            int us;
-            int64 now_s = q_epoch_us(us);
-            int64 now_ms = now_s * 1000 + us / 1000;
+            // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+            int64 now_ms = q_get_monotonic_us() / 1000;
             if (!wait_deadline_ms) {
                 wait_deadline_ms = now_ms + timeout_ms;
             }
@@ -2955,9 +3075,8 @@ private:
         if (wait_deadline_ms <= 0) {
             return false;
         }
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (now_ms < wait_deadline_ms) {
             return false;
         }
@@ -9093,8 +9212,7 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
 
         rc = startNextConnect(xsink);
         if (rc < 0 && !*xsink) {
-            qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr, host.c_str(),
-                service.c_str());
+            raiseConnectError(xsink);
         }
         if (rc <= 0) {
             if (rc == 0) {
@@ -9141,6 +9259,10 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             continue;
         }
         int rc = checkAttempt(i);
+        if (rc < 0) {
+            // the error is taken before the attempt is given up, which makes system calls of its own
+            last_error = sock_get_raw_error();
+        }
         if (rc == 0) {
             // Connected!
             winning_idx = (int)i;
@@ -9171,6 +9293,9 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             } else {
                 qore_socket_private::closeDescriptor(fd);
             }
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+            qore_socket_dbg_errno_after_connect_close();
+#endif
         }
     }
 
@@ -9224,7 +9349,7 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
 
     if (!any_active) {
         sock->sock = QORE_INVALID_SOCKET;
-        qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr, host.c_str(), service.c_str());
+        raiseConnectError(xsink);
         return -1;
     }
 
@@ -9395,6 +9520,7 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
 
         int fd = create_nonblocking_socket(p.family, p.socktype, p.protocol);
         if (fd == QORE_INVALID_SOCKET) {
+            last_error = sock_get_raw_error();
             ++next_addr_idx;
             continue;
         }
@@ -9432,6 +9558,7 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
 #else
         if (errno != EINPROGRESS && errno != EAGAIN) {
 #endif
+            last_error = sock_get_raw_error();
             // the descriptor was never registered
             qore_owned_descriptor_release(a.owned);
             ++next_addr_idx;
@@ -9453,6 +9580,11 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
     }
 
     return -1; // no more addresses
+}
+
+void SocketConnectInetHappyEyeballsPollState::raiseConnectError(ExceptionSink* xsink) const {
+    qore_socket_error_intern(last_error ? last_error : sock_get_raw_error(), xsink, "SOCKET-CONNECT-ERROR",
+        "error in connect()", nullptr, host.c_str(), service.c_str());
 }
 
 int SocketConnectInetHappyEyeballsPollState::checkAttempt(size_t idx) {
@@ -9616,8 +9748,11 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
                 return -1;
             }
             if (rc) {
+                // the error is taken before the close, which makes system calls of its own
+                int err = sock_get_raw_error();
                 sock->close_and_reset();
-                qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", 0, name.c_str());
+                qore_socket_error_intern(err, xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr,
+                    name.c_str());
                 return -1;
             }
 
@@ -9639,8 +9774,11 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
             }
 
             if (rc < 0) {
+                // the error is taken before the close, which makes system calls of its own
+                int err = sock_get_raw_error();
                 sock->close_and_reset();
-                qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", 0, name.c_str());
+                qore_socket_error_intern(err, xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr,
+                    name.c_str());
                 return -1;
             }
         }
@@ -13855,11 +13993,90 @@ struct QoreSocketTableEntry {
     //! the socket's options, such as SO_REUSEADDR and SO_REUSEPORT
     int options = 0;
     uid_t uid = 0;
+    //! the process whose descriptor the socket is, if found in the process descriptors; 0 otherwise
+    pid_t pid = 0;
 };
 
+#ifdef DEBUG
+//! the number of scans of the process descriptors made by the thread (see qore_socket_descriptor_scan_count())
+static thread_local size_t qore_socket_descriptor_scans = 0;
+//! the test scope of the port checks made by the thread (see qore_socket_port_check_test_scope())
+static thread_local int qore_socket_test_scope = 0;
+
+//! Adds the identities of the sockets of this process to @a ids, as the socket table gives them (\c xso_so)
+static void qore_socket_own_socket_ids(std::unordered_set<uint64_t>& ids) {
+    pid_t self = getpid();
+    int needed = proc_pidinfo(self, PROC_PIDLISTFDS, 0, nullptr, 0);
+    if (needed <= 0 || needed > INT_MAX - 4096) {
+        return;
+    }
+    std::vector<proc_fdinfo> fds((needed + 4096) / sizeof(proc_fdinfo));
+    int got = proc_pidinfo(self, PROC_PIDLISTFDS, 0, fds.data(), static_cast<int>(fds.size() * sizeof(proc_fdinfo)));
+    if (got <= 0) {
+        return;
+    }
+    size_t fd_count = std::min(fds.size(), static_cast<size_t>(got) / sizeof(proc_fdinfo));
+    for (size_t j = 0; j < fd_count; ++j) {
+        if (fds[j].proc_fdtype != PROX_FDTYPE_SOCKET) {
+            continue;
+        }
+        socket_fdinfo info;
+        if (proc_pidfdinfo(self, fds[j].proc_fd, PROC_PIDFDSOCKETINFO, &info, sizeof(info)) == sizeof(info)) {
+            ids.insert(info.psi.soi_so);
+        }
+    }
+}
+#endif
+
+//! the maximum number of parent processes that qore_socket_is_descendant() follows
+static constexpr unsigned QORE_SOCKET_MAX_PROCESS_DEPTH = 256;
+
+//! Returns true if the process is this process or one of its descendants, or if that cannot be told
+/** @param pid the process
+    @param self this process
+    @param known the processes already checked, with the result; the processes checked are added
+*/
+static bool qore_socket_is_descendant(pid_t pid, pid_t self, std::unordered_map<pid_t, bool>& known) {
+    std::vector<pid_t> chain;
+    bool rv = true;
+    for (unsigned depth = 0; ; ++depth) {
+        if (pid == self) {
+            rv = true;
+            break;
+        }
+        auto i = known.find(pid);
+        if (i != known.end()) {
+            rv = i->second;
+            break;
+        }
+        if (pid <= 1) {
+            rv = false;
+            break;
+        }
+        if (depth == QORE_SOCKET_MAX_PROCESS_DEPTH) {
+            // cannot be told
+            rv = true;
+            break;
+        }
+        chain.push_back(pid);
+        struct proc_bsdinfo info;
+        if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof(info)) != static_cast<int>(sizeof(info))) {
+            // the process has ended or cannot be read: it cannot be told
+            rv = true;
+            break;
+        }
+        pid = static_cast<pid_t>(info.pbi_ppid);
+    }
+    for (pid_t p : chain) {
+        known[p] = rv;
+    }
+    return rv;
+}
+
+
 //! Calls @a f with each socket of the type in the system's socket table that is bound to a port and not connected
-/** The table is the one that \c netstat reads (\c net.inet.tcp.pcblist64 or \c net.inet.udp.pcblist64); it lists
-    the sockets of all users.
+/** The table is the one that \c netstat reads (\c net.inet.tcp.pcblist64 or \c net.inet.udp.pcblist64);
+    macOS can restrict which sockets appear in the returned snapshot.
 
     @param socktype the socket type, \c SOCK_STREAM or \c SOCK_DGRAM
     @param f called with each socket
@@ -13898,6 +14115,14 @@ static int qore_socket_for_each_bound_socket(int socktype, F&& f, ExceptionSink*
     }
     memcpy(&gen, buf.data(), sizeof(gen));
     size_t record_size = tcp ? sizeof(struct xtcpcb64) : sizeof(struct xinpcb64);
+#ifdef DEBUG
+    // a test emulates a table that lists only the sockets of this process
+    std::unique_ptr<std::unordered_set<uint64_t>> own_ids;
+    if (qore_socket_test_scope & QORE_SOCKET_TEST_FILTERED_TABLE) {
+        own_ids = std::make_unique<std::unordered_set<uint64_t>>();
+        qore_socket_own_socket_ids(*own_ids);
+    }
+#endif
     size_t cancel_check = 0;
     for (size_t pos = gen.xig_len; pos + sizeof(uint32_t) <= len; ) {
         if (xsink && !(cancel_check++ % 100) && qore_check_cancel(xsink, "reading the system's socket table")) {
@@ -13938,10 +14163,300 @@ static int qore_socket_for_each_bound_socket(int socktype, F&& f, ExceptionSink*
         e.options = inp.xi_socket.so_options;
         e.listening = tcp && (state == TCPS_LISTEN || (e.options & SO_ACCEPTCONN));
         e.uid = inp.xi_socket.so_uid;
+#ifdef DEBUG
+        if (own_ids && !own_ids->count(inp.xi_socket.xso_so)) {
+            continue;
+        }
+#endif
         f(static_cast<const QoreSocketTableEntry&>(e));
     }
     // the table has no end record
     return -1;
+}
+
+//! Calls @a f with each socket of the type in the accessible process descriptors that is bound and not connected
+/** macOS can return a successful but filtered pcblist64 snapshot. The public libproc interface can
+    still describe accessible process descriptors. As with the system table, exited processes, closed descriptors,
+    and processes whose metadata is not accessible are skipped; no descriptor is opened or changed.
+
+    @param socktype the socket type, \c SOCK_STREAM or \c SOCK_DGRAM
+    @param port the port of the sockets to report, or 0 for the sockets on any port; the owner of a socket
+    (QoreSocketTableEntry::uid) is only determined when a port is given, and is no user otherwise
+    @param f called with each socket; returns true to end the scan
+    @param xsink if given, the scan is a cancellation point
+
+    @return 1 if @a f ended the scan, 0 otherwise, -1 if cancellation was raised in @a xsink
+*/
+template <typename F>
+static int qore_socket_for_each_process_socket(int socktype, int port, F&& f, ExceptionSink* xsink) {
+#ifdef DEBUG
+    ++qore_socket_descriptor_scans;
+    // a test limits the scan to this process and its descendants
+    const bool own_tree = qore_socket_test_scope & QORE_SOCKET_TEST_OWN_TREE;
+    const pid_t self = getpid();
+    std::unordered_map<pid_t, bool> descendants;
+#endif
+    int bytes = proc_listpids(PROC_ALL_PIDS, 0, nullptr, 0);
+    if (bytes <= 0 || bytes > INT_MAX - 4096) {
+        return 0;
+    }
+    std::vector<pid_t> pids((bytes + 4096) / sizeof(pid_t));
+    bytes = proc_listpids(PROC_ALL_PIDS, 0, pids.data(), static_cast<int>(pids.size() * sizeof(pid_t)));
+    if (bytes <= 0) {
+        return 0;
+    }
+    size_t count = std::min(pids.size(), static_cast<size_t>(bytes) / sizeof(pid_t));
+    std::vector<proc_fdinfo> fds;
+    size_t checks = 0;
+    auto cancelled = [&]() {
+        return xsink && !(checks++ % 10)
+            && qore_check_cancel(xsink, "checking process socket descriptors");
+    };
+    for (size_t i = 0; i < count; ++i) {
+        if (cancelled()) {
+            return -1;
+        }
+        if (pids[i] <= 0) {
+            continue;
+        }
+#ifdef DEBUG
+        if (own_tree && !qore_socket_is_descendant(pids[i], self, descendants)) {
+            continue;
+        }
+#endif
+        int needed = proc_pidinfo(pids[i], PROC_PIDLISTFDS, 0, nullptr, 0);
+        if (needed <= 0 || needed > INT_MAX - 4096) {
+            continue;
+        }
+        fds.resize((needed + 4096) / sizeof(proc_fdinfo));
+        int got = proc_pidinfo(pids[i], PROC_PIDLISTFDS, 0, fds.data(),
+            static_cast<int>(fds.size() * sizeof(proc_fdinfo)));
+        if (got <= 0) {
+            continue;
+        }
+        size_t fd_count = std::min(fds.size(), static_cast<size_t>(got) / sizeof(proc_fdinfo));
+        // the effective user of the process, read when a socket's description has no owner (see below)
+        bool have_process_uid = false;
+        uid_t process_uid = static_cast<uid_t>(-1);
+        for (size_t j = 0; j < fd_count; ++j) {
+            if (cancelled()) {
+                return -1;
+            }
+            if (fds[j].proc_fdtype != PROX_FDTYPE_SOCKET) {
+                continue;
+            }
+            socket_fdinfo info;
+            if (proc_pidfdinfo(pids[i], fds[j].proc_fd, PROC_PIDFDSOCKETINFO, &info, sizeof(info))
+                    != sizeof(info)) {
+                continue;
+            }
+            const socket_info& socket = info.psi;
+            if (socket.soi_type != socktype || (socket.soi_family != AF_INET && socket.soi_family != AF_INET6)) {
+                continue;
+            }
+            bool tcp = socktype == SOCK_STREAM;
+            if (socket.soi_kind != (tcp ? SOCKINFO_TCP : SOCKINFO_IN)) {
+                continue;
+            }
+            const in_sockinfo& inp = tcp ? socket.soi_proto.pri_tcp.tcpsi_ini : socket.soi_proto.pri_in;
+            int lport = ntohs(static_cast<uint16_t>(inp.insi_lport));
+            if (!lport || (port && lport != port) || inp.insi_fport) {
+                continue;
+            }
+            QoreSocketTableEntry entry;
+            entry.port = lport;
+            entry.pid = pids[i];
+            if (inp.insi_vflag & INI_IPV6) {
+                entry.addrs.setIpv6(inp.insi_laddr.ina_6, inp.insi_flags & IN6P_IPV6_V6ONLY);
+            } else if (inp.insi_vflag & INI_IPV4) {
+                entry.addrs.setIpv4(inp.insi_laddr.ina_46.i46a_addr4);
+            } else {
+                continue;
+            }
+            entry.options = socket.soi_options;
+            entry.listening = tcp && (socket.soi_proto.pri_tcp.tcpsi_state == TSI_S_LISTEN
+                || (entry.options & SO_ACCEPTCONN));
+            // The owner of the socket is in its stat information, which macOS 27 leaves empty in the description
+            // (all of soi_stat is zero, while fstat() of the socket reports its owner): an empty one has no file
+            // type in vst_mode, and the owner is then taken to be the effective user of the process, the creator of
+            // the socket unless the process changed its user or was given the descriptor.  If that cannot be read,
+            // the socket belongs to no user, so it does not share the port by SO_REUSEPORT.
+            if (socket.soi_stat.vst_mode) {
+                entry.uid = socket.soi_stat.vst_uid;
+            } else if (port) {
+                if (!have_process_uid) {
+                    have_process_uid = true;
+                    struct proc_bsdinfo bsd_info;
+                    if (proc_pidinfo(pids[i], PROC_PIDTBSDINFO, 0, &bsd_info, sizeof(bsd_info))
+                            == static_cast<int>(sizeof(bsd_info))) {
+                        process_uid = bsd_info.pbi_uid;
+                    }
+                }
+                entry.uid = process_uid;
+            } else {
+                entry.uid = static_cast<uid_t>(-1);
+            }
+            if (f(static_cast<const QoreSocketTableEntry&>(entry))) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+//! Whether the system's socket table of a socket type lists the sockets of the accessible process descriptors
+/** 0 or less: not known yet, the number of comparisons that could not tell (see
+    qore_socket_table_lists_process_sockets()); 1: it does; QORE_SOCKET_TABLE_OMITS: it can omit some.  Index 0 is
+    for \c SOCK_STREAM, 1 for \c SOCK_DGRAM.
+*/
+static std::atomic<int> qore_socket_table_lists_sockets[2] = {{0}, {0}};
+//! the state of qore_socket_table_lists_sockets of a table that can omit sockets
+static constexpr int QORE_SOCKET_TABLE_OMITS = -1000;
+//! the number of checks whose comparison cannot tell after which the next check takes a table to omit sockets
+static constexpr int QORE_SOCKET_TABLE_MAX_UNDECIDED = 3;
+//! the maximum number of comparisons of the table with the process descriptors in one check
+/** A comparison that finds a socket of the descriptors missing from the table is repeated, up to this number of
+    comparisons in all; if every one of them finds a socket missing, the table is taken to omit sockets in that check
+    (see qore_socket_table_lists_process_sockets()).
+*/
+static constexpr unsigned QORE_SOCKET_TABLE_MAX_COMPARISONS = 3;
+
+//! Returns 1 if the system's socket table lists every socket of the type that the process descriptors show
+/** The table that \c netstat reads is filtered by macOS for some processes; whether it is, is a property of the
+    process, not of a port.  The first check of a socket type therefore compares the sockets of the accessible process
+    descriptors that are bound and not connected with the table: if the table lists all of them, including at least
+    one socket of a process that is not this process or one of its descendants (for a process whose table it filters,
+    such as a program that another program started, macOS 27 lists only the sockets that the process created, which
+    its children can hold too, by fork(), and the descriptors show them in the children as well), the table alone is
+    the answer of every check, and the descriptors, whose scan costs a system call for every process and for every
+    socket descriptor, are not scanned again.  A socket that is bound, connected or closed between the two snapshots
+    can explain a socket missing from the table, so a comparison that finds one missing is repeated, up to
+    QORE_SOCKET_TABLE_MAX_COMPARISONS comparisons in all, before the table is taken to omit sockets in that check;
+    every check then scans the descriptors.  A comparison that finds no such socket of another process, or for which a
+    snapshot cannot be read, cannot tell: the check decides nothing and is counted, per socket type, and once
+    QORE_SOCKET_TABLE_MAX_UNDECIDED checks have been counted, the next check takes the table to omit sockets.
+
+    @return 1 if the table lists the sockets of the descriptors, 0 if it omits some or the outcome is not known, -1 if
+    cancellation was raised in @a xsink
+*/
+static int qore_socket_table_lists_process_sockets(int socktype, ExceptionSink* xsink) {
+    std::atomic<int>& state = qore_socket_table_lists_sockets[socktype == SOCK_STREAM ? 0 : 1];
+    int known = state.load(std::memory_order_acquire);
+    if (known == 1) {
+        return 1;
+    }
+    if (known == QORE_SOCKET_TABLE_OMITS) {
+        return 0;
+    }
+    if (-known >= QORE_SOCKET_TABLE_MAX_UNDECIDED) {
+        state.store(QORE_SOCKET_TABLE_OMITS, std::memory_order_release);
+        return 0;
+    }
+    const pid_t self = getpid();
+    // whether each process found is this process or one of its descendants, which can hold sockets that this process
+    // created, by fork()
+    std::unordered_map<pid_t, bool> descendants;
+    auto is_descendant = [&](pid_t pid) {
+        return qore_socket_is_descendant(pid, self, descendants);
+    };
+    // set when every comparison found a socket of the descriptors missing from the table
+    bool omits = true;
+    for (unsigned attempt = 0; attempt < QORE_SOCKET_TABLE_MAX_COMPARISONS; ++attempt) {
+        std::vector<QoreSocketTableEntry> process_sockets;
+        int rc = qore_socket_for_each_process_socket(socktype, 0, [&](const QoreSocketTableEntry& e) {
+            process_sockets.push_back(e);
+            return false;
+        }, xsink);
+        if (rc < 0) {
+            return -1;
+        }
+        // the table, taken after the descriptors, by port
+        std::unordered_multimap<int, QoreSocketServedAddrs> table;
+        rc = qore_socket_for_each_bound_socket(socktype, [&](const QoreSocketTableEntry& e) {
+            table.emplace(e.port, e.addrs);
+        }, xsink);
+        if (rc == -2) {
+            return -1;
+        }
+        if (rc) {
+            // the table cannot be read: this comparison cannot tell
+            omits = false;
+            break;
+        }
+        bool missing = false;
+        // a socket of a process that is not this process or one of its descendants in both: without one, a table
+        // that only lists the sockets that this process created could not be told from a complete one; a descendant
+        // can hold the sockets of this process that it inherited
+        bool other_process = false;
+        size_t count = 0;
+        for (const QoreSocketTableEntry& e : process_sockets) {
+            if (xsink && ++count % 100 == 0 && qore_check_cancel(xsink, "comparing sockets with the socket table")) {
+                return -1;
+            }
+            auto range = table.equal_range(e.port);
+            missing = std::none_of(range.first, range.second,
+                [&e](const std::pair<const int, QoreSocketServedAddrs>& t) {
+                    return t.second.sameAs(e.addrs);
+                });
+            if (missing) {
+                break;
+            }
+            if (!other_process && !is_descendant(e.pid)) {
+                other_process = true;
+            }
+        }
+        if (missing) {
+            continue;
+        }
+        if (other_process) {
+            state.store(1, std::memory_order_release);
+            return 1;
+        }
+        // nothing to compare with
+        omits = false;
+        break;
+    }
+    if (omits) {
+        state.store(QORE_SOCKET_TABLE_OMITS, std::memory_order_release);
+    } else {
+        // this comparison could not tell; another thread may have decided meanwhile
+        int expected = known;
+        state.compare_exchange_strong(expected, known - 1, std::memory_order_acq_rel);
+    }
+    return 0;
+}
+
+#ifdef DEBUG
+// documented in qore_socket_private.h
+size_t qore_socket_descriptor_scan_count() {
+    return qore_socket_descriptor_scans;
+}
+
+// documented in qore_socket_private.h
+int qore_socket_port_check_test_scope(int flags) {
+    int rv = qore_socket_test_scope;
+    qore_socket_test_scope = flags;
+    return rv;
+}
+
+// documented in qore_socket_private.h
+int qore_socket_table_check_mode(int socktype) {
+    int state = qore_socket_table_lists_sockets[socktype == SOCK_STREAM ? 0 : 1].load(std::memory_order_acquire);
+    return state == 1 ? 1 : (state == QORE_SOCKET_TABLE_OMITS ? -1 : 0);
+}
+
+// documented in qore_socket_private.h
+int qore_socket_table_check_exchange(int socktype, int state) {
+    return qore_socket_table_lists_sockets[socktype == SOCK_STREAM ? 0 : 1].exchange(state, std::memory_order_acq_rel);
+}
+#endif
+
+//! Checks process socket descriptors when the system table omits sockets owned by other processes.
+/** @return 1 on a matching socket, 0 otherwise, -1 if cancellation was raised in @a xsink
+*/
+template <typename F>
+static int qore_socket_process_port_held(int socktype, int port, F&& matches, ExceptionSink* xsink) {
+    return qore_socket_for_each_process_socket(socktype, port, std::forward<F>(matches), xsink);
 }
 
 //! Returns true if a socket option that is a flag is set on the socket
@@ -13976,23 +14491,32 @@ static int qore_socket_port_held(int socktype, const QoreSocketServedAddrs& ours
     bool reuseport = qore_socket_has_flag(sock, SOL_SOCKET, SO_REUSEPORT);
     uid_t uid = geteuid();
     bool held = false;
+    auto matches = [&](const QoreSocketTableEntry& e) {
+        if (e.port != port || !e.addrs.overlaps(ours) || (at_listen && e.addrs.sameAs(ours))) {
+            return false;
+        }
+        return !((reuse_shares && reuse && (e.options & SO_REUSEADDR) && !e.listening)
+            || (reuseport && (e.options & SO_REUSEPORT) && e.uid == uid));
+    };
     try {
         int rc = qore_socket_for_each_bound_socket(socktype, [&](const QoreSocketTableEntry& e) {
-            if (held || e.port != port || !e.addrs.overlaps(ours) || (at_listen && e.addrs.sameAs(ours))) {
-                return;
-            }
-            if ((reuse_shares && reuse && (e.options & SO_REUSEADDR) && !e.listening)
-                || (reuseport && (e.options & SO_REUSEPORT) && e.uid == uid)) {
-                return;
-            }
-            held = true;
+            held = held || matches(e);
         }, xsink);
         if (rc == -2) {
             return -1;
         }
+        if (!held) {
+            // the descriptors are scanned only if the table can omit a socket that holds the port
+            int lists = qore_socket_table_lists_process_sockets(socktype, xsink);
+            if (lists < 0) {
+                return -1;
+            }
+            if (!lists) {
+                return qore_socket_process_port_held(socktype, port, matches, xsink);
+            }
+        }
     } catch (std::bad_alloc&) {
-        // the table could not be read
-        return 0;
+        // No complete snapshot could be allocated; retain any match already found.
     }
     return held ? 1 : 0;
 }
@@ -17143,9 +17667,8 @@ int SocketSendInputStreamPollOperation::initLocked(ExceptionSink* xsink) {
 QoreHashNode* SocketSendInputStreamPollOperation::getPollInfo(ExceptionSink* xsink, int events, bool stream_wait) {
     int64 poll_timeout_ms = -1;
     if (timeout_ms >= 0) {
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (!wait_deadline_ms) {
             wait_deadline_ms = now_ms + timeout_ms;
         }
@@ -17199,9 +17722,8 @@ bool SocketSendInputStreamPollOperation::checkTimeout(ExceptionSink* xsink) {
     if (wait_deadline_ms <= 0) {
         return false;
     }
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     if (now_ms < wait_deadline_ms) {
         return false;
     }
@@ -17442,9 +17964,8 @@ QoreHashNode* SocketSendHttpChunkedInputStreamPollOperation::getPollInfo(Excepti
         bool stream_wait) {
     int64 poll_timeout_ms = -1;
     if (timeout_ms >= 0) {
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (!wait_deadline_ms) {
             wait_deadline_ms = now_ms + timeout_ms;
         }
@@ -17491,9 +18012,8 @@ bool SocketSendHttpChunkedInputStreamPollOperation::checkTimeout(ExceptionSink* 
     if (wait_deadline_ms <= 0) {
         return false;
     }
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     if (now_ms < wait_deadline_ms) {
         return false;
     }
@@ -17741,9 +18261,8 @@ int SocketRecvOutputStreamPollOperation::initLocked(ExceptionSink* xsink) {
 QoreHashNode* SocketRecvOutputStreamPollOperation::getPollInfo(ExceptionSink* xsink, int events, bool output_wait) {
     int64 poll_timeout_ms = -1;
     if (timeout_ms >= 0) {
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (!wait_deadline_ms) {
             wait_deadline_ms = now_ms + timeout_ms;
         }
@@ -17797,9 +18316,8 @@ bool SocketRecvOutputStreamPollOperation::checkTimeout(ExceptionSink* xsink) {
     if (wait_deadline_ms <= 0) {
         return false;
     }
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     if (now_ms < wait_deadline_ms) {
         return false;
     }
@@ -17982,9 +18500,8 @@ SocketWriteOutputStreamPollOperation::SocketWriteOutputStreamPollOperation(Excep
 QoreHashNode* SocketWriteOutputStreamPollOperation::getPollInfo(ExceptionSink* xsink) {
     int64 poll_timeout_ms = -1;
     if (timeout_ms >= 0) {
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (!wait_deadline_ms) {
             wait_deadline_ms = now_ms + timeout_ms;
         }
@@ -18028,9 +18545,8 @@ bool SocketWriteOutputStreamPollOperation::checkTimeout(ExceptionSink* xsink) {
     if (wait_deadline_ms <= 0) {
         return false;
     }
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     if (now_ms < wait_deadline_ms) {
         return false;
     }
@@ -19421,9 +19937,8 @@ SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(Excep
           idle_timeout_ms(idle_timeout_ms), header_output(nullptr) {
     {
         // the idle timeout is given as a deadline; a request answered by a fast route moves it on
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         idle_ttl_ms = idle_timeout_ms > now_ms ? idle_timeout_ms - now_ms : 0;
     }
     AutoLocker al(sock->priv->m);
@@ -19505,9 +20020,8 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
 
         case Phase::Idle: {
             // Check idle timeout
-            int us;
-            int64 now_s = q_epoch_us(us);
-            int64 now_ms = now_s * 1000 + us / 1000;
+            // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+            int64 now_ms = q_get_monotonic_us() / 1000;
             if (idle_timeout_ms > 0 && now_ms > idle_timeout_ms) {
                 phase = Phase::Timeout;
                 sock->priv->clearNonBlock();
@@ -19764,9 +20278,8 @@ int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const st
     }
     phase = Phase::Sending;
     if (idle_ttl_ms > 0) {
-        int us2;
-        int64 now_s = q_epoch_us(us2);
-        idle_timeout_ms = now_s * 1000 + us2 / 1000 + idle_ttl_ms;
+        // on the monotonic clock, as the deadline given to the constructor (#6150)
+        idle_timeout_ms = q_get_monotonic_us() / 1000 + idle_ttl_ms;
     }
     int rc = poll_state->continuePoll(xsink);
     if (*xsink) {
@@ -20144,9 +20657,8 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
 
             case Phase::Idle: {
                 // Check idle timeout
-                int us;
-                int64 now_s = q_epoch_us(us);
-                int64 now_ms = now_s * 1000 + us / 1000;
+                // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+                int64 now_ms = q_get_monotonic_us() / 1000;
                 if (idle_timeout_ms > 0 && now_ms > idle_timeout_ms) {
                     phase = Phase::Timeout;
                     sock->priv->clearNonBlock();

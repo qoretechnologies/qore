@@ -1,0 +1,6 @@
+ref-string: "s"
+ref-int: 7
+ref-invalid: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead
+closure-string: "s"
+closure-int: 7
+closure-invalid: RUNTIME-TYPE-ERROR: <lvalue> expects type '*string', but got type 'integer' instead

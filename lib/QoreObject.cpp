@@ -2039,13 +2039,27 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
     deleteOrDefer(xsink, cycle_cleanup);
 }
 
-int qore_object_private::startCall(const char* mname, ExceptionSink* xsink) {
+void qore_object_private::raiseDeletedCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink)
+        const {
+    // code that is not a method entered with the object (a background expression or a closure created in a method)
+    // raises the error that it raised before issue #5824, which names no class
+    if (mname && (!strcmp(mname, "background operator") || !strcmp(mname, "<anonymous closure>"))) {
+        qore_raise_deleted_object(xsink, "cannot call method '%s()' on an object that has already been deleted",
+            mname);
+        return;
+    }
+    // the class of the method, as the error of CodeEvaluationHelper names it, so that every execution mode raises the
+    // same error for a method call whose arguments deleted the object (issue #5824)
+    qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been deleted",
+        cls ? cls->name.c_str() : theclass->getName(), mname);
+}
+
+int qore_object_private::startCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink) {
     // no lock: every method call on the object comes through here, and taking a reference needs none (see
     // customRefIntern()); rlck never ordered this test against deletion anyway, since the status is changed
     // under the object's rml write lock
     if (status == OS_DELETED) {
-        qore_raise_deleted_object(xsink, "cannot call method '%s()' on an object that has already "
-                "been deleted", mname);
+        raiseDeletedCall(cls, mname, xsink);
         return -1;
     }
 

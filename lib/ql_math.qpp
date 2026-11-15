@@ -371,7 +371,8 @@ float pow(softfloat base = 0.0, softfloat exponent = 0.0) [flags=RET_VALUE_ONLY,
     @param base the number to raise to the power of \a exponent
     @param exponent the power to raise \a base to
 
-    @return a number raised to the power of another number
+    @return a number raised to the power of another number; a result out of the range of an integer gives the
+    largest or the smallest integer (see @ref float_to_int_conversion)
 
     @par Example:
     @code{.py}
@@ -387,7 +388,8 @@ int pow(int base = 0, int exponent = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
             "non-negative value");
     }
 
-    return (int64)pow((double)base, (double)exponent);
+    // a result out of the range of an int is saturated (issue #6181)
+    return q_float_to_int64(pow((double)base, (double)exponent));
 }
 
 //! Returns the absolute value of the argument passed

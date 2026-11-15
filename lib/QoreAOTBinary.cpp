@@ -3203,6 +3203,10 @@ QoreAOTStaticMethodRef::QoreAOTStaticMethodRef(const char* encoded) : method_nam
     method_name = method_name_storage.c_str();
 
     const char* payload = first_sep + 1;
+    if (!strcmp(payload, QORE_AOT_ABSTRACT_SELF_CALL_MARKER)) {
+        abstract_self_call = true;
+        return;
+    }
     size_t marker_len = strlen(QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER);
     if (!strncmp(payload, QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER, marker_len)
             && payload[marker_len] == '\n') {
@@ -3237,6 +3241,20 @@ static std::string qore_aot_encode_call_arg_type_signature(const type_vec_t& arg
     }
     rv += ")";
     return rv;
+}
+
+std::string qore_aot_encode_self_method_ref(const SelfFunctionCallNode* call, bool arg_types) {
+    if (call->isAbstractCall()) {
+        // the explicit type arguments of the call follow the marker: QoreAOTStaticMethodRef strips them first
+        std::string rv = qore_aot_encode_static_method_ref(call->getName(), nullptr, nullptr,
+            call->getExplicitTypeParamInstantiation());
+        std::string name(call->getName() ? call->getName() : "");
+        rv.insert(name.size(), std::string("\n") + QORE_AOT_ABSTRACT_SELF_CALL_MARKER);
+        return rv;
+    }
+    const AbstractQoreFunctionVariant* variant = call->getVariant();
+    return qore_aot_encode_static_method_ref(call->getName(), variant,
+        arg_types && !variant ? &call->getParsedArgTypeInfo() : nullptr, call->getExplicitTypeParamInstantiation());
 }
 
 std::string qore_aot_encode_static_method_ref(const char* method_name,
@@ -3484,6 +3502,13 @@ const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char
     }
 
     if (!strchr(path, '<')) {
+        return nullptr;
+    }
+
+    // the type parser does not accept the AOT spellings of type parameters, and its errors would be left pending in
+    // the Program, to be raised when it ends (see QoreAOTTypeResolver::resolveComplexType()); such a path is resolved
+    // by qore_aot_resolve_call_hashdecl_path()
+    if (strstr(path, "typeparam<")) {
         return nullptr;
     }
 
@@ -4599,7 +4624,7 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
                     error = "compressed section has an invalid zero decompressed size";
                     return false;
                 }
-                if (sec.size > 100 * 1024 * 1024) {
+                if (sec.size > QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE) {
                     error = "decompressed section exceeds maximum allowed size";
                     return false;
                 }
@@ -4613,7 +4638,7 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         }
         if (header.compression == QORE_AOT_COMPRESSION_SECTIONED_ZSTD) {
             sectioned_uncompressed_size += sec.size;
-            if (sectioned_uncompressed_size > 100 * 1024 * 1024) {
+            if (sectioned_uncompressed_size > QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE) {
                 error = "decompressed sectioned metadata exceeds maximum allowed size";
                 return false;
             }
@@ -6607,12 +6632,18 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
 
 const QoreTypeInfo* QoreAOTTypeResolver::resolveForSignature(const char* path, std::string& error,
         const UserSignature* signature) {
-    const UserSignature* old_signature = signature_type_param_owner;
+    // restores the owner also when the resolution raises a C++ exception, as a resolver can be shared by a context
+    // build (qore#5885)
+    struct OwnerRestore {
+        const UserSignature*& owner;
+        const UserSignature* old;
+        ~OwnerRestore() {
+            owner = old;
+        }
+    } restore{signature_type_param_owner, signature_type_param_owner};
     // the type parameters that a closure names are those of the code that it is in (qore#5733)
     signature_type_param_owner = signature ? signature->getTypeParamOwner() : nullptr;
-    const QoreTypeInfo* rv = resolve(path, error);
-    signature_type_param_owner = old_signature;
-    return rv;
+    return resolve(path, error);
 }
 
 // ---- Namespace Serialization (Phase 3) ----
@@ -7838,15 +7869,16 @@ static std::string aotBCAClassRef(const QoreMethod* method, const BCANode* bca) 
     return ref ? std::string(ref) : std::string();
 }
 
-static uint16_t aotBCAArgCount(const BCANode* bca) {
+//! Returns the number of arguments of a base class constructor call (the caller checks that it fits a u16)
+static size_t aotBCAArgCount(const BCANode* bca) {
     if (!bca) {
         return 0;
     }
     if (const QoreListNode* args = bca->getArgs()) {
-        return static_cast<uint16_t>(args->size());
+        return args->size();
     }
     if (const QoreParseListNode* parse_args = bca->getParseArgs()) {
-        return static_cast<uint16_t>(parse_args->size());
+        return parse_args->size();
     }
     return 0;
 }
@@ -10557,7 +10589,7 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                 //   `string boundary = MultiPartMessage::getBoundary()`. Serialize
                 //   the class path and method name; the reader rebuilds a
                 //   StaticMethodCallNode bound to the resolved QoreMethod.
-                if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(node)) {
+                if (auto* smcn = qore_get_static_method_call_node(node)) {
                     const QoreListNode* args = smcn->getArgs();
                     bool no_args = !args || args->size() == 0;
                     const QoreMethod* m = smcn->getMethod();
@@ -12060,6 +12092,14 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 return false;
                             }
 
+                            // the counts have u16 fields in the AOT format (qore#6127)
+                            if (bcal->size() > UINT16_MAX) {
+                                error = "AOT cannot compile constructor of class '"
+                                    + std::string(method->getClass()->getName()) + "': it has "
+                                    + std::to_string(bcal->size()) + " base class constructor calls, but the AOT "
+                                    "format supports at most " + std::to_string(UINT16_MAX);
+                                return false;
+                            }
                             writer.writeU8(1);  // has_bca = true
                             writer.writeU16(static_cast<uint16_t>(bcal->size()));
 
@@ -12087,7 +12127,15 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 // QORE_AOT_FEAT_BCA_NATIVE_ARGS bit is absent; new writers do
                                 // not emit EXPR_TREE fallback.
                                 const QoreListNode* args = bca->getArgs();
-                                uint16_t num_args = aotBCAArgCount(bca);
+                                if (aotBCAArgCount(bca) > UINT16_MAX) {
+                                    error = "AOT cannot compile constructor of class '"
+                                        + std::string(method->getClass()->getName()) + "': its call of base class '"
+                                        + base_path + "' has " + std::to_string(aotBCAArgCount(bca))
+                                        + " arguments, but the AOT format supports at most "
+                                        + std::to_string(UINT16_MAX);
+                                    return false;
+                                }
+                                uint16_t num_args = static_cast<uint16_t>(aotBCAArgCount(bca));
                                 const qore_list_private* args_priv = qore_list_private::get(args);
                                 const std::vector<size_t>* eval_map = args_priv
                                     ? args_priv->getCallArgEvalMap()
@@ -12929,15 +12977,14 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     }
 
     // SelfFunctionCallNode: method call on self
-    if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (auto* call = qore_get_self_function_call_node(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
-        const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
+        const QoreClass* qc = call->getRecordedClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
         writer.writeStringRef(class_ref.c_str());
-        const AbstractQoreFunctionVariant* variant = call->getVariant();
-        std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
-            variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
+        // with the parse-time abstract flag (issue #5824)
+        std::string method_ref = qore_aot_encode_self_method_ref(call, true);
         // the arguments are written in source order (the order of their evaluation): a named call keeps the
         // positions of their parameters (bound at parse time) or their names (resolved at run time by parameter
         // name) first (read by read_expr_self_method_call())
@@ -12962,7 +13009,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     }
 
     // StaticMethodCallNode: static method call
-    if (auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (auto* call = qore_get_static_method_call_node(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
         if (method) {
@@ -14012,6 +14059,13 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
 
                 // Write params: count, then (name, type_path, default) per param
                 unsigned num_params = sig->numParams();
+                // the count has a u16 field in the AOT format (qore#6127)
+                if (num_params > UINT16_MAX) {
+                    qoreAOTSetExprSerializationError("AOT cannot compile closure '" + std::string(ucf->getName())
+                        + "': it has " + std::to_string(num_params) + " parameters, but the AOT format supports at "
+                        "most " + std::to_string(UINT16_MAX));
+                    return false;
+                }
                 writer.writeU16(static_cast<uint16_t>(num_params));
                 for (unsigned p = 0; p < num_params; ++p) {
                     const char* pname = sig->getName(p);
@@ -14497,6 +14551,9 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
     if (has_debug_ir) {
         debug_ir_patches.reserve(funcs.size());
     }
+    // the size of the slot map entry and debug IR of each function
+    std::vector<size_t> func_metadata_sizes;
+    func_metadata_sizes.reserve(funcs.size());
 
     for (auto& func : funcs) {
         AOTConstantReverseMap filtered_crm;
@@ -14554,6 +14611,35 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeU16(static_cast<uint16_t>(count));
             return true;
         };
+
+        // The counts of the function header have fixed widths in the AOT format; a count that does not fit
+        // would wrap and make the executable read a different slot table than was written, so the function
+        // is refused here instead (qore#6127)
+        auto checkCount = [&func, &error](size_t count, size_t limit, const char* what) -> bool {
+            if (count <= limit) {
+                return true;
+            }
+            error = "AOT cannot compile function '" + func.name + "': it has " + std::to_string(count)
+                + " " + what + ", but the AOT format supports at most " + std::to_string(limit)
+                + "; split the function into smaller functions";
+            return false;
+        };
+        constexpr size_t u16_max = std::numeric_limits<uint16_t>::max();
+        constexpr size_t u8_max = std::numeric_limits<uint8_t>::max();
+        constexpr size_t u32_max = std::numeric_limits<uint32_t>::max();
+        if (!checkCount(std::max<size_t>(func.num_locals, func.slot_ids.locals.size()), u16_max,
+                    "local variable slots")
+                || !checkCount(std::max<size_t>(func.num_globals, func.slot_ids.globals.size()), u16_max,
+                    "global variable slots")
+                || !checkCount(std::max<size_t>(func.num_exprs, func.slot_ids.exprs.size()), u16_max,
+                    "expression slots")
+                || !checkCount(func.num_stmts, u16_max, "statement slots")
+                || !checkCount(func.slot_ids.regex_cases.size(), u16_max, "regex case slots")
+                || !checkCount(func.slot_ids.body_locals.size(), u16_max, "body local slots")
+                || !checkCount(std::max<size_t>(func.num_lv_path_insts, func.slot_ids.lv_path_insts.size()),
+                    u32_max, "lvalue path instructions (counting those of its handler functions)")) {
+            return false;
+        }
 
         // Function header
         writer.writeStringRef(func.name.c_str());
@@ -14716,6 +14802,9 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 writer.writeI64(lvid.pattern_options);
                 writer.writeU8(lvid.pattern_global);
             }
+            if (!checkCount(lvid.steps.size(), u8_max, "steps in an lvalue path")) {
+                return false;
+            }
             writer.writeU8(static_cast<uint8_t>(lvid.steps.size()));
             for (auto& step : lvid.steps) {
                 writer.writeU8(step.kind);
@@ -14779,6 +14868,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         // Patch the entry size field
         uint32_t entry_end_pos = writer.position();
         writer.patchU32(entry_size_pos, entry_end_pos - entry_size_pos - 4);
+        func_metadata_sizes.push_back(entry_end_pos - entry_size_pos);
         traceEntryOffset("entry end");
     }
 
@@ -14826,6 +14916,11 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             std::string expr_error;
             bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
             if (!debug_ir_ok || expr_error_set) {
+                // an error that names the function already is reported as it is
+                if (expr_error_set && expr_error.rfind("AOT cannot compile function '" + func.name + "'", 0) == 0) {
+                    error = std::move(expr_error);
+                    return false;
+                }
                 error = "failed to serialize debug IR for function '" + func.name + "'";
                 if (expr_error_set) {
                     error += ": ";
@@ -14837,8 +14932,16 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             }
             writer.patchU32(debug_ir_patches[i].offset_pos, payload_offset);
             writer.patchU32(debug_ir_patches[i].size_pos, writer.position() - payload_start);
+            func_metadata_sizes[i] += writer.position() - payload_start;
         }
         writer.endSection(debug_sec_idx);
+    }
+
+    for (size_t i = 0; i < funcs.size(); ++i) {
+        if (func_metadata_sizes[i] > writer.largest_func_metadata_size) {
+            writer.largest_func_metadata_size = func_metadata_sizes[i];
+            writer.largest_func_metadata_name = funcs[i].name;
+        }
     }
 
     return serializeCallRelocations(writer, funcs, error);
@@ -15423,6 +15526,23 @@ bool& QoreAOTSharedHandlerTable::nested() {
     return nested;
 }
 
+//! Returns the maximum number of basic blocks of a serialized IR function
+/** Block references are u16 indices, with 0xFFFF meaning no block; the QORE_AOT_TEST_MAX_IR_BLOCKS environment
+    variable can only lower the limit, for tests of the check
+*/
+static size_t aotMaxIRBlocks() {
+    size_t rv = std::numeric_limits<uint16_t>::max() - 1;
+    QoreEnvironmentValue test_max("QORE_AOT_TEST_MAX_IR_BLOCKS");
+    if (const char* str = test_max.c_str(); str && *str) {
+        char* end = nullptr;
+        unsigned long long val = strtoull(str, &end, 10);
+        if (end && !*end && val < rv) {
+            rv = static_cast<size_t>(val);
+        }
+    }
+    return rv;
+}
+
 bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
         const AOTExprWriteFunc& writeExpr) {
     // the handler functions written in the IR of the function (#6087)
@@ -15439,6 +15559,56 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
     if (!qore_aot_validate_inst_group_registry(registry_error)) {
         qoreAOTSetExprSerializationError("AOT instruction group registry validation failed: " + registry_error);
         return false;
+    }
+
+    // The counts of the IR have fixed widths in the AOT format; a count that does not fit would wrap and make the
+    // reader decode a different function than was written, so the function is refused instead (qore#6127)
+    {
+        auto checkCount = [&func](size_t count, size_t limit, const char* what) -> bool {
+            if (count <= limit) {
+                return true;
+            }
+            qoreAOTSetExprSerializationError("AOT cannot compile function '" + func.name + "': its IR has "
+                + std::to_string(count) + " " + what + ", but the AOT format supports at most "
+                + std::to_string(limit) + "; split the function into smaller functions");
+            return false;
+        };
+        constexpr size_t u16_max = std::numeric_limits<uint16_t>::max();
+        if (!checkCount(func.blocks.size(), aotMaxIRBlocks(), "basic blocks")
+                || !checkCount(func.local_var_slots.size(), u16_max, "local variable slots")
+                || !checkCount(func.all_body_locals.size(), u16_max, "body local variables")) {
+            return false;
+        }
+        for (auto& block : func.blocks) {
+            if (!checkCount(block->instructions.size(), u16_max, "instructions in a basic block")) {
+                return false;
+            }
+            for (auto& inst_ptr : block->instructions) {
+                switch (classifyInstruction(inst_ptr.get())) {
+                    case QoreIRInstGroup::SwitchInt:
+                        if (!checkCount(static_cast<const QoreIRSwitchIntInstruction*>(inst_ptr.get())->cases.size(),
+                                u16_max, "cases in a switch statement")) {
+                            return false;
+                        }
+                        break;
+                    case QoreIRInstGroup::SwitchString:
+                        if (!checkCount(
+                                static_cast<const QoreIRSwitchStringInstruction*>(inst_ptr.get())->cases.size(),
+                                u16_max, "cases in a switch statement")) {
+                            return false;
+                        }
+                        break;
+                    case QoreIRInstGroup::LValuePath:
+                        if (!checkCount(static_cast<const QoreIRLValuePathInstruction*>(inst_ptr.get())->path.size(),
+                                std::numeric_limits<uint8_t>::max(), "steps in an lvalue path")) {
+                            return false;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
     }
 
     // 1. Function header
@@ -20201,6 +20371,13 @@ bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
             continue;
         }
         qore_class_private* priv = qore_class_private::get(*qc);
+        // initializeMembers() recurses to the base classes whose members are not yet imported, and stops while the
+        // parse stack reserve remains (issue #6047); no parse reports that here, so the load fails with the error
+        if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
+            thread_stack_exceeded = true;
+            error = QORE_PARSE_STACK_DESC;
+            return false;
+        }
         // initializeMembers() checks parse_resolve_class_members flag to avoid re-initialization,
         // iterates base class list, and calls parseImportMembers() for each base class
         priv->initializeMembers();
@@ -21476,6 +21653,8 @@ void serializeModuleCommands(QoreAOTBinaryWriter& writer,
     for (const AOTModuleCommand& cmd : commands) {
         writer.writeStringRef(cmd.module.c_str());
         writer.writeStringRef(cmd.command.c_str());
+        writer.writeU64(static_cast<uint64_t>(cmd.options_lo));
+        writer.writeU64(static_cast<uint64_t>(cmd.options_hi));
     }
     writer.endSection(sec_idx);
 }
@@ -21502,7 +21681,10 @@ bool readModuleCommands(const QoreAOTBinaryReader& reader,
     const uint8_t* ptr = sec_data;
     const uint8_t* end = sec_data + sec->size;
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
-    uint32_t max_entries = (sec->size - 4) / 8;
+    // a v37 entry has the restricting parse options in force at the directive after its two strings
+    const bool has_options = reader.getHeader().version >= QORE_AOT_MODULE_CMD_OPTIONS_VERSION;
+    const uint32_t entry_min_size = has_options ? 24 : 8;
+    uint32_t max_entries = (sec->size - 4) / entry_min_size;
     if (count > max_entries) {
         error = "module-command count " + std::to_string(count) + " exceeds section capacity";
         return false;
@@ -21515,7 +21697,17 @@ bool readModuleCommands(const QoreAOTBinaryReader& reader,
             error = "invalid module-command entry at index " + std::to_string(i);
             return false;
         }
-        commands.push_back(AOTModuleCommand{module, command});
+        AOTModuleCommand cmd{module, command};
+        if (has_options) {
+            if (end - ptr < 16) {
+                error = "truncated module-command entry at index " + std::to_string(i);
+                return false;
+            }
+            cmd.has_options = true;
+            cmd.options_lo = static_cast<int64_t>(QoreAOTBinaryReader::readU64(ptr));
+            cmd.options_hi = static_cast<int64_t>(QoreAOTBinaryReader::readU64(ptr));
+        }
+        commands.push_back(std::move(cmd));
     }
     if (ptr != end) {
         error = "module-command section has " + std::to_string(end - ptr) + " trailing byte(s)";
@@ -22030,7 +22222,7 @@ bool decompressMetadata(const uint8_t* input, size_t input_len,
     }
 
     // Sanity check: decompressed size shouldn't be larger than a reasonable limit
-    const size_t MAX_DECOMPRESSED = 100 * 1024 * 1024;  // 100 MB limit
+    const size_t MAX_DECOMPRESSED = QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE;
     if (orig_size > MAX_DECOMPRESSED) {
         error = "decompressed metadata size " + std::to_string(orig_size) +
                 " exceeds maximum allowed (" + std::to_string(MAX_DECOMPRESSED) + " bytes)";
@@ -22077,7 +22269,7 @@ bool decompressMetadataZstd(const uint8_t* input, size_t input_len,
         return true;
     }
 
-    static constexpr size_t MAX_DECOMPRESSED = 100 * 1024 * 1024;
+    static constexpr size_t MAX_DECOMPRESSED = QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE;
     if (orig_size > MAX_DECOMPRESSED) {
         error = "decompressed metadata size " + std::to_string(orig_size)
             + " exceeds maximum allowed (" + std::to_string(MAX_DECOMPRESSED) + " bytes)";

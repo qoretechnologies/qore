@@ -435,6 +435,13 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::UnwindTemps: return "unwind.temps";
         case QoreIROpcode::CheckReturnValue: return "check.return";
         case QoreIROpcode::CheckCallTarget: return "check.call.target";
+        case QoreIROpcode::EqPlugin: return "eq.plugin";
+        case QoreIROpcode::NePlugin: return "ne.plugin";
+        case QoreIROpcode::LtPlugin: return "lt.plugin";
+        case QoreIROpcode::LePlugin: return "le.plugin";
+        case QoreIROpcode::GtPlugin: return "gt.plugin";
+        case QoreIROpcode::GePlugin: return "ge.plugin";
+        case QoreIROpcode::HandlerReturn: return "handler.return";
         case QoreIROpcode::IteratorRelease: return "iterator.release";
         case QoreIROpcode::ReleaseOwnedTemp: return "release.owned.temp";
         case QoreIROpcode::PushTempMark: return "push.temp.mark";
@@ -610,6 +617,26 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 auto* no_inst = qore_ir_inst_cast<const QoreIRNewObjectInstruction*>(inst.get());
                 if (no_inst && no_inst->qc) {
                     out << " @" << no_inst->qc->getName();
+                }
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                auto* inc_inst = qore_ir_inst_cast<const QoreIRIncrementLocalIntInstruction*>(inst.get());
+                if (inc_inst && inc_inst->local) {
+                    out << " @" << inc_inst->local->getName() << " " << inc_inst->delta;
+                }
+            } else if (inst->opcode == QoreIROpcode::LValuePathUnary) {
+                // the operation, so that a dump shows a pre-increment from a post-increment
+                auto* path_inst = qore_ir_inst_cast<const QoreIRLValuePathInstruction*>(inst.get());
+                if (path_inst) {
+                    static const char* const unary_names[] = {
+                        "pre-inc", "pre-dec", "post-inc", "post-dec", "remove", "delete", "shift", "pop", "trim",
+                        "chomp", "ensure-unique",
+                    };
+                    static_assert(sizeof(unary_names) / sizeof(unary_names[0])
+                        == static_cast<size_t>(LVUnaryOp::EnsureUnique) + 1, "a name for each LVUnaryOp");
+                    size_t index = static_cast<size_t>(path_inst->unary_op);
+                    if (index < sizeof(unary_names) / sizeof(unary_names[0])) {
+                        out << " " << unary_names[index];
+                    }
                 }
             } else if (inst->opcode == QoreIROpcode::LoadConstant) {
                 out << " <constant>";

@@ -652,17 +652,6 @@ struct DLHelper {
 class ModuleLoadMapHelper;
 struct QoreAOTModuleFileInfo;
 
-//! Where a module command issued with QoreModuleManager::issueRuntimeCmd() comes from
-enum class QoreModuleCmdOrigin {
-    //! A command issued by the calling code at run time (Program::issueModuleCmd()); a command for another Program
-    //! is checked against the calling code's sandbox and restrictions
-    Caller,
-    //! The target Program's own `%module-cmd` directive, replayed from its compiled (AOT) metadata when the Program
-    //! is created, as the directive runs when the Program's source is parsed in it: it is not a command from the
-    //! calling code to another Program
-    OwnDirective,
-};
-
 //! The attributes of the module manager's mutex: an error-checking mutex in a debug build, the default otherwise
 DLLLOCAL const pthread_mutexattr_t* qore_module_manager_mutex_attr();
 
@@ -685,12 +674,16 @@ public:
 
     DLLLOCAL void issueParseCmd(const QoreProgramLocation* loc, const char* mname, const QoreString& cmd);
 
-    //! Issues a module command to \a pgm at run time, loading the module in \a pgm if necessary
-    /** @param origin whether the command is issued by the calling code or is \a pgm's own replayed directive; only
-        a command issued by the calling code to another Program is checked as a cross-Program command
+    //! issues a module command at run time
+    /** @param origin how the command was issued: MC_RUNTIME, or MC_REPLAY for a command that a compiled program
+        records and replays when it is loaded
+        @param declared_po for a replayed command, the parse options that the compiled program is declared with:
+        the code that loads the program cannot loosen what the source it was compiled from had (see
+        QoreModuleCommandContext)
     */
     DLLLOCAL int issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd, ExceptionSink* xsink,
-            QoreModuleCmdOrigin origin = QoreModuleCmdOrigin::Caller);
+        QoreModuleCommandContext::Origin origin = QoreModuleCommandContext::MC_RUNTIME,
+        const QoreParseOptions* declared_po = nullptr);
 
     //! Registers a module under its current name
     /** The first time a module is registered, what was decided when it was loaded (see
@@ -751,7 +744,12 @@ public:
         @param name the module name with an optional version specification
         @param pgm the Program being parsed
         @param reexport if the module is reexported
-        @param loc the location of the directive, if known, for the warnings of the module loader
+        @param loc the location of the directive, if known, for the warnings of the module loader; when it is given,
+        a parse of this or another module that ran short of the stack of this thread (QORE_PARSE_STACK_ERR) is a parse
+        error of \a pgm, and not an error of the load in \a xsink, so that a parse directive that handles the errors of
+        its load (\c %%try-module) does not handle it as a module that is not available
+
+        @return 0 if the module was loaded, -1 if not
     */
     DLLLOCAL int parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
             bool reexport = false, const QoreProgramLocation* loc = nullptr);
@@ -786,6 +784,20 @@ public:
         @param files receives the paths of the files found
     */
     DLLLOCAL void getModuleCandidateFiles(const char* name, QoreProgram* pgm, std::vector<std::string>& files);
+
+    //! Appends the paths in the module path where a module with the given name could be found, but is not
+    /** As getModuleCandidateFiles(), but the paths that are not regular files are given, so that a build can
+        notice when the module is installed (qore#6145)
+    */
+    DLLLOCAL void getMissingModuleCandidateFiles(const char* name, QoreProgram* pgm,
+            std::vector<std::string>& files);
+
+private:
+    //! Appends the candidate paths of a module: the existing files, or the paths that are not files
+    DLLLOCAL void getModuleCandidatePaths(const char* name, QoreProgram* pgm, std::vector<std::string>& files,
+            bool missing);
+
+public:
 
     //! Worker for ModuleManager::registerAOTStaticModule — no dlopen, skip filesystem search
     /** @param aot_info the metadata record that qcc linked with the module (see qore_aot_register_into_program_v2()),
@@ -1065,7 +1077,13 @@ public:
             // remove dependents
             for (strset_t::iterator si = i->second.begin(), se = i->second.end(); si != se; ++si) {
                 md_map_t::iterator di = md_map.find(*si);
-                assert(di != md_map.end());
+                // a module in a dependency cycle (modules that load each other at run time, see
+                // trySetModuleProgramBinaryDependencyLocked()) can be deleted before a module that requires it, as
+                // QoreModuleManager::cleanup() breaks the cycle at one of them: its record of the modules that
+                // require it was removed with it, and there is nothing left to release (qore#6129)
+                if (di == md_map.end()) {
+                    continue;
+                }
 
                 strset_t::iterator dsi = di->second.find(i->first);
                 assert(dsi != di->second.end());
@@ -1124,15 +1142,18 @@ public:
         design/qore-module-structure.md "Child Modules" for the contract implemented here.
 
         A child declaration is optional, so no child status fails the parent; a child that is present but
-        cannot be loaded is reported and skipped.
+        cannot be loaded is reported and skipped.  A child that cannot be parsed within the stack of this thread
+        (QORE_PARSE_STACK_ERR) is not one that cannot be loaded: it stays pending, and the attach fails with the
+        error.
 
         @param mi the parent module
-        @param xsink exception sink; used only for interruptions of the attach itself
+        @param xsink exception sink; used only for interruptions of the attach itself and the parse stack error of a
+        child
         @param wsink warning sink for children that could not be attached
         @param warning_mask the warning mask in effect for the load
 
         @return 0 for OK (including for absent, skipped, and failed children), -1 if the attach was
-        interrupted
+        interrupted or a child could not be parsed within the stack of this thread
     */
     DLLLOCAL int attachChildModules(QoreAbstractModule& mi, ExceptionSink& xsink, ExceptionSink& wsink,
             int warning_mask);
@@ -1355,14 +1376,17 @@ protected:
     /** Each module is loaded if possible, as a %try-module directive in the source module would; the module
         manager lock must be held.
 
+        @param xsink receives an error that depends on the stack of the thread (qore_has_thread_stack_error()),
+        raised while a module was loaded: the module may be available, so the check cannot be made in this thread,
+        and the caller fails the load (issue #6047); any other error means that the module is not available
         @param specs module requests as written in %try-module directives (a name and an optional version
         constraint)
         @param path_pgm supplies module search paths for the load
         @param available receives the first request that can be loaded
-        @return true if a module can be loaded now
+        @return true if a module can be loaded now; false if none can, or if an error was raised in \a xsink
     */
-    DLLLOCAL bool findAvailableOptionalModule(const std::vector<std::string>& specs, QoreProgram* path_pgm,
-            std::string& available);
+    DLLLOCAL bool findAvailableOptionalModule(ExceptionSink& xsink, const std::vector<std::string>& specs,
+            QoreProgram* path_pgm, std::string& available);
 
     DLLLOCAL QoreAbstractModule* loadBinaryModuleFromDesc(ExceptionSink& xsink, DLHelper* dlh,
             QoreModuleInfo& mod_info, const char* path, const char* feature = nullptr, bool reexport = false,
@@ -1441,6 +1465,7 @@ public:
               api_major(mod_info.api_major), api_minor(mod_info.api_minor),
               module_init(mod_info.init), module_ns_init(mod_info.ns_init),
               module_delete(mod_info.del), module_parse_cmd(mod_info.parse_cmd),
+              cmd_caller_aware(mod_info.cmd_caller_aware),
               info(module_info.release(), &info_xsink), dlptr(dlptr), feature(mod_info.name),
               dependencies(mod_info.dependencies), aot(mod_info.is_aot), module_ns(mod_info.ns) {
         if (module_ns) {
@@ -1526,6 +1551,9 @@ protected:
     qore_module_ns_init_t module_ns_init;
     qore_module_delete_t module_delete;
     qore_module_parse_cmd_t module_parse_cmd;
+    //! true if the parse command handler honors the restrictions of the code that issues a command (see
+    //! QoreModuleInfo::cmd_caller_aware)
+    bool cmd_caller_aware;
     //! The sink outlives its metadata holder, including constructor failure cleanup.
     ExceptionSink info_xsink;
     ReferenceHolder<QoreHashNode> info;
@@ -1597,8 +1625,8 @@ public:
     DLLLOCAL virtual void issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd,
             ExceptionSink* xsink) override {
         if (xsink) {
-            xsink->raiseException(*loc, "PARSE-COMMAND-ERROR", "module '%s' loaded from '%s' is a user module; only "
-                "builtin modules can support parse commands", name.c_str(), filename.c_str());
+            xsink->raiseException(*loc, "PARSE-COMMAND-ERROR", QoreValue(), "module '%s' loaded from '%s' is a user "
+                "module; only builtin modules can support parse commands", name.c_str(), filename.c_str());
         }
     }
 
