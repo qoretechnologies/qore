@@ -1335,6 +1335,20 @@ void QoreLValueReferencePrograms::releaseIntern(ExceptionSink* xsink) {
     }
 }
 
+void LValueHelper::replaceEnumForWrite(const QoreValue& current) {
+    assert(current.isEnum());
+    assert(val || qv);
+    QoreValue copy = qore_enum_value_copy_for_write(current);
+    if (val) {
+        // QoreLValue::assignAssume() takes the copy and releases the lvalue's reference to the enum member
+        saveTemp(val->assignAssume(copy));
+        return;
+    }
+    QoreValue old = *qv;
+    *qv = copy;
+    saveTemp(old);
+}
+
 void LValueHelper::saveTemp(QoreValue val) {
     if (val.isEnum()) {
         val.discard(nullptr);

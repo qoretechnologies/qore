@@ -733,6 +733,12 @@ protected:
         }
     }
 
+    //! Replaces the enum value \a current that the lvalue holds with an owned copy of its base value
+    /** see qore_enum_value_copy_for_write(); the reference to the enum member is released with the lvalue's other
+        temporary values
+    */
+    DLLLOCAL void replaceEnumForWrite(const QoreValue& current);
+
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
     //! checks the stack and records the lvalue ID of a reference that is resolved; nullptr if the stack is exhausted
     DLLLOCAL const lvalue_ref* startReferenceLValue(const ReferenceNode* ref);
@@ -1440,6 +1446,11 @@ public:
         }
         member_lvalue_modified = true;
         QoreValue current = getValue();
+        if (current.isEnum()) {
+            // the enum member's base value is shared and constant: the lvalue takes an owned copy to modify
+            replaceEnumForWrite(current);
+            return;
+        }
         if (current.isShortString()) {
             char buf[7];
             current.getShortString(buf);
