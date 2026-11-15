@@ -212,6 +212,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   --exec-mode
         # - plugin-order-identity (#6136): its probes run in child processes that set their own --exec-mode, in qcc
         #   executables and with a module compiled by qcc
+        # - dataframe-inline-mask-subscript (#6141): its probes run in child processes that set their own --exec-mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
@@ -248,7 +249,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "modules/dataframe/test/dataframe-default-encoding.qtest",
                                  "modules/dataframe/test/dataframe-default-encoding-names.qtest",
                                  "modules/dataframe/test/dataframe-aot-plugin-helpers.qtest",
-                                 "modules/dataframe/test/dataframe-plugin-exception-handler.qtest"]),
+                                 "modules/dataframe/test/dataframe-plugin-exception-handler.qtest",
+                                 "modules/dataframe/test/dataframe-inline-mask-subscript.qtest"]),
                          sorted(non_harness_children))
 
     def test_children_tests_check_nothing_in_their_own_process(self):
