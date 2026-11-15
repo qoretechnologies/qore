@@ -78,6 +78,7 @@
 #include "qore/intern/CompressionTransforms.h"
 #include "qore/intern/SseEventFramer.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/HttpClientDrainDebug.h"
 
 #include <atomic>
 #include <cassert>
@@ -1556,6 +1557,14 @@ struct qore_httpclient_priv {
                 // Proxy URL from the existing connection info
                 opts.proxy_url = getConnMgrProxyUrl();
                 opts.proxy_authorization = getConnMgrProxyAuthorization();
+#ifdef DEBUG
+                // a test of max_age sets it with dbg_http_client_max_age() (#6150)
+                opts.max_age_ms = QoreHttpClientDrainDebug::get().max_age_ms.load(std::memory_order_acquire);
+                // a test of the idle timeout shortens it with dbg_http_client_idle_timeout() (#6184)
+                if (int idle_ms = QoreHttpClientDrainDebug::get().idle_timeout_ms.load(std::memory_order_acquire)) {
+                    opts.idle_timeout_ms = idle_ms;
+                }
+#endif
                 std::shared_ptr<HttpClientConnectionManagerBase> new_mgr(
                     new HttpClientConnectionManagerBase(opts, xsink));
                 if (*xsink) {

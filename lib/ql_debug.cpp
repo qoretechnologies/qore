@@ -16506,6 +16506,53 @@ static QoreValue f_dbg_http_client_drain_limit(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Debug-only: sets the max_age (ms) of the connection managers that HTTPClient objects create from now on; 0: none
+/** HTTPClient sets no max_age of its own: this lets a test check the max_age of HttpClientConnectionManagerBase (#6150)
+*/
+static QoreValue f_dbg_http_client_max_age(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t ms = get_param_value(params, 0).getAsBigInt();
+    if (ms < 0 || ms > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_client_max_age(): invalid max_age %lld", (long long)ms);
+        return QoreValue();
+    }
+    QoreHttpClientDrainDebug::get().max_age_ms.store(static_cast<int>(ms), std::memory_order_release);
+    return QoreValue();
+}
+
+//! Debug-only: sets the idle timeout (ms) of the connection managers that HTTPClient objects create from now on; 0: the
+//! default (#6184)
+static QoreValue f_dbg_http_client_idle_timeout(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t ms = get_param_value(params, 0).getAsBigInt();
+    if (ms < 0 || ms > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_client_idle_timeout(): invalid timeout %lld",
+            (long long)ms);
+        return QoreValue();
+    }
+    QoreHttpClientDrainDebug::get().idle_timeout_ms.store(static_cast<int>(ms), std::memory_order_release);
+    return QoreValue();
+}
+
+//! Debug-only: arms (or disarms) the hold of the next request of an HTTPClient after the reservation of its
+//! connection's stream and before its submission (#6165)
+static QoreValue f_dbg_http_client_hold_after_reserve(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreHttpClientDrainDebug::get().armReserveHold(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until a request is held by dbg_http_client_hold_after_reserve(); returns False on timeout
+static QoreValue f_dbg_http_client_wait_held_after_reserve(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return QoreHttpClientDrainDebug::get().waitReserveHeld(get_param_value(params, 0).getAsBigInt());
+}
+
+//! Debug-only: lets the request held by dbg_http_client_hold_after_reserve() submit
+static QoreValue f_dbg_http_client_release_after_reserve(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreHttpClientDrainDebug::get().releaseReserveHold();
+    return QoreValue();
+}
+
 //! Debug-only: sets the number of streaming streams whose buffered data an HTTP/2 client delivers in one pass; 0: the
 //! default
 static QoreValue f_dbg_http2_client_streaming_batch(const QoreListNode* params, RuntimeConfig& rc,
@@ -23806,6 +23853,20 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http_client_drain_limit", f_dbg_http_client_drain_limit,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "limit");
+    qns.addBuiltinVariant("dbg_http_client_max_age", f_dbg_http_client_max_age,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "max_age_ms");
+    qns.addBuiltinVariant("dbg_http_client_idle_timeout", f_dbg_http_client_idle_timeout,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "idle_timeout_ms");
+    qns.addBuiltinVariant("dbg_http_client_hold_after_reserve", f_dbg_http_client_hold_after_reserve,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "arm");
+    qns.addBuiltinVariant("dbg_http_client_wait_held_after_reserve", f_dbg_http_client_wait_held_after_reserve,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_http_client_release_after_reserve", f_dbg_http_client_release_after_reserve,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http2_client_streaming_batch", f_dbg_http2_client_streaming_batch,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "batch");
