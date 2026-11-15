@@ -94,6 +94,8 @@ protected:
     const QoreTypeInfo* typeInfo = nullptr;
     // is the RHS a list with a range?
     bool rhs_list_range = false;
+    // does the index need evaluation (set at parse time; qore#6204)?
+    bool right_needs_eval = true;
     // is the offset operand a list at parse time?
     bool slice = false;
     bool string_index_char = true;
