@@ -472,9 +472,22 @@ tp.stop();
 
     Queued tasks not yet processed by a worker thread are canceled.
 
+    @throw THREADPOOL-ERROR called from a task of the same pool: stopping the pool waits for all of its workers,
+    including the one that runs the calling task, so it would never return; a task can stop its pool from another
+    thread (for example with the @ref background "background" operator)
+
+    @note the pool is also stopped when its object is destroyed; a task must therefore not release the last reference
+    to the pool that runs it, as the destructor would then wait for the task
+
     @see ThreadPool::stopWait()
  */
 ThreadPool::stop() {
+    if (tp->isOwnWorker()) {
+        xsink->raiseException("THREADPOOL-ERROR", "ThreadPool::stop() cannot be called from a task of the same pool: "
+            "it waits for all of the pool's workers, including the one that runs the calling task; stop the pool from "
+            "another thread (for example with the background operator)");
+        return QoreValue();
+    }
     tp->stop();
 }
 
@@ -487,9 +500,19 @@ tp.stopWait();
     This method does not return until the ThreadPool has been stopped and all worker threads have also been stopped.
     After this method has been executed once no more tasks can be submitted to the ThreadPool.
 
+    @throw THREADPOOL-ERROR called from a task of the same pool: stopping the pool waits for all of its workers,
+    including the one that runs the calling task, so it would never return; a task can stop its pool from another
+    thread (for example with the @ref background "background" operator)
+
     @see ThreadPool::stop()
  */
 ThreadPool::stopWait() {
+    if (tp->isOwnWorker()) {
+        xsink->raiseException("THREADPOOL-ERROR", "ThreadPool::stopWait() cannot be called from a task of the same "
+            "pool: it waits for all of the pool's workers, including the one that runs the calling task; stop the pool "
+            "from another thread (for example with the background operator)");
+        return QoreValue();
+    }
     tp->stopWait(xsink);
 }
 

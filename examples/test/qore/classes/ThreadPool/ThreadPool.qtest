@@ -45,6 +45,7 @@ class ThreadPoolTest inherits QUnit::Test {
         addTestCase("a detached worker does not count against max_threads", \detachMaxThreadsTest());
         addTestCase("stopWait() waits for a detached worker", \detachStopWaitTest());
         addTestCase("stop() waits for a detached worker", \detachStopTest());
+        addTestCase("stop() and stopWait() from a task of the same pool", \stopFromOwnTaskTest());
         addTestCase("a task that releases the last reference to its pool", \destroyFromOwnTaskTest());
         set_return_value(main());
     }
@@ -272,6 +273,45 @@ class ThreadPoolTest inherits QUnit::Test {
 
         # signal background task to exit
         c.dec();
+    }
+
+    #! stop() and stopWait() called from a task of the same pool raise an exception instead of waiting for
+    #! themselves without end (qore#6242); another thread can stop the pool, also on the task's request
+    stopFromOwnTaskTest() {
+        foreach string method in (("stop", "stopWait")) {
+            ThreadPool tp(1);
+            Queue q();
+            tp.submit(sub () {
+                try {
+                    call_object_method(tp, method);
+                    q.push("returned");
+                } catch (hash<ExceptionInfo> ex) {
+                    q.push(ex.err);
+                }
+            });
+            assertEq("THREADPOOL-ERROR", q.get(30000), method + "() from a task of the pool");
+            # a task can have another thread stop its pool
+            Counter c(1);
+            tp.submit(sub () {
+                background sub () {
+                    tp.stop();
+                    c.dec();
+                }();
+            });
+            c.waitForZero();
+            # the pool has stopped: it takes no more tasks
+            assertThrows("THREADPOOL-ERROR", \tp.submit(), sub () {}, method + "(): the pool is stopped");
+        }
+        # a task of another pool stops a pool normally
+        ThreadPool other(1);
+        ThreadPool tp(1);
+        Queue q();
+        other.submit(sub () {
+            tp.stop();
+            q.push("stopped");
+        });
+        assertEq("stopped", q.get(30000), "stop() from a task of another pool");
+        other.stop();
     }
 
     #! a task of a pool that releases the last reference to the pool's object: the pool is stopped without waiting

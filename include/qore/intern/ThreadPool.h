@@ -553,6 +553,14 @@ public:
         str.concat(']');
     }
 
+    //! returns true if the calling thread is a worker of this pool, also a detached one (qore#6242)
+    /** Stopping the pool waits for all of its workers, so a worker of the pool cannot stop it
+    */
+    DLLLOCAL bool isOwnWorker() const {
+        ThreadPoolThread* tpt = ThreadPoolThread::current;
+        return tpt && &tpt->getPool() == this;
+    }
+
     //! stops the pool from a worker of its own without waiting for its workers (qore#6253)
     /** Called by the destructor of the pool's object when a task of the pool releases the last reference to it: the
         manager thread, which stops the workers, takes a reference to the pool, which it releases when it has stopped,
