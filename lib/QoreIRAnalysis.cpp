@@ -10245,6 +10245,19 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
                 || inst->opcode == QoreIROpcode::LoadClosure) {
             return true;
         }
+        // the fused int updates of a local, as in qore_ir_refine_local_value_facts(): an increment (++i, i++ and
+        // i += 1, the update of a for loop) keeps an assigned local assigned, and an addition of another local keeps
+        // it assigned when both are; they change no other local
+        if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+            return true;
+        }
+        if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+            const auto* add = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+            if (add->target && (!known.count(add->target) || !add->source || !known.count(add->source))) {
+                known.erase(add->target);
+            }
+            return true;
+        }
 
         bool has_ref_args = true;
         const AbstractQoreFunctionVariant* callee =
