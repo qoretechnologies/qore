@@ -1655,11 +1655,6 @@ struct QoreIRDebugNest {
 struct IRCallFrame {
     std::vector<QoreValue> values;
     IRCleanupSlots cleanup;
-    //! the returns of the try block of the try statement of the function that catches the exception that the next
-    //! handler run in this frame runs for (see IRHandlerHandOver::try_returns), set by the code that runs it in the
-    //! frame and taken by executeHandlerBody(): a member, not an argument, as a seventh argument would be passed on
-    //! the stack of execute() (#6074)
-    const std::vector<uint32_t>* handler_catch_returns = nullptr;
     // Remaining uses for borrowed SSA values. Indexed by value ID so hot
     // list-element reads avoid hash-table traffic; storage is pooled per frame.
     std::vector<int32_t> borrowed_temp_remaining;
@@ -1785,6 +1780,11 @@ struct IRCallFrame {
     //! the statements that the frame is in while a debugger is attached (#5816); reset when first used in a call; last,
     //! so that the members used in every call keep their offsets
     QoreIRDebugNest dbg_nest;
+    //! the returns of the try block of the try statement of the function that catches the exception that the next
+    //! handler run in this frame runs for (see IRHandlerHandOver::try_returns), set by the code that runs it in the
+    //! frame and taken by executeHandlerBody(): a member, not an argument, so that the call in execute() takes no
+    //! more than before; the last member, so that the members before it keep their offsets (#6074)
+    const std::vector<uint32_t>* handler_catch_returns = nullptr;
 };
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -7598,7 +7598,7 @@ static QORE_INTERN_NOINLINE bool qore_ir_handlers_unwinding(bool error, const Ex
 
 // The handler hands the values of its return statements to \a parent_frame (see qore_ir_handler_hand_over()) while it
 // runs during an unwind (\a unwinding: an exception or a thread_exit)
-static QORE_INTERN_NOINLINE void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
+static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
         std::vector<QoreValue>* parent_slot_cache = nullptr, const StatementBlock* dbg_statements = nullptr,
         QoreProgram* dbg_pgm = nullptr, bool unwinding = false) {
     // the frame that runs the handler is the innermost frame of the thread when the handler is run (from execute() or
@@ -15595,15 +15595,6 @@ load_local_done:
                 ++ip;
                 break;
             }
-            case QoreIROpcode::HandlerReturn: {
-                // the value of a return statement of a handler run out of line is handed to the function that the
-                // handler runs for, as the AST interpreter's handler has a reference to its return value (#6074)
-                // an exception that the release of a replaced value raises is taken to its target by the
-                // CheckException that follows
-                qore_ir_handler_return(inst, values, xsink);
-                ++ip;
-                break;
-            }
             case QoreIROpcode::CheckCallTarget: {
                 // the target of a call is checked before its arguments are evaluated, as the AST interpreter checks
                 // it (issue #5784)
@@ -19868,6 +19859,16 @@ load_local_done:
                 break;
             }
             default:
+                // the hand-over of a return statement of a handler run out of line (#6074) is handled here, out of
+                // the dispatch of the instructions of every function: it runs only in handler bodies, and a case of
+                // its own changed the code of execute() for every call
+                if (inst->opcode == QoreIROpcode::HandlerReturn) {
+                    // an exception that the release of a replaced value raises is taken to its target by the
+                    // CheckException that follows
+                    qore_ir_handler_return(inst, values, xsink);
+                    ++ip;
+                    break;
+                }
                 if (xsink) {
                     std::string msg = "unsupported opcode in executor: ";
                     msg += std::to_string(static_cast<int>(inst->opcode));
