@@ -2968,11 +2968,13 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
     }
     auto infile = maybe_infile.ValueOrDie();
 
-    // Open Parquet reader via FileReaderBuilder
+    // Open Parquet reader via FileReaderBuilder; the Parquet file reader (pages, decompression, page indexes) gets
+    // the same memory pool as the Arrow reader: default_reader_properties() would give it Arrow's default pool
+    // instead (mimalloc or jemalloc in most Arrow builds), see issue #6171
     std::unique_ptr<parquet::arrow::FileReader> reader;
     auto st_builder = parquet::arrow::FileReaderBuilder();
     st_builder.memory_pool(pool);
-    auto status = st_builder.Open(infile);
+    auto status = st_builder.Open(infile, parquet::ReaderProperties(pool));
     if (!status.ok()) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "cannot open Parquet reader for '%s': %s", path.c_str(),
@@ -3147,8 +3149,12 @@ QoreDataFrame* QoreDataFrame::fromArrowIpc(const BinaryNode* data,
     if (*xsink) {
         return nullptr;
     }
+    // the IPC readers allocate (for decompression, for example) from the same pool as the rest of the module, not
+    // from Arrow's default pool (issue #6171)
+    auto read_options = arrow::ipc::IpcReadOptions::Defaults();
+    read_options.memory_pool = arrow::system_memory_pool();
     auto stream_source = std::make_shared<arrow::io::BufferReader>(buffer);
-    auto maybe_stream_reader = arrow::ipc::RecordBatchStreamReader::Open(stream_source);
+    auto maybe_stream_reader = arrow::ipc::RecordBatchStreamReader::Open(stream_source, read_options);
 
     std::shared_ptr<arrow::Table> table;
     if (maybe_stream_reader.ok()) {
@@ -3161,7 +3167,7 @@ QoreDataFrame* QoreDataFrame::fromArrowIpc(const BinaryNode* data,
         table = maybe_table.ValueOrDie();
     } else {
         auto file_source = std::make_shared<arrow::io::BufferReader>(buffer);
-        auto maybe_file_reader = arrow::ipc::RecordBatchFileReader::Open(file_source);
+        auto maybe_file_reader = arrow::ipc::RecordBatchFileReader::Open(file_source, read_options);
         if (!maybe_file_reader.ok()) {
             xsink->raiseException("DATAFRAME-IO-ERROR",
                 "cannot open Arrow IPC data as stream or file; stream error: %s; file error: %s",
@@ -3312,6 +3318,9 @@ void QoreDataFrame::writeParquet(const std::string& path, const QoreHashNode* op
     auto outfile = maybe_outfile.ValueOrDie();
 
     parquet::WriterProperties::Builder properties_builder;
+    // the column writers allocate from the pool of the writer properties, which is Arrow's default pool unless set
+    // (issue #6171)
+    properties_builder.memory_pool(pool);
     if (write_options.has_compression) {
         properties_builder.compression(write_options.compression);
     }
