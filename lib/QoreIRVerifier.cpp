@@ -1719,6 +1719,90 @@ bool qore_ir_local_is_written(const QoreIRFunction& ir_func, const LocalVar* lv)
         || ir_func.lvalue_path_locals.count(key) || ir_func.cow_container_locals.count(key);
 }
 
+//! Collects the locals that \a ir_func creates a reference to (<tt>\\var</tt>, <tt>\\var.member</tt>), through which
+//! a callee can write them; returns true if a reference expression cannot be walked, which counts as one to any local
+static bool qore_ir_collect_parse_ref_locals(const QoreIRFunction& ir_func, std::unordered_set<const void*>& locals) {
+    bool unknown_node_found = false;
+    for (const auto& block : ir_func.blocks) {
+        for (const auto& inst : block->instructions) {
+            const QoreValue* expr = nullptr;
+            if (inst->opcode == QoreIROpcode::CreateParseRef) {
+                expr = &static_cast<const QoreIRCreateParseRefInstruction*>(inst.get())->expr;
+            } else if (inst->opcode == QoreIROpcode::Invoke) {
+                const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst.get());
+                if (inv->invoke_opcode == QoreIROpcode::CreateParseRef) {
+                    expr = &inv->expr;
+                }
+            }
+            if (expr) {
+                collectLocalsFromExpr(*expr, locals, unknown_node_found);
+            }
+        }
+    }
+    return unknown_node_found;
+}
+
+//! Returns true if \a ir_func creates a reference to the local \a key, which a callee can write it through
+/** From the set that computeIROnlyLocals() collects (QoreIRFunction::parse_ref_locals); a function whose locals were
+    not classified is scanned
+*/
+static bool qore_ir_function_creates_reference_to(const QoreIRFunction& ir_func, const void* key) {
+    if (ir_func.parse_ref_locals_valid) {
+        return ir_func.parse_ref_unknown || ir_func.parse_ref_locals.count(key);
+    }
+    std::unordered_set<const void*> locals;
+    return qore_ir_collect_parse_ref_locals(ir_func, locals) || locals.count(key);
+}
+
+//! Returns true if a handler of \a ir_func (on_exit, on_error, on_success), or a handler of one, can write \a param
+/** A handler is a function of its own (QoreIROnBlockExitInstruction::handler_ir), whose writes to the locals of the
+    function that registers it are not in that function's inventories, and whose own inventories are not built
+    (computeIROnlyLocals() runs for the function): its instructions are scanned, an Invoke (an operation in a try
+    block) of a store or of an lvalue operation and a handler without its IR counting as a write (qore#6004)
+*/
+static bool qore_ir_handlers_write(const QoreIRFunction& ir_func, const LocalVar* param, bool handler) {
+    const void* key = reinterpret_cast<const void*>(param);
+    if (handler && qore_ir_function_creates_reference_to(ir_func, key)) {
+        return true;
+    }
+    for (const auto& block : ir_func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (handler) {
+                if (qore_ir_get_written_local(inst.get()) == param) {
+                    return true;
+                }
+                if (inst->opcode == QoreIROpcode::Invoke) {
+                    QoreIROpcode op = static_cast<const QoreIRInvokeInstruction*>(inst.get())->invoke_opcode;
+                    if (op == QoreIROpcode::StoreLocal || op == QoreIROpcode::StoreClosure || isLValueOp(op)) {
+                        return true;
+                    }
+                }
+            }
+            if (inst->opcode != QoreIROpcode::OnBlockExit) {
+                continue;
+            }
+            const QoreIRFunction* handler_ir = static_cast<const QoreIROnBlockExitInstruction*>(inst.get())
+                ->handler_ir.get();
+            if (!handler_ir || qore_ir_handlers_write(*handler_ir, param, true)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// documented in QoreIR.h
+bool qore_ir_param_write_releases_arg(const QoreIRFunction& ir_func, const LocalVar* param) {
+    if (!param || !qore_ir_type_may_hold_object(param->getTypeInfo())) {
+        return false;
+    }
+    // a write that the IR does not see: in a closure that captures the parameter, or through a reference to it; and
+    // one in a handler, which has an IR function of its own
+    return qore_ir_local_is_written(ir_func, param) || param->closureUse()
+        || qore_ir_function_creates_reference_to(ir_func, reinterpret_cast<const void*>(param))
+        || qore_ir_handlers_write(ir_func, param, false);
+}
+
 // documented in QoreIR.h
 bool QoreIRFunction::detectCreatesReference() const {
     std::unordered_set<const void*> ignored_locals;
@@ -2188,6 +2272,11 @@ void QoreIRFunction::computeIROnlyLocals() {
     computeReferenceStoreLocals();
     ir_only_locals.clear();
     reference_slot_locals.clear();
+    // the locals that the function creates a reference to, for qore_ir_param_write_releases_arg(), once per
+    // classification instead of once per parameter and caller
+    parse_ref_locals.clear();
+    parse_ref_unknown = qore_ir_collect_parse_ref_locals(*this, parse_ref_locals);
+    parse_ref_locals_valid = true;
     real_reference_locals.clear();
     real_reference_ir_only_locals.clear();
     cow_container_locals.clear();
@@ -2556,6 +2645,13 @@ void QoreIRFunction::computeIROnlyLocals() {
             } else {
                 printd(5, "  local '%s' (%p): object type parameter (non-IR-only)\n", lv->getName(), key);
             }
+            continue;
+        }
+        // A parameter whose write can release an object that the caller passed stays on the runtime stack, whose
+        // variable takes the caller's temporary argument over (see takes_over_args): a write then releases it, as in
+        // the AST interpreter, while IR storage would hold a reference of its own besides the variable's
+        if (!body_local_keys.count(key) && qore_ir_param_write_releases_arg(*this, lv)) {
+            printd(5, "  local '%s' (%p): parameter taking its argument over (non-IR-only)\n", lv->getName(), key);
             continue;
         }
         printd(5, "  local '%s' (%p): IR-ONLY\n", lv->getName(), key);

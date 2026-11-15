@@ -7995,6 +7995,15 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     // none need TLS lvalue semantics, and not variadic.
     func->direct_params_eligible = all_params_ir_only && all_params_have_slots
         && all_params_direct_safe && !signature.argvid;
+    for (unsigned i = 0; i < signature.numParams(); ++i) {
+        if (qore_ir_param_write_releases_arg(*func, signature.lv[i])) {
+            if (!func->takes_over_args) {
+                func->takes_over_args = true;
+                func->takes_over_params.assign(signature.numParams(), 0);
+            }
+            func->takes_over_params[i] = 1;
+        }
+    }
 
     printd(3, "UserVariantBase::lowerIRFunction() '%s' lowered to IR (%d guards)\n", name, func->num_guards);
     return func;
