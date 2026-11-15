@@ -3159,9 +3159,10 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     return_protected_slots[ret->value.id] = 1;
                     return_value_slot_ids.push_back(ret->value.id);
                 }
-                // a list or hash returned through `any` is stripped (see the Return handler): decided here once for
-                // each return, from the value's facts, as for native code (qore_ir_return_needs_coercion())
-                if (ret->has_value && func.return_type_info == anyTypeInfo) {
+                // a list or hash returned through `any` or a plain `auto!` is stripped (see the Return handler):
+                // decided here once for each return, from the value's facts, as for native code
+                // (qore_ir_return_needs_coercion())
+                if (ret->has_value && q_type_strips_complex_type(func.return_type_info)) {
                     const QoreIRValueFacts* facts = func.getValueFacts(ret->value);
                     const QoreTypeInfo* value_type = facts ? facts->type_info : nullptr;
                     ret->interpreter_strips_any = !value_type
@@ -6274,7 +6275,7 @@ static bool interpreterInlineClosureNeedsFrame(const QoreClosureBase* cb) {
     return false;
 }
 
-//! strips the complex type of a list or hash returned through the return type `any` (qore#6058)
+//! strips the complex type of a list or hash returned through `any` or a plain `auto!` (qore#6058, qore#6059)
 /** Out of line: calling QoreTypeInfo::acceptAssignment() in QoreIRInterpreter::execute() instead made every execution
     mode +16 instructions per call in callgrind (the strip was inlined into the interpreter)
 */
@@ -9247,6 +9248,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         ? func.interpreter_param_local_vars[static_cast<size_t>(i)]
                         : nullptr;
                     if (lv) {
+                        // a parameter of the type `any` or a plain `auto!` (whose variable has the type `auto`) is
+                        // never a direct parameter (UserVariantBase::lowerIRFunction()): its strip is applied by the
+                        // call path (qore#6059)
+                        assert(!q_type_strips_complex_type(lv->getTypeInfoForLValue()));
                         const QoreTypeInfo* paramTypeInfo = lv->getTypeInfo();
                         if (!exactPrimitiveTypeAcceptsValue(paramTypeInfo, val)
                                 && (val.isEnum() || QoreTypeInfo::mayRequireFilter(paramTypeInfo, val))) {
@@ -20413,11 +20418,11 @@ load_local_done:
                     } else {
                         return_value = val;
                     }
-                    // a list or hash returned through the return type `any` has its complex type stripped, as on
-                    // assignment to `any` (ReturnStatement::execImpl() assigns the value to the return type): a list
-                    // or hash with a complex type is copied with a plain one (qore#6058).  The flag is set once per
-                    // return by the function's analysis; the strip is out of line and the test is marked unlikely,
-                    // so that the code of this function stays as it is for other returns
+                    // a list or hash returned through the return type `any` or a plain `auto!` has its complex type
+                    // stripped, as on assignment to `any` (ReturnStatement::execImpl() assigns the value to the return
+                    // type): a list or hash with a complex type is copied with a plain one (qore#6058, qore#6059).
+                    // The flag is set once per return by the function's analysis; the strip is out of line and the
+                    // test is marked unlikely, so that the code of this function stays as it is for other returns
                     if (ret->interpreter_strips_any) [[unlikely]] {
                         interpreterStripAnyReturn(return_value);
                     }

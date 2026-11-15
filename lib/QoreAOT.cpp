@@ -9679,12 +9679,44 @@ static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
         ? returned_param : -1;
 }
 
+//! returns true if a call of a function that returns its parameter \a param cannot be replaced with the argument
+/** The summary (qore_aot_get_forwarded_return_param()) is made from the declared signature, so a type parameter
+    that the call instantiates as `any` is not seen there: it strips the complex type of a list or hash argument, as
+    `any` does (qore#6059); a type parameter that the call does not resolve is not folded either
+*/
+static bool qore_aot_forwarded_return_call_strips(const AbstractQoreFunctionVariant* callee, const QoreValue& expr,
+        int8_t param) {
+    const UserVariantBase* uvb = callee ? callee->getUserVariantBase() : nullptr;
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    if (!sig || param < 0 || static_cast<unsigned>(param) >= sig->numParams() || !sig->lv[param]) {
+        return true;
+    }
+    const QoreTypeInfo* return_ti = sig->getReturnTypeInfo();
+    const QoreTypeInfo* param_ti = sig->lv[param]->getTypeInfo();
+    if (!qore_type_contains_type_parameter(return_ti) && !qore_type_contains_type_parameter(param_ti)) {
+        return false;
+    }
+    const QoreTypeInfo* receiver_type_info = qore_aot_get_call_receiver_type_info(expr);
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation = qore_aot_get_call_type_instantiation(expr);
+    if (!receiver_type_info && !explicit_type_param_instantiation) {
+        return true;
+    }
+    return_ti = qore_substitute_type_params_if_needed(return_ti, receiver_type_info,
+        explicit_type_param_instantiation);
+    param_ti = qore_substitute_type_params_if_needed(param_ti, receiver_type_info, explicit_type_param_instantiation);
+    return q_type_strips_complex_type(return_ti) || q_type_strips_complex_type(param_ti)
+        || qore_type_contains_type_parameter(return_ti) || qore_type_contains_type_parameter(param_ti);
+}
+
 static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
         const UserSignature& sig) {
+    // a value returned through `any` or a plain `auto!` loses the complex type of a list or hash (qore#6058,
+    // qore#6059), so the call is not replaced with its argument
     if (q_env_is_set("QORE_DISABLE_AOT_GENERIC_RETURN_PARAM_FOLD")
             || !sig.numParams() || sig.numParams() > INT8_MAX
             || func.blocks.size() != 1 || !func.blocks.front()
-            || qore_aot_code_size_exceeds(*func.blocks.front(), 16)) {
+            || qore_aot_code_size_exceeds(*func.blocks.front(), 16)
+            || q_type_strips_complex_type(sig.getReturnTypeInfo())) {
         return -1;
     }
 
@@ -9734,7 +9766,9 @@ static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
             case QoreIROpcode::StoreLocal: {
                 const auto* store =
                     static_cast<const QoreIRLocalInstruction*>(inst);
+                // a local of the type `any` or a plain `auto!` strips the value stored (qore#6059)
                 if (!store->local || inst->operands.size() != 1
+                        || q_type_strips_complex_type(store->local->getTypeInfoForLValue())
                         || func.param_local_vars.end()
                             != std::find_if(func.param_local_vars.begin(),
                                 func.param_local_vars.end(),
@@ -9800,6 +9834,11 @@ static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
         return -1;
     }
     const LocalVar* returned_local = returned_local_it->second;
+    // a parameter of the type `any` or a plain `auto!` (whose variable has the type `auto`) strips the complex type
+    // of a list or hash argument (qore#6032, qore#6059): the returned value is not the argument
+    if (q_type_strips_complex_type(returned_local->getTypeInfoForLValue())) {
+        return -1;
+    }
     return sig.getReturnTypeInfo() == returned_local->getTypeInfo()
         ? returned_param : -1;
 }
@@ -19962,7 +20001,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         && call->operands.size() == found->second.num_params
                         && qore_aot_fast_entry_operands_need_no_binding(
                             callee, *expr, func, call->operands, 0,
-                            static_cast<int>(call->operands.size()));
+                            static_cast<int>(call->operands.size()))
+                        && !qore_aot_forwarded_return_call_strips(callee, *expr,
+                            found->second.forwarded_return_param);
                     if (q_env_is_set("QORE_AOT_DEBUG")
                             && found != aot_batch_callee_map->end()
                             && found->second.forwarded_return_param >= 0) {

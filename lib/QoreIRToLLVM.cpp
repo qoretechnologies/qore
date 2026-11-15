@@ -1407,9 +1407,9 @@ bool qore_ir_return_needs_coercion(
     if (qore_ir_return_value_needs_conversion(return_type, value_facts)) {
         return true;
     }
-    if (return_type == anyTypeInfo) {
-        // a list or hash returned through `any` has its complex type stripped, as on assignment to `any`
-        // (qore#6058): a value that cannot be one is returned as it is
+    if (q_type_strips_complex_type(return_type)) {
+        // a list or hash returned through `any` or a plain `auto!` has its complex type stripped, as on assignment
+        // to `any` (qore#6058, qore#6059): a value that cannot be one is returned as it is
         const QoreTypeInfo* value_type = value_facts ? value_facts->type_info : nullptr;
         return !value_type || QoreTypeInfo::parseAcceptsReturns(value_type, NT_LIST)
             || QoreTypeInfo::parseAcceptsReturns(value_type, NT_HASH);
@@ -3137,10 +3137,11 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                         alloca_builder.CreateStore(alloca_builder.CreateCall(is_ref_fn, {arg_val}), ref_flag);
                     }
                 };
-                // an `any` parameter strips the complex type of a list or hash argument, as the call path does
-                // (UserVariantBase::setupCall(), instantiateFastCallParams()), which can make a new value that the
-                // parameter owns: it is not borrowed (qore#6032)
-                const bool strip_any = var->getTypeInfo() == anyTypeInfo;
+                // an `any` or a plain `auto!` parameter strips the complex type of a list or hash argument, as the
+                // call path does (UserVariantBase::setupCall(), instantiateFastCallParams()), which can make a new
+                // value that the parameter owns: it is not borrowed (qore#6032); the variable of an `auto!` parameter
+                // has the type `auto`, its lvalue type is `auto!` (qore#6059)
+                const bool strip_any = q_type_strips_complex_type(var->getTypeInfoForLValue());
                 if (!strip_any && fast_entry_borrowed_args && fast_entry_borrowed_args->count(key)) {
                     alloca_builder.CreateStore(arg_val, alloca);
                     set_fast_entry_reference_flag();
@@ -20216,11 +20217,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // a fast entry is called directly by compiled code instead of through a runtime call helper that
                 // applies the declared return type, so like an AOT standard entry it converts the value itself;
                 // the conversion must precede extraction of a native return value
-                // a value returned through `any` is converted by every entry, as not every caller applies the return
-                // type to the value of a standard entry (UserVariantBase::evalTiered() applies a return type that has
-                // a type only; qore#6058)
+                // a value returned through `any` or a plain `auto!` is converted by every entry, as not every caller
+                // applies the return type to the value of a standard entry (UserVariantBase::evalTiered() applies a
+                // return type that has a type only; qore#6058, qore#6059)
                 coerce_return = !timeout_return && !optional_timeout_return
-                    && (aot_mode || !fast_entry_name.empty() || return_type == anyTypeInfo)
+                    && (aot_mode || !fast_entry_name.empty() || q_type_strips_complex_type(return_type))
                     && qore_ir_return_needs_coercion(return_type, return_value_facts);
                 // a return statement that returns no value from code whose return type requires one raises the
                 // error of its return statement, as the AST interpreter checks every return statement, instead of

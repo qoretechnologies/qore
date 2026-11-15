@@ -2920,6 +2920,14 @@ protected:
 DLLLOCAL void map_get_plain_hash(QoreValue&, ExceptionSink*);
 DLLLOCAL void map_get_plain_hash_lvalue(QoreValue&, ExceptionSink*, LValueHelper*);
 
+//! returns true if a list or hash assigned to or returned through \a ti loses its complex type
+/** \c any and a plain \c auto! (not a subtype such as \c hash<auto!>) strip complex type information; \c auto keeps it
+    (qore#6058, qore#6059)
+*/
+DLLLOCAL inline bool q_type_strips_complex_type(const QoreTypeInfo* ti) {
+    return ti == anyTypeInfo || ti == autoNoNarrowTypeInfo;
+}
+
 //! strips no-narrow (hash<auto!>/list<auto!>) container tags like LValueHelper::assign(); copies shared containers
 DLLLOCAL QORE_INTERN_ALWAYS_INLINE void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val,
         ExceptionSink* xsink);
@@ -4910,7 +4918,7 @@ QORE_INTERN_ALWAYS_INLINE void QoreTypeInfo::stripTypeInfo(QoreValue& n, Excepti
 // Keep the common scalar/no-coercion checks in the caller; container copies stay out of line.
 QORE_INTERN_ALWAYS_INLINE void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val,
         ExceptionSink* xsink) {
-    if (ti == anyTypeInfo || ti == autoNoNarrowTypeInfo) {
+    if (q_type_strips_complex_type(ti)) {
         if (val.getType() == NT_HASH) {
             map_get_plain_hash(val, xsink);
         } else if (val.getType() == NT_LIST) {
