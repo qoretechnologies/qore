@@ -45,6 +45,7 @@
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/qore_number_private.h"
+#include "qore/intern/qore_program_private.h"
 
 // Macro for JIT runtime functions: check xsink and throw C++ exception
 // if a Qore exception was raised. Used at return points of qore_rt_*
@@ -12775,7 +12776,7 @@ static QORE_ALWAYS_INLINE QoreProgram* qore_rt_function_execution_program(QorePr
 }
 
 //! sets the runtime parse options override of a fast call of a user variant as UserVariantBase::eval() does
-/** See qore_get_user_call_runtime_po_override(): a user variant that runs in a Program other than the one that
+/** See qore_set_user_call_runtime_po_override(): a user variant that runs in a Program other than the one that
     defined it is restricted with the executing Program's restrictions, module code runs with its module's options
     (and a sandboxed caller's restrictions), a call of module code by code of the same module keeps the override in
     effect, and otherwise any override of the caller is cleared for the call.
@@ -12919,7 +12920,8 @@ extern "C" DLLEXPORT int qore_rt_enter_cross_module_call(QoreAOTContext* ctx, in
     // the function's parse options, after the override, as execJITWithDeopt() sets them (with the location only)
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
     if (parse_loc) {
-        state->runtime_context.emplace(parse_loc, uvb->getParseOptions(exec_pgm->getParseOptions()));
+        state->runtime_context.emplace(parse_loc,
+            uvb->getParseOptions(qore_program_private::getParseOptions(*exec_pgm)));
     }
     return 0;
 }

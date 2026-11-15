@@ -639,6 +639,7 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     sm_lock.reinitAfterFork();
     featureLock.reinitAfterFork();
     new (&runtime_metadata_lock) std::recursive_mutex();
+    pwo.parse_options.reinitAfterFork();
     ir_fallback_lock.reinitAfterFork();
     plugin_fallback_lock.reinitAfterFork();
     debug_program_counter.reinitAfterFork();
@@ -1859,16 +1860,17 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
 
     setCreatorChain(*p_pgm);
 
+    // the parent's options are read once, so that the test and the steps below use the same value (issue #6078)
+    QoreParseOptions p_po = p_pgm->priv->pwo.parse_options;
     // if children inherit restrictions, then set all child restrictions
-    if (!(p_pgm->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS)) {
+    if (!(p_po & PO_NO_CHILD_PO_RESTRICTIONS)) {
         // lock child parse options
         po_locked = true;
-        // turn on all restrictions in the child that are set in the parent
-        pwo.parse_options |= p_pgm->priv->pwo.parse_options;
-        // make sure all options that give more freedom and are off in the parent program are turned off in the child;
-        // the mask must be the full-width one: the legacy PO_POSITIVE_OPTIONS cannot hold extended (bits 64+)
-        // positive options, which would then pass to the child unchecked
-        pwo.parse_options &= (p_pgm->priv->pwo.parse_options | ~QoreParseOptions::POSITIVE_OPTIONS);
+        // turn on all restrictions in the child that are set in the parent, and make sure all options that give more
+        // freedom and are off in the parent program are turned off in the child; the mask must be the full-width one:
+        // the legacy PO_POSITIVE_OPTIONS cannot hold extended (bits 64+) positive options, which would then pass to
+        // the child unchecked
+        pwo.parse_options = (pwo.parse_options | p_po) & (p_po | ~QoreParseOptions::POSITIVE_OPTIONS);
         // the child keeps the restrictions of its parent and those it was created with
         locked_restrictions = pwo.parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
     } else {
@@ -3974,6 +3976,8 @@ ExceptionSink* QoreProgram::getParseExceptionSink() {
 }
 
 int QoreProgram::setWarningMask(int wm) {
+    // the check and the change are atomic with a change of PO_LOCK_WARNINGS (issue #6078)
+    std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     if (!(priv->pwo.parse_options & PO_LOCK_WARNINGS)) {
         priv->pwo.warn_mask = wm;
         return 0;
@@ -3983,6 +3987,8 @@ int QoreProgram::setWarningMask(int wm) {
 
 // returns 0 for success, -1 for error
 int QoreProgram::enableWarning(int code) {
+    // the check and the change are atomic with a change of PO_LOCK_WARNINGS (issue #6078)
+    std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     if (!(priv->pwo.parse_options & PO_LOCK_WARNINGS)) {
         priv->pwo.warn_mask |= code;
         return 0;
@@ -3992,6 +3998,8 @@ int QoreProgram::enableWarning(int code) {
 
 // returns 0 for success, -1 for error
 int QoreProgram::disableWarning(int code) {
+    // the check and the change are atomic with a change of PO_LOCK_WARNINGS (issue #6078)
+    std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     if (!(priv->pwo.parse_options & PO_LOCK_WARNINGS)) {
         priv->pwo.warn_mask &= ~code;
         return 0;
@@ -4082,7 +4090,9 @@ void QoreProgram::waitForTerminationAndDeref(ExceptionSink* xsink) {
 }
 
 void QoreProgram::lockOptions() {
-    // the restrictions that it has now are kept; under po_mutex, as the options may be changed in another thread
+    // atomic with the lock check of a change of the options (issue #6078); the write lock before po_mutex (see
+    // qore_program_private_base::po_mutex); the restrictions that it has now are kept
+    std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     std::lock_guard<std::mutex> po_guard(priv->po_mutex);
     priv->locked_restrictions |= priv->pwo.parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
     priv->po_locked = true;
@@ -4172,7 +4182,7 @@ bool QoreProgram::checkWarning(int code) const {
 }
 
 int QoreProgram::getWarningMask() const {
-    return priv->warnSink ? priv->pwo.warn_mask : 0;
+    return priv->warnSink ? priv->pwo.warn_mask.load(std::memory_order_relaxed) : 0;
 }
 
 bool QoreProgram::existsFunction(const char* name) {
@@ -4373,8 +4383,12 @@ int qore_program_private_base::checkNewProgramModernOptions(const QoreProgram* p
         ExceptionSink* xsink, const char* what) {
     // a child Program has its parent's options too, unless the parent allows other options for its children
     QoreParseOptions inherited;
-    if (parent && !(parent->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS)) {
-        inherited = parent->priv->pwo.parse_options;
+    if (parent) {
+        // the parent's options are read once, so that the test and the value checked are the same (issue #6078)
+        QoreParseOptions parent_po = parent->priv->pwo.parse_options;
+        if (!(parent_po & PO_NO_CHILD_PO_RESTRICTIONS)) {
+            inherited = parent_po;
+        }
     }
     if (!isModern(inherited | po)) {
         return 0;

@@ -29052,6 +29052,8 @@ static int applyAOTSourceModernDefault(QoreProgram& pgm, const std::string& cano
     if (!qore_program_private::should_auto_enable_modern(canon.c_str())) {
         return 0;
     }
+    // the check and the change are atomic (issue #6078)
+    std::lock_guard<std::recursive_mutex> lg(qore_program_private::getParseOptionsWriteLock(pgm));
     // %modern cannot be set while a compatibility option that it does not allow is in effect (issue #5682)
     if (qore_program_private::checkModernSourceDefault(pgm.getParseOptions(), canon.c_str(), xsink)) {
         return -1;

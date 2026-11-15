@@ -6379,7 +6379,7 @@ QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code
         // Program running on the thread that it calls back, have the effective options of their own callers
         td->callback_caller_pgm = nullptr;
         code_pgm = caller;
-        return caller->getParseOptions();
+        return qore_program_private::getParseOptions(*caller);
     }
     code_pgm = td->current_pgm;
     return runtime_get_effective_parse_options_for(td, td->current_pgm);
@@ -6428,7 +6428,8 @@ void QoreCallReferenceArgEvalHelper::evaluated(const QoreListNode* evaluated_arg
     }
 }
 
-QoreCallbackCallerHelper::QoreCallbackCallerHelper(const QoreProgram* caller) : po(caller->getParseOptions()) {
+QoreCallbackCallerHelper::QoreCallbackCallerHelper(const QoreProgram* caller)
+        : po(qore_program_private::getParseOptions(*caller)) {
     ThreadData* td = thread_data.get();
     old_caller_pgm = td->callback_caller_pgm;
     old_from_pgm = td->callback_from_pgm;
@@ -6444,7 +6445,7 @@ QoreCallbackCallerHelper::~QoreCallbackCallerHelper() {
 
 QoreParseOptions runtime_get_effective_parse_options_for(const QoreProgram* pgm) {
     ThreadData* td = thread_data.get();
-    return pgm ? apply_runtime_po_override(td, pgm->getParseOptions()) : td->runtime_po;
+    return pgm ? apply_runtime_po_override(td, qore_program_private::getParseOptions(*pgm)) : td->runtime_po;
 }
 
 QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOptions& po) {
@@ -6468,7 +6469,7 @@ ThreadData* qore_get_thread_data() {
 
 QoreParseOptions runtime_get_effective_parse_options_for(ThreadData* td, const QoreProgram* pgm) {
     assert(td == thread_data.get());
-    return pgm ? apply_runtime_po_override(td, pgm->getParseOptions()) : td->runtime_po;
+    return pgm ? apply_runtime_po_override(td, qore_program_private::getParseOptions(*pgm)) : td->runtime_po;
 }
 
 bool runtime_module_call_inherits_caller_restrictions(const QoreProgram* caller_pgm) {

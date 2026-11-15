@@ -1075,7 +1075,7 @@ private:
     const QoreProgram* old_from_pgm;
 };
 
-//! the runtime parse options override of a call; see qore_get_user_call_runtime_po_override()
+//! the runtime parse options override of a call; see qore_set_user_call_runtime_po_override()
 struct QoreCallParseOptionsOverride {
     //! the options that the override covers
     QoreParseOptions mask;
