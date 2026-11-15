@@ -4056,8 +4056,258 @@ void QoreIRToLLVM::emitPreInstClosureReInstantiation(llvm::Module& module) {
     }
 }
 
+//! The estimated size of the inline code of the places that run pending handlers over which a function uses the
+//! table-driven helpers instead (see QoreIRToLLVM::obe_table_mode, qore#6110)
+static size_t getObeTableBudget() {
+    static constinit QoreLazyValue<size_t> budget_setting([]() -> size_t {
+        constexpr size_t default_budget = 8192;
+        QoreEnvironmentValue env_holder("QORE_JIT_OBE_TABLE_BUDGET");
+        const char* env = env_holder.c_str();
+        if (!env || !*env) {
+            return default_budget;
+        }
+        char* end = nullptr;
+        unsigned long long value = strtoull(env, &end, 10);
+        if (!end || end == env || *end || value > static_cast<unsigned long long>(std::numeric_limits<size_t>::max())) {
+            return default_budget;
+        }
+        return static_cast<size_t>(value);
+    });
+    return budget_setting.get();
+}
+
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::shouldUseObeTables(const QoreIRFunction& func) const {
+    size_t handlers = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst && inst->opcode == QoreIROpcode::OnBlockExit) {
+                ++handlers;
+            }
+        }
+    }
+    if (!handlers) {
+        return false;
+    }
+    // about 18 instructions for each local at each of about two places for each handler
+    return handlers * 2 * 18 * (static_cast<size_t>(func.total_local_count) + 1) > getObeTableBudget();
+}
+
+// documented in QoreIRToLLVM.h
+uint32_t QoreIRToLLVM::getObeEntryIndex(const void* key) {
+    auto it = obe_entry_index.find(key);
+    if (it != obe_entry_index.end()) {
+        return it->second;
+    }
+    uint32_t index = static_cast<uint32_t>(obe_entry_keys.size());
+    assert(index < QORE_OBE_TABLE_INDEX);
+    obe_entry_keys.push_back(key);
+    obe_entry_index.emplace(key, index);
+    return index;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::getObeTable(llvm::Module& module, const std::vector<uint32_t>& entries) {
+    auto it = obe_tables.find(entries);
+    if (it != obe_tables.end()) {
+        return it->second;
+    }
+    llvm::Constant* data = llvm::ConstantDataArray::get(ctx, entries);
+    auto* table = new llvm::GlobalVariable(module, data->getType(), true, llvm::GlobalValue::PrivateLinkage, data,
+        "obe_table");
+    table->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+    obe_tables.emplace(entries, table);
+    return table;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::CallInst* QoreIRToLLVM::emitObeCall(llvm::Module& module, const char* name,
+        const std::vector<uint32_t>& entries, bool with_epoch) {
+    llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+    if (!obe_entries) {
+        // the size is that of the records that the tables cover, once the function is lowered (finalizeObeEntries())
+        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+        llvm::IRBuilder<> ab(&entry, entry.begin());
+        obe_entries = ab.CreateAlloca(llvm::Type::getInt8Ty(ctx), llvm::ConstantInt::get(i64_type, sizeof(QoreObeLocal)),
+            "obe_locals");
+        obe_entries->setAlignment(llvm::Align(8));
+    }
+    llvm::Value* table = getObeTable(module, entries);
+    llvm::Value* count = llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(entries.size()));
+    if (!with_epoch) {
+        auto helper = module.getOrInsertFunction(name,
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i32_type, ptr_type}, false));
+        return builder->CreateCall(helper, {obe_entries, table, count, xsink_arg});
+    }
+    auto helper = module.getOrInsertFunction(name,
+        llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i32_type, ptr_type, ptr_type, ptr_type}, false));
+    llvm::Value* epoch = local_reload_epoch ? static_cast<llvm::Value*>(local_reload_epoch)
+        : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    llvm::Value* aot = aot_mode ? static_cast<llvm::Value*>(aot_ctx_arg)
+        : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    return builder->CreateCall(helper, {obe_entries, table, count, epoch, aot, xsink_arg});
+}
+
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::publishLocalsViaTable(llvm::Module& module) {
+    llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+    // the locals that the inline code publishes, in the same order and by the same rules
+    std::vector<const void*> keys;
+    for (const void* key : getLocalsInReverseDeclarationOrder(local_allocas)) {
+        if (ir_only_locals_set && ir_only_locals_set->count(key)) {
+            continue;
+        }
+        auto* local = reinterpret_cast<const LocalVar*>(key);
+        if ((local && local->closureUse()) || weak_assigned_locals.count(key) || readsThroughReference(local)) {
+            continue;
+        }
+        // the inline code boxes the value of a native cache
+        if (native_int_locals.count(key) || native_float_locals.count(key) || native_bool_locals.count(key)) {
+            return false;
+        }
+        keys.push_back(key);
+    }
+    std::vector<uint32_t> entries;
+    entries.reserve(keys.size());
+    for (const void* key : keys) {
+        // a cache that can be stale is reloaded before it is published (ensureLocalCacheFresh())
+        bool fresh = local_reload_epoch && canReloadLocalFromRuntime(key);
+        if (fresh) {
+            ensureLocalReloadStorage(key, llvm_func);
+            localReferenceFlag(key, llvm_func);
+            // the epoch of the local that the helper compares (ensureLocalCacheFresh() makes it); a local that no
+            // native code loads or stores has none otherwise
+            getOrCreateLocalValidEpoch(key, llvm_func);
+        }
+        entries.push_back(getObeEntryIndex(key) | (fresh ? QORE_OBE_TABLE_FRESH : 0));
+    }
+    if (!entries.empty()) {
+        emitObeCall(module, "qore_rt_obe_publish", entries, true);
+    }
+    return true;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::reloadLocalsViaTable(llvm::Module& module, llvm::Function* llvm_func,
+        bool honor_reload_exempt) {
+    std::vector<uint32_t> entries;
+    for (auto& [key, alloca] : local_allocas) {
+        (void)alloca;
+        if (!canReloadLocalFromRuntime(key, honor_reload_exempt)) {
+            continue;
+        }
+        // the storage that reloadLocalFromRuntime() makes, and the epoch and the reference flag that
+        // markLocalCacheFresh() and emitLocalCacheLoad() make
+        ensureLocalReloadStorage(key, llvm_func);
+        localReferenceFlag(key, llvm_func);
+        bool fresh = local_reload_epoch && canReloadLocalFromRuntime(key);
+        if (fresh) {
+            getOrCreateLocalValidEpoch(key, llvm_func);
+        }
+        entries.push_back(getObeEntryIndex(key) | (fresh ? QORE_OBE_TABLE_FRESH : 0));
+    }
+    if (!entries.empty()) {
+        emitObeCall(module, "qore_rt_obe_reload", entries, true);
+    }
+}
+
+// documented in QoreIRToLLVM.h
+std::vector<const void*> QoreIRToLLVM::getReleasedReloadLocals() {
+    if (local_reload_trackers.empty() && local_reload_deferred.empty()
+            && preinstantiated_entry_cleanup_by_local.empty()) {
+        return {};
+    }
+    llvm::MapVector<const void*, bool> keys;
+    size_t count = 0;
+    for (const auto& entry : preinstantiated_entry_cleanup_by_local) {
+        if (!(++count % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM handler entry cleanup collection");
+        }
+        if (releasesReloadStorageForHandlers(entry.first)) {
+            keys.insert({entry.first, true});
+        }
+    }
+    for (const auto& entry : local_reload_deferred) {
+        if (releasesReloadStorageForHandlers(entry.first)) {
+            keys.insert({entry.first, true});
+        }
+    }
+    for (const auto& entry : local_reload_trackers) {
+        if (releasesReloadStorageForHandlers(entry.first)) {
+            keys.insert({entry.first, true});
+        }
+    }
+    return getLocalsInReverseDeclarationOrder(keys);
+}
+
+// documented in QoreIRToLLVM.h
+std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorageViaTable(llvm::Module& module) {
+    std::vector<const void*> released = getReleasedReloadLocals();
+    if (released.empty()) {
+        return released;
+    }
+    std::vector<uint32_t> entries;
+    entries.reserve(released.size());
+    for (const void* key : released) {
+        entries.push_back(getObeEntryIndex(key));
+    }
+    emitObeCall(module, "qore_rt_obe_release", entries, false);
+    return released;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::finalizeObeEntries(llvm::Function* llvm_func) {
+    if (!obe_entries) {
+        return;
+    }
+    llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+    llvm::Instruction* term = qoreGetTerminator(entry);
+    assert(term);
+    llvm::IRBuilder<> ab(term);
+    llvm::Type* i8_type = llvm::Type::getInt8Ty(ctx);
+    auto field = [&](size_t index, size_t offset) {
+        return ab.CreateGEP(i8_type, obe_entries, llvm::ConstantInt::get(i64_type, index * sizeof(QoreObeLocal) + offset));
+    };
+    llvm::Value* null_ptr = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    auto store_ptr = [&](size_t index, size_t offset, llvm::Value* value) {
+        ab.CreateStore(value ? value : null_ptr, field(index, offset));
+    };
+    for (size_t i = 0; i < obe_entry_keys.size(); ++i) {
+        const void* key = obe_entry_keys[i];
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "LLVM handler local table")) {
+            break;
+        }
+        auto cache_it = local_allocas.find(key);
+        assert(cache_it != local_allocas.end());
+        auto find_alloca = [&](const auto& map) -> llvm::Value* {
+            auto it = map.find(key);
+            return it == map.end() ? nullptr : static_cast<llvm::Value*>(it->second);
+        };
+        if (aot_mode) {
+            store_ptr(i, offsetof(QoreObeLocal, var), nullptr);
+            ab.CreateStore(llvm::ConstantInt::get(i32_type,
+                static_cast<uint32_t>(const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key))),
+                field(i, offsetof(QoreObeLocal, slot)));
+        } else {
+            store_ptr(i, offsetof(QoreObeLocal, var), ab.CreateIntToPtr(
+                llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(key)), ptr_type));
+            ab.CreateStore(llvm::ConstantInt::get(i32_type, 0), field(i, offsetof(QoreObeLocal, slot)));
+        }
+        store_ptr(i, offsetof(QoreObeLocal, cache), cache_it->second.storage());
+        store_ptr(i, offsetof(QoreObeLocal, tracker), find_alloca(local_reload_trackers));
+        store_ptr(i, offsetof(QoreObeLocal, deferred), find_alloca(local_reload_deferred));
+        store_ptr(i, offsetof(QoreObeLocal, valid_epoch), find_alloca(local_valid_epochs));
+        store_ptr(i, offsetof(QoreObeLocal, ref_flag), find_alloca(local_reference_flags));
+        store_ptr(i, offsetof(QoreObeLocal, entry_owner), find_alloca(preinstantiated_entry_cleanup_by_local));
+    }
+    obe_entries->setOperand(0, llvm::ConstantInt::get(i64_type, obe_entry_keys.size() * sizeof(QoreObeLocal)));
+}
+
 void QoreIRToLLVM::syncLocalsToRuntimeForHandlers(llvm::Module& module) {
     if (!has_on_block_exit_handlers || local_allocas.empty()) {
+        return;
+    }
+    if (obe_table_mode && publishLocalsViaTable(module)) {
         return;
     }
 
@@ -4180,28 +4430,10 @@ std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& m
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
         builder->CreateCall(helper, {val, xsink_arg});
     };
-    llvm::MapVector<const void*, bool> keys;
+    // the locals in the order of their release (shared with the table-driven release, see
+    // releaseLocalReloadStorageViaTable())
+    std::vector<const void*> released = getReleasedReloadLocals();
     size_t count = 0;
-    for (const auto& entry : preinstantiated_entry_cleanup_by_local) {
-        if (!(++count % 100)) {
-            (void)qore_check_cancel(nullptr, "LLVM handler entry cleanup collection");
-        }
-        if (releasesReloadStorageForHandlers(entry.first)) {
-            keys.insert({entry.first, true});
-        }
-    }
-    for (const auto& entry : local_reload_deferred) {
-        if (releasesReloadStorageForHandlers(entry.first)) {
-            keys.insert({entry.first, true});
-        }
-    }
-    for (const auto& entry : local_reload_trackers) {
-        if (releasesReloadStorageForHandlers(entry.first)) {
-            keys.insert({entry.first, true});
-        }
-    }
-    std::vector<const void*> released = getLocalsInReverseDeclarationOrder(keys);
-    count = 0;
     for (const void* key : released) {
         if (!(++count % 100)) {
             (void)qore_check_cancel(nullptr, "LLVM handler local reload storage release");
@@ -4261,7 +4493,8 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
     llvm::IRBuilderBase::InsertPointGuard insert_point_guard(*builder);
     for (const HandlerSite& site : sites) {
         builder->SetInsertPoint(site.call);
-        std::vector<const void*> released = releaseLocalReloadStorage(module);
+        std::vector<const void*> released = obe_table_mode ? releaseLocalReloadStorageViaTable(module)
+            : releaseLocalReloadStorage(module);
         if (!site.reload || released.empty()) {
             continue;
         }
@@ -4275,6 +4508,27 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
             builder->SetInsertPoint(next);
         } else {
             builder->SetInsertPoint(site.call->getParent());
+        }
+        if (obe_table_mode) {
+            // the locals that have an owner are reloaded by one call (qore#6110)
+            std::vector<uint32_t> entries;
+            for (const void* key : released) {
+                bool owned = local_reload_trackers.find(key) != local_reload_trackers.end()
+                    || preinstantiated_entry_cleanup_by_local.find(key) != preinstantiated_entry_cleanup_by_local.end();
+                if (!owned || local_allocas.find(key) == local_allocas.end()) {
+                    continue;
+                }
+                localReferenceFlag(key, llvm_func);
+                bool fresh = local_reload_epoch && canReloadLocalFromRuntime(key);
+                if (fresh) {
+                    getOrCreateLocalValidEpoch(key, llvm_func);
+                }
+                entries.push_back(getObeEntryIndex(key) | (fresh ? QORE_OBE_TABLE_FRESH : 0));
+            }
+            if (!entries.empty()) {
+                emitObeCall(module, "qore_rt_obe_reload_released", entries, true);
+            }
+            continue;
         }
         for (const void* key : released) {
             // Reload into the existing tracker, or the entry owner if it alone backed the cache. Both were cleared,
@@ -6702,17 +6956,8 @@ void QoreIRToLLVM::markLocalCacheStale(const void* key, llvm::Function* llvm_fun
     builder->CreateStore(llvm::ConstantInt::get(i64_type, UINT64_MAX), getOrCreateLocalValidEpoch(key, llvm_func));
 }
 
-void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
-        llvm::Function* llvm_func) {
-    if (!local_reload_epoch || !canReloadLocalFromRuntime(key)) {
-        return;
-    }
-
-    auto alloca_it = local_allocas.find(key);
-    if (alloca_it == local_allocas.end()) {
-        return;
-    }
-
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::ensureLocalReloadStorage(const void* key, llvm::Function* llvm_func) {
     auto tracker_it = local_reload_trackers.find(key);
     if (tracker_it == local_reload_trackers.end()) {
         llvm::IRBuilder<> alloca_builder(&llvm_func->getEntryBlock(),
@@ -6723,7 +6968,6 @@ void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
                 tracker);
         local_reload_trackers[key] = tracker;
         registerPersistentCleanupAlloca(tracker);
-        tracker_it = local_reload_trackers.find(key);
     }
 
     auto deferred_it = local_reload_deferred.find(key);
@@ -6736,8 +6980,23 @@ void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
                 deferred);
         local_reload_deferred[key] = deferred;
         registerPersistentCleanupAlloca(deferred);
-        deferred_it = local_reload_deferred.find(key);
     }
+}
+
+void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
+        llvm::Function* llvm_func) {
+    if (!local_reload_epoch || !canReloadLocalFromRuntime(key)) {
+        return;
+    }
+
+    auto alloca_it = local_allocas.find(key);
+    if (alloca_it == local_allocas.end()) {
+        return;
+    }
+
+    ensureLocalReloadStorage(key, llvm_func);
+    auto tracker_it = local_reload_trackers.find(key);
+    auto deferred_it = local_reload_deferred.find(key);
 
     llvm::AllocaInst* valid_epoch = getOrCreateLocalValidEpoch(key, llvm_func);
     llvm::Value* epoch = builder->CreateLoad(i64_type, local_reload_epoch);
@@ -7766,6 +8025,11 @@ void QoreIRToLLVM::reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Functi
     }
     stable_int_conversions.clear();
     stable_float_conversions.clear();
+    if (eager && obe_table_mode) {
+        // one call for the locals instead of the reload of each (qore#6110)
+        reloadLocalsViaTable(module, llvm_func, honor_reload_exempt);
+        return;
+    }
     bool has_reloadable_local = false;
     for (auto& [key, alloca] : local_allocas) {
         (void)alloca;
@@ -13793,6 +14057,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     return_tail = nullptr;
     return_tail_value = nullptr;
     share_return_tail = shouldShareReturnTail(func);
+    obe_table_mode = shouldUseObeTables(func);
+    obe_entries = nullptr;
+    obe_entry_keys.clear();
+    obe_entry_index.clear();
+    obe_tables.clear();
     jit_deopt_block = nullptr;
     current_lowering_block_ = nullptr;
     // the implicit arguments and elements that an exception leaving the function restores at each instruction (see
@@ -16197,6 +16466,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // the release and reload of the locals' reload storage around the handlers run out of line, now that the
     // function's reload storage is known
     finalizeHandlerSites(module, llvm_func);
+    // the records of the locals that the tables of the places that run handlers cover (qore#6110)
+    finalizeObeEntries(llvm_func);
     // the release of the values of an interrupted return that a handler's return replaced (#5992)
     finalizeHandlerReturnHoldSites(module);
 
