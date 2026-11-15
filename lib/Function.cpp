@@ -1268,6 +1268,28 @@ QORE_CEH_CONSTRUCTOR_INLINE CodeEvaluationHelper::CodeEvaluationHelper(Exception
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
+CodeEvaluationHelper::CodeEvaluationHelper(DeletedByArgs, ExceptionSink* n_xsink, RuntimeConfig& n_rc,
+        const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, const char* n_name,
+        QoreListNode* args, QoreObject* self, const qore_class_private* n_qc, const qore_class_private* cctx,
+        QoreProgram* pgm_ctx, const QoreTypeParamInstantiation* n_explicit_type_param_instantiation)
+    : ct(CT_UNUSED), call_flags(0), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
+        loc(take_runtime_call_location()),
+        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
+        receiver_type_info(nullptr),
+        explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
+    // as the constructor with pre-evaluated arguments that the call uses, without the test of the object, which its
+    // arguments deleted: the error of the method's code is raised by the caller once the variant is known
+    assert(self && !self->isValid());
+    setCallName(func);
+    call_ref_po = rc_take_call_reference_call(n_rc, args);
+    tmp.assignEval(args);
+    if (*xsink) {
+        return;
+    }
+
+    init(func, variant, false, cctx, self, pgm_ctx);
+}
+
 CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, const qore_class_private* cctx, QoreProgram* pgm_ctx,

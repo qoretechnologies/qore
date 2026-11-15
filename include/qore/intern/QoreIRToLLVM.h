@@ -232,6 +232,9 @@ private:
     //! the current object (NaN-boxed), read at the start of the function by the first check of a call through self
     //! (QoreIROpcode::CheckCallTarget with no operand, issue #5823); null until then
     llvm::Value* current_self_bits = nullptr;
+    //! the call whose check of its target (QoreIRInstruction::fused_call_check) is being lowered, whose arguments the
+    //! check after them passes to its helper (issue #5824); null otherwise
+    const QoreIRInstruction* fused_check_call = nullptr;
     bool aot_direct_closure_fast_entry = true;
 
     // Deferred exception checking for code proven not to observe exceptions before
@@ -1586,6 +1589,14 @@ private:
     //! resolved at parse time on an object of its class that has not been deleted; issues #5784, #5824)
     llvm::Value* emitCallTargetFastTest(const QoreIRExprInstruction* check, uint64_t call_bits, llvm::Value* target,
         llvm::Module& module, llvm::Function* llvm_func);
+
+    //! Emits the call of the helper of QoreIROpcode::CheckCallTarget that makes the check when the fast test did not
+    //! decide it; the check after the arguments of a call (QoreIRExprInstruction::check_after_args) passes the call's
+    //! arguments (fused_check_call), with which the helper resolves the variant whose error it raises (issue #5824)
+    /** @return false if an operand could not be lowered (@a error is set)
+    */
+    bool emitCallTargetCheckHelper(const QoreIRExprInstruction* check, uint64_t call_bits, int32_t slot,
+        llvm::Value* target, llvm::Module& module, llvm::Function* llvm_func, std::string& error);
 
     // Inline qore_rt_ref - reference count a value if it's a node
     // Returns the value unchanged if not a node, or qore_rt_refself result if node

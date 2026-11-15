@@ -2536,6 +2536,20 @@ static const QoreValue* qore_ir_fusable_method_call_expr(const QoreIRInstruction
     }
 }
 
+//! true if @a call is the method call (a dot or self call; not a call reference) that makes the check @a check of its
+//! target when the check is fused into it
+static bool qore_ir_check_fuses_into(const QoreIRInstruction* check, const QoreIRInstruction* call) {
+    const QoreValue& check_expr = static_cast<const QoreIRExprInstruction*>(check)->expr;
+    const QoreValue* call_expr = qore_ir_fusable_method_call_expr(call);
+    return call_expr && check_expr.isPointer() && call_expr->isPointer() && check_expr.getType() != NT_FUNCREFCALL
+        && call_expr->getInternalNode() == check_expr.getInternalNode();
+}
+
+const QoreIRInstruction* qore_ir_call_of_target_check(const QoreIRInstruction* check, const QoreIRInstruction* next) {
+    return check && next && check->opcode == QoreIROpcode::CheckCallTarget && qore_ir_check_fuses_into(check, next)
+        ? next : nullptr;
+}
+
 size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func) {
     size_t count = 0;
     // the check of a method call's target directly before the call (after its arguments) goes into the call, which
@@ -2546,13 +2560,9 @@ size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func) {
             const QoreIRInstruction* check = insts[i].get();
             QoreIRInstruction* call = insts[i + 1].get();
             if (check->opcode == QoreIROpcode::CheckCallTarget && !call->fused_call_check) {
-                const QoreValue& check_expr = static_cast<const QoreIRExprInstruction*>(check)->expr;
-                const QoreValue* call_expr = qore_ir_fusable_method_call_expr(call);
                 // the check of a method call (a dot or self call; not of a call reference) and the call of the same
                 // expression
-                if (call_expr && check_expr.isPointer() && call_expr->isPointer()
-                        && check_expr.getType() != NT_FUNCREFCALL
-                        && call_expr->getInternalNode() == check_expr.getInternalNode()) {
+                if (qore_ir_check_fuses_into(check, call)) {
                     call->fused_call_check = std::move(insts[i]);
                     insts.erase(insts.begin() + i);
                     ++count;

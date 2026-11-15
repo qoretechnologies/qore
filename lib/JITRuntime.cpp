@@ -2002,7 +2002,9 @@ extern "C" DLLEXPORT void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int
     @return -1 if the error was raised, 0 if not
 */
 static int qore_check_method_call_after_args(QoreValue base, const char* name, const QoreClass* qc,
-        const QoreMethod* method, bool direct, ExceptionSink* xsink) {
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool direct,
+        const QoreCallArgsSource& args, ExceptionSink* xsink) {
     QoreObject* obj = nullptr;
     switch (base.getType()) {
         case NT_OBJECT:
@@ -2020,10 +2022,10 @@ static int qore_check_method_call_after_args(QoreValue base, const char* name, c
     // the method that the call runs: as AbstractMethodCallNode::exec(), the method resolved at parse time on an object
     // of its class or of the parse-time class, otherwise the method found by name (qore_class_private::evalMethod())
     const QoreMethod* m = nullptr;
+    const qore_class_private* class_ctx = runtime_get_class();
     if (method && (direct || (qc && (obj->getClass() == qc || obj->getClass() == method->getClass())))) {
         m = method;
     } else if (name) {
-        const qore_class_private* class_ctx = runtime_get_class();
         if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*obj->getClass(), class_ctx)) {
             class_ctx = nullptr;
         }
@@ -2031,18 +2033,31 @@ static int qore_check_method_call_after_args(QoreValue base, const char* name, c
         m = qore_class_private::get(*obj->getClass())->getMethodForEval(name, obj->getProgram(), class_ctx,
             &lookup_xsink);
         lookup_xsink.clear();
+        // a method found by name has no variant resolved at parse time
+        variant = nullptr;
     }
     if (!m || m->isStatic()) {
         // no method of the class (a member closure, a methodGate or a pseudo-method): the call raises its own error;
         // a static method has no object, and the AST interpreter calls it whatever the arguments did to the object
         return 0;
     }
-    qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been deleted",
-        m->getClass()->getName(), m->getName());
+    // the AST interpreter raises the error when it enters the code of the variant that the call resolves with its
+    // arguments, naming the variant's class (issue #5824)
+    if (!args.build) {
+        // a check that is not made by its call (not fused, see qore_ir_fuse_call_target_checks()) has no arguments:
+        // the class of the method
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been deleted",
+            m->getClass()->getName(), m->getName());
+        return -1;
+    }
+    ReferenceHolder<QoreListNode> arg_list(args.build(args.ctx), xsink);
+    qore_raise_deleted_method_call_after_args(obj, *m, variant, *arg_list, class_ctx,
+        explicit_type_param_instantiation, xsink);
     return -1;
 }
 
-int qore_check_call_target_after_args(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink) {
+int qore_check_call_target_after_args(const QoreValue& call, const QoreValue& target,
+        const QoreCallArgsSource& args, ExceptionSink* xsink) {
     const AbstractQoreNode* node = call.isPointer() ? call.getPtr() : nullptr;
     if (!node) {
         return 0;
@@ -2050,27 +2065,61 @@ int qore_check_call_target_after_args(const QoreValue& call, const QoreValue& ta
     if (node->getType() == NT_SELF_CALL) {
         const SelfFunctionCallNode* self_call = static_cast<const SelfFunctionCallNode*>(node);
         return qore_check_method_call_after_args(target, self_call->getMethodName(), self_call->getClass(),
-            self_call->getMethod(), qore_self_call_is_qualified(self_call), xsink);
+            self_call->getMethod(), self_call->getVariant(), self_call->getExplicitTypeParamInstantiation(),
+            qore_self_call_is_qualified(self_call), args, xsink);
     }
     if (node->getType() == NT_OPERATOR) {
         // the only operator that the check is emitted for is a method call (QoreIRLowering::lowerDotEval())
         assert(dynamic_cast<const QoreDotEvalOperatorNode*>(node));
         const MethodCallNode* m = static_cast<const QoreDotEvalOperatorNode*>(node)->getMethodCall();
         if (m && !m->isPseudo()) {
-            return qore_check_method_call_after_args(target, m->getName(), m->getClass(), m->getMethod(), false,
-                xsink);
+            return qore_check_method_call_after_args(target, m->getName(), m->getClass(), m->getMethod(),
+                m->getVariant(), m->getExplicitTypeParamInstantiation(), false, args, xsink);
         }
     }
     return 0;
 }
 
+//! the arguments of a compiled call, as the values that the code passes to the check of its target after them
+struct QoreCompiledCallArgs {
+    const uint64_t* args;
+    int nargs;
+};
+
+//! builds the list of the arguments of a compiled call (see QoreCallArgsSource)
+static QoreListNode* qore_build_compiled_call_args(const void* ctx) {
+    const QoreCompiledCallArgs& call_args = *static_cast<const QoreCompiledCallArgs*>(ctx);
+    if (!call_args.nargs) {
+        return nullptr;
+    }
+    QoreListNode* l = new QoreListNode(autoTypeInfo);
+    qore_list_private* priv = qore_list_private::get(*l);
+    priv->reserve(call_args.nargs);
+    for (int i = 0; i < call_args.nargs; ++i) {
+        QoreValue arg = fromBits(call_args.args[i]);
+        priv->pushIntern(arg.needsRef() ? arg.refSelf() : arg);
+    }
+    return l;
+}
+
+//! the source of the arguments of a compiled call: none if the code does not know the call (a negative number of
+//! arguments, see QoreIRToLLVM::emitCallTargetCheckHelper())
+static QoreCallArgsSource qore_compiled_call_args_source(const QoreCompiledCallArgs& call_args) {
+    return call_args.nargs >= 0 ? QoreCallArgsSource{qore_build_compiled_call_args, &call_args}
+        : QoreCallArgsSource();
+}
+
 extern "C" DLLEXPORT void qore_rt_check_call_target_after_args(uint64_t call_bits, uint64_t target_bits,
-        ExceptionSink* xsink) {
-    qore_check_call_target_after_args(fromBits(call_bits), fromBits(target_bits), xsink);
+        const uint64_t* args, int32_t nargs, ExceptionSink* xsink) {
+    QoreCompiledCallArgs call_args{args, nargs};
+    qore_check_call_target_after_args(fromBits(call_bits), fromBits(target_bits),
+        qore_compiled_call_args_source(call_args), xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_check_call_target_after_args_aot(QoreAOTContext* ctx, int32_t slot,
-        uint64_t target_bits, ExceptionSink* xsink) {
+        uint64_t target_bits, const uint64_t* args, int32_t nargs, ExceptionSink* xsink) {
+    QoreCompiledCallArgs call_args{args, nargs};
+    QoreCallArgsSource source = qore_compiled_call_args_source(call_args);
     if (!ctx->exprs[slot] || !fromBits(ctx->exprs[slot]).hasNode()) {
         // a direct method call keeps the target of the call in its slot (AOTExprKind::DOT_EVAL_TARGET)
         const QoreAOTCallTarget& target = ctx->call_targets[slot];
@@ -2078,11 +2127,11 @@ extern "C" DLLEXPORT void qore_rt_check_call_target_after_args_aot(QoreAOTContex
             return;
         }
         const char* name = target.check_method ? target.check_method->getName() : target.method_name;
-        qore_check_method_call_after_args(fromBits(target_bits), name, target.check_qc, target.check_method, false,
-            xsink);
+        qore_check_method_call_after_args(fromBits(target_bits), name, target.check_qc, target.check_method,
+            target.check_variant, target.explicit_type_param_instantiation, false, source, xsink);
         return;
     }
-    qore_check_call_target_after_args(fromBits(ctx->exprs[slot]), fromBits(target_bits), xsink);
+    qore_check_call_target_after_args(fromBits(ctx->exprs[slot]), fromBits(target_bits), source, xsink);
 }
 
 //! Checks the value of a return statement against the declared return type, as the AST interpreter checks it in the
