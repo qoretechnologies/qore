@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes of the interpreter and of qcc executables
+# test-platform: macos - qcc executables that initialize the modules they require
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestInterpreter.qm
+
+%exec-class AOTModuleInitExceptionTest
+
+#! A qcc executable fails when the init closure of a module that it requires raises an exception (qore#6217)
+/** The executable ran and exited with status 0, where the interpreter reports the exception and fails: a module whose
+    initialization refuses to complete could still be used.  The program, interpreted and as qcc executables, loads a
+    module whose init closure raises an exception when told to; without it, the program runs.
+*/
+class AOTModuleInitExceptionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+
+        #! a module whose init closure raises an exception when MODINIT_THROW is set
+        const ModuleSource = "%modern
+module ModInitThrow {
+    version = \"1.0\";
+    desc = \"qore#6217: an init closure that raises an exception\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () { ModInitThrow::init_module(); };
+}
+public namespace ModInitThrow {
+    public string sub f() { return \"module ready\"; }
+    public sub init_module() {
+        if (getenv(\"MODINIT_THROW\")) {
+            throw \"MODULE-INIT-REFUSED\", \"the module's initialization refuses to complete\";
+        }
+    }
+}
+";
+
+        #! a program that uses the module, found in the module path when the program runs
+        const ProgramSource = "%modern
+%requires ModInitThrow
+printf(\"%s\\n\", ModInitThrow::f());
+";
+
+        #! a program that uses the module by its path, which qcc compiles into the executable
+        const EmbeddedProgramSource = "%modern
+%requires ./ModInitThrow.qm
+printf(\"%s\\n\", ModInitThrow::f());
+";
+
+        const Programs = {
+            "module path": "prog.q",
+            "module compiled into the executable": "embedded.q",
+        };
+    }
+
+    constructor() : QUnit::Test("AOTModuleInitExceptionTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler();
+        addTestCase("interpreted program", \interpretedTest());
+        addTestCase("qcc executables", \executableTest());
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! runs a command; returns its output and its exit status
+    private hash<auto> run(string cmd) {
+        string out = backquote(cmd + " 2>&1; echo \"rc=$?\"");
+        *list<*string> m = (out =~ x/^(.*)rc=([0-9]+)\n$/s);
+        assertTrue(exists m[1], "exit status of: " + cmd);
+        return {"out": m[0] ?? "", "rc": (m[1] ?? "-1").toInt()};
+    }
+
+    private string env(string mod_dir) {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s", libqore_dir,
+            libqore_dir, libqore_dir, mod_dir);
+    }
+
+    interpretedTest() {
+        TmpDir tmp("qore-aot-modinit-");
+        write(tmp.path + "/ModInitThrow.qm", ModuleSource);
+        write(tmp.path + "/prog.q", ProgramSource);
+        write(tmp.path + "/embedded.q", EmbeddedProgramSource);
+        foreach hash<auto> p in (Programs.pairIterator()) {
+            hash<auto> r = run(sprintf("%s %s -b %s/%s", env(tmp.path), qore_bin, tmp.path, p.value));
+            assertEq({"out": "module ready\n", "rc": 0}, r, p.key + ", interpreted, init completes");
+            r = run(sprintf("MODINIT_THROW=1 %s %s -b %s/%s", env(tmp.path), qore_bin, tmp.path, p.value));
+            assertNeq(0, r.rc, p.key + ", interpreted, init raises: exit status");
+            assertRegex("MODULE-INIT-REFUSED", r.out, p.key + ", interpreted, init raises: the exception is reported");
+            assertFalse(r.out =~ /module ready/, p.key + ", interpreted, init raises: the program does not run");
+        }
+    }
+
+    executableTest() {
+        if (!qcc_bin) {
+            testSkip("qcc is unavailable");
+        }
+        TmpDir tmp("qore-aot-modinit-exe-");
+        write(tmp.path + "/ModInitThrow.qm", ModuleSource);
+        write(tmp.path + "/prog.q", ProgramSource);
+        write(tmp.path + "/embedded.q", EmbeddedProgramSource);
+        foreach hash<auto> p in (Programs.pairIterator()) {
+            foreach string opt in (("-O0", "-O3")) {
+                string label = sprintf("%s, %s", p.key, opt);
+                string exe = sprintf("%s/%s%s", tmp.path, p.value, opt);
+                hash<auto> c = run(sprintf("%s %s %s -o %s %s/%s", env(tmp.path), qcc_bin, opt, exe, tmp.path,
+                    p.value));
+                assertTrue(is_file(exe), "built the executable " + label + ": " + c.out);
+                hash<auto> r = run(sprintf("%s %s", env(tmp.path), exe));
+                assertEq({"out": "module ready\n", "rc": 0}, r, label + ", init completes");
+                r = run(sprintf("MODINIT_THROW=1 %s %s", env(tmp.path), exe));
+                assertNeq(0, r.rc, label + ", init raises: exit status");
+                assertRegex("MODULE-INIT-REFUSED", r.out, label + ", init raises: the exception is reported");
+                assertFalse(r.out =~ /module ready/, label + ", init raises: the program does not run");
+            }
+        }
+    }
+}
