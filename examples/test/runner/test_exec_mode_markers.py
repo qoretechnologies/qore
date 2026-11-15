@@ -99,7 +99,9 @@ def sources(test):
 
 
 # a child process of the test's own binary: QORE_ARGV[0] given to a command it runs (strings and comments do not count)
-CHILD_BINARY = re.compile(r"\bQORE_ARGV\[0\]")
+# the test's own binary: QORE_ARGV[0], or the interpreter that examples/test/TestInterpreter.qm locates for it (which is
+# QORE_ARGV[0] in an interpreted test, and never the executable of a test compiled with qcc)
+CHILD_BINARY = re.compile(r"\bQORE_ARGV\[0\]|\bTestInterpreter::qore_interpreter\s*\(")
 
 
 def starts_children(test):
