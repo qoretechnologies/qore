@@ -833,14 +833,15 @@ void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink);
 /** @param saved_count the number of handlers registered before the block
     @param xsink the exception sink of the function
     @param hold the function's hold slot
-    @param replace the slots of the values of the function's returns, which the first hand-over releases and clears,
-    or nullptr where they must not be released (a try statement of the function catches the exception)
-    @param n_replace the number of slots in \a replace
+    @param replace copies of the values of the function's returns (or of the try block's returns of the try statement
+    of the function that catches the exception), which the first hand-over releases, or nullptr
+    @param n_replace the number of values in \a replace
 
-    @return 1 if a value was handed over
+    @return 1 if a value was handed over: the caller then clears the slots of the values of \a replace, which were
+    released
 */
 int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink, uint64_t* hold,
-    uint64_t* const* replace, int64_t n_replace);
+    uint64_t* replace, int64_t n_replace);
 
 //! Runs the handlers of a block of a handler body as qore_rt_exec_on_block_exit() does; the values that they hand over
 //! go to the function that the handler runs for (#6074)

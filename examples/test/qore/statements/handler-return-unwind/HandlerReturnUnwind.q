@@ -7,6 +7,8 @@
 %enable-all-warnings
 our list<string> lg = ();
 class T { public { string n; } constructor(string n) { self.n = n; } destructor() { lg += "~" + n; } }
+# a value whose member is returned
+class TB { public { T m; string n; } constructor(string n) { self.n = n; m = new T(n + "-m"); } destructor() { lg += "~" + n; } }
 # a value whose destructor throws
 class TT { public { string n; } constructor(string n) { self.n = n; } destructor() { lg += "~" + n; throw "DTOR-" + n; } }
 our bool never = False;
@@ -279,6 +281,21 @@ auto sub sh(int mode) {
     return new T("sh-after" + mode);
 }
 
+
+# with a try statement of the function catching the exception, a handler's return replaces the value of the try
+# block's return, which the return holds a reference of its own to: it is released when the handler's return executes
+auto sub tf1() {
+    T l("tf1-l");
+    try {
+        on_exit { lg += "x"; return new T("tf1-h"); }
+        on_exit { lg += "thr"; throw "TF1"; }
+        return (new TB("tf1-base")).m;
+    } catch (hash<ExceptionInfo> ex) {
+        lg += "c";
+    }
+    return new T("tf1-body");
+}
+
 # runs the function twice in a thread of its own, which a thread_exit ends
 sub show(string label, code c) {
     for (int i = 0; i < 2; ++i) {
@@ -329,3 +346,4 @@ show("rv5", \rv5());
 show("sh0", auto sub () { return sh(0); });
 show("sh1", auto sub () { return sh(1); });
 show("sh2", auto sub () { return sh(2); });
+show("tf1", \tf1());

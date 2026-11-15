@@ -14017,8 +14017,9 @@ extern "C" DLLEXPORT void qore_rt_handler_return(uint64_t value_bits, ExceptionS
 struct QoreNativeHandlerHold {
     //! the hold slot of the function
     uint64_t* hold;
-    //! the slots of the values of the function's returns that the first hand-over releases, or nullptr
-    uint64_t* const* replace;
+    //! copies of the values of the function's returns that the first hand-over releases, or nullptr; the code
+    //! after the call clears their slots if a value was handed over
+    uint64_t* replace;
     //! the number of slots in replace
     int64_t n_replace;
     //! true once the slots of replace have been released
@@ -14031,8 +14032,8 @@ struct QoreNativeHandlerHold {
         if (!h.replaced) {
             h.replaced = true;
             for (int64_t i = 0; i < h.n_replace; ++i) {
-                uint64_t bits = *h.replace[i];
-                *h.replace[i] = toBits(QoreValue());
+                uint64_t bits = h.replace[i];
+                h.replace[i] = toBits(QoreValue());
                 fromBits(bits).discard(xsink);
             }
         }
@@ -14062,7 +14063,7 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_forward(int64_t saved_count
 //! the first releases the values of the \a n_replace slots of \a replace, if any (see QoreNativeHandlerHold); returns 1
 //! if a value was handed over
 extern "C" DLLEXPORT int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink,
-        uint64_t* hold, uint64_t* const* replace, int64_t n_replace) {
+        uint64_t* hold, uint64_t* replace, int64_t n_replace) {
     QoreNativeHandlerHold h{hold, replace, n_replace};
     qore_rt_exec_on_block_exit_intern(saved_count, xsink, false, &h);
     return h.held;

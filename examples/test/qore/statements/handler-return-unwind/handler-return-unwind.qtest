@@ -100,6 +100,8 @@ sh1[0]: [\"x\", \"~sh-h1\", \"c\", \"~sh-l\", \"rv:sh-after1\", \"~sh-after1\"]
 sh1[1]: [\"x\", \"~sh-h1\", \"c\", \"~sh-l\", \"rv:sh-after1\", \"~sh-after1\"]
 sh2[0]: [\"x\", \"~sh-h2\", \"~sh-l\"]
 sh2[1]: [\"x\", \"~sh-h2\", \"~sh-l\"]
+tf1[0]: [\"~tf1-base\", \"thr\", \"x\", \"~tf1-base-m\", \"~tf1-h\", \"c\", \"~tf1-l\", \"rv:tf1-body\", \"~tf1-body\"]
+tf1[1]: [\"~tf1-base\", \"thr\", \"x\", \"~tf1-base-m\", \"~tf1-h\", \"c\", \"~tf1-l\", \"rv:tf1-body\", \"~tf1-body\"]
 ";
 
 

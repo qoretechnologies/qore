@@ -3460,23 +3460,34 @@ void QoreIRToLLVM::finalizeHandlerReturnHoldSites(llvm::Module& module) {
         if (allocas.empty()) {
             continue;
         }
-        // the array of the slots, made at the start of the function and filled before the call: the runtime
-        // releases and clears the values of the interrupted return that a handler's first hand-over replaces when it
-        // replaces them, as the AST interpreter releases the value of a return when a handler's return replaces it,
-        // before the handlers after it run (#5992, #6074)
+        // the values of the slots are copied to an array, made at the start of the function, before the call: the
+        // runtime releases them when a handler's first hand-over replaces them, as the AST interpreter releases the
+        // value of a return when a handler's return replaces it, before the handlers after it run, and the slots are
+        // cleared after the call when it did (#5992, #6074).  The values are copied, not the addresses of the slots:
+        // an alloca whose address is stored escapes, and could no longer be kept in a register on the paths that
+        // run no handler
         if (!entry) {
             entry = &site.call->getFunction()->getEntryBlock();
         }
         llvm::IRBuilder<> entry_builder(entry, entry->getFirstInsertionPt());
-        llvm::ArrayType* array_type = llvm::ArrayType::get(ptr_type, allocas.size());
+        llvm::ArrayType* array_type = llvm::ArrayType::get(i64_type, allocas.size());
         llvm::AllocaInst* array = entry_builder.CreateAlloca(array_type, nullptr, "handler.return.replace");
         builder->SetInsertPoint(site.call);
         for (size_t i = 0; i < allocas.size(); ++i) {
-            builder->CreateStore(allocas[i], builder->CreateConstInBoundsGEP2_32(array_type, array, 0,
-                static_cast<unsigned>(i)));
+            builder->CreateStore(builder->CreateLoad(i64_type, allocas[i]),
+                builder->CreateConstInBoundsGEP2_32(array_type, array, 0, static_cast<unsigned>(i)));
         }
         site.call->setArgOperand(3, array);
         site.call->setArgOperand(4, llvm::ConstantInt::get(i64_type, allocas.size()));
+        llvm::Instruction* next = site.call->getNextNode();
+        assert(next);
+        builder->SetInsertPoint(next);
+        llvm::Value* replaced = builder->CreateICmpNE(site.call, llvm::ConstantInt::get(builder->getInt8Ty(), 0));
+        llvm::Value* nothing = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+        for (llvm::Value* a : allocas) {
+            // the runtime released the value: the slot no longer holds it
+            builder->CreateStore(builder->CreateSelect(replaced, nothing, builder->CreateLoad(i64_type, a)), a);
+        }
     }
 }
 
@@ -35382,8 +35393,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             auto helper = module.getOrInsertFunction("qore_rt_handler_return",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            // an exception that the release of a replaced value raises is taken to its target by the CheckException
+            // that follows
             builder->CreateCall(helper, {boxed, xsink_arg});
-            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::CheckCallTarget: {

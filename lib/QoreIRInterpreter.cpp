@@ -1655,6 +1655,11 @@ struct QoreIRDebugNest {
 struct IRCallFrame {
     std::vector<QoreValue> values;
     IRCleanupSlots cleanup;
+    //! the returns of the try block of the try statement of the function that catches the exception that the next
+    //! handler run in this frame runs for (see IRHandlerHandOver::try_returns), set by the code that runs it in the
+    //! frame and taken by executeHandlerBody(): a member, not an argument, as a seventh argument would be passed on
+    //! the stack of execute() (#6074)
+    const std::vector<uint32_t>* handler_catch_returns = nullptr;
     // Remaining uses for borrowed SSA values. Indexed by value ID so hot
     // list-element reads avoid hash-table traffic; storage is pooled per frame.
     std::vector<int32_t> borrowed_temp_remaining;
@@ -7533,9 +7538,23 @@ static QORE_INTERN_NOINLINE void qore_ir_handler_hand_over(void* data, QoreValue
         if (h.try_returns) {
             // a try statement of the function catches the exception: the value replaces the value of its try block's
             // return, as the AST interpreter's try statement runs its block with a return value of its own, and the
-            // function's return stays pending (#5992's b459b78be9 in native code)
+            // function's return stays pending (#5992's b459b78be9 in native code).  Every slot of the frame that owns
+            // a reference to the value of one of those returns is released: a return takes a reference of its own
+            // to its value (RefSelf), whose source keeps one too, as native code releases the return's family
+            // (QoreIRToLLVM::return_value_family); the try block, which the exception leaves, does not use them again
+            std::vector<const AbstractQoreNode*> nodes;
             for (uint32_t id : *h.try_returns) {
-                h.releaseReturnSlot(id, xsink);
+                if (id < f.values.size() && f.values[id].hasNode()) {
+                    nodes.push_back(f.values[id].getInternalNode());
+                }
+            }
+            if (!nodes.empty()) {
+                for (size_t id = 0, e = f.values.size(); id < e; ++id) {
+                    if (f.values[id].hasNode() && std::find(nodes.begin(), nodes.end(),
+                            f.values[id].getInternalNode()) != nodes.end()) {
+                        h.releaseReturnSlot(static_cast<uint32_t>(id), xsink);
+                    }
+                }
             }
         } else {
             for (size_t id = 0, e = std::min(f.cleanup.slotTableSize(), f.values.size()); id < e; ++id) {
@@ -7552,21 +7571,52 @@ static QORE_INTERN_NOINLINE void qore_ir_handler_hand_over(void* data, QoreValue
 }
 
 // The IR interpreter's QoreIROpcode::HandlerReturn: hands the value of a return statement of a handler run out of line
-// to the function that it runs for (see QoreHandlerRunContext); returns true if the release of a replaced value
-// raised an exception
-static QORE_INTERN_NOINLINE bool qore_ir_handler_return(QoreValue value, ExceptionSink* xsink) {
-    qore_handler_return(value, xsink);
-    return xsink && *xsink;
+// to the function that it runs for (see QoreHandlerRunContext); an exception that the release of a replaced value
+// raises is left on the sink for the CheckException that follows
+static QORE_INTERN_NOINLINE void qore_ir_handler_return(const QoreIRInstruction* inst, const IRValueSlots& values,
+        ExceptionSink* xsink) {
+    // the value is read here, not in execute(), whose frame is at its budget (tools/stack-usage-budgets.txt)
+    qore_handler_return(inst->operands.empty() ? QoreValue() : getIRValue(values, inst->operands.front()), xsink);
 }
 
 // Execute a single on_block_exit handler body, using compiled IR if available, otherwise AST.
 // Returns true if execution encountered an error.
+// Sets the returns of the try block of the try statement of \a func that catches the exception that the next handler
+// run in \a frame runs for, searched for on the exception path from \a target (see IRCallFrame::handler_catch_returns);
+// out of line, as execute()'s frame is at its budget (tools/stack-usage-budgets.txt)
+static QORE_INTERN_NOINLINE void qore_ir_set_handler_catch_returns(IRCallFrame& frame, const QoreIRFunction& func,
+        const QoreIRBasicBlock* target) {
+    frame.handler_catch_returns = qore_ir_exception_catch_returns(func, target);
+}
+
+// Returns true if the handlers of a scope run while an exception (\a error) or a thread_exit unwinds it: a handler that
+// returns then hands its value over (#6074); out of line, as execute()'s frame is at its budget
+// (tools/stack-usage-budgets.txt)
+static QORE_INTERN_NOINLINE bool qore_ir_handlers_unwinding(bool error, const ExceptionSink* xsink) {
+    return error || (xsink && xsink->isThreadExit());
+}
+
 // The handler hands the values of its return statements to \a parent_frame (see qore_ir_handler_hand_over()) while it
 // runs during an unwind (\a unwinding: an exception or a thread_exit)
-static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
-        IRCallFrame* parent_frame = nullptr, const StatementBlock* dbg_statements = nullptr,
-        QoreProgram* dbg_pgm = nullptr, bool unwinding = false, const std::vector<uint32_t>* try_returns = nullptr) {
-    std::vector<QoreValue>* parent_slot_cache = parent_frame ? &parent_frame->locals_slot_cache.vector() : nullptr;
+static QORE_INTERN_NOINLINE void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
+        std::vector<QoreValue>* parent_slot_cache = nullptr, const StatementBlock* dbg_statements = nullptr,
+        QoreProgram* dbg_pgm = nullptr, bool unwinding = false) {
+    // the frame that runs the handler is the innermost frame of the thread when the handler is run (from execute() or
+    // its unwind): it is found here, so that the calls in execute() take no more than before (its frame is at its
+    // budget, tools/stack-usage-budgets.txt)
+    IRCallFrame* parent_frame = nullptr;
+    if (parent_slot_cache) {
+        IRCallFramePool& pool = TlFramePool::get();
+        assert(pool.top);
+        parent_frame = pool.frames[pool.top - 1].get();
+        assert(&parent_frame->locals_slot_cache.vector() == parent_slot_cache);
+    }
+    // where a try statement of the function catches the exception, set for this run by the code that runs it
+    const std::vector<uint32_t>* try_returns = nullptr;
+    if (parent_frame && parent_frame->handler_catch_returns) {
+        try_returns = parent_frame->handler_catch_returns;
+        parent_frame->handler_catch_returns = nullptr;
+    }
     // Every on_block_exit handler must have been compiled to IR by
     // QoreIRLowering::compileAllHandlerIRs/compileBlockHandlerIRs before
     // the enclosing IR function is executed — a handler-lowering failure
@@ -7621,7 +7671,7 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
 // Execute on_block_exit handlers in reverse order (LIFO), matching the AST's
 // StatementBlock::execIntern() semantics.  Returns the last non-zero return code, if any.
 static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handlers, ExceptionSink* xsink,
-        IRCallFrame* parent_slot_cache = nullptr, const StatementBlock* dbg_statements = nullptr,
+        std::vector<QoreValue>* parent_slot_cache = nullptr, const StatementBlock* dbg_statements = nullptr,
         QoreProgram* dbg_pgm = nullptr) {
     if (handlers.empty()) {
         return 0;
@@ -8452,9 +8502,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                         except->makeExceptionObject(), xsink));
                                 }
                             }
-                            executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &frame,
+                            executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector(),
                                         dbgHandlerStatements(), dbgHandlerProgram(),
-                                        error || (xsink && xsink->isThreadExit()));
+                                        qore_ir_handlers_unwinding(error, xsink));
                             // Restore td->catchException BEFORE clearing xsink to avoid
                             // a use-after-free window where td->catchException points to
                             // the freed exception chain
@@ -9533,7 +9583,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         // handlers registered outside of any scope, if any, run as the remaining handlers of the frame
         if (!frame.on_block_exit_handlers.empty()) {
-            executeOnBlockExitHandlers(frame.on_block_exit_handlers, xsink, &frame,
+            executeOnBlockExitHandlers(frame.on_block_exit_handlers, xsink, &frame.locals_slot_cache.vector(),
                 dbgHandlerStatements(), dbgHandlerProgram());
         }
         dbgFunctionExit();
@@ -10967,12 +11017,12 @@ next_instruction:
                                                 except->makeExceptionObject(), xsink));
                                         }
                                     }
-                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &frame,
+                                    // the try statement of this landing pad catches the exception: a handler's
+                                    // return replaces the value of its try block's return (#6074)
+                                    qore_ir_set_handler_catch_returns(frame, func, block);
+                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector(),
                                         dbgHandlerStatements(), dbgHandlerProgram(),
-                                        error || (xsink && xsink->isThreadExit()),
-                                        // the try statement of this landing pad catches the exception: a handler's
-                                        // return replaces the value of its try block's return (#6074)
-                                        qore_ir_exception_catch_returns(func, block));
+                                        qore_ir_handlers_unwinding(error, xsink));
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
@@ -15548,15 +15598,9 @@ load_local_done:
             case QoreIROpcode::HandlerReturn: {
                 // the value of a return statement of a handler run out of line is handed to the function that the
                 // handler runs for, as the AST interpreter's handler has a reference to its return value (#6074)
-                if (qore_ir_handler_return(inst->operands.empty() ? QoreValue()
-                        : getIRValue(values, inst->operands.front()), xsink)) {
-                    if (branchToExceptionTarget(inst)) {
-                        break;
-                    }
-                    unwindForException();
-                    cleanupLocalCaches();
-                    return false;
-                }
+                // an exception that the release of a replaced value raises is taken to its target by the
+                // CheckException that follows
+                qore_ir_handler_return(inst, values, xsink);
                 ++ip;
                 break;
             }
@@ -15771,12 +15815,12 @@ load_local_done:
                                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                                         }
                                     }
-                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &frame,
+                                    // where a try statement of the function catches the exception, a handler's
+                                    // return replaces the value of its try block's return (#6074)
+                                    qore_ir_set_handler_catch_returns(frame, func, scope_inst->exception_target);
+                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector(),
                                         dbgHandlerStatements(), dbgHandlerProgram(),
-                                        error || (xsink && xsink->isThreadExit()),
-                                        // where a try statement of the function catches the exception, a handler's
-                                        // return replaces the value of its try block's return (#6074)
-                                        qore_ir_exception_catch_returns(func, scope_inst->exception_target));
+                                        qore_ir_handlers_unwinding(error, xsink));
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
@@ -19765,7 +19809,7 @@ load_local_done:
                         return exitAfterUnwind();
                     }
                 }
-                executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &frame, dbgHandlerStatements(),
+                executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector(), dbgHandlerStatements(),
                     dbgHandlerProgram());
                 // the function's exit event follows the handlers of the frame, as with the AST interpreter
                 dbgFunctionExit();
@@ -19790,7 +19834,7 @@ load_local_done:
                         return exitAfterUnwind();
                     }
                 }
-                executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &frame, dbgHandlerStatements(),
+                executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector(), dbgHandlerStatements(),
                     dbgHandlerProgram());
                 // the function's exit event follows the handlers of the frame, as with the AST interpreter
                 dbgFunctionExit();
