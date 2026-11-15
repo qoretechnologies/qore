@@ -7844,15 +7844,16 @@ static std::string aotBCAClassRef(const QoreMethod* method, const BCANode* bca) 
     return ref ? std::string(ref) : std::string();
 }
 
-static uint16_t aotBCAArgCount(const BCANode* bca) {
+//! Returns the number of arguments of a base class constructor call (the caller checks that it fits a u16)
+static size_t aotBCAArgCount(const BCANode* bca) {
     if (!bca) {
         return 0;
     }
     if (const QoreListNode* args = bca->getArgs()) {
-        return static_cast<uint16_t>(args->size());
+        return args->size();
     }
     if (const QoreParseListNode* parse_args = bca->getParseArgs()) {
-        return static_cast<uint16_t>(parse_args->size());
+        return parse_args->size();
     }
     return 0;
 }
@@ -12066,6 +12067,14 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 return false;
                             }
 
+                            // the counts have u16 fields in the AOT format (qore#6127)
+                            if (bcal->size() > UINT16_MAX) {
+                                error = "AOT cannot compile constructor of class '"
+                                    + std::string(method->getClass()->getName()) + "': it has "
+                                    + std::to_string(bcal->size()) + " base class constructor calls, but the AOT "
+                                    "format supports at most " + std::to_string(UINT16_MAX);
+                                return false;
+                            }
                             writer.writeU8(1);  // has_bca = true
                             writer.writeU16(static_cast<uint16_t>(bcal->size()));
 
@@ -12093,7 +12102,15 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 // QORE_AOT_FEAT_BCA_NATIVE_ARGS bit is absent; new writers do
                                 // not emit EXPR_TREE fallback.
                                 const QoreListNode* args = bca->getArgs();
-                                uint16_t num_args = aotBCAArgCount(bca);
+                                if (aotBCAArgCount(bca) > UINT16_MAX) {
+                                    error = "AOT cannot compile constructor of class '"
+                                        + std::string(method->getClass()->getName()) + "': its call of base class '"
+                                        + base_path + "' has " + std::to_string(aotBCAArgCount(bca))
+                                        + " arguments, but the AOT format supports at most "
+                                        + std::to_string(UINT16_MAX);
+                                    return false;
+                                }
+                                uint16_t num_args = static_cast<uint16_t>(aotBCAArgCount(bca));
                                 const qore_list_private* args_priv = qore_list_private::get(args);
                                 const std::vector<size_t>* eval_map = args_priv
                                     ? args_priv->getCallArgEvalMap()
@@ -14018,6 +14035,13 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
 
                 // Write params: count, then (name, type_path, default) per param
                 unsigned num_params = sig->numParams();
+                // the count has a u16 field in the AOT format (qore#6127)
+                if (num_params > UINT16_MAX) {
+                    qoreAOTSetExprSerializationError("AOT cannot compile closure '" + std::string(ucf->getName())
+                        + "': it has " + std::to_string(num_params) + " parameters, but the AOT format supports at "
+                        "most " + std::to_string(UINT16_MAX));
+                    return false;
+                }
                 writer.writeU16(static_cast<uint16_t>(num_params));
                 for (unsigned p = 0; p < num_params; ++p) {
                     const char* pname = sig->getName(p);
@@ -14865,6 +14889,11 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             std::string expr_error;
             bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
             if (!debug_ir_ok || expr_error_set) {
+                // an error that names the function already is reported as it is
+                if (expr_error_set && expr_error.rfind("AOT cannot compile function '" + func.name + "'", 0) == 0) {
+                    error = std::move(expr_error);
+                    return false;
+                }
                 error = "failed to serialize debug IR for function '" + func.name + "'";
                 if (expr_error_set) {
                     error += ": ";

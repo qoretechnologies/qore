@@ -2449,7 +2449,7 @@ static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool 
             printf(" (uncompressed: too big to compress)\n");
         }
         std::string msg = "warning: the AOT metadata is " + std::to_string(metadata.size()) + " bytes, more than the "
-            + std::to_string(max_size) + " bytes that can be compressed; it is written uncompressed";
+            + std::to_string(max_size) + " bytes that the AOT loader can decompress; it is written uncompressed";
         // name the function with the most metadata when it accounts for a good part of the metadata
         if (!writer.largest_func_metadata_name.empty()
                 && writer.largest_func_metadata_size >= metadata.size() / 10) {

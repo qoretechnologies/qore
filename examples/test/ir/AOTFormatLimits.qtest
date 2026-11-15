@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-exec-mode: children - all checks run qcc and the programs it compiles in child processes
+# test-platform: macos - AOT code generation, native executable and module linking and loading with qcc
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -109,7 +110,7 @@ class AOTFormatLimitsTest inherits QUnit::Test {
             assertEq(0, r.rc, r.out);
             if (lowered) {
                 assertRegex("warning: the AOT metadata is [0-9]+ bytes, more than the " + MaxMetadataSize
-                    + " bytes that can be compressed; it is written uncompressed", r.stderr);
+                    + " bytes that the AOT loader can decompress; it is written uncompressed", r.stderr);
             } else {
                 assertNRegex("written uncompressed", r.out);
             }
