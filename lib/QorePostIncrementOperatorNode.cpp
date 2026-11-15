@@ -55,11 +55,14 @@ QoreValue QorePostIncrementOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
         return QoreValue();
 
     if (n.getType() == NT_NUMBER)
-        return n.postIncrementNumber(ref_rv, "<-- (post) operator>");
+        return n.postIncrementNumber(ref_rv, "<++ (post) operator>");
 
     if (n.getType() == NT_FLOAT) {
         double f = n.postIncrementFloat("<++ (post) operator>");
-        assert(!*xsink);
+        // the lvalue's type can refuse the result (ex: a float or number enum, qore#6197)
+        if (*xsink) {
+            return QoreValue();
+        }
         return f;
     }
 

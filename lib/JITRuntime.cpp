@@ -16266,6 +16266,69 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
 }
 
 // documented in QoreIRInterpreter.h
+QoreValue qore_rt_apply_lvalue_incdec(LValueHelper& lvh, LVUnaryOp unary_op, ExceptionSink* xsink) {
+    // the descriptions are those of the AST operators (QorePreIncrementOperatorNode::evalImpl() and the others)
+    QoreValue res;
+    qore_type_t t = lvh.getType();
+    switch (unary_op) {
+        case LVUnaryOp::PreInc:
+            if (t == NT_NUMBER) {
+                lvh.preIncrementNumber("<++ (pre) operator>");
+                if (!*xsink) {
+                    res = lvh.getReferencedValue();
+                }
+            } else if (t == NT_FLOAT) {
+                res = lvh.preIncrementFloat("<++ (pre) operator>");
+            } else {
+                res = lvh.preIncrementBigInt("<++ (pre) operator>");
+            }
+            break;
+        case LVUnaryOp::PreDec:
+            if (t == NT_NUMBER) {
+                lvh.preDecrementNumber("<-- (pre) operator>");
+                if (!*xsink) {
+                    res = lvh.getReferencedValue();
+                }
+            } else if (t == NT_FLOAT) {
+                res = lvh.preDecrementFloat("<-- (pre) operator>");
+            } else {
+                res = lvh.preDecrementBigInt("<-- (pre) operator>");
+            }
+            break;
+        case LVUnaryOp::PostInc:
+            if (t == NT_NUMBER) {
+                if (QoreNumberNode* n = lvh.postIncrementNumber(true, "<++ (post) operator>")) {
+                    res = n;
+                }
+            } else if (t == NT_FLOAT) {
+                res = lvh.postIncrementFloat("<++ (post) operator>");
+            } else {
+                res = lvh.postIncrementBigInt("<++ (post) operator>");
+            }
+            break;
+        case LVUnaryOp::PostDec:
+            if (t == NT_NUMBER) {
+                if (QoreNumberNode* n = lvh.postDecrementNumber(true, "<-- (post) operator>")) {
+                    res = n;
+                }
+            } else if (t == NT_FLOAT) {
+                res = lvh.postDecrementFloat("<-- (post) operator>");
+            } else {
+                res = lvh.postDecrementBigInt("<-- (post) operator>");
+            }
+            break;
+        default:
+            assert(false);
+            break;
+    }
+    if (*xsink) {
+        res.discard(xsink);
+        return QoreValue();
+    }
+    return res;
+}
+
+// documented in QoreIRInterpreter.h
 QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
         LVCompoundOp compound_op, ValueHolder& rhs_holder,
         ExceptionSink* xsink) {
@@ -16514,62 +16577,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_update(
     if (qore_rt_get_self_member_lvalue(member_name, lvh, xsink)) {
         return toBits(QoreValue());
     }
-    QoreValue res;
-    switch (static_cast<LVUnaryOp>(unary_op)) {
-        case LVUnaryOp::PreInc: {
-            qore_type_t type = lvh.getType();
-            if (type == NT_NUMBER) {
-                lvh.preIncrementNumber();
-                res = lvh.getReferencedValue();
-            } else if (type == NT_FLOAT) {
-                res = lvh.preIncrementFloat();
-            } else {
-                res = lvh.preIncrementBigInt();
-            }
-            break;
-        }
-        case LVUnaryOp::PreDec: {
-            qore_type_t type = lvh.getType();
-            if (type == NT_NUMBER) {
-                lvh.preDecrementNumber();
-                res = lvh.getReferencedValue();
-            } else if (type == NT_FLOAT) {
-                res = lvh.preDecrementFloat();
-            } else {
-                res = lvh.preDecrementBigInt();
-            }
-            break;
-        }
-        case LVUnaryOp::PostInc: {
-            qore_type_t type = lvh.getType();
-            if (type == NT_NUMBER) {
-                if (QoreNumberNode* number = lvh.postIncrementNumber(true)) {
-                    res = number;
-                }
-            } else if (type == NT_FLOAT) {
-                res = lvh.postIncrementFloat();
-            } else {
-                res = lvh.postIncrementBigInt();
-            }
-            break;
-        }
-        case LVUnaryOp::PostDec: {
-            qore_type_t type = lvh.getType();
-            if (type == NT_NUMBER) {
-                if (QoreNumberNode* number = lvh.postDecrementNumber(true)) {
-                    res = number;
-                }
-            } else if (type == NT_FLOAT) {
-                res = lvh.postDecrementFloat();
-            } else {
-                res = lvh.postDecrementBigInt();
-            }
-            break;
-        }
-        default:
-            assert(false);
-    }
-    return toBits(*xsink ? QoreValue() : res);
+    return toBits(qore_rt_apply_lvalue_incdec(lvh, static_cast<LVUnaryOp>(unary_op), xsink));
 }
 
 // Shared helper for HashKeySlice terminal step: iterates the resolved
@@ -17321,58 +17329,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             return toBits(QoreValue());
         }
         switch (inst->unary_op) {
-            case LVUnaryOp::PreInc: {
-                qore_type_t t = lvh.getType();
-                if (t == NT_NUMBER) {
-                    lvh.preIncrementNumber();
-                    res = lvh.getReferencedValue();
-                } else if (t == NT_FLOAT) {
-                    res = lvh.preIncrementFloat();
-                } else {
-                    res = lvh.preIncrementBigInt();
-                }
+            case LVUnaryOp::PreInc:
+            case LVUnaryOp::PreDec:
+            case LVUnaryOp::PostInc:
+            case LVUnaryOp::PostDec:
+                res = qore_rt_apply_lvalue_incdec(lvh, inst->unary_op, xsink);
                 break;
-            }
-            case LVUnaryOp::PreDec: {
-                qore_type_t t = lvh.getType();
-                if (t == NT_NUMBER) {
-                    lvh.preDecrementNumber();
-                    res = lvh.getReferencedValue();
-                } else if (t == NT_FLOAT) {
-                    res = lvh.preDecrementFloat();
-                } else {
-                    res = lvh.preDecrementBigInt();
-                }
-                break;
-            }
-            case LVUnaryOp::PostInc: {
-                qore_type_t t = lvh.getType();
-                if (t == NT_NUMBER) {
-                    QoreNumberNode* n = lvh.postIncrementNumber(true);
-                    if (n) {
-                        res = n;
-                    }
-                } else if (t == NT_FLOAT) {
-                    res = lvh.postIncrementFloat();
-                } else {
-                    res = lvh.postIncrementBigInt();
-                }
-                break;
-            }
-            case LVUnaryOp::PostDec: {
-                qore_type_t t = lvh.getType();
-                if (t == NT_NUMBER) {
-                    QoreNumberNode* n = lvh.postDecrementNumber(true);
-                    if (n) {
-                        res = n;
-                    }
-                } else if (t == NT_FLOAT) {
-                    res = lvh.postDecrementFloat();
-                } else {
-                    res = lvh.postDecrementBigInt();
-                }
-                break;
-            }
             case LVUnaryOp::EnsureUnique:
                 // the container of a variable that a weak reference is taken of (qore#5756)
                 if (lvh.getType() == NT_HASH || lvh.getType() == NT_LIST) {

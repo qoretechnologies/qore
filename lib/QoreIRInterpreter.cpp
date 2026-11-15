@@ -2502,6 +2502,25 @@ static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, Excep
     return stored;
 }
 
+//! Returns true if a local variable of type \a ti stores a value of type \a vt as it is
+/** \a vt is the type of a value that is no node and no enum value (an int, a float, a bool or no value), which the
+    IR interpreter's store to a local writes to the variable directly, without the type check of an assignment
+    (acceptAssignment()), when the type accepts it unchanged.  A type that names type parameters (a local of a generic
+    function, ex: *T) accepts any value before its type parameters are substituted, which only the full path does
+    (LocalVarValue::resolveLValueTypeInfo()), as the AST interpreter does (qore#5885).  An enum type accepts only its
+    members, which are enum values, never a plain value of its base type, which parseAcceptsReturns() accepts
+    (qore#6197).
+*/
+static QORE_INTERN_ALWAYS_INLINE bool qore_ir_local_stores_simple_value(const QoreTypeInfo* ti, qore_type_t vt) {
+    // the most common case, which needs no look at the type
+    if ((vt == NT_INT && ti == bigIntTypeInfo) || (vt == NT_FLOAT && ti == floatTypeInfo)
+            || (vt == NT_BOOLEAN && ti == boolTypeInfo)) {
+        return true;
+    }
+    return !qore_type_contains_type_parameter(ti) && QoreTypeInfo::parseAcceptsReturns(ti, vt)
+        && !QoreTypeInfo::getReturnEnum(ti);
+}
+
 static ClosureVarValue* resolve_closure_var_value(const LocalVar* var) {
     if (!var) {
         return nullptr;
@@ -2571,7 +2590,9 @@ static bool incrementClosureVarIntFast(LocalVar* var, int64_t delta, int64_t& re
     }
     // a closure or a reference to the variable can change it in another thread
     QoreSafeVarRWWriteLocker sl(cv->rml, !cv->frameExclusive());
-    if (cv->isReadOnly() || cv->finalized || cv->val.getType() != NT_INT) {
+    // only a variable holding a plain int is changed here: a member of an int enum (QV_Enum) has the base type int,
+    // but the enum type refuses the plain int computed, which the lvalue helper of the caller raises (qore#6197)
+    if (cv->isReadOnly() || cv->finalized || !cv->val.assigned || cv->val.type != QV_Int) {
         return false;
     }
     result = cv->val.getAsBigInt() + delta;
@@ -13201,6 +13222,9 @@ load_local_done:
                     bool nd = true;
                     QoreValue tv = fused_inst->target->eval(nd, xsink);
                     if (xsink && *xsink) {
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
                         unwindForException();
                         cleanupLocalCaches();
                         return exitAfterUnwind();
@@ -13305,6 +13329,15 @@ load_local_done:
                         // Closure-use variable: write through cvstack, not lvstack
                         assignClosureVarValueTransfer(fused_inst->target, QoreValue(result_val), xsink);
                         if (xsink && *xsink) {
+                            // the slot cache holds the result, which the variable refused: the next load reads the
+                            // variable
+                            if (fused_inst->target_slot_id < locals_slot_cache.size()) {
+                                locals_slot_cache.release(fused_inst->target_slot_id, xsink);
+                                locals_slot_cache.set(fused_inst->target_slot_id, QoreValue());
+                            }
+                            if (branchToExceptionTarget(inst)) {
+                                break;
+                            }
                             unwindForException();
                             cleanupLocalCaches();
                             return exitAfterUnwind();
@@ -13351,6 +13384,9 @@ load_local_done:
                             result_val = qore_rt_increment_closure_int(fused_inst->local, fused_inst->delta, xsink);
                         }
                         if (xsink && *xsink) {
+                            if (branchToExceptionTarget(inst)) {
+                                break;
+                            }
                             unwindForException();
                             cleanupLocalCaches();
                             return exitAfterUnwind();
@@ -13384,6 +13420,9 @@ load_local_done:
                     bool nd = true;
                     QoreValue lv = fused_inst->local->eval(nd, xsink);
                     if (xsink && *xsink) {
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
                         unwindForException();
                         cleanupLocalCaches();
                         return exitAfterUnwind();
@@ -14788,11 +14827,7 @@ load_local_done:
                         // through the full path to preserve enum identity and type checking
                         const QoreTypeInfo* target_ti = local_inst->local
                             ? local_inst->local->getTypeInfo() : nullptr;
-                        // a type that names type parameters (a local of a generic function, ex: *T) accepts any
-                        // value before its type parameters are substituted, which only the full path does
-                        // (LocalVarValue::resolveLValueTypeInfo()), as the AST interpreter does (qore#5885)
-                        if (qore_type_contains_type_parameter(target_ti)
-                                || !QoreTypeInfo::parseAcceptsReturns(target_ti, val.getType())) {
+                        if (!qore_ir_local_stores_simple_value(target_ti, val.getType())) {
                             // Type mismatch: invalidate caches and use full
                             // type-checking path (will raise RUNTIME-TYPE-ERROR)
                             locals_slot_cache.release(local_inst->slot_id, xsink);
@@ -18119,58 +18154,12 @@ load_local_done:
                             return -1;
                         }
                         switch (path_inst->unary_op) {
-                            case LVUnaryOp::PreInc: {
-                                qore_type_t t = lvh.getType();
-                                if (t == NT_NUMBER) {
-                                    lvh.preIncrementNumber();
-                                    res = lvh.getReferencedValue();
-                                } else if (t == NT_FLOAT) {
-                                    res = lvh.preIncrementFloat();
-                                } else {
-                                    res = lvh.preIncrementBigInt();
-                                }
+                            case LVUnaryOp::PreInc:
+                            case LVUnaryOp::PreDec:
+                            case LVUnaryOp::PostInc:
+                            case LVUnaryOp::PostDec:
+                                res = qore_rt_apply_lvalue_incdec(lvh, path_inst->unary_op, xsink);
                                 break;
-                            }
-                            case LVUnaryOp::PreDec: {
-                                qore_type_t t = lvh.getType();
-                                if (t == NT_NUMBER) {
-                                    lvh.preDecrementNumber();
-                                    res = lvh.getReferencedValue();
-                                } else if (t == NT_FLOAT) {
-                                    res = lvh.preDecrementFloat();
-                                } else {
-                                    res = lvh.preDecrementBigInt();
-                                }
-                                break;
-                            }
-                            case LVUnaryOp::PostInc: {
-                                qore_type_t t = lvh.getType();
-                                if (t == NT_NUMBER) {
-                                    QoreNumberNode* n = lvh.postIncrementNumber(true);
-                                    if (n) {
-                                        res = n;
-                                    }
-                                } else if (t == NT_FLOAT) {
-                                    res = lvh.postIncrementFloat();
-                                } else {
-                                    res = lvh.postIncrementBigInt();
-                                }
-                                break;
-                            }
-                            case LVUnaryOp::PostDec: {
-                                qore_type_t t = lvh.getType();
-                                if (t == NT_NUMBER) {
-                                    QoreNumberNode* n = lvh.postDecrementNumber(true);
-                                    if (n) {
-                                        res = n;
-                                    }
-                                } else if (t == NT_FLOAT) {
-                                    res = lvh.postDecrementFloat();
-                                } else {
-                                    res = lvh.postDecrementBigInt();
-                                }
-                                break;
-                            }
                             case LVUnaryOp::EnsureUnique: {
                                 // the container of a variable that a weak reference is taken of (qore#5756); a weak
                                 // reference held by the variable and a value of another type are left as they are
@@ -22502,10 +22491,12 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
         // if the lvalue is a timeout, then convert any date/time value as if it were a timeout
         if (right.getType() == NT_DATE && is_timeout_lvalue_type(v.getTypeInfo())) {
             int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-            return v.plusEqualsBigInt(ms);
+            return v.plusEqualsBigInt(ms, "<+= operator>");
         }
-        // do integer plus-equals; a char is added as its one-character string is
-        v.plusEqualsBigInt(qore_plus_equals_int_operand(right));
+        // do integer plus-equals; a char is added as its one-character string is; an error that the lvalue's type
+        // raises (ex: an enum lvalue, which refuses the plain int) names the operator, as
+        // QoreIntPlusEqualsOperatorNode::evalImpl() does (qore#6197)
+        v.plusEqualsBigInt(qore_plus_equals_int_operand(right), "<+= operator>");
     }
 
     if (*xsink) {
@@ -22629,7 +22620,7 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
         // issue #3157: if the lvalue is a timeout, then convert any date/time value as if it were a timeout too
         if (right.getType() == NT_DATE && is_timeout_lvalue_type(v.getTypeInfo())) {
             int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-            return v.minusEqualsBigInt(ms);
+            return v.minusEqualsBigInt(ms, "<-= operator>");
         }
         // Regular date arithmetic; a result out of range raises INVALID-DATE (qore#6103)
         if (right.getType() == NT_DATE) {
@@ -22705,7 +22696,7 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             // if the lvalue is a timeout, convert date/time value as timeout
             if (is_timeout_lvalue_type(v.getTypeInfo())) {
                 int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-                return v.minusEqualsBigInt(ms);
+                return v.minusEqualsBigInt(ms, "<-= operator>");
             }
             // an lvalue of an int type (int, *int, softint) is assigned the result of the binary operator, as
             // x = x - d assigns it; see qore_int_lvalue_minus_date()
@@ -22715,8 +22706,9 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             // any other lvalue subtracts the integer value of the date below, as += adds it: the seconds of a
             // relative date or the epoch seconds of an absolute date
         }
-        // do integer minus-equals
-        return v.minusEqualsBigInt(right.getAsBigInt());
+        // do integer minus-equals; an error that the lvalue's type raises names the operator, as
+        // QoreIntMinusEqualsOperatorNode::evalImpl() does (qore#6197)
+        return v.minusEqualsBigInt(right.getAsBigInt(), "<-= operator>");
     }
 
     if (*xsink) {
