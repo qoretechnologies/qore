@@ -1265,11 +1265,15 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
     if (kind_name.empty()) {
         kind_name = columnar_get_desc_string(desc, "logical_type");
     }
+    // an explicit kind is not replaced by the kind derived from the buffer type below: a date, timestamp or
+    // duration column is stored in a buffer<int64>, and its schema has both
+    bool has_kind = false;
     if (!kind_name.empty()) {
         QoreColumnarTypeKind kind;
         if (columnar_type_kind_from_name(kind_name, kind)) {
             schema.kind = kind;
             schema.column_type = columnar_flat_type_from_kind(kind);
+            has_kind = kind != QoreColumnarTypeKind::Auto;
         }
     }
 
@@ -1299,8 +1303,10 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
         QoreBufferElementType parsed = QoreBufferElementType::Invalid;
         if (qore_buffer_element_type_from_name(buffer_type.c_str(), parsed)) {
             schema.buffer_type = parsed;
-            schema.column_type = columnar_type_from_buffer(parsed);
-            schema.kind = columnar_kind_from_flat_type(schema.column_type);
+            if (!has_kind) {
+                schema.column_type = columnar_type_from_buffer(parsed);
+                schema.kind = columnar_kind_from_flat_type(schema.column_type);
+            }
             if (parsed == QoreBufferElementType::Decimal128) {
                 schema.kind = QoreColumnarTypeKind::Decimal128;
                 schema.column_type = QoreColumnarColumnType::Number;
