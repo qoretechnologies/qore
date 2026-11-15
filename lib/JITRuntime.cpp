@@ -14097,6 +14097,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_consume_args(const Qore
 static QoreValue qore_rt_eval_self_method_by_name(QoreObject* self, const char* name,
         QoreListNode* arg_list, const qore_class_private* class_ctx, RuntimeConfig& rc,
         ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) {
+    // as qore_class_private::evalMethod(): an object that has been deleted raises the error that names the class of
+    // the object, before the method is looked up (issue #6168)
+    if (!self->isValid()) {
+        qore_raise_deleted_method_call(xsink, self, name, nullptr, nullptr, nullptr);
+        return QoreValue();
+    }
     const qore_class_private* priv = qore_class_private::get(*self->getClass());
     const QoreMethod* m = priv->getMethodForEval(name, self->getProgram(), class_ctx, xsink);
     if (*xsink) {
