@@ -54,7 +54,7 @@ Environment (read by "exec"; never part of a key):
   build, with the private key, whose file path it reads from stdin (only the jobs of protected refs have it, and the
   build never does: QORE_QMOD_CACHE_SIGNING_KEY in the environment of "exec" disables the cache)
 - QORE_QMOD_CACHE_OPENSSL=<path>: the OpenSSL 3 command for the signatures
-- QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE=1|.d|.d.fingerprints: for the tests only, a restored file (the module, its
+- QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE=1|.d|.d.fingerprints|.d.optional: for the tests only, a restored file (the module, its
   depfile or its fingerprints) is damaged after the copy
 """
 
@@ -76,7 +76,9 @@ import tempfile
 import time
 
 #: the cache layout and key format; a new value makes every earlier entry unreachable
-SCHEMA = "qore-qmod-cache-1"
+# 2: the entries also store <qmod>.d.optional, the paths where the modules of failed %try-module directives could be
+# installed, which the build checks to rebuild the module when one of them is (qore#6145)
+SCHEMA = "qore-qmod-cache-2"
 
 #: environment variables that qcc and libqore read (QORE_*, QCC_*) are part of the key, except these, which neither
 #: reads (test/qmod-cache tests check that no libqore or qcc source names them) and whose values may differ between
@@ -113,7 +115,7 @@ ENV_INCLUDED_NAMES = frozenset((
 ))
 
 #: the files beside a qmod that qcc writes and the cache stores
-STORED_SUFFIXES = ("", ".d", ".d.fingerprints")
+STORED_SUFFIXES = ("", ".d", ".d.fingerprints", ".d.optional")
 #: the sidecar the cache writes beside each qmod it compiled or supplied
 SIDECAR_SUFFIX = ".qmod-cache.json"
 #: the most entries kept under one base key
@@ -1174,7 +1176,7 @@ def entry_problem(entry, key):
         return "the entry has an invalid resolution list"
     files = entry.get("files")
     if not isinstance(files, dict) or not all(isinstance(files.get(k), str) and HEX64.match(files[k])
-                                              for k in ("qmod", ".d", ".d.fingerprints")):
+                                              for k in ("qmod", ".d", ".d.fingerprints", ".d.optional")):
         return "the entry has invalid file digests"
     if not isinstance(entry.get("mode"), int) or isinstance(entry.get("mode"), bool):
         return "the entry has no file mode"
@@ -1707,7 +1709,8 @@ class Module:
         self.base = base_key(self.context["digest"], self.argv, self.cwd, env, self.source_root, self.extra)
 
     def files(self):
-        return {"": self.out, ".d": self.out + ".d", ".d.fingerprints": self.out + ".d.fingerprints"}
+        return {"": self.out, ".d": self.out + ".d", ".d.fingerprints": self.out + ".d.fingerprints",
+                ".d.optional": self.out + ".d.optional"}
 
     def sidecar(self, origin, key, entry=None, stored=False):
         rec = {"schema": SCHEMA, "name": self.name, "origin": origin, "base_key": self.base, "key": key,
@@ -1764,8 +1767,9 @@ class Module:
                 except Exception as e:
                     reason = damaged = str(e) or e.__class__.__name__
                     continue
-                # the dependency file and fingerprints first, the module last, each renamed into place
-                for suffix in (".d", ".d.fingerprints", ""):
+                # the dependency file, fingerprints and optional module paths first, the module last, each renamed into
+                # place
+                for suffix in (".d", ".d.fingerprints", ".d.optional", ""):
                     try:
                         os.replace(restored[suffix], self.out + suffix)
                     except BaseException:
@@ -1904,6 +1908,7 @@ class Module:
                 "qmod": sha256_file(self.out),
                 ".d": sha256_file(self.out + ".d"),
                 ".d.fingerprints": sha256_file(self.out + ".d.fingerprints"),
+                ".d.optional": sha256_file(self.out + ".d.optional"),
             },
             "created": time.time(),
         }
@@ -2119,7 +2124,7 @@ def cmd_verify(args):
             if sha256_file(qmod) != entry["files"]["qmod"]:
                 raise CacheError("it is not the module the cache supplied")
             # the loader decides from the depfile and the fingerprints whether the module is current
-            for suffix in (".d", ".d.fingerprints"):
+            for suffix in (".d", ".d.fingerprints", ".d.optional"):
                 if sha256_file(qmod + suffix) != entry["files"][suffix]:
                     raise CacheError("its %s is not the one the cache supplied" % suffix)
             target, deps = read_depfile(qmod + ".d")
