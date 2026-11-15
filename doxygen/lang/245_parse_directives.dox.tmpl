@@ -2851,6 +2851,14 @@ if (str)
 %new-style
     @endcode
 
+    This is a legacy directive for legacy code: it cannot be used while @ref modern "%modern" is in effect, which
+    guarantees a consistent set of parse options (a \c PARSE-OPTION-ERROR is raised).  A file included into
+    %%modern code is parsed with %%modern, and every source file but a \c .q file is %%modern by default (see
+    @ref modern "%modern"), so legacy code that needs parse options of its own is parsed apart from %%modern code, in
+    a \c .q file or a @ref Qore::Program "Program" of its own.  A legacy file can use the directive before it sets
+    @ref modern "%modern" itself, so that the file's %%modern ends with the file.  The compatibility options that a
+    pushed scope sets (such as @ref broken-range "%broken-range") apply only to the code parsed in it.
+
     <hr>
     @section require-dollar %require-dollar
 

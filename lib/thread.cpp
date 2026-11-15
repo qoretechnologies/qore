@@ -3167,9 +3167,9 @@ bool parse_cond_test(const QoreProgramLocation* loc) {
     return td->pcs->test(loc);
 }
 
-void push_parse_options() {
+void push_parse_options(const QoreProgramLocation* loc) {
     ThreadData* td = thread_data.get();
-    qore_program_private::get(*td->current_pgm)->pushParseOptions(td->parse_file);
+    qore_program_private::get(*td->current_pgm)->pushParseOptions(loc, td->parse_file);
 }
 
 // called when a StatementBlock has "on_exit" blocks

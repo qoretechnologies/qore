@@ -233,6 +233,68 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
             assertEq(0, p.getParseOptions() & PO_BROKEN_RANGE, "no option after the scope");
             assertEq((1,), p.callFunction("f"));
         }
+        # %push-parse-options is a legacy directive, refused while %modern is in effect (qore#5764)
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            assertThrows("PARSE-OPTION-ERROR", "%push-parse-options cannot be used while %modern is in effect", \p.parse(),
+                ("%modern\n%push-parse-options\nint sub f() { return 1; }\n", "push-after-modern"));
+            Program p2(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+            assertThrows("PARSE-OPTION-ERROR", "%push-parse-options cannot be used while %modern is in effect", \p2.parse(),
+                ("%push-parse-options\nint sub f() { return 1; }\n", "push-in-modern-program"));
+        }
+        # a file included into %modern code is parsed with %modern, so the directive is refused there as well; the error
+        # does not suggest %old-style before it, which would leave the rest of the including file without %modern
+        {
+            TmpDir tmp("modern-option-consistency-push-");
+            File f();
+            f.open2(tmp.path + "/legacy-include.ql", O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%push-parse-options\nint sub inc() { return 1; }\n");
+            f.close();
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            try {
+                p.parse(sprintf("%%modern\n%%include %s/legacy-include.ql\nint sub f() { return inc(); }\n", tmp.path),
+                    "include-in-modern");
+                fail("the directive in an included file is refused");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("PARSE-OPTION-ERROR", ex.err);
+                assertRegex("%push-parse-options cannot be used while %modern is in effect", ex.desc);
+                assertRegex("a file included into %modern code is parsed with %modern", ex.desc);
+                assertFalse(ex.desc =~ /%old-style/, "no %old-style remedy");
+            }
+        }
+        # a second %push-parse-options in a legacy file that has set %modern since the first is ignored, as before
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parse("%push-parse-options\n%modern\n%push-parse-options\nint sub f() { return 1; }\n", "twice");
+            assertEq(1, p.callFunction("f"));
+        }
+        # a legacy file can push the options before it sets %modern itself: its %modern ends with it
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parsePending("%push-parse-options\n%modern\nint sub f() { return 1; }\n", "a");
+            # legacy code: a function without a return type, which %modern (require-types) would refuse
+            p.parsePending("sub g() { return 2; }\n", "b");
+            p.parseCommit();
+            assertEq(1, p.callFunction("f"));
+            assertEq(2, p.callFunction("g"));
+            assertFalse(boolean(p.getParseOptions() & PO_REQUIRE_TYPES), "%modern ended with the file that pushed");
+        }
+        # the compatibility options of a pushed legacy scope apply to the code parsed in it only, as the issue's
+        # included file showed (qore#5764): f() has %broken-range, g() after the scope does not
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parsePending("%push-parse-options\n%old-style\n%broken-range\nsub f() { return range(1, 3); }\n",
+                "included");
+            p.parsePending("sub g() { return range(1, 3); }\n", "main");
+            p.parseCommit();
+            Program plain(PO_NO_CHILD_PO_RESTRICTIONS);
+            plain.parse("sub h() { return range(1, 3); }\n", "plain");
+            Program broken(PO_NO_CHILD_PO_RESTRICTIONS);
+            broken.parse("%broken-range\nsub h() { return range(1, 3); }\n", "broken");
+            assertEq(broken.callFunction("h"), p.callFunction("f"), "f() has %broken-range");
+            assertEq(plain.callFunction("h"), p.callFunction("g"), "g() does not");
+            assertNeq(p.callFunction("f"), p.callFunction("g"));
+        }
     }
 
     #! a module's own Program does not have the compatibility options of the Program loading it
