@@ -17308,6 +17308,8 @@ load_local_done:
                 bool in_place = inst->string_append_in_place
                     && left.getType() == NT_STRING
                     && !left.isShortString()
+                    // an enum value does not own its member's string (see qore_enum_value_copy_for_write())
+                    && !left.isEnum()
                     && left.get<QoreStringNode>()->is_unique();
                 QoreValue result = in_place
                     ? fromBits(qore_rt_string_append_in_place(
