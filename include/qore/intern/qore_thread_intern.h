@@ -749,6 +749,16 @@ private:
 */
 DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref();
 
+//! Returns true if every sandbox that governs the current thread's code allows uncontrolled APIs, or if none does
+/** Visits the managers that qore_find_thread_sandbox_policy_manager_ref() (\a policy true) or
+    qore_find_thread_sandbox_manager_ref() (\a policy false) would combine, with the same resolution rules, without
+    combining them: it allocates nothing and returns as soon as one of them refuses uncontrolled APIs.  It runs on
+    every call of an uncontrolled API by code that a sandbox governs (qore#5741).
+
+    @since Qore 3.0
+*/
+DLLLOCAL bool qore_thread_sandbox_allows_uncontrolled_apis(bool policy);
+
 //! Pushes a sandbox policy barrier on the current thread; returns 0 for OK, -1 for no thread data
 DLLLOCAL int qore_push_sandbox_policy_barrier();
 
@@ -1936,6 +1946,9 @@ DLLLOCAL ClosureParseEnvironment* thread_get_closure_parse_env();
 
 DLLLOCAL ClosureVarValue* thread_instantiate_closure_var(const char* id, const QoreTypeInfo* typeInfo, QoreValue& nval,
     bool assign, bool read_only = false);
+//! Creates a local's closure storage with the owning invocation's concrete constraint.
+DLLLOCAL ClosureVarValue* thread_instantiate_closure_var(const LocalVar* local, const QoreTypeInfo* runtimeTypeInfo,
+    QoreValue& nval, bool assign);
 DLLLOCAL void thread_instantiate_closure_var(ClosureVarValue* cvar);
 DLLLOCAL void thread_uninstantiate_closure_var(ExceptionSink* xsink);
 DLLLOCAL ClosureVarValue* thread_find_closure_var(const char* id);
@@ -2125,6 +2138,10 @@ public:
 
     CalleeContextHelper(const CalleeContextHelper&) = delete;
     CalleeContextHelper& operator=(const CalleeContextHelper&) = delete;
+
+    //! releases the implicit arguments that the helper set before it is destroyed, in the frame of the call, as the
+    //! AST interpreter releases them (issue #5882); the destructor restores the caller's
+    DLLLOCAL void releaseArgv();
 
 private:
     //! the current thread
@@ -2814,6 +2831,10 @@ public:
     DLLLOCAL ArgvContextHelper(QoreListNode* argv, ExceptionSink* n_xsink);
     // calls deref(xsink) on list in destructor
     DLLLOCAL ~ArgvContextHelper();
+
+    //! releases the implicit arguments that the helper set before it is destroyed, in the frame of the call, as the
+    //! AST interpreter releases them (issue #5882); the destructor restores the caller's
+    DLLLOCAL void releaseArgv();
 
 private:
     QoreListNode* old_argv;

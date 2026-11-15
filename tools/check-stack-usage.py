@@ -568,6 +568,10 @@ def calibration_mismatch(settings, config):
             return "%s %r, budgets for %r" % (key, config.get(key, ""), settings[key])
     if "ipo" in settings and config.get("ipo", "") != settings["ipo"]:
         return "link-time optimization (ipo) %r, budgets for %r" % (config.get("ipo", ""), settings["ipo"])
+    # a configuration written before the entry existed describes a single compilation unit, as CI builds libqore
+    if config.get("single-compilation-unit", "1") != "1":
+        return ("libqore is not built as a single compilation unit (SINGLE_COMPILATION_UNIT=OFF or "
+            "SINGLE_COMPILATION_UNIT_CHUNKS > 1), budgets for a single compilation unit")
     return None
 
 

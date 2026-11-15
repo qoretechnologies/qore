@@ -59,6 +59,19 @@ using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
 
 // these data structures are all private to the library
 
+//! Ordinary calls carry no completion state; the empty policy adds no runtime check or argument storage.
+struct QoreCallCompletion {
+    static constexpr bool constructor = false;
+    DLLLOCAL void capture(ExceptionSink*) const {}
+};
+
+//! Constructor-only observation after body/local cleanup and before implicit argument cleanup (#6086).
+struct QoreConstructorCompletion {
+    static constexpr bool constructor = true;
+    bool& completed;
+    DLLLOCAL void capture(ExceptionSink* xsink) const;
+};
+
 class MethodVariantBase;
 class LocalVar;
 class VarRefNode;
@@ -199,7 +212,11 @@ public:
         return num >= typeList.size() ? 0 : typeList[num];
     }
 
-    DLLLOCAL bool needsTypeParameterSubstitution() const;
+    //! The signature's cached answer is on every call path; scan types only on a cache miss.
+    DLLLOCAL bool needsTypeParameterSubstitution() const {
+        signed char cached = type_param_substitution_cache.load(std::memory_order_relaxed);
+        return cached == -1 ? computeTypeParameterSubstitution() : cached != 0;
+    }
 
     //! Set while parsing or loading a generic declaration, including parameters used only in its body.
     DLLLOCAL bool declaresTypeParameters() const {
@@ -255,6 +272,8 @@ protected:
 
     bool declares_type_parameters = false;
     mutable std::atomic<signed char> type_param_substitution_cache {-1};
+
+    DLLLOCAL QORE_INTERN_NOINLINE bool computeTypeParameterSubstitution() const;
 };
 
 struct QoreNamedArgBinding {
@@ -937,6 +956,8 @@ public:
         located at the runtime location, and a pending call site (see QoreRcCallSiteHelper) is hidden while it runs
         and restored afterwards, as the code can run between a call site and the frame that takes it, such as when
         a temporary value is released
+        @param n_closure the closure called with a temporary argument list (issue #5882), whose default values are
+        evaluated with its captured variables, as for a call with an argument list that the caller keeps
     */
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args,
@@ -944,7 +965,7 @@ public:
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            unsigned n_call_flags = 0, bool n_hide_call_site = false);
+            unsigned n_call_flags = 0, bool n_hide_call_site = false, const QoreClosureBase* n_closure = nullptr);
 
     DLLLOCAL CodeEvaluationHelper(LexicalSemanticPolicy invocation_policy, ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args,
@@ -1212,6 +1233,13 @@ protected:
 
     DLLLOCAL int findVariantNamed(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
             const qore_class_private* class_ctx, LexicalSemanticPolicy invocation_policy);
+    //! the variant search of a call whose variant committed at parse time rejected its arguments, made after the
+    //! callee's receiver is current: the caller's receiver is made current again for the search of a call with
+    //! explicit type arguments (qore#5892); out of line, as it is not on a call's common path
+    template <bool LexicalInvocation>
+    DLLLOCAL QORE_INTERN_NOINLINE int findVariantRetry(const QoreFunction* func,
+            const AbstractQoreFunctionVariant*& variant, const qore_class_private* cctx,
+            LexicalSemanticPolicy invocation_policy, bool explicit_type_args);
     DLLLOCAL int findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx);
 
@@ -1727,8 +1755,9 @@ protected:
     //! Lock-free call guard; publishes aot_lazy_function_ir before first invocation.
     mutable std::atomic<bool> has_aot_lazy_function_ir{false};
 
+    template <typename Completion = QoreCallCompletion>
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
-            ExceptionSink* xsink) const;
+            ExceptionSink* xsink, Completion completion = {}) const;
     DLLLOCAL QoreValue eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
             const qore_class_private* qc = nullptr, bool ref_obj = true) const;
     //! eval() for a call without a CodeEvaluationHelper (destructors), which has a helper of its own for the override
@@ -1738,8 +1767,9 @@ protected:
             const;
 
     //! Tiered compilation dispatch path
+    template <typename Completion = QoreCallCompletion>
     DLLLOCAL QoreValue evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
-            ExceptionSink* xsink, bool caller_has_frame_boundary = false) const;
+            ExceptionSink* xsink, bool caller_has_frame_boundary = false, Completion completion = {}) const;
     //! Attempt to lower to IR; called via std::call_once.
     /** If @p raise_on_failure is true and lowering fails, a parseException
         is raised describing the gap.  Used for parse-time eager compilation
@@ -1756,9 +1786,10 @@ protected:
             const QoreTypeInfo* receiver_type_info,
             const QoreTypeParamInstantiation* type_param_instantiation,
             bool raise_on_failure) const;
-    DLLLOCAL QoreValue evalSpecializedIR(const char* name, const QoreIRFunction* ir,
+    template <typename Completion = QoreCallCompletion>
+    DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalSpecializedIR(const char* name, const QoreIRFunction* ir,
             ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink,
-            bool caller_has_frame_boundary) const;
+            bool caller_has_frame_boundary, Completion completion = {}) const;
     //! Materialize source-stripped AOT debug IR on demand when a debugger is attached.
     DLLLOCAL bool materializeAOTDebugIR(const char* name, ExceptionSink* xsink) const;
 
@@ -2028,6 +2059,12 @@ public:
     //! Returns true if this variant has a cached AOT function
     DLLLOCAL bool hasCachedAOT() const {
         return cached_aot_fn != nullptr;
+    }
+
+    //! Returns the standard native entry of the AOT-compiled function, or nullptr; it identifies the function's
+    //! native fast entry in the registry of a module's fast entries (qore_aot_find_cross_module_fast_entry())
+    DLLLOCAL AotFunctionPtr getCachedAOTFunction() const {
+        return cached_aot_fn;
     }
 
     //! Returns the location of the body of the AOT-compiled function, or nullptr if unknown
@@ -2801,6 +2838,21 @@ public:
     DLLLOCAL const QoreTypeInfo* parseRuntimeNamedReturnType(const type_vec_t& argTypeInfo, const name_vec_t& argNames,
             const qore_class_private* class_ctx, QoreParseOptions po) const;
 
+    //! Returns the return type of a call whose variant is resolved at run time (qore#5896, qore#6151)
+    /** The type parameters of a generic variant's return type are those of the callee, not of the code that makes the
+        call: they are substituted with the call's explicit type arguments, or else with their bounds if the bounds
+        are basic types that convert no value, or else with auto, as the type arguments that the call binds at run
+        time are not known; the type is the union of the return types of the variants that the call can be resolved
+        to, or nullptr if it is not known
+
+        @param class_ctx the class context of the call, which the variants that it can be resolved to are accessible
+        in
+        @param all_variants true to take every variant, accessible in the class context or not: the union is then the
+        type of the call or a wider one (for a call whose class context is not known)
+    */
+    DLLLOCAL const QoreTypeInfo* parseRuntimeCallReturnType(const qore_class_private* class_ctx,
+            const QoreTypeInfo* receiver_type_info, const type_vec_t* explicit_type_args, bool all_variants = false);
+
     //! Returns a variant that run-time resolution could select for a named call and that does not have the parameter
     //! names of the binding at the positions of the arguments, or nullptr if there is none
     /** The arguments of a named call are passed at the positions of the binding's variant at run time; resolving the
@@ -3452,7 +3504,13 @@ public:
         return serial;
     }
 
-    DLLLOCAL QoreValue evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args, QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;
+    //! calls the closure
+    /** @param tmp_args true if \a args is a temporary list that the caller owns, whose values the parameters take
+        over, as the AST interpreter's call moves its evaluated arguments into the parameters, so that the last
+        reference of a temporary argument is released in the closure's frame (issue #5882)
+    */
+    DLLLOCAL QoreValue evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
+        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args = false) const;
 
     //! evalClosure() with arguments in source order with the names in \a arg_names, which are bound to the
     //! parameters of the closure's variant by name (M4 phase 3)

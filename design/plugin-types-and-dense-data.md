@@ -315,3 +315,23 @@ Before committing changes in this area:
 - LLVM codegen extensions are opt-in and tied to the libqore LLVM major
   version. Runtime-helper fallback should remain available unless the module
   deliberately marks the LLVM extension as required.
+- LLVM codegen extensions are used only by the JIT. Their code can name symbols
+  of the plugin module, which the JIT resolves in the process but which AOT code
+  (a qcc executable or `.qmod`) cannot link: the module is loaded at run time
+  (qore#6130). AOT code calls the registered runtime helper of a unary, binary
+  or subscript value operation that has an extension through a pointer that
+  the call site resolves on its first call from the operation's module-local
+  reference (`qore_rt_plugin_operation_helper_aot()`) and caches, and
+  dispatches any other operation generically.
+- Process-global plugin operation ids are assigned when plugin modules are
+  loaded, so they depend on the load order and are never embedded in AOT code
+  (qore#6136). AOT code names an operation by its module-local reference: the
+  module name, the plugin-local operation id and the canonical signature hash
+  it was compiled for. A generic dispatch site resolves the process-global id
+  on its first call (`qore_rt_plugin_operation_id_aot()`) and caches it. A
+  module that is not loaded, a missing operation or a changed signature raises
+  an exception (`PLUGIN-REGISTRY-MODULE-NOT-LOADED`,
+  `PLUGIN-REGISTRY-OPERATION-NOT-REGISTERED` or
+  `QORD-PLUGIN-SIGNATURE-HASH-MISMATCH`) when the site is first called, and
+  the operation returns NOTHING. A qcc executable or module refuses a missing
+  plugin module already when it loads the modules that it depends on.

@@ -462,6 +462,9 @@ string s = a.create(1);
     exactly the same parameters in order for the abstract method to match, but the return type of the concrete method
     in the child class has to simply be compatible with the return type of the abstract method in the parent
     class.\n\n
+    An abstract method can also be defined by another parent class of a class that inherits more than one class; a
+    call of the method, also an unqualified or qualified call through \c self, then calls that definition (when all
+    of the variants of the method in the class that declares it are abstract).\n\n
     Classes with undefined abstract methods cannot be instantiated.  Abstract methods cannot have a method body; an
     abstract method's declaration must be terminated with a semicolon (\c ";").  Furthermore, abstract methods cannot
     be also @ref static_methods "static".\n\n
@@ -482,6 +485,16 @@ string s = a.create(1);
     |@ref auto_type "auto" <tt>@ref memberGate_methods "memberGate"(</tt>@ref string_type "string" <em>member_param_name</em><tt>) {}</tt>|If this method is implemented in the class, it is called when read access is attempted to private member or members that do not exist in the current object; the return value of this method is returned as the value of the member.\n\n\c memberGate() methods cannot be @ref overloaded_methods "overloaded". User-defined gates are not inherited; builtin gates are inherited by subclasses.
     |@ref auto_type "auto" <tt>@ref methodGate_methods "methodGate"(</tt>@ref string_type "string" <em>method_param_name</em><tt>, ...) {}</tt>|If this method is implemented in the class, it is called when methods are called on the object that do not exist in the current object and the return value of this method is returned as the value of the method call.\n\n\c methodGate() methods cannot be @ref overloaded_methods "overloaded" and are not inherited by subclasses.
     |<tt>@ref memberNotification_methods "memberNotification"(</tt>@ref string_type "string" <em>member_param_name</em><tt>) {}</tt>|If this method is implemented in the class, it is called when an object member is updated outside the class with the member name as the argument. Note that this method is called after the member has been updated and without locking; the call is not atomic respective to other threads that also may update the same member simultaneously.\n\n\c memberNotification() methods cannot be @ref overloaded_methods "overloaded" and are not inherited by subclasses.
+
+    @anchor constructor_argument_cleanup
+    @par Exceptions While Releasing Constructor Arguments
+    Once the constructor body and its local cleanup complete successfully, an exception raised while releasing
+    its parameters or implicit arguments does not turn the object into a partially constructed object: the
+    construction releases its reference normally, running the object's destructor when no other reference remains.
+    The argument exception remains primary; an exception raised by the object's destructor is chained after it.
+    A reference published by the constructor remains valid until it is released. If member initialization, a base
+    constructor, the constructor body, or its local cleanup fails, the existing partial-construction behavior still
+    applies and user destructors are not run.
 
     @subsection final_methods Final Methods
 	Methods declared <b><tt>final</tt></b> cannot be reimplemented in a subclass.  Methods can be declared <b><tt>final</tt></b> to prevent a subclass from altering the behavior of a method that is critical to the class's functionality.\n\n

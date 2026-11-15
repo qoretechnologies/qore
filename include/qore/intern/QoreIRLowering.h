@@ -636,6 +636,13 @@ public:
     void setSelfLocal(LocalVar* n_self_local) {
         self_local = n_self_local;
     }
+    //! Gives a plugin dispatch instruction the active handler (see withExceptionTarget())
+    /** An exception that the plugin operation raises then branches to an enclosing try/catch in the same function
+        instead of returning from the frame (qore#6135).
+    */
+    QoreIRPluginInstruction* withPluginExceptionTarget(QoreIRPluginInstruction* inst) const {
+        return withExceptionTarget(inst);
+    }
 
 private:
     //! the "self" local of the method lowered, if any (see setSelfLocal())
@@ -1221,6 +1228,12 @@ private:
     unsigned* bg_helper_count = &bg_helper_count_own;
     //! The number of the background helper this lowering lowers, if any (see bg_helper)
     unsigned bg_helper_index = 0;
+
+    //! The handler functions compiled by the outermost lowering and the lowerings of the handlers nested in it
+    //! (see compileBlockHandlerIRs(), #6087)
+    struct HandlerIRCache;
+    //! Created by the first handler compiled; the lowerings of the handlers share their parent's
+    std::shared_ptr<HandlerIRCache> handler_ir_cache;
 
     //! Lowers a value that a background expression takes when the thread starts, while lowering its helper
     /** @param expr the expression to lower

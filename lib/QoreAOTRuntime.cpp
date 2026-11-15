@@ -300,7 +300,9 @@ static bool aotLocalTypeMatches(const LocalVar* lv, const char* type_path,
     }
 
     std::string type_error;
-    const QoreTypeInfo* resolved_ti = type_resolver->resolve(type_path, type_error);
+    // a type that names the type parameters of a generic function (qore#5885)
+    const QoreTypeInfo* resolved_ti = type_resolver->resolveForSignature(type_path, type_error,
+        qore_aot_get_type_param_owner());
     return resolved_ti && type_error.empty()
         && (QoreTypeInfo::isOutputIdentical(declared_ti, resolved_ti)
             || QoreTypeInfo::isOutputIdentical(lv->getTypeInfoForLValue(), resolved_ti));
@@ -327,7 +329,9 @@ static bool aotLocalTypeKnownMismatch(const LocalVar* lv, const char* type_path,
     }
 
     std::string type_error;
-    const QoreTypeInfo* resolved_ti = type_resolver->resolve(type_path, type_error);
+    // a type that names the type parameters of a generic function (qore#5885)
+    const QoreTypeInfo* resolved_ti = type_resolver->resolveForSignature(type_path, type_error,
+        qore_aot_get_type_param_owner());
     return resolved_ti && type_error.empty()
         && !QoreTypeInfo::isOutputIdentical(lv->getTypeInfo(), resolved_ti)
         && !QoreTypeInfo::isOutputIdentical(lv->getTypeInfoForLValue(), resolved_ti);
@@ -1344,6 +1348,14 @@ bool qore_aot_apply_explicit_type_args(FunctionCallBase& call,
     Thread-local because several Programs can register AOT slots concurrently. */
 static thread_local std::string aot_slot_resolve_error;
 
+//! Records the first error of the expressions read since it was last cleared (qore#6121)
+/** A slot whose expression cannot be read leaves the reader at an unknown position in the slot map entry, so the
+    reads after it fail for no reason of their own; this keeps the cause, which the reader of the slot map reports
+    instead of what fails after it.
+
+    Thread-local because several Programs can read AOT expressions concurrently. */
+static thread_local std::string aot_expr_read_error;
+
 //! Describes an unresolvable AOT symbol, naming the modules that could have provided it
 /** An AOT artifact only references symbols that resolved when it was compiled, so a symbol that
     cannot be resolved now means a module providing it is missing, or is older than the one compiled
@@ -2104,7 +2116,9 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
                     ref1, type_error.c_str());
                 return 0;
             }
-            const QoreEnumDecl* ed = QoreTypeInfo::getUniqueReturnEnum(ti);
+            // the type of an "or nothing" cast (*Enum) is not an enum itself; as when the cast is parsed (qore#6125)
+            const QoreEnumDecl* ed = or_nothing ? QoreTypeInfo::getReturnEnum(ti)
+                : QoreTypeInfo::getUniqueReturnEnum(ti);
             if (!ed) {
                 printd(0, "AOT v2: cannot extract enum from type '%s' for cast\n", ref1);
                 return 0;
@@ -2825,6 +2839,9 @@ QoreValue readOneExpr(
     const auto* kinfo = getAOTExprKindInfo(ekind);
     if (!kinfo || !kinfo->is_supported || !kinfo->read_fn) {
         err = "unsupported expression kind " + std::to_string(ekind);
+        if (aot_expr_read_error.empty()) {
+            aot_expr_read_error = err;
+        }
         return QoreValue();
     }
     AOTExprReadCtx rctx{
@@ -2832,6 +2849,10 @@ QoreValue readOneExpr(
     };
     QoreValue value = kinfo->read_fn(rctx);
     ParseNode::bindSemanticPolicy(value, LexicalSemanticPolicy());
+    // the first error is the cause; an expression that contains the failed one reports it again (qore#6121)
+    if (!err.empty() && aot_expr_read_error.empty()) {
+        aot_expr_read_error = err;
+    }
     return value;
 }
 
@@ -3408,12 +3429,24 @@ static QoreAOTContext* buildContextFromSlotMap(
     // The slot-map roots are reconstructed here, outside the scopes used to read their nested expressions.
     LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     const uint8_t* entry_payload_start = ptr;
-    auto setBuildError = [name, build_error](const std::string& msg) {
+    // the first expression slot whose expression could not be read, with the cause (qore#6121)
+    std::string slot_read_error;
+    auto setBuildError = [name, build_error, &slot_read_error](const std::string& msg) {
         if (build_error && build_error->empty()) {
             *build_error = "AOT slot map registration failed for '";
             *build_error += name ? name : "<unknown>";
             *build_error += "': ";
-            *build_error += msg;
+            if (!slot_read_error.empty()) {
+                // the reader is at an unknown position in the entry after a slot that it could not read, so what
+                // fails after it is a consequence of it
+                *build_error += "cannot read ";
+                *build_error += slot_read_error;
+                *build_error += " (and then: ";
+                *build_error += msg;
+                *build_error += ")";
+            } else {
+                *build_error += msg;
+            }
         }
     };
 
@@ -3421,6 +3454,7 @@ static QoreAOTContext* buildContextFromSlotMap(
     // legitimately (CLOSURE_CREATE) leaves it set, so a stale message from an earlier, successfully
     // registered function would otherwise be reported against this one.  Start each function clean.
     aot_slot_resolve_error.clear();
+    aot_expr_read_error.clear();
 
     // Read the per-function slot map header
     // Format: name_ref(u32), num_locals(u16), num_globals(u16), num_exprs(u16),
@@ -3665,7 +3699,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 std::string type_error;
                 const QoreTypeInfo* ti = nullptr;
                 if (ltype && *ltype) {
-                    ti = ctx_type_resolver->resolve(ltype, type_error);
+                    // the type of a local of a generic function can name its type parameters, which only the
+                    // function's signature resolves; resolved without it, the type is lost and the local accepts
+                    // any value (qore#5885)
+                    ti = ctx_type_resolver->resolveForSignature(ltype, type_error, qore_aot_get_type_param_owner());
                     if (!type_error.empty()) {
                         type_error.clear();
                     }
@@ -3780,11 +3817,27 @@ static QoreAOTContext* buildContextFromSlotMap(
         const char* kind_name;
         uint8_t& has_unsupported;
         uint8_t initially_unsupported;
+        std::string& slot_read_error;
 
         ~ExprUnsupportedTraceGuard() {
             if (enabled && !initially_unsupported && has_unsupported) {
                 fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] kind=%s(%u) marked unsupported\n",
                     func_name, slot, kind_name ? kind_name : "UNKNOWN", kind_byte);
+            }
+            // the first slot that fails because an expression in it could not be read is the cause of the failure
+            // of the function (qore#6121)
+            if (!initially_unsupported && has_unsupported && slot_read_error.empty()
+                    && !aot_expr_read_error.empty()) {
+                // a description of the failure recorded for this slot names the part of the expression that could
+                // not be read; a description of another slot is stale
+                std::string prefix = "expr slot " + std::to_string(slot) + " (";
+                if (!aot_slot_resolve_error.compare(0, prefix.size(), prefix)) {
+                    // "expr slot N (KIND): ..." -> "expression slot N (KIND): ..."
+                    slot_read_error = "expression" + aot_slot_resolve_error.substr(4);
+                } else {
+                    slot_read_error = "expression slot " + std::to_string(slot) + " ("
+                        + (kind_name ? kind_name : "UNKNOWN") + "): " + aot_expr_read_error;
+                }
             }
         }
     };
@@ -3823,8 +3876,12 @@ static QoreAOTContext* buildContextFromSlotMap(
             has_unsupported = true;
             break;
         }
+        // an error of an expression read for an earlier slot that did not make that slot fail is not a cause
+        if (!has_unsupported) {
+            aot_expr_read_error.clear();
+        }
         ExprUnsupportedTraceGuard unsupported_trace{
-            trace_slot_reg, name, i, kind_byte, expr_kind_name, has_unsupported, has_unsupported};
+            trace_slot_reg, name, i, kind_byte, expr_kind_name, has_unsupported, has_unsupported, slot_read_error};
 
         switch (kind) {
             case AOTExprKind::NEW_OBJECT:
@@ -4956,7 +5013,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (ref_type_path && *ref_type_path) {
                         std::string type_error;
                         QoreAOTTypeResolver type_resolver(pgm);
-                        ref_ti = type_resolver.resolve(ref_type_path, type_error);
+                        // the type of a reference to a local of a generic function can name its type parameters
+                        // (qore#5885)
+                        ref_ti = type_resolver.resolveForSignature(ref_type_path, type_error,
+                            qore_aot_get_type_param_owner());
                         if (!ref_ti) {
                             printd(0, "AOT v2: cannot resolve PARSE_REF type '%s' for expr slot %d of '%s': %s\n",
                                 ref_type_path, i, name, type_error.c_str());
@@ -4992,11 +5052,21 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (type_path && *type_path) {
                         QoreAOTTypeResolver type_resolver(pgm);
                         std::string type_error;
-                        result_type_info = type_resolver.resolve(type_path, type_error);
+                        // the type can name the type parameters of the generic function (qore#6121)
+                        result_type_info = type_resolver.resolveForSignature(type_path, type_error,
+                            qore_aot_get_type_param_owner());
                         if (!result_type_info || !type_error.empty()) {
                             if (trace_slot_reg) {
                                 fprintf(stderr, "[aot-slot-reg] '%s': HASH_DEREF expr[%d] cannot resolve "
                                     "result type '%s': %s\n", name, i, type_path, type_error.c_str());
+                            }
+                            // the operands are not read, so the reader is at an unknown position in the entry
+                            if (slot_read_error.empty()) {
+                                slot_read_error = "expression slot " + std::to_string(i) + " (HASH_DEREF): "
+                                    "cannot resolve hash-dereference result type '" + type_path + "'";
+                                if (!type_error.empty()) {
+                                    slot_read_error += ": " + type_error;
+                                }
                             }
                             has_unsupported = true;
                             continue;
@@ -6525,7 +6595,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             std::string type_error;
             const QoreTypeInfo* ti = nullptr;
             if (bltype && *bltype) {
-                ti = ctx_type_resolver->resolve(bltype, type_error);
+                // a type that names the type parameters of a generic function (qore#5885)
+                ti = ctx_type_resolver->resolveForSignature(bltype, type_error, qore_aot_get_type_param_owner());
                 if (!type_error.empty()) {
                     type_error.clear();
                 }
@@ -6927,7 +6998,10 @@ static QoreAOTContext* buildContextFromSlotMap(
         // name the symbol that failed to resolve when one was recorded; without it the caller sees only
         // "unsupported AOT slot metadata" and has no way to tell a stale module from a real metadata problem
         std::string msg = "unsupported AOT slot metadata";
-        if (!aot_slot_resolve_error.empty()) {
+        if (!slot_read_error.empty()) {
+            // setBuildError() reports the slot that could not be read
+            aot_slot_resolve_error.clear();
+        } else if (!aot_slot_resolve_error.empty()) {
             msg += ": ";
             msg += aot_slot_resolve_error;
             aot_slot_resolve_error.clear();
@@ -8338,8 +8412,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         }
         std::string type_error;
         QoreAOTTypeResolver type_resolver(pgm);
+        // a type that names the type parameters of a generic function (qore#5885)
         const QoreTypeInfo* ti = (ltype && *ltype)
-            ? type_resolver.resolve(ltype, type_error) : nullptr;
+            ? type_resolver.resolveForSignature(ltype, type_error, qore_aot_get_type_param_owner()) : nullptr;
         qore_program_private* pp = qore_program_private::get(
             *(local_owner_pgm ? local_owner_pgm : pgm));
         return pp->createLocalVar(lname, ti);
@@ -8751,6 +8826,10 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
         error = "lazy closure IR is attached to a non-closure variant";
         return nullptr;
     }
+    // the IR is built when the closure is first called, out of the context build that names the type parameters of
+    // the generic function that the closure is in (qore#5885)
+    QoreAOTTypeParamOwnerHelper type_param_owner_helper(uvb->getUserSignature()
+        ? uvb->getUserSignature()->getTypeParamOwner() : nullptr);
 
     std::string open_error;
     const QoreAOTBinaryReader* retained_reader = lazy_ir.metadata->getReader(open_error);
@@ -8925,6 +9004,9 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_function_ir(
     const QoreAOTLazyFunctionIR::Entry& lazy_entry = lazy_ir.entries[entry_index];
     const char* name = lazy_entry.aot_func
         ? lazy_entry.aot_func->name : lazy_entry.source_name.c_str();
+    // the types of the IR can name the type parameters of the function (qore#5885)
+    QoreAOTTypeParamOwnerHelper type_param_owner_helper(uvb && uvb->getUserSignature()
+        ? uvb->getUserSignature()->getTypeParamOwner() : nullptr);
     std::unique_ptr<QoreIRFunction> ir = context->materializeDebugIR(name, error);
     if (!ir) {
         delete context;
@@ -11405,8 +11487,15 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
         ExceptionSink xsink;
         QoreString qcmd(command.command.c_str());
         // the command is the Program's own recorded `%module-cmd` directive, not one from the loading code to
-        // another Program: a sandboxed loader can load a compiled module as it can its source (issue #5905)
-        int rc = QMM.issueRuntimeCmd(command.module.c_str(), pgm, qcmd, &xsink, QoreModuleCmdOrigin::OwnDirective);
+        // another Program: a sandboxed loader can load a compiled module as it can its source (issue #5905).
+        // A command recorded from the source of the compiled program is replayed with the restrictions of the code
+        // that loads the program and the restricting parse options that were in force at the directive: the loader
+        // cannot loosen what the source was compiled under (issue #5699); an artifact that does not record them
+        // (before v37) is replayed with the parse options that the program is declared with, a superset
+        const QoreParseOptions declared_po = command.has_options
+            ? QoreParseOptions(command.options_lo, command.options_hi) : pgm->getParseOptions();
+        int rc = QMM.issueRuntimeCmd(command.module.c_str(), pgm, qcmd, &xsink, QoreModuleCommandContext::MC_REPLAY,
+            &declared_po);
         if (rc < 0 || xsink.isException()) {
             error = "AOT module command failed";
             if (label && *label) {
@@ -13388,7 +13477,11 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     printd(2, "AOT v3: exec-class set to '%s'\n", exec_class_name.c_str());
                 }
             } else {
-                printd(0, "AOT v3: failed to read program metadata: %s\n", meta_error.c_str());
+                // reported in every build, as the program cannot be loaded (qore#6127)
+                fprintf(stderr, "AOT-ERROR: the AOT-compiled program (%s) cannot be loaded: failed to read its "
+                    "program metadata: %s\n", (label && *label) ? label : "<unknown path>", meta_error.c_str());
+                rc = 2;
+                break;
             }
         }
 
@@ -13419,7 +13512,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             std::string cmd_error;
             if (!applyAOTModuleCommandsToProgram(*qpgm, metadata,
                     static_cast<uint32_t>(metadata_len), label, cmd_error)) {
-                printd(0, "AOT v3: %s\n", cmd_error.c_str());
+                fprintf(stderr, "AOT-ERROR: the AOT-compiled program (%s) cannot be loaded: %s\n",
+                    (label && *label) ? label : "<unknown path>", cmd_error.c_str());
                 rc = 2;
                 break;
             }
@@ -13490,7 +13584,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             }
             if (!deserializer.deserializeIntoProgram(*qpgm,
                     metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
-                printd(0, "AOT: metadata deserialization failed: %s\n",
+                fprintf(stderr, "AOT-ERROR: the AOT-compiled program (%s) cannot be loaded: metadata "
+                    "deserialization failed: %s\n", (label && *label) ? label : "<unknown path>",
                     deser_error.c_str());
                 rc = 2;
                 break;
@@ -16331,6 +16426,132 @@ static int executeInitFunctions(
     printd(5, "AOT module '%s': executed %d/%d init functions (%d failed)\n",
         mod_name, executed, (int)exec_infos.size(), failed);
     return failed;
+}
+
+namespace {
+//! The metadata of an AOT module that registered its fast entries
+struct QoreAOTModuleMetadataRef {
+    const uint8_t* metadata = nullptr;
+    int32_t metadata_len = 0;
+};
+
+//! The registry of the native fast entries of the loaded AOT modules (qore#6035)
+/** A function-local static, so that a module loaded while the library initializes finds it constructed; its lock is a
+    leaf lock (no other lock is taken while it is held) with a fork handler.
+*/
+struct QoreAOTFastEntryRegistry {
+    QoreRWLock lock;
+    QoreForkRWLock fork_handler{lock, QFLR_LEAF, "aot_fast_entry_registry"};
+    std::unordered_map<std::string, QoreAOTModuleMetadataRef> modules;
+    std::unordered_map<AotFunctionPtr, const QoreAOTFastEntry*> entries;
+
+    static QoreAOTFastEntryRegistry& get() {
+        static QoreAOTFastEntryRegistry registry;
+        return registry;
+    }
+};
+
+//! A registration made by the init of a module whose load has not completed
+struct QoreAOTPendingFastEntries {
+    std::string mod_name;
+    const uint8_t* metadata;
+    int32_t metadata_len;
+    const QoreAOTFastEntry* entries;
+    int32_t num_entries;
+};
+
+//! The registrations of the modules whose loads this thread is making, innermost last
+/** A module is initialized in the thread that loads it, and a module that it requires is loaded and committed
+    while it is initialized, so the registrations of the loads in progress form a stack; see
+    QoreAOTPendingFastEntriesHelper.
+*/
+thread_local std::vector<QoreAOTPendingFastEntries> aot_pending_fast_entries;
+}
+
+extern "C" DLLEXPORT void qore_aot_register_module_fast_entries_v1(const char* mod_name, const uint8_t* metadata,
+        int32_t metadata_len, const QoreAOTFastEntry* entries, int32_t num_entries) {
+    // published when the module's load completes: an image whose load fails is unloaded without its delete function
+    aot_pending_fast_entries.push_back(QoreAOTPendingFastEntries{mod_name ? mod_name : "", metadata, metadata_len,
+        entries, num_entries});
+}
+
+extern "C" DLLEXPORT void qore_aot_unregister_module_fast_entries_v1(const char* mod_name,
+        const QoreAOTFastEntry* entries, int32_t num_entries) {
+    QoreAOTFastEntryRegistry& reg = QoreAOTFastEntryRegistry::get();
+    QoreAutoRWWriteLocker al(reg.lock);
+    if (mod_name) {
+        // a loaded module's name is unique; without its metadata, a module compiled later calls its functions
+        // through the runtime path
+        reg.modules.erase(mod_name);
+    }
+    for (int32_t i = 0; i < num_entries; ++i) {
+        auto it = reg.entries.find(entries[i].fn);
+        // only this module's own entry is removed: the native code of another image cannot have the same address
+        if (it != reg.entries.end() && it->second == &entries[i]) {
+            reg.entries.erase(it);
+        }
+    }
+}
+
+size_t qore_aot_pending_fast_entries_mark() {
+    return aot_pending_fast_entries.size();
+}
+
+void qore_aot_commit_pending_fast_entries(size_t mark) {
+    assert(mark <= aot_pending_fast_entries.size());
+    if (mark == aot_pending_fast_entries.size()) {
+        return;
+    }
+    {
+        QoreAOTFastEntryRegistry& reg = QoreAOTFastEntryRegistry::get();
+        QoreAutoRWWriteLocker al(reg.lock);
+        for (size_t p = mark; p < aot_pending_fast_entries.size(); ++p) {
+            const QoreAOTPendingFastEntries& pending = aot_pending_fast_entries[p];
+            if (!pending.mod_name.empty() && pending.metadata && pending.metadata_len > 0) {
+                reg.modules[pending.mod_name] = QoreAOTModuleMetadataRef{pending.metadata, pending.metadata_len};
+            }
+            for (int32_t i = 0; i < pending.num_entries; ++i) {
+                const QoreAOTFastEntry& e = pending.entries[i];
+                if (e.fn && e.fast_fn && e.fast_symbol && *e.fast_symbol) {
+                    reg.entries[e.fn] = &e;
+                }
+            }
+        }
+    }
+    aot_pending_fast_entries.resize(mark);
+}
+
+void qore_aot_discard_pending_fast_entries(size_t mark) {
+    assert(mark <= aot_pending_fast_entries.size());
+    aot_pending_fast_entries.resize(mark);
+}
+
+const void* qore_aot_find_cross_module_fast_entry(AotFunctionPtr fn, const char* fast_symbol) {
+    if (!fn || !fast_symbol) {
+        return nullptr;
+    }
+    QoreAOTFastEntryRegistry& reg = QoreAOTFastEntryRegistry::get();
+    QoreAutoRWReadLocker al(reg.lock);
+    auto it = reg.entries.find(fn);
+    if (it == reg.entries.end() || strcmp(it->second->fast_symbol, fast_symbol)) {
+        return nullptr;
+    }
+    return it->second->fast_fn;
+}
+
+bool qore_aot_get_module_metadata(const char* mod_name, const uint8_t*& metadata, int32_t& metadata_len) {
+    if (!mod_name) {
+        return false;
+    }
+    QoreAOTFastEntryRegistry& reg = QoreAOTFastEntryRegistry::get();
+    QoreAutoRWReadLocker al(reg.lock);
+    auto it = reg.modules.find(mod_name);
+    if (it == reg.modules.end()) {
+        return false;
+    }
+    metadata = it->second.metadata;
+    metadata_len = it->second.metadata_len;
+    return true;
 }
 
 //! C ABI entry point for AOT modules (v3 - full 128-bit parse options)

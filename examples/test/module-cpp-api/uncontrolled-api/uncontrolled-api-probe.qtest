@@ -1,0 +1,349 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the "uncontrolledprobe" test module (uncontrolled-api/uncontrolledprobe-module.cpp) is built into the build tree by
+# examples/test/module-cpp-api/CMakeLists.txt and is not installed
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires uncontrolledprobe
+%requires QUnit
+
+%exec-class UncontrolledApiProbeTest
+
+#! A trusted %Qore class that inherits a builtin class of the uncontrolled-API domain, as a Qore class inherits a Java
+#! class of the jni module
+class UserProbe inherits UncontrolledProbe::Probe {
+    public {
+        #! the runs of the destructor
+        static int destructors = 0;
+    }
+
+    #! user code: runs in Qore, which the sandbox controls
+    int user() {
+        return 7;
+    }
+
+    #! user code that calls an inherited builtin method of the domain
+    int inherited() {
+        return value();
+    }
+
+    destructor() {
+        ++UserProbe::destructors;
+    }
+}
+
+#! A trusted %Qore class whose destructor calls a builtin method of the uncontrolled-API domain on another object
+/** The exemption of the destructor of a builtin class covers that destructor only: what a user destructor calls is
+    judged as any other call
+*/
+class ProbeHolder {
+    public {
+        #! the result of the call that the last destructor made: the value, or the error
+        static auto result;
+        #! the runs of the destructor
+        static int destructors = 0;
+    }
+
+    private {
+        #! the other object, which the destructor calls
+        UncontrolledProbe::Probe other;
+    }
+
+    constructor(UncontrolledProbe::Probe other) {
+        self.other = other;
+    }
+
+    #! a method of the object, to show that it was deleted
+    int ok() {
+        return 1;
+    }
+
+    destructor() {
+        ++ProbeHolder::destructors;
+        try {
+            ProbeHolder::result = other.value();
+        } catch (hash<ExceptionInfo> ex) {
+            ProbeHolder::result = ex.err;
+        }
+    }
+}
+
+#! Tests the run-time refusal of builtins of the uncontrolled-API domain with a builtin class of a binary module (qore#5741)
+/** - a refused call evaluates no default argument: the refusal comes once the variant is known and before its default
+      arguments are evaluated, whether the variant was found when the call was parsed or when it is made
+    - the user methods of a %Qore class that inherits a builtin class of the domain, and its destructor, run for code
+      that a refusing sandbox governs, while the builtin methods that it inherits are refused
+*/
+public class UncontrolledApiProbeTest inherits QUnit::Test {
+    public {
+        #! the code of the sandboxed Programs; each function returns the result, or the error
+        const Source = "
+auto sub run(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+# the variants are found when the calls are parsed
+auto sub typed_method_default(UncontrolledProbe::Probe p) { return run(sub () { return p.withDefault(); }); }
+auto sub static_default() { return run(sub () { return UncontrolledProbe::Probe::staticWithDefault(); }); }
+auto sub function_default() { return run(sub () { return UncontrolledProbe::call(); }); }
+# the variant is found when the call is made
+auto sub method_default(object p) { return run(sub () { return p.withDefault(); }); }
+auto sub call_ref_default() {
+    return run(sub () { code c = \\UncontrolledProbe::call(); return c(); });
+}
+
+# the user methods and the inherited builtin methods of a Qore class that inherits a builtin class of the domain
+auto sub user_method(object o) { return run(sub () { return o.user(); }); }
+auto sub inherited_method(object o) { return run(sub () { return o.value(); }); }
+auto sub inherited_through_user(object o) { return run(sub () { return o.inherited(); }); }
+auto sub destroy(object o) { return run(sub () { delete o; return \"deleted\"; }); }
+
+# a subclass of the builtin class of the domain that the sandboxed code defines itself
+class SandboxedProbe inherits UncontrolledProbe::Probe {
+    public {
+        static int constructed = 0;
+    }
+
+    constructor() {
+        ++SandboxedProbe::constructed;
+    }
+
+    int user() {
+        return 7;
+    }
+}
+
+auto sub new_own_subclass() { return run(sub () { return new SandboxedProbe(); }); }
+
+# a Program that the sandboxed code creates: it is sandboxed, and has no sandbox manager of its own
+Program sub make_child() {
+    Program c(PO_NEW_STYLE);
+    c.parse(\"%requires uncontrolledprobe
+auto sub call() { return UncontrolledProbe::call(new UncontrolledProbe::SideEffect()); }
+string sub read(string path) { return ReadOnlyFile::readTextFile(path); }
+code sub get_closure() { return auto sub () { return call(); }; }
+\", \"uncontrolled-api-probe-child\");
+    return c;
+}
+
+code sub child_closure(Program c) { return c.callFunction(\"get_closure\"); }
+
+# calls a callback of trusted code with the given helper
+auto sub through(code helper, code cb) { return helper(cb); }
+int sub own_subclass_constructed() { return SandboxedProbe::constructed; }
+";
+
+        #! the functions of Source that call a builtin with a default argument, with no argument
+        const DefaultCalls = ("static_default", "function_default", "call_ref_default");
+
+        #! the functions of Source that call a method with a default argument of a probe
+        const DefaultMethodCalls = ("typed_method_default", "method_default");
+
+        #! the results of the calls when they are allowed
+        const Allowed = {
+            "typed_method_default": 1,
+            "method_default": 1,
+            "static_default": 2,
+            "function_default": 3,
+            "call_ref_default": 3,
+        };
+
+        const Refused = "INVALID-FUNCTION-ACCESS";
+    }
+
+    constructor() : Test("Uncontrolled API probe", "1.0") {
+        addTestCase("a refused call evaluates no default argument", \defaultArgTest());
+        addTestCase("an allowed call evaluates its default arguments", \defaultArgAllowedTest());
+        addTestCase("the user methods of a subclass of a builtin class of the domain run for sandboxed code",
+            \userSubclassTest());
+        addTestCase("a subclass under a sandbox that allows uncontrolled APIs", \userSubclassAllowedTest());
+        addTestCase("the exemption of a builtin destructor does not cover what a user destructor calls",
+            \destructorCallTest());
+        addTestCase("sandboxed code cannot construct its own subclass of a builtin class of the domain",
+            \ownSubclassTest());
+        addTestCase("a Program that sandboxed code created is governed inside a trusted policy barrier",
+            \childBarrierTest());
+        set_return_value(main());
+    }
+
+    #! Returns a Program with Source and a sandbox with the given policy, or with no sandbox
+    private static Program getProgram(*bool allow) {
+        Program p(PO_NEW_STYLE);
+        if (exists allow) {
+            SandboxManager sm();
+            if (allow) {
+                sm.setUncontrolledApiPolicy(True);
+            }
+            p.setSandboxManager(sm);
+        }
+        p.parse(Source, "uncontrolled-api-probe");
+        return p;
+    }
+
+    defaultArgTest() {
+        Program p = getProgram(False);
+        int count = UncontrolledProbe::SideEffect::count();
+        foreach string call in (DefaultCalls) {
+            assertEq(Refused, p.callFunction(call), call);
+            assertEq(count, UncontrolledProbe::SideEffect::count(), call + ": no default argument was evaluated");
+        }
+        # the probe is created by trusted code, which no sandbox governs
+        UncontrolledProbe::Probe probe();
+        foreach string call in (DefaultMethodCalls) {
+            assertEq(Refused, p.callFunction(call, probe), call);
+            assertEq(count, UncontrolledProbe::SideEffect::count(), call + ": no default argument was evaluated");
+        }
+    }
+
+    defaultArgAllowedTest() {
+        UncontrolledProbe::Probe probe();
+        foreach *bool allow in ((True, NOTHING)) {
+            Program p = getProgram(allow);
+            string label = allow ? "a sandbox that allows them" : "no sandbox";
+            foreach string call in (DefaultCalls) {
+                int count = UncontrolledProbe::SideEffect::count();
+                assertEq(Allowed{call}, p.callFunction(call), label + ": " + call);
+                assertEq(count + 1, UncontrolledProbe::SideEffect::count(),
+                    label + ": " + call + ": the default argument was evaluated");
+            }
+            foreach string call in (DefaultMethodCalls) {
+                int count = UncontrolledProbe::SideEffect::count();
+                assertEq(Allowed{call}, p.callFunction(call, probe), label + ": " + call);
+                assertEq(count + 1, UncontrolledProbe::SideEffect::count(),
+                    label + ": " + call + ": the default argument was evaluated");
+            }
+        }
+    }
+
+    userSubclassTest() {
+        Program p = getProgram(False);
+        # the object is created by trusted code, which no sandbox governs
+        UserProbe o();
+        assertEq(42, o.value(), "trusted code calls the inherited builtin method");
+        assertEq(7, p.callFunction("user_method", o), "a user method runs for sandboxed code");
+        assertEq(Refused, p.callFunction("inherited_method", o), "an inherited builtin method is refused");
+        assertEq(Refused, p.callFunction("inherited_through_user", o),
+            "an inherited builtin method that a user method calls for sandboxed code is refused");
+        int user_destructors = UserProbe::destructors;
+        int builtin_destructors = UncontrolledProbe::SideEffect::probeDestructors();
+        # the user destructor runs, and so does the destructor of the builtin class: it only releases what the object
+        # holds, and the object is destroyed whatever the sandbox decides, so it is not refused
+        assertEq("deleted", p.callFunction("destroy", o), "sandboxed code deletes the object");
+        assertEq(user_destructors + 1, UserProbe::destructors, "the user destructor ran");
+        assertEq(builtin_destructors + 1, UncontrolledProbe::SideEffect::probeDestructors(),
+            "the destructor of the builtin class ran");
+        assertThrows("OBJECT-ALREADY-DELETED", \o.user(), NOTHING, "the object was deleted");
+    }
+
+    destructorCallTest() {
+        # the other object is created by trusted code and kept by it, so that only the holder is destroyed
+        UncontrolledProbe::Probe other();
+        foreach bool allow in ((False, True)) {
+            Program p = getProgram(allow);
+            string label = allow ? "a sandbox that allows them" : "a refusing sandbox";
+            ProbeHolder holder(other);
+            int destructors = ProbeHolder::destructors;
+            int builtin_destructors = UncontrolledProbe::SideEffect::probeDestructors();
+            remove ProbeHolder::result;
+            # sandboxed code deletes the object: the user destructor runs for it, and the builtin method that it
+            # calls on the other object is judged as a call of the sandboxed code
+            assertEq("deleted", p.callFunction("destroy", holder), label + ": sandboxed code deletes the object");
+            assertEq(destructors + 1, ProbeHolder::destructors, label + ": the destructor ran");
+            assertEq(allow ? 42 : Refused, ProbeHolder::result, label + ": the builtin method that it calls");
+            # the destruction completed, and the other object was not destroyed
+            assertThrows("OBJECT-ALREADY-DELETED", \holder.ok(), NOTHING, label + ": the object was deleted");
+            assertEq(builtin_destructors, UncontrolledProbe::SideEffect::probeDestructors(),
+                label + ": the other object was not destroyed");
+            assertEq(42, other.value(), label + ": the other object is intact");
+        }
+    }
+
+    ownSubclassTest() {
+        Program p = getProgram(False);
+        int destructors = UncontrolledProbe::SideEffect::probeDestructors();
+        # the constructor of the builtin base class is refused before the constructor of the subclass runs
+        assertEq(Refused, p.callFunction("new_own_subclass"), "the builtin base constructor is refused");
+        assertEq(0, p.callFunction("own_subclass_constructed"), "the constructor of the subclass did not run");
+        assertEq(destructors, UncontrolledProbe::SideEffect::probeDestructors(),
+            "no builtin object was constructed");
+        # a sandbox that allows uncontrolled APIs lets its code construct it
+        p = getProgram(True);
+        object o = p.callFunction("new_own_subclass");
+        assertEq("SandboxedProbe", o.className(), "the subclass is constructed");
+        assertEq(1, p.callFunction("own_subclass_constructed"), "the constructor of the subclass ran");
+        assertEq(42, o.value(), "the inherited builtin method");
+        assertEq(7, o.user(), "the user method");
+    }
+
+    #! returns the result of the call, or the error
+    private static auto tryCall(code c) {
+        try {
+            return c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! runs the callback inside a trusted policy barrier
+    private static auto barrier(code c) {
+        return SandboxManager::callWithSystemPolicy(c);
+    }
+
+    childBarrierTest() {
+        Program p = getProgram(False);
+        Program child = p.callFunction("make_child");
+        # the child Program is sandboxed, but has no sandbox manager of its own
+        assertNothing(child.getSandboxManager(), "the child has no manager");
+        code closure = p.callFunction("child_closure", child);
+        # the code of the child is governed by the sandbox of the code that created it, also when trusted code calls
+        # it inside a policy barrier (as an override or callback that the trusted code calls for itself): the child
+        # carries the sandbox of its creator (its Program object and what its code creates have that provenance), so
+        # the barrier, which stops the walk out to the callers, does not make it ungoverned
+        hash<string, code> calls = {
+            "a function of the child": auto sub () { return child.callFunction("call"); },
+            "a closure that the child created": closure,
+        };
+        foreach hash<auto> i in (calls.pairIterator()) {
+            assertEq(Refused, tryCall(i.value), i.key + ": trusted code");
+            assertEq(Refused, tryCall(auto sub () { return barrier(i.value); }), i.key + ": in a trusted barrier");
+            assertEq(Refused, tryCall(auto sub () { return p.callFunction("through", \barrier(), i.value); }),
+                i.key + ": in a trusted barrier that the sandboxed code calls");
+        }
+        # the filesystem policy of the creator's sandbox governs it as well
+        string path = get_script_path();
+        assertEq("FILESYSTEM-ACCESS-DENIED",
+            tryCall(auto sub () { return barrier(auto sub () { return child.callFunction("read", path); }); }),
+            "the filesystem policy in a trusted barrier");
+        # the same calls are allowed when the creator's sandbox allows uncontrolled APIs
+        p = getProgram(True);
+        child = p.callFunction("make_child");
+        int count = UncontrolledProbe::SideEffect::count();
+        assertEq(3, tryCall(auto sub () { return barrier(auto sub () { return child.callFunction("call"); }); }),
+            "allowed in a trusted barrier");
+        assertEq(count + 1, UncontrolledProbe::SideEffect::count(), "the call was made");
+    }
+
+    userSubclassAllowedTest() {
+        Program p = getProgram(True);
+        UserProbe o();
+        assertEq(7, p.callFunction("user_method", o));
+        assertEq(42, p.callFunction("inherited_method", o));
+        assertEq(42, p.callFunction("inherited_through_user", o));
+        int user_destructors = UserProbe::destructors;
+        int builtin_destructors = UncontrolledProbe::SideEffect::probeDestructors();
+        assertEq("deleted", p.callFunction("destroy", o));
+        assertEq(user_destructors + 1, UserProbe::destructors, "the user destructor ran");
+        assertEq(builtin_destructors + 1, UncontrolledProbe::SideEffect::probeDestructors(),
+            "the destructor of the builtin class ran");
+    }
+}

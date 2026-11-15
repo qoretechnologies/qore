@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - constructor cleanup checks run in children with explicit modes and qcc
+# test-platform: macos - native module compilation and loading, JIT/AOT constructor cleanup
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%exec-class ConstructorArgumentReleaseTest
+
+class ConstructorArgumentReleaseTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? libdir + DirSep + "qcc";
+        string prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+    }
+    constructor() : QUnit::Test("ConstructorArgumentRelease", "1.0", \ARGV) {
+        addTestCase("completed user constructors and partial-construction controls", \user());
+        addTestCase("builtin and external native constructor argument holders", \native());
+        addTestCase("stripped AOT constructors with an attached debugger", \debugger());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string checked(string command, bool ir_tier = False) {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(command, False,
+            ir_tier ? ExecModeHarness::IRTierEnv : NOTHING);
+        assertEq(0, result.rc, sprintf("child exited normally: %s\n%s", command, result.out));
+        if (ir_tier) ExecModeHarness::check_ir_tier(result);
+        else if (result.mode) ExecModeHarness::check_native(result);
+        return result.out;
+    }
+    private matrix(string source, string expected_file, string extra_env = "") {
+        string worker = get_script_dir() + DirSep + source;
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + expected_file);
+        foreach bool debug in (False, True) {
+            string options = debug ? " -b --enable-debug " : " -b ";
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                assertEq(expected, checked(prefix + extra_env + quote(qore_bin) + options + "--exec-mode="
+                    + mode + " " + quote(worker)), sprintf("%s %s debug=%y", source, mode, debug));
+            }
+            assertEq(expected, checked(prefix + extra_env + quote(qore_bin) + options + "--exec-mode=tiered "
+                + quote(worker), True), sprintf("%s tiered IR debug=%y", source, debug));
+        }
+        TmpDir tmp("constructor-argument-release-");
+        foreach int opt in (0, 3) {
+            string exe = tmp.path + DirSep + "constructor-argument-release";
+            checked(prefix + extra_env + quote(qcc_bin) + sprintf(" -O%d -o ", opt) + quote(exe)
+                + " " + quote(worker));
+            assertTrue(is_file(exe), "qcc produced the executable");
+            foreach bool debug in (False, True) {
+                string options = debug ? " -b --enable-debug" : " -b";
+                assertEq(expected, checked(prefix + extra_env + quote(exe) + options),
+                    sprintf("%s qcc -O%d debug=%y", source, opt, debug));
+            }
+        }
+    }
+    user() { matrix("ConstructorArgumentRelease.q", "user.expected"); }
+    debugger() {
+        string worker = get_script_dir() + "/DebugConstructorRelease.q";
+        string cycle = "completed\nargument\nproduct\ncaught:ARGUMENT\n";
+        string expected = cycle + cycle + cycle + "debugger:PASS\n";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected, ExecModeHarness::run(prefix + quote(qore_bin)
+                + " -b --enable-debug --exec-mode=" + mode + " " + quote(worker),
+                ExecModeHarness::NativeCheck::None), mode + " attached debugger");
+        }
+        TmpDir tmp("constructor-debugger-");
+        foreach int opt in (0, 3) {
+            foreach bool strip in (False, True) {
+                string exe = tmp.path + DirSep + "debugger";
+                checked(prefix + quote(qcc_bin) + sprintf(" -O%d ", opt) + (strip ? "--strip-source " : "")
+                    + "-o " + quote(exe) + " " + quote(worker));
+                assertEq(expected, ExecModeHarness::run_any(prefix + quote(exe) + " -b --enable-debug"),
+                    sprintf("qcc -O%d stripped=%y attached debugger", opt, strip));
+            }
+        }
+    }
+    native() {
+        if (!trim(backquote("command -v cmake 2>/dev/null || true"))) {
+            testSkip("cmake is unavailable");
+            return;
+        }
+        TmpDir tmp("constructor-native-");
+        string build = tmp.path + DirSep + "build";
+        string config = ENV.Qore_DIR ?? (libdir + "/cmake");
+        string configure = "cmake -S " + quote(get_script_dir()) + " -B " + quote(build);
+        if (is_file(config + "/QoreConfig.cmake")) configure += " -DQore_DIR=" + quote(config);
+        checked(configure);
+        checked("cmake --build " + quote(build) + " --target ctorprobe -j2");
+        string modules = build + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        matrix("NativeConstructorRelease.q", "native.expected", "QORE_MODULE_DIR=" + quote(modules) + " ");
+    }
+}
