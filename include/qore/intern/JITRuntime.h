@@ -2306,6 +2306,13 @@ uint64_t qore_rt_cast_by_type_path_throwing(uint64_t inner_bits, const char* typ
 uint64_t qore_rt_cast_by_type_path_aot_throwing(QoreAOTContext* ctx, uint64_t inner_bits,
     const char* type_path, int64_t or_nothing, ExceptionSink* xsink);
 
+//! AOT variant for a type path with type parameters (generic code), which are substituted with their types in the
+//! current call; the code generator emits it for such a path, so that other casts make no check for them (qore#5661)
+uint64_t qore_rt_cast_by_generic_type_path_aot(QoreAOTContext* ctx, uint64_t inner_bits, const char* type_path,
+    int64_t or_nothing, ExceptionSink* xsink);
+uint64_t qore_rt_cast_by_generic_type_path_aot_throwing(QoreAOTContext* ctx, uint64_t inner_bits,
+    const char* type_path, int64_t or_nothing, ExceptionSink* xsink);
+
 //! Switch case match: calls CaseNode::matches() which unwraps TAG_ENUM before isEqualHard()
 //! \param case_node_ptr pointer to the CaseNode (cast to void* for C ABI)
 //! \param switch_val_bits NaN-boxed switch value

@@ -100,6 +100,11 @@ protected:
     template <bool Lexical>
     DLLLOCAL QoreValue evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const;
 
+    //! Resolves the hashdecl of a node without a concrete hashdecl when it is evaluated
+    /** @return the hashdecl, or nullptr if an exception has been raised
+    */
+    DLLLOCAL const TypedHashDecl* resolveRuntimeHashDecl(ExceptionSink* xsink) const;
+
     DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
@@ -118,10 +123,17 @@ public:
     const QoreTypeInfo* typeInfo = nullptr;
     std::string dynamic_hashdecl_name;
     bool runtime_check;
+    //! the hashdecl if it has no type parameters, else nullptr
+    /** A hashdecl with type parameters (new hash<HD<U>>() in generic code) is resolved when the node is evaluated,
+        with the type parameters substituted by the types of the running instantiation, as is a hashdecl deferred at
+        parse time (qore#5720); a non-generic node finds its hashdecl here with the one test it made before
+    */
+    const TypedHashDecl* concrete_hd = nullptr;
 
     DLLLOCAL NewHashDeclNode(const QoreProgramLocation* loc, const TypedHashDecl* hd, QoreParseListNode* a,
             bool runtime_check) : ParseNode(loc, NT_SCOPE_REF), hd(hd), args(a),
-            typeInfo(hd ? hd->getTypeInfo() : nullptr), runtime_check(runtime_check) {
+            typeInfo(hd ? hd->getTypeInfo() : nullptr), runtime_check(runtime_check),
+            concrete_hd(hd && !qore_type_contains_type_parameter(hd->getTypeInfo()) ? hd : nullptr) {
     }
 
     //! Creates a construction of an AOT build-group hashdecl deferred at parse time
@@ -139,7 +151,7 @@ public:
     */
     DLLLOCAL NewHashDeclNode(const NewHashDeclNode& old, QoreParseListNode* a) : ParseNode(old), hd(old.hd),
             args(a), typeInfo(old.typeInfo), dynamic_hashdecl_name(old.dynamic_hashdecl_name),
-            runtime_check(old.runtime_check) {
+            runtime_check(old.runtime_check), concrete_hd(old.concrete_hd) {
     }
 
     DLLLOCAL virtual ~NewHashDeclNode() {

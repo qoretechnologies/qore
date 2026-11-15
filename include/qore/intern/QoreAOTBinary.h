@@ -345,6 +345,20 @@ const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signat
 //! Resolves a serialized hashdecl path, including parameterized hashdecl paths.
 const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char* path);
 
+//! Resolves a serialized hashdecl path in the current call
+/** The type parameters of the receiver's class and of the generic function or method running are substituted with
+    their types in the current call (hash<HD<U>> is hash<HD<int>> in a call of m<int>(), qore#5661); a type parameter
+    of a signature is resolved with the signature of the type parameter instantiation of the call.
+
+    @param pgm the Program
+    @param path the hashdecl type path
+    @param receiver_type_info the receiver's type, whose class's type parameters are substituted
+
+    @return the hashdecl, or nullptr if it cannot be resolved
+*/
+DLLLOCAL const TypedHashDecl* qore_aot_resolve_call_hashdecl_path(QoreProgram* pgm, const char* path,
+    const QoreTypeInfo* receiver_type_info);
+
 //! Magic number: "QORD" in little-endian (0x44524F51)
 constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 

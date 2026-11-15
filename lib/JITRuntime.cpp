@@ -4049,7 +4049,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_cast_with_inner_aot(QoreAOTContext* ctx, i
 // Runtime casts evaluate their input expression before type checking.  The
 // type-path cast helper receives a precomputed value, so mirror that evaluation
 // step for weak references here.
-static QoreValue qore_rt_cast_normalize_weak_ref(const QoreValue& val) {
+// always inlined: the non-generic cast by type path inlined it before its generic variant existed (qore#5661)
+static QORE_INTERN_ALWAYS_INLINE QoreValue qore_rt_cast_normalize_weak_ref(const QoreValue& val) {
     switch (val.getType()) {
         case NT_WEAKREF: {
             // the destroyed object for a weak reference to an object that has been destroyed, as the AST interpreter
@@ -4069,9 +4070,15 @@ static QoreValue qore_rt_cast_normalize_weak_ref(const QoreValue& val) {
     }
 }
 
+static const QoreTypeInfo* qore_rt_resolve_call_type_path(QoreAOTTypeResolver& resolver, const char* type_path,
+    const QoreTypeInfo* receiver_type_info, std::string& error);
+
 // Cast by type path: resolves the cast type at runtime from a string path,
 // then performs the cast on the pre-evaluated inner value.
 // Eliminates the need for EXPR_TREE serialization of cast operator nodes.
+// Generic: the path has type parameters (generic code), which are substituted with their types in the current call;
+// the code generator decides it when it emits the cast (qore#5661)
+template <bool Generic>
 static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         const char* type_path, int64_t or_nothing, ExceptionSink* xsink, QoreProgram* pgm) {
     QoreValue inner = qore_rt_cast_normalize_weak_ref(fromBits(inner_bits));
@@ -4101,7 +4108,20 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
     }
     std::string error;
     QoreAOTTypeResolver resolver(pgm);
-    const QoreTypeInfo* ti = resolver.resolve(resolve_path, error);
+    // the type parameters of generic code are substituted with their types in the current call, as by the cast
+    // operator nodes (qore#5661, qore#5720)
+    const QoreTypeInfo* ti;
+    const char* cast_type_name = type_path;
+    if constexpr (Generic) {
+        ti = qore_rt_resolve_call_type_path(resolver, resolve_path, qore_get_current_receiver_type_info(), error);
+        // a generic cast is named with the type of the instantiation in its errors, as by the cast operator nodes,
+        // with the "*" of an or-nothing cast, which the path resolved has not
+        if (ti) {
+            cast_type_name = QoreTypeInfo::getName(or_nothing ? get_or_nothing_type_check(ti) : ti);
+        }
+    } else {
+        ti = resolver.resolve(resolve_path, error);
+    }
 
     // The resolver stands a placeholder in for a class or hashdecl that it cannot find, as deserialization needs one
     // for a declaration that appears later.  When a cast runs, every declaration of the Program is in place, so a
@@ -4190,7 +4210,7 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         if (inner.getType() != NT_HASH) {
             xsink->raiseException("RUNTIME-CAST-ERROR",
                 "cannot cast from type '%s' to '%s'",
-                inner.getTypeName(), type_path);
+                inner.getTypeName(), cast_type_name);
             return toBits(QoreValue());
         }
         QoreHashNode* init_hash = inner.get<QoreHashNode>()->hashRefSelf();
@@ -4227,7 +4247,7 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         if (inner.getType() != NT_LIST) {
             xsink->raiseException("RUNTIME-CAST-ERROR",
                 "cannot cast from type '%s' to '%s'",
-                inner.getTypeName(), type_path);
+                inner.getTypeName(), cast_type_name);
             return toBits(QoreValue());
         }
         // List cast: return the value with the desired element type.
@@ -4316,13 +4336,19 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
 
 extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path(uint64_t inner_bits,
         const char* type_path, int64_t or_nothing, ExceptionSink* xsink) {
-    return qore_rt_cast_by_type_path_in_program(inner_bits, type_path, or_nothing, xsink, getProgram());
+    return qore_rt_cast_by_type_path_in_program<false>(inner_bits, type_path, or_nothing, xsink, getProgram());
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path_aot(QoreAOTContext* ctx, uint64_t inner_bits,
         const char* type_path, int64_t or_nothing, ExceptionSink* xsink) {
     QoreProgram* pgm = ctx && ctx->pgm ? ctx->pgm : getProgram();
-    return qore_rt_cast_by_type_path_in_program(inner_bits, type_path, or_nothing, xsink, pgm);
+    return qore_rt_cast_by_type_path_in_program<false>(inner_bits, type_path, or_nothing, xsink, pgm);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_cast_by_generic_type_path_aot(QoreAOTContext* ctx, uint64_t inner_bits,
+        const char* type_path, int64_t or_nothing, ExceptionSink* xsink) {
+    QoreProgram* pgm = ctx && ctx->pgm ? ctx->pgm : getProgram();
+    return qore_rt_cast_by_type_path_in_program<true>(inner_bits, type_path, or_nothing, xsink, pgm);
 }
 
 // --- Call reference creation helper ---
@@ -4861,14 +4887,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_from_hash_by_path(const char
         }
         return toBits(QoreValue());
     }
-    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, hd_path);
-    if (!hd) {
-        std::string error;
-        QoreAOTTypeResolver resolver(pgm);
-        const QoreTypeInfo* ti = resolver.resolve(hd_path, error);
-        ti = qore_substitute_type_params_if_needed(ti);
-        hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
-    }
+    const TypedHashDecl* hd = qore_aot_resolve_call_hashdecl_path(pgm, hd_path,
+        qore_get_current_receiver_type_info());
     if (!hd) {
         if (xsink) {
             xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s'",
@@ -4985,16 +5005,7 @@ static const TypedHashDecl* qore_rt_resolve_hashdecl_path(QoreAOTContext* ctx, c
         return nullptr;
     }
 
-    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, hd_path);
-    if (!hd) {
-        std::string error;
-        QoreAOTTypeResolver resolver(pgm);
-        const QoreTypeInfo* ti = resolver.resolve(hd_path, error);
-        if (ti) {
-            ti = qore_substitute_type_params_if_needed(ti, receiver_type_info);
-            hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
-        }
-    }
+    const TypedHashDecl* hd = qore_aot_resolve_call_hashdecl_path(pgm, hd_path, receiver_type_info);
     if (!hd && xsink) {
         xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s'", hd_path);
     }
@@ -5044,9 +5055,12 @@ static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext*
 
     // the context's map is keyed by the receiver's type and the serial of its class, which is never reused, so it
     // is not cleared in a new epoch; a context without a Program resolves its paths in the current Program, whose
-    // types can be freed before the context, so nothing is cached for it
+    // types can be freed before the context, so nothing is cached for it.  The hashdecl of a path with a type
+    // parameter of a signature depends on the instantiation of the current call, so it is not cached either, and
+    // is never in the front cache, which is filled only below (qore#5661)
     uint64_t receiver_serial;
-    if (!ctx->pgm || !qore_rt_aot_path_cache_receiver_serial(receiver_type_info, receiver_serial)) {
+    if (!ctx->pgm || !qore_rt_aot_path_cache_receiver_serial(receiver_type_info, receiver_serial)
+            || (receiver_dependent && qore_aot_type_path_has_signature_type_param(hd_path))) {
         return qore_rt_resolve_hashdecl_path(ctx, hd_path, receiver_type_info, xsink);
     }
     QoreAOTHashDeclPathCacheKey key{hd_path, receiver_type_info, receiver_serial};
@@ -5098,6 +5112,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_from_hash_by_path_cached(Qor
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_from_hash_by_concrete_path_cached(QoreAOTContext* ctx,
         const char* hd_path, uint64_t hash_bits, int32_t runtime_check, ExceptionSink* xsink) {
+    // the code generator gives a path with type parameters to the receiver-dependent helper, whose cache is safe for
+    // them (qore#5661)
     const TypedHashDecl* hd = qore_rt_resolve_hashdecl_path_cached(ctx, hd_path, false, xsink);
     if (!hd || (xsink && *xsink)) {
         return toBits(QoreValue());
@@ -5268,6 +5284,20 @@ static const QoreTypeInfo* qore_rt_resolve_call_type_path(QoreAOTTypeResolver& r
         return qore_substitute_type_params_if_needed(ti, receiver_type_info, type_param_inst);
     }
     return qore_substitute_type_params_if_needed(resolver.resolve(type_path, error), receiver_type_info);
+}
+
+const TypedHashDecl* qore_aot_resolve_call_hashdecl_path(QoreProgram* pgm, const char* hd_path,
+        const QoreTypeInfo* receiver_type_info) {
+    if (!pgm || !hd_path || !*hd_path) {
+        return nullptr;
+    }
+    if (const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, hd_path)) {
+        return hd;
+    }
+    std::string error;
+    QoreAOTTypeResolver resolver(pgm);
+    return QoreTypeInfo::getUniqueReturnHashDecl(qore_rt_resolve_call_type_path(resolver, hd_path,
+        receiver_type_info, error));
 }
 
 static const QoreTypeInfo* qore_rt_resolve_element_type_path(const char* type_path, const char* op,
@@ -14815,6 +14845,16 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_cast_by_type_pat
         QoreAOTContext* ctx, uint64_t inner_bits, const char* type_path, int64_t or_nothing,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_cast_by_type_path_aot(ctx, inner_bits, type_path, or_nothing, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_cast_by_generic_type_path_aot_throwing(
+        QoreAOTContext* ctx, uint64_t inner_bits, const char* type_path, int64_t or_nothing,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_cast_by_generic_type_path_aot(ctx, inner_bits, type_path, or_nothing, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
