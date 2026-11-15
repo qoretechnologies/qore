@@ -77,6 +77,20 @@ def write_sources(sub, version):
     (sub / "mod.cpp").write_text(f'extern "C" const char* atomic_mod() {{ return "atomic-link-{version}"; }}\n')
 
 
+def build_link_files(build):
+    """Returns the link.txt files of the targets of the CMake build in build, sorted; a subdirectory with a
+    CMakeCache.txt of its own is another build (a nested baseline build, a _deps/*-subbuild) and is skipped."""
+    build = Path(build)
+    links = []
+    for directory, subdirectories, files in os.walk(build):
+        directory = Path(directory)
+        # prune nested builds while walking
+        subdirectories[:] = [name for name in subdirectories if not (directory / name / "CMakeCache.txt").exists()]
+        if "link.txt" in files and directory.name.endswith(".dir") and directory.parent.name == "CMakeFiles":
+            links.append(directory / "link.txt")
+    return sorted(links)
+
+
 class AtomicLinkTest(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="qore-atomic-link-")
@@ -332,13 +346,30 @@ endif()''', configure=[f"-DQore_DIR={config}"])
         self.run_cmake("--build", self.build, "-j2")
         self.assertEqual([], self.partial_files())
 
+    def test_build_link_files_skips_nested_builds(self):
+        """Only the link.txt files of the build's own targets are checked, not those of builds nested in it."""
+        build = self.root / "build"
+        own = build / "lib/CMakeFiles/bad.dir/link.txt"
+        top = build / "CMakeFiles/top.dir/link.txt"
+        nested = build / "bench/old/source/build"
+        nested_link = nested / "CMakeFiles/old.dir/link.txt"
+        subbuild = build / "_deps/foo-subbuild"
+        subbuild_link = subbuild / "deep/CMakeFiles/foo.dir/link.txt"
+        for link in (own, top, nested_link, subbuild_link):
+            link.parent.mkdir(parents=True)
+            link.write_text("/usr/bin/c++ main.o -o bad\n")
+        for cache in (build, nested, subbuild):
+            (cache / "CMakeCache.txt").write_text("")
+        self.assertEqual(sorted([own, top]), build_link_files(build))
+        self.assertEqual([nested_link], build_link_files(nested))
+
     def test_qore_build_tree_links_atomically(self):
         """Every executable, shared library and module of the Qore build in QORE_TEST_BUILD_DIR links atomically."""
         build = os.environ.get("QORE_TEST_BUILD_DIR")
         if not build:
             self.skipTest("QORE_TEST_BUILD_DIR is not set")
         build = Path(build)
-        links = sorted(build.rglob("CMakeFiles/*.dir/link.txt"))
+        links = build_link_files(build)
         if not links:
             self.skipTest(f"{build} was not generated for Unix Makefiles")
         checked = set()
