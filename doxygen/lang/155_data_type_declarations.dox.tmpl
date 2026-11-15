@@ -1926,6 +1926,10 @@ global_config = {"setting": "value"};
       parameter) drops the narrowed type: it holds a \c hash<auto> or \c list<auto>, and later writes of any
       value type succeed; a value that is also referenced elsewhere is copied, so the original value, such as the
       caller's hash, keeps its type and its contents
+    - a plain \c auto! lvalue (a local variable, a global variable, a class member or a parameter) drops the
+      complex type of a hash or list assigned to it, as an \c any lvalue does: it holds a plain \c hash or \c list,
+      and later writes of any value type succeed; a hash or list returned through the return type \c auto! loses
+      its complex type in the same way, while a plain \c auto lvalue or return type keeps it
 
     Dropping the type is shallow: only the hash or list assigned loses its narrowed type, while the hashes and lists
     it holds keep theirs.  To write values of another type into a nested container, assign that container to a

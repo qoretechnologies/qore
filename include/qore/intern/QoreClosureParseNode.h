@@ -193,4 +193,17 @@ private:
     DLLLOCAL QoreClosureBase* evalObjectClosure() const;
 };
 
+//! Returns the node as a QoreClosureParseNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const QoreClosureParseNode*>(), from the node type: QoreClosureParseNode has no
+    subclasses, and only its constructors give NT_CLOSURE.  A dynamic_cast searches the class hierarchy with string
+    comparisons of the type names, which costs about 47 instructions on every closure that AOT code creates.
+*/
+DLLLOCAL inline const QoreClosureParseNode* qore_get_closure_parse_node(const AbstractQoreNode* n) {
+    const QoreClosureParseNode* rv = (n && n->getType() == NT_CLOSURE)
+        ? static_cast<const QoreClosureParseNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const QoreClosureParseNode*>(n));
+    return rv;
+}
+
 #endif

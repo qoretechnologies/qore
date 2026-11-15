@@ -62,6 +62,17 @@ enum class HttpClientProtocol {
                 //!< manager decides H1 vs H2 per connection
 };
 
+//! defined if HttpClientConnectionBase::tryReservePendingStream() is available and the idle timeout of a client
+//! connection does not close it with a reserved stream (#6184)
+/** @since %Qore 3.0
+*/
+#define QORE_HAS_HTTP_CLIENT_PENDING_RESERVATION 1
+
+//! defined if HttpClientConnectionBase::setIdleCloseHold() is available (#6194)
+/** @since %Qore 3.0
+*/
+#define QORE_HAS_HTTP_CLIENT_IDLE_CLOSE_HOLD 1
+
 //! Abstract base for C++ HTTP client connections
 /** This class wraps a protocol-specific poll operation (H1, H2, or H3) and
     a socket, submits the poll op to the global AsyncIoController, and exposes
@@ -207,6 +218,46 @@ public:
 
     //! Returns the current pending (reserved-but-not-yet-submitted) count.
     DLLEXPORT int getPendingStreamCount() const;
+
+    //! Called by the I/O thread when the connection's idle timeout expires: false if a stream is reserved or active
+    /** Under @ref reserve_lock: with no hold (setIdleCloseHold()), no reserved stream and no active one (a request
+        submitted since the operation found the connection idle; read with \a active_streams, or
+        getActiveStreamCount() if it is nullptr), the
+        connection is marked as closing for its idle timeout and accepts no further reservation (tryReserveStream()
+        and tryReservePendingStream() fail), and true is returned; otherwise false is returned and the operation
+        starts a new idle period, so that the reserved request is not closed under (#6184)
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool tryBeginIdleClose(active_stream_count_t active_streams, const void* op) override;
+
+    //! Reserves a stream for a connection whose active streams are counted by its owner (a Qore-level connection)
+    /** Like tryReserveStream(), with the active streams and the limit given by the caller: fails if the connection
+        is draining, closed or closing for its idle timeout, or if \a max_streams is not 0 and \a active_streams and
+        the reservations reach it.  The reservation is released with releaseStreamReservation(), as one of
+        tryReserveStream(); the idle timeout of the connection's operation does not close a connection with a
+        reservation (#6184).
+
+        @param active_streams the active streams of the connection, as its owner counts them
+        @param max_streams the most streams of the connection; 0: no limit
+
+        @return true if a stream was reserved
+
+        @since %Qore 3.0 (@ref QORE_HAS_HTTP_CLIENT_PENDING_RESERVATION)
+    */
+    DLLEXPORT bool tryReservePendingStream(int active_streams, int max_streams);
+
+    //! Holds the connection against its idle timeout, or releases the hold
+    /** While held, tryBeginIdleClose() returns false: the idle timeout of the connection's operation does not close
+        it, whether or not a stream is reserved; for a connection that a session holds between its requests (a leased
+        connection of the Qore-level connection manager, #6194).  Set the hold before the reservation that it replaces
+        is released, so that the connection is never without both.
+
+        @param hold true to hold the connection, false to release the hold
+
+        @since %Qore 3.0 (@ref QORE_HAS_HTTP_CLIENT_IDLE_CLOSE_HOLD)
+    */
+    DLLEXPORT void setIdleCloseHold(bool hold);
 
     //! Returns true if a response has been received on this connection
     /** A connection that has served a request can be closed by the peer while it is idle in the pool, so a
@@ -696,8 +747,10 @@ public:
     */
     DLLEXPORT void drainInFlight();
 
-    //! Returns the connection creation timestamp (epoch microseconds).
-    /** Set once in the protected constructor; never updated.  Used by
+    //! Returns the time that the connection was created, in microseconds on the monotonic clock
+    /** The value is q_get_monotonic_us() when the connection was created, not a time of day: it only serves to measure
+        the connection's age, which a step of the system clock does not change.  Set once in the protected
+        constructor; never updated.  Used by
         @ref HttpClientConnectionManagerBase to enforce
         @ref HttpClientConnectionManagerBase::Options::max_age_ms at pool checkout.  Pure stored-state
         read — no syscall, no I/O thread coupling.
@@ -740,6 +793,14 @@ protected:
     //! Reserved-but-not-yet-submitted stream slots.  Protected by
     //! @ref reserve_lock.
     int pending_stream_count = 0;
+
+    //! True once the connection's idle timeout decided to close it: no reservation is taken.  Protected by
+    //! @ref reserve_lock (#6184)
+    bool idle_closing = false;
+
+    //! True while the connection is held against its idle timeout (setIdleCloseHold()).  Protected by
+    //! @ref reserve_lock (#6194)
+    bool idle_close_hold = false;
 
     //! Pending streaming-send reservations.  Protected by @ref reserve_lock.
     /** At most one is allowed because H2/H3 connection objects keep one

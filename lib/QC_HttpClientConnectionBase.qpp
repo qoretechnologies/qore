@@ -98,6 +98,34 @@ bool HttpClientConnectionBase::tryReserveStream() {
     return priv->tryReserveStream();
 }
 
+//! Reserves a stream slot of a connection whose active streams its owner counts (a Qore-level connection)
+/** Fails if the connection is draining, closed or closing for its idle timeout, or if \a max_streams is not 0 and
+    \a active_streams and the reservations reach it.  The reservation is released with releaseStreamReservation(); the
+    idle timeout of the connection's operation does not close a connection with a reservation.
+
+    @param active_streams the active streams of the connection, as its owner counts them
+    @param max_streams the most streams of the connection; 0: no limit
+
+    @return True if a slot was reserved
+
+    @since %Qore 3.0
+*/
+bool HttpClientConnectionBase::tryReservePendingStream(int active_streams, int max_streams) [flags=NAMED_ARGS] {
+    return priv->tryReservePendingStream(static_cast<int>(active_streams), static_cast<int>(max_streams));
+}
+
+//! Holds the connection against the idle timeout of its operation, or releases the hold
+/** While held, the idle timeout does not close the connection, whether or not a stream is reserved: for a connection
+    that a session holds between its requests.  Set the hold before the reservation that it replaces is released.
+
+    @param hold True to hold the connection, False to release the hold
+
+    @since %Qore 3.0
+*/
+nothing HttpClientConnectionBase::setIdleCloseHold(bool hold) [flags=NAMED_ARGS] {
+    priv->setIdleCloseHold(hold);
+}
+
 //! Releases a previously-reserved stream slot
 /** Decrements the pending stream count.
 */

@@ -585,8 +585,8 @@ struct qore_list_private {
                 memmove(static_cast<void*>(entry + (end - len + n)), entry + end, sizeof(QoreValue) * (ol - end));
             }
         } else if (len > n) { // make list smaller
-            memmove(static_cast<void*>(entry + offset + n), entry + offset + len,
-                sizeof(QoreValue) * (length - offset - n));
+            // move the trailing entries down: only the length - end entries after the removed range exist
+            memmove(static_cast<void*>(entry + offset + n), entry + end, sizeof(QoreValue) * (length - end));
             // zero out trailing entries
             zeroEntries(length - (len - n), length);
             // resize list

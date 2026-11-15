@@ -127,6 +127,12 @@
     .
     This makes a call reference to an object method call, binding the object and the method in the call reference. If the object expression has a class type, the method must exist and be accessible in that class (a parse exception is thrown otherwise); the method is resolved each time the reference is created, with the class of the object that the expression gives (a subclass can override the method), so a reference expression evaluated for objects of different classes refers to the method of each object's class.  If the object expression does not evaluate to an object at run-time, or its class has no such method (a @ref methodGate_methods "methodGate()" method is not used for a reference), an \c OBJECT-METHOD-REFERENCE-ERROR exception will be thrown; if the method is not accessible where the reference is made, an \c ILLEGAL-CALL-REFERENCE exception will be thrown.\n\n
     When called, a call reference to an object method will be executed in the context of the object originally referenced. Object method call references do not prolong the lifetime of an object; if the object is deleted (for example, by going out of scope), then if called the call reference will cause an \c OBJECT-ALREADY-DELETED exception to be thrown.\n\n
+    @anchor call_reference_deleted_object
+    The \c OBJECT-ALREADY-DELETED exception of a call through a reference to a deleted object names the class and the
+    method that the call runs (<tt>cannot call U::m() on an object that has already been deleted</tt>): the class
+    that defines the method of the reference, or, for a reference whose method is looked up by name, the class that
+    defines the method found; also when the arguments of the call delete the object, which the call raises after the
+    arguments as a direct call does.\n\n
     @anchor call_reference_program
     A call reference to an object method runs as the direct call written where the reference was made: a method of a
     user class runs in its class's @ref Qore::Program "Program" as always, and a builtin method (also one that a user
