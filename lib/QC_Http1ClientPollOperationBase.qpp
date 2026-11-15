@@ -1366,11 +1366,18 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     // has armed the deadline), close the connection if the deadline has
     // elapsed.  Defense-in-depth for peers that never close idle connections.
     if (idle_timeout_us > 0 && idle_deadline_us > 0 && h1_monotonic_us() >= idle_deadline_us) {
-        ASYNC_IO_TRACE("H1 handleIdle: IDLE-TIMEOUT deadline reached fd=%d\n", fd);
-        sock_obj->closeIo(xsink);
-        setError("HTTP1-IDLE-TIMEOUT",
-            "closing idle HTTP/1.1 connection after idle_timeout expired", xsink);
-        return nullptr;
+        // a request that has reserved the connection's stream and not yet submitted is not closed under: the
+        // connection then starts a new idle period (#6184)
+        if (!AbstractHttpPollConnectionPriv::idleCloseAllowed(stream_lock, connection_priv, xsink)) {
+            ASYNC_IO_TRACE("H1 handleIdle: IDLE-TIMEOUT deadline reached with a reserved stream fd=%d\n", fd);
+            idle_deadline_us = 0;
+        } else {
+            ASYNC_IO_TRACE("H1 handleIdle: IDLE-TIMEOUT deadline reached fd=%d\n", fd);
+            sock_obj->closeIo(xsink);
+            setError("HTTP1-IDLE-TIMEOUT",
+                "closing idle HTTP/1.1 connection after idle_timeout expired", xsink);
+            return nullptr;
+        }
     }
 
     setStateUnlessClosed(H1State::WAIT_READ, "idle");

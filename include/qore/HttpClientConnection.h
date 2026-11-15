@@ -208,6 +208,17 @@ public:
     //! Returns the current pending (reserved-but-not-yet-submitted) count.
     DLLEXPORT int getPendingStreamCount() const;
 
+    //! Called by the I/O thread when the connection's idle timeout expires: false if a stream is reserved
+    /** Under @ref reserve_lock: with no reserved stream and no active one (a request submitted since the operation
+        found the connection idle), the connection is marked as closing for its idle timeout and
+        accepts no further reservation (tryReserveStream() fails), and true is returned; otherwise false
+        is returned and the operation starts a new idle period, so that the reserved request is not closed under
+        (#6184)
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool tryBeginIdleClose() override;
+
     //! Returns true if a response has been received on this connection
     /** A connection that has served a request can be closed by the peer while it is idle in the pool, so a
         request that fails on it because it was closed can be retried on a new connection
@@ -742,6 +753,10 @@ protected:
     //! Reserved-but-not-yet-submitted stream slots.  Protected by
     //! @ref reserve_lock.
     int pending_stream_count = 0;
+
+    //! True once the connection's idle timeout decided to close it: no reservation is taken.  Protected by
+    //! @ref reserve_lock (#6184)
+    bool idle_closing = false;
 
     //! Pending streaming-send reservations.  Protected by @ref reserve_lock.
     /** At most one is allowed because H2/H3 connection objects keep one

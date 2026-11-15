@@ -103,7 +103,7 @@ bool HttpClientConnectionBase::tryReserveStream(bool streaming_send) {
     // ends it, so a stream count that shows the released stream is followed by the draining state: checked after
     // the count, a connection that the response ends is not reserved, even if it was found accepting requests
     // before its stream was released
-    if (isDraining() || isClosed()) {
+    if (isDraining() || isClosed() || idle_closing) {
         return false;
     }
     ++pending_stream_count;
@@ -121,6 +121,18 @@ void HttpClientConnectionBase::releaseStreamReservation(bool streaming_send) {
     if (streaming_send && pending_streaming_send_count > 0) {
         --pending_streaming_send_count;
     }
+}
+
+bool HttpClientConnectionBase::tryBeginIdleClose() {
+    AutoLocker al(reserve_lock);
+    // a request submitted since the operation found the connection idle shows in the active streams: a submit counts
+    // its active stream before it releases its reservation, so a request is in one of the two counts here (the lock
+    // order is reserve_lock, then the operation's stream lock, as in tryReserveStream())
+    if (pending_stream_count || getActiveStreamCount()) {
+        return false;
+    }
+    idle_closing = true;
+    return true;
 }
 
 int HttpClientConnectionBase::getPendingStreamCount() const {

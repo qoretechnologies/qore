@@ -15930,6 +15930,19 @@ static QoreValue f_dbg_http_client_max_age(const QoreListNode* params, RuntimeCo
     return QoreValue();
 }
 
+//! Debug-only: sets the idle timeout (ms) of the connection managers that HTTPClient objects create from now on; 0: the
+//! default (#6184)
+static QoreValue f_dbg_http_client_idle_timeout(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t ms = get_param_value(params, 0).getAsBigInt();
+    if (ms < 0 || ms > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_client_idle_timeout(): invalid timeout %lld",
+            (long long)ms);
+        return QoreValue();
+    }
+    QoreHttpClientDrainDebug::get().idle_timeout_ms.store(static_cast<int>(ms), std::memory_order_release);
+    return QoreValue();
+}
+
 //! Debug-only: arms (or disarms) the hold of the next request of an HTTPClient after the reservation of its
 //! connection's stream and before its submission (#6165)
 static QoreValue f_dbg_http_client_hold_after_reserve(const QoreListNode* params, RuntimeConfig& rc,
@@ -22810,6 +22823,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http_client_max_age", f_dbg_http_client_max_age,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "max_age_ms");
+    qns.addBuiltinVariant("dbg_http_client_idle_timeout", f_dbg_http_client_idle_timeout,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "idle_timeout_ms");
     qns.addBuiltinVariant("dbg_http_client_hold_after_reserve", f_dbg_http_client_hold_after_reserve,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "arm");

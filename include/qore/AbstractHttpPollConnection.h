@@ -184,6 +184,45 @@ public:
     */
     DLLEXPORT virtual void onClosedHook() {}
 
+    //! Called by the I/O thread when the idle timeout of the connection expires, before it closes the connection
+    /** Returns false if the connection must not be closed for its idle timeout: a request has reserved a stream of
+        it and not yet submitted (a pooled client connection, see HttpClientConnectionBase); the operation then starts
+        a new idle period.  Returns true otherwise; a connection that returns true then accepts no reservation.
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT virtual bool tryBeginIdleClose() {
+        return true;
+    }
+
+    //! Asks the connection behind a back-pointer that @a lock protects whether it may be closed for its idle timeout
+    /** Calls tryBeginIdleClose() without holding @a lock, with a reference of its own (the connection's reservation
+        lock is taken before the operation's lock elsewhere); returns true if there is no connection (#6184)
+
+        @param lock the lock that protects @a conn
+        @param conn the back-pointer
+        @param xsink for exceptions releasing the reference
+
+        @since %Qore 3.0
+    */
+    template <typename T>
+    DLLLOCAL static bool idleCloseAllowed(QoreThreadLock& lock, T* const& conn, ExceptionSink* xsink) {
+        T* c;
+        {
+            AutoLocker al(lock);
+            c = conn;
+            if (c && !c->optRef()) {
+                c = nullptr;
+            }
+        }
+        if (!c) {
+            return true;
+        }
+        bool rv = c->tryBeginIdleClose();
+        c->deref(xsink);
+        return rv;
+    }
+
     // --- Lock-free accessors ---
 
     //! Returns true when the connection is ready to accept requests

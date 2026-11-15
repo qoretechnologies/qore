@@ -55,6 +55,10 @@ public:
     //! 0: the default (none)
     std::atomic<int> max_age_ms{0};
 
+    //! The idle timeout of the connection managers that HTTPClient objects create, set by
+    //! dbg_http_client_idle_timeout() (ms); 0: the default (#6184)
+    std::atomic<int> idle_timeout_ms{0};
+
     //! The streaming batch set by dbg_http2_client_streaming_batch(); 0: the batch of the operation
     std::atomic<int> streaming_batch{0};
 

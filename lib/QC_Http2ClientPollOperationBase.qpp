@@ -1105,6 +1105,16 @@ QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_
         }
     }
 
+    // a request that has reserved a stream of the connection and not yet submitted is not closed under: the
+    // connection then starts a new idle period (#6184)
+    if (expired && !AbstractHttpPollConnectionPriv::idleCloseAllowed(stream_lock, connection_priv, xsink)) {
+        ASYNC_IO_TRACE("H2 handleReading: IDLE-TIMEOUT deadline reached with a reserved stream fd=%d\n",
+            sock_obj ? sock_obj->getPollableDescriptor() : -1);
+        AutoLocker al(stream_lock);
+        idle_deadline_us = now_us + idle_timeout_us;
+        expired = false;
+    }
+
     if (expired) {
         ASYNC_IO_TRACE("H2 handleReading: IDLE-TIMEOUT deadline reached fd=%d\n",
             sock_obj ? sock_obj->getPollableDescriptor() : -1);
