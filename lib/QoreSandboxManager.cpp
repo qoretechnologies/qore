@@ -347,6 +347,8 @@ int QoreFilesystemSecurityManager::setSandboxRoot(const char* path, ExceptionSin
     std::string canon = priv->canonicalize(path, xsink);
     if (*xsink) return -1;
 
+    // replacing a root removes the implicit rule of the previous one
+    clearSandboxRoot();
     priv->sandbox_root = canon;
 
     // Implicitly allow the sandbox root with all access
@@ -355,6 +357,17 @@ int QoreFilesystemSecurityManager::setSandboxRoot(const char* path, ExceptionSin
 }
 
 void QoreFilesystemSecurityManager::clearSandboxRoot() {
+    // setSandboxRoot() adds exactly one allowed path rule for the root (and changes nothing else, in particular not
+    // the default policy); remove that rule, so that the state is the one from before the root was set.  A rule
+    // equal to it that was added separately is indistinguishable from it, and one of the two remains
+    if (!priv->sandbox_root.empty()) {
+        for (auto i = priv->allowed_paths.rbegin(), e = priv->allowed_paths.rend(); i != e; ++i) {
+            if (i->mode == QSEC_ALL && i->path == priv->sandbox_root) {
+                priv->allowed_paths.erase(std::next(i).base());
+                break;
+            }
+        }
+    }
     priv->sandbox_root.clear();
 }
 

@@ -113,9 +113,9 @@ class SandboxRestrictsTest inherits QUnit::Test {
         sm = allowAll();
         sm.setFilesystemSandboxRoot("/tmp");
         check(sm, False, True, False, "sandbox root");
-        # clearing the root leaves the path rule that setting it added
+        # clearing the root removes the path rule that setting it added
         sm.clearFilesystemSandboxRoot();
-        check(sm, False, True, False, "sandbox root cleared: the implicit allowed path remains");
+        check(sm, False, False, False, "sandbox root cleared");
     }
 
     testLimits() {

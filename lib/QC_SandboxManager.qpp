@@ -716,7 +716,8 @@ nothing SandboxManager::setFilesystemSandboxRoot(string path) [flags=NAMED_ARGS]
 }
 
 //! Clears the sandbox root directory
-/** Removes any previously set sandbox root restriction
+/** Removes any previously set sandbox root restriction, and the allowed path rule that setting the root added: the
+    filesystem configuration is the one from before the root was set
 */
 nothing SandboxManager::clearFilesystemSandboxRoot() {
     if (qore_sandbox_manager_check_change(sm, "SandboxManager::clearFilesystemSandboxRoot()", xsink)) {
