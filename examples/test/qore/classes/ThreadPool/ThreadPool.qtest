@@ -369,5 +369,24 @@ class ThreadPoolTest inherits QUnit::Test {
             go3.push(1);
             assertEq("released", done3.get(30000), "a detached worker released its pool");
         }
+
+        # the thread-local data of the task holds the last reference: it is released when the worker clears that data
+        # after the task; the destructor cancels the queued task
+        {
+            Queue go4();
+            Queue done4();
+            ThreadPool tp4(1);
+            tp4.submit(sub () {
+                go4.get();
+                save_thread_data("tp", tp4);
+                # the variable is shared with this test: only the thread-local data holds the pool now
+                remove tp4;
+                done4.push("saved");
+            });
+            tp4.submit(sub () { done4.push("queued task ran"); }, sub () { done4.push("canceled"); });
+            go4.push(1);
+            assertEq("saved", done4.get(30000), "the task saved its pool in its thread-local data");
+            assertEq("canceled", done4.get(30000), "the pool released with the thread-local data was destroyed");
+        }
     }
 }
