@@ -2732,6 +2732,18 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
     running cleanup code) would get the exception again from a call that the AST interpreter runs to its first check
     point of its own, such as a loop.  A pending cancellation is raised at the program's next check point instead.
 */
+// returns true for a range slice (also in an exception region, as an Invoke): its value is a new list or string, a
+// temporary that a call that takes it as an argument consumes as it consumes a call's result, so that a parameter
+// that takes it over releases it when it is written, as in the AST interpreter (issue #5958)
+static bool qore_ir_is_range_slice(const QoreIRInstruction* inst) {
+    QoreIROpcode op = inst->opcode;
+    if (op == QoreIROpcode::Invoke) {
+        op = static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
+    }
+    return op == QoreIROpcode::RangeSliceAny || op == QoreIROpcode::RangeSliceInt
+        || op == QoreIROpcode::RangeSliceFloat;
+}
+
 // returns true for an instruction that reads a variable or a member of self, whose value a call that takes it as an
 // argument releases
 // when it returns if the read gave the frame a reference of its own; an implicit argument ($1) is not one: a later $1
@@ -2868,7 +2880,7 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             if (inst->result.isValid() && inst->result.id < def_block.size()) {
                 def_block[inst->result.id] = block.get();
                 def_scope[inst->result.id] = inst->temp_scope_id;
-                def_by_call[inst->result.id] = arg_start >= 0;
+                def_by_call[inst->result.id] = arg_start >= 0 || qore_ir_is_range_slice(inst);
                 def_by_variable_read[inst->result.id] = qore_ir_reads_variable_for_call_arg(inst->opcode);
                 def_inst[inst->result.id] = inst;
                 def_pos[inst->result.id] = static_cast<uint32_t>(inst_pos);
