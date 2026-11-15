@@ -21,7 +21,8 @@
     expression, a background closure and nested background expressions; a module (source and compiled) starts a
     thread for a restricted and for a sandboxed caller; thread pool tasks, call_async() callbacks and signal handlers
     that are call references to builtin code and call_async() code run with the restriction of the code that handed
-    them over; a script compares the options of its thread with its own, interpreted and as qcc
+    them over, as do exit hooks; a thread pool task that module code submits for a sandboxed caller keeps the
+    caller's restriction; a script compares the options of its thread with its own, interpreted and as qcc
     executables.  Each case runs in a process of its own, which waits for its background threads before it exits, so
     its output is complete and in order.
 */
@@ -130,6 +131,13 @@ public namespace BgRuntimeOpts {
     public nothing sub bgprint(File f) {
         background f.print(\"module: printed\\n\");
     }
+
+    #! prints in a thread pool task: a closure of the module, which keeps the restriction of the module code's caller
+    public nothing sub poolprint(File f) {
+        ThreadPool tp(1);
+        tp.submit(sub () { f.print(\"module: printed\\n\"); });
+        tp.stopWait();
+    }
 }
 ";
 
@@ -174,6 +182,11 @@ nothing sub async(File f, Queue q) {
         q.push(\\\"async: \\\" + ex.err);
     }
 }
+nothing sub exit_hook(File f, Queue q) {
+    # hooks run in the reverse order of their registration: this one runs after the builtin one
+    register_exit_hook(sub () { q.push(\\\"exit_hook: done\\\"); });
+    register_exit_hook(\\\\f.sync());
+}
 nothing sub signal(File f, Queue q) {
     # the handler is called with the signal number, which File::lock() takes; it checks the terminal I/O restriction
     set_signal_handler(SIGUSR1, \\\\f.lock());
@@ -182,6 +195,10 @@ nothing sub signal(File f, Queue q) {
 \", \"child\");
 Queue q();
 p.callFunction(ARGV[0], stdout, q);
+if (ARGV[0] == \"exit_hook\") {
+    # deleting the Program runs its hooks in this thread
+    delete p;
+}
 if (ARGV[0] == \"signal\") {
     # the signal thread runs one handler at a time, and the lower signal first when both are pending
     system(\"kill -USR1 \" + getpid());
@@ -202,8 +219,9 @@ p.setExecMode(modes{ARGV[0]});
 if (ARGV[1] == \"sandboxed\") {
     p.setSandboxManager(new SandboxManager());
 }
-p.parse(\"%modern\\n%requires BgRuntimeOpts\\nnothing sub run(File f) { BgRuntimeOpts::bgprint(f); }\\n\", \"child\");
-p.callFunction(\"run\", stdout);
+p.parse(\"%modern\\n%requires BgRuntimeOpts\\nnothing sub run(File f, string how) { \"
+    \"how == 'pool' ? BgRuntimeOpts::poolprint(f) : BgRuntimeOpts::bgprint(f); }\\n\", \"child\");
+p.callFunction(\"run\", stdout, ARGV[2]);
 ";
 
         #! a script whose threads compare their options with the script's, for qcc executables
@@ -316,14 +334,17 @@ printf(\"%y\\n\", rv);
                     mode));
                 assertFalse(out =~ /printed/, sprintf("%s module, restricted caller, mode %s: %s", dir.key, mode,
                     out));
-                out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s %s sandboxed 2>&1", env(),
-                    dir.value, qore_bin, mode, sandboxed, mode));
-                assertRegex("ILLEGAL-EXPRESSION", out, sprintf("%s module, sandboxed caller, mode %s", dir.key, mode));
-                assertFalse(out =~ /printed/, sprintf("%s module, sandboxed caller, mode %s: %s", dir.key, mode,
-                    out));
-                assertEq("module: printed\n", backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s %s "
-                    "open 2>&1", env(), dir.value, qore_bin, mode, sandboxed, mode)), sprintf("%s module, caller "
-                    "without a sandbox, mode %s", dir.key, mode));
+                foreach string how in (("bg", "pool")) {
+                    out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s %s sandboxed %s 2>&1",
+                        env(), dir.value, qore_bin, mode, sandboxed, mode, how));
+                    assertRegex("ILLEGAL-EXPRESSION", out, sprintf("%s module %s, sandboxed caller, mode %s", dir.key,
+                        how, mode));
+                    assertFalse(out =~ /printed/, sprintf("%s module %s, sandboxed caller, mode %s: %s", dir.key, how,
+                        mode, out));
+                    assertEq("module: printed\n", backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s "
+                        "%s open %s 2>&1", env(), dir.value, qore_bin, mode, sandboxed, mode, how)),
+                        sprintf("%s module %s, caller without a sandbox, mode %s", dir.key, how, mode));
+                }
             }
         }
     }
@@ -332,7 +353,7 @@ printf(\"%y\\n\", rv);
         TmpDir tmp("qore-bg-runtime-po-cb-");
         string script = tmp.path + "/cb.q";
         write(script, CallbackScript);
-        list<string> cases = ("pool", "async");
+        list<string> cases = ("pool", "async", "exit_hook");
         # signals: the order of pending signals is the lowest first on Linux
         if (PlatformOS == "Linux") {
             cases += "signal";

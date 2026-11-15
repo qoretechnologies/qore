@@ -6166,6 +6166,11 @@ struct QoreExitHook {
     QoreProgram* pgm;
     //! the hook; referenced
     ResolvedCallReferenceNode* code;
+    //! the run-time parse options of the code that registered the hook, which the hook runs with (qore#6208)
+    /** A hook that is a call reference to builtin code sets no options of its own, and the thread that runs the hooks
+        (the one that deletes the Program, or the main thread at the end of the process) has its own
+    */
+    QoreThreadRuntimeParseOptions po;
 
     //! Releases the hook's references; called without the registry lock
     void release(ExceptionSink* xsink) {
@@ -6251,6 +6256,8 @@ void qore_run_exit_hook(QoreExitHook& hook) {
         ProgramThreadCountContextHelper tch(&xsink, hook.pgm, true);
         if (!xsink) {
             QoreSandboxPolicyBarrierHelper barrier;
+            // the hook runs with the options of the code that registered it (qore#6208)
+            QoreThreadRuntimeParseOptionsHelper po_helper(&hook.po);
             hook.code->invoke(nullptr, &xsink).discard(&xsink);
         }
     }
@@ -6287,7 +6294,7 @@ int64 qore_register_exit_hook(const ResolvedCallReferenceNode* code, ExceptionSi
     int64 id = ++exit_hook_seq;
     // taking the references cannot fail, and releasing them takes no lock
     pgm->depRef();
-    exit_hooks.push_back({id, pgm, code->refRefSelf()});
+    exit_hooks.push_back({id, pgm, code->refRefSelf(), QoreThreadRuntimeParseOptions::capture()});
     return id;
 }
 
