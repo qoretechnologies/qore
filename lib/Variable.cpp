@@ -1180,7 +1180,90 @@ LValueHelper::~LValueHelper() {
     }
 }
 
+//! the nesting depth from which removedValue() continues without recursion (qore#6117)
+static constexpr unsigned QORE_REMOVED_VALUE_RECURSION_LIMIT = 64;
+
 void LValueHelper::removedValue(const QoreValue& v) {
+    removedValueIntern(v, 0);
+}
+
+// cold and not inlined: it must not change how the recursive visit, which visits the values met in practice, is
+// compiled
+__attribute__((cold, noinline)) void LValueHelper::removedValueWithoutRecursion(const QoreValue& v) {
+    assert(v.getType() == NT_LIST || v.getType() == NT_HASH);
+    // a container being visited and the position in it; this makes the same calls in the same order as the
+    // recursion in removedValueIntern()
+    class Frame {
+    public:
+        explicit Frame(const AbstractQoreNode* container) : container(container) {
+            if (get_node_type(container) == NT_HASH) {
+                hash_iter.reset(new ConstHashIterator(static_cast<const QoreHashNode*>(container)));
+            }
+        }
+
+        //! gets the next element of the container; returns false if there are no more
+        bool next(QoreValue& value) {
+            if (hash_iter) {
+                if (!hash_iter->next()) {
+                    return false;
+                }
+                value = hash_iter->get();
+                return true;
+            }
+            const QoreListNode* list = static_cast<const QoreListNode*>(container);
+            if (list_pos == list->size()) {
+                return false;
+            }
+            value = list->retrieveEntry(list_pos++);
+            return true;
+        }
+
+        const AbstractQoreNode* container;
+
+    private:
+        size_t list_pos = 0;
+        std::unique_ptr<ConstHashIterator> hash_iter;
+    };
+
+    std::vector<Frame> stack;
+    auto enter = [this, &stack](const QoreValue& value) {
+#ifdef DEBUG
+        ++lvalue_removal_visit_count;
+#endif
+        const AbstractQoreNode* container = value.getInternalNode();
+        if (removed_objects.tracking() && !removed_objects.visit(container)) {
+            return;
+        }
+        stack.emplace_back(container);
+    };
+    enter(v);
+    while (!stack.empty()) {
+        QoreValue value;
+        if (!stack.back().next(value)) {
+            const AbstractQoreNode* container = stack.back().container;
+            stack.pop_back();
+            // see removedValueIntern()
+            if (removed_objects.tracking()) {
+                removed_objects.visit(container);
+            }
+            continue;
+        }
+        qore_type_t type = value.getType();
+        if (type == NT_LIST || type == NT_HASH) {
+            removed_objects.visit(stack.back().container);
+            enter(value);
+        } else {
+#ifdef DEBUG
+            ++lvalue_removal_visit_count;
+#endif
+            if (type == NT_OBJECT) {
+                removed_objects.add(qore_object_private::get(*value.get<const QoreObject>()));
+            }
+        }
+    }
+}
+
+void LValueHelper::removedValueIntern(const QoreValue& v, unsigned depth) {
 #ifdef DEBUG
     ++lvalue_removal_visit_count;
 #endif
@@ -1190,11 +1273,16 @@ void LValueHelper::removedValue(const QoreValue& v) {
     // Flat containers need no visitation storage: only a nested container can share a traversal path.  Register
     // the parent before descending so every nested container is entered through the visited set.  Object/scalar
     // children are handled here without another recursive call.
-    auto child = [this](const QoreValue& value, const AbstractQoreNode* parent) {
+    auto child = [this, depth](const QoreValue& value, const AbstractQoreNode* parent) {
         qore_type_t type = value.getType();
         if (type == NT_LIST || type == NT_HASH) {
             removed_objects.visit(parent);
-            removedValue(value);
+            // a deeply nested value is visited without recursion, so that it cannot overflow the stack (qore#6117)
+            if (depth + 1 >= QORE_REMOVED_VALUE_RECURSION_LIMIT) {
+                removedValueWithoutRecursion(value);
+            } else {
+                removedValueIntern(value, depth + 1);
+            }
         } else {
 #ifdef DEBUG
             ++lvalue_removal_visit_count;
@@ -3689,10 +3777,17 @@ QoreNumberNode* LValueHelper::postDecrementNumber(bool ref_rv, const char* desc)
 void LValueHelper::plusEqualsNumber(QoreValue r, const char* desc) {
     SimpleRefHolder<QoreNumberNode> rn_holder;
     QoreNumberNode* rn;
-    if (r.getType() == NT_NUMBER)
-        rn = r.get<QoreNumberNode>();
-    else
+    // a number operand is a node (an enum is converted below, by its base value)
+    const AbstractQoreNode* r_node = r.isPointer() ? r.get<const AbstractQoreNode>() : nullptr;
+    if (r_node && r_node->getType() == NT_NUMBER) {
+        rn = const_cast<QoreNumberNode*>(static_cast<const QoreNumberNode*>(r_node));
+    } else if (r.isChar()) {
+        // += adds a char as its one-character string is
+        SimpleRefHolder<QoreStringNode> str(qore_plus_equals_char_string(r));
+        rn_holder = (rn = new QoreNumberNode(QoreValue(*str)));
+    } else {
         rn_holder = (rn = new QoreNumberNode(r));
+    }
 
     if (numberResultNeedsConversion()) {
         QoreNumberNode* nn = new QoreNumberNode(getValue());

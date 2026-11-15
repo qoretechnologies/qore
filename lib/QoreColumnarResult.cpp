@@ -548,7 +548,10 @@ static QoreValue columnar_make_column_value(const QoreListNode* source, const Co
                     }
                     continue;
                 }
-                if (rv->setEntry(i.index(), QoreValue(value.getAsBigInt()), xsink)) {
+                // an int outside of the inline range is held in a node of its own, which setEntry() copies and
+                // the holder releases (qore#6146)
+                ValueHolder int_value(QoreValue(value.getAsBigInt()), xsink);
+                if (rv->setEntry(i.index(), *int_value, xsink)) {
                     return QoreValue();
                 }
             }
