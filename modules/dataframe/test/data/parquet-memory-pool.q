@@ -5,7 +5,8 @@
 
 # child script of parquet-memory-pool.qtest: writes, reads and round-trips data through Parquet and Arrow IPC with
 # all the code paths that allocate from an Arrow memory pool (column writers with compression, dictionaries and
-# statistics; page reads with decompression, projections and row groups; IPC readers) and prints the results
+# statistics, the stored Arrow schema; page reads with decompression, projections and row groups; IPC readers) and
+# prints the results
 
 %new-style
 %strict-args
@@ -38,6 +39,12 @@ DataFrame::DataFrame part = DataFrame::DataFrame::readParquet(path, <DataFrame::
     "use_threads": False,
 });
 printf("part: %d rows, first id %d, columns %y\n", part.numRows(), part.getColumn("id")[0], part.columnNames());
+
+# store_schema: the Arrow schema is written in the file's key-value metadata
+string schema_path = ARGV[0] + "/pool-schema.parquet";
+df.writeParquet(schema_path, <DataFrame::ParquetWriteOptions>{"store_schema": True, "compression": "zstd"});
+DataFrame::DataFrame with_schema = DataFrame::DataFrame::readParquet(schema_path);
+printf("schema: %d rows, dtypes %y\n", with_schema.numRows(), with_schema.dtypes());
 
 DataFrame::DataFrame ipc = DataFrame::DataFrame::fromArrowIpc(whole.toArrowIpc());
 printf("ipc: %d rows, last name %s\n", ipc.numRows(), ipc.getColumn("name")[ipc.numRows() - 1]);

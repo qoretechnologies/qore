@@ -16,7 +16,8 @@
 #! issue #6171: Parquet and Arrow IPC reads and writes allocate from the module's Arrow memory pool only
 /** The module gives Arrow the system memory pool; the Parquet file reader, the Parquet column writers and the IPC
     readers took Arrow's default pool instead (default_reader_properties(), WriterProperties::Builder and
-    IpcReadOptions::Defaults() all default to it), which is mimalloc or jemalloc in most Arrow builds.  With
+    IpcReadOptions::Defaults() all default to it), which is mimalloc or jemalloc in most Arrow builds, and so did
+    the Arrow schema that store_schema writes (arrow::ipc::SerializeSchema() ignores the pool it is given).  With
     mimalloc, valgrind reported an "Invalid free()" for every block of that pool: it intercepts free() in
     libmimalloc, and mi_free() is the same function there, while mi_malloc_aligned() is not intercepted.
 
@@ -27,6 +28,7 @@ class ParquetMemoryPoolTest inherits QUnit::Test {
     public {
         const Expected = "whole: 200 rows, score sum 29850.0\n"
             "part: 100 rows, first id 150, columns [\"name\", \"id\"]\n"
+            "schema: 200 rows, dtypes [\"int64\", \"string\", \"float64\", \"bool\"]\n"
             "ipc: 200 rows, last name name-3\n";
     }
 
