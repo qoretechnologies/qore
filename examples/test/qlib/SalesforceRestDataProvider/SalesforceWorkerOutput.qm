@@ -1,0 +1,70 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# reads the output of the Salesforce data provider test workers
+
+%modern
+
+module SalesforceWorkerOutput {
+    version = "1.0";
+    desc = "reads the output of the Salesforce data provider test workers";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+#! reads the output of the Salesforce data provider test workers
+public namespace SalesforceWorkerOutput {
+#! the external modules that the optional child module SalesforcePubSubDataProvider requires and this tree does not have
+public const ExternalChildFeatures = ("grpc", "GrpcUtil");
+
+#! the warning of the module loader that SalesforcePubSubDataProvider was skipped because an external module is absent
+/** SalesforceRestDataProvider declares SalesforcePubSubDataProvider, which is not part of this tree, with
+    \c %try-child-module; where the child is installed but the external modules that it requires are not (or not for
+    this module API), the child is skipped with this warning, which the module loader always reports.  The warning
+    is matched up to the module path, which depends on the host
+*/
+public const AbsentExternalChildWarning = "^MODULE-CHILD-FAILED: module 'SalesforceRestDataProvider': child module "
+    "'SalesforcePubSubDataProvider' declared with %try-child-module is present but failed to load and was skipped; "
+    "the module was loaded without it: LOAD-MODULE-ERROR: feature '(" + ExternalChildFeatures.join("|")
+    + ")' is not builtin and no module with this name could be found in the module path: ";
+
+#! returns the \c name=value lines of the output of a worker
+/** @param out the output of the worker (stdout followed by stderr)
+    @param worker the file name of the worker script, which the location of a warning names
+
+    @return the values of the \c name=value lines by name
+
+    @throw UNEXPECTED-WORKER-OUTPUT the output has a line that is neither a \c name=value line nor the warning that
+    the optional child SalesforcePubSubDataProvider was skipped because an external module is absent
+    (AbsentExternalChildWarning) together with the line before it that gives its location in the worker
+*/
+public hash<string, string> sub parse_worker_output(string out, string worker) {
+    list<string> lines = out.split("\n");
+    string location = "^warning encountered at .*/" + quote_regex(worker) + ":[0-9]+ \\(Qore builtin code\\)$";
+    hash<string, string> results = {};
+    for (int i = 0; i < lines.size(); ++i) {
+        string line = lines[i];
+        *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+        if (parts) {
+            results{parts[0]} = parts[1];
+            continue;
+        }
+        if (!line.val()) {
+            continue;
+        }
+        if (regex(line, location) && i + 1 < lines.size() && regex(lines[i + 1], AbsentExternalChildWarning)) {
+            ++i;
+            continue;
+        }
+        throw "UNEXPECTED-WORKER-OUTPUT", sprintf("unexpected line %y in worker output: %y", line, out);
+    }
+    return results;
+}
+
+#! returns a string matching \a str literally in a regular expression
+string sub quote_regex(string str) {
+    return regex_subst(str, "([][\\\\^$.|?*+(){}])", "\\\\$1", Qore::RE_Global);
+}
+}
