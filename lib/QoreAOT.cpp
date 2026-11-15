@@ -9766,9 +9766,7 @@ static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
             case QoreIROpcode::StoreLocal: {
                 const auto* store =
                     static_cast<const QoreIRLocalInstruction*>(inst);
-                // a local of the type `any` or a plain `auto!` strips the value stored (qore#6059)
                 if (!store->local || inst->operands.size() != 1
-                        || q_type_strips_complex_type(store->local->getTypeInfoForLValue())
                         || func.param_local_vars.end()
                             != std::find_if(func.param_local_vars.begin(),
                                 func.param_local_vars.end(),
@@ -9779,6 +9777,22 @@ static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
                 }
                 auto source = value_sources.find(inst->operands.front().id);
                 if (source == value_sources.end()) {
+                    return -1;
+                }
+                // the local holds the parameter's value only if the store does not convert it: a local of another
+                // type converts or checks the value (a float local makes a float of an int, an int local raises an
+                // error for a string, a plain list local and an `any` or plain `auto!` local strip the complex type
+                // of a list; qore#6162); a local of the parameter's own type, including a type parameter, holds the
+                // value that the parameter's binding gave it (a type parameter that the call instantiates as `any`
+                // is refused at the call site: qore_aot_forwarded_return_call_strips())
+                auto source_param = func.param_local_vars.find(
+                    static_cast<unsigned>(source->second));
+                if (source_param == func.param_local_vars.end() || !source_param->second) {
+                    return -1;
+                }
+                const QoreTypeInfo* local_ti = store->local->getTypeInfoForLValue();
+                if (local_ti != source_param->second->getTypeInfoForLValue()
+                        || q_type_strips_complex_type(local_ti)) {
                     return -1;
                 }
                 auto [found, inserted] =
