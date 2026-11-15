@@ -1890,6 +1890,8 @@
       @ref Qore::Socket::startPollConnectSsl() "Socket::startPollConnectSsl()",
       @ref Qore::HTTPClient::startPollConnect() "HTTPClient::startPollConnect()") reports the connect's own error; on
       macOS, a refused or timed-out connect could be reported as <tt>Broken pipe</tt> (\c EPIPE) (issue #6119)
+    - the @ref splice "splice" and @ref extract "extract" operators no longer read past the end of a string when they
+      replace a range of it with a shorter string (issue #6188)
     - the heartbeat of @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" connections is measured on the
       monotonic clock: a step back of the system clock no longer stops the heartbeat PINGs for the size of the step
       (see @ref Qore::AsyncIoController::addTimerDelay() "AsyncIoController::addTimerDelay()")
