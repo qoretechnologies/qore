@@ -7958,7 +7958,8 @@ static QORE_INTERN_NOINLINE void qore_ir_handler_return_replaces(QoreValue rv, E
 
 // Execute a single on_block_exit handler body, using compiled IR if available, otherwise AST.
 // Returns true if execution encountered an error.
-static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
+// Returns the debugger's request that the handler ended with (qore_ir_take_handler_flow()), or 0 (#6201)
+static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
         std::vector<QoreValue>* parent_slot_cache = nullptr, const StatementBlock* dbg_statements = nullptr,
         QoreProgram* dbg_pgm = nullptr, bool exception_pending = false) {
     // Every on_block_exit handler must have been compiled to IR by
@@ -7976,7 +7977,7 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
                 "internal: on_block_exit handler has no compiled IR — compile-time "
                 "handler lowering must have failed silently");
         }
-        return;
+        return 0;
     }
     if (parent_slot_cache) {
         releaseHandlerParentCache(*parent_slot_cache, obe_xsink);
@@ -7984,15 +7985,22 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
     QoreValue rv;
     // the handler runs with the debug context of its frame, so that a debugger gets the events of its statements, as
     // with the AST interpreter, but not those of a function (see QoreIRInterpreter::execute())
+    // the request of a handler that the handler runs is taken by it
+    int outer_flow = qore_ir_take_handler_flow();
     QoreIRInterpreter::execute(*handler.handler_ir, rv, obe_xsink, nullptr, nullptr, nullptr,
                                &handler.handler_ir->pre_instantiated_cache, nullptr, dbg_statements, dbg_pgm,
                                false, nullptr, parent_slot_cache, true);
+    int flow = qore_ir_take_handler_flow();
+    if (outer_flow) [[unlikely]] {
+        qore_ir_set_handler_flow(outer_flow);
+    }
     // a handler that ends without a return gives no value; a return without a value cannot be told from it
     if (exception_pending && !rv.isNothing() && parent_slot_cache) [[unlikely]] {
         qore_ir_handler_return_replaces(rv, obe_xsink);
-        return;
+        return flow;
     }
     rv.discard(obe_xsink);
+    return flow;
 }
 
 // Execute on_block_exit handlers in reverse order (LIFO), matching the AST's
@@ -8022,7 +8030,10 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                         }
                     }
-                    executeHandlerBody(handlers[i], &obe_xsink, parent_slot_cache, dbg_statements, dbg_pgm, error);
+                    // the block takes the request of the last handler run, as with the AST interpreter
+                    // (StatementBlock::execIntern())
+                    nrc = executeHandlerBody(handlers[i], &obe_xsink, parent_slot_cache, dbg_statements, dbg_pgm,
+                        error);
                     // Restore td->catchException BEFORE clearing xsink to avoid
                     // a use-after-free window where td->catchException points to
                     // the freed exception chain
@@ -10177,14 +10188,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             tlpd->dbgFunctionExit(statements, return_value, xsink);
         }
     };
-    bool debug_break_loop = false;  // set by dbgStep RC_BREAK to exit current loop (legacy fallback)
-    // Set by dbgStep RC_BREAK to the exit block of the loop enclosing the break point.
-    // Execution then continues normally (running statement/scope cleanups) until the
-    // enclosing loop's condition BrIf — the unique branch whose false_target equals this
-    // block — is reached and diverted to it.  Resolving the loop this way (instead of
-    // "force the next BrIf false") avoids an inner if/switch BrIf wrongly consuming the
-    // break, which left the loop running.  See QoreIRBasicBlock::enclosing_loop_exit.
-    QoreIRBasicBlock* debug_break_target = nullptr;
 
     auto getDebugStatement = [&](const QoreIRInstruction* dbg_inst) -> AbstractStatement* {
         if (!pgm || !dbg_inst || !dbg_inst->loc || dbg_inst->cached_start_line < 0) {
@@ -12340,20 +12343,7 @@ next_instruction:
                 auto* br = static_cast<QoreIRBranchIfInstruction*>(inst);
                 QoreValue cond = getIRValue(values, br->condition);
                 prev_block = block;
-                // Debug break: divert to the enclosing loop's exit.  Only the loop's
-                // own condition BrIf has false_target == debug_break_target, so inner
-                // if/switch BrIfs flow normally (preserving per-iteration cleanup) until
-                // the loop header is reached.
-                if (debug_break_target && br->false_target == debug_break_target) {
-                    block = debug_break_target;
-                    debug_break_target = nullptr;
-                } else if (debug_break_loop) {
-                    // legacy fallback: force false branch to exit the current loop
-                    debug_break_loop = false;
-                    block = br->false_target;
-                } else {
-                    block = LexicalSemanticPolicy::getAsBoolDefault(cond) ? br->true_target : br->false_target;
-                }
+                block = LexicalSemanticPolicy::getAsBoolDefault(cond) ? br->true_target : br->false_target;
                 ip = 0;
                 // OSR: count back-edges to loop headers
                 if (block->is_loop_header) {
@@ -16525,20 +16515,26 @@ load_local_done:
                     }
                     int dbg_rc = tlpd->dbgSyntheticBlockStep(dbg_block, xsink);
                     if (dbg_rc || *xsink) {
-                        if (dbg_rc == RC_RETURN || *xsink) {
-                            unwindForException();
-                            cleanupLocalCaches();
-                            bool dismissed = exitAfterUnwind();
-                            return dbg_rc == RC_RETURN || dismissed;
-                        }
-                        if (dbg_rc == RC_BREAK) {
-                            // See the dbgStep RC_BREAK handler above for rationale.
-                            if (current_block->enclosing_loop_exit) {
-                                debug_break_target = current_block->enclosing_loop_exit;
-                            } else {
-                                debug_break_loop = true;
+                        // a request leaves the block before its first statement (#6200, #6201)
+                        if (!*xsink) {
+                            if (QoreIRBasicBlock* flow_target = qore_ir_debug_flow_target(inst, dbg_rc)) {
+                                // a request that ends a handler is taken by the frame that runs it (#6201)
+                                if (handler_frame && qore_ir_debug_flow_targets(inst)->leavesFunction(dbg_rc))
+                                        [[unlikely]] {
+                                    qore_ir_set_handler_flow(dbg_rc);
+                                }
+                                prev_block = block;
+                                block = flow_target;
+                                ip = 0;
+                                break;
                             }
+                            // the block of a handler lowered inline: the frame returns
+                            dbg_rc = RC_RETURN;
                         }
+                        unwindForException();
+                        cleanupLocalCaches();
+                        bool dismissed = exitAfterUnwind();
+                        return dbg_rc == RC_RETURN || dismissed;
                     }
                 }
                 ++ip;
@@ -16623,23 +16619,25 @@ load_local_done:
                             cleanupLocalCaches();
                             return exitAfterUnwind();
                         }
-                        if (dbg_rc == RC_RETURN) {
+                        if (dbg_rc) {
+                            // a return, a break or a continue is a return statement without a value, or a break or a
+                            // continue statement, placed before the statement, which does not run, as with the AST
+                            // interpreter (#6200, #6201)
+                            if (QoreIRBasicBlock* flow_target = qore_ir_debug_flow_target(inst, dbg_rc)) {
+                                // a request that ends a handler is taken by the frame that runs it (#6201)
+                                if (handler_frame && qore_ir_debug_flow_targets(inst)->leavesFunction(dbg_rc))
+                                        [[unlikely]] {
+                                    qore_ir_set_handler_flow(dbg_rc);
+                                }
+                                prev_block = block;
+                                block = flow_target;
+                                ip = 0;
+                                break;
+                            }
+                            // the statement of a handler lowered inline: the frame returns
                             unwindForException();
                             cleanupLocalCaches();
                             return true;
-                        }
-                        if (dbg_rc == RC_BREAK) {
-                            // Debug break: exit the loop enclosing this statement, matching
-                            // AST behavior where RC_BREAK unwinds to the innermost while/for
-                            // loop.  Resolve the loop via the block's enclosing_loop_exit so
-                            // the correct loop's condition BrIf is the one diverted (an inner
-                            // if/switch BrIf must not consume the break).  Fall back to the
-                            // legacy "force next BrIf false" only when no loop is annotated.
-                            if (current_block->enclosing_loop_exit) {
-                                debug_break_target = current_block->enclosing_loop_exit;
-                            } else {
-                                debug_break_loop = true;
-                            }
                         }
                     }
                 }
@@ -16963,6 +16961,8 @@ load_local_done:
                         qore_ir_close_catch_scopes(catch_exception_stack, scope_stack.size() + 1, xsink);
                         ExceptionSink obe_xsink;
                         bool error = scope_inst->is_error || (xsink && xsink->isException());
+                        // a debugger's request that the last handler run ended with (#6201)
+                        int handler_flow = 0;
                         for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
                             obe_type_e type = on_block_exit_handlers[i - 1].type;
                             if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
@@ -16977,8 +16977,9 @@ load_local_done:
                                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                                         }
                                     }
-                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector(),
-                                        dbgHandlerStatements(), dbgHandlerProgram(), error);
+                                    handler_flow = executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink,
+                                        &locals_slot_cache.vector(), dbgHandlerStatements(), dbgHandlerProgram(),
+                                        error);
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
@@ -17004,6 +17005,23 @@ load_local_done:
                             }
                         }
                         invalidateExternalCaches();
+                        // the request becomes that of the block, as with the AST interpreter
+                        // (StatementBlock::execIntern()): its path, after the handlers (#6201); an exception that a
+                        // handler raised takes precedence
+                        if (handler_flow && !(xsink && *xsink)) [[unlikely]] {
+                            if (QoreIRBasicBlock* flow_target = qore_ir_debug_flow_target(inst, handler_flow)) {
+                                if (handler_frame && scope_inst->flow->leavesFunction(handler_flow)) {
+                                    qore_ir_set_handler_flow(handler_flow);
+                                }
+                                on_block_exit_handlers.resize(scope_start);
+                                invalidateExternalCaches();
+                                dbgHandlersRan();
+                                prev_block = block;
+                                block = flow_target;
+                                ip = 0;
+                                break;
+                            }
+                        }
                     }
                     // Always remove executed handlers (or all handlers if inline_lowered=true)
                     on_block_exit_handlers.resize(scope_start);

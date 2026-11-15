@@ -33,6 +33,7 @@
 #define _QORE_INTERN_QOREIR_H
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -1603,6 +1604,60 @@ struct QoreIRDebugBlockLocals {
     std::vector<uint32_t> slots;
 };
 
+//! The paths of a break or a continue that a debugger requests at a step event (QoreIRDebugStatementInstruction::flow)
+/** The AST interpreter takes a DebugFlowBreak or DebugFlowContinue request at a step event as if a \c break or
+    \c continue statement were placed before the statement (StatementBlock::execIntern()): the statement does not
+    run, the blocks that the request leaves run their handlers and release their locals, and the innermost enclosing
+    loop ends or starts its next iteration (a switch statement ends at a break).  Each target is a block of the
+    function of its own (QoreIRBasicBlock::debug_flow) that branches to the code of the same jump at the position of
+    the step event, so that the control-flow edge from the step event to the jump has the state of the function at the
+    event as its input in the analyses of the IR (design/debug-flow-edges.md, issue #6201).
+
+    A request without a target, as a break outside any loop or switch statement, or a continue outside any loop, ends
+    the function as a return without a value, as with the AST interpreter.
+*/
+struct QoreIRDebugFlowTargets {
+    //! the path of a break request, or nullptr if the request returns
+    QoreIRBasicBlock* break_target = nullptr;
+    //! the path of a continue request, or nullptr if the request returns
+    QoreIRBasicBlock* continue_target = nullptr;
+    //! the path of a return request (DebugFlowReturn), or nullptr if the frame does not take it itself, as the frame
+    //! of a handler, whose request the frame that runs it takes
+    QoreIRBasicBlock* return_target = nullptr;
+
+    //! returns the path of the request \a rc (RC_RETURN, RC_BREAK or RC_CONTINUE of AbstractStatement.h), or nullptr
+    QoreIRBasicBlock* getTarget(int rc) const {
+        // RC_RETURN = 1, RC_BREAK = 2, RC_CONTINUE = 3 (include/qore/intern/AbstractStatement.h)
+        return rc == 1 ? return_target : (rc == 2 ? break_target : (rc == 3 ? continue_target : nullptr));
+    }
+
+    //! returns the paths, some of which can be nullptr
+    std::array<QoreIRBasicBlock*, 3> targets() const {
+        return {break_target, continue_target, return_target};
+    }
+
+    //! returns true if the path of the request \a rc returns from the function: the return, and a break or a continue
+    //! that no loop or switch statement of the function takes, whose entry block branches to the code of the return
+    bool leavesFunction(int rc) const {
+        QoreIRBasicBlock* target = getTarget(rc);
+        if (!target || !return_target) {
+            return false;
+        }
+        return target == return_target || qore_ir_debug_flow_entry_path(target) == qore_ir_debug_flow_entry_path(
+            return_target);
+    }
+
+private:
+    //! returns the block that the entry block of a request branches to
+    DLLLOCAL static const QoreIRBasicBlock* qore_ir_debug_flow_entry_path(const QoreIRBasicBlock* entry);
+};
+
+//! Records a debugger's request \a rc at a step event of a handler that ends the handler (RC_RETURN, RC_BREAK or
+//! RC_CONTINUE), for the frame that runs the handler (qore_ir_take_handler_flow())
+DLLLOCAL void qore_ir_set_handler_flow(int rc);
+//! Returns and clears the request that the handler that has just run ended with (qore_ir_set_handler_flow()), or 0
+DLLLOCAL int qore_ir_take_handler_flow();
+
 //! The step event of the debugger for a statement (QoreIROpcode::DebugStatement)
 class QoreIRDebugStatementInstruction : public QoreIRInstruction {
 public:
@@ -1642,7 +1697,27 @@ public:
     //! leaves the block releases before the debugger's exception event of the statement that contains it, with a
     //! debugger attached (#5921); a pointer, so that the instructions of other code are not larger
     std::unique_ptr<QoreIRDebugBlockLocals> block_locals;
+    //! the paths of a break and a continue that a debugger requests at the event, or nullptr if the event is in no
+    //! loop or switch statement of the function (a request then returns); a pointer, so that the instructions of other
+    //! code are not larger (#6201)
+    std::unique_ptr<QoreIRDebugFlowTargets> flow;
 };
+
+//! Returns the paths of the debugger's flow requests of \a inst: those of a step event (a QoreIROpcode::DebugStatement
+//! or QoreIROpcode::DebugBlock instruction), or those of a QoreIROpcode::ScopeExit, which the handlers that it ran can
+//! report (qore_ir_set_handler_flow()); nullptr if it has none
+inline const QoreIRDebugFlowTargets* qore_ir_debug_flow_targets(const QoreIRInstruction* inst);
+
+//! Returns true if the edges of the paths of the flow requests of \a inst leave its block after it, false if before it
+/** The requests of a step event are made before its statement; those of a ScopeExit, by the handlers that it runs
+*/
+inline bool qore_ir_debug_flow_after(const QoreIRInstruction* inst) {
+    return inst->opcode == QoreIROpcode::ScopeExit;
+}
+
+//! Returns the path of the flow request \a rc (RC_RETURN, RC_BREAK or RC_CONTINUE) of \a inst, or nullptr (see
+//! QoreIRDebugFlowTargets)
+inline QoreIRBasicBlock* qore_ir_debug_flow_target(const QoreIRInstruction* inst, int rc);
 
 class QoreIRConstInstruction : public QoreIRInstruction {
 public:
@@ -3764,7 +3839,34 @@ public:
     */
     bool trim = false;
     uint32_t keep_handlers = 0;  //!< the number of handlers of the scope that a trim keeps registered
+    //! the paths of a debugger's request that the last handler that the instruction ran ended with (#6201): the
+    //! request becomes that of the block, as with the AST interpreter (StatementBlock::execIntern()); nullptr if the
+    //! code has no step events
+    std::unique_ptr<QoreIRDebugFlowTargets> flow;
 };
+
+// documented above
+inline const QoreIRDebugFlowTargets* qore_ir_debug_flow_targets(const QoreIRInstruction* inst) {
+    switch (inst->opcode) {
+        case QoreIROpcode::DebugStatement:
+        case QoreIROpcode::DebugBlock:
+            // a DebugBlock instruction read from the debug IR of AOT code can be a plain instruction
+            if (!QoreIRDebugStatementInstruction::isInstClass(inst->inst_class)) {
+                return nullptr;
+            }
+            return static_cast<const QoreIRDebugStatementInstruction*>(inst)->flow.get();
+        case QoreIROpcode::ScopeExit:
+            return static_cast<const QoreIRScopeExitInstruction*>(inst)->flow.get();
+        default:
+            return nullptr;
+    }
+}
+
+// documented above
+inline QoreIRBasicBlock* qore_ir_debug_flow_target(const QoreIRInstruction* inst, int rc) {
+    const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst);
+    return flow ? flow->getTarget(rc) : nullptr;
+}
 
 //! ContextInit — create a Context frame for a `context` statement.
 //!
@@ -4124,12 +4226,10 @@ public:
     */
     QoreIRLoopCancel loop_cancel = QoreIRLoopCancel::None;
 
-    //! Exit block of the innermost while/for/do-while loop whose body contains this
-    //! block (nullptr if this block is not inside such a loop body).  Set during
-    //! lowering.  Used by the IR interpreter to resolve a debugger DebugFlowBreak
-    //! (RC_BREAK) to the correct enclosing loop's exit — the loop's condition BrIf
-    //! is the unique branch whose false_target equals this exit block.
-    QoreIRBasicBlock* enclosing_loop_exit = nullptr;
+    //! True for a block of the paths of a debugger's flow requests at step events (QoreIRDebugFlowTargets), which
+    //! only runs when a debugger requests a break or a continue; not counted in the size of the function
+    //! (QoreIRFunction::getInstructionCount())
+    bool debug_flow = false;
 
     //! True if this block contains phi nodes at the beginning.
     //! Set during computeSlotIdsAndEmbed() to optimize phi loop skipping.
@@ -4168,7 +4268,10 @@ public:
         size_t instruction_count = cached_instruction_count.load(std::memory_order_relaxed);
         if (!instruction_count) {
             for (const auto& block : blocks) {
-                instruction_count += block->instructions.size();
+                // the paths of a debugger's flow requests run only when a debugger requests one (#6201)
+                if (!block->debug_flow) {
+                    instruction_count += block->instructions.size();
+                }
             }
             cached_instruction_count.store(instruction_count, std::memory_order_relaxed);
         }
@@ -4320,6 +4423,13 @@ public:
         Program's statement index at runtime.
     */
     bool emit_debug_statements = false;
+    //! true for the body of an on_exit, on_success or on_error handler lowered to an IR function of its own
+    /** A debugger's request at a step event of the handler whose path leaves the function ends the handler and is
+        reported to the frame that runs it (QoreIRDebugFlowTargets::leavesFunction(), qore_ir_set_handler_flow()), as
+        the AST interpreter's block takes the request of its last handler run (StatementBlock::execIntern());
+        not serialized: the IR of a handler is known to the frame that runs it
+    */
+    bool handler_body = false;
     //! Owning program of this lowered IR function. Used by the per-Program background
     //! JIT-compile drain (QoreJIT::waitForBgCompileQueue(QoreProgram*)) to cancel/await
     //! only the compiles referencing a Program being torn down. Set unconditionally at

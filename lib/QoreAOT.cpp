@@ -4667,7 +4667,7 @@ private:
             auto tail = std::make_unique<QoreIRBasicBlock>(
                 b->name + ".osplit" + std::to_string(split_counter++));
             QoreIRBasicBlock* tail_ptr = tail.get();
-            tail->enclosing_loop_exit = b->enclosing_loop_exit;
+            tail->debug_flow = b->debug_flow;
             tail->instructions.assign(
                 std::make_move_iterator(b->instructions.begin() + pos),
                 std::make_move_iterator(b->instructions.end()));

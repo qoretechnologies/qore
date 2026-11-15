@@ -46,6 +46,62 @@ static inline bool qore_ir_is_exception_only_release(const QoreIRInstruction& in
     return inst.exception_cleanup_release && inst.opcode == QoreIROpcode::ReleaseOwnedTemp;
 }
 
+//! Visits the paths of the debugger's flow requests of a block (QoreIRDebugFlowTargets, #6200, #6201)
+/** Each edge leaves the block from inside it, not at its end: \a visitor gets the position of the edge, the index of
+    the instruction before which it leaves (that of a step event, or the one after a ScopeExit, see
+    qore_ir_debug_flow_after()), and the block that the request enters, which has the block as its only predecessor.
+    Each target is visited once: each request has an entry block of its own.
+*/
+template <typename F>
+void qore_ir_visit_debug_flow_targets(const QoreIRBasicBlock& block, F&& visitor) {
+    for (size_t i = 0; i < block.instructions.size(); ++i) {
+        const QoreIRInstruction* inst = block.instructions[i].get();
+        if (const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst)) {
+            size_t pos = qore_ir_debug_flow_after(inst) ? i + 1 : i;
+            for (QoreIRBasicBlock* target : flow->targets()) {
+                if (target) {
+                    visitor(pos, target);
+                }
+            }
+        }
+    }
+}
+
+//! Visits the paths of the debugger's flow requests that leave a block before each of its instructions, for an
+//! analysis that walks the instructions of the block in order (see qore_ir_visit_debug_flow_targets())
+/** visit() is called for each instruction before the analysis takes it: the visitor gets the targets of the edges that
+    leave before it, which have the state of the analysis then (those of a step event at the instruction, and those of
+    a ScopeExit before it, which leave after the ScopeExit; a ScopeExit is never the last instruction of its block)
+*/
+class QoreIRDebugFlowCursor {
+public:
+    template <typename F>
+    void visit(const QoreIRInstruction* inst, F&& visitor) {
+        if (pending) {
+            for (QoreIRBasicBlock* target : pending->targets()) {
+                if (target) {
+                    visitor(target);
+                }
+            }
+            pending = nullptr;
+        }
+        if (const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst)) {
+            if (qore_ir_debug_flow_after(inst)) {
+                pending = flow;
+                return;
+            }
+            for (QoreIRBasicBlock* target : flow->targets()) {
+                if (target) {
+                    visitor(target);
+                }
+            }
+        }
+    }
+
+private:
+    const QoreIRDebugFlowTargets* pending = nullptr;
+};
+
 struct QoreIRControlFlowGraph {
     //! Build reachability, predecessor, successor, and dominator information.
     //! @param func lowered IR function to analyze
@@ -63,7 +119,46 @@ struct QoreIRControlFlowGraph {
     std::vector<std::vector<size_t>> predecessors;
     std::vector<std::vector<uint64_t>> dominators;
     std::vector<uint8_t> reachable;
+    //! The step event whose flow request enters a block (see qore_ir_visit_debug_flow_targets())
+    struct DebugFlowSource {
+        //! the block of the step event
+        size_t block = SIZE_MAX;
+        //! the index of the step event's instruction in its block
+        size_t index = SIZE_MAX;
+    };
+    //! for each block, the step event whose flow request enters it, if any; empty if the function has no such
+    //! edges
+    /** The edge is in \a successors and \a predecessors as any other, with the block of the event as the only
+        predecessor of its target, but it leaves the block at the event: a forward analysis gives the target the state
+        before the event's instruction, and a backward analysis takes what is live at the target as live at the event
+        (#6201).
+    */
+    std::vector<DebugFlowSource> debug_flow_sources;
     bool cancelled = false;
+
+    //! Returns the only successor of \a block other than the paths of the debugger's flow requests at its step
+    //! events, or SIZE_MAX if it has none or more than one
+    size_t getOnlyNormalSuccessor(size_t block) const {
+        size_t only = SIZE_MAX;
+        for (size_t successor : successors[block]) {
+            if (getDebugFlowSource(successor)) {
+                continue;
+            }
+            if (only != SIZE_MAX) {
+                return SIZE_MAX;
+            }
+            only = successor;
+        }
+        return only;
+    }
+
+    //! Returns the step event whose flow request enters \a block, or nullptr if no flow request enters it
+    const DebugFlowSource* getDebugFlowSource(size_t block) const {
+        if (block >= debug_flow_sources.size() || debug_flow_sources[block].block == SIZE_MAX) {
+            return nullptr;
+        }
+        return &debug_flow_sources[block];
+    }
 };
 
 //! Answers whether a block of a function can reach any of a set of blocks without passing a given block

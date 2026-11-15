@@ -1605,15 +1605,13 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_deopt",
             llvm::FunctionType::get(void_type, {ptr_type}, false));
 
-    // Debug-step hooks (issue #5352): void qore_rt_dbg_step(const AbstractStatement* statement,
-    // void* statements_block, ExceptionSink* xsink, void* frame)
+    // Debug-step hooks (issue #5352): int64_t qore_rt_dbg_step(const AbstractStatement* statement,
+    // void* statements_block, ExceptionSink* xsink, int64_t flow_mask), which returns the request that a path of the
+    // step event takes (qore#6200, qore#6201)
     module.getOrInsertFunction("qore_rt_dbg_step",
-            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type, ptr_type}, false));
+            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type, i64_type}, false));
     module.getOrInsertFunction("qore_rt_dbg_synthetic_block_step",
-            llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type, ptr_type, ptr_type}, false));
-    // void qore_rt_dbg_take_return(ExceptionSink* xsink, void* frame) (qore#6200)
-    module.getOrInsertFunction("qore_rt_dbg_take_return",
-            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+            llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type, i64_type}, false));
 
     // Local variable helpers
     module.getOrInsertFunction("qore_rt_instantiate_local",
@@ -3571,6 +3569,12 @@ static bool qore_ir_exception_reaches_catch(const QoreIRBasicBlock* target) {
                     work.push_back(succ);
                 });
             }
+            // the paths of the debugger's flow requests at a step event on the way (#6201)
+            if (const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst.get())) {
+                for (QoreIRBasicBlock* target : flow->targets()) {
+                    work.push_back(target);
+                }
+            }
         }
     }
     return false;
@@ -5204,8 +5208,6 @@ void QoreIRToLLVM::emitExceptionExitTail(llvm::Module& module) {
     emitPreinstantiatedCleanup(module, true);
     emitInvokeCleanup(module);
     emitLocalUninstantiation(module);
-    // a return that a debugger requested at a step event ends here (qore#6200)
-    emitDebugReturnTake(module);
     builder->CreateRet(getNothingReturnValue());
     if (saved_insert) {
         builder->SetInsertPoint(saved_insert, saved_ip);
@@ -6978,6 +6980,10 @@ llvm::BasicBlock* QoreIRToLLVM::getInvokeResultDeferBlock(const QoreIRBasicBlock
                 qore_ir_visit_successors(*block->instructions.back(),
                     [&targets](QoreIRBasicBlock* target) { targets.insert(target); });
             }
+            // the paths of the debugger's flow requests at the block's step events (#6201)
+            qore_ir_visit_debug_flow_targets(*block, [&targets](size_t, QoreIRBasicBlock* target) {
+                targets.insert(target);
+            });
             for (const QoreIRBasicBlock* target : targets) {
                 ++ir_block_predecessor_counts[target];
             }
@@ -13528,6 +13534,33 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
     builder->CreateCondBr(attached, fire, cont, llvm::MDBuilder(ctx).createBranchWeights(1, 2000));
 
     builder->SetInsertPoint(fire);
+    // the paths of a break and a continue that the debugger requests at the event (#6201): the hook returns the
+    // request that one of them takes
+    const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst);
+    auto flow_block = [&](QoreIRBasicBlock* target) -> llvm::BasicBlock* {
+        if (!target) {
+            return nullptr;
+        }
+        auto it = block_map.find(target);
+        return it == block_map.end() ? nullptr : it->second;
+    };
+    llvm::BasicBlock* flow_break = flow ? flow_block(flow->break_target) : nullptr;
+    llvm::BasicBlock* flow_continue = flow ? flow_block(flow->continue_target) : nullptr;
+    llvm::BasicBlock* flow_return = flow ? flow_block(flow->return_target) : nullptr;
+    // the bits of QORE_RT_DBG_FLOW_BREAK, QORE_RT_DBG_FLOW_CONTINUE and QORE_RT_DBG_FLOW_RETURN (JITRuntime.cpp),
+    // and shifted by QORE_RT_DBG_FLOW_REPORT_SHIFT, the requests whose path leaves the frame of a handler, which
+    // reports them to the frame that runs it (qore_ir_set_handler_flow())
+    unsigned report = 0;
+    if (flow && current_ir_func->handler_body) {
+        for (int rc : {RC_BREAK, RC_CONTINUE, RC_RETURN}) {
+            if (flow->leavesFunction(rc)) {
+                report |= 1u << (rc == RC_BREAK ? 0 : (rc == RC_CONTINUE ? 1 : 2));
+            }
+        }
+    }
+    llvm::Value* flow_mask = llvm::ConstantInt::get(i64_type,
+        (flow_break ? 1 : 0) | (flow_continue ? 2 : 0) | (flow_return ? 4 : 0) | (report << 3));
+    llvm::Value* flow_rc = nullptr;
     if (synthetic) {
         // the entered block, which the parse tree outlives the native code with; without it, the block is resolved
         // from the marker's file and line
@@ -13546,8 +13579,8 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
                 ptr_type);
         llvm::Value* line_val = llvm::ConstantInt::get(i64_type, static_cast<uint64_t>(abs_line));
         auto fn = module.getOrInsertFunction("qore_rt_dbg_synthetic_block_step",
-                llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type, ptr_type, ptr_type}, false));
-        builder->CreateCall(fn, {file_ptr, line_val, sb_ptr, xsink_arg, getDebugFrameToken()});
+                llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type, i64_type}, false));
+        flow_rc = builder->CreateCall(fn, {file_ptr, line_val, sb_ptr, xsink_arg, flow_mask});
     } else {
         // the statement lives as long as the parse tree that the function was lowered from, which outlives the
         // native code
@@ -13560,34 +13593,59 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
             builder->CreateStore(stmt_ptr, stmt_cache_ptr);
         }
         auto fn = module.getOrInsertFunction("qore_rt_dbg_step",
-                llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type, ptr_type}, false));
-        builder->CreateCall(fn, {stmt_ptr, sb_ptr, xsink_arg, getDebugFrameToken()});
+                llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type, i64_type}, false));
+        flow_rc = builder->CreateCall(fn, {stmt_ptr, sb_ptr, xsink_arg, flow_mask});
     }
-    // An exception that the debugger raised, or a return that it requested, which the hook raised as a thread_exit
-    // (qore_rt_dbg_step()): routes to the instruction's exception target or to the function-level error return,
-    // where the return ends (emitDebugReturnTake())
+    // An exception that the debugger raised: routes to the instruction's exception target or to the function-level
+    // error return
     emitExceptionCheck(module, llvm_func, inst);
-    builder->CreateBr(cont);
+    if (flow_break || flow_continue || flow_return) {
+        // a request: the path of the request, which the IR models as an edge from the event (#6201); no SSA cleanups
+        // are pending here: the exception check above emptied the list (emitCondBrWithSsaPreamble())
+        assert(pending_ssa_cleanup.empty());
+        llvm::SwitchInst* sw = builder->CreateSwitch(flow_rc, cont, 3);
+        if (flow_return) {
+            sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i64_type), RC_RETURN), flow_return);
+        }
+        if (flow_break) {
+            sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i64_type), RC_BREAK), flow_break);
+        }
+        if (flow_continue) {
+            sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i64_type), RC_CONTINUE),
+                flow_continue);
+        }
+    } else {
+        builder->CreateBr(cont);
+    }
     builder->SetInsertPoint(cont);
 }
 
 // documented in QoreIRToLLVM.h
-llvm::Value* QoreIRToLLVM::getDebugFrameToken() {
-    if (native_entry_slots) {
-        return native_entry_slots;
+void QoreIRToLLVM::emitDebugFlowSwitch(llvm::Module& module, llvm::Function* llvm_func, llvm::Value* rc,
+        const QoreIRDebugFlowTargets& flow, bool report) {
+    llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "dbg_flow_cont", llvm_func);
+    llvm::SwitchInst* sw = builder->CreateSwitch(rc, cont, 3);
+    for (int request : {RC_RETURN, RC_BREAK, RC_CONTINUE}) {
+        QoreIRBasicBlock* target = flow.getTarget(request);
+        auto it = target ? block_map.find(target) : block_map.end();
+        if (it == block_map.end()) {
+            continue;
+        }
+        llvm::BasicBlock* dest = it->second;
+        // a request whose path leaves the frame of a handler is reported to the frame that runs it
+        if (report && flow.leavesFunction(request)) {
+            llvm::BasicBlock* report_bb = llvm::BasicBlock::Create(ctx, "dbg_flow_report", llvm_func);
+            llvm::IRBuilderBase::InsertPointGuard ipg(*builder);
+            builder->SetInsertPoint(report_bb);
+            builder->CreateCall(module.getOrInsertFunction("qore_rt_set_handler_flow",
+                llvm::FunctionType::get(void_type, {i64_type}, false)),
+                {llvm::ConstantInt::get(i64_type, request)});
+            builder->CreateBr(dest);
+            dest = report_bb;
+        }
+        sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i64_type), request), dest);
     }
-    return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
-}
-
-// documented in QoreIRToLLVM.h
-void QoreIRToLLVM::emitDebugReturnTake(llvm::Module& module) {
-    // only the functions with the step hooks (see emitDebugStepHook())
-    if (aot_mode || !current_ir_func || !current_ir_func->source_dpgm_addr || !native_entry_slots) {
-        return;
-    }
-    auto fn = module.getOrInsertFunction("qore_rt_dbg_take_return",
-            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
-    builder->CreateCall(fn, {xsink_arg, native_entry_slots});
+    builder->SetInsertPoint(cont);
 }
 
 void QoreIRToLLVM::annotateAotExecutableExprFallback(llvm::Value* call,
@@ -13743,7 +13801,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     native_call_frame_storage = nullptr;
     native_function_context_storage = nullptr;
     native_call_thread_data = nullptr;
-    native_entry_slots = nullptr;
     open_native_call_frames = 0;
     bg_helper_count = 0;
     obe_handler_count = 0;
@@ -14739,7 +14796,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             llvm::IRBuilder<> ab(&entry, entry.getFirstInsertionPt());
             slots = ab.CreateAlloca(slots_type, nullptr, "native_entry_slots");
         }
-        native_entry_slots = slots;
         builder->CreateCall(module.getOrInsertFunction("qore_rt_get_native_entry_slots",
             llvm::FunctionType::get(void_type, {ptr_type}, false)), {slots});
         auto load_slot = [&](unsigned i, const char* name) -> llvm::Value* {
@@ -16170,8 +16226,24 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
 
+    // the lowering state that the code of the blocks consumes in their order, which the paths of the debugger's flow
+    // requests at step events (QoreIRBasicBlock::debug_flow) leave as it was for the blocks after them: they run only
+    // on a request, from a step event of an earlier block, and the code that follows them in the list runs after the
+    // code before them (#6201)
+    bool in_debug_flow_run = false;
+    bool saved_local_reload_boundary_cleanup_pending = false;
     // Lower each block
     for (const auto& block : func.blocks) {
+        if (block->debug_flow != in_debug_flow_run) {
+            in_debug_flow_run = block->debug_flow;
+            if (in_debug_flow_run) {
+                saved_local_reload_boundary_cleanup_pending = local_reload_boundary_cleanup_pending;
+                // the reload state of the event is not known here: the next statement end releases it
+                local_reload_boundary_cleanup_pending = true;
+            } else {
+                local_reload_boundary_cleanup_pending = saved_local_reload_boundary_cleanup_pending;
+            }
+        }
         aot_hash_string_extraction_cache.clear();
         llvm::BasicBlock* llvm_block = block_map[block.get()];
         if (!llvm_block) {
@@ -16204,7 +16276,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     && hash_string_extraction_cfg
                             ->reachable[block_id->second]
                     && hash_string_extraction_cfg
-                            ->predecessors[block_id->second].size() == 1) {
+                            ->predecessors[block_id->second].size() == 1
+                    // the block that a debugger's flow request at a step event enters is entered from inside its
+                    // predecessor (#6201)
+                    && !hash_string_extraction_cfg->getDebugFlowSource(block_id->second)) {
                 size_t predecessor_id = hash_string_extraction_cfg
                     ->predecessors[block_id->second].front();
                 const QoreIRBasicBlock* predecessor =
@@ -16838,8 +16913,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         emitPreinstantiatedCleanup(module, true);
         emitInvokeCleanup(module);
         emitLocalUninstantiation(module);
-        // a return that a debugger requested at a step event ends here (qore#6200)
-        emitDebugReturnTake(module);
         builder->CreateRet(getNothingReturnValue());
     }
 
@@ -36878,19 +36951,40 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 } else {
                     // the handlers run through the runtime only if one of the scope is registered (see
                     // emitOnBlockExitExec())
+                    llvm::BasicBlock* skip_bb = builder->GetInsertBlock();
                     llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, saved_count);
                     publishLocalsForHandlers(module);
                     // the locals whose reload storage is released before the handlers run are reloaded right after
                     // them (see finalizeHandlerSites())
                     recordHandlerSite(emitOnBlockExitHoldCall(module, saved_count,
                         !qore_ir_exception_reaches_catch(inst->exception_target)), true);
+                    // a debugger's request that the last handler run ended with (#6201)
+                    llvm::Value* handler_flow = nullptr;
+                    llvm::BasicBlock* run_end_bb = nullptr;
+                    if (sinst->flow && !aot_mode) {
+                        handler_flow = builder->CreateCall(module.getOrInsertFunction("qore_rt_take_scope_exit_flow",
+                            llvm::FunctionType::get(i64_type, {}, false)), {});
+                        run_end_bb = builder->GetInsertBlock();
+                    }
                     endPendingHandlerRun(done_bb);
+                    if (handler_flow) {
+                        llvm::PHINode* flow_phi = builder->CreatePHI(i64_type, 2, "scope_exit_flow");
+                        flow_phi->addIncoming(llvm::ConstantInt::get(i64_type, 0), skip_bb);
+                        flow_phi->addIncoming(handler_flow, run_end_bb);
+                        handler_flow = flow_phi;
+                    }
                     // On-block-exit handlers execute user code and can modify any local variable on the
                     // thread-local stack.  The local caches are invalidated on both paths, as at a landing pad: this
                     // exit is on an exception path, where the cache of a local can have been left empty by the
                     // instruction that raised the exception (see the LandingPad case)
                     reloadAllLocalsFromRuntime(module, llvm_func);
                     emitExceptionCheck(module, llvm_func, inst);
+                    // the request becomes that of the block, as with the AST interpreter
+                    // (StatementBlock::execIntern()): its path, after the handlers (#6201)
+                    if (handler_flow) {
+                        emitDebugFlowSwitch(module, llvm_func, handler_flow, *sinst->flow,
+                            current_ir_func->handler_body);
+                    }
                 }
             }
             // ScopeExit produces NOTHING as its result
