@@ -422,6 +422,10 @@ public:
     //! Releases a temporary that the function owns on the path of a return (QoreIROpcode::ReleaseOwnedTemp)
     QoreIRInstruction* createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
 
+    //! Hands the value of a return statement in a handler run out of line to its function (QoreIROpcode::HandlerReturn,
+    //! #6074); an invalid \a value is a return without a value
+    QoreIRInstruction* createHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+
     //! Releases \a input, the input of a fused pipeline's map stage, once the stage has given \a kept, unless it is
     //! \a kept itself at run time (a value that an optimization or the expression made the input): a ReleaseOwnedTemp
     //! with \a kept as a second operand

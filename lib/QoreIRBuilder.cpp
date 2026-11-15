@@ -1776,6 +1776,15 @@ QoreIRInstruction* QoreIRBuilder::createReleaseOwnedTemp(QoreIRValue value, cons
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::HandlerReturn);
+    if (value.isValid()) {
+        inst->operands.push_back(value);
+    }
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createReleaseStageInput(QoreIRValue input, QoreIRValue kept,
         const QoreProgramLocation* loc) {
     QoreIRInstruction* inst = createReleaseOwnedTemp(input, loc);

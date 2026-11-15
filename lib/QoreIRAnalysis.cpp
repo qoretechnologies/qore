@@ -18825,3 +18825,36 @@ void qore_ir_find_observable_temp_call_args(const QoreIRFunction& func, std::vec
         }
     }
 }
+
+// documented in QoreIRAnalysis.h
+const std::vector<uint32_t>* qore_ir_exception_catch_returns(const QoreIRFunction& func,
+        const QoreIRBasicBlock* target) {
+    std::vector<const QoreIRBasicBlock*> work;
+    std::unordered_set<const QoreIRBasicBlock*> seen;
+    if (target) {
+        work.push_back(target);
+    }
+    // breadth first: the catch block nearest to the exception
+    for (size_t i = 0; i < work.size(); ++i) {
+        const QoreIRBasicBlock* block = work[i];
+        if (!block || !seen.insert(block).second) {
+            continue;
+        }
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::CatchException) {
+                static const std::vector<uint32_t> no_returns;
+                auto r = func.catch_interrupted_returns.find(inst.get());
+                return r == func.catch_interrupted_returns.end() ? &no_returns : &r->second;
+            }
+            if (inst->exception_target) {
+                work.push_back(inst->exception_target);
+            }
+            if (isTerminator(inst->opcode)) {
+                qore_ir_visit_successors(*inst, [&work](QoreIRBasicBlock* succ) {
+                    work.push_back(succ);
+                });
+            }
+        }
+    }
+    return nullptr;
+}

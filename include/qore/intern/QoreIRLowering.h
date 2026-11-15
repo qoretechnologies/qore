@@ -901,6 +901,13 @@ private:
         a handler compiled to an IR function of its own is the root block of that function, which has none (#5870)
     */
     bool handler_body = false;
+    //! true while the block cleanups of a return statement in a try statement of a handler body (handler_body) are
+    //! lowered: the value of the return (handover_try_value) is handed to the function that the handler runs for when
+    //! the walk leaves the outermost try statement of the handler, as the AST interpreter's try statement gives the
+    //! value of its return to the enclosing block when it ends (QoreIROpcode::HandlerReturn, #6074)
+    bool handover_try_active = false;
+    //! the value of the return of handover_try_active; invalid for a return without a value
+    QoreIRValue handover_try_value;
     //! the handler body that lowerHandlerAtExit() lowers inline next: its block gets an exception path of its own for
     //! its locals (see lowerStatementBlock(), #6002)
     const StatementBlock* inline_handler_block = nullptr;
@@ -936,7 +943,7 @@ private:
         //! CatchScope entry of its catch block): try_depth in the statement, 0 for the other entries (#5992)
         int try_end_depth = 0;
         //! for an entry with try_end_depth: the exception target outside the try statement, which an exception raised
-        //! once the statement has ended goes to (#6128)
+        //! once the statement has ended goes to (#6128; the hand-over of a return in it, #6074)
         QoreIRBasicBlock* try_outer_target = nullptr;
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
@@ -1161,6 +1168,10 @@ private:
     DLLLOCAL bool replacesPendingReturn() const;
     //! Releases the value of the return that a return in a handler replaces (see pending_return)
     DLLLOCAL void releaseReplacedReturn(const QoreProgramLocation* loc);
+    //! Hands the value of a return statement in a handler body run out of line (handler_body) to the function that
+    //! the handler runs for (QoreIROpcode::HandlerReturn, #6074); in a try statement of the handler, when the outermost
+    //! one ends (handover_try_active); an invalid \a value is a return without a value
+    DLLLOCAL void emitHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc);
     //! the depth of the statements lowered, for the nesting of DebugStatement instructions (#5816)
     uint16_t debug_nest_depth = 0;
     //! the depth of the statements of the catch block lowered, or -1 (QORE_IR_DEBUG_NEST_IN_CATCH)
