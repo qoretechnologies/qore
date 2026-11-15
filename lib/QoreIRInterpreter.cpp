@@ -485,6 +485,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include <qore/QoreStringNode.h>
 #include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/qore_list_private.h>
+#include <qore/intern/qore_date_private.h>
 
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // the trace switches, which the interpreter reads on every return of a function, read from the environment once
@@ -20624,8 +20625,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 int64_t ms = lms - (secs * 1000);
                 DateTime l;
                 // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
-                l.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
-                return right.get<const DateTimeNode>()->add(l);
+                if (l.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000), xsink)) {
+                    return QoreValue();
+                }
+                return right.get<const DateTimeNode>()->add(l, xsink);
             }
             if (left.getType() == NT_DATE && right.getType() == NT_INT) {
                 int64_t rms = right.getAsBigInt();
@@ -20633,8 +20636,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 int64_t ms = rms - (secs * 1000);
                 DateTime r;
                 // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
-                r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
-                return left.get<const DateTimeNode>()->add(r);
+                if (r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000), xsink)) {
+                    return QoreValue();
+                }
+                return left.get<const DateTimeNode>()->add(r, xsink);
             }
             // Fallback for non-timeout cases
             bool needs_deref = true;
@@ -20684,8 +20689,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 int64_t secs = lms / 1000;
                 int64_t ms = lms - (secs * 1000);
                 // the leftover is in milliseconds; makeRelativeFromSeconds() takes microseconds
-                SimpleRefHolder<DateTimeNode> l(DateTimeNode::makeRelativeFromSeconds(secs, static_cast<int>(ms * 1000)));
-                return l->subtractBy(right.get<const DateTimeNode>());
+                SimpleRefHolder<DateTimeNode> l(DateTimeNode::makeRelativeFromSeconds(secs,
+                    static_cast<int>(ms * 1000), xsink));
+                if (!l) {
+                    return QoreValue();
+                }
+                return l->subtractBy(*right.get<const DateTimeNode>(), xsink);
             }
             if (left.getType() == NT_DATE && right.getType() == NT_INT) {
                 int64_t rms = right.getAsBigInt();
@@ -20693,8 +20702,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 int64_t ms = rms - (secs * 1000);
                 DateTime r;
                 // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
-                r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
-                return left.get<const DateTimeNode>()->subtractBy(r);
+                if (r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000), xsink)) {
+                    return QoreValue();
+                }
+                return left.get<const DateTimeNode>()->subtractBy(r, xsink);
             }
             // Fallback
             bool needs_deref = true;
@@ -22362,8 +22373,17 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
         v.plusEqualsFloat(right.getAsFloat());
     } else if (vtype == NT_DATE) {
         if (!right.isNullOrNothing()) {
-            DateTime date(right);
-            assign(v.getValue().get<DateTimeNode>()->add(date), "<lvalue for += operator>");
+            // the value added is converted to a relative date, and a result out of range raises INVALID-DATE
+            // (qore#6103)
+            DateTime date(true);
+            if (qore_date_private::setRelative(date, right, xsink)) {
+                return QoreValue();
+            }
+            DateTimeNode* sum = v.getValue().get<DateTimeNode>()->add(date, xsink);
+            if (!sum) {
+                return QoreValue();
+            }
+            assign(sum, "<lvalue for += operator>");
         }
     } else if (vtype == NT_BINARY) {
         if (!right.isNullOrNothing()) {
@@ -22512,12 +22532,25 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
             return v.minusEqualsBigInt(ms);
         }
-        // Regular date arithmetic
+        // Regular date arithmetic; a result out of range raises INVALID-DATE (qore#6103)
         if (right.getType() == NT_DATE) {
-            v.assign(v.getValue().get<DateTimeNode>()->subtractBy(*right.get<const DateTimeNode>()));
+            DateTimeNode* diff = v.getValue().get<DateTimeNode>()->subtractBy(*right.get<const DateTimeNode>(),
+                xsink);
+            if (!diff) {
+                return QoreValue();
+            }
+            v.assign(diff);
         } else {
-            DateTime date(right);
-            v.assign(v.getValue().get<DateTimeNode>()->subtractBy(date));
+            // the value subtracted is converted to a relative date
+            DateTime date(true);
+            if (qore_date_private::setRelative(date, right, xsink)) {
+                return QoreValue();
+            }
+            DateTimeNode* diff = v.getValue().get<DateTimeNode>()->subtractBy(date, xsink);
+            if (!diff) {
+                return QoreValue();
+            }
+            v.assign(diff);
         }
     } else if (vtype == NT_HASH) {
         if (right.getType() != NT_HASH && right.getType() != NT_OBJECT) {

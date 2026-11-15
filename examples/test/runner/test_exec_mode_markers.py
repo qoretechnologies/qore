@@ -206,6 +206,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   executables
         # - dataframe-aot-plugin-helpers (#6130): its probes run in child processes that set their own --exec-mode,
         #   in qcc executables and with a module compiled by qcc
+        # - relative-date-overflow (#6103) and relative-date-multiply (#6109): their probes run in child processes
+        #   that set their own --exec-mode and in qcc executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
@@ -216,6 +218,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",
+                                 "examples/test/qore/operators/relative-date-overflow.qtest",
+                                 "examples/test/qore/operators/relative-date-multiply.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",

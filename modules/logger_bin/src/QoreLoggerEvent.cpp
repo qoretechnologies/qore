@@ -172,9 +172,10 @@ DateTimeNode* QoreLoggerEvent::getTimeStamp() const {
 
     @see @ref getStartTime()
 */
-DateTimeNode* QoreLoggerEvent::getRelativeTime() const {
+DateTimeNode* QoreLoggerEvent::getRelativeTime(ExceptionSink* xsink) const {
     AutoLocker al(m);
-    return timeStamp->subtractBy(*startTime);
+    // a difference out of range raises INVALID-DATE (qore#6103)
+    return timeStamp->subtractBy(*startTime, xsink);
 }
 
 //! Returns throwable info, if any

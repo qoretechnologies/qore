@@ -503,6 +503,11 @@ auto val = q.pop(20000);
 
     @note In this relative date/time format, only seconds accept a fractional component
 
+    @note A literal in this format has no sign and is parsed as one value: its value (for \c Y, \c M, \c D and
+    \c h) or its whole hours (for \c m, \c s, \c ms and \c us) must be at most 2147483647, the largest value of the
+    signed 32-bit component of a relative date, or the literal is a parse error.  So <tt>-2147483648h</tt> is a parse
+    error, as it is the negation of \c 2147483648h, although <tt>hours(-2147483648)</tt> is a relative date in range.
+
     @subsubsection short_reldates Short Relative Time Format
     This and the next duration format are the two duration formats of
     <a href="http://en.wikipedia.org/wiki/ISO_8601">ISO 8601</a> (ISO 8601:2004 section 4.4.3, and ISO 8601-1:2019),

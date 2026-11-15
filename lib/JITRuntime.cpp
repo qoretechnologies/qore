@@ -7060,8 +7060,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_date(int64_t date_microseconds, int64
     DateTimeNode* dt;
     if (is_relative) {
         dt = new DateTimeNode(true);
+        // the microseconds of a relative date constant, which the compiler took from a relative date that fits
+        // (getRelativeMicroseconds()), so its hours fit; there is no exception sink here, and a value out of range
+        // would be saturated (qore#6103)
         dt->setRelativeDateSeconds(date_microseconds / 1000000,
-            static_cast<int>(date_microseconds % 1000000));
+            static_cast<int>(date_microseconds % 1000000), nullptr);
     } else {
         // date_microseconds is a UTC epoch from getEpochMicrosecondsUTC(); use makeAbsolute()
         // which stores the epoch directly without local-to-UTC conversion (unlike DateTimeNode(s, ms)
@@ -16265,6 +16268,14 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
             break;
         default: {
             qore_type_t vtype = lvh.getType();
+            // *= with a date lvalue or operand assigns the relative date that the * operator gives, as in the AST
+            // interpreter (qore#6109)
+            if (compound_op == LVCompoundOp::MulAssign && (vtype == NT_DATE || rhs.getType() == NT_DATE)) {
+                if (!qore_date_multiply_equals(lvh, rhs, xsink)) {
+                    res = lvh.getReferencedValue();
+                }
+                break;
+            }
             // only *= and /= follow a number or float lvalue or operand; the other operators are integer
             // operations, as in the AST interpreter
             bool arithmetic = compound_op == LVCompoundOp::MulAssign || compound_op == LVCompoundOp::DivAssign;

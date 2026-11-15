@@ -601,6 +601,11 @@
       reference, and the Program is destroyed once nothing depends on it, instead of at once, so a Program must first
       be cleared with \c QoreProgram::waitForTerminationAndDeref() or \c QoreProgram::deref(ExceptionSink*) (see
       \c QoreProgram::deref())
+    - date arithmetic has overloads with an \c ExceptionSink that raise \c INVALID-DATE for a result out of range:
+      \c DateTime::add(), \c subtractBy(), \c unaryMinus(), \c unaryMinusInPlace(), \c addSecondsTo(),
+      \c setRelativeDateSeconds() and \c makeRelativeFromSeconds(), the \c DateTimeNode overloads and
+      \c DateTimeValueHelper(const QoreValue&, ExceptionSink*); the overloads without an \c ExceptionSink are
+      deprecated and saturate such a result (it wrapped before; see \c QORE_DATE_UNCHECKED_DEPRECATED, issue #6103)
     @endparblock
 
     @par qget Command-Line Changes
@@ -713,6 +718,18 @@
     @ref Qore::SIGSYS "SIGSYS", so \c SIGRTMIN+1 is reserved by the library and @ref Qore::SIGSYS "SIGSYS" can have
     a %Qore-language handler; valgrind no longer kills or hangs the process at the wake-up (see
     @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
+
+    @par Date Arithmetic Out of Range Raises INVALID-DATE
+    @ref date_time_arithmetic "Date arithmetic", date(int), date(softfloat) and the conversion of a number to a
+    relative date raise \c INVALID-DATE for a result that a date cannot hold, and a relative date literal out of range
+    (ex: \c 2147483648h) is a parse error; the result wrapped to another, often negative, duration (issue #6103).
+
+    @par Multiplying a Relative Date Gives a Relative Date
+    The @ref multiplication_operator "* operator" and \c *= with a @ref relative_dates "relative date" and a number
+    give a relative date with each of its components multiplied (ex: <tt>months(1) * 2</tt> is 2 months; a float
+    factor carries fractions as \c date("P...") does); they gave an int, and \c *= assigned it.  An \c int,
+    \c float or \c number lvalue multiplied by a date with \c *= raises an exception at run time, as it cannot hold
+    the result (issue #6109).
 
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Strict Parse Errors
@@ -1771,6 +1788,11 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the negative of an absolute date with microseconds (ex: <tt>-1970-01-01T00:00:01.5Z</tt>) is
+      \c 1969-12-31T23:59:58.5Z; the microseconds were negated as an unsigned value and gave another date (issue #6103)
+    - the decimal fraction of an ISO 8601 duration component (ex: \c P0.0000001Y for
+      @ref Qore::date(string) "date(string)") is converted to microseconds without the error of its binary
+      approximation, which could lose a microsecond (\c P0.0000001Y gave 3.153599 seconds; issue #6109)
     - the heartbeat of @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" connections is measured on the
       monotonic clock: a step back of the system clock no longer stops the heartbeat PINGs for the size of the step
       (see @ref Qore::AsyncIoController::addTimerDelay() "AsyncIoController::addTimerDelay()")
