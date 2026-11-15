@@ -3160,6 +3160,15 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     return_protected_slots[ret->value.id] = 1;
                     return_value_slot_ids.push_back(ret->value.id);
                 }
+                // a list or hash returned through `any` is stripped (see the Return handler): decided here once for
+                // each return, from the value's facts, as for native code (qore_ir_return_needs_coercion())
+                if (ret->has_value && func.return_type_info == anyTypeInfo) {
+                    const QoreIRValueFacts* facts = func.getValueFacts(ret->value);
+                    const QoreTypeInfo* value_type = facts ? facts->type_info : nullptr;
+                    ret->interpreter_strips_any = !value_type
+                        || QoreTypeInfo::parseAcceptsReturns(value_type, NT_LIST)
+                        || QoreTypeInfo::parseAcceptsReturns(value_type, NT_HASH);
+                }
             } else if (inst_ptr->opcode == QoreIROpcode::RefSelf && inst_ptr->result.isValid()
                     && inst_ptr->result.id < return_protected_slots.size()) {
                 return_protected_slots[inst_ptr->result.id] = 1;
@@ -6264,6 +6273,17 @@ static bool interpreterInlineClosureNeedsFrame(const QoreClosureBase* cb) {
         }
     }
     return false;
+}
+
+//! strips the complex type of a list or hash returned through the return type `any` (qore#6058)
+/** Out of line: calling QoreTypeInfo::acceptAssignment() in QoreIRInterpreter::execute() instead made every execution
+    mode +16 instructions per call in callgrind (the strip was inlined into the interpreter)
+*/
+static __attribute__((noinline, cold)) void interpreterStripAnyReturn(QoreValue& return_value) {
+    const qore_type_t rt = return_value.getType();
+    if (rt == NT_LIST || rt == NT_HASH) {
+        return_value = fromBits(qore_rt_strip_any_param(toBits(return_value)));
+    }
 }
 
 template <bool GIVEN = false>
@@ -20393,6 +20413,14 @@ load_local_done:
                         }
                     } else {
                         return_value = val;
+                    }
+                    // a list or hash returned through the return type `any` has its complex type stripped, as on
+                    // assignment to `any` (ReturnStatement::execImpl() assigns the value to the return type): a list
+                    // or hash with a complex type is copied with a plain one (qore#6058).  The flag is set once per
+                    // return by the function's analysis; the strip is out of line and the test is marked unlikely,
+                    // so that the code of this function stays as it is for other returns
+                    if (ret->interpreter_strips_any) [[unlikely]] {
+                        interpreterStripAnyReturn(return_value);
                     }
                 } else {
                     return_value = QoreValue();

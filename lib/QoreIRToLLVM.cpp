@@ -1423,7 +1423,11 @@ bool qore_ir_return_needs_coercion(
         return true;
     }
     if (return_type == anyTypeInfo) {
-        return false;
+        // a list or hash returned through `any` has its complex type stripped, as on assignment to `any`
+        // (qore#6058): a value that cannot be one is returned as it is
+        const QoreTypeInfo* value_type = value_facts ? value_facts->type_info : nullptr;
+        return !value_type || QoreTypeInfo::parseAcceptsReturns(value_type, NT_LIST)
+            || QoreTypeInfo::parseAcceptsReturns(value_type, NT_HASH);
     }
 
     if (QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)
@@ -20392,8 +20396,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // a fast entry is called directly by compiled code instead of through a runtime call helper that
                 // applies the declared return type, so like an AOT standard entry it converts the value itself;
                 // the conversion must precede extraction of a native return value
+                // a value returned through `any` is converted by every entry, as not every caller applies the return
+                // type to the value of a standard entry (UserVariantBase::evalTiered() applies a return type that has
+                // a type only; qore#6058)
                 coerce_return = !timeout_return && !optional_timeout_return
-                    && (aot_mode || !fast_entry_name.empty())
+                    && (aot_mode || !fast_entry_name.empty() || return_type == anyTypeInfo)
                     && qore_ir_return_needs_coercion(return_type, return_value_facts);
                 // a return statement that returns no value from code whose return type requires one raises the
                 // error of its return statement, as the AST interpreter checks every return statement, instead of
