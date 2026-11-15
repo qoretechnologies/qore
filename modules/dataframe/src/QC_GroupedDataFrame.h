@@ -89,9 +89,8 @@ private:
     std::vector<Column> source_columns;
     std::unordered_map<std::string, size_t> source_col_index;
 
-    //! Group key → list of row indices in source
+    //! The rows of a group in the source; the key values of a group are those of its first row
     struct Group {
-        std::vector<std::string> key_values;  //!< string representation of group key
         std::vector<int64_t> row_indices;
     };
     std::vector<Group> groups;

@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class RelativeDateOverflowTest
+
+#! Date arithmetic and conversions out of the range of a relative date raise INVALID-DATE in every mode (qore#6103)
+/** The components of a relative date are 32-bit ints: arithmetic (+, -, unary -, +=, -=, *), the conversion of a
+    number to a relative date (date(int), date(float), date + int) and relative date literals wrapped silently to
+    another, often negative, duration when the result did not fit.  The probes (relative-date-overflow/probes.q) run
+    in each execution mode in a child process, with tiered execution at the IR tier and promoted to native code, and
+    as qcc-compiled executables (-O0, -O3); the results are the same everywhere.
+*/
+class RelativeDateOverflowTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the result of each probe, which is the same in every mode
+        const Results = (
+            "rel+rel hours: INVALID-DATE",
+            "rel+rel carry into hours: INVALID-DATE",
+            "rel+rel in range: <time: 2147483647 hours 59 minutes>",
+            "rel+rel carry into years: INVALID-DATE",
+            "rel+rel days: INVALID-DATE",
+            "rel-rel hours: INVALID-DATE",
+            "rel-rel in range: <time: -2147483648 hours -1 minutes>",
+            "rel-rel days: INVALID-DATE",
+            "rel-rel years: INVALID-DATE",
+            "abs+rel years: INVALID-DATE",
+            "abs+rel in range: 1002026-01-01 00:00:00.000000 +00:00",
+            "abs+rel hours in range: 247009-10-10 07:00:00.000000 +00:00",
+            "abs-rel years: INVALID-DATE",
+            "abs-rel years in range: -2147481621-01-01 00:00:00.000000 +00:00",
+            "abs-rel smallest hours: 247009-10-10 08:00:00.000000 +00:00",
+            "abs-abs: INVALID-DATE",
+            "abs-abs in range: <time: 17750784 hours>",
+            "abs+abs: INVALID-DATE",
+            "abs+abs negative: INVALID-DATE",
+            "abs+abs int64: INVALID-DATE",
+            "abs+abs in range: 1970-01-02 01:00:00.500000 +00:00",
+            "abs out of range+days: INVALID-DATE",
+            "-abs smallest year: INVALID-DATE",
+            "-abs in range: 1969-12-31 23:59:58.500000 +00:00",
+            "-smallest hours: INVALID-DATE",
+            "-largest hours: <time: -2147483647 hours>",
+            "+= hours: INVALID-DATE",
+            "-= hours: INVALID-DATE",
+            "+= int: INVALID-DATE",
+            "+= int out of range: INVALID-DATE",
+            "-= int in range: <time: 2147483646 hours>",
+            "rel+int: INVALID-DATE",
+            "int-rel: INVALID-DATE",
+            "rel*int: INVALID-DATE",
+            "int*rel: INVALID-DATE",
+            "rel*float: INVALID-DATE",
+            "rel*number: INVALID-DATE",
+            "rel*nan: INVALID-DATE",
+            "rel*inf: INVALID-DATE",
+            "rel*maxint: INVALID-DATE",
+            "rel*int in range: <time: -2147483648 hours>",
+            "date(int): INVALID-DATE",
+            "date(int) in range: <time: 2135323380 hours 26 minutes 39 seconds>",
+            "date(float): INVALID-DATE",
+            "date(huge float): INVALID-DATE",
+            "date(nan): INVALID-DATE",
+            "date(float) in range: <time: -1 seconds -500 milliseconds>",
+            "get_duration_seconds(): 67723044291792000",
+            "get_duration_milliseconds(): INVALID-DATE",
+            "get_duration_microseconds(): INVALID-DATE",
+            "durationMicroseconds(): INVALID-DATE",
+            "get_duration_microseconds() in range: 7730941129200000000",
+            "compare near limits: True",
+            "compare equal: True",
+            "literal h: PARSE-EXCEPTION: relative date literal '2147483648h' is out of range: its hours must fit a "
+                "signed 32-bit integer (at most 2147483647 hours)",
+            "literal Y: PARSE-EXCEPTION: relative date literal '2147483648Y' is out of range: its years must fit a "
+                "signed 32-bit integer (at most 2147483647 years)",
+            "literal s: PARSE-EXCEPTION: relative date literal '9223372036855s' is out of range: its hours must fit a "
+                "signed 32-bit integer (at most 2147483647 hours)",
+            "literal ms: PARSE-EXCEPTION: relative date literal '9223372036854775ms' is out of range: its hours must "
+                "fit a signed 32-bit integer (at most 2147483647 hours)",
+            "literal us: PARSE-EXCEPTION: relative date literal '9223372036854775807us' is out of range: its hours "
+                "must fit a signed 32-bit integer (at most 2147483647 hours)",
+            "literal beyond int64: PARSE-EXCEPTION: relative date literal '9223372036854775808D' is out of range: its "
+                "days must fit a signed 32-bit integer (at most 2147483647 days)",
+            "literal s in range: <time: 833333 hours 20 minutes>",
+            "literal m in range: <time: 2147483647 hours 59 minutes>",
+            "literal h in range: <time: 2147483647 hours>",
+            "constant operands: INVALID-DATE: relative date arithmetic overflow: the result has more hours than a "
+                "relative date can hold (-2147483648 to 2147483647)",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("RelativeDateOverflow", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        for (int i = 0; i < 8; ++i) {
+            foreach string line in (Results) {
+                expected += sprintf("%d: %s\n", i, line);
+            }
+        }
+
+        addTestCase("date arithmetic out of range raises in every mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-relative-date-overflow-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "relative-date-overflow" + DirSep
+            + "probes.q")
+            + "\nfor (int i = 0; i < 8; ++i) {\n    foreach string line in (probes()) {\n"
+            "        printf(\"%d: %s\\n\", i, line);\n    }\n}\n");
+        f.close();
+
+        string env = sprintf("TZ=UTC QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), "tiered, IR tier");
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("TZ=UTC LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1",
+                libqore_dir, libqore_dir, exe)), "qcc " + opt);
+            assertEq(expected, backquote(sprintf("TZ=UTC QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 "
+                "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe)),
+                "qcc " + opt + ", JIT");
+        }
+    }
+}

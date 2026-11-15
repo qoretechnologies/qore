@@ -1,0 +1,277 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DeepValuesTest
+
+#! counts the objects destroyed
+class Tracker {
+    public {
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+#! Tests that deeply nested values are copied, converted, measured, scanned and removed on a thread with a small stack
+/** Copying a value with its complex types stripped (as when it is passed to a parameter of type list or hash),
+    auto_cast(), get_value_byte_size(), the scan of format_bounded() and the bookkeeping of a removed value walked the
+    value once per level of nesting, so a value nested more deeply than the thread's stack allows overflowed the stack
+    (qore#6117).  Values nested beyond a fixed depth are now walked with a work stack.
+*/
+class DeepValuesTest inherits QUnit::Test {
+    public {
+        #! the stack size of a test thread
+        const StackSize = 128 * 1024;
+        #! the nesting of the values
+        const DataDepth = 100000;
+        #! a depth past the one from which the values are walked without recursion
+        const IterativeDepth = 150;
+    }
+
+    constructor() : QUnit::Test("deep values", "1.0") {
+        addTestCase("a deep value passed to a list parameter", \stripListParam());
+        addTestCase("a deep value passed to a hash parameter", \stripHashParam());
+        addTestCase("a copy of a deep value has its values", \stripEquality());
+        addTestCase("a deep value removed from a container", \removeTest());
+        addTestCase("auto_cast() of a deep value", \autoCastTest());
+        addTestCase("get_value_byte_size() of a deep value", \byteSizeTest());
+        addTestCase("format_bounded() of a deep value", \formatTest());
+        addTestCase("an object in a deep value", \objectTest());
+        addTestCase("dbg_node_info() of a deep value", \nodeInfoTest());
+        set_return_value(main());
+    }
+
+    #! the issue's case: the list is copied with its complex types stripped, with the values in it
+    stripListParam() {
+        inThread(sub () {
+            auto dh = DeepValuesTest::makeHash(DataDepth);
+            hash<auto> r = DeepValuesTest::listParam((c"z", dh, dh));
+            assertEq(3, r.size);
+            assertEq(DataDepth, r.depth);
+            assertEq(1, r.bottom);
+        });
+    }
+
+    #! a copy that is made without recursion past a fixed depth has the values of the original
+    stripEquality() {
+        auto dh = DeepValuesTest::makeHash(IterativeDepth);
+        auto dl = DeepValuesTest::makeList(IterativeDepth);
+        assertTrue(DeepValuesTest::sameElements((c"z", dh, dl), (c"z", dh, dl)));
+        hash<auto> r = DeepValuesTest::listParam((c"z", dh, dh));
+        assertEq(IterativeDepth, r.depth);
+        assertEq(1, r.bottom);
+        # the copy has no complex types, also past the depth from which it is made without recursion
+        assertEq(("hash", "hash"), DeepValuesTest::typesAt((c"z", dh), (10, 100)));
+        assertEq(("list", "list"), DeepValuesTest::typesAt((c"z", dl), (10, 100)));
+        # the original keeps them
+        assertEq("hash<string, ", DeepValuesTest::descend(dh, 100).fullType().substr(0, 13));
+        assertEq("list<list<", DeepValuesTest::descend(dl, 100).fullType().substr(0, 10));
+    }
+
+    #! an object below the depth from which the values are walked without recursion is held by the copies and the
+    #! removed value, and is destroyed once they are released
+    objectTest() {
+        int before = Tracker::destroyed;
+        {
+            auto v = DeepValuesTest::makeHash(IterativeDepth, new Tracker());
+            hash<auto> c = {"a": v, "b": 1};
+            auto removed = remove c.a;
+            assertEq(("b",), keys c);
+            hash<auto> r = DeepValuesTest::listParam((c"z", removed));
+            assertTrue(r.bottom instanceof Tracker);
+            auto ac = auto_cast(removed);
+            assertTrue(DeepValuesTest::descend(ac, IterativeDepth) instanceof Tracker);
+            assertEq(before, Tracker::destroyed);
+        }
+        assertEq(before + 1, Tracker::destroyed);
+    }
+
+    #! the debug function raises an exception instead of overflowing the stack
+    nodeInfoTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_node_info() is only in debug builds");
+        }
+        inThread(sub () {
+            auto dh = DeepValuesTest::makeHash(DataDepth);
+            assertThrows("STACK-LIMIT-EXCEEDED", \call_function(), ("dbg_node_info", dh));
+        });
+    }
+
+    stripHashParam() {
+        inThread(sub () {
+            auto dh = DeepValuesTest::makeHash(DataDepth);
+            hash<auto> r = DeepValuesTest::hashParam({"x": dh});
+            assertEq(DataDepth, r.depth);
+            assertEq(1, r.bottom);
+        });
+    }
+
+    removeTest() {
+        inThread(sub () {
+            auto dh = DeepValuesTest::makeHash(DataDepth);
+            auto dl = DeepValuesTest::makeList(DataDepth);
+            hash<auto> h = {"a": dh, "b": dl, "c": dh, "d": dl};
+            auto v = remove h.a;
+            assertEq(DataDepth, DeepValuesTest::hashDepth(v));
+            delete h.b;
+            assertEq(("c", "d"), keys h);
+            list<auto> l = (1, dh, dl, 2);
+            list<auto> e = extract l, 1, 2;
+            assertEq((1, 2), l);
+            assertEq(DataDepth, DeepValuesTest::hashDepth(e[0]));
+            assertEq(DataDepth, DeepValuesTest::listDepth(e[1]));
+            remove h;
+        });
+    }
+
+    autoCastTest() {
+        inThread(sub () {
+            auto dh = DeepValuesTest::makeHash(DataDepth);
+            auto c = auto_cast(dh);
+            assertEq(DataDepth, DeepValuesTest::hashDepth(c));
+            # the folded type of a hash past the depth from which the conversion is made without recursion is that of
+            # the conversion of the same hash with recursion
+            auto deep = DeepValuesTest::descend(c, DataDepth - IterativeDepth);
+            auto sub_value = DeepValuesTest::descend(dh, DataDepth - IterativeDepth);
+            assertEq(auto_cast(sub_value).fullType(), deep.fullType());
+
+            auto dl = DeepValuesTest::makeList(DataDepth);
+            auto cl = auto_cast(dl);
+            assertEq(DataDepth, DeepValuesTest::listDepth(cl));
+        });
+    }
+
+    byteSizeTest() {
+        inThread(sub () {
+            # each level has the key "a" (1 byte); the value at the bottom is an int (8 bytes)
+            assertEq(DataDepth + 8, get_value_byte_size(DeepValuesTest::makeHash(DataDepth)));
+            # each level is a list with one element; the value at the bottom is an int
+            assertEq(8, get_value_byte_size(DeepValuesTest::makeList(DataDepth)));
+            # an object in a deep value is reported as in a shallow one
+            auto dh = DeepValuesTest::makeHash(DataDepth);
+            assertThrows("GET-VALUE-BYTE-SIZE-ERROR", \get_value_byte_size(), ({"o": new Mutex(), "h": dh},));
+        });
+    }
+
+    #! the scan of the value does not overflow the stack; the format pass raises the stack error when the value is
+    #! nested too deeply to format it
+    formatTest() {
+        inThread(sub () {
+            auto dh = DeepValuesTest::makeHash(DataDepth);
+            assertThrows("STACK-LIMIT-EXCEEDED", \format_bounded(), (dh, <FormatBounds>{"max_depth": 0}));
+        });
+        # a value that is formatted completely is scanned past the depth from which it is scanned without recursion;
+        # formatting it needs more stack than the test thread has
+        auto h = DeepValuesTest::makeHash(IterativeDepth);
+        string s = format_bounded(h, <FormatBounds>{"max_depth": 0});
+        assertEq(IterativeDepth, (s =~ x/(a)/g).size());
+    }
+
+    #! returns {"a": {"a": ... bottom}} nested to the given depth
+    static auto makeHash(int depth, auto bottom = 1) {
+        auto h = bottom;
+        for (int i = 0; i < depth; ++i) {
+            h = {"a": h};
+        }
+        return h;
+    }
+
+    #! returns ((... (1))) nested to the given depth
+    static auto makeList(int depth) {
+        auto l = 1;
+        for (int i = 0; i < depth; ++i) {
+            l = (l,);
+        }
+        return l;
+    }
+
+    #! returns the number of nested hashes
+    static int hashDepth(auto v) {
+        int depth = 0;
+        while (v.typeCode() == NT_HASH) {
+            v = v.a;
+            ++depth;
+        }
+        return depth;
+    }
+
+    #! returns the number of nested lists
+    static int listDepth(auto v) {
+        int depth = 0;
+        while (v.typeCode() == NT_LIST) {
+            v = v[0];
+            ++depth;
+        }
+        return depth;
+    }
+
+    #! returns the value the given number of levels down
+    static auto descend(auto v, int levels) {
+        for (int i = 0; i < levels; ++i) {
+            v = v.typeCode() == NT_HASH ? v.a : v[0];
+        }
+        return v;
+    }
+
+    #! a parameter of type list, which strips the complex types of its argument
+    static hash<auto> listParam(list l) {
+        auto v = l[-1];
+        int depth = DeepValuesTest::hashDepth(v);
+        return {
+            "size": l.size(),
+            "depth": depth,
+            "bottom": DeepValuesTest::descend(v, depth),
+        };
+    }
+
+    #! returns the types of the second value given to a parameter of type list at the given depths
+    static list<string> typesAt(list l, list<int> depths) {
+        return map DeepValuesTest::descend(l[1], $1).fullType(), depths;
+    }
+
+    #! compares the values given to a parameter of type list with the original values
+    static bool sameElements(list l, list<auto> orig) {
+        return l == orig;
+    }
+
+    #! a parameter of type hash, which strips the complex types of its argument
+    static hash<auto> hashParam(hash h) {
+        int depth = DeepValuesTest::hashDepth(h.x);
+        return {
+            "depth": depth,
+            "bottom": DeepValuesTest::descend(h.x, depth),
+        };
+    }
+
+    private inThread(code test) {
+        if (!HAVE_MANAGE_STACK) {
+            testSkip("stack management is not available");
+        }
+        int default_size = get_default_thread_stack_size();
+        set_default_thread_stack_size(StackSize);
+        on_exit set_default_thread_stack_size(default_size);
+
+        Counter c(1);
+        *hash<ExceptionInfo> ex;
+        background sub () {
+            on_exit c.dec();
+            try {
+                test();
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+        }();
+        c.waitForZero();
+        if (ex) {
+            throw ex.err, ex.desc, ex.arg;
+        }
+    }
+}

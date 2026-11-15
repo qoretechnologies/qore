@@ -15,11 +15,23 @@ static void require(bool valid, const char* message) {
     }
 }
 
+// a relative date in seconds and microseconds; the values are in range
+static DateTime* relative(int64 seconds, int micros) {
+    ExceptionSink xsink;
+    DateTime* rv = DateTime::makeRelativeFromSeconds(seconds, micros, &xsink);
+    require(rv && !xsink, "DateTime::makeRelativeFromSeconds() raised an exception");
+    return rv;
+}
+
 static void check(const DateTime& left, const DateTime& right, const DateTime& expected) {
     const DateTime original_left(left);
     const DateTime original_right(right);
-    for (bool pointer : {false, true}) {
-        std::unique_ptr<DateTime> result(pointer ? left.add(&right) : left.add(right));
+    // with an exception sink and with none (which saturates a result out of range, as the deprecated overloads
+    // without one do; issue #6103)
+    for (bool sink : {false, true}) {
+        ExceptionSink xsink;
+        std::unique_ptr<DateTime> result(left.add(right, sink ? &xsink : nullptr));
+        require(result && !xsink, "DateTime::add raised an exception");
         require(result->isEqual(expected), "DateTime::add returned the wrong date");
         require(result->isRelative() == expected.isRelative(), "incorrect result kind");
         require(result->getZone() == expected.getZone(), "incorrect result timezone");
@@ -37,7 +49,7 @@ static void epochCases() {
             std::unique_ptr<DateTime> absolute(DateTime::makeAbsolute(nullptr, seconds, micros));
             for (int64 delta : {-86400LL, -1LL, 0LL, 1LL, 86400LL}) {
                 for (int delta_us : {-999999, 0, 999999}) {
-                    std::unique_ptr<DateTime> relative(DateTime::makeRelativeFromSeconds(delta, delta_us));
+                    std::unique_ptr<DateTime> relative(::relative(delta, delta_us));
                     const int64 total = seconds * 1000000 + micros + delta * 1000000 + delta_us;
                     int64 expected_seconds = total / 1000000;
                     int expected_us = static_cast<int>(total % 1000000);
@@ -56,9 +68,9 @@ static void epochCases() {
                     std::unique_ptr<DateTime> expected_absolute(DateTime::makeAbsolute(currentTZ(),
                         expected_seconds, expected_us));
                     check(*absolute, *other_absolute, *expected_absolute);
-                    std::unique_ptr<DateTime> left_relative(DateTime::makeRelativeFromSeconds(seconds, micros));
-                    std::unique_ptr<DateTime> expected_relative(DateTime::makeRelativeFromSeconds(
-                        total / 1000000, static_cast<int>(total % 1000000)));
+                    std::unique_ptr<DateTime> left_relative(::relative(seconds, micros));
+                    std::unique_ptr<DateTime> expected_relative(::relative(total / 1000000,
+                        static_cast<int>(total % 1000000)));
                     check(*left_relative, *relative, *expected_relative);
                 }
             }
@@ -91,8 +103,8 @@ static void calendarCases() {
     std::unique_ptr<DateTime> value(DateTime::makeAbsolute(nullptr, int64(1), 750000));
     std::unique_ptr<DateTime> doubled(DateTime::makeAbsolute(currentTZ(), int64(3), 500000));
     check(*value, *value, *doubled);
-    std::unique_ptr<DateTime> relative(DateTime::makeRelativeFromSeconds(-1, -750000));
-    std::unique_ptr<DateTime> relative_doubled(DateTime::makeRelativeFromSeconds(-3, -500000));
+    std::unique_ptr<DateTime> relative(::relative(-1, -750000));
+    std::unique_ptr<DateTime> relative_doubled(::relative(-3, -500000));
     check(*relative, *relative, *relative_doubled);
 
     ExceptionSink xsink;

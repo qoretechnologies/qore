@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - all checks run in child processes selecting their execution modes or compiled with qcc
+# test-platform: macos - AOT code generation and native executable linking with qcc
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class AOTLValuePathCountLimitTest
+
+/*  The AOT format stores the number of lvalue path instructions of a function (counting those of its handler
+    functions) in a u8; qcc must refuse a function with more of them instead of writing a wrapped count that makes
+    the executable fail at run time (qore#6127); every execution mode of the interpreter runs such a function
+*/
+class AOTLValuePathCountLimitTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? (libqore_dir + "/qcc");
+        TmpDir tmp("aot-lv-path-count-");
+
+        # the scripts: name -> (whether its function has more lvalue path instructions than the format can count,
+        # expected output)
+        hash<string, hash<auto>> scripts;
+    }
+
+    constructor() : Test("AOTLValuePathCountLimit", "1.0", \ARGV) {
+        # a function whose lvalue path instructions fit
+        addScript("flat-250", flatScript(250), False, "31125\n");
+        # a function with more lvalue path instructions than the format can count
+        addScript("flat-300", flatScript(300), True, "44850\n");
+        # handler functions whose lvalue path instructions are counted with the function's (the count depends on how
+        # many copies of the handlers the function's exit paths need, but it is far above the limit)
+        addScript("nested-handlers", nestedHandlerScript(14, 20), True, "16100\n");
+
+        foreach string name in (keys scripts) {
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                addTestCase(name + " in " + mode, \testMode(), (name, mode));
+            }
+            foreach string opt in ("-O0", "-O3") {
+                addTestCase(name + " with qcc " + opt, \testAot(), (name, opt));
+            }
+        }
+        set_return_value(main());
+    }
+
+    private addScript(string name, string code, bool too_big, string expected) {
+        string path = tmp.path + "/" + name + ".q";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(code);
+        f.close();
+        scripts{name} = {"path": path, "too_big": too_big, "expected": expected};
+    }
+
+    # a function with one lvalue path instruction per line: h.x += i
+    private static string flatScript(int lines) {
+        string code = "%modern\n\nint sub big(hash<auto> h) {\n";
+        for (int i = 0; i < lines; ++i) {
+            code += sprintf("    h.x += %d;\n", i);
+        }
+        code += "    return h.x;\n}\n\nprintf(\"%d\\n\", big({\"x\": 0}));\n";
+        return code;
+    }
+
+    # nested blocks, each with an on_exit handler of lines lvalue path instructions
+    private static string nestedHandlerScript(int depth, int lines) {
+        string code = "%modern\n\nint sub nested(hash<auto> h) {\n    {\n";
+        for (int i = 0; i < depth; ++i) {
+            string ind = strmul("    ", i + 2);
+            code += ind + "on_exit {\n";
+            for (int k = 0; k < lines; ++k) {
+                code += sprintf("%s    h.x += %d;\n", ind, i + 1);
+            }
+            code += ind + "}\n" + ind + "{\n";
+        }
+        for (int i = depth - 1; i >= 0; --i) {
+            string ind = strmul("    ", i + 2);
+            code += ind + "    h.x += 1000;\n" + ind + "}\n";
+        }
+        code += "    }\n    return h.x;\n}\n\nprintf(\"%d\\n\", nested({\"x\": 0}));\n";
+        return code;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+
+    private string environment() {
+        return "LD_LIBRARY_PATH=" + shellQuote(libqore_dir) + " DYLD_LIBRARY_PATH=" + shellQuote(libqore_dir)
+            + " QORE_LIBDIR=" + shellQuote(libqore_dir) + " ";
+    }
+
+    testMode(string name, string mode) {
+        assertEq(scripts{name}.expected, ExecModeHarness::run(environment() + shellQuote(qore_bin)
+            + " -b --exec-mode=" + mode + " " + shellQuote(scripts{name}.path)));
+    }
+
+    testAot(string name, string opt) {
+        hash<auto> script = scripts{name};
+        string executable = tmp.path + "/" + name + opt;
+        hash<ExecModeHarness::ModeRunResult> compiled = ExecModeHarness::run_command(environment()
+            + shellQuote(qcc_bin) + " " + opt + " -o " + shellQuote(executable) + " " + shellQuote(script.path));
+        if (script.too_big) {
+            # qcc refuses the function and writes no executable
+            assertNeq(0, compiled.rc, compiled.out);
+            string func = name == "nested-handlers" ? "nested" : "big";
+            *list<*string> m = (compiled.out
+                =~ x/AOT cannot compile function '([^']+)': it has ([0-9]+) lvalue path instructions .*at most 255/);
+            assertEq(func + "(hash<auto>)", m[0], compiled.out);
+            *string count = m[1];
+            assertGt(255, count.toInt(), compiled.out);
+            if (name == "flat-300") {
+                assertEq("300", count);
+            }
+            assertFalse(is_file(executable));
+            return;
+        }
+        assertEq(0, compiled.rc, compiled.out);
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(environment()
+            + shellQuote(executable) + " -b");
+        assertEq(0, result.rc, result.out);
+        assertEq(script.expected, result.stdout);
+    }
+}

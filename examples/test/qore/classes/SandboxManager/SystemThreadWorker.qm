@@ -61,7 +61,8 @@ public class Worker {
             "provenance": Worker::tryCreate(Worker::sandboxedCallback()),
             "bound": Worker::tryCreate(SandboxManager::bindCall(\Worker::run())),
             "capability": Worker::tryCreate(starter),
-            "governed": Worker::createGoverned(),
+            "governed": Worker::createGoverned(False),
+            "governed_allowed": Worker::createGoverned(True),
         };
         deleted_program_cap = Worker::createInDeletedProgram();
         control = Worker::createControl();
@@ -212,8 +213,13 @@ public class Worker {
     }
 
     #! Returns what sandboxed code gets when it creates a capability
-    private:internal static string createGoverned() {
+    #! Returns what sandboxed code's creation of a capability raised
+    /** qore#5741: a sandbox that refuses uncontrolled APIs (the default) refuses the call itself at run time; one
+        that allows them still lets createSystemThreadCall() refuse code that a sandbox governs
+    */
+    private:internal static string createGoverned(bool allow_uncontrolled_apis) {
         SandboxManager sm();
+        sm.setUncontrolledApiPolicy(allow_uncontrolled_apis);
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
         p.parse("string sub create() {\n"
             "    try { code c = SandboxManager::createSystemThreadCall(sub () {}); return c ? \"created\" : \"none\"; }\n"

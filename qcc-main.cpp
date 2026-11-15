@@ -561,6 +561,38 @@ static bool write_depfile(const char* path, const std::string& output,
     return true;
 }
 
+//! Sets the sink of the paths where optional modules could be installed for its scope (qore#6145)
+class QccOptionalCandidateSinkHelper {
+public:
+    explicit QccOptionalCandidateSinkHelper(std::vector<std::string>* sink) {
+        qore_aot_set_optional_module_candidate_sink(sink);
+    }
+
+    ~QccOptionalCandidateSinkHelper() {
+        qore_aot_set_optional_module_candidate_sink(nullptr);
+    }
+
+    QccOptionalCandidateSinkHelper(const QccOptionalCandidateSinkHelper&) = delete;
+    QccOptionalCandidateSinkHelper& operator=(const QccOptionalCandidateSinkHelper&) = delete;
+};
+
+//! Writes the paths where the modules of the failed %try-module directives of an AOT module compile could be
+//! installed, one per line, to <depfile>.optional (qore#6145)
+/** The build checks them before it builds the module (cmake/QoreOptionalModuleStamp.cmake) and rebuilds the module
+    when one of them exists: the module was compiled without the optional module, which the module loader refuses
+    then (AOT-MODULE-STALE).  The file is written for every AOT module compile, empty if there are no such paths.
+*/
+static bool write_optional_module_candidates(const char* depfile, std::vector<std::string> paths) {
+    std::sort(paths.begin(), paths.end());
+    paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
+    std::string content;
+    for (const std::string& path : paths) {
+        content += path;
+        content += '\n';
+    }
+    return write_depfile_atomic((std::string(depfile) + ".optional").c_str(), content);
+}
+
 // Write a Make-style depfile from an explicit, already-canonicalized
 // dependency list (used by script `-c -L` mode, where compileScriptFile
 // reports the exact set of source files it parsed — the target plus its
@@ -11628,6 +11660,8 @@ int main(int argc, char** argv) {
         // Compile split module directory; the depfile of a .qmod lists everything the module depends on
         std::vector<std::string> dep_module_files;
         qcc_set_module_dep_sink(&dep_module_files, output);
+        std::vector<std::string> optional_candidates;
+        QccOptionalCandidateSinkHelper optional_candidate_sink(&optional_candidates);
         bool ok = QoreAOT::compileSeparatedModule(
                 source_file,
                 output,
@@ -11654,9 +11688,11 @@ int main(int argc, char** argv) {
             std::vector<std::string> module_deps =
                 qcc_module_depfile_inputs(dep_module_files, qcc_output_is_qmod(output));
             if (depfile_path
-                    && !write_depfile(depfile_path, qcc_depfile_target(output),
-                                      std::string(), source_file,
-                                      &module_deps, qcc_output_is_qmod(output))) {
+                    && (!write_depfile(depfile_path, qcc_depfile_target(output),
+                                       std::string(), source_file,
+                                       &module_deps, qcc_output_is_qmod(output))
+                        || (qcc_output_is_qmod(output)
+                            && !write_optional_module_candidates(depfile_path, std::move(optional_candidates))))) {
                 rc = 1;
             }
         }
@@ -11664,6 +11700,8 @@ int main(int argc, char** argv) {
         // Compile single-file module; the depfile of a .qmod lists everything the module depends on
         std::vector<std::string> dep_module_files;
         qcc_set_module_dep_sink(&dep_module_files, output);
+        std::vector<std::string> optional_candidates;
+        QccOptionalCandidateSinkHelper optional_candidate_sink(&optional_candidates);
         bool ok = QoreAOT::compileModule(
                 source_text.c_str(), (int)source_text.size(),
                 source_file,
@@ -11687,9 +11725,11 @@ int main(int argc, char** argv) {
             // deps = the .qm file plus dependency modules in the selected form.
             std::vector<std::string> module_deps =
                 qcc_module_depfile_inputs(dep_module_files, qcc_output_is_qmod(output));
-            if (depfile_path && !write_depfile(depfile_path, qcc_depfile_target(output),
-                                               source_file, nullptr,
-                                               &module_deps, qcc_output_is_qmod(output))) {
+            if (depfile_path && (!write_depfile(depfile_path, qcc_depfile_target(output),
+                                                source_file, nullptr,
+                                                &module_deps, qcc_output_is_qmod(output))
+                    || (qcc_output_is_qmod(output)
+                        && !write_optional_module_candidates(depfile_path, std::move(optional_candidates))))) {
                 rc = 1;
             }
         }

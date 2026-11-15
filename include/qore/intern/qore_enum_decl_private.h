@@ -136,6 +136,9 @@ public:
     DLLLOCAL void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
     }
 
+    DLLLOCAL void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const {
+    }
+
     DLLLOCAL void refTypeOwner() {
         ref();
     }
