@@ -184,14 +184,23 @@ public:
     */
     DLLEXPORT virtual void onClosedHook() {}
 
+    //! Returns the number of active streams of the operation that \a op is; see tryBeginIdleClose()
+    typedef int (*active_stream_count_t)(const void* op);
+
     //! Called by the I/O thread when the idle timeout of the connection expires, before it closes the connection
     /** Returns false if the connection must not be closed for its idle timeout: a request has reserved a stream of
-        it and not yet submitted (a pooled client connection, see HttpClientConnectionBase); the operation then starts
-        a new idle period.  Returns true otherwise; a connection that returns true then accepts no reservation.
+        it and not yet submitted, or has submitted since the operation found the connection idle (a pooled client
+        connection, see HttpClientConnectionBase); the operation then starts a new idle period.  Returns true
+        otherwise; a connection that returns true then accepts no reservation.
+
+        @param active_streams returns the number of active streams of the operation (read after the reservations,
+        under the connection's reservation lock: a submit counts its active stream before it releases its
+        reservation); may be nullptr
+        @param op the operation, for \a active_streams
 
         @since %Qore 3.0
     */
-    DLLEXPORT virtual bool tryBeginIdleClose() {
+    DLLEXPORT virtual bool tryBeginIdleClose(active_stream_count_t active_streams, const void* op) {
         return true;
     }
 
@@ -201,12 +210,15 @@ public:
 
         @param lock the lock that protects @a conn
         @param conn the back-pointer
+        @param active_streams returns the number of active streams of the operation (see tryBeginIdleClose())
+        @param op the operation
         @param xsink for exceptions releasing the reference
 
         @since %Qore 3.0
     */
     template <typename T>
-    DLLLOCAL static bool idleCloseAllowed(QoreThreadLock& lock, T* const& conn, ExceptionSink* xsink) {
+    DLLLOCAL static bool idleCloseAllowed(QoreThreadLock& lock, T* const& conn, active_stream_count_t active_streams,
+            const void* op, ExceptionSink* xsink) {
         T* c;
         {
             AutoLocker al(lock);
@@ -218,7 +230,7 @@ public:
         if (!c) {
             return true;
         }
-        bool rv = c->tryBeginIdleClose();
+        bool rv = c->tryBeginIdleClose(active_streams, op);
         c->deref(xsink);
         return rv;
     }

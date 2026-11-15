@@ -462,6 +462,10 @@ class HttpClientIoTest inherits QUnit::Test {
             \testH1ConnectionCloseRemovesFromPool());
         addTestCase("H1 proactive idle timeout", \testH1ProactiveIdleTimeout());
         addTestCase("H2 proactive idle timeout", \testH2ProactiveIdleTimeout());
+        addTestCase("H1 idle timeout leaves a connection with a reserved stream",
+            \testH1IdleTimeoutReservedStream());
+        addTestCase("H2 idle timeout leaves a connection with a reserved stream",
+            \testH2IdleTimeoutReservedStream());
         if (Option::HAVE_LIBRARY_DEBUGGING) {
             addTestCase("H1 idle timeout after a step back of the system clock",
                 \testH1IdleTimeoutClockStepBack());
@@ -2453,6 +2457,44 @@ class HttpClientIoTest inherits QUnit::Test {
         response = stream.request("GET", "/simple");
         assertEq(200, response.status_code,
             "H2 request after idle-timeout eviction should create a new connection");
+    }
+
+    #! The idle timeout of an H1 connection does not close it under a stream handle that has reserved it (#6184)
+    /** A stream handle reserves a stream of its connection when it is acquired, and submits when it makes its request:
+        the connection's idle timeout, which expires in between, closed the connection when it had no active stream,
+        and the POST then failed (it is not repeated).  The reservations of this manager's connections are counted in
+        the C++ connection, where the timeout sees them.
+    */
+    testH1IdleTimeoutReservedStream() {
+        idleTimeoutReservedStream("h1", mHttpUrl);
+    }
+
+    #! The idle timeout of an H2 connection does not close it under a stream handle that has reserved it (#6184)
+    testH2IdleTimeoutReservedStream() {
+        idleTimeoutReservedStream("h2", mSslUrl);
+    }
+
+    private idleTimeoutReservedStream(string protocol, string url) {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": protocol,
+            "idle_timeout": 500ms,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle s1 = mgr.acquireStream(url);
+        assertEq(200, s1.request("GET", "/simple").status_code);
+        int id = s1.getConnection().getConnectionId();
+
+        # the second handle reserves a stream of the idle connection; the idle timeout then expires before it submits
+        HttpClientIo::HttpClientStreamHandle s2 = mgr.acquireStream(url);
+        assertEq(id, s2.getConnection().getConnectionId(), "the second handle reserved the idle connection");
+        usleep(750ms);
+        hash<auto> response = s2.request("POST", "/echo", NOTHING, "test-body-content");
+        assertEq(200, response.status_code, "the POST is answered on its reserved connection");
+        assertEq(id, s2.getConnection().getConnectionId(), "the POST was sent on its reserved connection");
     }
 
     #! A step back of the system clock does not stop the proactive idle timeout of an H1 connection (#6150)

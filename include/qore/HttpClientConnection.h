@@ -62,6 +62,12 @@ enum class HttpClientProtocol {
                 //!< manager decides H1 vs H2 per connection
 };
 
+//! defined if HttpClientConnectionBase::tryReservePendingStream() is available and the idle timeout of a client
+//! connection does not close it with a reserved stream (#6184)
+/** @since %Qore 3.0
+*/
+#define QORE_HAS_HTTP_CLIENT_PENDING_RESERVATION 1
+
 //! Abstract base for C++ HTTP client connections
 /** This class wraps a protocol-specific poll operation (H1, H2, or H3) and
     a socket, submits the poll op to the global AsyncIoController, and exposes
@@ -208,16 +214,32 @@ public:
     //! Returns the current pending (reserved-but-not-yet-submitted) count.
     DLLEXPORT int getPendingStreamCount() const;
 
-    //! Called by the I/O thread when the connection's idle timeout expires: false if a stream is reserved
+    //! Called by the I/O thread when the connection's idle timeout expires: false if a stream is reserved or active
     /** Under @ref reserve_lock: with no reserved stream and no active one (a request submitted since the operation
-        found the connection idle), the connection is marked as closing for its idle timeout and
-        accepts no further reservation (tryReserveStream() fails), and true is returned; otherwise false
-        is returned and the operation starts a new idle period, so that the reserved request is not closed under
-        (#6184)
+        found the connection idle; read with \a active_streams, or getActiveStreamCount() if it is nullptr), the
+        connection is marked as closing for its idle timeout and accepts no further reservation (tryReserveStream()
+        and tryReservePendingStream() fail), and true is returned; otherwise false is returned and the operation
+        starts a new idle period, so that the reserved request is not closed under (#6184)
 
         @since %Qore 3.0
     */
-    DLLEXPORT bool tryBeginIdleClose() override;
+    DLLEXPORT bool tryBeginIdleClose(active_stream_count_t active_streams, const void* op) override;
+
+    //! Reserves a stream for a connection whose active streams are counted by its owner (a Qore-level connection)
+    /** Like tryReserveStream(), with the active streams and the limit given by the caller: fails if the connection
+        is draining, closed or closing for its idle timeout, or if \a max_streams is not 0 and \a active_streams and
+        the reservations reach it.  The reservation is released with releaseStreamReservation(), as one of
+        tryReserveStream(); the idle timeout of the connection's operation does not close a connection with a
+        reservation (#6184).
+
+        @param active_streams the active streams of the connection, as its owner counts them
+        @param max_streams the most streams of the connection; 0: no limit
+
+        @return true if a stream was reserved
+
+        @since %Qore 3.0 (@ref QORE_HAS_HTTP_CLIENT_PENDING_RESERVATION)
+    */
+    DLLEXPORT bool tryReservePendingStream(int active_streams, int max_streams);
 
     //! Returns true if a response has been received on this connection
     /** A connection that has served a request can be closed by the peer while it is idle in the pool, so a

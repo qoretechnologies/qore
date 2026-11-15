@@ -50,6 +50,11 @@ extern QoreClass* QC_EVENTNOTIFIER;
 
 /** @cond INTERNAL */
 
+// Returns the active streams of the operation \a op, for the idle check of its connection (#6184)
+static int h1_op_active_streams(const void* op) {
+    return static_cast<const Http1ClientPollOperationPriv*>(op)->getActiveStreamCount();
+}
+
 // Returns the monotonic clock in microseconds: the idle deadline is an interval, which a step of the system clock must
 // not end or stop (#6150)
 static inline int64 h1_monotonic_us() {
@@ -1368,7 +1373,8 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     if (idle_timeout_us > 0 && idle_deadline_us > 0 && h1_monotonic_us() >= idle_deadline_us) {
         // a request that has reserved the connection's stream and not yet submitted is not closed under: the
         // connection then starts a new idle period (#6184)
-        if (!AbstractHttpPollConnectionPriv::idleCloseAllowed(stream_lock, connection_priv, xsink)) {
+        if (!AbstractHttpPollConnectionPriv::idleCloseAllowed(stream_lock, connection_priv, h1_op_active_streams,
+            this, xsink)) {
             ASYNC_IO_TRACE("H1 handleIdle: IDLE-TIMEOUT deadline reached with a reserved stream fd=%d\n", fd);
             idle_deadline_us = 0;
         } else {
