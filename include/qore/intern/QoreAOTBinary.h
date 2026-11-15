@@ -517,15 +517,10 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        releases (two more arguments).  A handler of an earlier format returned its value, which the runtime no
 //!        longer reads; the AOT runtime identity changes with the runtime entry, so a module compiled for an earlier
 //!        format is refused and must be rebuilt (#6074).
-//! v(next) (PLACEHOLDER: the next version after the newest; renumber when this change gets a format slot): the IR of
-//!      an OnBlockExit instruction whose handler function an earlier OnBlockExit instruction of the same function or
-//!      of its handlers has (a handler nested in other handlers, whose function the copies of its statement share,
-//!      #6087) is written as the handler flag 2 followed by the u32 index of that function in the order in which the
-//!      handler functions of the function are written (see QoreAOTSharedHandlerTable); flag 1 is followed by the
-//!      function itself, as before; a reader of the earlier formats would read flag 2 as flag 1, so it is the
-//!      header's format version, which such a reader refuses, that keeps it from reading these images.  The slot map
-//!      entry of a function has the u32 count of its LValuePath instructions after the u8 one (its low byte, which
-//!      readers of this format ignore), which a function with more than 255 of them overflowed (#6127).
+//! v40 (batch T; one format version for the format changes of the batch, one line each):
+//!      - the IR of an OnBlockExit instruction whose handler function an earlier one of the same function or of its
+//!        handlers has is written as handler flag 2 and the u32 index of that function (QoreAOTSharedHandlerTable),
+//!        and the slot map entry of a function has a u32 count of its LValuePath instructions (qore#6087, qore#6127)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -568,9 +563,18 @@ constexpr uint16_t QORE_AOT_MODULE_CMD_OPTIONS_VERSION = 37;
 constexpr uint16_t QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION = 38;
 //! First format version whose out-of-line handlers hand their return values over with HandlerReturn (see v39 above).
 constexpr uint16_t QORE_AOT_HANDLER_RETURN_VERSION = 39;
-//! First format version with shared handler functions and wide LValuePath instruction counts (see v(next) above)
-/** PLACEHOLDER: the next version after the newest; renumber when this change gets a format slot (#6087) */
-constexpr uint16_t QORE_AOT_SHARED_HANDLER_VERSION = QORE_AOT_HANDLER_RETURN_VERSION + 1;
+//! First format version with shared handler functions and wide LValuePath instruction counts (see v40 above)
+/** The IR of an OnBlockExit instruction whose handler function an earlier OnBlockExit instruction of the same function
+    or of its handlers has (a handler nested in other handlers, whose function the copies of its statement share) is
+    written as the handler flag 2 followed by the u32 index of that function in the order in which the handler
+    functions of the function are written (see QoreAOTSharedHandlerTable); flag 1 is followed by the function itself,
+    as before.  A reader of an earlier format would read flag 2 as flag 1, so it is the header's format version, which
+    such a reader refuses, that keeps it from reading these images (#6087).
+
+    The slot map entry of a function has the u32 count of its LValuePath instructions after the u8 one (its low byte,
+    which readers of this format ignore), which a function with more than 255 of them overflowed (#6127).
+*/
+constexpr uint16_t QORE_AOT_SHARED_HANDLER_VERSION = 40;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
 constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_SHARED_HANDLER_VERSION;
