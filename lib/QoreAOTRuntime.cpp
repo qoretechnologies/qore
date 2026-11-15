@@ -2116,7 +2116,9 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
                     ref1, type_error.c_str());
                 return 0;
             }
-            const QoreEnumDecl* ed = QoreTypeInfo::getUniqueReturnEnum(ti);
+            // the type of an "or nothing" cast (*Enum) is not an enum itself; as when the cast is parsed (qore#6125)
+            const QoreEnumDecl* ed = or_nothing ? QoreTypeInfo::getReturnEnum(ti)
+                : QoreTypeInfo::getUniqueReturnEnum(ti);
             if (!ed) {
                 printd(0, "AOT v2: cannot extract enum from type '%s' for cast\n", ref1);
                 return 0;
