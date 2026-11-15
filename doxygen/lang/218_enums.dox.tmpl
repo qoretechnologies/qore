@@ -144,8 +144,10 @@ processColor(3);                       # PARSE-TYPE-ERROR: argument 'c' to 'proc
       run time, also when the value is a literal
     - a value of another type raises a \c PARSE-EXCEPTION at parse time when the parser knows its type (ex:
       <tt>cast&lt;enum&lt;Color&gt;&gt;(2.0)</tt>), and otherwise a \c RUNTIME-CAST-ERROR exception at run time
-    - \c NOTHING raises a \c RUNTIME-CAST-ERROR exception, except with the or-nothing form
-      <tt>cast&lt;*enum&lt;EnumName&gt;&gt;()</tt>, which returns \c NOTHING
+    - \c NOTHING raises a \c PARSE-EXCEPTION at parse time when the parser knows that the value is \c NOTHING or
+      cannot be the base type (ex: a literal \c NOTHING, or a <tt>*string</tt> value cast to an \c int enum), and
+      otherwise (ex: a <tt>*int</tt> value cast to an \c int enum) a \c RUNTIME-CAST-ERROR exception at run time;
+      the or-nothing form <tt>cast&lt;*enum&lt;EnumName&gt;&gt;()</tt> accepts \c NOTHING and returns it
 
     A value of another enum type with the same base type is treated like its base type value: it is converted
     when its value is a member of the target enum.

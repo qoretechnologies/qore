@@ -46,6 +46,7 @@ class EnumBaseTypeConversionTest inherits QUnit::Test {
             "cast-float-to-int-enum": "RUNTIME-CAST-ERROR",
             "cast-string-to-int-enum": "RUNTIME-CAST-ERROR",
             "cast-nothing": "RUNTIME-CAST-ERROR",
+            "cast-or-nothing-int-nothing": "RUNTIME-CAST-ERROR",
             "cast-or-nothing-nothing": "nothing:null",
             "cast-or-nothing-value": "enum<Status>:\"active\"",
             "cast-other-enum": "enum<Color>:1",
@@ -66,6 +67,10 @@ class EnumBaseTypeConversionTest inherits QUnit::Test {
             "parse-cast-literal-not-member": "ok",
             "parse-cast-int-to-string-enum": "PARSE-EXCEPTION",
             "parse-cast-float-to-int-enum": "PARSE-EXCEPTION",
+            "parse-cast-nothing-literal": "PARSE-EXCEPTION",
+            "parse-cast-or-nothing-string-to-int-enum": "PARSE-EXCEPTION",
+            "parse-cast-or-nothing-int": "ok",
+            "parse-or-nothing-cast-nothing-literal": "ok",
         };
     }
 
