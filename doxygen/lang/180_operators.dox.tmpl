@@ -158,6 +158,8 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     |unquoted @ref string "string" \a shell_command|@ref string_type "string"|The shell command will be executed and the \c stdout is returned as a string
 
     @throw BACKQUOTE-ERROR An error occurred in fork() or creating the output pipe
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "SandboxManager" governing the code does not allow
+    \c /bin/sh, which runs the command, to be executed (see @ref sandbox_fs_shell)
 
     <hr>
     @subsection hash_element_operator Hash Element or Object Member Expression Dereference Operator ({})

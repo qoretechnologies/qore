@@ -677,9 +677,15 @@ public:
     //! true if the parse options cannot be changed; set by QoreProgram::lockOptions() from any thread
     std::atomic<bool> po_locked{false};
 
-    //! the restrictions that a locked Program keeps: those it inherited from its parent, or that it had when it was
-    //! locked; disabling one is refused (checkDisableParseOptions())
+    //! the restrictions that a locked Program keeps: those it inherited from its parent or from the code that created
+    //! it (lockCreatorRestrictions()), those it was created with, or that it had when it was locked; disabling one is
+    //! refused (checkDisableParseOptions()); protected by po_mutex
     QoreParseOptions locked_restrictions;
+
+    //! serializes the changes of the parse options that are checked against the lock (po_locked and
+    //! locked_restrictions) with the changes of the lock, so that a check and the change that it allows are one step;
+    //! a leaf lock: no other lock is taken while it is held
+    mutable std::mutex po_mutex;
 
     //! true if the Program has an exec class; set by QoreProgram::setExecClass() from any thread
     std::atomic<bool> exec_class{false};
@@ -1452,14 +1458,55 @@ public:
         do) may be disabled, so that a locked child can parse code in another style
     */
     DLLLOCAL bool checkDisableParseOptions(const QoreParseOptions& po) {
+        return (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked
+            && (!po_allow_restrict || !!(po & locked_restrictions & ~lockedMayDisable())));
+    }
+
+    //! the options that a locked Program may disable although they are locked in: free options, positive options and
+    //! the options of style and backward compatibility (see checkDisableParseOptions())
+    DLLLOCAL static const QoreParseOptions& lockedMayDisable() {
         static const QoreParseOptions may_disable = QoreParseOptions::FREE_OPTIONS
             | QoreParseOptions::POSITIVE_OPTIONS
             | QoreParseOptions(PO_STYLE_OPTIONS | PO_MODERN | PO_REQUIRE_OUR | PO_NO_TYPEDEF | PO_NO_ENUM
                 | PO_NO_TRANSIENT)
             | QoreParseOptions::NO_SUMMARIZE | QoreParseOptions::STRICT_PARSE_ERRORS;
-        return (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked
-            && (!po_allow_restrict || !!(po & locked_restrictions & ~may_disable)));
+        return may_disable;
     }
+
+    //! returns the restrictions of a creator with the options \a creator_po that a Program that its code creates
+    //! without making it its child takes
+    /** Only the options that restrict what code can do, and the options that keep system code from a Program (an
+        independent Program would otherwise get the system API that its creator does not have); not the options of
+        style and backward compatibility, which the created Program sets for itself (an independent Program has its own
+        %modern mode), nor the options that decide what user code a child inherits from its parent
+    */
+    DLLLOCAL static QoreParseOptions getCreatorRestrictions(const QoreParseOptions& creator_po);
+
+    //! returns \a po restricted for a Program that the code of \a creator creates without making it its child
+    /** An independent Program (\c Program::constructor() with \c independent set) and a Program created with
+        \c ProgramControl::createEvalProgram() as a child of another Program are not children of the Program whose code
+        creates them; they take its restrictions as a child would: the restrictions of the creator are added and the
+        positive options that it does not have are removed, except \c PO_ALLOW_REPARSE, which only allows code to be
+        parsed more than once.  This is done when the creator does not have
+        \c PO_NO_CHILD_PO_RESTRICTIONS and has restrictions or is locked itself (a locked Program cannot give its
+        children positive options it lacks), and whenever the calling code is sandboxed (see
+        qore_caller_is_sandboxed()), as a Program governed by a sandbox cannot create an independent or evaluation
+        Program that is free of its restrictions: then \c PO_NO_CHILD_PO_RESTRICTIONS is removed as well, so that the
+        children of the new Program inherit them.  Code without restrictions that is not locked creates such a Program
+        with the options it gives, as it has no restrictions that the Program could escape
+
+        @param creator the Program whose code creates the new Program, if any
+        @param po the options requested for the new Program
+        @param restrictions set to the restrictions to lock in the new Program if the options were restricted
+        @param restricted set to true if the options were restricted, in which case the new Program must be locked
+        with lockCreatorRestrictions() and \a restrictions once it is created
+    */
+    DLLLOCAL static QoreParseOptions restrictForCreator(const QoreProgram* creator, const QoreParseOptions& po,
+            QoreParseOptions& restrictions, bool& restricted);
+
+    //! locks the options of \a pgm, created with options from restrictForCreator() that were restricted, so that
+    //! \a restrictions, which restrictForCreator() returned, cannot be disabled
+    DLLLOCAL static void lockCreatorRestrictions(QoreProgram& pgm, const QoreParseOptions& restrictions);
 
     DLLLOCAL void setParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options |= po;
@@ -3526,15 +3573,19 @@ public:
 
     DLLLOCAL int setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
         assert(xsink);
-        if (checkSetParseOptions(po)) {
+        // the check and the change are one step with respect to lockOptions() (changeIfNotLocked()); the exceptions
+        // are raised without po_mutex, as raising one takes other locks (the Programs on the call stack)
+        if (isLocked(po, true)) {
             xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
             return -1;
         }
         if (checkModernConflict(pwo.parse_options, po, true, "Program::setParseOptions()", xsink)) {
             return -1;
         }
-
-        setParseOptionsIntern(po);
+        if (changeIfNotLocked(po, true)) {
+            xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
+            return -1;
+        }
         return 0;
     }
 
@@ -3557,16 +3608,18 @@ public:
     DLLLOCAL int disableParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
         assert(xsink);
         // only raise the exception if parse options are locked and the option is not a "free option"; disabling a
-        // positive option is more restrictive and is allowed, disabling a restriction is not
-        if (checkDisableParseOptions(po)) {
+        // positive option is more restrictive and is allowed, disabling a restriction is not; as setParseOptions()
+        if (isLocked(po, false)) {
             xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
             return -1;
         }
         if (checkModernConflict(pwo.parse_options, po, false, "Program::disableParseOptions()", xsink)) {
             return -1;
         }
-
-        disableParseOptionsIntern(po);
+        if (changeIfNotLocked(po, false)) {
+            xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
+            return -1;
+        }
         return 0;
     }
 
@@ -3583,48 +3636,78 @@ public:
         }
         // a Program whose parse options are locked (a child that inherited its parent's restrictions, or a Program
         // locked with Program::lockOptions()) keeps them: the options that the replacement removes and adds are
-        // checked as Program::disableParseOptions() and Program::setParseOptions() check them
-        if (po_locked) {
-            QoreParseOptions removed = pwo.parse_options & ~po;
-            QoreParseOptions added = po & ~pwo.parse_options;
-            if (checkDisableParseOptions(removed) || checkSetParseOptions(added)) {
-                xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
-                return -1;
+        // checked as Program::disableParseOptions() and Program::setParseOptions() check them; the check and the
+        // change are one step with respect to lockOptions(), and the exception is raised without po_mutex
+        bool refused;
+        {
+            std::lock_guard<std::mutex> po_guard(po_mutex);
+            refused = po_locked && (checkDisableParseOptions(pwo.parse_options & ~po)
+                || checkSetParseOptions(po & ~pwo.parse_options));
+            if (!refused) {
+                //printd(5, "qore_program_private::replaceParseOptions() this: %p pgm: %p replacing po: %lld with po: %lld\n", this, pgm, pwo.parse_options, po);
+                replaceParseOptionsIntern(po);
             }
         }
-        //printd(5, "qore_program_private::replaceParseOptions() this: %p pgm: %p replacing po: %lld with po: %lld\n", this, pgm, pwo.parse_options, po);
-        replaceParseOptionsIntern(po);
+        if (refused) {
+            xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
+            return -1;
+        }
         return 0;
     }
 
     DLLLOCAL int parseSetParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
-        // only raise the exception if parse options are locked and the option is not a "free option"
-        // also check if options may be made more restrictive and the option also does so
-        if (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked
-            && (!po_allow_restrict || (po & QoreParseOptions::POSITIVE_OPTIONS))) {
+        // as setParseOptions(); the parse errors are raised without po_mutex, as raising one takes other locks
+        if (isLocked(po, true)) {
             parse_error(*loc, "parse options have been locked on this program object");
             return -1;
         }
         if (parseCheckModernConflict(loc, po, true)) {
             return -1;
         }
-
-        setParseOptionsIntern(po);
+        if (changeIfNotLocked(po, true)) {
+            parse_error(*loc, "parse options have been locked on this program object");
+            return -1;
+        }
         return 0;
     }
 
     DLLLOCAL int parseDisableParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
-        // as disableParseOptions()
-        if (checkDisableParseOptions(po)) {
+        // as disableParseOptions(); the parse errors are raised without po_mutex, as raising one takes other locks
+        if (isLocked(po, false)) {
             parse_error(*loc, "parse options have been locked on this program object");
             return -1;
         }
         if (parseCheckModernConflict(loc, po, false)) {
             return -1;
         }
-
-        disableParseOptionsIntern(po);
+        if (changeIfNotLocked(po, false)) {
+            parse_error(*loc, "parse options have been locked on this program object");
+            return -1;
+        }
         return 0;
+    }
+
+    //! returns true if setting (\a set) or disabling \a po is refused by the lock of the parse options
+    DLLLOCAL bool isLocked(const QoreParseOptions& po, bool set) {
+        std::lock_guard<std::mutex> po_guard(po_mutex);
+        return set ? checkSetParseOptions(po) : checkDisableParseOptions(po);
+    }
+
+    //! sets (\a set) or disables \a po unless the lock of the parse options refuses it; returns true if refused
+    /** The check is made again with the change, as the options may have been locked since isLocked(); po_mutex is
+        held only here, and nothing done under it takes another lock
+    */
+    DLLLOCAL bool changeIfNotLocked(const QoreParseOptions& po, bool set) {
+        std::lock_guard<std::mutex> po_guard(po_mutex);
+        if (set ? checkSetParseOptions(po) : checkDisableParseOptions(po)) {
+            return true;
+        }
+        if (set) {
+            setParseOptionsIntern(po);
+        } else {
+            disableParseOptionsIntern(po);
+        }
+        return false;
     }
 
     DLLLOCAL void parseSetTimeZone(const char* zone) {
@@ -3957,7 +4040,15 @@ public:
         ppo_t::iterator i = ppo.find(pf);
         if (i != ppo.end()) {
             //printd(5, "qore_program_private::restoreParseOptions() this: %p %p '%s' restoring %lld\n", this, pf, pf, pwo.parse_options);
-            pwo.parse_options = i->second;
+            std::lock_guard<std::mutex> po_guard(po_mutex);
+            // the snapshot predates the changes made by the file, but not necessarily the lock: the Program may have
+            // been locked (Program::lockOptions(), %lock-options) since, with restrictions that the file set, which it
+            // keeps, and without positive options that the snapshot has, which a locked Program cannot get back
+            QoreParseOptions restored = i->second;
+            if (po_locked) {
+                restored &= pwo.parse_options | ~QoreParseOptions::POSITIVE_OPTIONS;
+            }
+            pwo.parse_options = restored | (locked_restrictions & ~lockedMayDisable());
             ppo.erase(i);
             // the options restored may not support an inherited execution mode that the ones of the file did
             syncExecModeWithParseOptions();

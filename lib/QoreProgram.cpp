@@ -1869,8 +1869,8 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
         // the mask must be the full-width one: the legacy PO_POSITIVE_OPTIONS cannot hold extended (bits 64+)
         // positive options, which would then pass to the child unchecked
         pwo.parse_options &= (p_pgm->priv->pwo.parse_options | ~QoreParseOptions::POSITIVE_OPTIONS);
-        // the child keeps the restrictions of its parent
-        locked_restrictions = p_pgm->priv->pwo.parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
+        // the child keeps the restrictions of its parent and those it was created with
+        locked_restrictions = pwo.parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
     } else {
         pwo.parse_options = n_parse_options;
         po_locked = !(n_parse_options & PO_NO_CHILD_PO_RESTRICTIONS);
@@ -4079,9 +4079,68 @@ void QoreProgram::waitForTerminationAndDeref(ExceptionSink* xsink) {
 }
 
 void QoreProgram::lockOptions() {
-    // the restrictions that it has now are kept
+    // the restrictions that it has now are kept; under po_mutex, as the options may be changed in another thread
+    std::lock_guard<std::mutex> po_guard(priv->po_mutex);
     priv->locked_restrictions |= priv->pwo.parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
     priv->po_locked = true;
+}
+
+QoreParseOptions qore_program_private_base::getCreatorRestrictions(const QoreParseOptions& creator_po) {
+    // the options of style and backward compatibility, %modern's included, are the created Program's own; the
+    // options that decide what user code a child inherits from its parent are not restrictions of a Program that is
+    // not a child (nor is the inheritance of the module data of a parent), and the system options are never
+    // inherited this way; the options that keep system code from a Program are taken, as an independent Program
+    // copies its namespace from the system namespace, not from its creator's
+    static const QoreParseOptions not_inherited = QoreParseOptions::POSITIVE_OPTIONS | lockedMayDisable()
+        | modernImpliedOptions() | modernIncompatibleOptions()
+        | QoreParseOptions(PO_USER_INHERITANCE_OPTIONS | PO_NO_INHERIT_PROGRAM_DATA | PO_SYSTEM_OPS);
+    return creator_po & ~not_inherited;
+}
+
+QoreParseOptions qore_program_private_base::restrictForCreator(const QoreProgram* creator,
+        const QoreParseOptions& po, QoreParseOptions& restrictions, bool& restricted) {
+    restricted = false;
+    restrictions = QoreParseOptions();
+    if (!creator) {
+        return po;
+    }
+    QoreParseOptions creator_po;
+    bool creator_locked;
+    {
+        // the options of the creator may be changed in another thread
+        std::lock_guard<std::mutex> po_guard(creator->priv->po_mutex);
+        creator_po = creator->priv->pwo.parse_options;
+        creator_locked = creator->priv->po_locked;
+    }
+    QoreParseOptions creator_restrictions = getCreatorRestrictions(creator_po);
+    // sandboxed code cannot create a Program that is free of its restrictions
+    const bool sandboxed = qore_caller_is_sandboxed();
+    // code without restrictions that is not locked has none that the Program could escape; such code creates an
+    // independent Program with the options it gives, as before (QoreRepl, for example, creates one with
+    // PO_ALLOW_REPARSE); a locked Program has no positive options that it cannot have, which the new Program does not
+    // get either
+    if (!sandboxed && ((creator_po & PO_NO_CHILD_PO_RESTRICTIONS) || (!creator_restrictions && !creator_locked))) {
+        return po;
+    }
+    restricted = true;
+    restrictions = creator_restrictions;
+    // the restrictions of the creator are added, and the options that give more freedom that it does not have are
+    // removed, as setParent() does for a child; the children of the Program of sandboxed code inherit them;
+    // PO_ALLOW_REPARSE is kept, as it only allows code to be parsed in the new Program more than once (QoreRepl
+    // creates its Program with it)
+    QoreParseOptions allowed = creator_po | ~QoreParseOptions::POSITIVE_OPTIONS | QoreParseOptions(PO_ALLOW_REPARSE);
+    if (sandboxed) {
+        allowed &= ~QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS);
+    }
+    return (po | restrictions) & allowed;
+}
+
+void qore_program_private_base::lockCreatorRestrictions(QoreProgram& pgm, const QoreParseOptions& restrictions) {
+    std::lock_guard<std::mutex> po_guard(pgm.priv->po_mutex);
+    // the options were given by restrictForCreator(), so the Program has the restrictions already
+    assert((pgm.priv->pwo.parse_options & restrictions) == restrictions);
+    pgm.priv->locked_restrictions |= restrictions;
+    pgm.priv->po_locked = true;
 }
 
 // setExecClass() NOTE: string passed here will copied

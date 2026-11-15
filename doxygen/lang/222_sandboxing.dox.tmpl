@@ -544,6 +544,15 @@ sm.setFilesystemDefaultPolicy(False);
 sm.setFilesystemDefaultPolicy(True);
     @endcode
 
+    @subsection sandbox_fs_shell Shell Commands
+
+    system(), backquote() and the @ref backquote_operator "backquote operator" run their command with the shell, so
+    the filesystem policy must allow \c /bin/sh to be executed; otherwise they raise \c FILESYSTEM-ACCESS-DENIED.
+    Allowing it allows any command, as the shell runs what it is given:
+    @code{.py}
+sm.addFilesystemAllowedPath("/bin/sh", QSEC_EXECUTE);
+    @endcode
+
     @section sandbox_network Network Security
 
     The network security system controls socket connections and provides SSRF (Server-Side Request Forgery)
