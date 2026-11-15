@@ -38,6 +38,24 @@ class DelMutex inherits Mutex {
     }
 }
 
+#! private:internal methods of the same name in a class and its subclass: a reference made in the base class calls
+#! the base class's method, which is the one that the error names
+class PimBase {
+    private:internal pim(auto a) {
+        printf("PimBase::pim(%y)\n", a);
+    }
+
+    code getPim() {
+        return \pim();
+    }
+}
+
+class PimSub inherits PimBase {
+    private:internal pim(auto a) {
+        printf("PimSub::pim(%y)\n", a);
+    }
+}
+
 int sub delete_object(object o) {
     delete o;
     return 1;
@@ -66,5 +84,11 @@ check("builtin, deleted before the call", sub () { Mutex o(); code c = \o.lock()
 check("builtin, deleted by the arguments", sub () { Mutex o(); code c = \o.lock(); c(delete_object(o)); });
 check("self call reference, builtin", sub () { DelMutex o(); o.callRefSelf(); });
 check("self call reference, user method", sub () { DelMutex o(); o.callRefSelfUser(); });
+check("private:internal in the class of the reference, deleted before the call",
+    sub () { PimSub o(); code c = o.getPim(); delete o; c(1); });
+check("private:internal in the class of the reference, deleted by the arguments",
+    sub () { PimSub o(); code c = o.getPim(); c(delete_object(o)); });
+check("private:internal in the class of the reference, called",
+    sub () { PimSub o(); code c = o.getPim(); c(1); });
 check("named arguments, deleted by the arguments",
     sub () { U o(); code c = \o.m(); c(a: delete_object(o)); });

@@ -1007,9 +1007,18 @@ int RunTimeResolvedMethodReferenceNode::checkObject(ExceptionSink* xsink) const 
 int RunTimeObjectMethodReferenceNode::checkObject(ExceptionSink* xsink) const {
     // the status is read inline, without the exported call of QoreObject::isValid() (#5692)
     if (obj && qore_object_private::get(*obj)->status == OS_DELETED) {
-        // the method found by name, as the call names it (qore_object_private::startCall()); the object's class if
-        // there is none
-        const QoreMethod* m = findMethod();
+        // the method that the call finds by name, as the call names it (qore_object_private::startCall()): looked up
+        // in the class context of the reference, as the call looks it up (evalMethod()), not in that of the caller;
+        // the object's class if there is none
+        const qore_class_private* class_ctx = qc;
+        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*obj->getClass(), class_ctx)) {
+            class_ctx = nullptr;
+        }
+        ExceptionSink lookup_xsink;
+        const QoreMethod* m = qore_class_private::get(*obj->getClass())->getMethodForEval(method.c_str(),
+            obj->getProgram(), class_ctx, &lookup_xsink);
+        // an error of the lookup is the call's own, which is not made
+        lookup_xsink.clear();
         qore_object_private::get(*obj)->raiseDeletedCall(m ? qore_class_private::get(*m->getClass()) : nullptr,
             method.c_str(), xsink);
         return -1;
