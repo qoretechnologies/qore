@@ -792,23 +792,32 @@ struct qore_ds_private : public QoreDbiForkObject {
     DLLLOCAL void setPendingConnectionValues(const qore_ds_private* other);
 
     //! copies the pending connection values to the values in use; called by the thread that holds the connection
-    /** The pending values are copied with \c m held, and installed as the values in use without it, as only the
-        thread that holds the connection writes them.  For a ManagedDatasource, its \c ds_lock is held by the caller,
-        so that another thread that reads the values in use with \c ds_lock held does not race with the change (a
-        debug build asserts it); this function does not take \c ds_lock itself, as its callers hold it already
+    /** The pending values and their setters are copied to the values in use in one leaf section on \c m: the strings
+        are assigned in place, which reuses their storage (the one bounded allocation that a section on \c m can make),
+        and a setter is replaced only if it changed, with the previous one released after the lock, so no record is
+        released under it.  Only the thread that holds the connection writes the values in use.  For a
+        ManagedDatasource, its \c ds_lock is held by the caller, so that another thread that reads the values in use
+        with \c ds_lock held does not race with the change (a debug build asserts it); this function does not take
+        \c ds_lock itself, as its callers hold it already
     */
     DLLLOCAL void setConnectionValues() {
         assert(!dsh || dsh->helperHoldsConnectionValuesLock());
-        qore_ds_pending_params::Values vals = getPendingValues();
-        dbname.swap(vals.dbname);
-        username.swap(vals.username);
-        password.swap(vals.password);
-        hostname.swap(vals.hostname);
-        db_encoding.swap(vals.db_encoding);
-        port = vals.port;
-        // the setters of the values in use; the previous ones are released with vals, without a lock
+        // the previous setters of the values in use, released after the lock
+        qore_ds_setter_t old_setters[QDCP_COUNT];
+        QoreDsLock al(m, QoreDsLock::Leaf);
+        qore_ds_pending_params::ConstView v(pending, al);
+        const qore_ds_pending_params::Values& p = v.get();
+        dbname = p.dbname;
+        username = p.username;
+        password = p.password;
+        hostname = p.hostname;
+        db_encoding = p.db_encoding;
+        port = p.port;
         for (unsigned i = 0; i < QDCP_COUNT; ++i) {
-            param_setter[i].swap(vals.setter[i]);
+            if (param_setter[i] != p.setter[i]) {
+                old_setters[i] = std::move(param_setter[i]);
+                param_setter[i] = p.setter[i];
+            }
         }
     }
 
