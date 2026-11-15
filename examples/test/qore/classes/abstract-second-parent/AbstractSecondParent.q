@@ -15,6 +15,20 @@ class Base {
     abstract string o(string s);
 
     abstract nothing put(Queue q, int i);
+
+    abstract string n(int x, int y);
+
+    # calls from the code of the declaring class
+    string callFromBase() {
+        return m(11);
+    }
+
+    string callBackgroundFromBase() {
+        Queue q();
+        background put(q, 12);
+        # the thread raises an exception and pushes nothing if the call fails
+        return q.get(60s);
+    }
 }
 
 class Impl {
@@ -32,6 +46,10 @@ class Impl {
 
     nothing put(Queue q, int i) {
         q.push("Impl::put " + i);
+    }
+
+    string n(int x, int y) {
+        return sprintf("Impl::n x: %d y: %d", x, y);
     }
 }
 
@@ -61,6 +79,38 @@ class D inherits Base, Impl {
     string callDeleted() {
         delete self;
         return m(8);
+    }
+
+    string callDeletedQualified() {
+        delete self;
+        return Base::m(13);
+    }
+
+    # calls with named arguments
+    string callNamed() {
+        return n(y: 4, x: 3);
+    }
+
+    string callNamedQualified() {
+        return Base::n(y: 6, x: 5);
+    }
+
+    # a closure and a call reference
+    string callClosure() {
+        code c = string sub (int i) { return m(i); };
+        return c(14);
+    }
+
+    string callReference() {
+        code c = \m();
+        return c(15);
+    }
+}
+
+# the implementing class is inherited privately
+class P inherits Base, private:internal Impl {
+    string callM() {
+        return m(16);
     }
 }
 
@@ -112,6 +162,10 @@ class GrandImpl {
     nothing put(Queue q, int i) {
         q.push("GrandImpl::put " + i);
     }
+
+    string n(int x, int y) {
+        return sprintf("GrandImpl::n x: %d y: %d", x, y);
+    }
 }
 
 class MidImpl inherits GrandImpl {
@@ -148,4 +202,13 @@ for (int i = 0; i < 3; ++i) {
     check("call on a deleted object", string sub () { D d(); return d.callDeleted(); });
     check("final class", string sub () { H h(); return h.callM(); });
     check("final class, background self call", string sub () { H h(); return h.callBackground(); });
+    check("qualified call on a deleted object", string sub () { D d(); return d.callDeletedQualified(); });
+    check("named arguments", string sub () { D d(); return d.callNamed(); });
+    check("named arguments, qualified", string sub () { D d(); return d.callNamedQualified(); });
+    check("call from the declaring class", string sub () { D d(); return d.callFromBase(); });
+    check("call from the declaring class, subclass", string sub () { E e(); return e.callFromBase(); });
+    check("background call from the declaring class", string sub () { D d(); return d.callBackgroundFromBase(); });
+    check("closure", string sub () { D d(); return d.callClosure(); });
+    check("call reference", string sub () { D d(); return d.callReference(); });
+    check("private:internal implementing class", string sub () { P p(); return p.callM(); });
 }
