@@ -152,3 +152,12 @@ ast, ir, jit, tiered, tiered with thresholds 1 (tlow), qcc -O0 and -O3.
   jit, tlow and qcc, `f_try_w` qcc -O0/-O3 +4352/+4303 (+57%: the consume path instead of the fast entry).
   `m_poly` jit is -437 (the call of a method of another class that gives its arguments takes them over: fewer
   allocations), as against develop since e317abfe88.
+- After the review of 1d03004059, against batch R on spinster (callgrind, Release, per-call slope of two sizes,
+  `QORE_JIT_SYNC_COMPILE=1`, R 8a1ac4346b and the branch built on the same host; 17 cases including the reviewer's):
+  the frames bound from the runtime stack that are given nothing write the parameter in IR storage again: `b_loop`
+  (`fl(hv)`, a default argument, 50 writes of `h.k`) is -184 per call in IR mode (code -823, libc +639) and -19 in
+  tiered and tlow, against +875 and +1078 at 1d03004059; `b_dflt`, `b_cref`, `b_meth` -19..-32 in ir, tiered and
+  tlow; jit and qcc 0.  Every non-giving row (`rv_fh`, `rv_fl`, `rv_cm`, `f_var_hwrite`, `f_var_lwrite`, `f_int`,
+  `f_tmp_read`, `m_tmp_read`) is 0 or cheaper in code in every mode; `rv_fa` ir/tiered/tlow +40..44 is libc only
+  (+65, code -21..-25).  The move replaces the first load's reference of the IR frame (fewer instructions than the
+  reference and its release).  `b_ast` (a giving site) is -1902 in IR mode and +1078 in jit, all of it in libc.
