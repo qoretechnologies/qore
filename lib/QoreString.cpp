@@ -1658,6 +1658,8 @@ int qore_string_private::substr_complex(QoreString* ns, qore_offset_t offset, Ex
 
 void qore_string_private::splice_simple(size_t offset, size_t num, QoreString* extract) {
     mutableBuffer();
+    // the callers give an offset within the string; see QoreString::replace()
+    assert(offset <= len);
     //printd(5, "splice_intern(offset=" QSD ", num=" QSD ", len=" QSD ")\n", offset, num, len);
     size_t end;
     if (num > (len - offset)) {
@@ -1686,6 +1688,8 @@ void qore_string_private::splice_simple(size_t offset, size_t num, QoreString* e
 void qore_string_private::splice_simple(size_t offset, size_t num, const char* str, size_t str_len,
         QoreString* extract) {
     mutableBuffer();
+    // the callers give an offset within the string; see QoreString::replace()
+    assert(offset <= len);
     //printd(5, "splice_intern(offset=" QSD ", num=" QSD ", len=" QSD ")\n", offset, num, len);
 
     size_t end;
@@ -2747,6 +2751,10 @@ void QoreString::replaceAll(const char* old_str, const char* new_str) {
 
 void QoreString::replace(size_t offset, size_t dlen, const char* str) {
     QORE_ASSERT_MUTABLE(this);
+    // an offset past the end of the string is the end of the string
+    if (offset > priv->len) {
+        offset = priv->len;
+    }
     if (str && str[0])
         priv->splice_simple(offset, dlen, str, ::strlen(str));
     else
@@ -2755,6 +2763,10 @@ void QoreString::replace(size_t offset, size_t dlen, const char* str) {
 
 void QoreString::replace(size_t offset, size_t dlen, const QoreString* str, ExceptionSink* xsink) {
     QORE_ASSERT_MUTABLE(this);
+    // an offset past the end of the string is the end of the string
+    if (offset > priv->len) {
+        offset = priv->len;
+    }
     if (str && str->strlen()) {
         TempEncodingHelper tmp(str, priv->getEncoding(), xsink);
         if (!tmp)

@@ -290,7 +290,8 @@ public:
     //! concatenates a string and converts encodings if necessary
     /** @param str the string to concatenate to the current string (this)
         @param pos the starting character (not byte) position for concatenation (negative values are from the end)
-        @param len the number of characters (not bytes) to concatenate from the starting position (negative values indicate all except that many characters from the end)
+        @param len the number of characters (not bytes) to concatenate from the starting position (negative values indicate all except that many characters from the end); the characters
+        concatenated are always within \a str, in single-byte and multi-byte encodings
         @param xsink if an error occurs converting character encodings, it will be raised here
 
         @return 0 for OK, -1 for exception raised
@@ -640,12 +641,14 @@ public:
     DLLEXPORT void replaceAll(const char* old_str, const char* new_str);
 
     //! replaces bytes with the string passed
-    /** offsets and size are in bytes, not characters
+    /** offsets and size are in bytes, not characters; an offset past the end of the string is the end of the string
+        (the string passed is appended), and a length past the end of the string is the rest of the string
     */
     DLLEXPORT void replace(size_t offset, size_t len, const char* str);
 
     //! replaces bytes with the string passed
-    /** offsets and size are in bytes, not characters
+    /** offsets and size are in bytes, not characters; an offset past the end of the string is the end of the string
+        (the string passed is appended), and a length past the end of the string is the rest of the string
     */
     DLLEXPORT void replace(size_t offset, size_t len, const QoreString* str, ExceptionSink* xsink);
 
