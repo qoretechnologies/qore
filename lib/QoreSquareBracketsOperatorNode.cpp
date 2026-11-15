@@ -751,12 +751,8 @@ FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIterat
     ValueEvalOptimizedRefHolder lhs(left, xsink);
     if (*xsink)
         return nullptr;
-    // the container and the index are temporaries of the statement, which live until the statement ends, as in
-    // evalImpl() and in the other execution modes (qore#5712); an iterator takes references of its own
-    QoreStatementTempScope::holdReceiver(left, lhs, xsink);
-    // the destructor of a value that the scope released for the same expression can raise an exception
-    if (*xsink)
-        return nullptr;
+
+    ValueEvalOptimizedRefHolder rhs(xsink);
 
     // do not evaluate the RHS if the RHS is a list with ranges
     if (rhs_list_range) {
@@ -766,8 +762,7 @@ FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIterat
                 string_index_char, negative_offsets, semantic_policy.brokenListRange(), xsink);
         }
     } else {
-        QoreOperandEvalHolder rhs(right, xsink);
-        if (*xsink)
+        if (rhs.eval(right))
             return nullptr;
         return getIndexesIterator(lhs, rhs, string_index_char, negative_offsets, value_type, xsink);
     }

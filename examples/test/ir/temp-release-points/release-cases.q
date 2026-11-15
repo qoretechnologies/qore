@@ -55,11 +55,6 @@ hashdecl HE {
     auto a;
 }
 
-enum EnR { One = 1 }
-
-class Other {
-}
-
 #! records a point of the statement
 string sub mark(string m) {
     printf("  mark %s\n", m);
@@ -88,27 +83,6 @@ hash<auto> sub mkh(string n) {
 
 E sub mke(string n) {
     return new E(n);
-}
-
-list<E> sub mkl(string n) {
-    return (new E(n),);
-}
-
-#! an int outside the inline range, computed at runtime: a node
-auto sub bigi(int i) {
-    return (1 << 62) + i;
-}
-
-#! a class cast in a default argument (qore#5712)
-string sub cast_default_arg(E e = cast<E>(mke("cda"))) {
-    return e.n;
-}
-
-#! a class cast in a member initializer (qore#5712)
-class CastMember {
-    public {
-        E e = cast<E>(mke("cmi"));
-    }
 }
 
 # the cases of qore#5801 are functions, not closures, so that each execution mode compiles them
@@ -299,31 +273,6 @@ sub main() {
     # an index and a key
     t("operand of index", auto sub () { list<auto> l = (1, 2); string s = f1(l[mke("ix")]) + mark("ix"); });
     t("operand of key", auto sub () { hash<auto> h = {"a": 1}; string s = f1(h{mke("key").n}) + mark("key"); });
-    # the key itself, not the receiver of a member access (qore#5712)
-    t("operand of key value", auto sub () { hash<auto> h = {"a": 1}; string s = f1(h{id(mke("keyv"))}) + mark("keyv"); });
-    # [] as the source of a functional operator: its index and its container
-    t("index source", auto sub () { list<auto> l = (1, 2); string s = f1(map $1, l[mke("ixs")]) + mark("ixs"); });
-    t("index source container", auto sub () { string s = f1(map $1, mkl("ixc")[(0,)]) + mark("ixc"); });
-    # the operand of a class cast and of an enum cast
-    t("operand of class cast", auto sub () { string s = f1(cast<E>(mke("cc"))) + mark("cc"); });
-    t("class cast exception", auto sub () { string s = g3(new E("arg"), cast<Other>(mke("ccx")), raise()); });
-    t("enum cast exception", auto sub () { string s = g3(new E("arg"), cast<EnR>(id(mke("enx"))), raise()); });
-    # a class cast whose value is used after the scope of its expression ends: an assignment to an element, a default
-    # argument and a member initializer evaluate in a scope of their own
-    t("class cast element", auto sub () { hash<auto> h = {}; h.x = cast<E>(mke("cel")); string s = h.x.n + mark("cel"); });
-    t("class cast default argument", auto sub () { string s = cast_default_arg() + mark("cda"); });
-    t("class cast member", auto sub () { CastMember c(); string s = c.e.n + mark("cmi"); });
-    # unary plus of an int node, assigned to an element and pushed to a list
-    t("unary plus element", auto sub () { hash<auto> h = {}; h.x = +bigi(12345); printf("  value %d\n", h.x); });
-    t("unary plus push", auto sub () { list<auto> l = (); push l, +bigi(7); printf("  value %d\n", l[0]); });
-    t("unary plus variable", auto sub () {
-        number n = 1.5n;
-        date d = 3h;
-        hash<auto> h = {};
-        h.x = +n;
-        h.y = +d;
-        printf("  value %y %y\n", h.x, h.y);
-    });
     t("float compare exception", auto sub () { string s = g3(new E("arg"), mke("gt") > 1.0, raise()); });
     # the condition of ?:
     t("condition", auto sub () { string s = f1(1) + ((new E("q")) ? mark("q") : ""); });

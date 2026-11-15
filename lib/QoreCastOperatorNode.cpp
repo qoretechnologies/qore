@@ -819,24 +819,11 @@ QoreValue QoreClassCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* 
     if (*xsink) {
         return QoreValue();
     }
-    // a temporary operand is a temporary of the statement, which lives until the statement ends, as in the other
-    // execution modes (qore#5712); the value is then the operand itself, which the caller can use after the scope
-    // that holds the operand ends (an assignment to an element, a default argument, a member initializer), so it is
-    // returned with a reference of its own; an operand read from a variable is returned as it was read
-    bool held = false;
-    if (rv.isTemp() && xsink && rv->needsRef()) {
-        QoreStatementTempScope::holdReceiver(exp, rv, xsink);
-        held = !rv.isTemp();
-    }
 
     if (QoreClassCastOperatorNode::checkValue(xsink, *rv, false)) {
         return QoreValue();
     }
 
-    if (held) {
-        needs_deref = true;
-        return rv->refSelf();
-    }
     return rv.takeValue(needs_deref);
 }
 
@@ -1325,9 +1312,7 @@ int QoreEnumCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& 
 }
 
 QoreValue QoreEnumCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    // the operand is a temporary of the statement, which lives until the statement ends, as in the other execution
-    // modes (qore#5712)
-    QoreOperandEvalHolder rv(exp, xsink);
+    ValueEvalOptimizedRefHolder rv(exp, xsink);
     if (*xsink) {
         return QoreValue();
     }

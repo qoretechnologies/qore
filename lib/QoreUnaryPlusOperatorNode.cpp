@@ -58,11 +58,9 @@ QoreValue QoreUnaryPlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *
         case NT_FLOAT:
         case NT_DATE:
         case NT_NUMBER: {
-            // the value is the operand itself, which the statement's scope can hold (an int or a float outside the
-            // inline range is a node), and which the caller can use after the scope that holds the operand ends (an
-            // assignment to an element, a default argument): it is returned with a reference of its own (qore#5712)
-            needs_deref = true;
-            return v.takeReferencedValue();
+            needs_deref = v.isTemp();
+            v.clearTemp();
+            return *v;
         }
     }
 
