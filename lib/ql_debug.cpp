@@ -18880,12 +18880,170 @@ static void ut_old_background_self_call_helper(UnitTestCounters& c) {
 }
 
 #ifdef DEBUG
+//! qore#6142: the record of the code that chose the connection of a datasource, in C++
+/** - Z1: a Datasource that C++ creates on a thread with no Qore thread data (a std::thread) records a trusted creator
+      (no manager, uncontrolled APIs allowed) and does not crash; so does a value that it sets there
+    - the API of QoreDatasourceConnectChoosers: an empty object, the creators and setters of the values in use, the
+      setter of an option, entries without duplicates, clear(), a refill that replaces the entries
+    - a copy: the copier and the creators of the original; setPendingConnectionValues() merges the creators
+    - a pool connection: the record of the pool, whatever thread creates the connection
+*/
+static void ut_datasource_connect_choosers(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    DBIDriver* drv = ut_dsopt_driver();
+
+    // an empty object: no entries, and no permission
+    {
+        QoreDatasourceConnectChoosers ch;
+        UT_ASSERT_EQ(c, 0, (int)ch.size(), "an empty record has no entries");
+        UT_ASSERT(c, !ch.allowsUncontrolledApis(), "an empty record is not a permission");
+        ch.clear();
+        UT_ASSERT_EQ(c, 0, (int)ch.size(), "clear() of an empty record");
+    }
+
+    // Z1: created on a thread that has no Qore thread data
+    {
+        std::unique_ptr<Datasource> ds;
+        std::thread t([&ds, drv]() {
+            ds.reset(new Datasource(drv));
+            ds->setPendingDBName("z1");
+        });
+        t.join();
+        UT_ASSERT(c, ds.get(), "Z1: the datasource is created on a foreign thread");
+        UT_ASSERT_EQ(c, 0, ds->open(&xsink), "Z1: the datasource is opened");
+        QoreDatasourceConnectChoosers ch;
+        UT_ASSERT_EQ(c, 0, ds->getConnectChoosers(ch, &xsink), "Z1: the record is read");
+        // the creator and the setter of the database name, recorded separately
+        UT_ASSERT_EQ(c, 2, (int)ch.size(), "Z1: the creator and the setter of the database name");
+        for (size_t i = 0; i < ch.size(); ++i) {
+            UT_ASSERT(c, ch.allowsUncontrolledApis(i), "Z1: trusted");
+            ReferenceHolder<QoreSandboxManager> pm(ch.getPolicyManagerRef(i), &xsink);
+            UT_ASSERT(c, !pm, "Z1: no policy manager");
+            QoreModuleCommandRestrictions r;
+            UT_ASSERT(c, ch.getRestrictions(i, r), "Z1: the restrictions are known");
+            UT_ASSERT(c, !r.isSandboxed() && !r.isRestricted(), "Z1: not restricted");
+        }
+        UT_ASSERT(c, ch.allowsUncontrolledApis(), "Z1: the aggregate");
+        ds->close();
+    }
+
+    // the creators and the setters of the values in use; an option's setter; no duplicates; a refill replaces
+    {
+        Datasource ds(drv);
+        ds.setPendingUsername("u");
+        ds.setPendingDBName("db");
+        UT_ASSERT_EQ(c, 0, ut_dsopt_set(ds, "opt", "value", xsink), "an option is set");
+        UT_ASSERT_EQ(c, 0, ds.open(&xsink), "the datasource is opened");
+        QoreDatasourceConnectChoosers ch;
+        UT_ASSERT_EQ(c, 0, ds.getConnectChoosers(ch, &xsink), "the record is read");
+        UT_ASSERT_EQ(c, 3, (int)ch.size(), "the creator and the setters of the user and the database name");
+        UT_ASSERT_EQ(c, 1, ds.addOptionChooser("opt", ch, &xsink), "the setter of the option is added");
+        UT_ASSERT_EQ(c, 4, (int)ch.size(), "the setter of the option is an entry");
+        UT_ASSERT_EQ(c, 1, ds.addOptionChooser("opt", ch, &xsink), "the setter of the option is already an entry");
+        UT_ASSERT_EQ(c, 4, (int)ch.size(), "no duplicate entry");
+        UT_ASSERT_EQ(c, 0, ds.addOptionChooser("opt2", ch, &xsink), "an option that is not set has no setter");
+        UT_ASSERT_EQ(c, 4, (int)ch.size(), "nothing is added for an option without a setter");
+        // a value that is set on the open connection judges the next open, not the values in use
+        ds.setPendingHostName("h");
+        UT_ASSERT_EQ(c, 0, ds.getConnectChoosers(ch, &xsink), "the record is read again");
+        UT_ASSERT_EQ(c, 3, (int)ch.size(), "a refill replaces the entries; the pending setter is not in use yet");
+        ds.close();
+        UT_ASSERT_EQ(c, 0, ds.open(&xsink), "the datasource is opened again");
+        UT_ASSERT_EQ(c, 0, ds.getConnectChoosers(ch, &xsink), "the record is read after the reopen");
+        UT_ASSERT_EQ(c, 4, (int)ch.size(), "the setter of the host name is in use after the reopen");
+        // the last setter of a value replaces the previous one
+        ds.setPendingHostName("h2");
+        ds.close();
+        UT_ASSERT_EQ(c, 0, ds.open(&xsink), "the datasource is opened a third time");
+        UT_ASSERT_EQ(c, 0, ds.getConnectChoosers(ch, &xsink), "the record is read after the third open");
+        UT_ASSERT_EQ(c, 4, (int)ch.size(), "the last setter of the host name replaced the previous one");
+        ch.clear();
+        UT_ASSERT_EQ(c, 0, (int)ch.size(), "clear() removes every entry");
+        ds.close();
+
+        // a copy: the copier and the creators of the original, and the setters of the values that it copies
+        std::unique_ptr<Datasource> cp(ds.copy());
+        UT_ASSERT_EQ(c, 0, cp->open(&xsink), "the copy is opened");
+        UT_ASSERT_EQ(c, 0, cp->getConnectChoosers(ch, &xsink), "the record of the copy is read");
+        UT_ASSERT_EQ(c, 5, (int)ch.size(), "the copier, the creator and the three setters of the copy");
+        cp->close();
+
+        // setPendingConnectionValues(): the target keeps its creators and gets those of the source
+        Datasource target(drv);
+        qore_ds_private::get(target)->setPendingConnectionValues(qore_ds_private::get(*cp));
+        UT_ASSERT_EQ(c, 3, (int)qore_ds_private::get(target)->getCreators()->size(),
+            "the target's creator, and the copier and the creator of the source");
+        qore_ds_private::get(target)->setPendingConnectionValues(qore_ds_private::get(*cp));
+        UT_ASSERT_EQ(c, 3, (int)qore_ds_private::get(target)->getCreators()->size(),
+            "a second merge adds no duplicates");
+    }
+
+    // a datasource that sandboxed code created, copied and configured by code that is not restricted: in Qore, such
+    // calls run under the object's sandbox (its provenance), so only C++ can make them
+    {
+        QoreProgram* sp = new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+        QoreSandboxManager* sm = new QoreSandboxManager;
+        sp->setSandboxManager(sm);
+        sm->deref(nullptr);
+        std::unique_ptr<Datasource> ds;
+        {
+            ProgramThreadCountContextHelper tch(&xsink, sp, true);
+            UT_ASSERT(c, !xsink, "the sandboxed Program is entered");
+            ds.reset(new Datasource(drv));
+        }
+        // D4d: a setter that is not restricted does not replace the sandboxed creator
+        ds->setPendingDBName("x");
+        UT_ASSERT_EQ(c, 0, ds->open(&xsink), "the sandbox-created datasource is opened");
+        QoreDatasourceConnectChoosers ch;
+        UT_ASSERT_EQ(c, 0, ds->getConnectChoosers(ch, &xsink), "the record of the sandbox-created datasource");
+        UT_ASSERT_EQ(c, 2, (int)ch.size(), "the sandboxed creator and the setter of the database name");
+        UT_ASSERT(c, !ch.allowsUncontrolledApis(0), "D4d: the creator restricts");
+        UT_ASSERT(c, ch.allowsUncontrolledApis(1), "D4d: the setter does not");
+        UT_ASSERT(c, !ch.allowsUncontrolledApis(), "D4d: the connection is restricted");
+        ds->close();
+        // Y2 (M8): a copy by code that is not restricted keeps the sandboxed creator of the original
+        std::unique_ptr<Datasource> cp(ds->copy());
+        UT_ASSERT_EQ(c, 0, cp->open(&xsink), "the copy of the sandbox-created datasource is opened");
+        UT_ASSERT_EQ(c, 0, cp->getConnectChoosers(ch, &xsink), "the record of the copy");
+        UT_ASSERT_EQ(c, 3, (int)ch.size(), "the copier, the creator of the original and the setter");
+        UT_ASSERT(c, ch.allowsUncontrolledApis(0), "Y2: the copier does not restrict");
+        UT_ASSERT(c, !ch.allowsUncontrolledApis(1), "Y2: the creator of the original restricts");
+        UT_ASSERT(c, !ch.allowsUncontrolledApis(), "Y2: the copy is restricted");
+        cp->close();
+        cp.reset();
+        ds.reset();
+        sp->waitForTerminationAndDeref(&xsink);
+    }
+
+    // a connection of a pool has the record of the pool, also when another thread creates it
+    {
+        qore_ds_setter_t pool_setter = qore_ds_option_setter::getCaller();
+        qore_ds_pool_record rec{qore_ds_make_creators(pool_setter), pool_setter};
+        std::unique_ptr<Datasource> ds;
+        std::thread t([&ds, &rec, drv]() {
+            ds.reset(new Datasource(drv, nullptr, rec));
+            qore_ds_setter_t s = rec.setter;
+            qore_ds_private::get(*ds)->setPendingParam(QDCP_DB, "db", s);
+        });
+        t.join();
+        UT_ASSERT_EQ(c, 0, ds->open(&xsink), "the pool connection is opened");
+        QoreDatasourceConnectChoosers ch;
+        UT_ASSERT_EQ(c, 0, ds->getConnectChoosers(ch, &xsink), "the record of the pool connection is read");
+        UT_ASSERT_EQ(c, 1, (int)ch.size(), "the creator of the pool set the values: one entry");
+        ds->close();
+    }
+
+    UT_ASSERT(c, !xsink, "the record: no exception");
+    xsink.clear();
+}
+
 //! runs the tests of the locks of the connection values of a datasource (qore#6142; DEBUG builds only)
 static QoreValue f_dbg_run_datasource_pending_tests(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_datasource_pending_params_locked(c);
     ut_datasource_pending_params_checks(c);
+    ut_datasource_connect_choosers(c);
     return make_unit_test_result(c, xsink);
 }
 #endif

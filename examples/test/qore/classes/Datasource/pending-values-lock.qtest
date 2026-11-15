@@ -19,6 +19,11 @@
       inherited connection in a child process created with fork()
     - X4: the debug checks of the locks pass on each of these paths, and an entry point called with the lock of a
       datasource held aborts a child process created with fork()
+    - the record of the code that chose the connection (qore#6142): Z1 (a Datasource that C++ creates on a thread
+      with no Qore thread data), the API of QoreDatasourceConnectChoosers, copies and merges of the creators, a
+      datasource that sandboxed code created and that code which is not restricted configures and copies (which
+      Qore code cannot do: a call of a method of such an object runs under its sandbox), and a pool connection
+      created on another thread
 
     Before the fix, a copy, the configuration hash and string, serialization and the reopen in a child read the
     values while another thread could be changing them, which is a data race on std::string that can read freed memory.
@@ -46,6 +51,6 @@ class DatasourcePendingValuesLockTest inherits QUnit::Test {
 
     private {
         #! the number of assertions of dbg_run_datasource_pending_tests()
-        const TestCount = 87;
+        const TestCount = 144;
     }
 }
