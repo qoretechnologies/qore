@@ -1724,7 +1724,10 @@ public:
     /** A handler that is a call reference to builtin code sets no options of its own, and the thread that enters the
         Program has its own
     */
-    const QoreThreadRuntimeParseOptions po = QoreThreadRuntimeParseOptions::capture();
+    /** Without the application of a call of module code, as the handlers run for every thread that enters the
+        Program
+    */
+    const QoreThreadRuntimeParseOptions po = QoreThreadRuntimeParseOptions::captureForThread();
 
     //! creates the object with one reference and a reference to each handler given
     DLLLOCAL QoreThreadEntryHandlers(const ResolvedCallReferenceNode* on_enter,

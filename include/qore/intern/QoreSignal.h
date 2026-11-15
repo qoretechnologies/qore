@@ -143,8 +143,10 @@ public:
       CodePgm rv(funcref, pgm);
       funcref = 0;
       pgm = 0;
-      // the options hold references to Programs, which must not outlive the handler (qore#6208)
-      po = QoreThreadRuntimeParseOptions();
+      // the options go with the handler taken, which is released outside the signal lock, as their references to
+      // Programs can be the last ones (qore#6208)
+      std::swap(rv.po.po, po.po);
+      std::swap(rv.po.override, po.override);
       return rv;
    }
 

@@ -1737,12 +1737,17 @@ bool qore_program_private::scanMembers(RObject& obj, RSetHelper& rsh) {
 bool qore_program_private::setThreadInit(const ResolvedCallReferenceNode* n_thr_init, ExceptionSink* xsink) {
     // the old code is released after the lock, as releasing it can run destructors
     ReferenceHolder<ResolvedCallReferenceNode> old(xsink);
+    // the options of the code that sets it, which it runs with, without the application of a call of module code,
+    // as it runs for every thread that enters the Program (qore#6208); the old ones are released after the lock, as
+    // their references to Programs can be the last ones
+    QoreThreadRuntimeParseOptions po = n_thr_init ? QoreThreadRuntimeParseOptions::captureForThread()
+        : QoreThreadRuntimeParseOptions();
     {
         AutoLocker al(tlock);
         old = thr_init;
         thr_init = n_thr_init ? n_thr_init->refRefSelf() : nullptr;
-        // the options of the code that sets it, which it runs with (qore#6208)
-        thr_init_po = n_thr_init ? QoreThreadRuntimeParseOptions::capture() : QoreThreadRuntimeParseOptions();
+        std::swap(thr_init_po.po, po.po);
+        std::swap(thr_init_po.override, po.override);
         if (scan_holder) {
             scanValuesChangedIntern(program_code_needs_scan(*old), {thr_init});
         }
@@ -6266,6 +6271,9 @@ struct QoreExitHook {
 
     //! Releases the hook's references; called without the registry lock
     void release(ExceptionSink* xsink) {
+        // the options' references to Programs are released here, not when the object is overwritten or destroyed
+        // with the registry lock held (qore#6208)
+        po = QoreThreadRuntimeParseOptions();
         code->deref(xsink);
         pgm->depDeref();
     }

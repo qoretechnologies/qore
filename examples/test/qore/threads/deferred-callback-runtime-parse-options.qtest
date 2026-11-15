@@ -96,17 +96,25 @@ nothing sub delegating(File f, Queue q) {
     Socket client();
     client.connect(\"127.0.0.1:\" + listener.getSocketInfo().port);
     Socket server = listener.accept();
+    AsyncIoController::setMaxCallbackWorkers(1);
+    # the operation's counter is decremented by the callback worker just before it calls the completion callback
+    Counter c(1);
     PollPipeline pipeline(client);
     pipeline.addRecvExact(2, True);
-    DelegatingPollOperation op(pipeline, \\f.sync(), NOTHING);
+    DelegatingPollOperation op(pipeline, \\f.sync(), c);
     hash<SocketPollOperationInfo> info = <SocketPollOperationInfo>{
         \"sock\": client, \"spop\": op, \"to\": -1s, \"owner\": \"deferred-test\",
     };
-    AsyncIoController::setMaxCallbackWorkers(1);
     AsyncIoController::submit(info);
     server.send(\"hi\");
-    # one callback worker runs the items in order: the timer's callback runs after the completion callback
-    AsyncIoController::addTimerDelay(100ms, sub () { q.push(\"delegating: done\"); });
+    c.waitForZero();
+    # the one callback worker is running the first completion: the second one, submitted now, runs after it
+    PollPipeline pipeline2(client);
+    pipeline2.addRecvExact(2, True);
+    DelegatingPollOperation op2(pipeline2, sub (hash h) { q.push(\"delegating: done\"); }, NOTHING);
+    info.spop = op2;
+    AsyncIoController::submit(info);
+    server.send(\"hi\");
 }
 ";
 

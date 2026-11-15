@@ -776,22 +776,33 @@ void HttpWebSocketPollOperationPriv::queueSendRawFrame(const BinaryNode* data, E
 }
 
 void HttpWebSocketPollOperationPriv::setFrameCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink) {
-    AutoLocker al(m);
-    if (frame_callback) {
-        frame_callback->deref(xsink);
+    // the options of the code that sets the callback, which it runs with (qore#6208); the old ones are released
+    // after the lock, as their references to Programs can be the last ones
+    QoreThreadRuntimeParseOptions po = cb ? QoreThreadRuntimeParseOptions::capture() : QoreThreadRuntimeParseOptions();
+    {
+        AutoLocker al(m);
+        if (frame_callback) {
+            frame_callback->deref(xsink);
+        }
+        frame_callback = cb;
+        std::swap(frame_callback_po.po, po.po);
+        std::swap(frame_callback_po.override, po.override);
     }
-    frame_callback = cb;
 }
 
 void HttpWebSocketPollOperationPriv::dispatchFrameCallback(ExceptionSink* xsink) {
     ReferenceHolder<ResolvedCallReferenceNode> cb(xsink);
+    QoreThreadRuntimeParseOptions cb_po;
     {
         AutoLocker al(m);
         if (frame_callback) {
             cb = frame_callback->refRefSelf();
+            cb_po = frame_callback_po;
         }
     }
     if (cb) {
+        // the callback runs with the options of the code that set it (qore#6208)
+        QoreThreadRuntimeParseOptionsHelper po_helper(&cb_po);
         ValueHolder rv(cb->invoke(nullptr, xsink), xsink);
     }
 }
