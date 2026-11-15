@@ -1132,7 +1132,10 @@ void QoreFormatBoundsContext::scan(const QoreValue val) {
     scanIntern(val, 0, nodes);
 }
 
-void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, unsigned& nodes) {
+//! the nesting depth from which the scan of the format bounds continues without recursion (qore#6117)
+static constexpr unsigned QORE_FORMAT_SCAN_RECURSION_LIMIT = 64;
+
+bool QoreFormatBoundsContext::scanEnter(const QoreValue val, unsigned depth, unsigned& nodes) {
     const AbstractQoreNode* node;
     switch (val.getType()) {
         case NT_HASH:
@@ -1141,11 +1144,11 @@ void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, un
             node = val.getInternalNode();
             break;
         default:
-            return;
+            return false;
     }
 
     if (nodes >= max_scan_nodes) {
-        return;
+        return false;
     }
     ++nodes;
 
@@ -1154,11 +1157,103 @@ void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, un
         // the container is already known; count the reference and do not expand it again; this also terminates
         // the scan of recursive references
         ++(i->second);
-        return;
+        return false;
     }
     counts.insert(i, nmap_t::value_type(node, 1));
 
-    if (bounds.max_depth && depth >= bounds.max_depth) {
+    return !bounds.max_depth || depth < bounds.max_depth;
+}
+
+namespace {
+// releases the copy of the data of an object that the scan expands; as in the recursive scan, an exception raised
+// by the release is reported when the sink is destroyed
+struct FormatScanDataDeref {
+    void operator()(QoreHashNode* h) const {
+        ExceptionSink xs;
+        h->deref(&xs);
+    }
+};
+
+// a container whose values the scan without recursion is scanning, and the position in it
+class FormatScanFrame {
+public:
+    FormatScanFrame(const QoreValue val, unsigned depth) : depth(depth) {
+        switch (val.getType()) {
+            case NT_HASH:
+                hash_iter.reset(new ConstHashIterator(val.get<const QoreHashNode>()));
+                break;
+            case NT_LIST:
+                list = val.get<const QoreListNode>();
+                break;
+            case NT_OBJECT: {
+                // any exception here is ignored; the format pass reports it
+                ExceptionSink xs;
+                data.reset(qore_object_private::get(*val.get<const QoreObject>())->copyData(&xs, false));
+                xs.clear();
+                if (data) {
+                    hash_iter.reset(new ConstHashIterator(data.get()));
+                }
+                break;
+            }
+            default:
+                assert(false);
+                break;
+        }
+    }
+
+    // gets the next value in the container; returns false if there are no more
+    bool next(QoreValue& value) {
+        if (list) {
+            if (list_pos == list->size()) {
+                return false;
+            }
+            value = list->retrieveEntry(list_pos++);
+            return true;
+        }
+        if (!hash_iter || !hash_iter->next()) {
+            return false;
+        }
+        value = hash_iter->get();
+        return true;
+    }
+
+    unsigned depth;
+
+private:
+    const QoreListNode* list = nullptr;
+    size_t list_pos = 0;
+    std::unique_ptr<QoreHashNode, FormatScanDataDeref> data;
+    std::unique_ptr<ConstHashIterator> hash_iter;
+};
+}
+
+// cold and not inlined: it must not change how the recursive scan, which scans the values met in practice, is compiled
+__attribute__((cold, noinline)) void QoreFormatBoundsContext::scanWithoutRecursion(const QoreValue val, unsigned depth,
+        unsigned& nodes) {
+    // the values are scanned in the same order as by the recursion in scanIntern()
+    std::vector<FormatScanFrame> stack;
+    stack.emplace_back(val, depth);
+    while (!stack.empty()) {
+        QoreValue value;
+        if (!stack.back().next(value)) {
+            stack.pop_back();
+            continue;
+        }
+        unsigned child_depth = stack.back().depth + 1;
+        if (scanEnter(value, child_depth, nodes)) {
+            stack.emplace_back(value, child_depth);
+        }
+    }
+}
+
+void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, unsigned& nodes) {
+    if (!scanEnter(val, depth, nodes)) {
+        return;
+    }
+
+    // a deeply nested value is scanned without recursion, so that it cannot overflow the stack (qore#6117)
+    if (depth >= QORE_FORMAT_SCAN_RECURSION_LIMIT) {
+        scanWithoutRecursion(val, depth, nodes);
         return;
     }
 

@@ -1836,6 +1836,10 @@
     - the heartbeat of @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" connections is measured on the
       monotonic clock: a step back of the system clock no longer stops the heartbeat PINGs for the size of the step
       (see @ref Qore::AsyncIoController::addTimerDelay() "AsyncIoController::addTimerDelay()")
+    - a list or hash nested more deeply than the thread's stack allows no longer crashes the process when it is passed
+      to a parameter of type \c list or \c hash, removed or deleted from a container, or given to
+      @ref Qore::auto_cast() "auto_cast()", @ref Qore::get_value_byte_size() "get_value_byte_size()" or
+      @ref Qore::format_bounded() "format_bounded()" (issue #6117)
     - a @ref background "background expression" nested in another one that calls methods of the object no longer
       crashes the AST interpreter: the calls are made on the object of the code that started the outer one (issue
       #5971)
