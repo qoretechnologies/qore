@@ -90,6 +90,7 @@ printf(\"%s\\n\", ModInitUser::f());
         addTestCase("interpreted program", \interpretedTest());
         addTestCase("qcc executables", \executableTest());
         addTestCase("a compiled module (qmod) and a module that requires the failing one", \qmodTest());
+        addTestCase("the init closures that run when one fails, in each mode", \initOrderTest());
         set_return_value(main());
     }
 
@@ -221,5 +222,133 @@ printf(\"%s\\n\", ModInitUser::f());
         assertNeq(0, r.rc, "required by a module, qmod, executable, init raises: exit status");
         assertRegex("MODULE-INIT-REFUSED", r.out, "required by a module, qmod, executable: the exception is reported");
         assertFalse(r.out =~ /module ready/, "required by a module, qmod, executable: the program does not run");
+    }
+
+    #! returns the source of a module whose init closure logs its name; \a body is added to the closure
+    private string orderModuleSource(string name, string requires = "", string body = "") {
+        return sprintf("%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"qore#6217: an init closure that logs that it ran\";
+    author = \"Qore\";
+    license = \"MIT\";
+    domains = \"FILESYSTEM,EXTERNAL_INFO\";
+    init = sub () {
+        File f();
+        f.open2(getenv(\"INIT_LOG\"), O_CREAT | O_WRONLY | O_APPEND);
+        f.write(\"%s\\n\");
+        %s
+    };
+}
+%s
+public namespace %s {
+    public string sub f() { return \"%s\"; }
+}
+", name, name, body, requires, name, name);
+    }
+
+    #! runs a program or executable; returns the init closures that ran, its exit status and its output
+    private hash<auto> runLogged(string tmp_dir, string cmd, bool throw_init) {
+        string log = tmp_dir + "/init.log";
+        if (is_file(log)) {
+            unlink(log);
+        }
+        hash<auto> r = run(sprintf("INIT_LOG=%s %s%s", log, throw_init ? "ORDB_THROW=1 " : "", cmd));
+        r.inits = is_file(log) ? (ReadOnlyFile::readTextFile(log) =~ x/([A-Za-z]+)/g) : ();
+        return r;
+    }
+
+    #! with ModOrdB's init closure raising an exception, the init closures of ModOrdA, ModOrdB and ModOrdC run in
+    #! every mode before the program fails, as in the interpreter, which loads the other modules of the program after a
+    #! module fails (a module that requires the failing one does not initialize)
+    initOrderTest() {
+        TmpDir src("qore-aot-modinit-order-");
+        write(src.path + "/ModOrdA.qm", orderModuleSource("ModOrdA"));
+        write(src.path + "/ModOrdB.qm", orderModuleSource("ModOrdB", "",
+            "if (getenv(\"ORDB_THROW\")) { throw \"MODORDB-INIT-ERROR\", \"refused\"; }"));
+        write(src.path + "/ModOrdC.qm", orderModuleSource("ModOrdC"));
+        write(src.path + "/ModOrdU.qm", orderModuleSource("ModOrdU", "%requires ModOrdB\n%requires ModOrdC"));
+        # the modules required by their path, required by their names, and through a module that requires them
+        write(src.path + "/bypath.q", "%modern\n%requires ./ModOrdA.qm\n%requires ./ModOrdB.qm\n%requires ./ModOrdC.qm\n"
+            "printf(\"main\\n\");\n");
+        write(src.path + "/byname.q", "%modern\n%requires ModOrdA\n%requires ModOrdB\n%requires ModOrdC\n"
+            "printf(\"main\\n\");\n");
+        write(src.path + "/transitive.q", "%modern\n%requires ModOrdA\n%requires ModOrdU\nprintf(\"main\\n\");\n");
+
+        list<string> all = ("ModOrdA", "ModOrdB", "ModOrdC");
+        # mode label -> [module dir, program]
+        hash<string, list<string>> modes = {
+            "interpreted, by path": (src.path, "bypath.q"),
+            "interpreted, by name": (src.path, "byname.q"),
+            "interpreted, through a module": (src.path, "transitive.q"),
+        };
+        foreach hash<auto> m in (modes.pairIterator()) {
+            hash<auto> r = runLogged(src.path, sprintf("%s %s -b %s/%s", env(m.value[0]), qore_bin, src.path,
+                m.value[1]), True);
+            assertEq(all, r.inits, m.key + ": the init closures that ran: " + r.out);
+            assertNeq(0, r.rc, m.key + ": exit status");
+            assertRegex("MODORDB-INIT-ERROR", r.out, m.key + ": the exception is reported");
+        }
+
+        # the modules compiled to qmods
+        TmpDir qmod("qore-aot-modinit-order-qmod-");
+        bool have_qmods = True;
+        foreach string name in (("ModOrdA", "ModOrdB", "ModOrdC", "ModOrdU")) {
+            # a module is compiled against the compiled modules that it requires
+            run(sprintf("INIT_LOG=%s/compile.log %s %s -b --compile-module --strip-source --output %s/%s.qmod "
+                "%s/%s.qm", qmod.path, env(qmod.path), qore_bin, qmod.path, name, src.path, name));
+            if (!is_file(qmod.path + "/" + name + ".qmod")) {
+                have_qmods = False;
+                break;
+            }
+        }
+        if (have_qmods) {
+            foreach string prog in (("byname.q", "transitive.q")) {
+                string label = "interpreted, qmods, " + prog;
+                hash<auto> r = runLogged(src.path, sprintf("%s %s -b %s/%s", env(qmod.path), qore_bin, src.path,
+                    prog), True);
+                assertEq(all, r.inits, label + ": the init closures that ran");
+                assertNeq(0, r.rc, label + ": exit status");
+            }
+        }
+
+        if (!qcc_bin) {
+            return;
+        }
+        TmpDir empty("qore-aot-modinit-order-empty-");
+        # label -> [module dir when compiled, module dir when run, program]
+        hash<string, list<string>> exes = {
+            "executable, modules compiled in": (empty.path, empty.path, "bypath.q"),
+            "executable, modules in the module path": (src.path, src.path, "byname.q"),
+            "executable, through a module in the module path": (src.path, src.path, "transitive.q"),
+        };
+        if (have_qmods) {
+            exes += {
+                "executable, qmods": (qmod.path, qmod.path, "byname.q"),
+                "executable, through a qmod": (qmod.path, qmod.path, "transitive.q"),
+            };
+        }
+        int i = 0;
+        foreach hash<auto> m in (exes.pairIterator()) {
+            string exe = sprintf("%s/order-%d", src.path, ++i);
+            hash<auto> c = run(sprintf("cd %s && INIT_LOG=%s/compile.log %s %s -O0 -o %s %s/%s", src.path, src.path,
+                env(m.value[0]), qcc_bin, exe, src.path, m.value[2]));
+            if (!assertTrue(is_file(exe), m.key + ": built the executable: " + c.out)) {
+                continue;
+            }
+            # without the exception, every module initializes and the program runs
+            hash<auto> r = runLogged(src.path, sprintf("%s %s", env(m.value[1]), exe), False);
+            list<string> expected = all;
+            if (m.value[2] == "transitive.q") {
+                expected += "ModOrdU";
+            }
+            assertEq(expected, r.inits, m.key + ", no exception: the init closures that ran");
+            assertEq({"out": "main\n", "rc": 0}, r - "inits", m.key + ", no exception: the program runs");
+            r = runLogged(src.path, sprintf("%s %s", env(m.value[1]), exe), True);
+            assertEq(all, r.inits, m.key + ": the init closures that ran");
+            assertNeq(0, r.rc, m.key + ": exit status");
+            assertRegex("MODORDB-INIT-ERROR", r.out, m.key + ": the exception is reported");
+            assertFalse(r.out =~ /^main$/m, m.key + ": the program does not run");
+        }
     }
 }

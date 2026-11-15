@@ -11655,21 +11655,23 @@ static AOTDependencyLoadResult aotLoadModuleDependencies(ExceptionSink& xsink,
                 continue;
             }
             AOTDepLoadFailure failure = aotRequiredDepFailure(dep.c_str());
-            if (failure == AOTDepLoadFailure::INIT_FAILED) {
-                // a module whose initialization failed cannot be used (qore#6217)
-                result.init_error = aotDepLoadExceptionText(xsink);
-                if (result.init_error.empty()) {
-                    result.init_error = "its initialization failed";
+            // the first dependency that cannot be used fails the module; the other dependencies are loaded, and
+            // their initialization runs, before it fails, as in the interpreter, which loads the other modules that
+            // a module requires (qore#6217)
+            if (failure != AOTDepLoadFailure::TOLERATED && result.dependency.empty()) {
+                if (failure == AOTDepLoadFailure::INIT_FAILED) {
+                    // a module whose initialization failed cannot be used
+                    result.init_error = aotDepLoadExceptionText(xsink);
+                    if (result.init_error.empty()) {
+                        result.init_error = "its initialization failed";
+                    }
                 }
+                result.dependency = dep;
             }
             xsink.clear();
-            if (failure != AOTDepLoadFailure::TOLERATED) {
-                result.dependency = dep;
-                return false;
-            }
             // A circular/in-progress dependency is registered in the module map and is resolved later.
         }
-        return true;
+        return result.dependency.empty();
     };
 
     if (!imports_present || force_legacy_imports) {
@@ -11794,8 +11796,10 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                     (label && *label) ? label : "<unknown path>");
                             }
                             xsink.handleExceptions();
+                            // the other dependencies are loaded, and their initialization runs, before the program
+                            // fails, as in the interpreter, which loads the other modules of the program
                             dep_unavailable = true;
-                            break;
+                            continue;
                         }
                         if (aotRequiredDepUnavailable(dep.c_str())) {
                             // the dependency's own load exception is reported with the error (qore#6217)
@@ -11805,8 +11809,10 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                 "code references that module's symbols) and cannot be loaded without it",
                                 (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
                             xsink.handleExceptions();
+                            // the other dependencies are loaded, and their initialization runs, before the program
+                            // fails, as in the interpreter, which loads the other modules of the program
                             dep_unavailable = true;
-                            break;
+                            continue;
                         }
                         xsink.clear();
                     }
@@ -13677,8 +13683,10 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                     (label && *label) ? label : "<unknown path>");
                             }
                             xsink.handleExceptions();
+                            // the other dependencies are loaded, and their initialization runs, before the program
+                            // fails, as in the interpreter, which loads the other modules of the program
                             dep_unavailable_v3 = true;
-                            break;
+                            continue;
                         }
                         if (aotRequiredDepUnavailable(dep.c_str())) {
                             // the dependency's own load exception is reported with the error (qore#6217)
@@ -13688,8 +13696,10 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                 "code references that module's symbols) and cannot be loaded without it",
                                 (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
                             xsink.handleExceptions();
+                            // the other dependencies are loaded, and their initialization runs, before the program
+                            // fails, as in the interpreter, which loads the other modules of the program
                             dep_unavailable_v3 = true;
-                            break;
+                            continue;
                         }
                         xsink.clear();
                     }
@@ -14023,6 +14033,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // (via ModuleLoadMapHelper), so we can safely load dependencies here.
     std::vector<std::string> reexport_deps;
     std::vector<std::string> deps = extractDependencies(source, source_len, &reexport_deps);
+    // the error of the first dependency that cannot be used, which fails the module after the other dependencies are
+    // loaded and their initialization runs, as in the interpreter, which loads the other modules that a module
+    // requires (qore#6217)
+    SimpleRefHolder<QoreStringNode> dep_err;
     for (const std::string& dep : deps) {
         // Try to load the module (it may already be loaded, which is fine)
         int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
@@ -14032,30 +14046,36 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
                 // a module whose initialization failed cannot be used (qore#6217)
                 std::string init_error = aotDepLoadExceptionText(xsink);
                 xsink.clear();
-                QoreStringNode* err = new QoreStringNodeMaker("AOT module '%s' (%s) requires module '%s', "
-                    "whose initialization failed (%s)", mod_name ? mod_name : "<unknown>",
-                    (label && *label) ? label : "<unknown path>", dep.c_str(),
-                    init_error.empty() ? "its initialization failed" : init_error.c_str());
-                local_pgm->waitForTerminationAndDeref(nullptr);
-                return err;
+                if (!dep_err) {
+                    dep_err = new QoreStringNodeMaker("AOT module '%s' (%s) requires module '%s', "
+                        "whose initialization failed (%s)", mod_name ? mod_name : "<unknown>",
+                        (label && *label) ? label : "<unknown path>", dep.c_str(),
+                        init_error.empty() ? "its initialization failed" : init_error.c_str());
+                }
+                continue;
             }
             xsink.clear();
             // A genuinely-missing dependency is a hard error (this init path runs with the
             // module-loading mutex unlocked, so use the locking lookup); only a circular/in-progress
             // dependency, still registered in the module map, is tolerated.
             if (failure == AOTDepLoadFailure::UNAVAILABLE) {
-                QoreStringNode* err = new QoreStringNodeMaker(
-                    "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
-                    "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
-                    "and cannot be loaded without it",
-                    mod_name ? mod_name : "<unknown>",
-                    (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
-                local_pgm->waitForTerminationAndDeref(nullptr);
-                return err;
+                if (!dep_err) {
+                    dep_err = new QoreStringNodeMaker(
+                        "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
+                        "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
+                        "and cannot be loaded without it",
+                        mod_name ? mod_name : "<unknown>",
+                        (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                }
+                continue;
             }
             // Circular dependency or other in-progress load - tolerate and continue.
             // The types might be resolved later when the requiring script is parsed.
         }
+    }
+    if (dep_err) {
+        local_pgm->waitForTerminationAndDeref(nullptr);
+        return dep_err.release();
     }
 
     // Set up module context for the parser (must be QoreUserModuleDefContextHelper
@@ -17554,6 +17574,9 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
             printd(2, "qore_aot_script_register(%s): loading %d dependencies\n",
                 label ? label : "<script>", (int)deps.size());
             size_t dep_cancel_i = 0;
+            // true if a dependency could not be loaded or its initialization failed: the other dependencies are
+            // loaded, and their initialization runs, before the script fails, as in the interpreter
+            bool dep_failed = false;
             for (const std::string& dep : deps) {
                 if (dep_cancel_i && !(dep_cancel_i % 100)
                         && qore_check_cancel(&xsink, "AOT script dependency load")) {
@@ -17573,7 +17596,9 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                                 label ? label : "<script>");
                         }
                         xsink.handleExceptions();
-                        return 7;
+                        dep_failed = true;
+                        ++dep_cancel_i;
+                        continue;
                     }
                     if (aotRequiredDepUnavailable(dep.c_str())) {
                         // the dependency's own load exception is reported with the error (qore#6217)
@@ -17583,12 +17608,17 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                             "references that module's symbols) and cannot be loaded without it",
                             label ? label : "<script>", dep.c_str(), dep.c_str());
                         xsink.handleExceptions();
-                        return 7;
+                        dep_failed = true;
+                        ++dep_cancel_i;
+                        continue;
                     }
                     xsink.clear();
                     // else: circular/in-progress dependency (still registered) - tolerate.
                 }
                 ++dep_cancel_i;
+            }
+            if (dep_failed) {
+                return 7;
             }
         }
     }
@@ -17854,6 +17884,9 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
     // Mirrors qore_aot_run_v2 / qore_aot_module_init_v3.
     {
         size_t dep_cancel_i = 0;
+        // true if a dependency could not be loaded or its initialization failed: the other dependencies are loaded, and
+        // their initialization runs, before the scripts fail, as in the interpreter
+        bool dep_failed = false;
         for (auto& d : batch->deferred) {
             if (d.native_only) {
                 continue;
@@ -17887,7 +17920,9 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                                     d.label.c_str());
                             }
                             xsink.handleExceptions();
-                            return 13;
+                            dep_failed = true;
+                            ++dep_load_i;
+                            continue;
                         }
                         if (aotRequiredDepUnavailable(dep.c_str())) {
                             // the dependency's own load exception is reported with the error (qore#6217)
@@ -17897,7 +17932,9 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                                 "references that module's symbols) and cannot be loaded without it",
                                 d.label.c_str(), dep.c_str(), dep.c_str());
                             xsink.handleExceptions();
-                            return 13;
+                            dep_failed = true;
+                            ++dep_load_i;
+                            continue;
                         }
                         xsink.clear();
                         // else: circular/in-progress dependency (still registered) - tolerate.
@@ -17906,6 +17943,9 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                 }
             }
             ++dep_cancel_i;
+        }
+        if (dep_failed) {
+            return 13;
         }
     }
 
