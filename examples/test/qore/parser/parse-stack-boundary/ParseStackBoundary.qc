@@ -61,7 +61,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
         if (qore !~ /\//) {
             *string found;
-            foreach string dir in (ENV.PATH.split(":")) {
+            foreach string dir in ((ENV.PATH ?? "").split(":")) {
                 if (dir && is_executable(dir + "/" + qore)) {
                     found = dir + "/" + qore;
                     break;
@@ -105,7 +105,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         if (name =~ /\//) {
             return is_executable(name);
         }
-        foreach string dir in (ENV.PATH.split(":")) {
+        foreach string dir in ((ENV.PATH ?? "").split(":")) {
             if (dir && is_executable(dir + "/" + name)) {
                 return True;
             }
@@ -449,7 +449,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         *string qcc = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libdir + "/qcc") ? libdir + "/qcc" : NOTHING);
         if (!qcc) {
             # the qcc of the PATH, if any
-            foreach string dir in (ENV.PATH.split(":")) {
+            foreach string dir in ((ENV.PATH ?? "").split(":")) {
                 if (dir && is_executable(dir + "/qcc")) {
                     qcc = dir + "/qcc";
                     break;

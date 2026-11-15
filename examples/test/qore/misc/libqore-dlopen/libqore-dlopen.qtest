@@ -43,7 +43,7 @@ public class LibqoreDlopenTest inherits QUnit::Test {
         string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
         if (qore !~ /\//) {
             *string found;
-            foreach string dir in (ENV.PATH.split(":")) {
+            foreach string dir in ((ENV.PATH ?? "").split(":")) {
                 if (dir && is_executable(dir + "/" + qore)) {
                     found = dir + "/" + qore;
                     break;
@@ -73,7 +73,7 @@ public class LibqoreDlopenTest inherits QUnit::Test {
         if (name =~ /\//) {
             return is_executable(name);
         }
-        foreach string dir in (ENV.PATH.split(":")) {
+        foreach string dir in ((ENV.PATH ?? "").split(":")) {
             if (dir && is_executable(dir + "/" + name)) {
                 return True;
             }
