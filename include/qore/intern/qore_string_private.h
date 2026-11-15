@@ -775,6 +775,10 @@ public:
             if (*xsink)
                 return -1;
             pos = clen + pos;
+            // a position before the start stays negative: the caller handles it as with a single-byte encoding
+            if (pos <= 0) {
+                return 0;
+            }
         }
         // now get the byte position from this character offset
         pos = getEncoding()->getByteLen(b + start, b + len, pos, xsink);
@@ -814,14 +818,32 @@ public:
             return rindex_simple(b, len, needle->c_str(), needle->size(), pos, getCharAlignment());
         }
 
-        // do multi-byte rindex
-        if (findByteOffset(pos, xsink))
+        // do multi-byte rindex: as with a single-byte encoding, the search covers the characters from the start up
+        // to and including the character at pos, so the byte range ends after that character, not at its first byte
+        size_t clen = 0;
+        if (pos < 0) {
+            if (getCharLength(clen, xsink)) {
+                return -1;
+            }
+            pos += clen;
+            if (pos < 0) {
+                return -1;
+            }
+        }
+        // the number of bytes in the characters up to and including the one at pos; the default position (-1, the
+        // last character) needs no second scan
+        size_t blen = (clen && (size_t)pos + 1 == clen)
+            ? len
+            : getEncoding()->getByteLen(b, b + len, (size_t)pos + 1, xsink);
+        if (*xsink) {
             return -1;
-        if (pos < 0)
+        }
+        if (!blen) {
             return -1;
+        }
 
         // get byte rindex position
-        qore_offset_t ind = rindex_simple(b, len, needle->c_str(), needle->size(), pos, getCharAlignment());
+        qore_offset_t ind = rindex_simple(b, len, needle->c_str(), needle->size(), blen - 1, getCharAlignment());
 
         // calculate character position from byte position
         if (ind && ind != -1) {

@@ -186,7 +186,8 @@ public:
         @param clen the length of the character
         @param xsink Qore-language exceptions will be raised using this argument
 
-        @return the unicode code point for the character or -1 in case of an error
+        @return the unicode code point for the character or -1 in case of an error; 0 (and \a clen 0) when \a p is
+        at \a end
 
         @since Qore 0.8.13
     */
