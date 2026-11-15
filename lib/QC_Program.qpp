@@ -2957,16 +2957,21 @@ nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sandbox_ma
    p->setSandboxManager(*sandbox_manager);
 }
 
-//! Returns the sandbox manager for this program if set
-/** @return The sandbox manager if set, or NOTHING if no sandbox restrictions are active
+//! Returns the sandbox manager set on this %Program, if any
+/** @return The sandbox manager set on this %Program with Program::setSandboxManager(), or NOTHING if it has none
 
     @par Example:
     @code{.py}
 *SandboxManager sm = pgm.getSandboxManager();
 if (sm) {
-    printf("Sandbox is active\n");
+    printf("max threads: %d\n", sm.getMaxThreads());
 }
     @endcode
+
+    @note NOTHING does not mean that the code of the %Program is not sandboxed: a %Program that sandboxed code
+    creates has no manager of its own, but its code is governed by the sandbox of its callers, and, as the
+    %Program object keeps the sandbox that it was created in, by that sandbox when its code is called through the
+    object (Program::callFunction(), Program::getCallReference() and the like), also by trusted code
 
     @since Qore 3.0
  */
