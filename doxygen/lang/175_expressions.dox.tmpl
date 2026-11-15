@@ -41,6 +41,13 @@
     that loads it, also with @ref try-module "%try-module", and the error of
     @ref Qore::load_module() "load_module()".
 
+    A module load at run time (@ref Qore::load_module() "load_module()" or Program::loadModule(), for example)
+    raises the same error when the stack of the thread is nearly used up (when less than the parse stack reserve of
+    64KB remains above the thread's stack limit), also for a module that is already loaded in the process: making a
+    loaded module available in another @ref Qore::Program "Program" still runs code that uses the stack, as it merges
+    the module's namespaces into the Program, can run the module's initialization, and loads its optional child
+    modules (@ref try-child-module "%try-child-module") that were not loaded yet.
+
     The code that runs while a module is loaded, such as the initializers of its constants, can also exceed the stack
     of the thread at run time (\c STACK-LIMIT-EXCEEDED).  This error is handled as the parse error above only in a
     thread whose total stack size is smaller than the default thread stack size (see

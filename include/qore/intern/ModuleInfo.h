@@ -1363,14 +1363,17 @@ protected:
     /** Each module is loaded if possible, as a %try-module directive in the source module would; the module
         manager lock must be held.
 
+        @param xsink receives an error that depends on the stack of the thread (qore_has_thread_stack_error()),
+        raised while a module was loaded: the module may be available, so the check cannot be made in this thread,
+        and the caller fails the load (issue #6047); any other error means that the module is not available
         @param specs module requests as written in %try-module directives (a name and an optional version
         constraint)
         @param path_pgm supplies module search paths for the load
         @param available receives the first request that can be loaded
-        @return true if a module can be loaded now
+        @return true if a module can be loaded now; false if none can, or if an error was raised in \a xsink
     */
-    DLLLOCAL bool findAvailableOptionalModule(const std::vector<std::string>& specs, QoreProgram* path_pgm,
-            std::string& available);
+    DLLLOCAL bool findAvailableOptionalModule(ExceptionSink& xsink, const std::vector<std::string>& specs,
+            QoreProgram* path_pgm, std::string& available);
 
     DLLLOCAL QoreAbstractModule* loadBinaryModuleFromDesc(ExceptionSink& xsink, DLHelper* dlh,
             QoreModuleInfo& mod_info, const char* path, const char* feature = nullptr, bool reexport = false,

@@ -2653,7 +2653,8 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
             }
             std::string available;
             if (!aot_info->unavailable_optional_modules.empty()
-                    && findAvailableOptionalModule(aot_info->unavailable_optional_modules, tpgm, available)) {
+                    && findAvailableOptionalModule(xsink, aot_info->unavailable_optional_modules, tpgm,
+                        available)) {
                 // a statically linked module has no source module to load instead: it is used, and the missing
                 // functionality is always reported, as for a .qmod without its source
                 qore_report_module_load_warning(xsink, nullptr, QP_WARN_MODULES, true, "BINARY-MODULE-STALE",
@@ -2664,6 +2665,9 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
                 if (xsink) {
                     return -1;
                 }
+            }
+            if (xsink) {
+                return -1;
             }
         }
         // restore info hash for the descriptor handoff
@@ -4211,8 +4215,8 @@ static int qore_parse_module_spec(const char* spec, QoreString& name, mod_op_e& 
     return 0;
 }
 
-bool QoreModuleManager::findAvailableOptionalModule(const std::vector<std::string>& specs, QoreProgram* path_pgm,
-        std::string& available) {
+bool QoreModuleManager::findAvailableOptionalModule(ExceptionSink& xsink, const std::vector<std::string>& specs,
+        QoreProgram* path_pgm, std::string& available) {
     for (size_t i = 0; i < specs.size(); ++i) {
         if (i && !(i % 10) && qore_check_cancel(nullptr, "AOT optional module check")) {
             return false;
@@ -4230,6 +4234,14 @@ bool QoreModuleManager::findAvailableOptionalModule(const std::vector<std::strin
         if (!tmp) {
             available = specs[i];
             return true;
+        }
+        // an error that depends on the stack of the thread does not tell whether the module is available: taken
+        // as unavailable, it would make the module load with its branch for the optional module being unavailable
+        // in this thread and be found stale in a larger one; the load fails instead, as the load of a source module
+        // that runs short of the stack does (issue #6047)
+        if (qore_has_thread_stack_error(tmp)) {
+            xsink.assimilate(tmp);
+            return false;
         }
         tmp.clear();
     }
@@ -5428,7 +5440,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     // module being unavailable, so it is stale once the module can be loaded
     if (have_aot_info && !aot_info.unavailable_optional_modules.empty()) {
         std::string available;
-        if (findAvailableOptionalModule(aot_info.unavailable_optional_modules, path_pgm, available)) {
+        if (findAvailableOptionalModule(xsink, aot_info.unavailable_optional_modules, path_pgm, available)) {
             if (source_available) {
                 xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT module '%s' was "
                     "compiled when optional module '%s' was not available, but it is available now; rebuild the "
@@ -5443,6 +5455,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
                 "rebuild the binary module", path, available.c_str()));
             qore_report_module_load_warning(xsink, wsink != &xsink ? wsink : nullptr, warning_mask, true,
                 "BINARY-MODULE-STALE", feature, desc.release());
+        }
+        if (xsink) {
+            return nullptr;
         }
     }
 
