@@ -22575,51 +22575,52 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
     // operation differs for a char replace it with the string (qore_plus_equals_replace_char()); the string, char,
     // binary and hash branches convert or ignore a char as they do its string, so the common string case is unchanged
 
-    qore_type_t enum_base;
-    if ((vtype == NT_NOTHING || vtype == NT_NULL)
-            && (enum_base = qore_numeric_enum_lvalue_base_type(v.getTypeInfo())) != NT_NOTHING
-            && !(qore_value_is_nothing(right) && get_or_nothing_base_type(v.getTypeInfo()) != v.getTypeInfo())) {
+    if (vtype == NT_NOTHING || vtype == NT_NULL) {
+        const QoreTypeInfo* typeInfo = v.getTypeInfo();
         // a numeric enum lvalue with no value gets no default value: the operation raises the type error (see
         // qore_numeric_enum_lvalue_base_type()); an or-nothing enum lvalue is left unchanged by NOTHING, as below
-        vtype = enum_base;
-    } else if (vtype == NT_NOTHING || vtype == NT_NULL) {
-        const QoreTypeInfo* typeInfo = v.getTypeInfo();
-        // an or-nothing lvalue (*T) with no value takes the default value of T for an operand with a value
-        const QoreTypeInfo* plain_default_ti = get_compound_default_type(typeInfo);
-        if (has_compound_default_value(typeInfo)) {
-            if (assign(QoreTypeInfo::getDefaultQoreValue(typeInfo), "<lvalue for += operator>")) {
-                return QoreValue();
-            }
-            vtype = v.getType();
-        } else if (is_compound_container_type(typeInfo, NT_LIST)) {
-            if (assign(new QoreListNode(QoreTypeInfo::getReturnComplexListOrNothing(typeInfo)),
-                    "<lvalue for += operator>")) {
-                return QoreValue();
-            }
-            vtype = v.getType();
-        } else if (qore_value_is_nothing(right)) {
-            return QoreValue();
-        } else if (plain_default_ti != typeInfo) {
-            if (assign(QoreTypeInfo::getDefaultQoreValue(plain_default_ti), "<lvalue for += operator>")) {
-                return QoreValue();
-            }
-            vtype = v.getType();
-        } else if (is_compound_container_type(typeInfo, NT_HASH)) {
-            if (assign(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)),
-                    "<lvalue for += operator>")) {
-                return QoreValue();
-            }
-            vtype = v.getType();
+        qore_type_t enum_base = qore_numeric_enum_lvalue_base_type(typeInfo);
+        if (enum_base != NT_NOTHING
+                && !(qore_value_is_nothing(right) && get_or_nothing_base_type(typeInfo) != typeInfo)) {
+            vtype = enum_base;
         } else {
-            // assign rhs to lhs
-            // the reference held for the value is handed over to the lvalue, as the AST interpreter does
-            if (right.isChar()) {
-                qore_plus_equals_replace_char(right_holder);
-            }
-            if (assign(right_holder.release(), "<lvalue for += operator>")) {
+            // an or-nothing lvalue (*T) with no value takes the default value of T for an operand with a value
+            const QoreTypeInfo* plain_default_ti = get_compound_default_type(typeInfo);
+            if (has_compound_default_value(typeInfo)) {
+                if (assign(QoreTypeInfo::getDefaultQoreValue(typeInfo), "<lvalue for += operator>")) {
+                    return QoreValue();
+                }
+                vtype = v.getType();
+            } else if (is_compound_container_type(typeInfo, NT_LIST)) {
+                if (assign(new QoreListNode(QoreTypeInfo::getReturnComplexListOrNothing(typeInfo)),
+                        "<lvalue for += operator>")) {
+                    return QoreValue();
+                }
+                vtype = v.getType();
+            } else if (qore_value_is_nothing(right)) {
                 return QoreValue();
+            } else if (plain_default_ti != typeInfo) {
+                if (assign(QoreTypeInfo::getDefaultQoreValue(plain_default_ti), "<lvalue for += operator>")) {
+                    return QoreValue();
+                }
+                vtype = v.getType();
+            } else if (is_compound_container_type(typeInfo, NT_HASH)) {
+                if (assign(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)),
+                        "<lvalue for += operator>")) {
+                    return QoreValue();
+                }
+                vtype = v.getType();
+            } else {
+                // assign rhs to lhs
+                // the reference held for the value is handed over to the lvalue, as the AST interpreter does
+                if (right.isChar()) {
+                    qore_plus_equals_replace_char(right_holder);
+                }
+                if (assign(right_holder.release(), "<lvalue for += operator>")) {
+                    return QoreValue();
+                }
+                return v.getReferencedValue();
             }
-            return v.getReferencedValue();
         }
     }
 
@@ -22855,35 +22856,37 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
 
     qore_type_t vtype = v.getType();
 
-    qore_type_t enum_base;
-    if (vtype == NT_NOTHING && (enum_base = qore_numeric_enum_lvalue_base_type(v.getTypeInfo())) != NT_NOTHING) {
+    if (vtype == NT_NOTHING) {
         // a numeric enum lvalue with no value gets no default value: the operation raises the type error (see
         // qore_numeric_enum_lvalue_base_type())
-        vtype = enum_base;
-    } else if (vtype == NT_NOTHING) {
-        const QoreTypeInfo* typeInfo = v.getTypeInfo();
-        // an or-nothing lvalue (*T) takes the default value of T
-        const QoreTypeInfo* default_ti = get_compound_default_type(typeInfo);
-        if (is_compound_container_type(typeInfo, NT_HASH)) {
-            return QoreValue();
-        } else if (has_compound_default_value(default_ti)) {
-            if (v.assign(QoreTypeInfo::getDefaultQoreValue(default_ti))) {
-                return QoreValue();
-            }
-            vtype = v.getType();
+        qore_type_t enum_base = qore_numeric_enum_lvalue_base_type(v.getTypeInfo());
+        if (enum_base != NT_NOTHING) {
+            vtype = enum_base;
         } else {
-            if (right.getType() == NT_FLOAT) {
-                v.assign(-right.getAsFloat());
-            } else if (right.getType() == NT_NUMBER) {
-                const QoreNumberNode* num = right.get<const QoreNumberNode>();
-                v.assign(num->negate());
-            } else {
-                v.assign(-right.getAsBigInt());
-            }
-            if (*xsink) {
+            const QoreTypeInfo* typeInfo = v.getTypeInfo();
+            // an or-nothing lvalue (*T) takes the default value of T
+            const QoreTypeInfo* default_ti = get_compound_default_type(typeInfo);
+            if (is_compound_container_type(typeInfo, NT_HASH)) {
                 return QoreValue();
+            } else if (has_compound_default_value(default_ti)) {
+                if (v.assign(QoreTypeInfo::getDefaultQoreValue(default_ti))) {
+                    return QoreValue();
+                }
+                vtype = v.getType();
+            } else {
+                if (right.getType() == NT_FLOAT) {
+                    v.assign(-right.getAsFloat());
+                } else if (right.getType() == NT_NUMBER) {
+                    const QoreNumberNode* num = right.get<const QoreNumberNode>();
+                    v.assign(num->negate());
+                } else {
+                    v.assign(-right.getAsBigInt());
+                }
+                if (*xsink) {
+                    return QoreValue();
+                }
+                return v.getReferencedValue();
             }
-            return v.getReferencedValue();
         }
     }
 
