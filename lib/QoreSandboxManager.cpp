@@ -343,31 +343,41 @@ int QoreFilesystemSecurityManager::addDeniedPath(const char* path, ExceptionSink
     return 0;
 }
 
+// removes the allowed path rule that setSandboxRoot() added for the root; does not throw
+static void remove_sandbox_root_rule(std::vector<PathRule>& rules, const std::string& root) noexcept {
+    if (root.empty()) {
+        return;
+    }
+    for (auto i = rules.rbegin(), e = rules.rend(); i != e; ++i) {
+        if (i->mode == QSEC_ALL && i->path == root) {
+            rules.erase(std::next(i).base());
+            return;
+        }
+    }
+}
+
 int QoreFilesystemSecurityManager::setSandboxRoot(const char* path, ExceptionSink* xsink) {
     std::string canon = priv->canonicalize(path, xsink);
     if (*xsink) return -1;
 
-    // replacing a root removes the implicit rule of the previous one
-    clearSandboxRoot();
-    priv->sandbox_root = canon;
+    // everything that can throw is done first, so that a failure leaves the old root and the old rules untouched:
+    // the rule that implicitly allows the sandbox root with all access, and room for it
+    PathRule rule(canon, QSEC_ALL);
+    priv->allowed_paths.reserve(priv->allowed_paths.size() + 1);
 
-    // Implicitly allow the sandbox root with all access
-    priv->allowed_paths.emplace_back(canon, QSEC_ALL);
+    // commit with operations that do not throw: replacing a root removes the rule of the previous one
+    remove_sandbox_root_rule(priv->allowed_paths, priv->sandbox_root);
+    priv->allowed_paths.push_back(std::move(rule));
+    priv->sandbox_root = std::move(canon);
     return 0;
 }
 
 void QoreFilesystemSecurityManager::clearSandboxRoot() {
     // setSandboxRoot() adds exactly one allowed path rule for the root (and changes nothing else, in particular not
-    // the default policy); remove that rule, so that the state is the one from before the root was set.  A rule
-    // equal to it that was added separately is indistinguishable from it, and one of the two remains
-    if (!priv->sandbox_root.empty()) {
-        for (auto i = priv->allowed_paths.rbegin(), e = priv->allowed_paths.rend(); i != e; ++i) {
-            if (i->mode == QSEC_ALL && i->path == priv->sandbox_root) {
-                priv->allowed_paths.erase(std::next(i).base());
-                break;
-            }
-        }
-    }
+    // the default policy); remove that rule, so that the configuration is the one from before the root was set.  A
+    // rule equal to it that was added separately is indistinguishable from it, and one of the two remains; rules
+    // added after the root remain
+    remove_sandbox_root_rule(priv->allowed_paths, priv->sandbox_root);
     priv->sandbox_root.clear();
 }
 

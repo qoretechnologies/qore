@@ -699,6 +699,9 @@ sm.setFilesystemSandboxRoot(path: "/home/user/sandbox");
     @note When a sandbox root is set, all allowed paths must be within
     this root, and the root itself is implicitly allowed with QSEC_ALL.
 
+    @note Setting a root when one is set replaces it: the allowed path rule that setting the previous root added is
+    removed, and the rule for the new one is added.
+
     @note The path is canonicalized before it is stored; it does not have to exist yet.
 
     @throw SANDBOX-PATH-ERROR the path cannot be canonicalized
@@ -716,8 +719,10 @@ nothing SandboxManager::setFilesystemSandboxRoot(string path) [flags=NAMED_ARGS]
 }
 
 //! Clears the sandbox root directory
-/** Removes any previously set sandbox root restriction, and the allowed path rule that setting the root added: the
-    filesystem configuration is the one from before the root was set
+/** Removes the sandbox root and only the allowed path rule that setting it added, so that the filesystem
+    configuration is the one from before the root was set; allowed path rules that were added after the root remain.
+    If an allowed path rule equal to the root's (the same path with \c QSEC_ALL) was added separately, one of the two
+    remains.  Does nothing if no root is set
 */
 nothing SandboxManager::clearFilesystemSandboxRoot() {
     if (qore_sandbox_manager_check_change(sm, "SandboxManager::clearFilesystemSandboxRoot()", xsink)) {

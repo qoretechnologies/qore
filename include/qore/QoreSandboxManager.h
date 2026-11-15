@@ -163,10 +163,18 @@ public:
 
         @note When a sandbox root is set, all allowed paths must be within
         this root, and the root itself is implicitly allowed with QSEC_ALL.
+
+        @note Replacing a root removes the allowed path rule that setting the previous root added, and adds the rule
+        for the new one; on failure, the old root and the old rules are unchanged
     */
     DLLEXPORT int setSandboxRoot(const char* path, ExceptionSink* xsink);
 
     //! Clears the sandbox root directory
+    /** Removes the sandbox root and only the allowed path rule that setSandboxRoot() added for it, so that the
+        configuration is the one from before the root was set; allowed path rules that were added after the root
+        remain.  If an allowed path rule equal to the root's (the same path with QSEC_ALL) was added separately, one
+        of the two remains.  Does nothing if no root is set
+    */
     DLLEXPORT void clearSandboxRoot();
 
     //! Sets whether paths not explicitly listed are allowed or denied

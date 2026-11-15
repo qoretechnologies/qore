@@ -156,7 +156,6 @@ static std::shared_ptr<QoreSandboxCapture> sb_capture_get(int64 handle, Exceptio
     return i->second;
 }
 
-// stores a capture and returns its handle
 // fills a hash with the restriction predicates of the resolved manager
 static void sb_fill_restricts(QoreHashNode& rv, const QoreSandboxManagerHelper& sm, ExceptionSink* xsink) {
     rv.setKeyValue("sandboxed", static_cast<bool>(sm), xsink);
@@ -169,6 +168,7 @@ static void sb_fill_restricts(QoreHashNode& rv, const QoreSandboxManagerHelper& 
     }
 }
 
+// stores a capture and returns its handle
 static int64 sb_capture_add(std::shared_ptr<QoreSandboxCapture> capture) {
     std::lock_guard<std::mutex> lock(sb_capture_lock);
     sb_captures[++sb_capture_next] = std::move(capture);
