@@ -3517,10 +3517,17 @@ QoreNumberNode* LValueHelper::postDecrementNumber(bool ref_rv, const char* desc)
 void LValueHelper::plusEqualsNumber(QoreValue r, const char* desc) {
     SimpleRefHolder<QoreNumberNode> rn_holder;
     QoreNumberNode* rn;
-    if (r.getType() == NT_NUMBER)
-        rn = r.get<QoreNumberNode>();
-    else
+    // a number operand is a node (an enum is converted below, by its base value)
+    const AbstractQoreNode* r_node = r.isPointer() ? r.get<const AbstractQoreNode>() : nullptr;
+    if (r_node && r_node->getType() == NT_NUMBER) {
+        rn = const_cast<QoreNumberNode*>(static_cast<const QoreNumberNode*>(r_node));
+    } else if (r.isChar()) {
+        // += adds a char as its one-character string is
+        SimpleRefHolder<QoreStringNode> str(qore_plus_equals_char_string(r));
+        rn_holder = (rn = new QoreNumberNode(QoreValue(*str)));
+    } else {
         rn_holder = (rn = new QoreNumberNode(r));
+    }
 
     if (numberResultNeedsConversion()) {
         QoreNumberNode* nn = new QoreNumberNode(getValue());

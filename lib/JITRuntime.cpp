@@ -984,9 +984,10 @@ extern "C" DLLEXPORT int64_t qore_rt_to_int(uint64_t val) {
     return v.getAsBigInt();
 }
 
-//! converts the operand of += on an integer lvalue to an int: a char as its one-character string is
+//! converts the operand of += on an integer lvalue to an int: a char as its one-character string is; native code
+//! calls it only for a value that is not an inline integer, which it converts itself
 extern "C" DLLEXPORT int64_t qore_rt_plus_equals_operand_to_int(uint64_t val) {
-    return qore_plus_equals_int_operand(fromBits(val));
+    return qore_plus_equals_boxed_int_operand(fromBits(val));
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_float_to_int(double val) {
@@ -15586,11 +15587,10 @@ QoreValue qore_compound_assign_value(LVCompoundOp op, const QoreValue& left, con
     // += on an "auto" lvalue with no value assigns the value added as it is (doPlusEqualsOnLValue()), which can be a
     // reference, while the assignment to the temporary lvalue below would store the referenced value; the native
     // fast path gives the same (QoreIRToLLVM::emitAnyCompoundAssignFastPath())
-    if (op == LVCompoundOp::AddAssign && left.isNullOrNothing() && !right.isNothing()) {
-        // a char is added as its one-character string is: the lvalue is assigned the string
-        if (right.isChar()) {
-            return qore_plus_equals_char_string(right);
-        }
+    // a char is added as its one-character string is: the lvalue below is assigned the string
+    // (doPlusEqualsOnLValue())
+    if (op == LVCompoundOp::AddAssign && qore_value_is_null_or_nothing(left) && !qore_value_is_nothing(right)
+            && !right.isChar()) {
         return right.refSelf();
     }
     // += takes the operand's reference when it stores the value; the holder must be declared before the

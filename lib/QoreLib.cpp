@@ -3891,6 +3891,87 @@ int64 qore_plus_equals_char_int_operand(const QoreValue v) {
     return str->getAsBigInt();
 }
 
+double qore_plus_equals_char_float_operand(const QoreValue v) {
+    assert(v.isChar());
+    SimpleRefHolder<QoreStringNode> str(qore_plus_equals_char_string(v));
+    return str->getAsFloat();
+}
+
+//! the steps of QoreValue::getAsBigInt(), with a char converted as its string; \a CheckInt is false for a value that
+//! the caller knows is not an inline integer
+template <bool CheckInt>
+static QORE_INTERN_ALWAYS_INLINE int64 qore_plus_equals_int_operand_steps(const QoreValue v) {
+    if constexpr (CheckInt) {
+        if (v.isInt()) {
+            return v.getInt();
+        }
+    }
+    if (v.isFloat()) {
+        return static_cast<int64>(v.getDouble());
+    }
+    if (v.isBool()) {
+        return v.getBool() ? 1 : 0;
+    }
+    if (v.isChar()) {
+        return qore_plus_equals_char_int_operand(v);
+    }
+    if (v.isEnum()) {
+        return qore_plus_equals_int_operand(v.getEnumMember()->getValue());
+    }
+    if (v.isPointer()) {
+        const AbstractQoreNode* n = v.get<const AbstractQoreNode>();
+        return n ? n->getAsBigInt() : 0;
+    }
+    if (v.isShortString()) {
+        char buf[8];
+        v.getShortString(buf);
+        return strtoll(buf, nullptr, 10);
+    }
+    if constexpr (!CheckInt) {
+        if (v.isInt()) {
+            return v.getInt();
+        }
+    }
+    return 0;
+}
+
+int64 qore_plus_equals_int_operand(const QoreValue v) {
+    return qore_plus_equals_int_operand_steps<true>(v);
+}
+
+int64 qore_plus_equals_boxed_int_operand(const QoreValue v) {
+    return qore_plus_equals_int_operand_steps<false>(v);
+}
+
+// the steps of QoreValue::getAsFloat() after its test for a float, with a char converted as its string
+double qore_plus_equals_nonfloat_float_operand(const QoreValue v) {
+    if (v.isInt()) {
+        return static_cast<double>(v.getInt());
+    }
+    if (v.isBool()) {
+        return v.getBool() ? 1.0 : 0.0;
+    }
+    if (v.isChar()) {
+        return qore_plus_equals_char_float_operand(v);
+    }
+    if (v.isEnum()) {
+        return qore_plus_equals_float_operand(v.getEnumMember()->getValue());
+    }
+    if (v.isPointer()) {
+        const AbstractQoreNode* n = v.get<const AbstractQoreNode>();
+        return n ? n->getAsFloat() : 0.0;
+    }
+    if (v.isShortString()) {
+        char buf[8];
+        v.getShortString(buf);
+        return strtod(buf, nullptr);
+    }
+    if (v.isFloat()) {
+        return v.getDouble();
+    }
+    return 0.0;
+}
+
 int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
     // make sure the lvalue can be assigned a floating-point value
     // raise a parse exception only if parse exceptions are not suppressed

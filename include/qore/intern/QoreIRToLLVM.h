@@ -1502,6 +1502,10 @@ private:
     //! char is converted as its one-character string is (qore_rt_plus_equals_operand_to_int()); the result is not
     //! cached as the value's int conversion
     llvm::Value* ensurePlusEqualsIntOperandInline(llvm::Value* val, uint32_t value_id);
+    //! Returns true if the IR value can hold a char at runtime: it is boxed, and its type does not exclude a char
+    bool irValueMayBeChar(uint32_t value_id) const;
+    //! Returns true if the IR value can be NOTHING at runtime, as far as its facts show
+    bool irValueMayBeNothing(uint32_t value_id) const;
     //! Returns the type path argument of the return type of a method that AOT-compiled code reads a member for
     //! directly (a getter, an assignment or a compound assignment that returns the member), or a null pointer
     //! when the return type accepts no value

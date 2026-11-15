@@ -2447,9 +2447,25 @@ llvm::Value* QoreIRToLLVM::ensureIntTypeInline(llvm::Value* val, uint32_t value_
 }
 
 // documented in QoreIRToLLVM.h
-llvm::Value* QoreIRToLLVM::ensurePlusEqualsIntOperandInline(llvm::Value* val, uint32_t value_id) {
+bool QoreIRToLLVM::irValueMayBeChar(uint32_t value_id) const {
     // a native value is never a char
     if (!nanboxed_values.count(value_id)) {
+        return false;
+    }
+    const QoreIRValueFacts* facts = current_ir_func ? current_ir_func->getValueFacts(QoreIRValue(value_id)) : nullptr;
+    return !facts || !QoreTypeInfo::hasType(facts->type_info)
+        || QoreTypeInfo::parseReturns(facts->type_info, NT_CHAR) != QTI_NOT_EQUAL;
+}
+
+bool QoreIRToLLVM::irValueMayBeNothing(uint32_t value_id) const {
+    const QoreIRValueFacts* facts = current_ir_func ? current_ir_func->getValueFacts(QoreIRValue(value_id)) : nullptr;
+    return !facts || !facts->never_nothing;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::ensurePlusEqualsIntOperandInline(llvm::Value* val, uint32_t value_id) {
+    // a value that cannot be a char is converted as any other int operand is, with its cached conversion
+    if (!irValueMayBeChar(value_id)) {
         return ensureIntTypeInline(val, value_id);
     }
     return emitBoxedToIntInline(val, "qore_rt_plus_equals_operand_to_int");
@@ -37094,14 +37110,20 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
 
         // Nothing path: Phase 4 - inline qore_rt_ref using select
         // Checks if rhs has a node inline via NaN-boxing, selects refself result or original value
-        // a char is added as its one-character string, which the runtime helper makes (qore_compound_assign_value())
+        // a char is added as its one-character string, which the runtime helper makes (qore_compound_assign_value());
+        // the test is made only where the left side can be NOTHING and the right side a char (irValueMayBeChar())
         builder->SetInsertPoint(nothing_bb);
-        llvm::Value* rhs_is_char = builder->CreateICmpEQ(
-            builder->CreateLShr(rhs, llvm::ConstantInt::get(i64_type, 48)),
-            llvm::ConstantInt::get(i64_type, TAG_CHAR >> 48));
-        llvm::BasicBlock* nothing_ref_bb = llvm::BasicBlock::Create(ctx, "ca_nothing_ref", llvm_func);
-        builder->CreateCondBr(rhs_is_char, slow_bb, nothing_ref_bb);
-        builder->SetInsertPoint(nothing_ref_bb);
+        if (inst && inst->operands.size() > 1 && irValueMayBeNothing(inst->operands[0].id)
+                && irValueMayBeChar(inst->operands[1].id)) {
+            llvm::Value* rhs_is_char = builder->CreateICmpEQ(
+                builder->CreateLShr(rhs, llvm::ConstantInt::get(i64_type, 48)),
+                llvm::ConstantInt::get(i64_type, TAG_CHAR >> 48));
+            llvm::BasicBlock* nothing_ref_bb = llvm::BasicBlock::Create(ctx, "ca_nothing_ref", llvm_func);
+            // a char operand is rare: the common path keeps its layout
+            builder->CreateCondBr(rhs_is_char, slow_bb, nothing_ref_bb,
+                llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+            builder->SetInsertPoint(nothing_ref_bb);
+        }
         nothing_result = emitHelperRef(module, rhs);
         builder->CreateBr(merge_bb);
         nothing_bb = builder->GetInsertBlock();
@@ -37269,13 +37291,18 @@ llvm::Value* QoreIRToLLVM::emitLValueCompoundAssignFastPath(
     llvm::BasicBlock* nothing_end = nullptr;
     if (handle_nothing) {
         builder->SetInsertPoint(nothing_bb);
-        // a char is added as its one-character string, which the slow path makes (doPlusEqualsOnLValue())
-        llvm::Value* rhs_is_char = builder->CreateICmpEQ(
-            builder->CreateLShr(val_boxed, llvm::ConstantInt::get(i64_type, 48)),
-            llvm::ConstantInt::get(i64_type, TAG_CHAR >> 48));
-        llvm::BasicBlock* nothing_store_bb = llvm::BasicBlock::Create(ctx, "lca_nothing_store", llvm_func);
-        builder->CreateCondBr(rhs_is_char, slow_bb, nothing_store_bb);
-        builder->SetInsertPoint(nothing_store_bb);
+        // a char is added as its one-character string, which the slow path makes (doPlusEqualsOnLValue()), where the
+        // value can be a char (irValueMayBeChar())
+        if (!inst->operands.empty() && irValueMayBeChar(inst->operands[0].id)) {
+            llvm::Value* rhs_is_char = builder->CreateICmpEQ(
+                builder->CreateLShr(val_boxed, llvm::ConstantInt::get(i64_type, 48)),
+                llvm::ConstantInt::get(i64_type, TAG_CHAR >> 48));
+            llvm::BasicBlock* nothing_store_bb = llvm::BasicBlock::Create(ctx, "lca_nothing_store", llvm_func);
+            // a char operand is rare: the common path keeps its layout
+            builder->CreateCondBr(rhs_is_char, slow_bb, nothing_store_bb,
+                llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+            builder->SetInsertPoint(nothing_store_bb);
+        }
         nothing_result = emitLValueStore(val_boxed);
         // current is NOTHING here — no decref needed (scalar, no refcount)
         builder->CreateBr(merge_bb);

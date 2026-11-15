@@ -21230,7 +21230,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
             return v.assign(value, description);
         }
     };
-    QoreValue right = *right_holder;
+    const QoreValue right = *right_holder;
     qore_type_t vtype = v.getType();
     // a char is added exactly as its one-character string is, whatever the type of the lvalue: the branches whose
     // operation differs for a char replace it with the string (qore_plus_equals_replace_char()); the string, char,
@@ -21251,7 +21251,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
                 return QoreValue();
             }
             vtype = v.getType();
-        } else if (right.isNothing()) {
+        } else if (qore_value_is_nothing(right)) {
             return QoreValue();
         } else if (plain_default_ti != typeInfo) {
             if (assign(QoreTypeInfo::getDefaultQoreValue(plain_default_ti), "<lvalue for += operator>")) {
@@ -21268,7 +21268,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
             // assign rhs to lhs
             // the reference held for the value is handed over to the lvalue, as the AST interpreter does
             if (right.isChar()) {
-                right = qore_plus_equals_replace_char(right_holder);
+                qore_plus_equals_replace_char(right_holder);
             }
             if (assign(right_holder.release(), "<lvalue for += operator>")) {
                 return QoreValue();
@@ -21305,18 +21305,21 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
     }
 
     if (vtype == NT_LIST) {
-        if (right.isChar()) {
-            right = qore_plus_equals_replace_char(right_holder);
-        }
         v.ensureUnique();
         QoreListNode* l = v.getValue().get<QoreListNode>();
-        if (right.getType() == NT_LIST) {
+        // a list operand is a node; only a node value can be a list (QoreValue::getType())
+        const AbstractQoreNode* right_node = right.isPointer() ? right.get<const AbstractQoreNode>() : nullptr;
+        if (right_node && right_node->getType() == NT_LIST) {
             if constexpr (Lexical) {
                 qore_list_private::get(*l)->merge(right.get<const QoreListNode>(), xsink, policy);
             } else {
                 qore_list_private::mergeCanonical(*l, right.get<const QoreListNode>(), xsink);
             }
         } else {
+            // a char is appended as its one-character string is
+            if (right.isChar()) {
+                qore_plus_equals_replace_char(right_holder);
+            }
             // Keep a rejected value in the caller's holder, which outlives the lvalue lock. push() would
             // consume and release it here, so a temporary's destructor could reenter the locked lvalue.
             qore_list_private* lp = qore_list_private::get(*l);
@@ -21352,15 +21355,15 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
             }
         }
     } else if (vtype == NT_OBJECT) {
-        if (right.isChar()) {
-            right = qore_plus_equals_replace_char(right_holder);
-        }
+        // a char is added as its one-character string is
+        const QoreValue operand = right.isChar() ? qore_plus_equals_replace_char(right_holder) : right;
         LValueMergeDerefHelper sdh(v, xsink);
         QoreObject* o = v.getValue().get<QoreObject>();
         if constexpr (Lexical) {
-            qore_object_private::get(*o)->plusEquals(right.getInternalNode(), v.getAutoVLock(), sdh, xsink, policy);
+            qore_object_private::get(*o)->plusEquals(operand.getInternalNode(), v.getAutoVLock(), sdh, xsink,
+                policy);
         } else {
-            qore_object_private::get(*o)->plusEquals(right.getInternalNode(), v.getAutoVLock(), sdh, xsink);
+            qore_object_private::get(*o)->plusEquals(operand.getInternalNode(), v.getAutoVLock(), sdh, xsink);
         }
     } else if (vtype == NT_STRING) {
         if (!right.isNullOrNothing()) {
@@ -21370,21 +21373,16 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
             vs->concat(*str, xsink);
         }
     } else if (vtype == NT_NUMBER) {
-        if (right.isChar()) {
-            right = qore_plus_equals_replace_char(right_holder);
-        }
+        // a char is added as its one-character string is (LValueHelper::plusEqualsNumber())
         v.plusEqualsNumber(right, "<+= operator>");
     } else if (vtype == NT_FLOAT) {
-        if (right.isChar()) {
-            right = qore_plus_equals_replace_char(right_holder);
-        }
-        v.plusEqualsFloat(right.getAsFloat());
+        // a char is added as its one-character string is (qore_plus_equals_float_operand())
+        v.plusEqualsFloat(qore_plus_equals_float_operand(right));
     } else if (vtype == NT_DATE) {
-        if (right.isChar()) {
-            right = qore_plus_equals_replace_char(right_holder);
-        }
-        if (!right.isNullOrNothing()) {
-            DateTime date(right);
+        // a char is added as its one-character string is
+        const QoreValue operand = right.isChar() ? qore_plus_equals_replace_char(right_holder) : right;
+        if (!operand.isNullOrNothing()) {
+            DateTime date(operand);
             assign(v.getValue().get<DateTimeNode>()->add(date), "<lvalue for += operator>");
         }
     } else if (vtype == NT_BINARY) {
