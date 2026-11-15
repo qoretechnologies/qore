@@ -294,6 +294,42 @@ public namespace DefCons {
             assertRegex("cannot resolve the target type '[^']*Prov::(NewKind|NewBox)[^']*' of an? [a-z]+ cast",
                 res.output, mode + ": " + res.output);
         }
+
+        # each kind of cast on its own, also as the argument of a constructor of a typed container: the cast is
+        # applied with the provider, and the error of its type is the error of the module without it
+        hash<string, hash<auto>> kinds = {
+            "DefEnumOnly": {"expr": "cast<*Prov::NewKind>(Prov::value(0))", "result": "True",
+                "check": "== Prov::NewKind::X", "error": "'\\*enum<Prov::NewKind>' of an enum cast"},
+            "DefListOnly": {"expr": "cast<*list<Prov::NewKind>>(Prov::value(NOTHING))", "result": "True",
+                "check": "=== NOTHING", "error": "'\\*list<enum<Prov::NewKind>>' of a list cast"},
+            "DefHashOnly": {"expr": "cast<*hash<string, Prov::NewKind>>(Prov::value(NOTHING))", "result": "True",
+                "check": "=== NOTHING", "error": "'\\*hash<string, enum<Prov::NewKind>>' of a hash cast"},
+            "DefClassOnly": {"expr": "cast<*Prov::NewBox>(Prov::value(NOTHING))", "result": "True",
+                "check": "=== NOTHING", "error": "'Prov::NewBox \\(module Prov\\)' of a class cast"},
+            "DefNewList": {"expr": "new list<auto>(cast<*Prov::NewKind>(Prov::value(0)))", "result": "True",
+                "check": "== (Prov::NewKind::X,)", "error": "'\\*enum<Prov::NewKind>' of an enum cast"},
+            "DefNewHash": {"expr": "new hash<string, auto>(cast<*hash<string, Prov::NewKind>>("
+                "Prov::value({})))", "result": "True", "check": "== {}",
+                "error": "'\\*hash<string, enum<Prov::NewKind>>' of a hash cast"},
+        };
+        foreach hash<auto> i in (kinds.pairIterator()) {
+            compileModule(dir, i.key, sprintf("%%requires Prov\npublic namespace %s {\n"
+                "    public auto sub f(auto x = %s) { return x; }\n}\n", i.key, i.value.expr),
+                modulePath(dir + "/provider-new"));
+            string kcode = sprintf("%%requires Prov\n%%requires %s\nprintf(\"%%y\\n\", %s::f() %s);\n", i.key,
+                i.key, i.value.check);
+            foreach string mode in (Modes) {
+                hash<auto> res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-new"),
+                    ("--exec-mode=" + mode, "-ne", kcode));
+                assertEq(0, res.status, i.key + " " + mode + ": " + res.output);
+                assertEq(i.value.result + "\n", res.output, i.key + " " + mode);
+                res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-old"),
+                    ("--exec-mode=" + mode, "-ne", kcode));
+                assertNeq(0, res.status, i.key + " " + mode + ": " + res.output);
+                assertRegex("cannot resolve the target type " + i.value.error, res.output,
+                    i.key + " " + mode + ": " + res.output);
+            }
+        }
     }
 
     castToMissingClass() {

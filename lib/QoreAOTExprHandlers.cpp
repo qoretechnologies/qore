@@ -2788,6 +2788,7 @@ static bool write_expr_hashdecl_new(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_hashdecl_new(AOTExprReadCtx& ctx) {
     const char* hashdecl_path = ctx.reader.readStringRef(ctx.ptr);
     if (!hashdecl_path || !*hashdecl_path) {
+        ctx.error = "a hashdecl constructor has no type";
         return QoreValue();
     }
     uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
@@ -2801,16 +2802,28 @@ static QoreValue read_expr_hashdecl_new(AOTExprReadCtx& ctx) {
             if (!arg_err.empty()) {
                 arg.discard(nullptr);
                 call_args->push(QoreValue(), nullptr);
+                // the first error of an argument is the error of the expression (qore#6125); the remaining
+                // arguments are read so that the reader stays in sync
+                if (ctx.error.empty()) {
+                    ctx.error = arg_err;
+                }
             } else {
                 call_args->push(arg, nullptr);
             }
         }
+    }
+    if (!ctx.error.empty()) {
+        if (call_args) {
+            call_args->deref(nullptr);
+        }
+        return QoreValue();
     }
     const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(ctx.pgm, hashdecl_path);
     if (!hd) {
         if (call_args) {
             call_args->deref(nullptr);
         }
+        ctx.error = std::string("cannot resolve the hashdecl '") + hashdecl_path + "' of a hashdecl constructor";
         return QoreValue();
     }
     // Convert call_args to QoreParseListNode for NewHashDeclNode
@@ -2865,6 +2878,7 @@ static bool write_expr_complex_hash_new(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_complex_hash_new(AOTExprReadCtx& ctx) {
     const char* type_path = ctx.reader.readStringRef(ctx.ptr);
     if (!type_path || !*type_path) {
+        ctx.error = "a complex hash constructor has no type";
         return QoreValue();
     }
     uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
@@ -2878,10 +2892,21 @@ static QoreValue read_expr_complex_hash_new(AOTExprReadCtx& ctx) {
             if (!arg_err.empty()) {
                 arg.discard(nullptr);
                 call_args->push(QoreValue(), nullptr);
+                // the first error of an argument is the error of the expression (qore#6125); the remaining
+                // arguments are read so that the reader stays in sync
+                if (ctx.error.empty()) {
+                    ctx.error = arg_err;
+                }
             } else {
                 call_args->push(arg, nullptr);
             }
         }
+    }
+    if (!ctx.error.empty()) {
+        if (call_args) {
+            call_args->deref(nullptr);
+        }
+        return QoreValue();
     }
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
@@ -2941,6 +2966,7 @@ static bool write_expr_complex_list_new(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_complex_list_new(AOTExprReadCtx& ctx) {
     const char* type_path = ctx.reader.readStringRef(ctx.ptr);
     if (!type_path || !*type_path) {
+        ctx.error = "a complex list constructor has no type";
         return QoreValue();
     }
     uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
@@ -2952,6 +2978,9 @@ static QoreValue read_expr_complex_list_new(AOTExprReadCtx& ctx) {
         if (!arg_err.empty()) {
             arg_val.discard(nullptr);
             arg_val = QoreValue();
+            // the error of the argument is the error of the expression (qore#6125)
+            ctx.error = arg_err;
+            return QoreValue();
         }
     }
     std::string type_error;
@@ -2995,6 +3024,7 @@ static bool write_expr_complex_buffer_new(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_complex_buffer_new(AOTExprReadCtx& ctx) {
     const char* type_path = ctx.reader.readStringRef(ctx.ptr);
     if (!type_path || !*type_path) {
+        ctx.error = "a complex buffer constructor has no type";
         return QoreValue();
     }
     QoreComplexBufferInitKind init_kind = static_cast<QoreComplexBufferInitKind>(
@@ -3008,6 +3038,9 @@ static QoreValue read_expr_complex_buffer_new(AOTExprReadCtx& ctx) {
         if (!arg_err.empty()) {
             arg_val.discard(nullptr);
             arg_val = QoreValue();
+            // the error of the argument is the error of the expression (qore#6125)
+            ctx.error = arg_err;
+            return QoreValue();
         }
     }
     std::string type_error;
@@ -3015,6 +3048,10 @@ static QoreValue read_expr_complex_buffer_new(AOTExprReadCtx& ctx) {
     const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
     if (!ti) {
         arg_val.discard(nullptr);
+        ctx.error = std::string("cannot resolve the type '") + type_path + "' of a complex buffer constructor";
+        if (!type_error.empty()) {
+            ctx.error += ": " + type_error;
+        }
         return QoreValue();
     }
     NewComplexBufferNode* ncb = new NewComplexBufferNode(&loc_builtin, ti, arg_val, init_kind);
@@ -3588,7 +3625,18 @@ static QoreValue read_expr_cast_class(AOTExprReadCtx& ctx) {
     }
     const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, false);
     if (!qc) {
-        return set_cast_type_error(ctx, inner, "a class cast", class_path, type_error,
+        // an encoded class reference has the module that provides the class before the class path:
+        // "@qore-module:<module>\n<class path>"
+        std::string class_desc = class_path;
+        size_t nl = class_desc.find('\n');
+        if (nl != std::string::npos) {
+            std::string origin = class_desc.substr(0, nl);
+            class_desc = class_desc.substr(nl + 1);
+            if (!origin.compare(0, 13, "@qore-module:")) {
+                class_desc += " (module " + origin.substr(13) + ")";
+            }
+        }
+        return set_cast_type_error(ctx, inner, "a class cast", class_desc.c_str(), type_error,
             "the class cannot be found");
     }
     auto* node = new QoreClassCastOperatorNode(&loc_builtin, qc, inner, or_nothing != 0);
