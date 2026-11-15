@@ -424,15 +424,24 @@ DLLLOCAL bool qore_call_target_cache_hit(const QoreCallTargetCheckCache* cache, 
 DLLLOCAL bool qore_call_target_cache_hit_static(const QoreCallTargetCheckCache* cache, const QoreValue& target,
         const qore_class_private* ctx, const QoreProgram* pgm);
 
+//! the kind of a value that compiled code passes to the check of a call's target after its arguments, which converts
+//! it (qore_rt_check_call_target_after_args())
+enum QoreCompiledCallArgKind : uint8_t {
+    QORE_COMPILED_CALL_ARG_BOXED = 0,  //!< a NaN-boxed value (no reference of its own)
+    QORE_COMPILED_CALL_ARG_INT = 1,    //!< an int64
+    QORE_COMPILED_CALL_ARG_FLOAT = 2,  //!< the bits of a double
+    QORE_COMPILED_CALL_ARG_BOOL = 3,   //!< 0 or 1
+};
+
 //! The JIT helper of a CheckCallTarget made after the arguments (QoreIRExprInstruction::check_after_args): @a args
-//! are the @a nargs arguments of the call (NaN-boxed, no references of their own); @a nargs is negative if the code
-//! does not know the call (a check not followed by its call, see qore_ir_call_of_target_check())
+//! are the @a nargs arguments of the call, of the kinds in @a kinds (QoreCompiledCallArgKind); @a nargs is negative
+//! if the code does not know the call (a check not followed by its call, see qore_ir_call_of_target_check())
 void qore_rt_check_call_target_after_args(uint64_t call_bits, uint64_t target_bits, const uint64_t* args,
-    int32_t nargs, ExceptionSink* xsink);
+    const uint8_t* kinds, int32_t nargs, ExceptionSink* xsink);
 
 //! The AOT counterpart of qore_rt_check_call_target_after_args(), with the call identified by its expression slot
 void qore_rt_check_call_target_after_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits,
-    const uint64_t* args, int32_t nargs, ExceptionSink* xsink);
+    const uint64_t* args, const uint8_t* kinds, int32_t nargs, ExceptionSink* xsink);
 
 //! Returns the current object as a NaN-boxed value (no reference), which native code reads once per function
 uint64_t qore_rt_current_self_bits();

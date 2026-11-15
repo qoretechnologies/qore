@@ -2085,6 +2085,7 @@ int qore_check_call_target_after_args(const QoreValue& call, const QoreValue& ta
 //! the arguments of a compiled call, as the values that the code passes to the check of its target after them
 struct QoreCompiledCallArgs {
     const uint64_t* args;
+    const uint8_t* kinds;
     int nargs;
 };
 
@@ -2098,8 +2099,27 @@ static QoreListNode* qore_build_compiled_call_args(const void* ctx) {
     qore_list_private* priv = qore_list_private::get(*l);
     priv->reserve(call_args.nargs);
     for (int i = 0; i < call_args.nargs; ++i) {
-        QoreValue arg = fromBits(call_args.args[i]);
-        priv->pushIntern(arg.needsRef() ? arg.refSelf() : arg);
+        uint64_t bits = call_args.args[i];
+        switch (call_args.kinds[i]) {
+            case QORE_COMPILED_CALL_ARG_INT:
+                priv->pushIntern(QoreValue(static_cast<int64>(bits)));
+                break;
+            case QORE_COMPILED_CALL_ARG_FLOAT: {
+                double d;
+                memcpy(&d, &bits, sizeof(d));
+                priv->pushIntern(QoreValue(d));
+                break;
+            }
+            case QORE_COMPILED_CALL_ARG_BOOL:
+                priv->pushIntern(QoreValue(bits != 0));
+                break;
+            default: {
+                assert(call_args.kinds[i] == QORE_COMPILED_CALL_ARG_BOXED);
+                QoreValue arg = fromBits(bits);
+                priv->pushIntern(arg.needsRef() ? arg.refSelf() : arg);
+                break;
+            }
+        }
     }
     return l;
 }
@@ -2112,15 +2132,15 @@ static QoreCallArgsSource qore_compiled_call_args_source(const QoreCompiledCallA
 }
 
 extern "C" DLLEXPORT void qore_rt_check_call_target_after_args(uint64_t call_bits, uint64_t target_bits,
-        const uint64_t* args, int32_t nargs, ExceptionSink* xsink) {
-    QoreCompiledCallArgs call_args{args, nargs};
+        const uint64_t* args, const uint8_t* kinds, int32_t nargs, ExceptionSink* xsink) {
+    QoreCompiledCallArgs call_args{args, kinds, nargs};
     qore_check_call_target_after_args(fromBits(call_bits), fromBits(target_bits),
         qore_compiled_call_args_source(call_args), xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_check_call_target_after_args_aot(QoreAOTContext* ctx, int32_t slot,
-        uint64_t target_bits, const uint64_t* args, int32_t nargs, ExceptionSink* xsink) {
-    QoreCompiledCallArgs call_args{args, nargs};
+        uint64_t target_bits, const uint64_t* args, const uint8_t* kinds, int32_t nargs, ExceptionSink* xsink) {
+    QoreCompiledCallArgs call_args{args, kinds, nargs};
     QoreCallArgsSource source = qore_compiled_call_args_source(call_args);
     if (!ctx->exprs[slot] || !fromBits(ctx->exprs[slot]).hasNode()) {
         // a direct method call keeps the target of the call in its slot (AOTExprKind::DOT_EVAL_TARGET)

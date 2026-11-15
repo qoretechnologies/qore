@@ -2220,9 +2220,9 @@ bool QoreIRToLLVM::emitCallTargetCheckHelper(const QoreIRExprInstruction* check,
     // of a call on an object, which is the target of the check (operand 0 of the call); a call through self has no
     // receiver operand, and its check has no target operand
     llvm::Value* args = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    llvm::Value* kinds = args;
     // -1: the call is not known
     int nargs = -1;
-    std::vector<llvm::Value*> temps;
     if (fused_check_call) {
         nargs = 0;
         size_t first = check->operands.empty() ? 0 : 1;
@@ -2233,47 +2233,48 @@ bool QoreIRToLLVM::emitCallTargetCheckHelper(const QoreIRExprInstruction* check,
             llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
             llvm::AllocaInst* arr = ab.CreateAlloca(llvm::ArrayType::get(i64_type, nargs), nullptr,
                 "call.target.check.args");
+            // the values are passed as they are, with the kind of each (QoreCompiledCallArgKind), which the helper
+            // converts: boxing them here would add code (the branches of boxing an int) that the optimizer merges
+            // with the boxing of the call's arguments, changing the code of the call that every iteration runs
+            std::vector<uint8_t> arg_kinds(nargs);
             for (int i = 0; i < nargs; ++i) {
                 uint32_t id = operands[first + i].id;
                 llvm::Value* val = getVal(id, error);
                 if (!val) {
                     return false;
                 }
-                // boxed as the target of the check is: a boxed big int or colliding double is a new node
-                llvm::Value* boxed = val;
+                llvm::Value* raw = val;
+                arg_kinds[i] = QORE_COMPILED_CALL_ARG_BOXED;
                 if (!nanboxed_values.count(id)) {
                     if (val->getType() == double_type) {
-                        boxed = boxFloat(val);
-                        temps.push_back(boxed);
+                        raw = builder->CreateBitCast(val, i64_type);
+                        arg_kinds[i] = QORE_COMPILED_CALL_ARG_FLOAT;
                     } else if (val->getType() == i1_type) {
-                        boxed = boxBool(val);
+                        raw = builder->CreateZExt(val, i64_type);
+                        arg_kinds[i] = QORE_COMPILED_CALL_ARG_BOOL;
                     } else if (val->getType() == i64_type) {
-                        boxed = boxIntInline(val);
-                        temps.push_back(boxed);
+                        arg_kinds[i] = QORE_COMPILED_CALL_ARG_INT;
                     }
                 }
-                builder->CreateStore(boxed, builder->CreateConstGEP2_32(arr->getAllocatedType(), arr, 0, i));
+                builder->CreateStore(raw, builder->CreateConstGEP2_32(arr->getAllocatedType(), arr, 0, i));
             }
             args = arr;
+            llvm::Constant* kinds_data = llvm::ConstantDataArray::get(ctx, arg_kinds);
+            kinds = new llvm::GlobalVariable(module, kinds_data->getType(), true,
+                llvm::GlobalValue::PrivateLinkage, kinds_data, "call.target.check.arg.kinds");
         }
     }
     if (aot_mode) {
         auto helper = module.getOrInsertFunction("qore_rt_check_call_target_after_args_aot",
-            llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type, i32_type, ptr_type}, false));
-        builder->CreateCall(helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), target, args,
+            llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type, ptr_type, i32_type, ptr_type},
+                false));
+        builder->CreateCall(helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), target, args, kinds,
             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
     } else {
         auto helper = module.getOrInsertFunction("qore_rt_check_call_target_after_args",
-            llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type, i32_type, ptr_type}, false));
-        builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, call_bits), target, args,
+            llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+        builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, call_bits), target, args, kinds,
             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
-    }
-    if (!temps.empty()) {
-        auto decref_nothrow = module.getOrInsertFunction("qore_rt_decref_nothrow",
-            llvm::FunctionType::get(void_type, {i64_type}, false));
-        for (llvm::Value* temp : temps) {
-            builder->CreateCall(decref_nothrow, {temp});
-        }
     }
     return true;
 }
