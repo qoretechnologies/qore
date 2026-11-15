@@ -117,8 +117,8 @@ C dc = new D();
 hash<string, code> refs = {
     "function": \f(),
     "static method": \C::s(),
-    # references by a scoped path (the deferred references of objects compiled per file are tested in
-    # ir/AOTNamedCallRefModules.qtest)
+    # references by a scoped path (references from objects compiled per file with a source symbol manifest, which
+    # resolve when they are evaluated, are compared in ir/AOTNamedCallRefModules.qtest)
     "function in a namespace": \NS::f(),
     "static method in a namespace": \NS::K::s(),
     "method, typed receiver": \typed.m(),
