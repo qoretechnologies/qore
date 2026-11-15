@@ -84,6 +84,56 @@ class Override inherits Base {
     string m(auto x) { return "override-auto"; }
 }
 
+#! a method type parameter bounded by the class's type parameter (qore#6155)
+class Bounded<T> {
+    public {}
+
+    string m<X: T>(X x) { return "X"; }
+    string m(auto x) { return "plain"; }
+
+    static string sm<X: T>(X x) { return "sX"; }
+    static string sm(auto x) { return "splain"; }
+
+    #! the class's type parameter as the type argument
+    string viaT(T a) { return m<T>(a); }
+    #! an argument of a type that is known at parse time, outside the bound of a class instantiated with Obj
+    string outside() { return m(1); }
+    #! a static method called from a method of the class: the bound takes the class's instantiation
+    string viaStatic(auto a) { return sm(a); }
+}
+
+#! a default type that names the class's type parameter
+class BoundedDefault<T> {
+    public {}
+
+    X e<X: T = T>(auto v) { return v; }
+}
+
+#! the original case of qore#6155: the only variant, with an inferred type argument
+class BoundedOnly<T> {
+    public {}
+
+    X m<X: T>(X x) { return x; }
+}
+
+auto sub bounded_only_auto(auto a) { BoundedOnly<int> b(); return b.m(a); }
+
+#! a static method called with a receiver that names the calling code's type parameter: the bound is not satisfied
+class BoundedCaller<U> {
+    public {}
+
+    string viaReceiver(auto a) { return Bounded<U>::sm(a); }
+    string viaReceiverOnly(auto a) { return BoundedOnlyStatic<U>::only(a); }
+}
+
+class BoundedOnlyStatic<T> {
+    public {}
+
+    static string only<X: T>(X x) { return "oX"; }
+}
+
+string sub bounded_generic_receiver<Y>(auto a) { return Bounded<Y>::sm(a); }
+
 class Box<T> {
     auto func(T a) { return g<T>(a); }
     auto stat(T a) { return Util::sm<T>(a); }
@@ -212,6 +262,21 @@ string sub probes(bool del) {
             parse_call("u.m<int>(1)"),
             probe(auto sub () { Zero z(); return z.z<int>(); }),
             probe(auto sub () { return Inferred::s<int>("str", "a"); }),
+            # a type argument within the bound of the class's type parameter, in the class and from outside it, and
+            # an argument outside the bound (qore#6155)
+            probe(auto sub () { Bounded<Obj> bo(); return bo.viaT(new Obj()); }),
+            probe(auto sub () { Bounded<Obj> bo(); return bo.m<Obj>(new Obj()); }),
+            probe(auto sub () { Bounded<Obj> bo(); return bo.m(1); }),
+            probe(auto sub () { BoundedOnly<int> bi(); return bi.m(1); }),
+            probe(auto sub () { return bounded_only_auto(1); }),
+            probe(auto sub () { return bounded_only_auto("s"); }),
+            probe(auto sub () { Bounded<Obj> bo(); return bo.outside(); }),
+            probe(auto sub () { Bounded<Obj> bo(); return bo.viaStatic(1); }),
+            probe(auto sub () { Bounded<Obj> bo(); return bo.viaStatic(new Obj()); }),
+            probe(auto sub () { BoundedDefault<string> bd(); return bd.e("s"); }),
+            probe(auto sub () { BoundedCaller<Obj> bc(); return bc.viaReceiver(new Obj()); }),
+            probe(auto sub () { BoundedCaller<Obj> bc(); return bc.viaReceiverOnly(new Obj()); }),
+            probe(auto sub () { return bounded_generic_receiver<Obj>(new Obj()); }),
         );
     } else {
         # the same call sites with a live object, a deleted object and other receivers in turn

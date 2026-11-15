@@ -2796,7 +2796,7 @@ public:
         only: out of line, so that the inlining of the run-time code of this unit does not change.
     */
     DLLLOCAL __attribute__((noinline, cold)) bool parseHasExplicitTypeArgsVariant(const qore_class_private* class_ctx,
-            const type_vec_t* explicit_type_args) const;
+            const type_vec_t* explicit_type_args, const QoreTypeInfo* receiver_type_info) const;
 
     // find variant at parse time, throw parse exception if no variant can be matched
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's
