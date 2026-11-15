@@ -1,0 +1,14 @@
+resolved, deleted before the call: OBJECT-ALREADY-DELETED: cannot call U::m() on an object that has already been deleted
+resolved, deleted by the arguments: OBJECT-ALREADY-DELETED: cannot call U::m() on an object that has already been deleted
+resolved, subclass, deleted by the arguments: OBJECT-ALREADY-DELETED: cannot call U::m() on an object that has already been deleted
+by name, deleted before the call: OBJECT-ALREADY-DELETED: cannot call U::m() on an object that has already been deleted
+by name, deleted by the arguments: OBJECT-ALREADY-DELETED: cannot call U::m() on an object that has already been deleted
+builtin, deleted before the call: OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+builtin, deleted by the arguments: OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+self call reference, builtin: OBJECT-ALREADY-DELETED: cannot call Mutex::lock() on an object that has already been deleted
+self call reference, user method: OBJECT-ALREADY-DELETED: cannot call DelMutex::n() on an object that has already been deleted
+private:internal in the class of the reference, deleted before the call: OBJECT-ALREADY-DELETED: cannot call PimBase::pim() on an object that has already been deleted
+private:internal in the class of the reference, deleted by the arguments: OBJECT-ALREADY-DELETED: cannot call PimBase::pim() on an object that has already been deleted
+PimBase::pim(1)
+private:internal in the class of the reference, called: no exception
+named arguments, deleted by the arguments: OBJECT-ALREADY-DELETED: cannot call U::m() on an object that has already been deleted

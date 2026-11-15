@@ -50,6 +50,7 @@
 #include <vector>
 #include <qore/QoreParseOptions.h>
 #include "qore/intern/QoreAOTBinary.h"
+#include "qore/intern/QoreCallTargetCheckCache.h"
 #include "qore/intern/qore_aot_deps.h"
 
 class AbstractStatement;
@@ -321,6 +322,13 @@ struct QoreAOTCallTarget {
     const UserVariantBase* uvb = nullptr;  //!< cached user variant base for inlined fast path
     const QoreMethod* method = nullptr;    //!< for static/self method calls (pre-resolved)
     const QoreClass* qc = nullptr;         //!< for dot-eval method calls (pre-resolved)
+    //! the class, method and variant of a dot-eval method call resolved at parse time, also for a call dispatched by
+    //! name: the check of the call's target before its arguments are evaluated uses them (issue #5824)
+    const QoreClass* check_qc = nullptr;
+    const QoreMethod* check_method = nullptr;
+    const AbstractQoreFunctionVariant* check_variant = nullptr;
+    //! the cache of the check of the call's target before its arguments (issue #5824)
+    QoreCallTargetCheckCache check_cache;
     const QoreTypeInfo* object_type_info = nullptr; //!< instantiated object type for constructor calls
     const QoreTypeInfo* receiver_type_info = nullptr; //!< parameterized receiver type for generic static calls
     const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr;

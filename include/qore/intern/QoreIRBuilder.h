@@ -262,8 +262,12 @@ public:
     /** An invalid @a target checks the current object, for a call through self (issue #5823): the code then does not
         load self, which a fast entry of a method of the object does not have.
     */
+    /** @param check_class the class of the method resolved at parse time, if any (QoreIRExprInstruction::check_class)
+        @param check_method the method resolved at parse time, if any
+    */
     QoreIRExprInstruction* createCheckCallTarget(const QoreValue& call, QoreIRValue target,
-        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc);
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc,
+            const QoreClass* check_class = nullptr, const QoreMethod* check_method = nullptr);
     QoreIRBackgroundInstruction* createBackground(QoreIRBackgroundKind kind, const std::string& name,
         const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc = nullptr);

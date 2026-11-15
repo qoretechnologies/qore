@@ -1,0 +1,179 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the plugin operations of the dataframe module's native library, and qcc code generation and linking
+
+/*  dataframe-plugin-ornothing-dispatch.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+
+%requires dataframe
+
+%exec-class DataFramePluginOrNothingDispatchTest
+
+#! comparisons of an operand of an or-nothing or a union type with a class that has a plugin operation dispatch to
+#! the plugin for a value of the class, in every execution mode and in qcc code (qore#5911)
+/** The parse-time resolution of a plugin operation only resolves operand types that match the operation's for every
+    value; for an or-nothing or a union type, the ordering operators were specialized for the other operand's type
+    (a float comparison), and the IR, JIT and AOT code compared the values without the plugin, also for ==.
+*/
+class DataFramePluginOrNothingDispatchTest inherits QUnit::Test {
+    private {
+        string probe = get_script_dir() + "/plugin-ornothing-dispatch/probe.q";
+        string qore_bin = QORE_ARGV[0];
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(QORE_ARGV[0]);
+        string qcc_bin = ENV.QCC ?? (dirname(QORE_ARGV[0]) + "/qcc");
+    }
+
+    constructor() : Test("plugin dispatch for or-nothing and union operands", "1.0") {
+        addTestCase("comparisons dispatch to the plugin", \inProcess());
+        addTestCase("qcc executables give the AST results", \compiled());
+        set_return_value(main());
+    }
+
+    inProcess() {
+        DataFrame::DataFrame df(({"a": 1}, {"a": 2}));
+        foreach string op in (("==", "!=", "<", "<=", ">", ">=")) {
+            assertEq("RowMask", DataFramePluginOrNothingDispatchTest::opn(df.column("a"), 1.5, op).className(),
+                "*ColumnRef " + op);
+            assertEq("RowMask", DataFramePluginOrNothingDispatchTest::opu(df.column("a"), 1.5, op).className(),
+                "union ColumnRef " + op);
+        }
+        # values that are not of the class are compared as before
+        assertEq((False, True, True, True, False, False),
+            (map DataFramePluginOrNothingDispatchTest::opn(NOTHING, 1.5, $1), ("==", "!=", "<", "<=", ">", ">=")));
+        assertEq((False, True, False, False, True, True),
+            (map DataFramePluginOrNothingDispatchTest::opu(2, 1.5, $1), ("==", "!=", "<", "<=", ">", ">=")));
+        # a plugin result in a boolean context is a boolean as the object is
+        assertEq("true", DataFramePluginOrNothingDispatchTest::ifctx(df.column("a"), 1.5));
+        assertEq("false", DataFramePluginOrNothingDispatchTest::ifctx(1, 1.5));
+        assertEq("true", DataFramePluginOrNothingDispatchTest::ifauto(df.column("a"), 1.5));
+        assertEq("false", DataFramePluginOrNothingDispatchTest::ifauto(1, 1.5));
+        foreach string op in (("==", "!=", "<", "<=", ">", ">=")) {
+            # an operand of type auto or without a type can have a value of the class
+            assertEq("RowMask", DataFramePluginOrNothingDispatchTest::opa(df.column("a"), 1.5, op).className(),
+                "auto ColumnRef " + op);
+            assertEq("RowMask", DataFramePluginOrNothingDispatchTest::opx(df.column("a"), 1.5, op).className(),
+                "untyped ColumnRef " + op);
+            # a comparison with an exception handler
+            assertEq("RowMask", DataFramePluginOrNothingDispatchTest::opt(df.column("a"), 1.5, op).className(),
+                "try *ColumnRef " + op);
+        }
+        assertEq((False, True, False, False, True, True),
+            (map DataFramePluginOrNothingDispatchTest::opa(2, 1.5, $1), ("==", "!=", "<", "<=", ">", ">=")));
+        assertEq((False, True, True, True, False, False),
+            (map DataFramePluginOrNothingDispatchTest::opt(NOTHING, 1.5, $1), ("==", "!=", "<", "<=", ">", ">=")));
+    }
+
+    compiled() {
+        if (!is_executable(qcc_bin)) {
+            testSkip("qcc is not available");
+        }
+        string expected = run(sprintf("%s -b --exec-mode=ast %s", quote(qore_bin), quote(probe)));
+        assertRegex("(?m)^\\*ColumnRef >: RowMask$", expected, expected);
+        assertRegex("(?m)^closure \\*ColumnRef: RowMask$", expected, expected);
+        assertRegex("(?m)^closure case ColumnRef: \"no\"$", expected, expected);
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-dataframe-plugin-dispatch-");
+            string exe = dir.path + "/probe";
+            run(sprintf("%s %s -o %s %s", quote(qcc_bin), level, quote(exe), quote(probe)));
+            assertEq(expected, run(sprintf("%s -b", quote(exe))), "qcc " + level);
+            # closures run as their IR read from the executable
+            assertEq(expected, run(sprintf("env QORE_DISABLE_AOT_NATIVE_CLOSURES=1 %s -b", quote(exe))),
+                "qcc " + level + " interpreted closures");
+        }
+    }
+
+    static auto opn(*DataFrame::ColumnRef c, float x, string op) {
+        switch (op) {
+            case "==": return c == x;
+            case "!=": return c != x;
+            case "<": return c < x;
+            case "<=": return c <= x;
+            case ">": return c > x;
+            case ">=": return c >= x;
+        }
+    }
+
+    static auto opu(union<DataFrame::ColumnRef, int> c, float x, string op) {
+        switch (op) {
+            case "==": return c == x;
+            case "!=": return c != x;
+            case "<": return c < x;
+            case "<=": return c <= x;
+            case ">": return c > x;
+            case ">=": return c >= x;
+        }
+    }
+
+    static auto opa(auto c, auto x, string op) {
+        switch (op) {
+            case "==": return c == x;
+            case "!=": return c != x;
+            case "<": return c < x;
+            case "<=": return c <= x;
+            case ">": return c > x;
+            case ">=": return c >= x;
+        }
+    }
+
+    #! the left operand is an implicit argument, which has no type
+    static auto opx(auto c, auto x, string op) {
+        switch (op) {
+            case "==": return (map $1 == x, (c,))[0];
+            case "!=": return (map $1 != x, (c,))[0];
+            case "<": return (map $1 < x, (c,))[0];
+            case "<=": return (map $1 <= x, (c,))[0];
+            case ">": return (map $1 > x, (c,))[0];
+            case ">=": return (map $1 >= x, (c,))[0];
+        }
+    }
+
+    static auto opt(*DataFrame::ColumnRef c, float x, string op) {
+        try {
+            switch (op) {
+                case "==": return c == x;
+                case "!=": return c != x;
+                case "<": return c < x;
+                case "<=": return c <= x;
+                case ">": return c > x;
+                case ">=": return c >= x;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    static string ifauto(auto c, auto x) {
+        if (c > x) {
+            return "true";
+        }
+        return "false";
+    }
+
+    static string ifctx(union<DataFrame::ColumnRef, int> c, float x) {
+        if (c > x) {
+            return "true";
+        }
+        return "false";
+    }
+
+    private string run(string command) {
+        string full = sprintf("env LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s 2>&1", quote(lib_dir), quote(lib_dir),
+            command);
+        int rc;
+        string out = backquote(full, \rc);
+        assertEq(0, rc, full + ": " + out);
+        return out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+}

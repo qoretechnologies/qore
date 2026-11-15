@@ -2920,6 +2920,14 @@ protected:
 DLLLOCAL void map_get_plain_hash(QoreValue&, ExceptionSink*);
 DLLLOCAL void map_get_plain_hash_lvalue(QoreValue&, ExceptionSink*, LValueHelper*);
 
+//! returns true if a list or hash assigned to or returned through \a ti loses its complex type
+/** \c any and a plain \c auto! (not a subtype such as \c hash<auto!>) strip complex type information; \c auto keeps it
+    (qore#6058, qore#6059)
+*/
+DLLLOCAL inline bool q_type_strips_complex_type(const QoreTypeInfo* ti) {
+    return ti == anyTypeInfo || ti == autoNoNarrowTypeInfo;
+}
+
 //! strips no-narrow (hash<auto!>/list<auto!>) container tags like LValueHelper::assign(); copies shared containers
 DLLLOCAL QORE_INTERN_ALWAYS_INLINE void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val,
         ExceptionSink* xsink);
@@ -4683,6 +4691,17 @@ DLLLOCAL const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTyp
 DLLLOCAL const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti,
     const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst = nullptr);
 
+//! Returns the hashdecl that a hashdecl with type parameters stands for in the running instantiation of generic code
+/** The type parameters (HD<U>) are substituted with the types of the current receiver and of the type parameter
+    instantiation of the current call (HD<int>), with qore_substitute_type_params_if_needed(), as
+    VarRefNewObjectNode does for the construction of a hashdecl (qore#5720)
+
+    @param hd the hashdecl, which must not be nullptr
+
+    @return the hashdecl of the instantiation, or \a hd itself if nothing is substituted
+*/
+DLLLOCAL const TypedHashDecl* qore_substitute_hashdecl_type_params(const TypedHashDecl* hd);
+
 //! Checks whether a target generic type argument accepts a source type argument
 DLLLOCAL qore_type_result_e qore_generic_type_arg_accepts(const QoreTypeInfo* target_arg,
     const QoreTypeInfo* source_arg, bool& may_not_match, bool& may_need_filter);
@@ -4910,7 +4929,7 @@ QORE_INTERN_ALWAYS_INLINE void QoreTypeInfo::stripTypeInfo(QoreValue& n, Excepti
 // Keep the common scalar/no-coercion checks in the caller; container copies stay out of line.
 QORE_INTERN_ALWAYS_INLINE void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val,
         ExceptionSink* xsink) {
-    if (ti == anyTypeInfo || ti == autoNoNarrowTypeInfo) {
+    if (q_type_strips_complex_type(ti)) {
         if (val.getType() == NT_HASH) {
             map_get_plain_hash(val, xsink);
         } else if (val.getType() == NT_LIST) {

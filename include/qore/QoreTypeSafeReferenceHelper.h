@@ -176,7 +176,12 @@ public:
     DLLEXPORT int assign(QoreValue val);
 
     //! returns the reference's value
-    /** @return the value of the lvalue reference
+    /** @return the value of the lvalue reference, which is valid only while this helper exists and which the caller
+        does not own; a caller that keeps the value after that must take its own reference to it
+
+        @note a large integer or a special float that the lvalue stores natively is returned in a new node, which this
+        helper keeps until it is destroyed; each call makes another one, so a caller that needs the value more than
+        once (in a loop, for example) reads it once and keeps the value for the helper's lifetime
     */
     DLLEXPORT const QoreValue getValue() const;
 
