@@ -48,6 +48,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include "qore/intern/HttpClientDrainDebug.h"
 
 #ifdef DEBUG
 std::atomic<void (*)(HttpClientConnectionBase*)> qore_http_manager_new_connection_hook{nullptr};
@@ -351,7 +352,12 @@ void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key,
         // caller can close+deref after pool_lock_ drops (closeConnection
         // is unsafe under pool_lock_, see acquireConnectionImpl shutdown
         // branch ~line 360 for the established pattern).
+        // nor one with a stream reserved by a checkout that has not submitted on it yet (#6165).  The reservations
+        // are read first: a reservation is taken under pool_lock_ (held here for writing), so none appears after
+        // the read, and a submit counts its active stream before it releases its reservation, so a reservation that
+        // was released before the read shows in the active count read after it
         if (max_age_us > 0
+                && conn->getPendingStreamCount() == 0
                 && conn->getActiveStreamCount() == 0
                 && (now_us - conn->getCreatedUs()) >= max_age_us) {
             out_to_close->push_back(conn);
@@ -1497,6 +1503,10 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
     conn->ref();
     // RAII deref — fires on every return path below.
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+#ifdef DEBUG
+    // a test holds the request here, with a stream of the connection reserved and nothing submitted (#6165)
+    QoreHttpClientDrainDebug::get().holdAfterReserve();
+#endif
 
     ReferenceHolder<QoreHashNode> submit_result(
         conn->submitRequest(method, path, headers, body, body_len, xsink, event_sink), xsink);

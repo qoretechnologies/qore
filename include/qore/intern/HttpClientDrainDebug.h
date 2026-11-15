@@ -124,9 +124,68 @@ public:
         return true;
     }
 
+    //! Arms the hold of the next request of an HTTPClient between the reservation of its connection's stream and the
+    //! submission of the request (dbg_http_client_hold_after_reserve(), #6165)
+    DLLLOCAL void armReserveHold(bool arm) {
+        AutoLocker al(lock);
+        reserve_hold_armed = arm;
+        if (!arm) {
+            reserve_held = false;
+            cond.broadcast();
+        }
+    }
+
+    //! Holds the calling request if the hold is armed, until releaseReserveHold() (at most a minute); the request
+    //! has reserved a stream of its connection and not yet submitted on it
+    DLLLOCAL void holdAfterReserve() {
+        AutoLocker al(lock);
+        if (!reserve_hold_armed) {
+            return;
+        }
+        reserve_hold_armed = false;
+        reserve_held = true;
+        cond.broadcast();
+        int64_t deadline = q_get_monotonic_us() + 60000000;
+        while (reserve_held) {
+            int64_t remaining_ms = (deadline - q_get_monotonic_us()) / 1000;
+            if (remaining_ms <= 0) {
+                reserve_held = false;
+                break;
+            }
+            cond.wait(lock, static_cast<int>(remaining_ms));
+        }
+    }
+
+    //! Waits until a request is held by holdAfterReserve()
+    /** @return false if the wait timed out
+    */
+    DLLLOCAL bool waitReserveHeld(int64_t timeout_ms) {
+        int64_t deadline = q_get_monotonic_us() + timeout_ms * 1000;
+        AutoLocker al(lock);
+        while (!reserve_held) {
+            int64_t remaining_ms = (deadline - q_get_monotonic_us()) / 1000;
+            if (remaining_ms <= 0) {
+                return false;
+            }
+            cond.wait(lock, static_cast<int>(remaining_ms > INT_MAX ? INT_MAX : remaining_ms));
+        }
+        return true;
+    }
+
+    //! Lets the request held by holdAfterReserve() submit
+    DLLLOCAL void releaseReserveHold() {
+        AutoLocker al(lock);
+        reserve_held = false;
+        cond.broadcast();
+    }
+
 private:
     QoreThreadLock lock;
     QoreCondition cond;
+    //! true if the next request is held after its reservation (see holdAfterReserve())
+    bool reserve_hold_armed = false;
+    //! true while a request is held after its reservation
+    bool reserve_held = false;
     //! the number of completed responses that the last read pass found held
     size_t held = 0;
     //! the number of streaming streams with buffered data that the last HTTP/2 client pass left; -1: none recorded
