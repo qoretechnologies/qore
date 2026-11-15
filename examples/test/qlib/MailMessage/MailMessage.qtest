@@ -59,7 +59,7 @@ public class Main inherits QUnit::Test {
             NOTHING);
         addTestCase("Test quoted local part duplicates (issue #6134)", \testQuotedLocalPartDuplicates(), NOTHING);
         addTestCase("Test parsed header lines and body (issue #6139)", \testParsedHeaderLines(), NOTHING);
-        addTestCase("Test the time to parse many header lines (issue #6139)", \testParseTime(), NOTHING);
+        addParseTimeCases();
 
         set_return_value(main());
     }
@@ -2255,6 +2255,24 @@ lorem ipsum\r
         assertEq({"X-A": "ü"}, m.getHeaders());
         assertEq("bödy\r\n", m.getBody());
         assertEq("ISO-8859-1", m.getBody().encoding());
+        # messages in encodings with characters of more than one byte, read by bytes (Shift_JIS, EUC-JP) or in UTF-8
+        # (UTF-16, ISO-2022-JP)
+        foreach string e in ("SHIFT_JIS", "EUC-JP", "UTF-16", "UTF-16LE", "ISO-2022-JP") {
+            string text = "From: ポ <a@x.com>\r\nTo: b@x.com,\r\n ポ <c@x.com>\r\nSubject: ポ\r\n\tポ\r\n"
+                "X-A: ポ\r\n\r\nポ\r\n";
+            m = new Message(convert_encoding(text, e));
+            assertEq("a@x.com", m.getFrom(), e);
+            assertEq(("b@x.com, ポ <c@x.com>",), m.getTO(), e);
+            assertEq("ポ ポ", m.getSubject(), e);
+            assertEq({"X-A": "ポ"}, m.getHeaders(), e);
+            assertEq("ポ\r\n", m.getBody(), e);
+            assertEq(e, m.getBody().encoding(), e);
+            # the position is the byte offset of the line in the message
+            text = "X-A: ポ\r\n b\r\nX-B: c";
+            assertThrows("MESSAGE-PARSE-ERROR", sprintf("byte position %d$", convert_encoding(text, e).size()
+                - convert_encoding("X-B: c", e).size()), sub () { new Message(convert_encoding(text, e)); }, NOTHING,
+                e);
+        }
 
         # a body that is not valid UTF-8 is read as it is; matching the rest of the message for each header line
         # raised INVALID-ENCODING
@@ -2272,40 +2290,80 @@ lorem ipsum\r
             sub () { new Message("Content-Transfer-Encoding: quoted-printable\r\n\r\nends with =4"); });
     }
 
-    testParseTime() {
-        # 100000 header lines, folded and separate, ASCII and not, and encoded words; parsing them took time that
-        # grew with the square of their number (issue #6139): from 13 seconds to over a minute each
-        int lines = 100000;
-        hash<string, string> inputs = {
-            "folded": sprintf("To: z@y.com%s\r\n\r\nbody\r\n", strmul(",\r\n a@b.com", lines)),
-            "folded non-ascii": sprintf("To: z@y.com%s\r\n\r\nbody\r\n", strmul(",\r\n ö", lines)),
-            "separate": sprintf("%s\r\nbody\r\n", strmul("X-H: o\r\n", lines)),
-            "separate non-ascii": sprintf("%s\r\nbody\r\n", strmul("X-H: ö\r\n", lines)),
-            # 1 MB of encoded words
-            "encoded words": sprintf("Subject: s%s\r\n\r\nbody\r\n", strmul("\r\n =?UTF-8?Q?=C3=B6?=",
-                lines / 2)),
-            # 600 KB of quoted-printable codes
-            "quoted-printable body": "Content-Transfer-Encoding: quoted-printable\r\n"
-                "Content-Type: text/plain; charset=UTF-8\r\n\r\n" + strmul("=C3=B6", lines),
-        };
-        foreach hash<auto> i in (inputs.pairIterator()) {
-            date start = now_us();
-            Message m(i.value);
-            date elapsed = now_us() - start;
-            switch (i.key) {
-                case "folded": assertEq(lines + 1, m.getTO()[0].split(",").size(), i.key); break;
-                case "folded non-ascii": assertEq(lines + 1, m.getTO()[0].split(",").size(), i.key); break;
-                # a header that is given again replaces the value
-                case "separate": assertEq({"X-H": "o"}, m.getHeaders(), i.key); break;
-                case "separate non-ascii": assertEq({"X-H": "ö"}, m.getHeaders(), i.key); break;
-                case "encoded words": assertEq("s " + strmul("ö", lines / 2), m.getSubject(), i.key); break;
-                case "quoted-printable body": assertEq(strmul("ö", lines), m.getBody(), i.key); break;
-            }
-            # 0.5 - 2.5 seconds each on an idle machine
-            assertLt(8s, elapsed, i.key);
+    # adds a test case of the time to parse each kind of header
+    private addParseTimeCases() {
+        # parsing took time that grew with the square of the number of header lines, folded and separate, ASCII and
+        # not, in UTF-8 and in other encodings, and of encoded words (issue #6139): parsing twice as many took four
+        # times as long
+        addParseTimeCase("folded", 50000,
+            string sub (int n) { return sprintf("To: z@y.com%s\r\n\r\nbody\r\n", strmul(",\r\n a@b.com", n)); },
+            sub (Message m, int n) { assertEq(n + 1, m.getTO()[0].split(",").size()); });
+        addParseTimeCase("folded non-ascii", 25000,
+            string sub (int n) { return sprintf("To: z@y.com%s\r\n\r\nbody\r\n", strmul(",\r\n ö", n)); },
+            sub (Message m, int n) { assertEq(n + 1, m.getTO()[0].split(",").size()); });
+        # a header that is given again replaces the value
+        addParseTimeCase("separate", 50000,
+            string sub (int n) { return sprintf("%s\r\nbody\r\n", strmul("X-H: o\r\n", n)); },
+            sub (Message m, int n) { assertEq({"X-H": "o"}, m.getHeaders()); });
+        addParseTimeCase("separate non-ascii", 25000,
+            string sub (int n) { return sprintf("%s\r\nbody\r\n", strmul("X-H: ö\r\n", n)); },
+            sub (Message m, int n) { assertEq({"X-H": "ö"}, m.getHeaders()); });
+        addParseTimeCase("separate shift_jis", 25000,
+            string sub (int n) {
+                return convert_encoding(sprintf("%s\r\nbody ポ\r\n", strmul("X-H: ポ\r\n", n)), "SHIFT_JIS");
+            },
+            sub (Message m, int n) {
+                assertEq({"X-H": "ポ"}, m.getHeaders());
+                assertEq("body ポ\r\n", m.getBody());
+            });
+        addParseTimeCase("separate utf-16", 25000,
+            string sub (int n) {
+                return convert_encoding(sprintf("%s\r\nbody ポ\r\n", strmul("X-H: ポ\r\n", n)), "UTF-16");
+            },
+            sub (Message m, int n) {
+                assertEq({"X-H": "ポ"}, m.getHeaders());
+                assertEq("body ポ\r\n", m.getBody());
+            });
+        addParseTimeCase("encoded words", 25000,
+            string sub (int n) {
+                return sprintf("Subject: s%s\r\n\r\nbody\r\n", strmul("\r\n =?UTF-8?Q?=C3=B6?=", n));
+            },
+            sub (Message m, int n) { assertEq("s " + strmul("ö", n), m.getSubject()); });
+    }
+
+    # adds a test case that checks the time to parse a message with the given kind of header
+    private addParseTimeCase(string name, int n, code make, code check) {
+        addTestCase(sprintf("Test the time to parse %s header lines (issue #6139)", name),
+            sub () { checkLinear(name, n, make, check); });
+    }
+
+    # checks that parsing a message with twice as many lines takes at most 3 times as long; the time of a quadratic
+    # algorithm grows by 4 times
+    private checkLinear(string name, int n, code make, code check) {
+        # once with a small message first, so that the code is compiled before it is timed
+        check(new Message(make(n / 10)), n / 10);
+        float ratio;
+        # a measurement that was made longer by other work on the machine is made again
+        for (int i = 0; i < 2; ++i) {
+            list<int> us = map timeParse(make, check, $1), (n, n * 2);
+            ratio = us[1] / float(max(us[0], 1));
             if (m_options.verbose) {
-                printf("%s: %d bytes in %y\n", i.key, i.value.size(), elapsed);
+                printf("%s: %d lines: %d us, %d lines: %d us: ratio %.2f\n", name, n, us[0], n * 2, us[1], ratio);
+            }
+            if (ratio <= 3.0) {
+                break;
             }
         }
+        assertLe(3.0, ratio, name);
+    }
+
+    # returns the time in microseconds to parse a message with the given number of lines
+    private int timeParse(code make, code check, int n) {
+        string msg = make(n);
+        date start = now_us();
+        Message m(msg);
+        int us = (now_us() - start).durationMicroseconds();
+        check(m, n);
+        return us;
     }
 }

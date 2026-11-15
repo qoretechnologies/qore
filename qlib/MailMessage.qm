@@ -126,9 +126,10 @@ msg.addTO("My Best Friend <you@friend.com>");
       @ref MailMessage::Message::serialize() "Message::serialize()" no longer change the message: a \c Content-Type
       header was removed or taken as the type of the body, and the body encoding of a message with attachments was
       changed from \c none to \c 7bit
-    - Raw message text is parsed in time proportional to its length; the time grew with the square of the number of
-      header lines, encoded words and quoted-printable codes, and a body that is not valid UTF-8 no longer makes the
-      parse fail with \c INVALID-ENCODING
+    - Raw message text in any character encoding is parsed in time proportional to its length; the time grew with
+      the square of the number of header lines, encoded words and quoted-printable codes.  A body that is not valid
+      UTF-8 no longer makes the parse fail with \c INVALID-ENCODING, and the position given when a header line does
+      not end with CRLF is a byte offset in every encoding
       (<a href="https://github.com/qoretechnologies/qore/issues/6139">issue 6139</a>)
     - Enhanced attachment handling:
       - Added RFC 2231 filename encoding for non-ASCII filenames
@@ -710,14 +711,24 @@ public class Message {
         @ref receiptDelivery() and is no longer returned by @ref getHeaders()
     */
     constructor(string msg) {
-        # the message is read at an offset: taking each line off the front of the rest of the message copied the
-        # rest, so that the time to parse the header grew with the square of its number of lines (issue #6139)
+        # the lines of the header are split once, and the body is taken at the byte offset after them: taking each
+        # line off the front of the rest of the message copied the rest, so that the time to parse the header grew
+        # with the square of its number of lines, and a character offset takes time that grows with the offset in an
+        # encoding with characters of more than one byte (issue #6139)
         string enc = msg.encoding();
-        # a character offset in UTF-8 text takes time that grows with the offset, so text in UTF-8 is read by bytes,
-        # which gives the same lines, since the bytes of CR and LF are never part of another character in UTF-8
-        *string line_enc = enc == "UTF-8" ? enc : NOTHING;
-        string text = line_enc ? force_encoding(msg, "ISO-8859-1") : msg;
-        # the offset of the rest of the message in the text
+        bool convert = Message::isReadConverted(enc);
+        # the text is read by bytes in a single-byte view of it
+        string text = force_encoding(convert ? convert_encoding(msg, "UTF-8") : msg, "ISO-8859-1");
+        # the header ends with an empty line, at the latest before the first two line breaks in a row; the last
+        # element is the text after the last line break, which has no line break of its own unless it is that empty
+        # line
+        int hend = text.find(ViewEolEol);
+        list<string> lines = (hend == -1 ? text : text.substr(0, hend + 2)).split(ViewEol, False, True);
+        # the number of lines that end with a line break
+        int complete = hend == -1 ? lines.size() - 1 : lines.size();
+        # the index of the next line
+        int ln = 0;
+        # the byte offset of the next line in the text
         int pos = 0;
 
         # is this a MIME message?
@@ -729,19 +740,34 @@ public class Message {
 
         # first get the message headers
         while (True) {
-            string hdr = Message::getLineAt(text, \pos, line_enc);
+            if (ln == complete) {
+                Message::throwNoEol(text, pos, enc, convert);
+            }
+            string hdr = lines[ln];
+            pos += hdr.size() + 2;
+            ++ln;
+            hdr = convert ? convert_encoding(force_encoding(hdr, "UTF-8"), enc) : force_encoding(hdr, enc);
+            trim hdr;
             if (hdr.empty())
                 break;
 
             # see if it's a long header field as defined in RFC 2822 section 2.2.3: http://tools.ietf.org/html/rfc2822#section-2.2.3
-            if (Message::isFoldedLineAt(text, pos)) {
+            if (lines[ln] =~ /^[ \t]/) {
                 # the lines are joined at the end, as appending to a string can copy it; they are joined in the
                 # encoding of the first line, as they were appended to it
-                list<string> lines = (hdr,);
+                list<string> fold = (hdr,);
                 do {
-                    lines += " " + trim(Message::getLineAt(text, \pos, line_enc));
-                } while (Message::isFoldedLineAt(text, pos));
-                hdr = join(convert_encoding("", hdr.encoding()), lines);
+                    if (ln == complete) {
+                        Message::throwNoEol(text, pos, enc, convert);
+                    }
+                    string line = lines[ln];
+                    pos += line.size() + 2;
+                    ++ln;
+                    fold += " " + trim(convert
+                        ? convert_encoding(force_encoding(line, "UTF-8"), enc)
+                        : force_encoding(line, enc));
+                } while (lines[ln] =~ /^[ \t]/);
+                hdr = join(convert_encoding("", enc), fold);
             }
 
             hash h = parseHeader(hdr);
@@ -801,10 +827,7 @@ public class Message {
         #printf("mime: %y ct: %y %d headers: %Y\n", mime, ct, headers.size(), headers);
 
         # the rest of the message after the header is its body
-        msg = text.substr(pos);
-        if (line_enc) {
-            msg = force_encoding(msg, line_enc);
-        }
+        msg = Message::getText(text.substr(pos), enc, convert);
 
         # try and parse the Content-Type header; assume any multipart type is "multipart/mixed"
         # (http://tools.ietf.org/html/rfc2046#section-5.1.3)
@@ -1645,6 +1668,12 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     }
 
     private {
+        # the end of a line in the single-byte view of the message text that is parsed (issue #6139); in the
+        # encoding of the view, so that it is not converted for every line
+        const ViewEol = force_encoding("\r\n", "ISO-8859-1");
+        # the end of a line and an empty line in the view
+        const ViewEolEol = force_encoding("\r\n\r\n", "ISO-8859-1");
+
         # white space, including Unicode white space (ex: a no-break space, a line or paragraph separator, NEL)
         const SpaceChars = "\\s\\p{Z}\\x{85}";
         # white space and format characters (ex: a byte order mark, a zero width space, a soft hyphen, a
@@ -3012,27 +3041,32 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
     }
 
     #! @cond nodoc
-    # returns the line at the given offset of the message text without the "\r\n" that ends it, trimmed, and sets the
-    # offset to the start of the next line; the line is given the encoding \a enc if the text is read by bytes
-    # (issue #6139)
-    private static string getLineAt(string text, reference<int> pos, *string enc) {
-        int i = text.find("\r\n", pos);
-        if (i == -1)
-            throw "MESSAGE-PARSE-ERROR", sprintf("cannot find end of line in message at byte position %d", pos);
-
-        string hdr = text.substr(pos, i - pos);
-        if (enc) {
-            hdr = force_encoding(hdr, enc);
+    # returns True if message text in the given encoding is read in UTF-8, False if it is read by bytes as it is
+    # (issue #6139): the bytes of CR, LF, space and tab are never part of another character in UTF-8, in a
+    # single-byte encoding, or in the EUC, Shift_JIS, GBK, GB18030, Big5 and UHC encodings, so the lines found by
+    # bytes are the same; text in any other encoding (UTF-16, UTF-32, stateful encodings such as ISO-2022-JP) is
+    # converted to UTF-8, and its lines are converted back
+    private static bool isReadConverted(string enc) {
+        if (enc == "UTF-8") {
+            return False;
         }
-        pos = i + 2;
-        trim hdr;
-        return hdr;
+        string name = enc.upr();
+        name =~ s/[^A-Z0-9]//g;
+        return name !~ /^(UTF8|USASCII|ASCII|ISO8859|LATIN|WINDOWS125|CP125|KOI8|KOI7|WINDOWS874|CP874)/
+            && name !~ /^(EUC|SHIFTJIS|SJIS|CP932|WINDOWS31J|MSKANJI|GBK|CP936|WINDOWS936|GB2312|GB18030|BIG5|CP950)/
+            && name !~ /^(CP949|UHC)/;
     }
 
-    # returns True if the line at the given offset of the message text continues a folded header field
-    private static bool isFoldedLineAt(string text, int pos) {
-        string c = text.substr(pos, 1);
-        return c == " " || c == "\t";
+    # returns text of the message read by bytes in the encoding of the message
+    private static string getText(string text, string enc, bool convert) {
+        return convert ? convert_encoding(force_encoding(text, "UTF-8"), enc) : force_encoding(text, enc);
+    }
+
+    # throws an exception for a header line at the given byte offset of the message text read by bytes that does not
+    # end with "\r\n"; the position is the byte offset in the message
+    private static throwNoEol(string text, int pos, string enc, bool convert) {
+        throw "MESSAGE-PARSE-ERROR", sprintf("cannot find end of line in message at byte position %d",
+            convert ? Message::getText(text.substr(0, pos), enc, True).size() : pos);
     }
 
     private list<string> getEnvelopeList() {

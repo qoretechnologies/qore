@@ -103,6 +103,8 @@ aωb\r
         addTestCase("RFC 2387 multipart/related header", \multiPartRelatedHeaderTest());
         addTestCase("header line breaks and encoded words", \headerLineBreakTest());
         addTestCase("NUL characters in parsed names", \parsedNameNulTest());
+        addTestCase("encoded word decoding time (issue #6139)", \decodeHeaderTimeTest());
+        addTestCase("quoted-printable decoding time (issue #6139)", \decodeQpTimeTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -1118,14 +1120,6 @@ aωb\r
         assertEq("a b", mime_decode_quoted_printable("a_b", "UTF-8"));
         assertThrows("QUOTED-PRINTABLE-DECODE-ERROR", "\"4\"", \mime_decode_quoted_printable(), ("=4", "UTF-8"));
         assertThrows("QUOTED-PRINTABLE-DECODE-ERROR", "\"\"", \mime_decode_quoted_printable(), ("a=", "UTF-8"));
-        string long_qp = strmul("=C3=B6", 200000);
-        date start = now_us();
-        assertEq(strmul("ö", 200000), mime_decode_quoted_printable(long_qp, "UTF-8"));
-        assertLt(5s, now_us() - start);
-        string long_hdr = strmul(" =?UTF-8?Q?=C3=B6?= x", 50000);
-        start = now_us();
-        assertEq(strmul(" ö x", 50000), mime_decode_header(long_hdr));
-        assertLt(5s, now_us() - start);
 
         # a part header name or value with a NUL, CR or LF character is refused when the part is added
         MultiPartMixedMessage mpm();
@@ -1185,5 +1179,45 @@ aωb\r
         assertEq(0, fd.size());
         fd.addPart("data", "ab");
         assertEq(1, fd.size());
+    }
+
+    # decoding took time that grew with the square of the number of encoded words or quoted-printable codes
+    # (issue #6139): decoding twice as many took four times as long
+    decodeHeaderTimeTest() {
+        checkLinear("encoded words", 50000, string sub (int n) { return strmul(" =?UTF-8?Q?=C3=B6?= x", n); },
+            sub (string hdr, int n) { assertEq(strmul(" ö x", n), mime_decode_header(hdr)); });
+    }
+
+    decodeQpTimeTest() {
+        checkLinear("quoted-printable codes", 400000, string sub (int n) { return strmul("=C3=B6", n); },
+            sub (string str, int n) { assertEq(strmul("ö", n), mime_decode_quoted_printable(str, "UTF-8")); });
+    }
+
+    # checks that the time to process an input of twice the size takes at most 3 times as long; the time of a
+    # quadratic algorithm grows by 4 times
+    private checkLinear(string name, int n, code make, code run) {
+        # once with a small input first, so that the code is compiled before it is timed
+        run(make(n / 10), n / 10);
+        float ratio;
+        # a measurement that was made longer by other work on the machine is made again
+        for (int i = 0; i < 2; ++i) {
+            list<int> us = map timeRun(make, run, $1), (n, n * 2);
+            ratio = us[1] / float(max(us[0], 1));
+            if (m_options.verbose) {
+                printf("%s: %d: %d us, %d: %d us: ratio %.2f\n", name, n, us[0], n * 2, us[1], ratio);
+            }
+            if (ratio <= 3.0) {
+                break;
+            }
+        }
+        assertLe(3.0, ratio, name);
+    }
+
+    # returns the time in microseconds to process an input of the given size
+    private int timeRun(code make, code run, int n) {
+        auto input = make(n);
+        date start = now_us();
+        run(input, n);
+        return (now_us() - start).durationMicroseconds();
     }
 }

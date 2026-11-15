@@ -1381,34 +1381,63 @@ public namespace Mime {
             str = replace(str, "_", " ");
         }
 
+        int i = str.find("=");
+        if (i == -1) {
+            return force_encoding(str, encoding);
+        }
+
         # the decoded text is joined from its pieces: replacing each code in the string copied the rest of it, so
         # that decoding took time that grew with the square of the number of codes (issue #6139)
         list<string> rv = ();
         # the offset of the text that is not decoded yet
         int start = 0;
         while (True) {
-            int i = str.find("=", start);
-            if (i == -1) {
-                rv += str.substr(start);
-                break;
-            }
             if (i > start) {
                 rv += str.substr(start, i - start);
             }
 
-            string hex = toupper(str.substr(i + 1, 2));
-            # according to RFC 2045 sec 6.7 rule (1): we have to use upper-case characters
-            if (hex !~ /[0-9A-Z][0-9A-Z]/)
-                throw "QUOTED-PRINTABLE-DECODE-ERROR", sprintf("invalid hex byte code found: %y", hex);
+            # according to RFC 2045 sec 6.7 rule (1): we have to use upper-case characters; the two characters of
+            # the code in upper case must be digits or letters, and their value is that of the hex digits that
+            # they start with
+            int v1 = mime_get_qp_code_char(str, i + 1);
+            int v2 = mime_get_qp_code_char(str, i + 2);
+            if (v1 < 0 || v2 < 0) {
+                throw "QUOTED-PRINTABLE-DECODE-ERROR", sprintf("invalid hex byte code found: %y",
+                    toupper(str.substr(i + 1, 2)));
+            }
             # write the character of the code
-            rv += chr(int(hex, 16), "us-ascii");
+            rv += chr(v1 > 15 ? 0 : (v2 > 15 ? v1 : v1 * 16 + v2), "us-ascii");
             start = i + 3;
+
+            i = str.find("=", start);
+            if (i == -1) {
+                if (start < str.size()) {
+                    rv += str.substr(start);
+                }
+                break;
+            }
         }
 
-        return force_encoding(join(force_encoding("", "us-ascii"), rv), encoding);
+        return force_encoding(join(str.substr(0, 0), rv), encoding);
     }
 
     #! @cond nodoc
+    # returns the value of the character of a quoted-printable code at the given byte offset, in upper case, as a
+    # digit of base 36, or -1 if it is not a digit or a letter or if there is no character there
+    int sub mime_get_qp_code_char(string str, int offset) {
+        int c = get_byte(str, offset) ?? -1;
+        if (c >= 48 && c <= 57) {
+            return c - 48;
+        }
+        if (c >= 65 && c <= 90) {
+            return c - 55;
+        }
+        if (c >= 97 && c <= 122) {
+            return c - 87;
+        }
+        return -1;
+    }
+
     # returns the charset parameter of a Content-Type value, if any; the parameter was taken with any parameters
     # after it (ex: "ISO-8859-1; format=flowed"), which named no character encoding
     *string sub mime_get_charset(*string ct) {
@@ -1484,54 +1513,33 @@ public namespace Mime {
         if (hdr !~ /=\?[^?]+\?(Q|B)\?[^?]+\?=/is) {
             return "" + hdr;
         }
-        # the encoded words are found by byte offsets in the text in UTF-8: matching the rest of the header for each
-        # word copied the rest, so that decoding took time that grew with the square of the number of words
-        # (issue #6139); a character offset in UTF-8 text takes time that grows with the offset, and the bytes of
-        # the delimiters of an encoded word are never part of another character in UTF-8
-        string text = force_encoding(hdr.encoding() == "UTF-8" ? hdr : convert_encoding(hdr, "UTF-8"),
-            "ISO-8859-1");
+        # all encoded words are found in one match: matching the rest of the header for each word copied the rest,
+        # so that decoding took time that grew with the square of the number of words (issue #6139); each match
+        # gives the text before the word, the charset, the encoding, the encoded text and the end of the word (a
+        # match continues after the last group that it captures), and the last one the text after the last word, if
+        # any
+        *list<*string> l = (hdr =~ x/(.*?)(?:=\?([^?]+)\?([QqBb])\?([^?]+)(\?=)|\z)/gs);
         # the pieces of the decoded text, which are joined at the end, as appending to a string can copy it
         list<string> rv = ();
         # True if the text decoded last was an encoded word, so that white space before the next one is dropped
         bool after_word = False;
-        # the offset of the text that is not decoded yet
-        int start = 0;
-        # the offset where the next encoded word is looked for
-        int pos = 0;
-        while (True) {
-            # an encoded word: "=?" charset "?" ("Q" | "B") "?" encoded text "?=", where the charset and the text are
-            # not empty and contain no "?"
-            int ws = text.find("=?", pos);
-            if (ws == -1) {
+        int size = l.size();
+        for (int i = 0; i < size; i += 5) {
+            string pre = l[i];
+            if (i + 1 == size) {
+                # the text after the last word
+                rv += pre;
                 break;
-            }
-            int q1 = text.find("?", ws + 2);
-            if (q1 == -1) {
-                break;
-            }
-            pos = ws + 1;
-            if (q1 == ws + 2 || !inlist(text.substr(q1 + 1, 1).upr(), ("Q", "B"))
-                || text.substr(q1 + 2, 1) != "?") {
-                continue;
-            }
-            int q2 = text.find("?", q1 + 3);
-            if (q2 == -1 || q2 == q1 + 3 || text.substr(q2 + 1, 1) != "=") {
-                continue;
             }
             # the text before the word; white space between two encoded words is dropped
-            string pre = force_encoding(text.substr(start, ws - start), "UTF-8");
-            if (!after_word || pre !~ /^[ \t\r\n]*$/) {
+            if (!pre.empty() && (!after_word || pre !~ /^[ \t\r\n]*$/)) {
                 rv += pre;
             }
-            string enc = force_encoding(text.substr(ws + 2, q1 - ws - 2), "UTF-8");
-            string hw = force_encoding(text.substr(q1 + 3, q2 - q1 - 3), "UTF-8");
-            rv += text.substr(q1 + 1, 1).upr() == "Q"
-                ? mime_decode_quoted_printable(hw, enc)
-                : mime_decode_base64_to_string(hw, enc);
+            rv += l[i + 2].upr() == "Q"
+                ? mime_decode_quoted_printable(l[i + 3], l[i + 1])
+                : mime_decode_base64_to_string(l[i + 3], l[i + 1]);
             after_word = True;
-            start = pos = q2 + 2;
         }
-        rv += force_encoding(text.substr(start), "UTF-8");
         return join("", rv);
     }
     #/@}
