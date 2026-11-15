@@ -4223,6 +4223,16 @@ bool QoreModuleManager::findAvailableOptionalModule(const std::vector<std::strin
 
 void QoreModuleManager::getModuleCandidateFiles(const char* name, QoreProgram* pgm,
         std::vector<std::string>& files) {
+    getModuleCandidatePaths(name, pgm, files, false);
+}
+
+void QoreModuleManager::getMissingModuleCandidateFiles(const char* name, QoreProgram* pgm,
+        std::vector<std::string>& files) {
+    getModuleCandidatePaths(name, pgm, files, true);
+}
+
+void QoreModuleManager::getModuleCandidatePaths(const char* name, QoreProgram* pgm,
+        std::vector<std::string>& files, bool missing) {
     std::vector<std::string> dirs;
     {
         AutoLocker al(mutex);
@@ -4235,9 +4245,16 @@ void QoreModuleManager::getModuleCandidateFiles(const char* name, QoreProgram* p
         dirs.insert(dirs.end(), appended.begin(), appended.end());
     }
 
-    auto add = [&files](const QoreString& path) {
+    auto add = [&files, missing](const QoreString& path) {
         struct stat sb;
-        if (!stat(path.c_str(), &sb) && S_ISREG(sb.st_mode)) {
+        bool found = !stat(path.c_str(), &sb) && S_ISREG(sb.st_mode);
+        if (missing) {
+            if (!found) {
+                files.emplace_back(path.c_str());
+            }
+            return;
+        }
+        if (found) {
             char* resolved = realpath(path.c_str(), nullptr);
             files.emplace_back(resolved ? resolved : path.c_str());
             free(resolved);
