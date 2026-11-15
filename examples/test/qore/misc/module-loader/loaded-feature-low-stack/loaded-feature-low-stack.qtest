@@ -17,7 +17,10 @@
     module request at each level, so that the last requests are made with less than the parse stack reserve (64KB)
     left.  A request for a feature that the Program already has, or for the \c qore feature, loads nothing and must
     never fail; a request that merges a loaded module into a Program that does not have it yet needs stack, and must
-    fail with \c PARSE-STACK-LIMIT-EXCEEDED there, not crash.
+    fail with \c PARSE-STACK-LIMIT-EXCEEDED there, not crash, located at the directive when a directive made it.
+    Where the stack runs out exactly at a request (\c STACK-LIMIT-EXCEEDED raised by the call of the request itself,
+    which depends on the frame sizes of the build and of the execution mode), the recursion ends as it does when it
+    runs out at the recursive call.
 */
 public class LoadedFeatureLowStackTest inherits QUnit::Test {
     constructor() : Test("LoadedFeatureLowStackTest", "1.0") {
@@ -25,7 +28,15 @@ public class LoadedFeatureLowStackTest inherits QUnit::Test {
         addTestCase("a feature that the Program has, at parse time", \hasFeatureParseTest());
         addTestCase("the qore feature", \qoreFeatureTest());
         addTestCase("a loaded module merged into another Program", \mergeTest());
+        addTestCase("the location of the error of a directive", \locationTest());
         set_return_value(main());
+    }
+
+    #! ends the recursion with an exception raised where the stack ran out at the call of a request
+    private static endAtStackLimit(hash<ExceptionInfo> ex) {
+        if (ex.err == "STACK-LIMIT-EXCEEDED") {
+            throw ex.err, ex.desc, ex.arg;
+        }
     }
 
     #! the stack size of the threads of the cases: small, so that the recursion ends quickly
@@ -54,6 +65,7 @@ public class LoadedFeatureLowStackTest inherits QUnit::Test {
         try {
             load_module(feature);
         } catch (hash<ExceptionInfo> ex) {
+            LoadedFeatureLowStackTest::endAtStackLimit(ex);
             return {"depth": depth, "err": ex.err, "desc": ex.desc};
         }
         return LoadedFeatureLowStackTest::probeLoad(feature, depth + 1);
@@ -71,8 +83,10 @@ public class LoadedFeatureLowStackTest inherits QUnit::Test {
         assertEq("STACK-LIMIT-EXCEEDED", h.err, sprintf("%y", h));
     }
 
+    #! a test of the fast path of run-time module loads, which the module manager's stack check never sees
     hasFeatureTest() {
         # this Program has QUnit: load_module() returns before the module manager for a feature that the Program has
+        # (QoreModuleManager::runTimeLoadModule()); see hasFeatureParseTest() for the check of the module manager
         checkNoOpRequest("QUnit");
     }
 
@@ -83,6 +97,7 @@ public class LoadedFeatureLowStackTest inherits QUnit::Test {
             # committed, so the parse initializes nothing
             p.parsePending("%requires QUnit\n", "probe");
         } catch (hash<ExceptionInfo> ex) {
+            LoadedFeatureLowStackTest::endAtStackLimit(ex);
             return {"depth": depth, "err": ex.err, "desc": ex.desc};
         }
         return LoadedFeatureLowStackTest::probeParse(p, depth + 1);
@@ -112,6 +127,7 @@ public class LoadedFeatureLowStackTest inherits QUnit::Test {
         try {
             p.loadModule("QUnit");
         } catch (hash<ExceptionInfo> ex) {
+            LoadedFeatureLowStackTest::endAtStackLimit(ex);
             return {"depth": depth, "err": ex.err};
         }
         return LoadedFeatureLowStackTest::probeMerge(depth + 1);
@@ -125,5 +141,29 @@ public class LoadedFeatureLowStackTest inherits QUnit::Test {
         # the merge of a loaded module stops while the parse stack reserve remains
         assertEq("PARSE-STACK-LIMIT-EXCEEDED", h.result.err, sprintf("%y", h));
         assertGt(0, h.result.depth, sprintf("%y", h));
+    }
+
+    #! returns the error and its location for the first parse of a directive that failed
+    private static hash<auto> probeLocation(int depth) {
+        Program p(PO_NEW_STYLE);
+        try {
+            # QUnit is loaded in the process but not in p: the directive merges it into p
+            p.parsePending("# probe\n\n%requires QUnit\n", "location-probe");
+        } catch (hash<ExceptionInfo> ex) {
+            LoadedFeatureLowStackTest::endAtStackLimit(ex);
+            return {"depth": depth, "err": ex.err, "file": ex.file, "line": ex.line};
+        }
+        return LoadedFeatureLowStackTest::probeLocation(depth + 1);
+    }
+
+    #! the parse stack error of a directive is located at the directive, as a parse error is
+    locationTest() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        hash<auto> h = runInThread(\LoadedFeatureLowStackTest::probeLocation());
+        assertEq("PARSE-STACK-LIMIT-EXCEEDED", h.result.err, sprintf("%y", h));
+        assertEq("location-probe", h.result.file, sprintf("%y", h));
+        assertEq(3, h.result.line, sprintf("%y", h));
     }
 }

@@ -37,10 +37,10 @@ public class TestBuildToolsTest inherits QUnit::Test {
         # a name that the shell finds in its search path
         *string sh = TestBuildTools::find_command("sh");
         assertTrue(sh =~ /\/sh$/, sprintf("%y", sh));
-        assertTrue(is_executable(sh));
+        assertTrue(sh && is_executable(sh), sprintf("%y", sh));
         # a path
         assertEq("/bin/sh", TestBuildTools::find_command("/bin/sh"));
-        # missing: no such command, a file that is not executable, a directory, nothing
+        # missing: no such command, a file that is not executable, a directory, no such file, nothing
         assertEq(NOTHING, TestBuildTools::find_command("qore-test-no-such-command-6047"));
         TmpDir dir("qore-test-build-tools-");
         string file = dir.path + "/not-executable";
@@ -49,6 +49,7 @@ public class TestBuildToolsTest inherits QUnit::Test {
         f.write("#!/bin/sh\n");
         f.close();
         assertEq(NOTHING, TestBuildTools::find_command(file));
+        assertEq(NOTHING, TestBuildTools::find_command(dir.path));
         assertEq(NOTHING, TestBuildTools::find_command(dir.path + "/no-such-file"));
         assertEq(NOTHING, TestBuildTools::find_command(""));
         # a name with characters that the shell would interpret is a name, not a command line

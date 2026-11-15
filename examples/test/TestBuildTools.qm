@@ -23,7 +23,6 @@
 */
 
 %modern
-%modern
 
 module TestBuildTools {
     version = "1.0";

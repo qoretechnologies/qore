@@ -169,10 +169,10 @@ int main(int argc, char** argv) {
             testSkip(sprintf("no C++ compiler to build the host: %y is not available", cxx[0]));
         }
         int status;
-        string out = backquote(sprintf("%s -std=c++17 -pthread -I%s -I%s %s %s -L%s -Wl,-rpath,%s -lqore -o %s %s "
-            "2>&1", (map TestBuildTools::shell_quote($1), cxx).join(" "), source_root + "/include",
-            libqore_dir + "/include", host, obj, libqore_dir, libqore_dir, exe, libqoreTargetFlags().join(" ")),
-            \status);
+        list<string> args = cxx + ("-std=c++17", "-pthread", "-I" + source_root + "/include",
+            "-I" + libqore_dir + "/include", host, obj, "-L" + libqore_dir, "-Wl,-rpath," + libqore_dir, "-lqore",
+            "-o", exe) + libqoreTargetFlags();
+        string out = backquote((map TestBuildTools::shell_quote($1), args).join(" ") + " 2>&1", \status);
         assertEq(0, status, "linked the C++ host: " + out);
         assertTrue(is_file(exe), "linked the C++ host: " + out);
         return exe;
@@ -255,7 +255,10 @@ int main(int argc, char** argv) {
         }
         int used;
         int stack_errors;
-        for (int kb = 96; kb <= 1024; kb += 32) {
+        # 96KB to 1MB in 32KB steps, then larger stacks, so that a build with large frames (a debug or a sanitizer
+        # build) also reaches a size where the chain of optional modules can be loaded
+        list<int> sizes = (map 96 + $1 * 32, xrange(30)) + (2048, 4096, 8192);
+        foreach int kb in (sizes) {
             # only the optional modules are in the module path: the module has no source to load instead
             out = run(sprintf("%s QORE_MODULE_DIR=%s %s %d", env, opt_dir, exe, kb));
             string label = sprintf("%dK", kb);
