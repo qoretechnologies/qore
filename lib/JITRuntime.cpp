@@ -246,6 +246,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_guard_plugin_type_profiled", reinterpret_cast<void*>(&qore_rt_guard_plugin_type_profiled) },
     { "qore_rt_expr_op", reinterpret_cast<void*>(&qore_rt_expr_op) },
     { "qore_rt_comparison_op", reinterpret_cast<void*>(&qore_rt_comparison_op) },
+    { "qore_rt_plugin_comparison_op", reinterpret_cast<void*>(&qore_rt_plugin_comparison_op) },
     { "qore_rt_ternary_op", reinterpret_cast<void*>(&qore_rt_ternary_op) },
     { "qore_rt_load_global", reinterpret_cast<void*>(&qore_rt_load_global) },
     { "qore_rt_store_global", reinterpret_cast<void*>(&qore_rt_store_global) },
@@ -3746,6 +3747,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_comparison_op(int opcode, uint64_t left, u
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
     QoreValue result = QoreIRInterpreter::evalComparison(static_cast<QoreIROpcode>(opcode), lv, rv, xsink);
+    return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_plugin_comparison_op(int opcode, uint64_t left, uint64_t right,
+        ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    QoreValue result = QoreIRInterpreter::evalPluginComparison(static_cast<QoreIROpcode>(opcode), lv, rv, xsink);
     return toBits(result);
 }
 
@@ -24336,6 +24345,15 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_unary_op_throwin
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_comparison_op_throwing(
         int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink) {
     uint64_t result = qore_rt_comparison_op(opcode, left, right, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_plugin_comparison_op_throwing(
+        int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_plugin_comparison_op(opcode, left, right, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

@@ -663,6 +663,12 @@ static bool qore_ir_opcode_holds_operands(QoreIROpcode op) {
         case QoreIROpcode::LeAny:
         case QoreIROpcode::GtAny:
         case QoreIROpcode::GeAny:
+        case QoreIROpcode::EqPlugin:
+        case QoreIROpcode::NePlugin:
+        case QoreIROpcode::LtPlugin:
+        case QoreIROpcode::LePlugin:
+        case QoreIROpcode::GtPlugin:
+        case QoreIROpcode::GePlugin:
         case QoreIROpcode::CmpAny:
         case QoreIROpcode::Not:
         case QoreIROpcode::ToBool:

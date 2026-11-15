@@ -82,7 +82,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 431,
+static_assert(QORE_IR_MAX_OPCODE == 437,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -690,6 +690,37 @@ static void evaluateOwnedListElement(QoreValue& value, ExceptionSink* xsink) {
 // the weak reference held by the list keeps it allocated
 static QoreValue getBorrowedListElement(const QoreListNode* l, size_t i) {
     return getWeakReferenceTarget(l->retrieveEntry(i));
+}
+
+QoreValue QoreIRInterpreter::evalPluginComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
+        ExceptionSink* xsink) {
+    // the AST operator applies a buffer operation first, then a plugin operation (qore#5911); the types are those
+    // that qore_buffer_binary_op_applies() and qore_plugin_value_may_have_operation() check
+    qore_type_t left_type = left.getType();
+    qore_type_t right_type = right.getType();
+    if (left_type != NT_BUFFER && right_type != NT_BUFFER
+            && (left_type == NT_OBJECT || left_type == NT_PLUGIN_VALUE
+                || right_type == NT_OBJECT || right_type == NT_PLUGIN_VALUE)) {
+        const char* operation_name;
+        switch (op) {
+            case QoreIROpcode::EqPlugin: operation_name = "eq"; break;
+            case QoreIROpcode::NePlugin: operation_name = "ne"; break;
+            case QoreIROpcode::LtPlugin: operation_name = "lt"; break;
+            case QoreIROpcode::LePlugin: operation_name = "le"; break;
+            case QoreIROpcode::GtPlugin: operation_name = "gt"; break;
+            case QoreIROpcode::GePlugin: operation_name = "ge"; break;
+            default:
+                assert(false);
+                return evalComparison(qore_ir_plugin_comparison_base_opcode(op), left, right, xsink);
+        }
+        bool matched = false;
+        QoreValue result = qore_plugin_try_dispatch_binary(getProgram(), operation_name,
+            QorePluginHelperAbi::BinaryValue, left, right, matched, xsink);
+        if (matched || (xsink && *xsink)) {
+            return result;
+        }
+    }
+    return evalComparison(qore_ir_plugin_comparison_base_opcode(op), left, right, xsink);
 }
 
 QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
@@ -2754,7 +2785,8 @@ static bool qore_ir_reads_variable_for_call_arg(QoreIROpcode op) {
 
 // returns true for an operator whose value holds no reference to its operands, so that an operand read from a local
 // can be borrowed from it for the operator: a conversion to bool, a negation, a comparison, a type test, exists,
-// elements and keys
+// elements and keys; not a comparison that may dispatch to a plugin operation (EqPlugin...GePlugin), whose result
+// can hold a reference to its operands (qore#5911)
 static bool qore_ir_operator_keeps_no_operand(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::ToBool:
@@ -6995,6 +7027,12 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::GeFloat:
         case QoreIROpcode::GeString:
         case QoreIROpcode::GeAny:
+        case QoreIROpcode::EqPlugin:
+        case QoreIROpcode::NePlugin:
+        case QoreIROpcode::LtPlugin:
+        case QoreIROpcode::LePlugin:
+        case QoreIROpcode::GtPlugin:
+        case QoreIROpcode::GePlugin:
         case QoreIROpcode::CmpInt:
         case QoreIROpcode::CmpFloat:
         case QoreIROpcode::CmpString:
@@ -17385,6 +17423,12 @@ load_local_done:
             case QoreIROpcode::GeFloat:
             case QoreIROpcode::GeString:
             case QoreIROpcode::GeAny:
+            case QoreIROpcode::EqPlugin:
+            case QoreIROpcode::NePlugin:
+            case QoreIROpcode::LtPlugin:
+            case QoreIROpcode::LePlugin:
+            case QoreIROpcode::GtPlugin:
+            case QoreIROpcode::GePlugin:
             case QoreIROpcode::CmpInt:
             case QoreIROpcode::CmpFloat:
             case QoreIROpcode::CmpString:
@@ -22142,6 +22186,15 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::CmpString:
         case QoreIROpcode::CmpAny:
             return evalComparison(op, left, right, xsink);
+        // a plugin comparison is evaluated outside evalComparison(), whose dispatch keeps the comparisons' compact
+        // range of opcodes (qore#5911)
+        case QoreIROpcode::EqPlugin:
+        case QoreIROpcode::NePlugin:
+        case QoreIROpcode::LtPlugin:
+        case QoreIROpcode::LePlugin:
+        case QoreIROpcode::GtPlugin:
+        case QoreIROpcode::GePlugin:
+            return evalPluginComparison(op, left, right, xsink);
         case QoreIROpcode::HashDerefDynamic: {
             // Dynamic hash/object dereference — mirrors QoreHashObjectDereferenceOperatorNode::evalImpl
             qore_type_t bt = left.getType();

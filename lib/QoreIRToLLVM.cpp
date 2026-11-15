@@ -50,7 +50,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 431,
+static_assert(QORE_IR_MAX_OPCODE == 437,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -14475,6 +14475,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     std::unordered_set<uint32_t> dot_eval_base_candidates;
     std::unordered_set<uint32_t> non_dot_eval_uses;
     std::unordered_map<uint32_t, int> to_bool_uses;
+    // the results of comparisons that may dispatch to a plugin, which need not be booleans (qore#5911)
+    std::unordered_set<uint32_t> plugin_comparison_results;
     std::unordered_map<uint32_t, const QoreIRCreateClosureInstruction*> closure_definitions;
     std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>
         function_call_ref_definitions;
@@ -14687,6 +14689,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (inst_ptr->opcode == QoreIROpcode::ToBool
                     && inst_ptr->operands.size() == 1) {
                 to_bool_uses[inst_ptr->operands[0].id]++;
+            }
+            if (inst_ptr->result.isValid() && (qore_ir_is_plugin_comparison_opcode(inst_ptr->opcode)
+                    || (inst_ptr->opcode == QoreIROpcode::Invoke && qore_ir_is_plugin_comparison_opcode(
+                        static_cast<const QoreIRInvokeInstruction*>(inst_ptr.get())->invoke_opcode)))) {
+                plugin_comparison_results.insert(inst_ptr->result.id);
             }
             if (inst_ptr->opcode == QoreIROpcode::StoreLocal
                     || inst_ptr->opcode == QoreIROpcode::StoreClosure) {
@@ -15800,7 +15807,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 return false;
             }
             auto total = operand_remaining_uses.find(id);
-            if (total != operand_remaining_uses.end() && total->second == count) {
+            if (total != operand_remaining_uses.end() && total->second == count
+                    && !plugin_comparison_results.count(id)) {
                 native_boolean_result_values.insert(id);
             }
         }
@@ -28527,6 +28535,45 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
+        // comparisons that may dispatch to a plugin operation (qore#5911): ints and floats compare natively, other
+        // values through qore_rt_plugin_comparison_op(), which dispatches to the plugin for a plugin value; the
+        // result is never a native boolean
+        case QoreIROpcode::EqPlugin:
+        case QoreIROpcode::NePlugin:
+        case QoreIROpcode::LtPlugin:
+        case QoreIROpcode::LePlugin:
+        case QoreIROpcode::GtPlugin:
+        case QoreIROpcode::GePlugin: {
+            llvm::CmpInst::Predicate int_pred;
+            llvm::CmpInst::Predicate float_pred;
+            switch (inst->opcode) {
+                case QoreIROpcode::EqPlugin:
+                    int_pred = llvm::CmpInst::ICMP_EQ; float_pred = llvm::CmpInst::FCMP_OEQ; break;
+                case QoreIROpcode::NePlugin:
+                    int_pred = llvm::CmpInst::ICMP_NE; float_pred = llvm::CmpInst::FCMP_UNE; break;
+                case QoreIROpcode::LtPlugin:
+                    int_pred = llvm::CmpInst::ICMP_SLT; float_pred = llvm::CmpInst::FCMP_OLT; break;
+                case QoreIROpcode::LePlugin:
+                    int_pred = llvm::CmpInst::ICMP_SLE; float_pred = llvm::CmpInst::FCMP_OLE; break;
+                case QoreIROpcode::GtPlugin:
+                    int_pred = llvm::CmpInst::ICMP_SGT; float_pred = llvm::CmpInst::FCMP_OGT; break;
+                default:
+                    int_pred = llvm::CmpInst::ICMP_SGE; float_pred = llvm::CmpInst::FCMP_OGE; break;
+            }
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            assert(!native_boolean_result_values.count(inst->result.id));
+            llvm::Value* result = emitAnyCmpFastPath(int_pred, float_pred, static_cast<int>(inst->opcode),
+                inst, lhs_boxed, rhs_boxed, llvm_func, module, false);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
         // === Spaceship comparisons (native lowering) ===
         case QoreIROpcode::CmpInt: {
             // Returns -1 if l < r, 1 if l > r, 0 if l == r
@@ -38066,9 +38113,12 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
     llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), opcode);
     auto cmp_ft = llvm::FunctionType::get(i64_type,
             {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false);
-    auto helper = module.getOrInsertFunction("qore_rt_comparison_op", cmp_ft);
-    auto helper_throwing = module.getOrInsertFunction(
-            "qore_rt_comparison_op_throwing", cmp_ft);
+    // a plugin comparison has a helper of its own, outside the dispatch of qore_rt_comparison_op() (qore#5911)
+    const bool plugin_comparison = qore_ir_is_plugin_comparison_opcode(static_cast<QoreIROpcode>(opcode));
+    auto helper = module.getOrInsertFunction(plugin_comparison
+        ? "qore_rt_plugin_comparison_op" : "qore_rt_comparison_op", cmp_ft);
+    auto helper_throwing = module.getOrInsertFunction(plugin_comparison
+        ? "qore_rt_plugin_comparison_op_throwing" : "qore_rt_comparison_op_throwing", cmp_ft);
     llvm::Value* slow_result = emitMaybeInvoke(helper, helper_throwing,
             {opcode_val, lhs, rhs, xsink_arg}, module, llvm_func, inst);
     if (native_result) {
