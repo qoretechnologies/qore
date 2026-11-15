@@ -21046,7 +21046,15 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
             class_ctx, rc_get_current_ref(), xsink,
             explicit_type_param_instantiation));
     }
+    // a call that gave the references of its temporary arguments (the argument list holds them now) calls the method
+    // found, or the code that a member holds, with them, whose parameters take them over: a write to a parameter then
+    // releases its argument, as in the AST interpreter (issue #5958)
+    const bool given = arg_cleanups && !explicit_type_param_instantiation;
     if (!cacheable) {
+        if (given) {
+            return toBits(object_class->evalMethodGivenArgs(object, method_name, *arg_list, class_ctx,
+                rc_get_current_ref(), xsink, nullptr));
+        }
         return toBits(object_class->evalMethod(object, method_name, *arg_list,
             class_ctx, rc_get_current_ref(), xsink,
             explicit_type_param_instantiation));
@@ -21057,6 +21065,10 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
         return toBits(QoreValue());
     }
     if (!method) {
+        if (given) {
+            return toBits(object_class->evalMethodGivenArgs(object, method_name, *arg_list, class_ctx,
+                rc_get_current_ref(), xsink, nullptr));
+        }
         return toBits(object_class->evalMethod(object, method_name, *arg_list,
             class_ctx, rc_get_current_ref(), xsink,
             explicit_type_param_instantiation));
