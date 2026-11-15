@@ -378,6 +378,33 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
             assertEq(-1, out.find("LOADED"), "inherited");
         }
 
+        # %push-parse-options in a module whose %modern the mask completes (qore#5764): the error names the restrictions
+        # that the mask adds, and does not suggest %old-style
+        f.open2(tmp.path + "/LegacyPushMod.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%new-style\n%require-types\n%strict-args\n%push-parse-options\nmodule LegacyPushMod {\n"
+            "    version = \"1.0\";\n    desc = \"test\";\n    author = \"Qore Technologies\";\n"
+            "    url = \"https://qore.org\";\n}\npublic int sub legacy_push() { return 1; }\n");
+        f.close();
+        foreach hash<auto> tcase in (
+                {"name": "push-first", "code": "load_module_masked(mod, new ParseOptions(), new ParseOptions("
+                    "(\"strong-encapsulation\", \"no-summarize\")));"},
+                {"name": "push-global", "code": "set_module_parse_option_mask(new ParseOptions(), new ParseOptions("
+                    "(\"strong-encapsulation\", \"no-summarize\")));\nload_module(mod);"},
+            ) {
+            string script = sprintf("%s/mask-%s.q", tmp.path, tcase.name);
+            f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("%%new-style\n%%require-types\nstring mod = \"%s/LegacyPushMod.qm\";\ntry {\n    %s\n"
+                "    printf(\"LOADED\\n\");\n} catch (hash<ExceptionInfo> ex) {\n"
+                "    printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n}\n", tmp.path, tcase.code));
+            f.close();
+            string out = ExecModeHarness::run_any(sprintf("QORE_OLD_STYLE_DEFAULT=1 %s %s %s", env, qore_bin, script));
+            assertRegex("%push-parse-options cannot be used while %modern is in effect", out, tcase.name);
+            assertRegex("%modern is complete only with %[-a-z]+.*, which the module parse option mask adds", out,
+                tcase.name);
+            assertEq(-1, out.find("%old-style"), tcase.name + ": no %old-style remedy: " + out);
+            assertEq(-1, out.find("LOADED"), tcase.name);
+        }
+
         # %no-negative-offsets in a module whose %modern the mask completes: the error names the mask
         f.open2(tmp.path + "/LegacyNegOffsetsMod.qm", O_CREAT | O_WRONLY | O_TRUNC);
         f.write("%new-style\n%require-types\n%strict-args\n%no-negative-offsets\nmodule LegacyNegOffsetsMod {\n"
