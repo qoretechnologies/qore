@@ -8931,6 +8931,25 @@ struct IRCatchEntry {
     size_t scope_depth;
 };
 
+//! Closes the catch blocks opened since the try statement of a catch block's exit block began (#5968)
+/** Returns false if \a inst is the CatchCleanup of no exit block, which closes the innermost catch block. */
+static QORE_INTERN_NOINLINE bool qore_ir_catch_exit_cleanup(const QoreIRFunction& func, const QoreIRInstruction* inst,
+        std::vector<IRCatchEntry>& stack, ExceptionSink* xsink) {
+    auto i = func.catch_exit_depths.find(inst);
+    if (i == func.catch_exit_depths.end()) {
+        return false;
+    }
+    while (stack.size() > i->second) {
+        IRCatchEntry entry = stack.back();
+        stack.pop_back();
+        if (entry.caught) {
+            catch_swap_exception(entry.saved);
+            entry.caught->del(xsink);
+        }
+    }
+    return true;
+}
+
 //! Restores enclosing caught exceptions on the exceptional exit from a scope (#5969).
 static QORE_INTERN_NOINLINE void qore_ir_close_catch_scopes_pending(std::vector<IRCatchEntry>& stack,
         size_t scope_count, ExceptionSink* xsink) {
@@ -9626,6 +9645,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 std::fill(locals_lvar_cache.begin(), locals_lvar_cache.end(), nullptr);
             }
+        }
+        // the frame is left: the catch blocks that no scope closed are left with it (#5968)
+        if (scope_stack.empty()) {
+            qore_ir_close_catch_scopes(catch_exception_stack, 0, xsink);
         }
     };
 
@@ -10711,6 +10734,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             dbgReportEnclosing();
         }
+        // the catch blocks that the exception leaves with the frame and that no scope closed (a catch block with
+        // no exit block, in no scope: see the lowering of TryStatement) are left before the locals and values of the
+        // frame are released, as the AST interpreter leaves a catch block before the blocks around it (#5968); done
+        // by fireScopeExits() with no scope left, which has the frame's catch stack
+        fireScopeExits(0);
         // handlers registered outside of any scope, if any, run as the remaining handlers of the frame
         if (!frame.on_block_exit_handlers.empty()) {
             executeOnBlockExitHandlers(frame.on_block_exit_handlers, xsink, &frame.locals_slot_cache.vector(),
@@ -10939,7 +10967,9 @@ next_instruction:
             ++ip;
             goto next_instruction;
         }
-        if (inst->cached_start_line >= 0 && inst->cached_start_line != last_ephemeral_line) {
+        // the line is compared first: most instructions are on the line of the one before them, and this order is the
+        // one with the fewest instructions dispatched (an instruction without a location has -1)
+        if (inst->cached_start_line != last_ephemeral_line && inst->cached_start_line >= 0) {
             // Update runtime_loc for exception/callstack reporting via cached pointers; while a debugger is attached,
             // the current statement is set by the DebugStatement instruction of each statement and kept, so that the
             // call stack gives the statement of each frame (QoreThreadList::getCallStackHash())
@@ -12261,7 +12291,10 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::CatchCleanup: {
-                if (!catch_exception_stack.empty()) {
+                if (!func.catch_exit_depths.empty() && qore_ir_catch_exit_cleanup(func, inst, catch_exception_stack,
+                        xsink)) {
+                    // the exit block of a catch block (#5968)
+                } else if (!catch_exception_stack.empty()) {
                     auto entry = catch_exception_stack.back();
                     catch_exception_stack.pop_back();
                     if (entry.caught) {

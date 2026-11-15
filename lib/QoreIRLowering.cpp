@@ -1676,6 +1676,94 @@ bool QoreIRLowering::returnCleanupObservesError(const LocalVar* returned_local) 
     return false;
 }
 
+void QoreIRLowering::emitCatchVarReleaseForThrow(const QoreProgramLocation* loc) {
+    // the catch variable is released before the catch block is closed, as TryStatement::execImpl() releases it
+    if (catchScopesClosedByThrow() && catch_exit_stack[catch_cleanup_depth - 1].catch_var) {
+        auto* ui = builder.createUninstantiateLocal(catch_exit_stack[catch_cleanup_depth - 1].catch_var, loc);
+        ui->is_block_exit = true;
+    }
+}
+
+void QoreIRLowering::emitCatchCloseForThrow(const QoreProgramLocation* loc) {
+    if (catchScopesClosedByThrow()) {
+        emitCatchVarReleaseForThrow(loc);
+        builder.createCatchCleanup(loc);
+    }
+}
+
+//! Returns true if a catch block needs an exit block (#5968)
+/** The exit block is the exception target of the statements of the catch block, so that an exception that leaves it
+    closes it after the code in it that it leaves: the handlers and locals of the blocks in it, and its other
+    statements with exception paths of their own.  It is not free: each statement of the catch block that can raise
+    gets an exception edge to it, and the exit itself is code of its own, in an exception region of the frame too.  A
+    catch block whose statements are all simple ones, with no blocks, locals or handlers that an exception leaves, has
+    none: a throw, rethrow or assertion in it closes it, after releasing its catch variable, before it raises the
+    exception (catchScopesClosedByThrow()).  When a call raises an exception in it (or it runs a thread_exit), the
+    exception path of an enclosing block (see lowerStatementBlock()), the landing pad of an enclosing try statement
+    or another catch block's exit block releases its catch variable and closes it; with none of them, where the
+    exception leaves the frame (QoreIRInterpreter::execute()'s unwind and the exception exits of native code), the
+    catch block is closed before the frame's locals are released, and its catch variable is released with them.  A
+    block with handlers and no exception path of its own (no locals in the blocks in it, and no exception region
+    around it) closes the catch block before its handlers run (the scope's catch scope close, #5969), but its catch
+    variable, which holds the exception's information, is released only after them, with the frame's locals: the
+    objects of the exception's argument are destroyed after those handlers, unlike in the AST interpreter.
+*/
+static bool qore_ir_catch_block_needs_exit(const StatementBlock* block) {
+    if (block->hasOnBlockExit()) {
+        return true;
+    }
+    const LVList* lvars = block->getLVList();
+    if (lvars && lvars->size()) {
+        return true;
+    }
+    for (const AbstractStatement* stmt : block->getStatements()) {
+        if (stmt && !dynamic_cast<const ExpressionStatement*>(stmt) && !dynamic_cast<const ReturnStatement*>(stmt)
+                && !dynamic_cast<const ThrowStatement*>(stmt) && !dynamic_cast<const RethrowStatement*>(stmt)
+                && !dynamic_cast<const BreakStatement*>(stmt) && !dynamic_cast<const ContinueStatement*>(stmt)
+                && !dynamic_cast<const ThreadExitStatement*>(stmt) && !dynamic_cast<const AssertStatement*>(stmt)
+                && !dynamic_cast<const DebugStatement*>(stmt)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! Returns true if a statement of a catch block without an exit block can raise an exception that leaves it without
+//! closing it (#5968)
+/** A break, continue or return without a value closes it, as do a throw or rethrow statement with arguments that need
+    no evaluation, which close it before raising (QoreIRLowering::catchScopesClosedByThrow()); a return of a value
+    that needs no evaluation raises nothing.
+*/
+static bool qore_ir_simple_catch_block_can_raise(const StatementBlock* block) {
+    for (const AbstractStatement* stmt : block->getStatements()) {
+        if (!stmt || dynamic_cast<const BreakStatement*>(stmt) || dynamic_cast<const ContinueStatement*>(stmt)) {
+            continue;
+        }
+        if (auto* ret = dynamic_cast<const ReturnStatement*>(stmt)) {
+            QoreValue expr = ret->getExpression();
+            if (!expr || !expr.needsEval()) {
+                continue;
+            }
+            return true;
+        }
+        if (auto* thr = dynamic_cast<const ThrowStatement*>(stmt)) {
+            if (!thr->getArgs().needsEval()) {
+                continue;
+            }
+            return true;
+        }
+        if (auto* rethr = dynamic_cast<const RethrowStatement*>(stmt)) {
+            QoreValue args = rethr->getArgs();
+            if (!args || args.isNothing() || !args.needsEval()) {
+                continue;
+            }
+            return true;
+        }
+        return true;
+    }
+    return false;
+}
+
 bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& error) {
     if (!stmt) {
         error = "null statement for IR lowering";
@@ -3225,11 +3313,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             msg = builder.createConstString("assertion failed", stmt->loc)->result;
         }
         QoreIRValue throw_list = builder.createMakeList({err, msg}, stmt->loc)->result;
-        // Emit CatchCleanup for the catch scopes that the exception leaves before throwing, except those whose
-        // handlers run with their exception (see catchScopesClosedByThrow(), #5968)
-        for (int i = 0, e = catchScopesClosedByThrow(); i < e; ++i) {
-            builder.createCatchCleanup(stmt->loc);
-        }
+        // the catch blocks that the exception leaves are closed on their exception paths (see the catch exit block
+        // of the try statement, #5968), except an innermost one without an exit block, which is closed here
+        emitCatchCloseForThrow(stmt->loc);
         QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
         builder.createThrow(throw_list, handler, stmt->loc);
         if (!blockHasTerminator(builder.getBlock())) {
@@ -3939,8 +4025,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             pushBlockCleanup(scope_entry);
         }
         builder.createScopeEnter(try_scope_id);
+        // the catch blocks without exit blocks in the try block whose statements' exceptions go to its landing pad
+        // are left there (see lowerStatementBlock())
+        anchor_catch_stack.push_back({catch_block, catch_cleanup_depth, {}, false});
 
         if (try_stmt->getTryBlock() && !lowerStatementBlock(try_stmt->getTryBlock(), error)) {
+            anchor_catch_stack.pop_back();
             scope_stack.pop_back();
             cleanup_stack.pop_back();
             exception_stack.pop_back();
@@ -3949,6 +4039,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             guard_exception_target_override = prev_guard_override;
             return false;
         }
+        AnchorCatchInfo try_catches = std::move(anchor_catch_stack.back());
+        anchor_catch_stack.pop_back();
         exception_stack.pop_back();
         exception_scope_depth_stack.pop_back();
         try_catch_cleanup_depth_stack.pop_back();
@@ -3965,10 +4057,30 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             cleanup_stack.pop_back();
         }
 
+        // whether the catch block has an exit block (see below)
+        // (a catch variable that a closure can capture has one too: the exception paths that release the catch
+        // variable of a catch block without one do so whether the catch block ran or not)
+        const bool catch_needs_exit = try_stmt->getCatchBlock()
+            && (qore_ir_catch_block_needs_exit(try_stmt->getCatchBlock())
+                || (try_stmt->getCatchVar() && try_stmt->getCatchVar()->closureUse()));
+        // a catch block with an exception target (its exit block or an enclosing one) comes after the blocks of the
+        // try block, which the lowering to native code processes in the order of the list (its temp scopes, the
+        // values that it defines): a statement of the catch block that raises spans blocks then, and its temp scope
+        // must not be open while the blocks of the try block that come after the landing pad are lowered (#5968)
+        if (catch_needs_exit || getCurrentExceptionTarget()) {
+            builder.getFunction()->moveBlockToEnd(catch_block);
+        }
         builder.setBlock(catch_block);
         // Pass the scope_stack depth and try_scope_id so the LandingPad can
         // execute on_error/on_exit handlers for scopes entered within the try body
         builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
+        // a catch block without an exit block in the try block whose statement raised the exception is left before
+        // the exception is caught: its catch variable is released, which does nothing if it did not run or was left
+        // already; the landing pad closed the catch blocks opened in the try block (#5968)
+        for (LocalVar* var : try_catches.vars) {
+            auto* ui = builder.createUninstantiateLocal(var, stmt->loc);
+            ui->is_block_exit = true;
+        }
         QoreIRInstruction* catch_inst = builder.createCatchException(stmt->loc);
         // the returns of the try block, whose value the try statement releases when it catches an exception that
         // interrupted one of them (qore#5941); those of the catch block are those of the enclosing try statement
@@ -4032,15 +4144,61 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             pushBlockCleanup(catch_var_entry);
         }
         ++catch_cleanup_depth;
-        catch_scope_depth_stack.push_back(handlerScopeCount());
+        // An exception (or a thread_exit) that leaves the catch block leaves it through its exit block, which closes
+        // it: the exception paths of the blocks and statements in the catch block, which run their handlers and
+        // release their locals, lead to it, and it releases the catch variable and closes the catch scope (restoring
+        // td->catchException and deleting the caught exception) before the exception goes on to the enclosing
+        // target or leaves the frame, as TryStatement::execImpl() deletes the exception after the catch block,
+        // before the enclosing blocks are left (#5968).  The catch block's handlers and those of the blocks in it
+        // so run with its exception, which a rethrow in them raises again.
+        QoreIRBasicBlock* catch_exit_block = nullptr;
+        if (catch_needs_exit) {
+            catch_exit_block = createBlock("try.catch.exit");
+            if (!catch_exit_block) {
+                --catch_cleanup_depth;
+                if (catch_var) {
+                    cleanup_stack.pop_back();
+                }
+                assert(cleanup_stack.back().type == BlockCleanupEntry::CatchScope);
+                cleanup_stack.pop_back();
+                error = "IR builder failed to create the exit block of a catch block";
+                return false;
+            }
+            exception_stack.push_back(catch_exit_block);
+            // the catch blocks without exit blocks in this one whose statements' exceptions go to its exit block are
+            // left there first (see lowerStatementBlock())
+            anchor_catch_stack.push_back({catch_exit_block, catch_cleanup_depth, {}, false});
+        }
+        catch_exit_stack.push_back({catch_exit_block != nullptr, catch_var});
+        // the exception exits of native code close a catch block without an exit block that a statement raising an
+        // exception, or a thread_exit, leaves with the frame (see QoreIRToLLVM::emitExceptionExitCatchUnwind())
+        if (!catch_exit_block && try_stmt->getCatchBlock()
+                && qore_ir_simple_catch_block_can_raise(try_stmt->getCatchBlock())) {
+            builder.getFunction()->catch_exit_unwind = true;
+        }
+        // a catch block without an exit block whose statements' exceptions go to the exception path of an enclosing
+        // block is left there, before that block's handlers and locals (see lowerStatementBlock())
+        if (!catch_exit_block && try_stmt->getCatchBlock() && !anchor_catch_stack.empty()
+                && getCurrentExceptionTarget() == anchor_catch_stack.back().anchor) {
+            anchor_catch_stack.back().any = true;
+            if (catch_var) {
+                anchor_catch_stack.back().vars.push_back(catch_var);
+            }
+        }
         // the statements of the catch block are marked for the debugger's exception events (#5816)
         int old_debug_catch_child_depth = debug_catch_child_depth;
         debug_catch_child_depth = debug_nest_depth;
         bool catch_ok = !try_stmt->getCatchBlock() || lowerStatementBlock(try_stmt->getCatchBlock(), error);
         debug_catch_child_depth = old_debug_catch_child_depth;
+        AnchorCatchInfo exit_catches;
+        if (catch_exit_block) {
+            exception_stack.pop_back();
+            exit_catches = std::move(anchor_catch_stack.back());
+            anchor_catch_stack.pop_back();
+        }
+        catch_exit_stack.pop_back();
         if (!catch_ok) {
             --catch_cleanup_depth;
-            catch_scope_depth_stack.pop_back();
             if (catch_var) {
                 cleanup_stack.pop_back();
             }
@@ -4049,7 +4207,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             return false;
         }
         --catch_cleanup_depth;
-        catch_scope_depth_stack.pop_back();
         if (catch_var) {
             cleanup_stack.pop_back();
         }
@@ -4068,6 +4225,33 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // Return/throw/break/continue from catch emit their own CatchCleanup.
             builder.createCatchCleanup(stmt->loc);
             builder.createBranch(merge_block);
+        }
+        if (catch_exit_block) {
+            QoreIRBasicBlock* after_block = builder.getBlock();
+            builder.getFunction()->moveBlockToEnd(catch_exit_block);
+            builder.setBlock(catch_exit_block);
+            if (exit_catches.any) {
+                // a nested catch block without an exit block whose statement raised the exception is left first
+                for (LocalVar* var : exit_catches.vars) {
+                    auto* ui = builder.createUninstantiateLocal(var, stmt->loc);
+                    ui->is_block_exit = true;
+                }
+                QoreIRInstruction* close = builder.createCatchCleanup(stmt->loc);
+                builder.getFunction()->catch_exit_depths[close] = static_cast<uint32_t>(exit_catches.catch_depth);
+            }
+            if (catch_var) {
+                auto* ui = builder.createUninstantiateLocal(catch_var, stmt->loc);
+                ui->is_block_exit = true;
+            }
+            // closes the catch blocks opened since the try statement began: this one, and a nested one without an
+            // exit block that the exception left open
+            QoreIRInstruction* exit_cleanup = builder.createCatchCleanup(stmt->loc);
+            builder.getFunction()->catch_exit_depths[exit_cleanup] = static_cast<uint32_t>(catch_cleanup_depth);
+            // the exception (or thread_exit) then leaves the try statement as one that its catch block does not
+            // enter: through the propagation block, to the enclosing target or out of the frame; the frame's exit
+            // sequence of native code is not emitted again for each catch block
+            builder.createBranch(propagate_block, stmt->loc);
+            builder.setBlock(after_block);
         }
 
         // Move merge_block to the end of the block list so it is processed
@@ -4090,14 +4274,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // before on_error handlers fire (for CatchExceptionHelper/rethrow support).
         // For exception-target case: the LandingPad fires scope exits after the invoke.
         // For no-exception-target case: the Throw handler fires scope exits after raising.
-        // Emit CatchCleanup for the catch scopes that the exception leaves before throwing: a throw in a try
-        // statement nested in a catch block lands in that try statement's catch block, and the enclosing catch block
-        // keeps running with its exception (which a rethrow there reads); a catch scope with handlers between it and
-        // the throw stays open for them, and the exception path of that block closes it after them (see
-        // catchScopesClosedByThrow(), #5968)
-        for (int i = 0, e = catchScopesClosedByThrow(); i < e; ++i) {
-            builder.createCatchCleanup(stmt->loc);
-        }
+        // The catch blocks that the exception leaves are closed on their exception paths, after the handlers and the
+        // locals of the blocks in them have run and been released, as the AST interpreter leaves a catch block (see the
+        // catch exit block of the try statement, #5968); an innermost one without an exit block is closed here
+        emitCatchCloseForThrow(stmt->loc);
         QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
         builder.createThrow(value, handler, stmt->loc);
         return true;
@@ -4111,10 +4291,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             }
             // NOTE: do NOT emit ScopeExits or CatchCleanup before Rethrow —
             // rethrow needs td->catchException intact to get the exception to
-            // modify via replaceTop().  Store catch_cleanup_depth in the
-            // instruction so the rethrow handler can clean up all catch scopes
-            // AFTER rethrowing.
+            // modify via replaceTop().  The catch scopes that it leaves are closed
+            // on their exception paths (see Throw above), except an innermost one
+            // without an exit block, which it closes after rethrowing.
             QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
+            emitCatchVarReleaseForThrow(stmt->loc);
             auto* rethrow_inst = builder.createRethrow(handler, stmt->loc);
             rethrow_inst->catch_depth = catchScopesClosedByThrow();
             // Attach args to the Rethrow instruction so the interpreter/JIT can
@@ -4123,11 +4304,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         } else {
             // NOTE: do NOT emit ScopeExits before Rethrow — same reason as Throw above.
             // Don't emit CatchCleanup before rethrow — rethrow needs td->catchException
-            // intact to get the exception to rethrow.  Instead, store catch_cleanup_depth
-            // in the instruction so the rethrow handler can clean up all catch scopes
-            // AFTER rethrowing.  Only the catch scopes that the exception leaves and that no handler sees are cleaned
-            // up (see Throw above).
+            // intact to get the exception to rethrow.  The catch scopes that it leaves
+            // are closed on their exception paths, or by it (see Throw above).
             QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
+            emitCatchVarReleaseForThrow(stmt->loc);
             auto* rethrow_inst = builder.createRethrow(handler, stmt->loc);
             rethrow_inst->catch_depth = catchScopesClosedByThrow();
         }
@@ -4315,20 +4495,6 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // Phase 2a: Emit ScopeEnter so scope_stack has watermark for exception-path handler execution
         scope_enter = builder.createScopeEnter(scope_id);
     }
-    // the catch blocks that this block is in with no other block with handlers and no try block between them and
-    // it, innermost first: an exception that leaves the block leaves them too, and they are closed on the block's
-    // exception path after its handlers and the release of its locals, as the AST interpreter leaves a catch block
-    // after the blocks in it (#5968); the scopes of reference foreach and context statements between them do not
-    // count, as a throw in them closes the catch blocks before raising the exception (catchScopesClosedByThrow())
-    int catch_exit_count = 0;
-    if (has_on_block_exit) {
-        const int left = catchScopesLeftByThrow();
-        const size_t outer_handler_scopes = left ? handlerScopeCount() - 1 : 0;
-        while (catch_exit_count < left
-                && catch_scope_depth_stack[catch_cleanup_depth - 1 - catch_exit_count] == outer_handler_scopes) {
-            ++catch_exit_count;
-        }
-    }
 
     QoreIRBasicBlock* lvar_exception_cleanup_block = nullptr;
     QoreIRBasicBlock* lvar_exception_cleanup_continue_block = nullptr;
@@ -4360,14 +4526,11 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // path of its own, which the blocks in it take as theirs
     const bool inline_handler_body = inline_handler_block == block;
     inline_handler_block = nullptr;
-    // a block with handlers in a catch block has an exception path of its own as well, which closes the catch block
-    // after the handlers (see catch_exit_count above)
-    if (scope_enter && lvars && !(needs_handler_anchor || getCurrentExceptionTarget() || inline_handler_body
-            || catch_exit_count)) {
+    if (scope_enter && lvars && !(needs_handler_anchor || getCurrentExceptionTarget() || inline_handler_body)) {
         scope_enter->locals = lvars->lv;
     }
     if (needs_handler_anchor || ((lvars || has_on_block_exit) && getCurrentExceptionTarget())
-            || (inline_handler_body && (lvars || qoreIrBlockEnclosesScopeLocals(block))) || catch_exit_count) {
+            || (inline_handler_body && (lvars || qoreIrBlockEnclosesScopeLocals(block)))) {
         // Exceptions raised inside this lexical block must destroy its block-scoped
         // locals before control reaches the enclosing catch.  Normal fall-through
         // cleanup below only handles non-exception exits.
@@ -4411,6 +4574,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         }
         exception_stack.push_back(lvar_exception_cleanup_block);
         pushed_lvar_exception_target = true;
+        anchor_catch_stack.push_back({lvar_exception_cleanup_block, catch_cleanup_depth, {}, false});
     }
     if (has_on_block_exit) {
         // where an exception raised by a handler of this block lowered inline goes; see
@@ -4502,6 +4666,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             }
             if (pushed_lvar_exception_target) {
                 exception_stack.pop_back();
+                anchor_catch_stack.pop_back();
             }
             if (has_on_block_exit) {
                 scope_stack.pop_back();
@@ -4534,8 +4699,13 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         }
     }
 
+    // the catch blocks without exit blocks whose statements' exceptions go to this block's exception path (see
+    // below)
+    AnchorCatchInfo anchor_catches;
     if (pushed_lvar_exception_target) {
         exception_stack.pop_back();
+        anchor_catches = std::move(anchor_catch_stack.back());
+        anchor_catch_stack.pop_back();
     }
 
     // Pop handler stack
@@ -4669,6 +4839,19 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         if (builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements) {
             builder.createDebugBlockUnwind(debug_nest_depth, block->loc);
         }
+        if (anchor_catches.any) {
+            // a catch block without an exit block whose statement raised the exception (a call, or a thread_exit)
+            // is left first, before the handlers and the locals of this block, as the AST interpreter leaves it:
+            // its catch variable is released, which does nothing if the catch block did not run or was left
+            // already, and the catch blocks of the frame opened in this block that are still open are closed
+            // (#5968)
+            for (LocalVar* var : anchor_catches.vars) {
+                auto* ui = builder.createUninstantiateLocal(var, block->loc);
+                ui->is_block_exit = true;
+            }
+            QoreIRInstruction* close = builder.createCatchCleanup(block->loc);
+            builder.getFunction()->catch_exit_depths[close] = static_cast<uint32_t>(anchor_catches.catch_depth);
+        }
         if (has_on_block_exit) {
             // Exception unwinds through this synthetic block instead of the
             // try LandingPad, so fire this lexical scope's on_exit/on_error
@@ -4686,10 +4869,6 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
                 auto* ui = builder.createUninstantiateLocal(lvars->lv[i], block->loc);
                 ui->is_block_exit = true;
             }
-        }
-        // the catch blocks that the exception leaves with the block, whose handlers ran with their exception (#5968)
-        for (int i = 0; i < catch_exit_count; ++i) {
-            builder.createCatchCleanup(block->loc);
         }
         if (saved_exception_target) {
             auto* check_inst = builder.createCheckException(block->loc);
