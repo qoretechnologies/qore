@@ -140,7 +140,9 @@ public:
     /** @param sdata serialized payload produced by serialize()
         @param xsink exception sink for validation, allocation, and cancellation errors
         @return a new columnar result, or nullptr if an exception was raised
-        @throw DESERIALIZATION-ERROR if the payload has an unsupported version or invalid shape
+        @throw DESERIALIZATION-ERROR if the payload has an unsupported version or invalid shape, or a column schema
+        that does not match its data: the schema is checked as by qore_columnar_check_column_schema(), and a buffer
+        type, decimal precision or scale that the data does not have is an error; a list column is not converted
      */
     DLLEXPORT static QoreColumnarResult* deserialize(const QoreHashNode* sdata, ExceptionSink* xsink);
 

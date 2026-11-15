@@ -1986,7 +1986,8 @@ __attribute__((noinline, cold)) static arrow::Status arrowTimeOverflow(const Dat
 */
 static bool checkArrowValueType(QoreValue val, qore_type_t expected, const char* expected_name,
         const std::shared_ptr<arrow::DataType>& type, ExceptionSink* xsink) {
-    if (val.getType() == expected) {
+    // the expected types are all held in nodes; the node type is read inline
+    if (val.isPointer() && val.getPtr()->getType() == expected) {
         return true;
     }
     xsink->raiseException("DATAFRAME-IO-ERROR", "expected %s for Arrow %s value, got %s", expected_name,
@@ -2238,7 +2239,8 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
         case arrow::Type::STRUCT: {
             auto struct_builder = static_cast<arrow::StructBuilder*>(builder);
             auto struct_type = std::static_pointer_cast<arrow::StructType>(type);
-            const QoreHashNode* hash = val.getType() == NT_HASH ? val.get<const QoreHashNode>() : nullptr;
+            const QoreHashNode* hash = val.isPointer() && val.getPtr()->getType() == NT_HASH
+                ? val.get<const QoreHashNode>() : nullptr;
             if (!hash) {
                 xsink->raiseException("DATAFRAME-IO-ERROR",
                     "expected hash for Arrow struct value, got %s", val.getFullTypeName());
@@ -2270,7 +2272,8 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
         case arrow::Type::LIST:
         case arrow::Type::LARGE_LIST:
         case arrow::Type::FIXED_SIZE_LIST: {
-            const QoreListNode* qlist = val.getType() == NT_LIST ? val.get<const QoreListNode>() : nullptr;
+            const QoreListNode* qlist = val.isPointer() && val.getPtr()->getType() == NT_LIST
+                ? val.get<const QoreListNode>() : nullptr;
             if (!qlist) {
                 xsink->raiseException("DATAFRAME-IO-ERROR",
                     "expected list for Arrow list value, got %s", val.getFullTypeName());
@@ -2317,7 +2320,8 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
         case arrow::Type::MAP: {
             auto map_builder = static_cast<arrow::MapBuilder*>(builder);
             auto map_type = std::static_pointer_cast<arrow::MapType>(type);
-            const QoreHashNode* hash = val.getType() == NT_HASH ? val.get<const QoreHashNode>() : nullptr;
+            const QoreHashNode* hash = val.isPointer() && val.getPtr()->getType() == NT_HASH
+                ? val.get<const QoreHashNode>() : nullptr;
             if (!hash) {
                 xsink->raiseException("DATAFRAME-IO-ERROR",
                     "expected hash for Arrow map value, got %s", val.getFullTypeName());

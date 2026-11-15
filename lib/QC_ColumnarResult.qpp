@@ -151,6 +151,17 @@ ColumnarResult::copy() {
     Dense buffer columns are referenced directly, so callers can build projected
     or augmented column blocks without boxing dense values through row records.
 
+    A column description can also have a \c schema hash with a \c kind and \c buffer_type.  The schema is
+    checked against the column data: the kind of a buffer column must be one its buffer type can hold (\c bool in
+    \c buffer<bool>, \c int in an integer buffer, \c float in a floating-point buffer, \c string in
+    \c buffer<string>, \c decimal128 in \c buffer<decimal128>, \c date, \c timestamp and \c duration in
+    \c buffer<int64>), and a declared buffer type must be the buffer's.  A list column is stored as its kind gives:
+    a scalar kind in a buffer of its type (or of the declared buffer type), whose element type each value must have,
+    and a \c number, \c binary, \c list, \c large_list, \c fixed_size_list, \c struct or \c map kind in a
+    list, whose values must be of the kind (\c number: \c number, \c int, \c float or \c string; \c binary:
+    \c binary; the list kinds: \c list; \c struct and \c map: \c hash), checked recursively against the child
+    schemas.  A NOTHING or NULL value makes the column or child schema nullable.
+
     @par Example: building a projected dense block
     @code{.py}
 hash<auto> columns = result.toColumnHash();
@@ -162,6 +173,8 @@ ColumnarResult compact = ColumnarResult::fromColumnHash({
 
     @throw COLUMNAR-RESULT-ERROR if a column value is not a list or buffer, or
         if column lengths differ
+    @throw COLUMNAR-SCHEMA-ERROR a column schema does not match the column data
+    @throw BUFFER-TYPE-ERROR a value of a list column cannot be stored in the buffer of its kind
     @throw HASH-KEY-ERROR a column or field name in \a desc has a NUL character, which the keys of the records,
         column hashes and struct values of the result cannot contain
 */
@@ -181,6 +194,7 @@ static ColumnarResult ColumnarResult::fromColumnHash(hash<auto> columns, *hash<a
 
     @throw COLUMNAR-RESULT-ERROR if row values are not hashes or cannot be
         converted to columns
+    @throw COLUMNAR-SCHEMA-ERROR a column schema does not match the column data (see fromColumnHash())
     @throw HASH-KEY-ERROR a column or field name in \a desc has a NUL character, which the keys of the records,
         column hashes and struct values of the result cannot contain
 */

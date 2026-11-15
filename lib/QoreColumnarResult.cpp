@@ -10,6 +10,7 @@
 #include <qore/QoreColumnarResult.h>
 
 #include "qore/intern/QC_ColumnarResult.h"
+#include "qore/intern/qore_list_private.h"
 
 #include <algorithm>
 #include <cctype>
@@ -1234,28 +1235,66 @@ static int columnar_check_value(const char* name, QoreColumnarTypeDescriptor& sc
 //! Checks the values of a list against a schema; a NOTHING or NULL value makes the schema nullable
 static int columnar_check_list_values(const char* name, QoreColumnarTypeDescriptor& schema, const QoreListNode* list,
         size_t row, bool top_level, const char* err, ExceptionSink* xsink) {
-    // a schema with no kind and no children accepts any value
-    if (schema.kind == QoreColumnarTypeKind::Auto && schema.children.empty()) {
-        if (!schema.nullable) {
-            ConstListIterator i(list);
-            while (i.next()) {
-                if (i.index() && !(i.index() % 100) && qore_check_cancel(xsink, "checking columnar values")) {
-                    return -1;
-                }
-                if (i.getValue().isNullOrNothing()) {
-                    schema.nullable = true;
-                    break;
-                }
+    // the values are read directly, as this is the only part of the check whose cost depends on the size of the data
+    const qore_list_private* lp = qore_list_private::get(list);
+    const QoreValue* entry = lp->entry;
+    size_t length = lp->length;
+
+    // the kind of the values, without children to check them against: only the value type is checked
+    const QoreColumnarTypeDescriptor* value_schema = &schema;
+    while (value_schema->kind == QoreColumnarTypeKind::Dictionary && !value_schema->children.empty()) {
+        value_schema = &value_schema->children[0];
+    }
+    QoreColumnarTypeKind kind = value_schema->kind;
+    bool scalar;
+    switch (kind) {
+        case QoreColumnarTypeKind::Auto:
+        case QoreColumnarTypeKind::Dictionary:
+            scalar = value_schema->children.empty();
+            break;
+        case QoreColumnarTypeKind::Binary:
+            scalar = value_schema->fixed_size <= 0;
+            break;
+        case QoreColumnarTypeKind::List:
+        case QoreColumnarTypeKind::LargeList:
+        case QoreColumnarTypeKind::FixedSizeList:
+        case QoreColumnarTypeKind::Struct:
+        case QoreColumnarTypeKind::Map:
+            scalar = false;
+            break;
+        default:
+            scalar = true;
+            break;
+    }
+
+    if (scalar) {
+        bool any = kind == QoreColumnarTypeKind::Auto || kind == QoreColumnarTypeKind::Dictionary;
+        bool nullable = false;
+        for (size_t i = 0; i < length; ++i) {
+            if (i && !(i % 1024) && qore_check_cancel(xsink, "checking columnar values")) {
+                return -1;
             }
+            qore_type_t type = entry[i].getType();
+            if (type == NT_NOTHING || type == NT_NULL) {
+                nullable = true;
+                continue;
+            }
+            if (!any && !columnar_value_type_matches_kind(type, kind)) {
+                // raises the exception
+                return columnar_check_value(name, schema, entry[i], top_level ? i : row, !top_level, err, xsink);
+            }
+        }
+        if (nullable) {
+            schema.nullable = true;
         }
         return 0;
     }
-    ConstListIterator i(list);
-    while (i.next()) {
-        if (i.index() && !(i.index() % 100) && qore_check_cancel(xsink, "checking columnar values")) {
+
+    for (size_t i = 0; i < length; ++i) {
+        if (i && !(i % 1024) && qore_check_cancel(xsink, "checking columnar values")) {
             return -1;
         }
-        if (columnar_check_value(name, schema, i.getValue(), top_level ? i.index() : row, !top_level, err, xsink)) {
+        if (columnar_check_value(name, schema, entry[i], top_level ? i : row, !top_level, err, xsink)) {
             return -1;
         }
     }
