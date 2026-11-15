@@ -17029,6 +17029,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
     bool is_remove = (inst->unary_op == LVUnaryOp::Remove || inst->unary_op == LVUnaryOp::Delete);
     QoreValue res;
 
+    // the result for an exception: NOTHING, as for every lvalue path helper; a value already taken as the result is
+    // released here, as the AST and IR interpreters release theirs (ex: trim takes the string as its result after the
+    // exception raised for its invalid encoding, and an lvalue's write-back can raise one after the result is taken)
+    auto exception_result = [&res, xsink]() -> uint64_t {
+        res.discard(xsink);
+        res = QoreValue();
+        return toBits(QoreValue());
+    };
+
     // deletes the object in a removed value, raising the same error as the AST path for system objects
     auto delete_removed_object = [&](QoreValue value) {
         QoreObject* o = value.get<QoreObject>();
@@ -17075,7 +17084,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         res = qore_object_private::takeMember(*obj, xsink,
             path_copy[0].name.c_str(), false, inst->unary_op == LVUnaryOp::Delete);
         if (*xsink || !finish_delete_result(res)) {
-            return toBits(QoreValue());
+            return exception_result();
         }
         if (!inst->ref_rv) {
             res.discard(xsink);
@@ -17193,7 +17202,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
 
     if (handled_multistep_remove) {
         if (*xsink) {
-            return toBits(QoreValue());
+            return exception_result();
         }
         if (!inst->ref_rv) {
             res.discard(xsink);
@@ -17251,7 +17260,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     }
                 }
                 if (*xsink) {
-                    return toBits(QoreValue());
+                    return exception_result();
                 }
                 if (!inst->ref_rv) {
                     res.discard(xsink);
@@ -17508,7 +17517,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         }
     }
     if (*xsink) {
-        return toBits(QoreValue());
+        return exception_result();
     }
     if (is_remove && !inst->ref_rv) {
         res.discard(xsink);
