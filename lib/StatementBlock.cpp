@@ -157,6 +157,23 @@ VariableBlockHelper::VariableBlockHelper() : closure_parse_env(thread_get_closur
    //printd(5, "VariableBlockHelper::VariableBlockHelper() this=%p pushed %p\n", this, 0);
 }
 
+DeclarationParseScopeHelper::DeclarationParseScopeHelper() : vstack(update_get_vstack(nullptr)),
+        closure_parse_env(thread_get_closure_parse_env()) {
+    // a frame marker with nothing below it: the search continues with the top-level local variables (see
+    // VNode::nextSearch())
+    new VNode(nullptr);
+    thread_set_closure_parse_env(nullptr);
+}
+
+DeclarationParseScopeHelper::~DeclarationParseScopeHelper() {
+    thread_set_closure_parse_env(closure_parse_env);
+    std::unique_ptr<VNode> vnode(getVStack());
+    assert(vnode.get());
+    assert(!vnode->lvar);
+    assert(!vnode->next);
+    updateVStack(vstack);
+}
+
 VariableBlockHelper::~VariableBlockHelper() {
    thread_set_closure_parse_env(closure_parse_env);
    std::unique_ptr<VNode> vnode(getVStack());

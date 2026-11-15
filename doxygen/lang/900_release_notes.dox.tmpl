@@ -787,6 +787,11 @@
     (see @ref call_reference_deleted_object; <a href="https://github.com/qoretechnologies/qore/issues/6083">issue
     6083</a>).
 
+    @par Hashdecl Member Initializers Cannot Use the Local Variables of the Code Using the Hashdecl
+    A @ref hashdecl_initializer_scope "hashdecl member initialization expression" that names a local variable of the
+    function, method or closure that first uses the type-safe hash is a parse error, as it already was for class
+    members; 2.2.1 evaluated it with that code's variable (issue #6268).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Module Commands Know the Restrictions of the Code That Issues Them
     A binary module's command handler gets the effective restrictions of the issuing code, not those of the target
@@ -2763,6 +2768,9 @@
       @ref Qore::get_local_vars() "get_local_vars()" and @ref Qore::set_local_var_value() "set_local_var_value()"
       from the calls it makes or from a debugger's callbacks in the same thread
       (<a href="https://github.com/qoretechnologies/qore/issues/5871">issue 5871</a>)
+    - a class or hashdecl member or static class variable initialization expression that uses a top-level local
+      variable no longer crashes the process when the class or hashdecl is first used in a closure and then used
+      elsewhere (see @ref member_initialization and @ref hashdecl_initializer_scope; issue #6268)
 
     @section qore_2_2_1 Qore 2.2.1
 

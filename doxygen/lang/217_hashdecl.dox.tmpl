@@ -75,6 +75,12 @@ hash<Container> h4 = new hash<Container>(("i": 2));
     one of them evaluated raises a \c PROGRAM-ERROR exception (see @ref threads_and_program_deletion); an initial
     value that needs no evaluation, such as a literal, is still assigned.
 
+    @anchor hashdecl_initializer_scope
+    The initialization expressions are parsed in their own scope, not in the scope of the code that first uses the
+    <tt><b>hashdecl</b></tt>: they can refer to the top-level local variables of the program, whose value is that of
+    the thread that evaluates the expression (see @ref threading_and_variables), and to global variables, but not to
+    the local variables of a function, method or closure, so naming one is a parse error.
+
     Note that it's illegal to assign a value to an unassigned lvalue declared as a typed hash; in such cases a
     \c HASHDECL-IMPLICIT-CONSTRUCTION-ERROR exception is thrown as in the following example:
     @code{.py}
