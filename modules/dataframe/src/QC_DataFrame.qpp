@@ -811,7 +811,8 @@ static DataFrame DataFrame::fromMatrix(list<auto> matrix, *list<string> column_n
     column of a right or outer join whose left and right key columns differ in type holds any value, with no schema
     (a decimal and a float key column, for example), and cannot be exported to Arrow or Parquet (toArrowIpc() and
     writeParquet() raise \c DATAFRAME-IO-ERROR); one whose key columns have the same type gets a schema that holds
-    the keys of both (decimals of different precisions and scales, timestamps of different units or time zones),
+    the keys of both (decimals of different precisions and scales, timestamps of different units or time zones; a
+    date key column, such as a date32[day] column, and a timestamp key column give a timestamp key column),
     or no schema if there is none: a key column of strings, for example, needs none, but one that holds any value
     with no schema (decimals whose common schema would have more than 38 digits) cannot be exported.
 

@@ -169,7 +169,7 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
         DataFrame::DataFrame ts = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
             "t": (2024-01-01T00:00:00Z, 2024-01-03T10:30:00Z), "b": (1, 2),
         }, {
-            "t": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "Europe/Prague", "nullable": True,
+            "t": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "Europe/Prague", "nullable": False,
                 "native_type": "timestamp[ms, tz=Europe/Prague]"}},
         }));
         foreach list<string> date_schema in ((("day", "date32[day]"), ("ms", "date64[ms]"))) {
@@ -181,18 +181,18 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
             }));
             foreach string how in (("right", "outer")) {
                 foreach list<DataFrame::DataFrame> pair in (((dt, ts), (ts, dt))) {
-                    # the right join of the timestamp column and the date column has the keys of the date column only
-                    if (how == "right" && pair[1] == dt) {
-                        continue;
-                    }
                     DataFrame::DataFrame j = pair[0].join(pair[1], ("t",), how);
                     hash<auto> s = schema(j, "t");
                     string label = sprintf("%s join of %s and a timestamp (%s first)", how, date_schema[1],
                         pair[0] == dt ? "date" : "timestamp");
                     # the unit is kept if both have it (date64[ms] and timestamp[ms])
                     string unit = date_schema[0] == "ms" ? "ms" : "us";
-                    assertEq(("timestamp", unit, "UTC", NOTHING), (s.kind, s.time_unit, s.timezone, s.native_type),
-                        label);
+                    assertEq(("timestamp", unit, "UTC", NOTHING, True),
+                        (s.kind, s.time_unit, s.timezone, s.native_type, s.nullable), label);
+                    # the right join of the timestamp column and the date column has the keys of the date column only
+                    if (how == "right" && pair[1] == dt) {
+                        continue;
+                    }
                     list<auto> tv = DataFrame::DataFrame::fromArrowIpc(j.toArrowIpc()).getColumn("t");
                     assertTrue((select tv, $1 == 2024-01-03T10:30:00Z).size() == 1,
                         sprintf("%s: the time of day kept: %y", label, tv));
@@ -265,7 +265,8 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
     private hash<auto> schema(DataFrame::DataFrame df, string name) {
         foreach hash<auto> column in (df.toColumnarResult().schemaV2()) {
             if (column.name == name) {
-                return column{"kind", "buffer_type", "precision", "scale", "time_unit", "timezone", "native_type"};
+                return column{"kind", "buffer_type", "precision", "scale", "time_unit", "timezone", "native_type",
+                    "nullable"};
             }
         }
         return {};
