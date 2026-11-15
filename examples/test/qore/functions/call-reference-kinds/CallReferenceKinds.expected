@@ -4,6 +4,12 @@ function: equal to itself True, to its bound callback False, bound to itself Tru
 static method: loop 21920 try 21940 named 1015/1034 args 1047, background 1063
 static method, bound: loop 21920 try 21940 named 1015/1034 args 1047, background 1063
 static method: equal to itself True, to its bound callback False, bound to itself True
+function in a namespace: loop 2060 try 2080 named 22/41 args 54, background 70
+function in a namespace, bound: loop 2060 try 2080 named 22/41 args 54, background 70
+function in a namespace: equal to itself True, to its bound callback False, bound to itself True
+static method in a namespace: loop 41920 try 41940 named 2015/2034 args 2047, background 2063
+static method in a namespace, bound: loop 41920 try 41940 named 2015/2034 args 2047, background 2063
+static method in a namespace: equal to itself True, to its bound callback False, bound to itself True
 method, typed receiver: loop 1940 try 1960 named 16/35 args 48, background 64
 method, typed receiver, bound: loop 1940 try 1960 named 16/35 args 48, background 64
 method, typed receiver: equal to itself True, to its bound callback False, bound to itself True
@@ -30,7 +36,9 @@ closure of an object, bound: loop 29020 try 29040 named 605/804 args 907, backgr
 closure of an object: equal to itself True, to its bound callback False, bound to itself True
 function references to the same function: True, to another function: False
 static method references to the same method: True, to a function: False
+references by a scoped path to the same function: True, to another function: False, to the same static method: True, to another static method: False
 method references to the same method of the same object: True, of another object: False, to a function: False
+method references with an object receiver to the same method of the same object: True, of another object: False
 references made in the class to the same object: True, to another object: False
 references made through self to the same object: True, to another object: False
 method, typed receiver, deleted object: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted, arguments evaluated: 0
