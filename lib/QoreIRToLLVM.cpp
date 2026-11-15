@@ -16234,6 +16234,20 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     bool saved_local_reload_boundary_cleanup_pending = false;
     // Lower each block
     for (const auto& block : func.blocks) {
+        // AOT native code makes no step events (emitDebugStepHook()): the paths of the debugger's flow requests are
+        // only for the IR interpreter that runs the debug IR of the function, so they get no native code (#6201)
+        if (aot_mode && block->debug_flow) {
+            if (llvm::BasicBlock* unused = block_map[block.get()]) {
+                if (unused->use_empty()) {
+                    unused->eraseFromParent();
+                } else {
+                    llvm::IRBuilder<> ub(unused);
+                    ub.CreateUnreachable();
+                }
+                block_map[block.get()] = nullptr;
+            }
+            continue;
+        }
         if (block->debug_flow != in_debug_flow_run) {
             in_debug_flow_run = block->debug_flow;
             if (in_debug_flow_run) {
@@ -16625,6 +16639,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             fflush(stderr);
         }
         for (const auto& inc : phi_inst->incoming) {
+            // AOT native code has no paths of the debugger's flow requests (see above)
+            if (aot_mode && inc.block && inc.block->debug_flow) {
+                continue;
+            }
             llvm::Value* val = getVal(inc.value.id, error);
             if (!val) {
                 return false;

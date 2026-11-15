@@ -25,8 +25,18 @@
     function whose return type does not accept no value raises the error of a function without a return statement.
     Native code ignored the request (issue #6200).
 
-    A break or a continue (DebugFlowBreak, DebugFlowContinue) at a step event is not checked: the IR interpreter and
-    native code do not take them as the AST interpreter does yet (issues #6200 and #6201).
+    A break or a continue (DebugFlowBreak, DebugFlowContinue) at a step event is a break or a continue statement
+    placed before the statement: the blocks that it leaves run their handlers and release their locals, and the
+    innermost loop ends or starts its next iteration (a switch statement ends at a break); with no loop (or switch) to
+    take it, the function returns without a value.  The IR interpreter ran the statement and did not leave a loop whose
+    condition is a fused comparison, and native code ignored the request (issues #6200 and #6201).  A float local that
+    the IR keeps in a native register has its value of the step event after the loop.
+
+    A request at a step event of a handler ends the handler, and the block takes the request of its last handler run,
+    as with the AST interpreter (StatementBlock::execIntern()): with a handler lowered inline in the code of the
+    block's exit and with handlers that run out of line.  A return requested while a return leaves the function, a
+    thread_exit or an exception raised by a handler or a destructor while it does, are taken as with the AST
+    interpreter.
 */
 class DebuggerStepFlowTest inherits QUnit::Test {
     public {
@@ -40,6 +50,11 @@ class DebuggerStepFlowTest inherits QUnit::Test {
             - \c result: the value that the function returned, or the exception that it raised
             - \c log: the values that the function logged while the debugger was attached
             - \c steps: the step events of the debugger: the line of a statement, or "b" and the line of a block
+            - \c flow2, \c tag2, \c hit2: a second request, at the hit2-th step event of the statement after the
+              first request
+            - \c handler: the case of a request in a handler, or of a request while a return leaves the function
+            - \c promoted: the function has locals that the IR keeps in native registers (SSA promotion), which the
+              run checks with the optimization statistics of the IR (QORE_IR_OPT_STATS)
             - \c calls: the function calls code of StepFlowTarget.q while the debugger is attached, which runs on the
               AST tier then, as every call with a debugger attached does (UserVariantBase::evalTiered()), so that it
               is not run on the IR tier only (ExecModeHarness::run_ir_tier())
@@ -125,6 +140,201 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "log": ("callee=null",),
                 "steps": (258, 259, "b255", 255, 258, 267, 268, 269, 270),
             },
+            {"function": "for_loop", "flow": "break", "tag": "for_first", "hit": 2, "block": False,
+                "result": "33",
+                "log": (),
+                "steps": (17, 18, "b14", 14, 17, 20),
+            },
+            {"function": "for_loop", "flow": "break", "tag": "for_second", "hit": 2, "block": False,
+                "result": "43",
+                "log": (),
+                "steps": (17, 18, "b14", 14, 17, 18, 20),
+            },
+            {"function": "for_loop", "flow": "continue", "tag": "for_first", "hit": 2, "block": False,
+                "result": "44",
+                "log": (),
+                "steps": (17, 18, "b14", 14, 17, "b14", 14, 17, 18, 20),
+            },
+            {"function": "for_loop", "flow": "break", "tag": "for_body", "hit": 2, "block": True,
+                "result": "44",
+                "log": (),
+                "steps": (17, 18, "b14", 14, 17, 18, "b14", 20),
+            },
+            {"function": "for_loop", "flow": "continue", "tag": "for_body", "hit": 2, "block": True,
+                "result": "44",
+                "log": (),
+                "steps": (17, 18, "b14", 14, 17, 18, "b14", 20),
+            },
+            {"function": "while_loop", "flow": "break", "tag": "while_first", "hit": 2, "block": False,
+                "result": "33",
+                "log": (),
+                "steps": (32, 33, 34, "b29", 29, 32, 36),
+            },
+            {"function": "while_call_loop", "flow": "break", "tag": "while_call_first", "hit": 2, "block": False,
+                "result": "33",
+                "log": ("cond0", "cond1", "cond2", "cond3"),
+                "steps": (48, 49, 50, "b45", 45, 48, 52),
+            },
+            {"function": "foreach_loop", "flow": "break", "tag": "foreach_first", "hit": 2, "block": False,
+                "result": "33",
+                "log": (),
+                "steps": (63, 64, "b60", 60, 63, 66),
+            },
+            {"function": "foreach_strings", "flow": "break", "tag": "foreach_strings_first", "hit": 2, "block": False,
+                "result": "\"s0,s1,s2,\"",
+                "log": (),
+                "steps": (226, 227, "b223", 223, 226, 229),
+            },
+            {"function": "nested_loops", "flow": "break", "tag": "nested_inner", "hit": 2, "block": False,
+                "result": "5143",
+                "log": (),
+                "steps": (77, "b78", 78, 79, "b78", 78, 81, "b74", 74, 77, "b78", 78, 79, "b78", 78, 79, "b78", 78, 79,
+                    81, "b74", 74, 77, "b78", 78, 79, "b78", 78, 79, "b78", 78, 79, 81, 83),
+            },
+            {"function": "nested_loops", "flow": "continue", "tag": "nested_inner", "hit": 2, "block": False,
+                "result": "5154",
+                "log": (),
+                "steps": (77, "b78", 78, 79, "b78", 78, "b78", 78, 79, 81, "b74", 74, 77, "b78", 78, 79, "b78", 78, 79,
+                    "b78", 78, 79, 81, "b74", 74, 77, "b78", 78, 79, "b78", 78, 79, "b78", 78, 79, 81, 83),
+            },
+            {"function": "nested_loops", "flow": "break", "tag": "nested_outer", "hit": 2, "block": False,
+                "result": "3132",
+                "log": (),
+                "steps": (77, "b78", 78, 79, "b78", 78, 79, "b78", 78, 79, 81, "b74", 74, 77, "b78", 78, 79, "b78", 78,
+                    79, "b78", 78, 79, 81, 83),
+            },
+            {"function": "try_in_loop", "flow": "break", "tag": "try_first", "hit": 2, "block": False,
+                "result": "33",
+                "log": (),
+                "steps": (94, "b95", 95, 96, "b91", 91, 94, "b95", 95, 101),
+            },
+            {"function": "catch_in_loop", "flow": "break", "tag": "catch_first", "hit": 2, "block": False,
+                "result": "33",
+                "log": (),
+                "steps": (240, "b241", 241, "b243", 243, 244, "b237", 237, 240, "b241", 241, "b243", 243, 247),
+            },
+            {"function": "switch_in_loop", "flow": "break", "tag": "switch_case", "hit": 1, "block": False,
+                "result": "54",
+                "log": (),
+                "steps": (112, "b118", 118, 120, "b109", 109, 112, "b114", 114, 120, "b109", 109, 112, "b118", 118,
+                    120, 122),
+            },
+            {"function": "locals_changed", "flow": "break", "tag": "locals_after", "hit": 2, "block": False,
+                "result": "12.0",
+                "log": (),
+                "steps": (134, 135, 136, "b131", 131, 134, 135, 136, 138),
+            },
+            {"function": "locals_changed", "flow": "continue", "tag": "locals_after", "hit": 2, "block": False,
+                "result": "21.5",
+                "log": (),
+                "steps": (134, 135, 136, "b131", 131, 134, 135, 136, "b131", 131, 134, 135, 136, 138),
+            },
+            {"function": "handlers_in_loop", "flow": "break", "tag": "handlers_first", "hit": 2, "block": False,
+                "result": "33",
+                "log": ("success0", "exit0", "success1", "exit1", "success2", "exit2", "success3", "exit3"),
+                "steps": (149, 150, 151, 152, 153, "b150", 150, "b149", 149, "b146", 146, 149, 150, 151, 152, "b150",
+                    150, "b149", 149, 155),
+            },
+            {"function": "object_local", "flow": "break", "tag": "object_first", "hit": 2, "block": False,
+                "calls": True,
+                "result": "33",
+                "log": ("destroy t0", "destroy t1", "destroy t2", "destroy t3", "destroy outer"),
+                "steps": (210, "b193", 193, 194, 211, 212, "b198", 198, "b207", 207, 210, "b193", 193, 194, 211,
+                    "b198", 198, 214),
+            },
+            {"function": "no_loop", "flow": "break", "tag": "no_loop_stmt", "hit": 1, "block": False,
+                "result": "null",
+                "log": ("success", "exit"),
+                "steps": (163, 164, 165, 166, "b165", 165, "b164", 164),
+            },
+            {"function": "handler_flow", "flow": "break", "tag": "handler_flow_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "44",
+                "log": ("exit0", "exit2-0", "exit1", "exit2-1", "exit2", "exit2-2"),
+                "steps": (282, 286, 287, "b283", 283, 284, "b279", 279, 282, 286, 287, "b283", 283, 289),
+            },
+            {"function": "handler_flow", "flow": "continue", "tag": "handler_flow_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "55",
+                "log": ("exit0", "exit2-0", "exit1", "exit2-1", "exit2", "exit2-2", "exit4", "exit2-4"),
+                "steps": (282, 286, 287, "b283", 283, 284, "b279", 279, 282, 286, 287, "b283", 283, "b279", 279, 282,
+                    286, 287, "b283", 283, 284, 289),
+            },
+            {"function": "handler_flow", "flow": "return", "tag": "handler_flow_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "null",
+                "log": ("exit0", "exit2-0", "exit1", "exit2-1", "exit2", "exit2-2"),
+                "steps": (282, 286, 287, "b283", 283, 284, "b279", 279, 282, 286, 287, "b283", 283),
+            },
+            {"function": "handler_two", "flow": "break", "tag": "handler_two_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "55",
+                "log": ("second0", "second2-0", "first0", "second1", "second2-1", "first1", "second2", "second2-2",
+                    "first2", "first3", "second4", "second2-4", "first4"),
+                "steps": (300, 301, 305, 306, "b302", 302, 303, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302",
+                    302, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302", 302, 303, "b300", 300, 308),
+            },
+            {"function": "handler_two", "flow": "return", "tag": "handler_two_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "55",
+                "log": ("second0", "second2-0", "first0", "second1", "second2-1", "first1", "second2", "second2-2",
+                    "first2", "first3", "second4", "second2-4", "first4"),
+                "steps": (300, 301, 305, 306, "b302", 302, 303, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302",
+                    302, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302", 302, 303, "b300", 300, 308),
+            },
+            {"function": "handler_mixed", "flow": "break", "tag": "handler_mixed_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "44",
+                "log": ("mixed0", "mixed2-0", "mixed1", "mixed2-1", "mixed2", "mixed2-2"),
+                "steps": (320, 321, 325, 326, "b322", 322, 323, "b317", 317, 320, 321, 325, 326, "b322", 322, 328),
+            },
+            {"function": "handler_mixed", "flow": "continue", "tag": "handler_mixed_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "55",
+                "log": ("mixed0", "mixed2-0", "mixed1", "mixed2-1", "mixed2", "mixed2-2", "mixed4", "mixed2-4"),
+                "steps": (320, 321, 325, 326, "b322", 322, 323, "b317", 317, 320, 321, 325, 326, "b322", 322, "b317",
+                    317, 320, 321, 325, 326, "b322", 322, 323, 328),
+            },
+            {"function": "handler_mixed", "flow": "return", "tag": "handler_mixed_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "null",
+                "log": ("mixed0", "mixed2-0", "mixed1", "mixed2-1", "mixed2", "mixed2-2"),
+                "steps": (320, 321, 325, 326, "b322", 322, 323, "b317", 317, 320, 321, 325, 326, "b322", 322),
+            },
+            {"function": "return_twice", "flow": "return", "tag": "return_twice_first", "hit": 2, "block": False,
+                "flow2": "return", "tag2": "return_twice_handler", "hit2": 1,
+                "handler": True,
+                "result": "null",
+                "log": ("exit0", "exit2-0", "exit1", "exit2-1", "exit2", "exit2-2", "exit3"),
+                "steps": (339, 343, 344, "b340", 340, 341, "b336", 336, 339, 343, "b340", 340, 341),
+            },
+            {"function": "return_thread_exit", "flow": "return", "tag": "return_thread_exit_first",
+                "hit": 2, "block": False,
+                "handler": True,
+                "result": "no result: the thread of the call ended",
+                "log": ("exit0", "exit1", "exit2", "exit3"),
+                "steps": (360, 366, 367, "b361", 361, 362, "b357", 357, 360, 366, "b361", 361, 362, "b363", 363),
+            },
+            {"function": "return_dtor_exit", "flow": "return", "tag": "return_dtor_exit_first",
+                "hit": 2, "block": False,
+                "handler": True, "calls": True,
+                "result": "no result: the thread of the call ended",
+                "log": ("destroy",),
+                "steps": (397, 398, 399, "b394", 394, 397, "b379", 379, 398, "b382", 382, 383),
+            },
+            {"function": "return_throw_in_try", "flow": "return", "tag": "return_throw_first", "hit": 2, "block": False,
+                "handler": True,
+                "result": "44",
+                "log": ("caught HANDLER-ERR",),
+                "steps": (412, "b413", 413, 418, 419, "b414", 414, "b409", 409, 412, "b413", 413, 418, "b414", 414,
+                    "b415", 415, "b421", 421, "b409", 409, 412, "b413", 413, 418, 419, "b414", 414, 424),
+            },
+            {"function": "promoted_float", "flow": "break", "tag": "promoted_float_total", "hit": 2, "block": False,
+                "promoted": True,
+                "result": "\"f=3.0 total=1\"",
+                "log": (),
+                "steps": (432, 433, 434, "b435", 435, 436, "b435", 435, 436, 439),
+            },
         );
     }
 
@@ -138,6 +348,9 @@ class DebuggerStepFlowTest inherits QUnit::Test {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         tags = getTags();
         addTestCase("a return at a step event", \testReturn());
+        addTestCase("a break at a step event", \testBreak());
+        addTestCase("a continue at a step event", \testContinue());
+        addTestCase("a request in a handler and the requests of a return", \testHandler());
         set_return_value(main());
     }
 
@@ -168,15 +381,28 @@ class DebuggerStepFlowTest inherits QUnit::Test {
     #! runs a case in every execution mode and compares the results with those of the AST interpreter
     private checkCase(hash<auto> c) {
         string dir = get_script_dir();
-        string args = sprintf("%s/StepFlowDebugger.q %s/StepFlowTarget.q %s %s %d %d%s", dir, dir, c.function,
-            c.flow, tags{c.tag}, c.hit, c.block ? " block" : "");
+        string args = sprintf("%s/StepFlowDebugger.q %s/StepFlowTarget.q %s %s %d %d %s", dir, dir, c.function,
+            c.flow, tags{c.tag}, c.hit, c.block ? "block" : "-");
         string what = sprintf("%s %s at %s#%d%s", c.function, c.flow, c.tag, c.hit, c.block ? " (block)" : "");
+        # a second request, after the first one
+        if (c.flow2) {
+            args += sprintf(" %s %d %d", c.flow2, tags{c.tag2}, c.hit2);
+            what += sprintf(", %s at %s#%d", c.flow2, c.tag2, c.hit2);
+        }
         string expected = getExpected(c);
         foreach string mode in (ExecModeHarness::ExecModes) {
             hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
-                "--exec-mode=%s %s", qore_bin, mode, args));
+                "--exec-mode=%s %s", qore_bin, mode, args), NOTHING, c.promoted
+                ? ExecModeHarness::TraceEnv + " QORE_IR_OPT_STATS=1" : NOTHING);
             ExecModeHarness::check_native(r);
             assertEq(expected, getOutput(r.out), sprintf("%s: %s", what, mode));
+            # the locals that the IR keeps in native registers in the function (SSA promotion), which the path of the
+            # request has to take with their values at the step event
+            if (c.promoted && mode != "ast") {
+                *list<*string> stats = regex_extract(r.stderr, "IR-OPT: " + c.function
+                    + ": .* native-local-loads=([0-9]+)");
+                assertGt(0, (stats[0] ?? "0").toInt(), sprintf("%s: %s: promoted loads", what, mode));
+            }
             # the function runs as native code when the debugger attaches with JIT and tiered execution
             if (mode == "jit" || mode == "tiered") {
                 string name = "'" + c.function + "@";
@@ -194,7 +420,31 @@ class DebuggerStepFlowTest inherits QUnit::Test {
 
     testReturn() {
         foreach hash<auto> c in (Cases) {
-            if (c.flow == "return") {
+            if (c.flow == "return" && !c.handler) {
+                checkCase(c);
+            }
+        }
+    }
+
+    testBreak() {
+        foreach hash<auto> c in (Cases) {
+            if (c.flow == "break" && !c.handler) {
+                checkCase(c);
+            }
+        }
+    }
+
+    testContinue() {
+        foreach hash<auto> c in (Cases) {
+            if (c.flow == "continue" && !c.handler) {
+                checkCase(c);
+            }
+        }
+    }
+
+    testHandler() {
+        foreach hash<auto> c in (Cases) {
+            if (c.handler) {
                 checkCase(c);
             }
         }

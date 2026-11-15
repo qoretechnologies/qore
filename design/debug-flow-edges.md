@@ -1,6 +1,7 @@
 # Debugger flow at a step event: modeled IR edges (issues #6201, #6200 break/continue)
 
-Status: design handover, not implemented. Decision (prof): option (A), model the edges.
+Status: implemented on `fix/6201-ir-debug-break` (decision (A), extended by prof's decision (ii) to the return); the
+sections below are the design handover, and "Implementation" at the end lists what differs from it.
 
 All line numbers refer to develop d79a3a93fc (the `fix/6201-ir-debug-break` worktree, `~/tmp/qdbg/6201`).
 The return part of #6200 is done separately on `fix/6200-native-debug-flow` (head dc3975e3f4, worktree
@@ -504,3 +505,38 @@ runcases.sh on dev. The return cases and their pinned steps are in the qtest.
    do not exist yet. The enclosing statements' temp scopes (e.g. a foreach list temp) are released by the
    `target_temp_depth` unwinding in emitBlockCleanups, as for a break statement. Confirm with foreach_strings
    under valgrind.
+
+## Implementation
+
+One mechanism for return, break and continue; the #6200 token design (a thread_exit raised for a return and ended at
+the frame's exits) is gone.
+
+- **IR.** `QoreIRDebugStatementInstruction::flow` and `QoreIRScopeExitInstruction::flow` (`QoreIRDebugFlowTargets`:
+  `break_target`, `continue_target`, `return_target`).  Every step event of code with step events gets all three: a
+  break or a continue with no loop or switch to take it uses the return path.  Each request has an entry block of its
+  own (one `Br` to its path); the paths are shared per segment (`QoreIRLowering::DebugFlowSegment`) and lowered with
+  `lowerLoopJump()` / `lowerReturnWithoutValue()`, which the break, continue and return statements use too.  The blocks
+  of the paths have `QoreIRBasicBlock::debug_flow`, are not counted by `getInstructionCount()`, and run handlers out of
+  line (`CF_HANDLERS_OUT_OF_LINE`) unless a handler can return.  Deviation: the blocks stay in creation order, as the
+  code of a break statement does (the LLVM lowering is block-order sensitive for temp scopes); they are not moved to the
+  end.
+- **CFG and passes.** `QoreIRControlFlowGraph` has the edges in `successors`/`predecessors` and
+  `debug_flow_sources`; a pass that walks a block in order takes the state at the edge with `QoreIRDebugFlowCursor`
+  (before a step event, after a ScopeExit).  Patched: SSA promotion (liveness and values), local value facts, dense list
+  facts, `values_proven_assigned_at`, the JIT's `qore_ir_analyze_local_assignment` (which decides the native locals),
+  exact boxed facts, fresh list pushes and string appends, scalar CSE (dominated blocks reached by a path get what is
+  available at the first event), aggregate scalar replacement, natural loops (no loops from path back edges), LICM and
+  bounded list reads (no path blocks), the open implicit contexts, the reads overwritten before use, the reused call
+  arguments, block reachability, `statementWritesLocalAfter()`, the string transform fusion, prune and the verifier.
+- **Handlers** (prof's decision 3).  A request in a handler ends the handler; the block takes the request of its last
+  handler run (AST `StatementBlock::execIntern()`).  Inline handler: its events branch to the paths of its body's loops,
+  or to the end of the handler (`InlineHandlerFlow`): for the last handler of the exit, the scope's paths
+  (`getScopeFlowPaths()`); otherwise a join block after the handler, where the exit goes on (one extra `Br` in debug code
+  with two or more inline handlers at an exit).  Out-of-line handler: the handler frame reports the request
+  (`qore_ir_set_handler_flow()`), and the ScopeExit that ran it takes the scope's paths.
+- **Runtime.** The IR interpreter branches to the path in the DebugStatement, DebugBlock and ScopeExit cases; native
+  code's step hooks return the request (`qore_rt_dbg_step()`, flow mask: bits 0-2 the paths, bits 3-5 report from a
+  handler) and branch to it; a native ScopeExit gets the request of its handlers from `qore_rt_take_scope_exit_flow()`.
+- **AOT (format v40).** DebugStatement, DebugBlock and ScopeExit records end with a u8 mask and a u16 block index per
+  path; block flag 0x10 is `debug_flow`.  AOT native code lowers no path blocks.
+

@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
+# test-platform: macos - AOT code generation and linking of the debug IR of a program that a debugger runs
+
+# A debugger's return, break or continue request at a step event of AOT code is taken as by the AST interpreter
+# (#6200, #6201).
+#
+# Once a debugger is attached, an AOT function runs its serialized debug IR in the IR interpreter
+# (UserVariantBase::materializeAOTDebugIR()): from format version 40 (QORE_AOT_DEBUG_FLOW_VERSION), the step events of
+# the debug IR have the paths of the requests (QoreIRDebugFlowTargets), and so do the ScopeExit instructions whose
+# handlers run out of line.  The program aot-debug-ir-flow/flow.q attaches a debugger to itself and calls a function
+# in a thread of its own; the debugger requests a flow at a step event of a statement of a loop or of a handler.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%exec-class AOTDebugIRFlowTest
+
+class AOTDebugIRFlowTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir;
+        string tmp_dir;
+        string src = get_script_dir() + "/aot-debug-ir-flow/flow.q";
+        hash<string, int> tags = {};
+
+        #! the function, the request and the tag and the hit of its statement
+        const Cases = (
+            ("loop", "break", "loop_first", 2),
+            ("loop", "continue", "loop_first", 2),
+            ("loop", "return", "loop_first", 2),
+            ("handler", "break", "handler_body", 2),
+            ("handler", "continue", "handler_body", 2),
+            ("handler", "return", "handler_body", 2),
+            ("mixed", "break", "mixed_body", 2),
+            ("mixed", "return", "mixed_body", 2),
+        );
+    }
+
+    constructor() : QUnit::Test("AOTDebugIRFlow", "1.0") {
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        tmp_dir = sprintf("%s/qore-aot-debug-ir-flow-%d", (ENV.TMPDIR ?? "/tmp"), getpid());
+        mkdir(tmp_dir);
+        list<string> lines = ReadOnlyFile::readTextFile(src).split("\n");
+        for (int i = 0; i < lines.size(); ++i) {
+            *list<*string> tag = lines[i] =~ x/### ([a-z_]+)$/;
+            if (tag) {
+                tags{tag[0]} = i + 1;
+            }
+        }
+        addTestCase("the requests of a debugger in AOT code", \testFlows());
+        set_return_value(main());
+    }
+
+    destructor() {
+        system(sprintf("rm -rf %s", tmp_dir));
+    }
+
+    testFlows() {
+        string exe = tmp_dir + "/flow.aot";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile --output %s %s 2>&1", libqore_dir,
+            qore_bin, exe, src));
+        assertTrue(is_file(exe), "AOT compile succeeds: " + compile_out);
+        foreach list<auto> c in (Cases) {
+            string args = sprintf("%s %s %d %d", c[0], c[1], tags{c[2]}, c[3]);
+            # the AST interpreter is the reference
+            string ast_out = backquote(sprintf("%s -b --exec-mode=ast %s %s 2>&1", qore_bin, src, args));
+            assertRegex("^RESULT:", ast_out, sprintf("%s: AST", args));
+            string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s 2>&1", libqore_dir,
+                libqore_dir, exe, args));
+            assertEq(ast_out, aot_out, sprintf("%s: AOT code takes the request as the AST interpreter", args));
+        }
+    }
+}

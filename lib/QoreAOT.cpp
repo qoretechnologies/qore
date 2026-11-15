@@ -3865,11 +3865,16 @@ public:
         if (n < 3) {
             return false;
         }
+        // the paths of the debugger's flow requests (#6201) do not count
         size_t total_insts = 0;
+        size_t code_blocks = 0;
         for (const auto& b : fn.blocks) {
-            total_insts += b->instructions.size();
+            if (!b->debug_flow) {
+                total_insts += b->instructions.size();
+                ++code_blocks;
+            }
         }
-        if (total_insts < tun.min_fn_insts && n < tun.min_fn_blocks) {
+        if (total_insts < tun.min_fn_insts && code_blocks < tun.min_fn_blocks) {
             return false;
         }
         if (dbg) {
@@ -4415,12 +4420,17 @@ public:
         {
             // Cheap pre-filter so ordinary functions never pay for the
             // block-split pass below.
+            // the paths of the debugger's flow requests (#6201) do not count
             size_t total_insts = 0;
+            size_t code_blocks = 0;
             for (const auto& b : func->blocks) {
-                total_insts += b->instructions.size();
+                if (!b->debug_flow) {
+                    total_insts += b->instructions.size();
+                    ++code_blocks;
+                }
             }
             if (total_insts < tun.min_fn_insts
-                    && func->blocks.size() < tun.min_fn_blocks) {
+                    && code_blocks < tun.min_fn_blocks) {
                 return false;
             }
         }

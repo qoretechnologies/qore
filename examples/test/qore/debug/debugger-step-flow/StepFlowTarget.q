@@ -270,3 +270,171 @@ auto sub caller(int n, code attach, code detach, code log) {
     detach();
     return x;
 }
+
+# a handler of the body of a loop with a request in it: the handler ends, and the block takes the request of its last
+# handler run, as a break, a continue or a return of the block
+auto sub handler_flow(int n, code attach, code detach, code log) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {
+            attach();
+        }
+        on_exit {
+            log("exit" + i);                        ### handler_flow_body
+            log("exit2-" + i);
+        }
+        total += 10;
+        total += 1;
+    }
+    detach();
+    return total;
+}
+
+# two handlers: a request in the one that runs first is replaced by the outcome of the one that runs after it
+auto sub handler_two(int n, code attach, code detach, code log) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {
+            attach();
+        }
+        on_exit log("first" + i);
+        on_exit {
+            log("second" + i);                      ### handler_two_body
+            log("second2-" + i);
+        }
+        total += 10;
+        total += 1;
+    }
+    detach();
+    return total;
+}
+
+# on_exit and on_error handlers of one block, which run out of line: a request in one ends it and is taken by the
+# frame that runs it
+auto sub handler_mixed(int n, code attach, code detach, code log) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {
+            attach();
+        }
+        on_error log("error" + i);
+        on_exit {
+            log("mixed" + i);                       ### handler_mixed_body
+            log("mixed2-" + i);
+        }
+        total += 10;
+        total += 1;
+    }
+    detach();
+    return total;
+}
+
+# a return requested at a statement, and another one in the handler that the first one runs
+auto sub return_twice(int n, code attach, code detach, code log) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {
+            attach();
+        }
+        on_exit {
+            log("exit" + i);
+            log("exit2-" + i);                      ### return_twice_handler
+        }
+        total += 10;                                ### return_twice_first
+        total += 1;
+    }
+    detach();
+    return total;
+}
+
+our int thread_exit_calls = 0;
+
+# a thread_exit in a handler that a return requested at a step event runs
+auto sub return_thread_exit(int n, code attach, code detach, code log) {
+    int total = 0;
+    ++thread_exit_calls;
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {
+            attach();
+        }
+        on_exit {
+            log("exit" + i);
+            if (i == 3 && thread_exit_calls == 2) {
+                thread_exit;
+            }
+        }
+        total += 10;                                ### return_thread_exit_first
+        total += 1;
+    }
+    detach();
+    return total;
+}
+
+# exits the thread when destroyed
+class ThreadExiter {
+    public {
+        code log;
+    }
+    constructor(code log) {
+        self.log = log;
+    }
+    destructor() {
+        log("destroy");
+        thread_exit;
+    }
+}
+
+our int dtor_exit_calls = 0;
+
+# a thread_exit in the destructor of a local that a return requested at a step event releases
+auto sub return_dtor_exit(int n, code attach, code detach, code log) {
+    int total = 0;
+    ++dtor_exit_calls;
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {
+            attach();
+        }
+        *ThreadExiter t = dtor_exit_calls == 2 && i == 3 ? new ThreadExiter(log) : NOTHING;
+        total += 10;                                ### return_dtor_exit_first
+        total += 1;
+    }
+    detach();
+    return total;
+}
+
+# a handler that raises an exception in a try block that a return requested at a step event leaves
+auto sub return_throw_in_try(int n, code attach, code detach, code log) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {
+            attach();
+        }
+        try {
+            on_exit {
+                if (i == 3) {
+                    throw "HANDLER-ERR", "x";
+                }
+            }
+            total += 10;                            ### return_throw_first
+            total += 1;
+        } catch (hash<ExceptionInfo> ex) {
+            log("caught " + ex.err);
+        }
+    }
+    detach();
+    return total;
+}
+
+# a float local that the IR keeps in a native register (SSA promotion): a break request leaves the loop with the value
+# that it has at the step event of the request
+auto sub promoted_float(int n, code attach, code detach, code log) {
+    attach();
+    float f = 0.0;
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        f = f + 1.5;
+        total += 1;                                 ### promoted_float_total
+    }
+    # no call after the loop: a call that the values of the locals are live across keeps them in memory
+    return sprintf("f=%y total=%y", f, total);
+}
