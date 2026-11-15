@@ -1183,16 +1183,52 @@ class Test inherits QUnit::Test {
             return LoggerSearchUtil::searchRenderedEvents(raw_la, {"text": "nothing", "direction": dir,
                 "max_scanned_bytes": 8192, "cursor": c});
         };
+        string new_fn = raw_fn + ".new";
+        on_exit unlink(new_fn);
         foreach string dir in ("backward", "forward") {
-            # the same data in a new file
+            # the device, inode and first bytes are the identity of the source: after a rewrite in place with the same
+            # data, the cursor continues where it did before
             cursor = get_cursor(dir);
+            hash<auto> before = use_cursor(dir, cursor);
+            assertEq("partial", before.status, dir + " same identity");
+            assertEq("max-scanned-bytes", before.reason, dir + " same identity");
+            rewriteInPlace(raw_fn, raw);
+            res = use_cursor(dir, cursor);
+            assertEq("partial", res.status, dir + " rewritten with the same data");
+            assertEq(before.scanned_bytes, res.scanned_bytes, dir + " rewritten with the same data");
+            assertEq(before.next_cursor, res.next_cursor, dir + " rewritten with the same data");
+
+            # the same data in a new file created after the source was deleted: once the last reference to a deleted
+            # file is gone, the filesystem can give its inode number to the next file (ext4 does), which then has the
+            # identity of the source, and the cursor is valid for it, as for the source rewritten in place; with
+            # another inode number, the cursor is stale
+            int deleted_inode = hstat(raw_fn).inode;
             unlink(raw_fn);
             f.open2(raw_fn, O_CREAT | O_WRONLY | O_TRUNC);
             f.write(raw);
             f.close();
             res = use_cursor(dir, cursor);
-            assertEq("invalid", res.status, dir);
-            assertEq("stale-cursor", res.reason, dir);
+            if (hstat(raw_fn).inode == deleted_inode) {
+                assertEq("partial", res.status, dir + " recreated at the same inode");
+                assertEq(before.next_cursor, res.next_cursor, dir + " recreated at the same inode");
+            } else {
+                assertEq("invalid", res.status, dir + " recreated at another inode");
+                assertEq("stale-cursor", res.reason, dir + " recreated at another inode");
+            }
+
+            # the same data in a new file, which replaces the source while it still exists (renamed over it), so
+            # that it has another inode number: the cursor is stale
+            cursor = get_cursor(dir);
+            int old_inode = hstat(raw_fn).inode;
+            f.open2(new_fn, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(raw);
+            f.close();
+            rename(new_fn, raw_fn);
+            assertNeq(old_inode, hstat(raw_fn).inode, dir + " replaced: another inode");
+            res = use_cursor(dir, cursor);
+            assertEq("invalid", res.status, dir + " replaced");
+            assertEq("stale-cursor", res.reason, dir + " replaced");
+
             # rewritten from the start in the same file
             cursor = get_cursor(dir);
             rewriteInPlace(raw_fn, "X" + raw.substr(1));
