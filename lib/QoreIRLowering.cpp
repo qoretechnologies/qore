@@ -14315,6 +14315,11 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
         if (!lowerCallArgs(m->getParseArgs(), m->getArgs(), operands, error)) {
             return QoreIRValue();
         }
+        if (check_after_args) {
+            // arguments with side effects can delete the object: it is checked again after them, as for the other
+            // calls (issue #5824)
+            emitCallTargetCheckAfterArgs(expr, base_val, op->loc);
+        }
         return finish_call(lowerExprOpOrInvoke(QoreIROpcode::CallMethod, expr, operands, op->loc, error));
     }
 

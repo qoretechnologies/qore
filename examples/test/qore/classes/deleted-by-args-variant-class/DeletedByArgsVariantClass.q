@@ -184,6 +184,12 @@ class NB inherits NA {
         return m(a: del());
     }
 
+    # a named call through a typed local
+    string dotNamed() {
+        NB o = self;
+        return o.m(b: "s", a: del());
+    }
+
     string namedInTry() {
         try {
             return m(b: "s", a: del());
@@ -244,6 +250,8 @@ for (int i = 0; i < 3; ++i) {
     check("named arguments, inherited variant", string sub () { NB o(); return o.namedInherited(); });
     check("named argument", string sub () { NB o(); return o.namedOnly(); });
     check("named arguments in a try block", string sub () { NB o(); return o.namedInTry(); });
+    check("named arguments, typed local", string sub () { NB o(); return o.dotNamed(); });
+    check("named arguments, top-level call", string sub () { NB o(); return o.m(b: "s", a: o.del()); });
     check("call in a block exit handler", string sub () { H2 h(); return h.inOnExit(); });
     check("private:internal implementation, deleted before the call", string sub () { PID d(); return d.deletedBefore(); });
     check("private:internal implementation, subclass, deleted before the call",

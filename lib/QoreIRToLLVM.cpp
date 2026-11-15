@@ -2216,18 +2216,16 @@ bool QoreIRToLLVM::emitCallTargetCheckHelper(const QoreIRExprInstruction* check,
     }
     // the check after the arguments raises the error of a call whose arguments deleted the object, which names the
     // class of the variant that the call resolves with its arguments: they are passed to the helper, which is only
-    // called when the fast test did not decide the check (issue #5824); the operands of the call, after the target of
-    // a call on an object (DotEvalMethodDirect, operand 0)
+    // called when the fast test did not decide the check (issue #5824); the operands of the call, after the receiver
+    // of a call on an object, which is the target of the check (operand 0 of the call); a call through self has no
+    // receiver operand, and its check has no target operand
     llvm::Value* args = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
     // -1: the call is not known
     int nargs = -1;
     std::vector<llvm::Value*> temps;
     if (fused_check_call) {
         nargs = 0;
-        QoreIROpcode opcode = fused_check_call->opcode == QoreIROpcode::Invoke
-            ? static_cast<const QoreIRInvokeInstruction*>(fused_check_call)->invoke_opcode : fused_check_call->opcode;
-        size_t first = (opcode == QoreIROpcode::DotEvalMethodDirect
-            || opcode == QoreIROpcode::InvokeDotEvalMethodDirect) ? 1 : 0;
+        size_t first = check->operands.empty() ? 0 : 1;
         const auto& operands = fused_check_call->operands;
         if (operands.size() > first) {
             nargs = static_cast<int>(operands.size() - first);

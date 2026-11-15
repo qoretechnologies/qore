@@ -7875,19 +7875,18 @@ static QORE_INTERN_NOINLINE bool qore_ir_call_target_cache_hit(const QoreIRFunct
 */
 //! the arguments of the call that makes the check of its target after them (QoreIRInstruction::fused_call_check)
 struct QoreIRCallArgs {
+    const QoreIRInstruction* check;
     const QoreIRInstruction* call;
     const IRValueSlots& values;
 };
 
 //! builds the list of the arguments of a call that makes the check of its target (see QoreCallArgsSource): the
-//! operands of the call, after the target of a call on an object (DotEvalMethodDirect, operand 0)
+//! operands of the call, after the receiver of a call on an object, which is the target of the check (operand 0 of
+//! the call); a call through self has no receiver operand, and its check has no target operand
 static QoreListNode* qore_ir_build_call_args(const void* ctx) {
     const QoreIRCallArgs& call_args = *static_cast<const QoreIRCallArgs*>(ctx);
     const QoreIRInstruction* call = call_args.call;
-    QoreIROpcode opcode = call->opcode == QoreIROpcode::Invoke
-        ? static_cast<const QoreIRInvokeInstruction*>(call)->invoke_opcode : call->opcode;
-    size_t first = (opcode == QoreIROpcode::DotEvalMethodDirect || opcode == QoreIROpcode::InvokeDotEvalMethodDirect)
-        ? 1 : 0;
+    size_t first = call_args.check->operands.empty() ? 0 : 1;
     if (call->operands.size() <= first) {
         return nullptr;
     }
@@ -7909,7 +7908,7 @@ static QORE_INTERN_NOINLINE bool qore_ir_call_target_check_slow(const QoreIRFunc
         return !qore_check_call_target(ei->expr, target, xsink);
     }
     // the check after the arguments raises the error of the variant that the call resolves with them (issue #5824)
-    QoreIRCallArgs call_args{call, values};
+    QoreIRCallArgs call_args{ei, call, values};
     return !qore_check_call_target_after_args(ei->expr, target,
         call ? QoreCallArgsSource{qore_ir_build_call_args, &call_args} : QoreCallArgsSource(), xsink);
 }

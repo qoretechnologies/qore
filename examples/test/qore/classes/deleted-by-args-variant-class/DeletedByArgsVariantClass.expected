@@ -17,6 +17,8 @@ plain method, argument deletes: OBJECT-ALREADY-DELETED: cannot call C::m() on an
 named arguments, inherited variant: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
 named argument: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
 named arguments in a try block: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
+named arguments, typed local: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
+named arguments, top-level call: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
 call in a block exit handler: OBJECT-ALREADY-DELETED: cannot call Impl::n() on an object that has already been deleted
 private:internal implementation, deleted before the call: OBJECT-ALREADY-DELETED: cannot call PID::n() on an object that has already been deleted
 private:internal implementation, subclass, deleted before the call: OBJECT-ALREADY-DELETED: cannot call PIE::n() on an object that has already been deleted
@@ -39,6 +41,8 @@ plain method, argument deletes: OBJECT-ALREADY-DELETED: cannot call C::m() on an
 named arguments, inherited variant: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
 named argument: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
 named arguments in a try block: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
+named arguments, typed local: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
+named arguments, top-level call: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
 call in a block exit handler: OBJECT-ALREADY-DELETED: cannot call Impl::n() on an object that has already been deleted
 private:internal implementation, deleted before the call: OBJECT-ALREADY-DELETED: cannot call PID::n() on an object that has already been deleted
 private:internal implementation, subclass, deleted before the call: OBJECT-ALREADY-DELETED: cannot call PIE::n() on an object that has already been deleted
@@ -61,6 +65,8 @@ plain method, argument deletes: OBJECT-ALREADY-DELETED: cannot call C::m() on an
 named arguments, inherited variant: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
 named argument: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
 named arguments in a try block: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
+named arguments, typed local: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
+named arguments, top-level call: OBJECT-ALREADY-DELETED: cannot call NA::m() on an object that has already been deleted
 call in a block exit handler: OBJECT-ALREADY-DELETED: cannot call Impl::n() on an object that has already been deleted
 private:internal implementation, deleted before the call: OBJECT-ALREADY-DELETED: cannot call PID::n() on an object that has already been deleted
 private:internal implementation, subclass, deleted before the call: OBJECT-ALREADY-DELETED: cannot call PIE::n() on an object that has already been deleted
