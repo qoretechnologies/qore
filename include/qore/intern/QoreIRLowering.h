@@ -211,6 +211,18 @@ public:
     QoreIRValue lowerAndEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerOrEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerXorEquals(const QoreValue& expr, std::string& error);
+    //! Lowers a pre-increment or pre-decrement of lvexp, or a post-increment or post-decrement whose value is unused
+    /** @param expr the operator expression
+        @param lvexp the lvalue expression
+        @param int_op true for the int-specialized operator (the lvalue is typed int)
+        @param increment true for an increment, false for a decrement
+        @param loc the source location
+        @param error set on failure
+
+        @return the new value of the lvalue, or an invalid value on failure
+    */
+    QoreIRValue lowerPreIncDec(const QoreValue& expr, const QoreValue& lvexp, bool int_op, bool increment,
+        const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerPreIncrement(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPostIncrement(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPreDecrement(const QoreValue& expr, std::string& error);
