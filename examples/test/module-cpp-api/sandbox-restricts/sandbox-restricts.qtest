@@ -1,0 +1,297 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxRestrictsCompositionTest
+
+#! trusted class whose method reports the restriction predicates of the manager that governs it; sandboxed code
+#! subclasses it
+class Probe {
+    #! returns the predicates of the governing manager
+    hash<auto> get(bool policy = False) {
+        return sb_governing_restricts(policy);
+    }
+
+    #! returns the predicates before and after the callback, resolved once
+    hash<auto> around(code mutate, bool policy = False) {
+        return sb_governing_restricts_around(mutate, policy);
+    }
+}
+
+#! Tests QoreSandboxManager::restricts() and its relatives on the manager that governs a thread, including the
+#! composition of the managers of two sandboxes
+/** A call of a method of an object that sandboxed code created, made by code of another sandbox, is governed by both
+    sandboxes: the governing manager is the composition of their managers (see design/sandbox-provenance.md), whose
+    own configuration is the empty default
+*/
+class SandboxRestrictsCompositionTest inherits QUnit::Test {
+    private {
+        int counter = 0;
+    }
+
+    constructor() : QUnit::Test("SandboxRestrictsCompositionTest", "1.0", \ARGV) {
+        addTestCase("no sandbox", \testUnsandboxed());
+        addTestCase("one sandbox", \testSingle());
+        addTestCase("a composition of allow-all managers restricts nothing", \testAllowAllComposition());
+        addTestCase("a composition restricts if one member does", \testRestrictingMember());
+        addTestCase("a composition with a limits-only member restricts", \testLimitsMember());
+        addTestCase("a composition with a filesystem-restricting member restricts", \testFilesystemMember());
+        addTestCase("a default-deny member makes a composition restrict", \testDefaultDenyMember());
+        addTestCase("each limit alone makes a composition restrict", \testEachLimit());
+        addTestCase("port rules and a sandbox root alone make a composition restrict", \testPortAndRoot());
+        addTestCase("members that restrict in different dimensions", \testDifferentDimensions());
+        addTestCase("a composition of three", \testThree());
+        addTestCase("a member changed after the composition exists is seen", \testMutatedAfter());
+        addTestCase("the Policy purpose resolves the same predicates", \testPolicyPurpose());
+        addTestCase("a policy barrier masks the Policy purpose only", \testPolicyBarrier());
+        addTestCase("trustsUncontrolledApis() of a composition is the AND over the members", \testTrusts());
+        addTestCase("reset() of the managers restores the default deny", \testReset());
+        set_return_value(main());
+    }
+
+    private SandboxManager allowAll() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.setFilesystemDefaultPolicy(True);
+        return sm;
+    }
+
+    #! returns a Program with the given sandbox manager that can create a Probe subclass object and call a method of
+    #! an object
+    private Program makeProgram(SandboxManager sm) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.importClass("Probe");
+        p.parse("class Sub inherits Probe {}\n"
+            "auto sub run(code c) { return c(); }\n"
+            "code sub wrap(object o) { return auto sub () { return o.get(); }; }\n"
+            "object sub make() { return new Sub(); }\n"
+            "hash<auto> sub call(object o) { return o.get(); }\n"
+            "hash<auto> sub here() { return new Sub().get(); }", "restricts-" + (++counter));
+        return p;
+    }
+
+    private hash<auto> expected(bool network, bool filesystem, bool limits, bool trusts = False) {
+        return {
+            "sandboxed": True,
+            "restricts": network || filesystem || limits,
+            "network": network,
+            "filesystem": filesystem,
+            "limits": limits,
+            "trusts": trusts,
+        };
+    }
+
+    #! the predicates seen by the method of an object created in Program a, called in Program b
+    private hash<auto> both(Program a, Program b) {
+        object o = a.callFunction("make");
+        return b.callFunction("call", o);
+    }
+
+    testUnsandboxed() {
+        assertEq({"sandboxed": False}, sb_governing_restricts());
+        assertEq({"sandboxed": False}, new Probe().get());
+    }
+
+    testSingle() {
+        Program a = makeProgram(allowAll());
+        assertEq(expected(False, False, False), a.callFunction("here"));
+        SandboxManager sm = allowAll();
+        sm.blockPrivateNetworks();
+        assertEq(expected(True, False, False), makeProgram(sm).callFunction("here"));
+    }
+
+    testAllowAllComposition() {
+        assertEq(expected(False, False, False), both(makeProgram(allowAll()), makeProgram(allowAll())));
+    }
+
+    testRestrictingMember() {
+        SandboxManager sm = allowAll();
+        sm.blockPrivateNetworks();
+        Program denied = makeProgram(sm);
+        Program open = makeProgram(allowAll());
+        assertEq(expected(True, False, False), both(open, denied));
+        assertEq(expected(True, False, False), both(denied, open));
+    }
+
+    testLimitsMember() {
+        SandboxManager sm = allowAll();
+        sm.setMaxThreads(8);
+        Program limited = makeProgram(sm);
+        Program open = makeProgram(allowAll());
+        assertEq(expected(False, False, True), both(open, limited));
+        assertEq(expected(False, False, True), both(limited, open));
+    }
+
+    testFilesystemMember() {
+        SandboxManager sm = allowAll();
+        sm.addFilesystemDeniedPath("/etc");
+        Program fs = makeProgram(sm);
+        Program open = makeProgram(allowAll());
+        assertEq(expected(False, True, False), both(open, fs));
+        assertEq(expected(False, True, False), both(fs, open));
+    }
+
+    testDefaultDenyMember() {
+        Program deny = makeProgram(new SandboxManager());
+        Program open = makeProgram(allowAll());
+        assertEq(expected(True, True, False), deny.callFunction("here"));
+        assertEq(expected(True, True, False), both(open, deny));
+        assertEq(expected(True, True, False), both(deny, open));
+    }
+
+    #! asserts that a manager changed by the callback is the only restricting member of a composition
+    private checkOnly(code<nothing(SandboxManager)> set, bool network, bool filesystem, bool limits, string msg) {
+        SandboxManager sm = allowAll();
+        set(sm);
+        Program r = makeProgram(sm);
+        Program open = makeProgram(allowAll());
+        assertEq(expected(network, filesystem, limits), both(open, r), msg);
+        assertEq(expected(network, filesystem, limits), both(r, open), msg + " (reversed)");
+    }
+
+    testEachLimit() {
+        checkOnly(sub (SandboxManager sm) { sm.setWallTimeLimit(500); }, False, False, True, "wall time");
+        checkOnly(sub (SandboxManager sm) { sm.setCPUTimeLimit(500); }, False, False, True, "CPU time");
+        checkOnly(sub (SandboxManager sm) { sm.setMaxStackSize(1024 * 1024); }, False, False, True, "stack size");
+        checkOnly(sub (SandboxManager sm) { sm.setMemoryLimit(64 * 1024 * 1024); }, False, False, True, "memory");
+    }
+
+    testPortAndRoot() {
+        checkOnly(sub (SandboxManager sm) { sm.addNetworkAllowedPort(443); }, True, False, False, "allowed port");
+        checkOnly(sub (SandboxManager sm) { sm.setFilesystemSandboxRoot("/tmp"); }, False, True, False,
+            "sandbox root");
+    }
+
+    testDifferentDimensions() {
+        SandboxManager n = allowAll();
+        n.blockPrivateNetworks();
+        SandboxManager f = allowAll();
+        f.addFilesystemDeniedPath("/etc");
+        SandboxManager l = allowAll();
+        l.setMaxThreads(2);
+        assertEq(expected(True, True, False), both(makeProgram(n), makeProgram(f)));
+        assertEq(expected(True, False, True), both(makeProgram(l), makeProgram(n)));
+        assertEq(expected(False, True, True), both(makeProgram(f), makeProgram(l)));
+    }
+
+    #! the predicates seen by the method of an object of a, called by a closure of b, run in c
+    private hash<auto> three(Program a, Program b, Program c) {
+        object o = a.callFunction("make");
+        code w = b.callFunction("wrap", o);
+        return c.callFunction("run", w);
+    }
+
+    testThree() {
+        SandboxManager sm = allowAll();
+        sm.blockLocalhost();
+        assertEq(expected(False, False, False),
+            three(makeProgram(allowAll()), makeProgram(allowAll()), makeProgram(allowAll())));
+        assertEq(expected(True, False, False), three(makeProgram(allowAll()), makeProgram(sm), makeProgram(allowAll())));
+        assertEq(expected(True, False, False), three(makeProgram(sm), makeProgram(allowAll()), makeProgram(allowAll())));
+    }
+
+    # members of a composition are held by reference (QoreSandboxComposition holds the member managers, not copies),
+    # so a change to a member after the composition was resolved is seen by the same composition object
+    testMutatedAfter() {
+        SandboxManager sm = allowAll();
+        Program a = makeProgram(sm);
+        Program open = makeProgram(allowAll());
+        object o = a.callFunction("make");
+        hash<auto> r = open.callFunction("run", auto sub () { return o.around(sub () { sm.setMaxThreads(5); }); });
+        assertEq(expected(False, False, False), r.before);
+        assertEq(expected(False, False, True), r.after);
+        r = open.callFunction("run", auto sub () { return o.around(sub () { sm.blockPrivateNetworks(); }); });
+        assertEq(expected(False, False, True), r.before);
+        assertEq(expected(True, False, True), r.after);
+    }
+
+    testPolicyPurpose() {
+        assertEq({"sandboxed": False}, sb_governing_restricts(True));
+        SandboxManager sm = allowAll();
+        sm.addFilesystemDeniedPath("/etc");
+        Program p = makeProgram(sm);
+        assertEq(expected(False, True, False), p.callFunction("here"));
+        object o = p.callFunction("make");
+        assertEq(expected(False, True, False), makeProgram(allowAll()).callFunction("run", auto sub () { return o.get(True); }));
+        assertEq(expected(False, False, False),
+            makeProgram(allowAll()).callFunction("run", auto sub () { return makeProgram(allowAll()).callFunction("make").get(True); }));
+    }
+
+    testPolicyBarrier() {
+        SandboxManager sm = allowAll();
+        sm.blockPrivateNetworks();
+        Program p = makeProgram(sm);
+        # registered during trusted initialization, as system-policy capabilities must be
+        code system_probe = SandboxManager::createSystemPolicyCall(hash<auto> sub () {
+            return {"policy": sb_governing_restricts(True), "all": sb_governing_restricts()};
+        });
+        hash<auto> r = p.callFunction("run", system_probe);
+        assertEq(expected(True, False, False), r."all", "the barrier does not change the All purpose");
+        assertEq({"sandboxed": False}, r.policy, "no sandbox decides the Policy purpose inside the barrier");
+        assertEq(expected(True, False, False), p.callFunction("run", auto sub () { return sb_governing_restricts(True); }),
+            "outside the barrier the Policy purpose sees the sandbox");
+    }
+
+    testReset() {
+        hash<auto> r = sb_reset_restricts();
+        assertEq({"network": True, "filesystem": True, "default_allow": True}, r.before);
+        assertEq({"network": True, "filesystem": True, "default_allow": False}, r.after,
+            "reset() restores the default deny, which restricts");
+        assertEq({"network": True, "filesystem": True, "default_allow": True}, r.copy,
+            "the copy made before the reset is independent");
+    }
+
+    private SandboxManager trusting() {
+        SandboxManager sm = allowAll();
+        sm.setUncontrolledApiPolicy(True);
+        return sm;
+    }
+
+    testTrusts() {
+        # the default does not trust
+        assertEq(expected(False, False, False, False), makeProgram(allowAll()).callFunction("here"));
+        assertEq(expected(False, False, False, True), makeProgram(trusting()).callFunction("here"));
+        SandboxManager denied = trusting();
+        denied.setUncontrolledApiPolicy(False);
+        assertEq(expected(False, False, False, False), makeProgram(denied).callFunction("here"));
+        # a composition of members that all trust trusts; one that does not makes it not trust
+        assertEq(expected(False, False, False, True), both(makeProgram(trusting()), makeProgram(trusting())));
+        assertEq(expected(False, False, False, False), both(makeProgram(trusting()), makeProgram(allowAll())));
+        assertEq(expected(False, False, False, False), both(makeProgram(allowAll()), makeProgram(trusting())));
+        assertEq(expected(False, False, False, False), both(makeProgram(allowAll()), makeProgram(allowAll())));
+        # a member that restricts and trusts: the predicates are independent
+        SandboxManager rt = trusting();
+        rt.blockPrivateNetworks();
+        assertEq(expected(True, False, False, True), makeProgram(rt).callFunction("here"));
+        assertEq(expected(True, False, False, True), both(makeProgram(trusting()), makeProgram(rt)));
+        assertEq(expected(True, False, False, False), both(makeProgram(allowAll()), makeProgram(rt)));
+        # three members
+        assertEq(expected(False, False, False, True),
+            three(makeProgram(trusting()), makeProgram(trusting()), makeProgram(trusting())));
+        assertEq(expected(False, False, False, False),
+            three(makeProgram(trusting()), makeProgram(allowAll()), makeProgram(trusting())));
+        # the Policy purpose resolves the same
+        Program p = makeProgram(trusting());
+        assertEq(expected(False, False, False, True), p.callFunction("run", auto sub () { return sb_governing_restricts(True); }));
+        # a member changed after the composition was resolved is seen
+        SandboxManager sm = trusting();
+        Program owner = makeProgram(sm);
+        Program caller = makeProgram(trusting());
+        object o = owner.callFunction("make");
+        hash<auto> r = caller.callFunction("run", auto sub () {
+            return o.around(sub () { sm.setUncontrolledApiPolicy(False); });
+        });
+        assertEq(expected(False, False, False, True), r.before);
+        assertEq(expected(False, False, False, False), r.after);
+    }
+}
