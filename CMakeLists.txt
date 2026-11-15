@@ -250,7 +250,6 @@ set(LIBQORE_QPP_SRC
     lib/QC_AbstractThreadResource.qpp
     lib/QC_AutoGate.qpp
     lib/QC_AutoLock.qpp
-    lib/QC_ThreadCapabilityScope.qpp
     lib/QC_AutoReadLock.qpp
     lib/QC_AutoWriteLock.qpp
     lib/QC_Condition.qpp
@@ -2408,7 +2407,6 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_SSLPrivateKey.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HTTPClient.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AutoLock.cpp\"
-#include \"${CMAKE_BINARY_DIR}/QC_ThreadCapabilityScope.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AutoGate.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AutoReadLock.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AutoWriteLock.cpp\"

@@ -47,7 +47,7 @@
 
 module WebSocketClient {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS_CONTROL,THREAD_CONTROL";
+    domains = "PROCESS_CONTROL";
     version = "2.5";
     desc = "user module for providing client support for the WebSocket protocol";
     author = "David Nichols <david@qore.org>";
@@ -354,13 +354,6 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
-    - declares the \c THREAD_CONTROL domain in its module header, so that its threads start for a caller restricted with
-      @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
-      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
-    - without the \c "start_thread" and \c "call_wrapper" options, the \c start_thread and \c call_wrapper
-      capabilities of the thread that creates the client are used, as a host sets them for the code it runs with
-      @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"
-      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
     - \c WebSocketConnectionObject::getImpl() is declared to return a
       @ref WebSocketClient::WebSocketClient "WebSocketClient", as subclasses return other clients (see
       @ref override_return_types); \c getAsync() raises \c CONNECTION-ASYNC-UNSUPPORTED for a connection whose client
@@ -3523,15 +3516,12 @@ ws.setEventQueue();
         }
 %endif
 
-        if (exists http_opts.start_thread) {
+        if (http_opts.hasKey("start_thread")) {
             if (!http_opts.start_thread.callp()) {
                 raiseError("option hash to WebSocketClient::constructor() has an invalid 'start_thread' key with type %y; "
                     "must be a callable value", opts.start_thread.fullType());
             }
             start_thread = remove http_opts.start_thread;
-        } else if (*code cap = get_thread_capability("start_thread")) {
-            # the capability of the code that the host runs (qorus#867)
-            start_thread = cap;
         }
 %ifdef PO_NO_THREAD_CONTROL
         else {
@@ -3556,19 +3546,14 @@ ws.setEventQueue();
             pong_callback = http_opts.pong_callback;
         }
 
-        if (exists http_opts.call_wrapper) {
+        if (http_opts.hasKey("call_wrapper")) {
             if (!http_opts.call_wrapper.callp()) {
                 raiseError("option hash to WebSocketClient::constructor() has an invalid 'call_wrapper' key with "
                     "type %y; must be a callable value", opts.call_wrapper.type());
             }
             # not an HTTPClient option; remove so it is not forwarded to the HTTP layer
             call_wrapper = remove http_opts.call_wrapper;
-        } else {
-            # the capability of the code that the host runs, if any (qorus#867)
-            call_wrapper = get_thread_capability("call_wrapper");
         }
-        # neither is an HTTPClient option, also when given as NOTHING
-        remove http_opts{"start_thread", "call_wrapper"};
 
         hash<UrlInfo> uh = parse_url(http_opts.url);
         if (uh.protocol) {

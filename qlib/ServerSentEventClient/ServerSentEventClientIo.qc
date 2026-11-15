@@ -54,35 +54,9 @@ sse.disconnect();
       @ref disconnect()
 
     @note The event loop runs in a background thread.  Event callbacks are invoked from
-    that thread.  This class is thread-safe for connect/disconnect/reconnect calls; the event thread holds the
-    object only by a weak reference, so dropping its last reference destroys it, and its destructor stops the thread.
+    that thread.  This class is thread-safe for connect/disconnect/reconnect calls; the event thread holds a
+    reference to the object, so @ref disconnect() must be called, or the object deleted, to stop it.
 */
-#! The stop and reconnect flags of a client, which its event thread shares
-class SseIoRunState {
-    public {
-        bool stop = False;
-        bool do_reconnect = False;
-    }
-}
-
-#! What the event thread of a client holds: the client only by a weak reference, and the objects it waits on
-class SseIoThreadRef {
-    public {
-        #! the client (a weak reference)
-        auto client;
-        Mutex m;
-        Condition stop_cond;
-        SseIoRunState state;
-    }
-
-    constructor(ServerSentEventClientIo client, Mutex m, Condition stop_cond, SseIoRunState state) {
-        self.client := client;
-        self.m = m;
-        self.stop_cond = stop_cond;
-        self.state = state;
-    }
-}
-
 public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionProvider::OptionHelper,
         DataProvider::DelayedObservable {
 
@@ -108,8 +82,8 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         #! I/O timeout for opening the stream and for SSE event reading
         timeout timeout_ms = ServerSentEventClient::DefaultTimeout;
 
-        #! Stop and reconnect flags, shared with the event thread
-        SseIoRunState run_state();
+        #! Stop flag
+        bool stop = False;
 
         #! True from just before the event thread is started until it terminates
         /** Set by @ref connect() before the thread is started and cleared by the thread itself when it terminates,
@@ -129,6 +103,8 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         #! Reconnect flag
         bool reconnect_flag = False;
 
+        #! Set by @ref reconnect() to reconnect immediately
+        bool do_reconnect = False;
 
         #! Reconnect delay
         timeout reconnect_delay = ServerSentEventClient::ReconnectDelay;
@@ -197,9 +173,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
           \c ssl_cert_data, \c ssl_key_path, \c ssl_key_data, \c ssl_key_password, \c max_response_body_size:
           HTTP options of the REST client
         - \c logger: a logger
-        - \c yield: callable to yield thread execution (for sandboxed environments); the event thread holds it while it
-          reads events, so a closure that refers to the client (one created in a method of a subclass, for example)
-          keeps the client alive after its owner drops its last reference
+        - \c yield: callable to yield thread execution (for sandboxed environments)
         - \c start_thread: callable to start a new thread (for sandboxed environments)
         - \c asyncapi: a string URL or file path to an AsyncAPI schema to load for automatic validation of
           deserialized event data
@@ -241,8 +215,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
             }
         }
         yield = opts.yield;
-        # without the option, the capability of the code that the host runs, if any (qorus#867)
-        start_thread = exists opts.start_thread ? opts.start_thread : get_thread_capability("start_thread");
+        start_thread = opts.start_thread;
 
         if (exists opts.last_event_id) {
             last_event_id = opts.last_event_id.toString();
@@ -342,8 +315,8 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
 
         {
             AutoLock al1(m);
-            run_state.stop = False;
-            run_state.do_reconnect = False;
+            stop = False;
+            do_reconnect = False;
             setConnectedUnlocked(reader);
             # the event thread is accounted for before it is started: it can run to completion before the call
             # that starts it returns, so it cannot be recorded afterwards
@@ -356,10 +329,16 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
             # raised after it, the connected event could follow the first data event
             notifyObservers(EVENT_SSE_CONNECTED, {});
 
-            # the thread holds the client only by a weak reference, so that the client's destructor runs, and stops
-            # it, when the owner drops its last reference
-            SseIoThreadRef ref(self, m, stop_cond, run_state);
-            code<nothing()> fn = ServerSentEventClientIo::makeEventThreadClosure(ref, reader);
+            code<nothing()> fn = sub () {
+                try {
+                    eventLoop(reader);
+                } catch (hash<ExceptionInfo> ex) {
+                    # the object was deleted from the event thread itself, for example by an observer
+                    if (ex.err != "OBJECT-ALREADY-DELETED") {
+                        rethrow;
+                    }
+                }
+            };
 %ifdef PO_NO_THREAD_CONTROL
             new_tid = start_thread(fn);
 %else
@@ -408,8 +387,8 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
             return False;
         }
         reconnect_flag = True;
-        if (!run_state.stop && !run_state.do_reconnect) {
-            run_state.do_reconnect = True;
+        if (!stop && !do_reconnect) {
+            do_reconnect = True;
             if (cur_reader) {
                 cur_reader.cancel();
             }
@@ -533,7 +512,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
 
     #! Tells the event thread to stop; must be called with @ref m held
     private requestStopUnlocked() {
-        run_state.stop = True;
+        stop = True;
         if (cur_reader) {
             cur_reader.cancel();
         }
@@ -592,310 +571,163 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         }
     }
 
-    #! the code of the event thread: a closure of a static method, which refers to the client only through \a ref
-    private static code<nothing()> makeEventThreadClosure(SseIoThreadRef ref,
-            HttpClientStreamingIo::SseStreamReader reader) {
-        return sub () {
-            ServerSentEventClientIo::eventThread(ref, reader);
-        };
-    }
-
-    #! The event thread
-    /** Holds the client only by a weak reference, and takes a strong one for each short step: the client's
-        destructor runs when its owner drops its last reference, and stops the thread (disconnect()); if the last
-        reference is the thread's own, the destructor runs in the thread after a step and only tells it to stop.  The
-        thread reads the events and waits for the reconnect delay without the client; it holds the client while it
-        opens a stream again (the connect and the response headers), so a client whose last reference is dropped
-        meanwhile is destroyed in the event thread when the step ends.
-
-        @param ref the client (a weak reference) and the objects that the thread waits on
-        @param reader the reader of the event stream opened by @ref connect()
+    #! Background event loop
+    /** @param reader the reader of the event stream opened by @ref connect()
     */
-    private static eventThread(SseIoThreadRef ref, HttpClientStreamingIo::SseStreamReader reader) {
-        try {
-            ServerSentEventClientIo c = ref.client;
-            c.eventThreadStarted();
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "OBJECT-ALREADY-DELETED") {
-                reader.cancel();
-                return;
-            }
-            rethrow;
+    private eventLoop(HttpClientStreamingIo::SseStreamReader reader) {
+        {
+            # recorded before any event is raised, so a disconnect() from an observer is recognized as made from
+            # the event thread, also before the call that started the thread has returned
+            AutoLock al(m);
+            tid = gettid();
         }
-        on_exit {
-            try {
-                ServerSentEventClientIo c = ref.client;
-                c.eventThreadEnded();
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err != "OBJECT-ALREADY-DELETED") {
-                    rethrow;
-                }
-            }
+        on_exit if (self) {
+            AutoLock al(m);
+            thread_active = False;
+            remove tid;
+            remove cur_reader;
+            connected = False;
+            cid = -1;
+            stop = False;
+            do_reconnect = False;
+            stop_cond.broadcast();
+            self.logDebug("SSE I/O thread TID %d terminating", gettid());
         }
 
         while (True) {
             try {
-                ServerSentEventClientIo::readEvents(ref, reader);
+                readEvents(reader);
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "OBJECT-ALREADY-DELETED") {
-                    reader.cancel();
+                if (!self) {
                     return;
                 }
-                if (!ServerSentEventClientIo::threadLogError(ref, "SSE stream error: %s: %s", ex.err, ex.desc)) {
-                    reader.cancel();
-                    return;
-                }
+                self.logError("SSE stream error: %s: %s", ex.err, ex.desc);
             }
             # the reader is canceled if it has not ended, for example after a stream error
             reader.cancel();
-            try {
-                ServerSentEventClientIo c = ref.client;
-                c.streamClosed();
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "OBJECT-ALREADY-DELETED") {
-                    return;
-                }
-                rethrow;
+            if (!self) {
+                return;
             }
 
-            *HttpClientStreamingIo::SseStreamReader new_reader = ServerSentEventClientIo::reopenStream(ref);
+            {
+                AutoLock al(m);
+                remove cur_reader;
+                connected = False;
+                cid = -1;
+            }
+            notifyObservers(EVENT_SSE_CLOSED, {});
+
+            *HttpClientStreamingIo::SseStreamReader new_reader = reopenStream();
             if (!new_reader) {
                 return;
             }
             reader = new_reader;
-            try {
-                ServerSentEventClientIo c = ref.client;
-                c.notifyObservers(EVENT_SSE_CONNECTED, {});
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "OBJECT-ALREADY-DELETED") {
-                    reader.cancel();
-                    return;
-                }
-                rethrow;
-            }
+            notifyObservers(EVENT_SSE_CONNECTED, {});
         }
     }
 
-    #! logs an error with the client, unless it has been destroyed; returns False if it has
-    private static bool threadLogError(SseIoThreadRef ref, string fmt, ...) {
-        try {
-            ServerSentEventClientIo c = ref.client;
-            c.logError("%s", vsprintf(fmt, argv));
-            return True;
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "OBJECT-ALREADY-DELETED") {
-                return False;
+    #! Reopens the event stream if the client reconnects
+    /** @return the reader of the new event stream, or @ref nothing if the event thread is to terminate
+    */
+    private *HttpClientStreamingIo::SseStreamReader reopenStream() {
+        int reconnect_attempts = 0;
+        while (True) {
+            {
+                AutoLock al(m);
+                if (stop || !reconnect_flag) {
+                    return;
+                }
+                if (do_reconnect) {
+                    # an immediate reconnect requested with reconnect()
+                    do_reconnect = False;
+                } else {
+                    # Check retry limit (negative = infinite)
+                    ++reconnect_attempts;
+                    if (max_reconnect_retries >= 0 && reconnect_attempts > max_reconnect_retries) {
+                        self.logInfo("SSE max reconnect retries (%d) exceeded; giving up", max_reconnect_retries);
+                        return;
+                    }
+                    self.logInfo("SSE connection lost; reconnecting in %y (attempt %d/%s)",
+                        reconnect_delay, reconnect_attempts,
+                        max_reconnect_retries < 0 ? "inf" : string(max_reconnect_retries));
+                    stop_cond.wait(m, reconnect_delay);
+                    if (stop) {
+                        return;
+                    }
+                    do_reconnect = False;
+                }
             }
-            rethrow;
+
+            HttpClientStreamingIo::SseStreamReader reader;
+            try {
+                reader = openStream();
+            } catch (hash<ExceptionInfo> ex) {
+                self.logInfo("SSE reconnect failed: %s: %s", ex.err, ex.desc);
+                continue;
+            }
+
+            AutoLock al(m);
+            if (stop) {
+                reader.cancel();
+                return;
+            }
+            setConnectedUnlocked(reader);
+            self.logDebug("SSE reconnected (connection %d)", num_connects);
+            return reader;
         }
     }
 
     #! Reads events from the stream until it ends or the event thread is told to stop or reconnect
-    /** The read waits without the client; each event is dispatched with a strong reference
-
-        @throw OBJECT-ALREADY-DELETED the client has been destroyed
-    */
-    private static readEvents(SseIoThreadRef ref, HttpClientStreamingIo::SseStreamReader reader) {
+    private readEvents(HttpClientStreamingIo::SseStreamReader reader) {
         while (True) {
-            *hash<auto> step;
-            {
-                ServerSentEventClientIo c = ref.client;
-                step = c.readStep();
-            }
-            if (!step) {
+            if (!self) {
                 return;
             }
+            {
+                AutoLock al(m);
+                if (stop || do_reconnect) {
+                    return;
+                }
+            }
 
-            *hash<SseMessageInfo> evt = reader.readEvent(step.timeout);
+            *hash<SseMessageInfo> evt = reader.readEvent(timeout_ms);
             if (!evt) {
                 if (reader.isDone()) {
                     return;
                 }
                 # Timeout — yield and retry
 %ifdef PO_NO_PROCESS_CONTROL
-                call_function(step.yield);
+                yield();
 %else
-                if (step.yield) {
-                    call_function(step.yield);
+                if (yield) {
+                    yield();
                 }
 %endif
                 continue;
             }
 
-            ServerSentEventClientIo c = ref.client;
-            c.dispatchEvent(evt);
-        }
-    }
+            # Track last event ID for reconnection
+            if (evt.id.val()) {
+                AutoLock al(m);
+                last_event_id = string(evt.id);
+            }
 
-    #! Reopens the event stream if the client reconnects
-    /** Waits for the reconnect delay without the client
-
-        @return the reader of the new event stream, or @ref nothing if the event thread is to terminate
-    */
-    private static *HttpClientStreamingIo::SseStreamReader reopenStream(SseIoThreadRef ref) {
-        int reconnect_attempts = 0;
-        while (True) {
-            *hash<auto> decision;
+            # Deserialize and dispatch
             try {
-                ServerSentEventClientIo c = ref.client;
-                decision = c.reconnectDecision(\reconnect_attempts);
+                if (evt.data.val()) {
+                    evt.data = deserializeData(evt.data);
+                }
+                if (evt.id =~ /^[0-9]+$/) {
+                    evt.id = evt.id.toInt();
+                }
+                validateIncomingEvent(evt);
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "OBJECT-ALREADY-DELETED") {
-                    return;
-                }
-                rethrow;
-            }
-            if (!decision) {
-                return;
-            }
-            if (!decision.immediate) {
-                # the reconnect delay, interrupted by disconnect() and reconnect(); a delay <= 0 waits until then
-                AutoLock al(ref.m);
-                if (!ref.state.stop && !ref.state.do_reconnect) {
-                    ref.stop_cond.wait(ref.m, decision.delay);
-                }
-                if (ref.state.stop) {
-                    return;
-                }
-                ref.state.do_reconnect = False;
+                self.logError("Error processing SSE event: %s", get_exception_string(ex));
+                continue;
             }
 
-            *hash<auto> rv;
-            try {
-                ServerSentEventClientIo c = ref.client;
-                rv = c.reopenStep();
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "OBJECT-ALREADY-DELETED") {
-                    return;
-                }
-                rethrow;
-            }
-            # an empty hash is a retry
-            if (!exists rv) {
-                return;
-            }
-            if (rv.reader) {
-                return rv.reader;
-            }
+            notifyObservers(EVENT_SSE_DATA, evt);
         }
-    }
-
-    #! records the event thread; called by the event thread before any event is raised
-    /** A disconnect() from an observer is then recognized as made from the event thread, also before the call that
-        started the thread has returned
-    */
-    private eventThreadStarted() {
-        AutoLock al(m);
-        tid = gettid();
-    }
-
-    #! clears the state of the event thread when it terminates
-    private eventThreadEnded() {
-        AutoLock al(m);
-        thread_active = False;
-        remove tid;
-        remove cur_reader;
-        connected = False;
-        cid = -1;
-        run_state.stop = False;
-        run_state.do_reconnect = False;
-        stop_cond.broadcast();
-        logDebug("SSE I/O thread TID %d terminating", gettid());
-    }
-
-    #! returns the timeout and yield code of the next read, or @ref nothing if the thread stops reading
-    private *hash<auto> readStep() {
-        AutoLock al(m);
-        if (run_state.stop || run_state.do_reconnect) {
-            return;
-        }
-        return {"timeout": timeout_ms, "yield": yield};
-    }
-
-    #! records, deserializes, validates and raises an event that was read
-    private dispatchEvent(hash<SseMessageInfo> evt) {
-        # Track last event ID for reconnection
-        if (evt.id.val()) {
-            AutoLock al(m);
-            last_event_id = string(evt.id);
-        }
-
-        # Deserialize and dispatch
-        try {
-            if (evt.data.val()) {
-                evt.data = deserializeData(evt.data);
-            }
-            if (evt.id =~ /^[0-9]+$/) {
-                evt.id = evt.id.toInt();
-            }
-            validateIncomingEvent(evt);
-        } catch (hash<ExceptionInfo> ex) {
-            logError("Error processing SSE event: %s", get_exception_string(ex));
-            return;
-        }
-
-        notifyObservers(EVENT_SSE_DATA, evt);
-    }
-
-    #! records that the event stream has ended and raises the closed event
-    private streamClosed() {
-        {
-            AutoLock al(m);
-            remove cur_reader;
-            connected = False;
-            cid = -1;
-        }
-        notifyObservers(EVENT_SSE_CLOSED, {});
-    }
-
-    #! decides whether and when to reconnect
-    /** @param reconnect_attempts the reconnect attempts of this reopen
-
-        @return @ref nothing if the thread terminates, else \c immediate: @ref True to reconnect at once, or \c delay:
-        the reconnect delay in milliseconds
-    */
-    private *hash<auto> reconnectDecision(reference<int> reconnect_attempts) {
-        AutoLock al(m);
-        if (run_state.stop || !reconnect_flag) {
-            return;
-        }
-        if (run_state.do_reconnect) {
-            # an immediate reconnect requested with reconnect()
-            run_state.do_reconnect = False;
-            return {"immediate": True};
-        }
-        # Check retry limit (negative = infinite)
-        ++reconnect_attempts;
-        if (max_reconnect_retries >= 0 && reconnect_attempts > max_reconnect_retries) {
-            logInfo("SSE max reconnect retries (%d) exceeded; giving up", max_reconnect_retries);
-            return;
-        }
-        logInfo("SSE connection lost; reconnecting in %y (attempt %d/%s)", reconnect_delay, reconnect_attempts,
-            max_reconnect_retries < 0 ? "inf" : string(max_reconnect_retries));
-        return {"immediate": False, "delay": reconnect_delay};
-    }
-
-    #! reopens the event stream
-    /** @return \c reader: the reader of the new stream; or an empty hash to retry; or @ref nothing if the thread
-        terminates
-    */
-    private *hash<auto> reopenStep() {
-        HttpClientStreamingIo::SseStreamReader reader;
-        try {
-            reader = openStream();
-        } catch (hash<ExceptionInfo> ex) {
-            logInfo("SSE reconnect failed: %s: %s", ex.err, ex.desc);
-            return {};
-        }
-
-        AutoLock al(m);
-        if (run_state.stop) {
-            reader.cancel();
-            return;
-        }
-        setConnectedUnlocked(reader);
-        logDebug("SSE reconnected (connection %d)", num_connects);
-        return {"reader": reader};
     }
 
     #! Deserializes SSE event data based on the serialization setting
