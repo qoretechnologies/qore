@@ -30,6 +30,7 @@
 */
 
 #include "qore/intern/QoreRuntimeDiagnostic.h"
+#include "qore/intern/AssertStatement.h"
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreJITException.h"
@@ -6911,19 +6912,10 @@ extern "C" DLLEXPORT int64_t qore_rt_int_to_string_measure(int64_t value) {
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_sprintf(uint64_t val_bits, ExceptionSink* xsink) {
-    QoreValue val = fromBits(val_bits);
-    QoreStringNode* str;
-    if (val.getType() == NT_LIST) {
-        str = q_sprintf(val.get<const QoreListNode>(), 0, 0, xsink);
-        if (*xsink) {
-            return toBits(QoreValue());
-        }
-    } else {
-        // Single value: convert to string
-        QoreStringValueHelper sv(val);
-        str = new QoreStringNode(*sv);
-    }
-    return toBits(QoreValue(str));
+    // the message of a failed @assert, the only code that QoreIROpcode::Sprintf is emitted for: it is made as the AST
+    // interpreter makes it (qore#6197)
+    QoreStringNode* str = AssertStatement::makeMessage(fromBits(val_bits), xsink);
+    return str ? toBits(QoreValue(str)) : toBits(QoreValue());
 }
 
 static uint64_t qore_rt_make_hash_const_keys_impl(const char** keys, uint64_t* vals,

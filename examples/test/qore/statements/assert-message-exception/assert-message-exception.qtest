@@ -2,6 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the exception edge of an @assert message
 
 %modern
 %no-child-restrictions
@@ -18,7 +19,8 @@
     exception raised by the formatting (ENCODING-CONVERSION-ERROR for an argument that cannot be converted to the
     format's encoding) left the function instead of going to the handler of the try block around the @assert.  A
     message that is not formatted was converted with a "%s" format, which raised that error for a string that the AST
-    interpreter keeps in its own encoding; a list was formatted as one argument (qore#6197).  The worker's output must
+    interpreter keeps in its own encoding; a list was formatted as one argument, and any other value was converted as a format's argument is, not as the AST
+    interpreter converts it (ex: 1 for True, nothing for a hash, NOTHING and NULL) (qore#6197).  The worker's output must
     be that of the AST interpreter in every execution mode and as a qcc-compiled executable.
 */
 class AssertMessageExceptionTest inherits QUnit::Test {
@@ -30,6 +32,13 @@ class AssertMessageExceptionTest inherits QUnit::Test {
             "plain message: caught ASSERTION-ERROR",
             "list message: caught ASSERTION-ERROR: a 1",
             "int message: caught ASSERTION-ERROR: 2",
+            "bool message: caught ASSERTION-ERROR: True",
+            "hash message: caught ASSERTION-ERROR: hash: (1 member)",
+            "  a : 1",
+            "nothing message: caught ASSERTION-ERROR: <NOTHING>",
+            "null message: caught ASSERTION-ERROR: <NULL>",
+            "date message: caught ASSERTION-ERROR: 2026-01-02 03:04:05.000000 Fri +00:00 (UTC)",
+            "float message: caught ASSERTION-ERROR: 1.5",
             "format arg loop: 0:ENCODING-CONVERSION-ERROR 1:ENCODING-CONVERSION-ERROR",
             "format arg out: escaped ENCODING-CONVERSION-ERROR",
         );

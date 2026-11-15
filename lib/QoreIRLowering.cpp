@@ -3313,11 +3313,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 if (!raw_msg.isValid()) {
                     return false;
                 }
-                // the value is converted to a string as AssertStatement::execImpl() converts it: Sprintf converts
-                // a value that is not a list as it is, keeping a string's encoding (a "%s" format converted it to
-                // the encoding of the format, which raised ENCODING-CONVERSION-ERROR for a string that has no
-                // representation in it), and formats a list as the arguments of sprintf(); an exception raised by
-                // the formatting goes to the handler of an enclosing try block (see above)
+                // the value is given to Sprintf as it is, which makes the message with
+                // AssertStatement::makeMessage(), as the AST interpreter does: a string keeps its encoding (a "%s"
+                // format converted it to the encoding of the format, which raised ENCODING-CONVERSION-ERROR for a
+                // string that has no representation in it), a list is formatted as the arguments of sprintf(), and
+                // any other value is converted with getAsString(); an exception raised by the formatting goes to the
+                // handler of an enclosing try block (see above)
                 auto* sprintf_inst = builder.createExprOp(QoreIROpcode::Sprintf, QoreValue(), {raw_msg},
                     stmt->loc);
                 sprintf_inst->exception_target = getCurrentExceptionTarget();

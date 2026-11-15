@@ -8,6 +8,7 @@
 */
 
 #include "qore/intern/QoreRuntimeDiagnostic.h"
+#include "qore/intern/AssertStatement.h"
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRInterpreter.h>
 #include <qore/intern/QoreHashKeyHelper.h>
@@ -17283,24 +17284,19 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::Sprintf: {
+                // the message of a failed @assert, the only code that this opcode is emitted for: it is made as the
+                // AST interpreter makes it (qore#6197)
                 QoreValue val = getIRValue(values, inst->operands[0]);
-                QoreStringNode* str;
-                if (val.getType() == NT_LIST) {
-                    str = q_sprintf(val.get<const QoreListNode>(), 0, 0, xsink);
-                    if (*xsink) {
-                        if (inst->exception_target) {
-                            cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
-                            prev_block = block;
-                            block = inst->exception_target;
-                            ip = 0;
-                            break;
-                        }
-                        return returnAfterUnhandledException();
+                QoreStringNode* str = AssertStatement::makeMessage(val, xsink);
+                if (!str) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
                     }
-                } else {
-                    // Single value: convert to string
-                    QoreStringValueHelper sv(val);
-                    str = new QoreStringNode(*sv);
+                    return returnAfterUnhandledException();
                 }
                 setValueSlot(values, inst->result.id, QoreValue(str), xsink);
                 cleanup.push_back(inst->result.id);

@@ -75,6 +75,12 @@ for (int i = 0; i < 3; ++i) {
     run("plain message", auto sub () { return plain_message(invalid); });
     run("list message", auto sub () { return list_message(("a %d", 1)); });
     run("int message", auto sub () { return list_message(2); });
+    run("bool message", auto sub () { return list_message(True); });
+    run("hash message", auto sub () { return list_message({"a": 1}); });
+    run("nothing message", auto sub () { return list_message(); });
+    run("null message", auto sub () { return list_message(NULL); });
+    run("date message", auto sub () { return list_message(2026-01-02T03:04:05Z); });
+    run("float message", auto sub () { return list_message(1.5); });
     run("format arg loop", auto sub () { return format_arg_loop(invalid); });
     run("format arg out", auto sub () { return format_arg_out(invalid); });
 }

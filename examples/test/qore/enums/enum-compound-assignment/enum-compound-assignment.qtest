@@ -26,10 +26,11 @@
     The worker applies each operator to int, float and number enum lvalues of each kind (a local, a closure-bound
     local, a global, an object member, a hashdecl member, a hash element and a list element) in a try block, in a
     function with no try block whose caller catches the error, in a try block in a loop, and in top-level code; and
-    to EI, *EI and EF lvalues with no value, EI parameters, EI lvalues changed through a reference, thread-local EI
-    variables and EI lvalues with an operand of no type; the same operators on int and softint locals are controls,
-    which must change them.  It is run in each execution mode, on the IR tier, and as a program compiled with qcc at
-    -O0 and -O3; every run must give the results of the AST interpreter.
+    to int, float and number enum lvalues with no value, with and without "*", to string enum lvalues with no value
+    (whose members, a short and a long string, must not change), EI parameters, EI lvalues changed through a
+    reference, thread-local EI variables and EI lvalues with an operand of no type; the same operators on int and
+    softint locals are controls, which must change them.  It is run in each execution mode, on the IR tier, and as a
+    program compiled with qcc at -O0 and -O3; every run must give the results of the AST interpreter.
 */
 class EnumCompoundAssignmentTest inherits QUnit::Test {
     public {
@@ -42,13 +43,23 @@ class EnumCompoundAssignmentTest inherits QUnit::Test {
             "einv": "nothing null",
             "eionv": "nothing null",
             "efnv": "nothing null",
+            "efonv": "nothing null",
+            "ennv": "nothing null",
+            "enonv": "nothing null",
         };
+
+        #! the kinds of string enum lvalues with no value, which only need the same result in every mode: they are
+        #! changed as string lvalues are (qore#6195)
+        const StringEnumKinds = ("essnv", "eslnv");
+
+        #! the values of the members of the string enums, which no operator changes
+        const StringEnumMembers = "\"a\" \"a long string value that is not stored inline\"";
 
         #! the checks that assign an EI value from a variable of no type, which is assigned as it is
         const AssignEnum = "none|enum<EI> 8";
 
         #! the number of checks the worker makes
-        const CheckCount = 639;
+        const CheckCount = 745;
     }
 
     private {
@@ -133,6 +144,13 @@ class EnumCompoundAssignmentTest inherits QUnit::Test {
     #! unchanged, and every operator on an int or softint local changes it
     private checkAstResult(string name, string result) {
         string kind = (name =~ x/^([a-z]+)-/)[0];
+        if (name == "es-members") {
+            assertEq(StringEnumMembers, result, "ast: " + name);
+            return;
+        }
+        if (inlist(kind, StringEnumKinds)) {
+            return;
+        }
         if (kind == "int" || kind == "softint") {
             assertRegex("^none\\|integer -?[0-9]+$", result, "ast: " + name);
             return;
