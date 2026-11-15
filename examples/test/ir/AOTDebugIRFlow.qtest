@@ -7,7 +7,7 @@
 # (#6200, #6201).
 #
 # Once a debugger is attached, an AOT function runs its serialized debug IR in the IR interpreter
-# (UserVariantBase::materializeAOTDebugIR()): from format version 40 (QORE_AOT_DEBUG_FLOW_VERSION), the step events of
+# (UserVariantBase::materializeAOTDebugIR()): from format version QORE_AOT_DEBUG_FLOW_VERSION, the step events of
 # the debug IR have the paths of the requests (QoreIRDebugFlowTargets), and so do the ScopeExit instructions whose
 # handlers run out of line.  The program aot-debug-ir-flow/flow.q attaches a debugger to itself and calls a function
 # in a thread of its own; the debugger requests a flow at a step event of a statement of a loop or of a handler.

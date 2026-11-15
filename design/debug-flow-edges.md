@@ -537,6 +537,6 @@ the frame's exits) is gone.
 - **Runtime.** The IR interpreter branches to the path in the DebugStatement, DebugBlock and ScopeExit cases; native
   code's step hooks return the request (`qore_rt_dbg_step()`, flow mask: bits 0-2 the paths, bits 3-5 report from a
   handler) and branch to it; a native ScopeExit gets the request of its handlers from `qore_rt_take_scope_exit_flow()`.
-- **AOT (format v40).** DebugStatement, DebugBlock and ScopeExit records end with a u8 mask and a u16 block index per
-  path; block flag 0x10 is `debug_flow`.  AOT native code lowers no path blocks.
+- **AOT (format v41, `QORE_AOT_DEBUG_FLOW_VERSION`).** DebugStatement, DebugBlock and ScopeExit records end with a
+  u8 mask and a u16 block index per path; block flag 0x10 is `debug_flow`.  AOT native code lowers no path blocks.
 

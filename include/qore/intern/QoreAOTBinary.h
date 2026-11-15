@@ -508,10 +508,10 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      for a call dispatched by name, whose slot records the class, method and variant resolved at parse time for the
 //!      check of the call's target; and the method-ref payload of a self call to an abstract method is
 //!      QORE_AOT_ABSTRACT_SELF_CALL_MARKER (#5824).  A v9-v37 image has neither.
-//! v40: the DebugStatement, DebugBlock and ScopeExit records of the debug IR end with the paths of a debugger's
+//! v41: the DebugStatement, DebugBlock and ScopeExit records of the debug IR end with the paths of a debugger's
 //!      flow requests (a u8 mask: bit 0 break, bit 1 continue, bit 2 return, then the u16 block index of each path in
 //!      that order), and the flags of a block record have the bit 0x10 for a block of such a path (#6200, #6201).  A
-//!      v9-v39 image has none: a request at a step event of its code returns from the function.
+//!      v9-v40 image has none: a request at a step event of its code returns from the function.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -552,8 +552,8 @@ constexpr uint16_t QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION = 36;
 constexpr uint16_t QORE_AOT_MODULE_CMD_OPTIONS_VERSION = 37;
 //! First format version whose call targets can be dispatched by name and self calls marked abstract (see v38 above).
 constexpr uint16_t QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION = 38;
-//! First format version whose debug IR has the paths of a debugger's flow requests (see v40 above).
-constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 40;
+//! First format version whose debug IR has the paths of a debugger's flow requests (see v41 above).
+constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 41;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
 constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_DEBUG_FLOW_VERSION;

@@ -267,8 +267,8 @@ int main() {
             }
         };
     };
-    run("v39 step event without paths", O::DebugStatement, G::DebugStatement, {}, debug_step(-1, {}), nullptr,
-        false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
+    run("step event without paths before the flow version", O::DebugStatement, G::DebugStatement, {},
+        debug_step(-1, {}), nullptr, false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
     run("step event without paths", O::DebugStatement, G::DebugStatement, {}, debug_step(0, {}), nullptr,
         false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
     run("step event with paths", O::DebugStatement, G::DebugStatement, {}, debug_step(7, {0, 0, 0}), nullptr,
@@ -292,8 +292,8 @@ int main() {
             }
         };
     };
-    run("v39 ScopeExit without paths", O::ScopeExit, G::ScopeExit, {}, scope_exit(-1, {}), nullptr, false, false,
-        QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
+    run("ScopeExit without paths before the flow version", O::ScopeExit, G::ScopeExit, {}, scope_exit(-1, {}),
+        nullptr, false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
     run("ScopeExit with paths", O::ScopeExit, G::ScopeExit, {}, scope_exit(5, {0, 0}), nullptr, false, false,
         QORE_AOT_DEBUG_FLOW_VERSION, 0);
     run("ScopeExit flow mask", O::ScopeExit, G::ScopeExit, {}, scope_exit(0x40, {}),
