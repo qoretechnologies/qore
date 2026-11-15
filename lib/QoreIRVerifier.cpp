@@ -1563,27 +1563,6 @@ static const QoreValue* getSerializationOnlyInstructionExpr(const QoreIRInstruct
     }
 }
 
-//! Returns true if the opcode is a call/invoke that could trigger AST evaluation
-//! and potentially access locals through the thread-local variable stack.
-static bool isCallOrInvoke(QoreIROpcode op) {
-    switch (op) {
-        case QoreIROpcode::Call:
-        case QoreIROpcode::CallDirect:
-        case QoreIROpcode::CallIndirect:
-        case QoreIROpcode::CallMethod:
-        case QoreIROpcode::CallMethodDirect:
-        case QoreIROpcode::InvokeMethodDirect:
-        case QoreIROpcode::CallStatic:
-        case QoreIROpcode::CallStaticDirect:
-        case QoreIROpcode::DotEvalMethodDirect:
-        case QoreIROpcode::InvokeDotEvalMethodDirect:
-        case QoreIROpcode::Invoke:
-            return true;
-        default:
-            return false;
-    }
-}
-
 static void collectLocalsFromIRFunction(const QoreIRFunction& func,
         std::unordered_set<const void*>& ast_locals,
         bool& unknown_node_found, std::unordered_set<const QoreIRFunction*>& visited_handlers);

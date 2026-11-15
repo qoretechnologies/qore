@@ -649,34 +649,6 @@ static const AbstractQoreZoneInfo* readAOTDateZone(const char* zone_name) {
     return zone;
 }
 
-//! Resolve a pseudo-class by its serialized path (e.g. "::Qore::<value>").
-//! Pseudo-classes are not in the normal namespace hierarchy, so runtimeFindClass()
-//! cannot resolve them when rebuilding direct dot-eval instructions from AOT IR.
-static const QoreClass* instRegistryFindPseudoClassByPath(const char* path) {
-    if (!path || !*path) {
-        return nullptr;
-    }
-
-    for (qore_type_t t = 0; t <= NT_NUMBER; ++t) {
-        const QoreClass* pc = qore_pseudo_get_class(t);
-        if (pc && !strcmp(pc->getPath(), path)) {
-            return pc;
-        }
-    }
-
-    const QoreClass* pc = qore_pseudo_get_class(NT_FUNCREF);
-    if (pc && !strcmp(pc->getPath(), path)) {
-        return pc;
-    }
-
-    pc = qore_pseudo_get_class(NT_RUNTIME_CLOSURE);
-    if (pc && !strcmp(pc->getPath(), path)) {
-        return pc;
-    }
-
-    return nullptr;
-}
-
 //! Return a class path suitable for AOT instruction metadata.
 static std::string instRegistryGetClassPath(const QoreClass* qc, bool pseudo = false) {
     if (!qc) {

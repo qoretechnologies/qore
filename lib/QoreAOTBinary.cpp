@@ -7377,15 +7377,6 @@ static std::string aotHashParts(const std::vector<std::string>& parts) {
     return aotHashHex(h);
 }
 
-static std::string aotHexBytes(const uint8_t* data, size_t size) {
-    std::ostringstream os;
-    os << std::hex << std::setfill('0');
-    for (size_t i = 0; i < size; ++i) {
-        os << std::setw(2) << static_cast<unsigned>(data[i]);
-    }
-    return os.str();
-}
-
 static std::string aotTypePathString(const QoreTypeInfo* ti, bool no_narrow = false) {
     return getTypePath(ti, no_narrow);
 }
@@ -11787,68 +11778,6 @@ static void buildProgramConstantReverseMapImpl(qore_ns_private* ns,
             buildProgramConstantReverseMapImpl(qore_ns_private::get(*ni.second), crm);
         }
     }
-}
-
-//! Build a reverse map from constant value node pointers to names for a specific class
-//! Includes the class's own constants and parent namespace constants
-static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
-    AOTConstantReverseMap crm;
-    if (!qc) {
-        return crm;
-    }
-
-    const qore_class_private* cls_priv = qore_class_private::get(*qc);
-    std::string class_prefix = std::string(qc->getPath() + 2) + "::";  // strip leading "::"
-
-    // Add class constants
-    ConstConstantListIterator cci(cls_priv->constlist);
-    while (cci.next()) {
-        const ConstantEntry* ce = cci.getEntry();
-        std::string fqn = class_prefix + cci.getName();
-        if (ce->hasInitExpr()) {
-            aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq(), true);
-            continue;
-        }
-        QoreValue v = ce->getAOTOwnershipValue();
-        if (!v.hasNode()) {
-            v.discard(nullptr);
-            continue;
-        }
-        qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq());
-        v.discard(nullptr);
-    }
-
-    // Add namespace constants from the class's enclosing namespace hierarchy
-    if (cls_priv->ns) {
-        const qore_ns_private* ns_priv = cls_priv->ns;
-        while (ns_priv) {
-            // Iterate namespace constants using the ConstantList directly
-            ConstConstantListIterator nsi(ns_priv->constant);
-            while (nsi.next()) {
-                const ConstantEntry* ce = nsi.getEntry();
-                std::string ns_path = ns_priv->path;
-                if (ns_path.size() >= 2) {
-                    ns_path = ns_path.substr(2);  // strip leading "::"
-                }
-                std::string fqn = ns_path.empty() ? nsi.getName() : ns_path + "::" + nsi.getName();
-                if (ce->hasInitExpr()) {
-                    aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq(), true);
-                    continue;
-                }
-                QoreValue v = ce->getAOTOwnershipValue();
-                if (!v.hasNode()) {
-                    v.discard(nullptr);
-                    continue;
-                }
-                qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq());
-                v.discard(nullptr);
-            }
-            // Walk up to parent namespace
-            ns_priv = ns_priv->parent;
-        }
-    }
-
-    return crm;
 }
 
 static std::vector<AOTLocalSlotId> buildAOTLocalSlotsForUserSignature(const UserSignature* sig) {

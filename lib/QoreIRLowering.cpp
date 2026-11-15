@@ -6326,18 +6326,6 @@ static bool getLValueBaseValue(const QoreValue& value, QoreValue& base) {
     }
 }
 
-static bool isInvokeLValueNode(const AbstractQoreNode* node) {
-    return dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)
-        || dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)
-        || dynamic_cast<const QorePreIncrementOperatorNode*>(node)
-        || dynamic_cast<const QorePostIncrementOperatorNode*>(node)
-        || dynamic_cast<const QorePreDecrementOperatorNode*>(node)
-        || dynamic_cast<const QorePostDecrementOperatorNode*>(node)
-        || dynamic_cast<const QoreShiftOperatorNode*>(node)
-        || dynamic_cast<const QoreUnshiftOperatorNode*>(node)
-        || dynamic_cast<const QoreSpliceOperatorNode*>(node);
-}
-
 static std::string describeIRLoweringExpr(const QoreValue& expr) {
     std::string desc = "QoreValue type '";
     desc += expr.getTypeName();
@@ -7294,15 +7282,6 @@ QoreIRBasicBlock* QoreIRLowering::createBlock(const std::string& prefix) {
         b->enclosing_loop_exit = current_loop_exit;
     }
     return b;
-}
-
-static bool isContainerLiteral(const QoreValue& v) {
-    if (!v.hasNode()) {
-        return false;
-    }
-    const AbstractQoreNode* node = v.getInternalNode();
-    return dynamic_cast<const QoreParseHashNode*>(node) || dynamic_cast<const QoreParseListNode*>(node)
-        || dynamic_cast<const QoreHashNode*>(node) || dynamic_cast<const QoreListNode*>(node);
 }
 
 //! Largest container a constant is still rebuilt from its entries rather than referenced

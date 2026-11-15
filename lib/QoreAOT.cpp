@@ -1146,12 +1146,6 @@ static bool hasAOTSelfRecursiveCall(const QoreIRFunction* ir_func) {
     return false;
 }
 
-//! Check if an AOT function is eligible for self-recursive Approach B fast entry.
-static bool isAOTSelfRecursiveEligible(const QoreIRFunction* ir_func,
-        const UserVariantBase* uvb) {
-    return isAOTFastEntryEligible(ir_func, uvb) && hasAOTSelfRecursiveCall(ir_func);
-}
-
 // Forward declaration
 static std::vector<std::string> extractAllDependencies(const char* source, int source_len,
     std::vector<std::string>* reexport_deps = nullptr,
