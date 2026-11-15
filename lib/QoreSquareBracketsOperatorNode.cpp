@@ -754,6 +754,9 @@ FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIterat
     // the container and the index are temporaries of the statement, which live until the statement ends, as in
     // evalImpl() and in the other execution modes (qore#5712); an iterator takes references of its own
     QoreStatementTempScope::holdReceiver(left, lhs, xsink);
+    // the destructor of a value that the scope released for the same expression can raise an exception
+    if (*xsink)
+        return nullptr;
 
     // do not evaluate the RHS if the RHS is a list with ranges
     if (rhs_list_range) {

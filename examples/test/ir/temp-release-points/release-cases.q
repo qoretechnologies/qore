@@ -94,6 +94,18 @@ list<E> sub mkl(string n) {
     return (new E(n),);
 }
 
+#! a class cast in a default argument (qore#5712)
+string sub cast_default_arg(E e = cast<E>(mke("cda"))) {
+    return e.n;
+}
+
+#! a class cast in a member initializer (qore#5712)
+class CastMember {
+    public {
+        E e = cast<E>(mke("cmi"));
+    }
+}
+
 # the cases of qore#5801 are functions, not closures, so that each execution mode compiles them
 auto sub case_map_iterator() {
     *It it = new It((new E("mapit"),));
@@ -291,6 +303,11 @@ sub main() {
     t("operand of class cast", auto sub () { string s = f1(cast<E>(mke("cc"))) + mark("cc"); });
     t("class cast exception", auto sub () { string s = g3(new E("arg"), cast<Other>(mke("ccx")), raise()); });
     t("enum cast exception", auto sub () { string s = g3(new E("arg"), cast<EnR>(id(mke("enx"))), raise()); });
+    # a class cast whose value is used after the scope of its expression ends: an assignment to an element, a default
+    # argument and a member initializer evaluate in a scope of their own
+    t("class cast element", auto sub () { hash<auto> h = {}; h.x = cast<E>(mke("cel")); string s = h.x.n + mark("cel"); });
+    t("class cast default argument", auto sub () { string s = cast_default_arg() + mark("cda"); });
+    t("class cast member", auto sub () { CastMember c(); string s = c.e.n + mark("cmi"); });
     t("float compare exception", auto sub () { string s = g3(new E("arg"), mke("gt") > 1.0, raise()); });
     # the condition of ?:
     t("condition", auto sub () { string s = f1(1) + ((new E("q")) ? mark("q") : ""); });

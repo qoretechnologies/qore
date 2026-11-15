@@ -50,7 +50,7 @@ class TempReleasePointsTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(62, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
+        assertEq(65, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
         assertTrue(out =~ /^list literal:\n  dtor lit\n  mark lit\n/, "list literal");
         assertTrue(out =~ /\nmember:\n  dtor mem\n  mark mem\n/, "member");
         assertTrue(out =~ /\nno write:\n  mark nw\n  dtor nw\n/, "no write");
@@ -75,6 +75,11 @@ class TempReleasePointsTest inherits QUnit::Test {
             "class cast and an exception");
         assertTrue(out =~ /\nenum cast exception:\n  dtor arg\n  dtor enx\n  ! RUNTIME-CAST-ERROR\n/,
             "enum cast and an exception");
+        # a class cast whose value is used after the scope of its expression: the value lives as long as it is used
+        assertTrue(out =~ /\nclass cast element:\n  mark cel\n  dtor cel\n/, "class cast assigned to an element");
+        assertTrue(out =~ /\nclass cast default argument:\n  dtor cda\n  mark cda\n/,
+            "class cast in a default argument");
+        assertTrue(out =~ /\nclass cast member:\n  mark cmi\n  dtor cmi\n/, "class cast in a member initializer");
         assertTrue(out =~ /\nkeys source object:\n  mark kso\n  dtor kso\n/, "keys of an object as a functional source");
         assertTrue(out =~ /\noperand of float compare:\n  mark lt\n  dtor lt\n/, "operand of a float comparison");
         assertTrue(out =~ /\nfloat compare exception:\n  dtor arg\n  dtor gt\n  ! X\n/, "float comparison and an exception");
