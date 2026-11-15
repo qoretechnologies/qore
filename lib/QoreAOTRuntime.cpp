@@ -11878,6 +11878,9 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                 if (!init_descriptors.empty()) {
                     ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
                     if (!xsink.isException()) {
+                        // the initializers are the program's own code: they run with its parse options, as when
+                        // the program is parsed, not with those in effect when it is loaded (qore#6189)
+                        LoadTimeParseOptionsHelper init_poh((*qpgm)->getParseOptions());
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
                             /*write_shadow=*/true, /*failure_sink=*/nullptr, /*script_load=*/true);
@@ -13190,6 +13193,10 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     if (!init_func_contexts.empty()) {
         printd(2, "AOT ns_init '%s': executing %d init functions\n",
             mod_name.c_str(), (int)init_func_contexts.size());
+        // the initializers are the module's own code: they run with the module's parse options, as its contexts are
+        // built with them above, not with those of the code that imports it or that is being parsed when it is
+        // loaded (qore#6189)
+        LoadTimeParseOptionsHelper exec_poh(init_ctx_pgm->getParseOptions());
         int failed = executeInitFunctions(tpgm, init_func_contexts,
             pending_descriptors, mod_name.c_str(), shadow_pgm,
             mod_path.empty() ? nullptr : mod_path.c_str(),
@@ -13705,6 +13712,9 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                 if (!init_descriptors.empty()) {
                     ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
                     if (!xsink.isException()) {
+                        // the initializers are the program's own code: they run with its parse options, as when
+                        // the program is parsed, not with those in effect when it is loaded (qore#6189)
+                        LoadTimeParseOptionsHelper init_poh((*qpgm)->getParseOptions());
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
                             /*write_shadow=*/true, /*failure_sink=*/nullptr, /*script_load=*/true);
@@ -15510,6 +15520,9 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
         const char* old_name = set_module_context_name(rec->mod_name.empty() ? nullptr : rec->mod_name.c_str());
         const char* old_path = set_module_context_path(rec->mod_path.empty() ? nullptr : rec->mod_path.c_str());
         uint64_t raw_result = 0;
+        // a constant initialized when it is first read runs with the parse options of the code that it belongs to
+        // (the module's own Program, or the script's), not with those of the code that reads it (qore#6189)
+        LoadTimeParseOptionsHelper lazy_poh((rec->shadow_pgm ? rec->shadow_pgm : init_pgm)->getParseOptions());
         try {
             raw_result = rec->fn_ptr(rec->ctx, &init_xsink);
         } catch (const QoreJITException&) {
@@ -17275,6 +17288,9 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
                     tch_xsink.handleExceptions();
                     return 6;
                 }
+                // the initializers are the script's own code: they run with its parse options, not with those of
+                // the host code that registers it (qore#6189)
+                LoadTimeParseOptionsHelper init_poh(tpgm->getParseOptions());
                 executeInitFunctions(tpgm, init_func_contexts,
                     init_descriptors, label ? label : "<script>",
                     /*shadow_pgm=*/nullptr, /*mod_path=*/nullptr,
@@ -17483,6 +17499,9 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                     if (tch_xsink.isException()) {
                         tch_xsink.handleExceptions();
                     } else {
+                        // the initializers are the script's own code: they run with its parse options, not with
+                        // those of the host code that registers it (qore#6189)
+                        LoadTimeParseOptionsHelper init_poh(tpgm->getParseOptions());
                         executeInitFunctions(tpgm, init_func_contexts,
                             init_descriptors,
                             label ? label : "<script>",
@@ -17842,6 +17861,9 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                 tch_xsink.handleExceptions();
             } else {
                 uint64_t t1 = time_on ? now_us() : 0;
+                // the initializers are the script's own code: they run with its parse options, not with those of
+                // the host code that registers it (qore#6189)
+                LoadTimeParseOptionsHelper init_poh(tpgm->getParseOptions());
                 executeInitFunctions(tpgm, batch_init_contexts,
                     batch_init_descriptors, "<script-batch>",
                     /*shadow_pgm=*/nullptr,
