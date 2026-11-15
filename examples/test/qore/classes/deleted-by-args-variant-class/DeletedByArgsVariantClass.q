@@ -157,6 +157,64 @@ class PIE inherits PID {
     }
 }
 
+# named arguments, bound by name to the variants of the method when the call is made
+class NA {
+    string m(int a, string b = "x") {
+        return "NA::m " + a + " " + b;
+    }
+}
+
+class NB inherits NA {
+    string m(string a, int b = 1) {
+        return "NB::m " + a + " " + b;
+    }
+
+    int del() {
+        delete self;
+        return 17;
+    }
+
+    # the names select the variant of NA
+    string namedInherited() {
+        return m(b: "s", a: del());
+    }
+
+    # the only argument is positional for either variant: the variant of NA
+    string namedOnly() {
+        return m(a: del());
+    }
+
+    string namedInTry() {
+        try {
+            return m(b: "s", a: del());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ": " + ex.desc;
+        }
+    }
+}
+
+# a call in the handler of a block exit, which runs as a function of its own
+class H2 inherits Base, Impl {
+    int del() {
+        delete self;
+        return 18;
+    }
+
+    string inOnExit() {
+        string r;
+        {
+            on_exit {
+                try {
+                    r = n(del());
+                } catch (hash<ExceptionInfo> ex) {
+                    r = ex.err + ": " + ex.desc;
+                }
+            }
+        }
+        return r;
+    }
+}
+
 sub check(string name, code c) {
     try {
         printf("%s: %s\n", name, c());
@@ -183,6 +241,10 @@ for (int i = 0; i < 3; ++i) {
     check("typed local, inherited variant, argument deletes", string sub () { V2 o(); return o.dotInheritedVariant(); });
     check("top-level call, inherited variant, argument deletes", string sub () { V2 o(); return o.v(o.delInt()); });
     check("plain method, argument deletes", string sub () { C c(); return c.argDeletes(); });
+    check("named arguments, inherited variant", string sub () { NB o(); return o.namedInherited(); });
+    check("named argument", string sub () { NB o(); return o.namedOnly(); });
+    check("named arguments in a try block", string sub () { NB o(); return o.namedInTry(); });
+    check("call in a block exit handler", string sub () { H2 h(); return h.inOnExit(); });
     check("private:internal implementation, deleted before the call", string sub () { PID d(); return d.deletedBefore(); });
     check("private:internal implementation, subclass, deleted before the call",
         string sub () { PIE e(); return e.deletedBefore(); });

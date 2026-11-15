@@ -1271,9 +1271,10 @@ QORE_CEH_CONSTRUCTOR_INLINE CodeEvaluationHelper::CodeEvaluationHelper(Exception
 CodeEvaluationHelper::CodeEvaluationHelper(DeletedByArgs, ExceptionSink* n_xsink, RuntimeConfig& n_rc,
         const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, const char* n_name,
         QoreListNode* args, QoreObject* self, const qore_class_private* n_qc, const qore_class_private* cctx,
-        QoreProgram* pgm_ctx, const QoreTypeParamInstantiation* n_explicit_type_param_instantiation)
+        QoreProgram* pgm_ctx, const QoreTypeParamInstantiation* n_explicit_type_param_instantiation,
+        const name_vec_t* n_arg_names)
     : ct(CT_UNUSED), call_flags(0), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
-        loc(take_runtime_call_location()),
+        loc(take_runtime_call_location()), arg_names(n_arg_names),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
         receiver_type_info(nullptr),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
@@ -1287,6 +1288,12 @@ CodeEvaluationHelper::CodeEvaluationHelper(DeletedByArgs, ExceptionSink* n_xsink
         return;
     }
 
+    if (n_arg_names) {
+        // the arguments are bound by name, as the constructor of a named call binds them
+        assert(!variant);
+        initImpl<false, true>(func, variant, false, cctx, self, pgm_ctx, {});
+        return;
+    }
     init(func, variant, false, cctx, self, pgm_ctx);
 }
 

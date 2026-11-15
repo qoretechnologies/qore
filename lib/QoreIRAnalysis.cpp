@@ -2550,8 +2550,41 @@ const QoreIRInstruction* qore_ir_call_of_target_check(const QoreIRInstruction* c
         ? next : nullptr;
 }
 
+static size_t qore_ir_fuse_call_target_checks_intern(QoreIRFunction& func,
+        std::unordered_set<const QoreIRFunction*>& visited);
+
 size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func) {
+    std::unordered_set<const QoreIRFunction*> visited;
+    return qore_ir_fuse_call_target_checks_intern(func, visited);
+}
+
+static size_t qore_ir_fuse_call_target_checks_intern(QoreIRFunction& func,
+        std::unordered_set<const QoreIRFunction*>& visited) {
+    if (!visited.insert(&func).second) {
+        // a handler shared by more than one block exit (#6087)
+        return 0;
+    }
     size_t count = 0;
+    // the helpers of background expressions and the handlers of block exits, which the interpreter runs as functions
+    // of their own, as the function itself (issue #5824: the check after the arguments of a call takes the call's
+    // arguments from the call that makes it)
+    for (auto& block : func.blocks) {
+        for (auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::BackgroundInt) {
+                // a background call of a function, of a closure or of a resolved self or static method is an
+                // expression instruction with the same opcode (see QoreIRLowering::lowerExprOpOrInvoke())
+                auto* bi = qore_ir_inst_cast<QoreIRBackgroundInstruction*>(inst.get());
+                if (bi && bi->helper_ir) {
+                    count += qore_ir_fuse_call_target_checks_intern(*bi->helper_ir, visited);
+                }
+            } else if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
+                if (obei->handler_ir) {
+                    count += qore_ir_fuse_call_target_checks_intern(*obei->handler_ir, visited);
+                }
+            }
+        }
+    }
     // the check of a method call's target directly before the call (after its arguments) goes into the call, which
     // makes it: the IR interpreter makes no instruction of its own for it (issue #5824)
     for (auto& block : func.blocks) {

@@ -895,10 +895,14 @@ public:
         method's code); the caller then raises the error of the method's code (issue #5824).  Only for the cold path
         of the compiled modes' check of a call's target after its arguments: the call itself is not made.
     */
+    /** @param n_arg_names the names of the arguments of a named call resolved at run time by parameter name
+        (AbstractMethodCallNode::execNamed()), whose arguments are in source order, or nullptr
+    */
     DLLLOCAL CodeEvaluationHelper(DeletedByArgs, ExceptionSink* n_xsink, RuntimeConfig& n_rc,
             const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, const char* n_name,
             QoreListNode* args, QoreObject* self, const qore_class_private* n_qc, const qore_class_private* cctx,
-            QoreProgram* pgm_ctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation);
+            QoreProgram* pgm_ctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+            const name_vec_t* n_arg_names);
 
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args = nullptr,

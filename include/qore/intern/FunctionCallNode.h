@@ -662,7 +662,8 @@ DLLLOCAL void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObj
 */
 DLLLOCAL void qore_raise_deleted_method_call_after_args(QoreObject* self, const QoreMethod& m,
         const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation, ExceptionSink* xsink);
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t* arg_names,
+        ExceptionSink* xsink);
 
 //! Returns the node as a FunctionCallNode if it is one, otherwise nullptr
 /** The same result as dynamic_cast<const FunctionCallNode*>(), from the node type: a FunctionCallNode has

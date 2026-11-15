@@ -8494,7 +8494,8 @@ static QORE_INTERN_NOINLINE void raise_abstract_variant_call(ExceptionSink* xsin
 
 void qore_raise_deleted_method_call_after_args(QoreObject* self, const QoreMethod& m,
         const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation, ExceptionSink* xsink) {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t* arg_names,
+        ExceptionSink* xsink) {
     assert(!m.isStatic());
     const NormalMethodFunction* f = NMETHF(qore_method_private::get(m)->getFunction());
     RuntimeConfig& rc = rc_get_current_ref();
@@ -8505,7 +8506,8 @@ void qore_raise_deleted_method_call_after_args(QoreObject* self, const QoreMetho
         // code
         CodeEvaluationHelper ceh(CodeEvaluationHelper::DeletedByArgs(), xsink, rc, f, variant, f->getName(),
             args, self, qore_class_private::get(*f->getClass()), cctx,
-            qore_get_method_pgm_context(*f->getClass(), spgm_holder), explicit_type_param_instantiation);
+            qore_get_method_pgm_context(*f->getClass(), spgm_holder), explicit_type_param_instantiation,
+            arg_names);
         if (*xsink) {
             return;
         }

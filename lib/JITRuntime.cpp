@@ -2003,8 +2003,8 @@ extern "C" DLLEXPORT void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int
 */
 static int qore_check_method_call_after_args(QoreValue base, const char* name, const QoreClass* qc,
         const QoreMethod* method, const AbstractQoreFunctionVariant* variant,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool direct,
-        const QoreCallArgsSource& args, ExceptionSink* xsink) {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t* arg_names,
+        bool direct, const QoreCallArgsSource& args, ExceptionSink* xsink) {
     QoreObject* obj = nullptr;
     switch (base.getType()) {
         case NT_OBJECT:
@@ -2051,8 +2051,9 @@ static int qore_check_method_call_after_args(QoreValue base, const char* name, c
         return -1;
     }
     ReferenceHolder<QoreListNode> arg_list(args.build(args.ctx), xsink);
-    qore_raise_deleted_method_call_after_args(obj, *m, variant, *arg_list, class_ctx,
-        explicit_type_param_instantiation, xsink);
+    // the arguments of a named call are bound by name (AbstractMethodCallNode::execNamed())
+    qore_raise_deleted_method_call_after_args(obj, *m, arg_names ? nullptr : variant, *arg_list, class_ctx,
+        explicit_type_param_instantiation, arg_names, xsink);
     return -1;
 }
 
@@ -2066,7 +2067,7 @@ int qore_check_call_target_after_args(const QoreValue& call, const QoreValue& ta
         const SelfFunctionCallNode* self_call = static_cast<const SelfFunctionCallNode*>(node);
         return qore_check_method_call_after_args(target, self_call->getMethodName(), self_call->getClass(),
             self_call->getMethod(), self_call->getVariant(), self_call->getExplicitTypeParamInstantiation(),
-            qore_self_call_is_qualified(self_call), args, xsink);
+            self_call->getRuntimeArgNames(), qore_self_call_is_qualified(self_call), args, xsink);
     }
     if (node->getType() == NT_OPERATOR) {
         // the only operator that the check is emitted for is a method call (QoreIRLowering::lowerDotEval())
@@ -2074,7 +2075,8 @@ int qore_check_call_target_after_args(const QoreValue& call, const QoreValue& ta
         const MethodCallNode* m = static_cast<const QoreDotEvalOperatorNode*>(node)->getMethodCall();
         if (m && !m->isPseudo()) {
             return qore_check_method_call_after_args(target, m->getName(), m->getClass(), m->getMethod(),
-                m->getVariant(), m->getExplicitTypeParamInstantiation(), false, args, xsink);
+                m->getVariant(), m->getExplicitTypeParamInstantiation(), m->getRuntimeArgNames(), false, args,
+                xsink);
         }
     }
     return 0;
@@ -2128,7 +2130,7 @@ extern "C" DLLEXPORT void qore_rt_check_call_target_after_args_aot(QoreAOTContex
         }
         const char* name = target.check_method ? target.check_method->getName() : target.method_name;
         qore_check_method_call_after_args(fromBits(target_bits), name, target.check_qc, target.check_method,
-            target.check_variant, target.explicit_type_param_instantiation, false, source, xsink);
+            target.check_variant, target.explicit_type_param_instantiation, nullptr, false, source, xsink);
         return;
     }
     qore_check_call_target_after_args(fromBits(ctx->exprs[slot]), fromBits(target_bits), source, xsink);
