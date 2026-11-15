@@ -848,7 +848,8 @@
     @par Thread Entry and Exit Handlers
     @ref Qore::Program::setThreadEntryHandler() "Program::setThreadEntryHandler()" sets code that runs every time a
     thread enters and leaves a Program, so that an embedding application can keep a context of its own for each
-    Program on threads that run the code of many Programs, such as async I/O callback workers.
+    Program on threads that run the code of many Programs, such as async I/O callback workers; a binary module asks
+    \c qore_program_thread_entry_pending() whether a call into its current Program must still enter it.
 
     @par Module Parse Option Masks
     A process can let code with fewer privileges load trusted modules that use more functionality with a module

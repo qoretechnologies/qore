@@ -2348,9 +2348,10 @@ private:
 /** This is the case when the Program has thread entry handlers and is not the thread's entered Program: the current
     Program can be set without entering it, for example while a Program is parsed or committed, or while metadata
     of a Program is looked up.  Callers that skip ProgramThreadCountContextHelper for a call within the current
-    Program must check this first; ProgramThreadCountContextHelper::set() checks it itself.
+    Program must check this first; ProgramThreadCountContextHelper::set() checks it itself.  Binary modules use the
+    exported qore_program_thread_entry_pending().
 */
-DLLLOCAL bool thread_entry_pending(QoreProgram* pgm);
+DLLLOCAL bool thread_entry_pending(const QoreProgram* pgm);
 
 //! A thread's entry into a Program, counted with its thread count, which is left with
 //! qore_program_private::decThreadCount(*pgm, tid, xsink)

@@ -62,3 +62,26 @@ static int ProgramContextProbe::getStaticParseOptions() [flags=CONSTANT] {
     QoreProgram* pgm = getProgram();
     return pgm ? pgm->getParseOptions64() : 0;
 }
+
+//! returns what qore_program_thread_entry_pending() reports for a Program to the C++ code of a module
+/** @param program the Program to check
+
+    @return True if a call into \a program from here must enter it although it can be the current Program
+*/
+static bool ProgramContextProbe::threadEntryPending(Program[QoreProgram] program) [flags=RET_VALUE_ONLY] {
+    return qore_program_thread_entry_pending(*program);
+}
+
+//! returns whether a module's call into a Program that it made current with QoreProgramContextHelper must enter it
+/** QoreProgramContextHelper sets the current Program without entering it: the decision of the example of
+    qore_program_thread_entry_pending() is made in that state
+
+    @param program the Program to make current
+
+    @return True if a call into \a program must enter it with QoreExternalProgramContextHelper
+*/
+static bool ProgramContextProbe::needsEntryInContext(Program[QoreProgram] program) [flags=RET_VALUE_ONLY] {
+    QoreProgram* pgm = *program;
+    QoreProgramContextHelper pch(pgm);
+    return pgm != getProgram() || qore_program_thread_entry_pending(pgm);
+}

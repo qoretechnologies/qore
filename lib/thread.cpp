@@ -4358,8 +4358,13 @@ QoreValue run_thread_entry_handler(ThreadData* td, ResolvedCallReferenceNode* ha
 }
 }
 
-bool thread_entry_pending(QoreProgram* pgm) {
-    return qore_program_private::hasThreadEntryHandlers(*pgm) && thread_data.get()->entry_pgm != pgm;
+bool thread_entry_pending(const QoreProgram* pgm) {
+    if (!qore_program_private::hasThreadEntryHandlers(*pgm)) {
+        return false;
+    }
+    // a thread without Qore thread data has entered no Program
+    ThreadData* td = thread_data.get();
+    return !td || td->entry_pgm != pgm;
 }
 
 int ThreadEntryHandlerFrame::enter(QoreProgram* pgm, ExceptionSink* xsink) {
