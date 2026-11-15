@@ -1129,7 +1129,7 @@ QoreProgram* RunTimeResolvedMethodReferenceNode::getProgram() const {
 }
 
 bool RunTimeResolvedMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-    const RunTimeResolvedMethodReferenceNode* vc = dynamic_cast<const RunTimeResolvedMethodReferenceNode*>(v);
+    const RunTimeResolvedMethodReferenceNode* vc = qore_exact_node_cast<RunTimeResolvedMethodReferenceNode>(v);
     return vc && vc->obj == obj && vc->method == method;
 }
 
@@ -1540,10 +1540,12 @@ void qore_raise_not_call_reference(ExceptionSink* xsink, const QoreProgramLocati
 }
 
 int qore_call_reference_check_target(const ResolvedCallReferenceNode* rcr, ExceptionSink* xsink) {
-    if (const RunTimeResolvedMethodReferenceNode* r = dynamic_cast<const RunTimeResolvedMethodReferenceNode*>(rcr)) {
+    // made for every call through a call reference: the classes are final, so they are tested by their exact type,
+    // without the string comparisons of a dynamic_cast
+    if (const RunTimeResolvedMethodReferenceNode* r = qore_exact_node_cast<RunTimeResolvedMethodReferenceNode>(rcr)) {
         return r->checkObject(xsink);
     }
-    if (const RunTimeObjectMethodReferenceNode* r = dynamic_cast<const RunTimeObjectMethodReferenceNode*>(rcr)) {
+    if (const RunTimeObjectMethodReferenceNode* r = qore_exact_node_cast<RunTimeObjectMethodReferenceNode>(rcr)) {
         return r->checkObject(xsink);
     }
     return 0;
@@ -1556,13 +1558,13 @@ static const QoreMethod* qore_call_reference_code_method(const ResolvedCallRefer
     const QoreMethod* m = nullptr;
     // the object a method is called on, if any: the call is dispatched on its class
     const QoreObject* obj = nullptr;
-    if (const RunTimeResolvedMethodReferenceNode* r = dynamic_cast<const RunTimeResolvedMethodReferenceNode*>(rcr)) {
+    if (const RunTimeResolvedMethodReferenceNode* r = qore_exact_node_cast<RunTimeResolvedMethodReferenceNode>(rcr)) {
         m = r->getMethod();
         obj = r->getObject();
     } else if (const RunTimeObjectMethodReferenceNode* r
-            = dynamic_cast<const RunTimeObjectMethodReferenceNode*>(rcr)) {
+            = qore_exact_node_cast<RunTimeObjectMethodReferenceNode>(rcr)) {
         m = r->findMethod();
-    } else if (const MethodCallReferenceNode* r = dynamic_cast<const MethodCallReferenceNode*>(rcr)) {
+    } else if (const MethodCallReferenceNode* r = qore_exact_node_cast<MethodCallReferenceNode>(rcr)) {
         m = r->getMethod();
         obj = r->getObject();
     } else if (const LocalStaticMethodCallReferenceNode* r
@@ -1659,7 +1661,7 @@ int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr,
 }
 
 bool RunTimeObjectMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-    const RunTimeObjectMethodReferenceNode* vc = dynamic_cast<const RunTimeObjectMethodReferenceNode*>(v);
+    const RunTimeObjectMethodReferenceNode* vc = qore_exact_node_cast<RunTimeObjectMethodReferenceNode>(v);
     return vc && obj == vc->obj && method == vc->method;
 }
 
@@ -2100,7 +2102,7 @@ DeferredStaticMethodCallReferenceNode::DeferredStaticMethodCallReferenceNode(con
 }
 
 bool DeferredStaticMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-    const DeferredStaticMethodCallReferenceNode* d = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(v);
+    const DeferredStaticMethodCallReferenceNode* d = qore_exact_node_cast<DeferredStaticMethodCallReferenceNode>(v);
     return d && class_path == d->class_path && method_name == d->method_name;
 }
 
@@ -2701,7 +2703,7 @@ DeferredFunctionCallReferenceNode::DeferredFunctionCallReferenceNode(const QoreP
 }
 
 bool DeferredFunctionCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-    const DeferredFunctionCallReferenceNode* d = dynamic_cast<const DeferredFunctionCallReferenceNode*>(v);
+    const DeferredFunctionCallReferenceNode* d = qore_exact_node_cast<DeferredFunctionCallReferenceNode>(v);
     return d && function_name == d->function_name;
 }
 
@@ -2852,7 +2854,7 @@ QoreValue ResolvedCallReferenceNodeIntern::dispatchNamed(const QoreListNode* arg
 namespace {
 //! A fixed callback, bound at registration time; native subclasses still implement execValue().
 
-class SandboxBoundCallReference : public ResolvedCallReferenceNode {
+class SandboxBoundCallReference final : public ResolvedCallReferenceNode {
 public:
     //! calls the callback with named arguments as dispatchValue() calls it with positional arguments
     QoreValue dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names, LexicalSemanticPolicy policy,
@@ -3239,13 +3241,16 @@ AbstractQoreNode* ResolvedCallReferenceNode::realCopy() const {
 
 QoreValue qore_call_ref_invoke_named(const ResolvedCallReferenceNode* r, const QoreListNode* args,
         const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink) {
-    if (const ResolvedCallReferenceNodeIntern* ri = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r)) {
+    // the classes are tested without the string comparisons of a dynamic_cast: only QoreClosureBase's constructor
+    // gives NT_RUNTIME_CLOSURE, and SandboxBoundCallReference is final
+    if (r->getType() == NT_RUNTIME_CLOSURE) {
+        assert(dynamic_cast<const QoreClosureBase*>(r));
+        return static_cast<const QoreClosureBase*>(r)->dispatchNamed(args, arg_names, xsink);
+    }
+    if (const ResolvedCallReferenceNodeIntern* ri = qore_get_resolved_call_reference_intern(r)) {
         return ri->dispatchNamed(args, arg_names, policy, xsink);
     }
-    if (const QoreClosureBase* cb = dynamic_cast<const QoreClosureBase*>(r)) {
-        return cb->dispatchNamed(args, arg_names, xsink);
-    }
-    if (const SandboxBoundCallReference* sb = dynamic_cast<const SandboxBoundCallReference*>(r)) {
+    if (const SandboxBoundCallReference* sb = qore_exact_node_cast<SandboxBoundCallReference>(r)) {
         return sb->dispatchNamed(args, arg_names, policy, xsink);
     }
     // a call reference implemented outside of the library takes its arguments by position
