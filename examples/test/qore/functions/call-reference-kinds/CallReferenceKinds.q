@@ -18,6 +18,18 @@ int sub g(int a, int b = 2) {
     return a * 10 + b;
 }
 
+namespace NS {
+    int sub f(int a, int b = 2) {
+        return a * 10 + b + 7;
+    }
+
+    class K {
+        static int s(int a, int b = 2) {
+            return 2000 + a * 10 + b;
+        }
+    }
+}
+
 class C {
     public {
         int base;
@@ -105,6 +117,9 @@ C dc = new D();
 hash<string, code> refs = {
     "function": \f(),
     "static method": \C::s(),
+    # references by a scoped path, which a program compiled with qcc resolves when it is loaded (deferred references)
+    "function in a namespace": \NS::f(),
+    "static method in a namespace": \NS::K::s(),
     "method, typed receiver": \typed.m(),
     "method, object receiver": \untyped.m(),
     "method, auto receiver": \any.m(),
@@ -126,8 +141,13 @@ foreach hash<auto> i in (refs.pairIterator()) {
 printf("function references to the same function: %y, to another function: %y\n", \f() == \f(), \f() == \g());
 printf("static method references to the same method: %y, to a function: %y\n", \C::s() == \C::s(),
     \C::s() == \f());
+printf("references by a scoped path to the same function: %y, to another function: %y, to the same static method: "
+    "%y, to another static method: %y\n", \NS::f() == \NS::f(), \NS::f() == \f(), \NS::K::s() == \NS::K::s(),
+    \NS::K::s() == \C::s());
 printf("method references to the same method of the same object: %y, of another object: %y, to a function: %y\n",
     \typed.m() == \typed.m(), \typed.m() == \untyped.m(), \typed.m() == \f());
+printf("method references with an object receiver to the same method of the same object: %y, of another object: "
+    "%y\n", \untyped.m() == \untyped.m(), \untyped.m() == \any.m());
 printf("references made in the class to the same object: %y, to another object: %y\n",
     typed.getLocalRef() == typed.getLocalRef(), typed.getLocalRef() == dc.getLocalRef());
 printf("references made through self to the same object: %y, to another object: %y\n",
@@ -135,7 +155,7 @@ printf("references made through self to the same object: %y, to another object: 
 
 # method references to deleted objects raise before the arguments are evaluated (not tested for a reference bound
 # to the sandbox, whose call in the compiled execution modes evaluates the arguments before the bound reference
-# checks the object)
+# checks the object: issue #6225)
 int sub arg(reference<int> count) {
     return ++count;
 }
@@ -158,7 +178,7 @@ hash<string, code> deleted_refs;
 foreach hash<auto> i in (deleted_refs.pairIterator()) {
     int count = 0;
     # called through a local variable: a call of a call reference in a hash value with an argument with side effects
-    # evaluates the argument before it checks the object in the compiled execution modes, which is not tested here
+    # evaluates the argument before it checks the object in the compiled execution modes (issue #6225)
     code c = i.value;
     try {
         c(arg(\count));
