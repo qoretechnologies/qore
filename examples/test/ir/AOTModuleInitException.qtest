@@ -206,5 +206,20 @@ printf(\"%s\\n\", ModInitUser::f());
         assertNeq(0, r.rc, "required by a module, executable, init raises: exit status");
         assertRegex("MODULE-INIT-REFUSED", r.out, "required by a module, executable: the exception is reported");
         assertFalse(r.out =~ /module ready/, "required by a module, executable: the program does not run");
+
+        # a module that requires the failing module compiled to a qmod
+        write(qmod.path + "/ModInitUser.qm", UserModuleSource);
+        r = run(sprintf("MODINIT_THROW=1 %s %s -b %s/user.q", env(qmod.path), qore_bin, tmp.path));
+        assertNeq(0, r.rc, "required by a module, qmod, interpreted: exit status");
+        assertRegex("MODULE-INIT-REFUSED", r.out, "required by a module, qmod, interpreted: the exception is reported");
+        exe = tmp.path + "/user-qmod";
+        c = run(sprintf("%s %s -O0 -o %s %s/user.q", env(qmod.path), qcc_bin, exe, tmp.path));
+        assertTrue(is_file(exe), "built the executable of the module user with the qmod: " + c.out);
+        r = run(sprintf("%s %s", env(qmod.path), exe));
+        assertEq({"out": "module ready\n", "rc": 0}, r, "required by a module, qmod, executable, init completes");
+        r = run(sprintf("MODINIT_THROW=1 %s %s", env(qmod.path), exe));
+        assertNeq(0, r.rc, "required by a module, qmod, executable, init raises: exit status");
+        assertRegex("MODULE-INIT-REFUSED", r.out, "required by a module, qmod, executable: the exception is reported");
+        assertFalse(r.out =~ /module ready/, "required by a module, qmod, executable: the program does not run");
     }
 }

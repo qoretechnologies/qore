@@ -12810,6 +12810,19 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     }
     qore_program_private* target_pp = qore_program_private::get(*tpgm);
 
+    // a module whose init closure raised an exception is not initialized again, which would run the closure again
+    // (qore#6217); a load through the module manager reports it before, this covers the other paths
+    {
+        AutoLocker al(get_aot_module_state_lock());
+        auto sit = aot_module_map.find(mod_name);
+        if (sit != aot_module_map.end() && sit->second.init_failed) {
+            result.attempted = true;
+            result.hard_error = true;
+            result.error = "the initialization of the module failed on a prior attempt";
+            return result;
+        }
+    }
+
     const QoreAOTFunc* init_funcs = nullptr;
     int init_num_funcs = 0;
     QoreProgram* init_ctx_pgm = nullptr;
