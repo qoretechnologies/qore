@@ -996,6 +996,37 @@ hash<auto> cpp_api_find_create_timezone(string name, int epoch = 0) [flags=RET_V
     return rv.release();
 }
 
+//! returns the dates that the public default constructors of DateTime and DateTimeNode give in each form
+/** The converting constructors of DateTime and DateTimeNode are explicit, but the default constructors are not, so
+    that copy-list-initialization from an empty brace list keeps compiling; this function does not compile if one of
+    these forms is rejected
+
+    @return the dates of: <tt>DateTime w = {};</tt>, both elements of <tt>DateTime a[2] = {};</tt>,
+    <tt>return {};</tt> from a function returning a DateTime, <tt>{}</tt> given for a <tt>const DateTime&</tt>
+    parameter, <tt>DateTime d;</tt> and <tt>new DateTimeNode</tt>, each an empty absolute date
+*/
+list<date> cpp_api_date_default_forms() [flags=RET_VALUE_ONLY] {
+    DateTime w = {};
+    DateTime a[2] = {};
+    auto make_empty = []() -> DateTime {
+        return {};
+    };
+    auto copy_arg = [](const DateTime& dt) -> DateTimeNode* {
+        return new DateTimeNode(dt);
+    };
+    DateTime d;
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(dateTypeInfo), xsink);
+    rv->push(new DateTimeNode(w), xsink);
+    rv->push(new DateTimeNode(a[0]), xsink);
+    rv->push(new DateTimeNode(a[1]), xsink);
+    rv->push(new DateTimeNode(make_empty()), xsink);
+    rv->push(copy_arg({}), xsink);
+    rv->push(new DateTimeNode(d), xsink);
+    rv->push(new DateTimeNode, xsink);
+    return rv.release();
+}
+
 //! detaches the descriptor of a File object with QoreFile::detachFd() and returns the object's state afterwards
 /** Lets tests check that a detach leaves the object without the descriptor.  The descriptor is not closed here: it
     is returned, so that the test can close or destroy the File before passing it to cpp_api_fd_write_and_close().

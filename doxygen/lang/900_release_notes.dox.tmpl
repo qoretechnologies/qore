@@ -641,6 +641,19 @@
       \c setRelativeDateSeconds() and \c makeRelativeFromSeconds(), the \c DateTimeNode overloads and
       \c DateTimeValueHelper(const QoreValue&, ExceptionSink*); the overloads without an \c ExceptionSink are
       deprecated and saturate such a result (it wrapped before; see \c QORE_DATE_UNCHECKED_DEPRECATED, issue #6103)
+    - a pointer to a \c DateTime or \c DateTimeNode given where a \c DateTime value is expected (a constructor,
+      \c DateTime::setDate(), a <tt>const DateTime&</tt> argument) is a compile error, as the deleted
+      \c DateTime(const DateTime*) shows; it was converted through \c DateTime(bool) to an empty date
+    - \c DateTime(bool) is \c explicit, so a pointer of another type (ex: <tt>const AbstractQoreNode*</tt>) is no
+      longer converted implicitly to an empty \c DateTime; write <tt>DateTime(true)</tt> for an empty relative date
+    - \c DateTime(int64) is \c explicit, so an integer, a floating-point value or a \c bool (\c true gave
+      1970-01-01 00:00:01) is no longer converted implicitly to an absolute date; construct it from an \c int64
+      (<tt>DateTime((int64)secs)</tt>, as another integer type is ambiguous with \c DateTime(bool))
+    - \c DateTimeNode(bool) and \c DateTimeNode(int64) are \c explicit like those of \c DateTime, which affects
+      only code that can create a \c DateTimeNode temporary (its destructor is protected)
+    - the <tt>const char*</tt> and <tt>struct tm*</tt> constructors of \c DateTime (and, as for
+      \c DateTimeNode(bool), of \c DateTimeNode) are \c explicit, so a string or a \c struct \c tm pointer is no
+      longer converted implicitly to a date; construct it explicitly (<tt>DateTime(str)</tt>)
     @endparblock
 
     @par qget Command-Line Changes
