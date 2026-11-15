@@ -2113,6 +2113,16 @@ private:
     // non-debug JIT execution pays at most one predictable not-taken branch.  No-op in AOT mode.
     void emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst, bool synthetic);
+    //! Ends a return that a debugger requested at a step event of the function being lowered as a return without a
+    //! value, at an exit of the function on an exception (qore_rt_dbg_take_return())
+    /** Emitted only in a function with the step hooks (emitDebugStepHook()), at its exits on an exception that no
+        handler of the function takes, after its handlers ran and its locals were released, where the exception exit
+        and a return leave the frame in the same state
+    */
+    void emitDebugReturnTake(llvm::Module& module);
+    //! Returns the value that identifies the frame of the function being lowered to the step hooks
+    //! (native_entry_slots), or a null pointer before the frame has it
+    llvm::Value* getDebugFrameToken();
 
     // Get or create the per-function JIT deopt block.
     // On guard failure, branches here to set the thread-local deopt flag
@@ -2297,6 +2307,12 @@ private:
     llvm::AllocaInst* native_call_frame_storage = nullptr;
     //! The current thread's data for the frames of the native calls, got once in the entry block
     llvm::Value* native_call_thread_data = nullptr;
+    //! The storage of the thread's runtime location slots got in the entry block (QoreNativeEntrySlots), whose
+    //! address identifies the frame of the function being lowered while it runs
+    /** A return that a debugger requests at a step event leaves the frame through its exception exits, which end it
+        as a return (see emitDebugStepHook() and emitDebugReturnTake())
+    */
+    llvm::AllocaInst* native_entry_slots = nullptr;
     //! The storage of the context of the plain functions whose fast entries the function being lowered calls
     //! directly, created by the first call that switches to it (emitPushNativeFunctionContext())
     /** One is enough, as for native_call_frame_storage */

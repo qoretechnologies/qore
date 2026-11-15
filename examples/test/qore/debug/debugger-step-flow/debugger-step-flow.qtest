@@ -1,0 +1,202 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation of the debugger's step hooks and of their exits from native frames
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../ExecModeHarness.qm
+
+%exec-class DebuggerStepFlowTest
+
+#! A debugger that requests a flow at a step event gets the flow of the AST interpreter in every execution mode
+/** StepFlowDebugger.q calls a function of StepFlowTarget.q in a Program that does not allow a debugger, once to compile
+    it to native code with JIT and tiered execution, and then with a debugger in its own Program that the function
+    attaches while it runs (through ProgramControl::resolveProgramId()): the function then runs as native code with
+    JIT and tiered execution, with the IR interpreter with IR execution and on the IR tier of tiered execution, and
+    with the AST interpreter with AST execution.  The debugger steps, and requests a flow at a step event of a
+    statement or of a block.
+
+    With the AST interpreter, a return (DebugFlowReturn) at a step event returns from the function at once, without a
+    value: the statement does not run, and the handlers of the blocks that the return leaves run as for a return.  A
+    function whose return type does not accept no value raises the error of a function without a return statement.
+    Native code ignored the request (issue #6200).
+
+    A break or a continue (DebugFlowBreak, DebugFlowContinue) at a step event is not checked: the IR interpreter and
+    native code do not take them as the AST interpreter does yet (issues #6200 and #6201).
+*/
+class DebuggerStepFlowTest inherits QUnit::Test {
+    public {
+        #! the requests and the result, the values logged and the step events of the AST interpreter
+        /** - \c function: the function of StepFlowTarget.q called
+            - \c flow: the flow that the debugger requests
+            - \c tag: the tag of the line of the statement or block of the request
+            - \c hit: the request is made at the hit-th step event of the statement or block
+            - \c block: the request is made at the step event of the block that starts on the line, not of the
+              statement
+            - \c result: the value that the function returned, or the exception that it raised
+            - \c log: the values that the function logged while the debugger was attached
+            - \c steps: the step events of the debugger: the line of a statement, or "b" and the line of a block
+            - \c calls: the function calls code of StepFlowTarget.q while the debugger is attached, which runs on the
+              AST tier then, as every call with a debugger attached does (UserVariantBase::evalTiered()), so that it
+              is not run on the IR tier only (ExecModeHarness::run_ir_tier())
+        */
+        const Cases = (
+            {"function": "for_loop", "flow": "return", "tag": "for_first", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (17, 18, "b14", 14, 17),
+            },
+            {"function": "for_loop", "flow": "return", "tag": "for_body", "hit": 2, "block": True,
+                "result": "null",
+                "log": (),
+                "steps": (17, 18, "b14", 14, 17, 18, "b14"),
+            },
+            {"function": "while_loop", "flow": "return", "tag": "while_first", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (32, 33, 34, "b29", 29, 32),
+            },
+            {"function": "foreach_loop", "flow": "return", "tag": "foreach_first", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (63, 64, "b60", 60, 63),
+            },
+            {"function": "foreach_strings", "flow": "return", "tag": "foreach_strings_first", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (226, 227, "b223", 223, 226),
+            },
+            {"function": "nested_loops", "flow": "return", "tag": "nested_inner", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (77, "b78", 78, 79, "b78", 78),
+            },
+            {"function": "try_in_loop", "flow": "return", "tag": "try_first", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (94, "b95", 95, 96, "b91", 91, 94, "b95", 95),
+            },
+            {"function": "catch_in_loop", "flow": "return", "tag": "catch_first", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (240, "b241", 241, "b243", 243, 244, "b237", 237, 240, "b241", 241, "b243", 243),
+            },
+            {"function": "switch_in_loop", "flow": "return", "tag": "switch_case", "hit": 1, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (112, "b118", 118, 120, "b109", 109, 112, "b114", 114),
+            },
+            {"function": "locals_changed", "flow": "return", "tag": "locals_after", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (134, 135, 136, "b131", 131, 134, 135, 136),
+            },
+            {"function": "handlers_in_loop", "flow": "return", "tag": "handlers_first", "hit": 2, "block": False,
+                "result": "null",
+                "log": ("success0", "exit0", "success1", "exit1", "success2", "exit2", "success3", "exit3"),
+                "steps": (149, 150, 151, 152, 153, "b150", 150, "b149", 149, "b146", 146, 149, 150, 151, 152, "b150",
+                    150, "b149", 149),
+            },
+            {"function": "object_local", "flow": "return", "tag": "object_first", "hit": 2, "block": False,
+                "calls": True,
+                "result": "null",
+                "log": ("destroy t0", "destroy t1", "destroy t2", "destroy t3", "destroy outer"),
+                "steps": (210, "b193", 193, 194, 211, 212, "b198", 198, "b207", 207, 210, "b193", 193, 194, 211,
+                    "b198", 198, "b198", 198),
+            },
+            {"function": "no_loop", "flow": "return", "tag": "no_loop_stmt", "hit": 1, "block": False,
+                "result": "null",
+                "log": ("success", "exit"),
+                "steps": (163, 164, 165, 166, "b165", 165, "b164", 164),
+            },
+            {"function": "int_return", "flow": "return", "tag": "int_first", "hit": 2, "block": False,
+                "result": "RUNTIME-TYPE-ERROR: <block return> expects type 'int', but got no value instead: block "
+                    + "missing return statement",
+                "log": (),
+                "steps": (178, 179, "b175", 175, 178),
+            },
+            # the function that requested the flow returns, and its caller, also native code, goes on
+            {"function": "caller", "flow": "return", "tag": "callee_first", "hit": 2, "block": False,
+                "result": "6",
+                "log": ("callee=null",),
+                "steps": (258, 259, "b255", 255, 258, 267, 268, 269, 270),
+            },
+        );
+    }
+
+    private {
+        string qore_bin;
+        #! the lines of the tags of StepFlowTarget.q
+        hash<string, int> tags;
+    }
+
+    constructor() : QUnit::Test("DebuggerStepFlow", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        tags = getTags();
+        addTestCase("a return at a step event", \testReturn());
+        set_return_value(main());
+    }
+
+    #! returns the 1-based line numbers of the lines of StepFlowTarget.q tagged "### <tag>"
+    private static hash<string, int> getTags() {
+        hash<string, int> ret = {};
+        list<string> lines = ReadOnlyFile::readTextFile(get_script_dir() + "/StepFlowTarget.q").split("\n");
+        for (int i = 0; i < lines.size(); ++i) {
+            *list<*string> tag = lines[i] =~ x/### ([a-z_]+)$/;
+            if (tag) {
+                ret{tag[0]} = i + 1;
+            }
+        }
+        return ret;
+    }
+
+    #! returns the output line of StepFlowDebugger.q expected for a case
+    private static string getExpected(hash<auto> c) {
+        return sprintf("RESULT:%s LOG:%y STEPS:%y", c.result, c.log, c.steps);
+    }
+
+    #! returns the output line of StepFlowDebugger.q
+    private static string getOutput(string out) {
+        *list<*string> line = out =~ x/^(RESULT:.*)$/m;
+        return line ? line[0] : out;
+    }
+
+    #! runs a case in every execution mode and compares the results with those of the AST interpreter
+    private checkCase(hash<auto> c) {
+        string dir = get_script_dir();
+        string args = sprintf("%s/StepFlowDebugger.q %s/StepFlowTarget.q %s %s %d %d%s", dir, dir, c.function,
+            c.flow, tags{c.tag}, c.hit, c.block ? " block" : "");
+        string what = sprintf("%s %s at %s#%d%s", c.function, c.flow, c.tag, c.hit, c.block ? " (block)" : "");
+        string expected = getExpected(c);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                "--exec-mode=%s %s", qore_bin, mode, args));
+            ExecModeHarness::check_native(r);
+            assertEq(expected, getOutput(r.out), sprintf("%s: %s", what, mode));
+            # the function runs as native code when the debugger attaches with JIT and tiered execution
+            if (mode == "jit" || mode == "tiered") {
+                string name = "'" + c.function + "@";
+                assertTrue((select r.trace, ExecModeHarness::is_native_compilation($1) && $1.find(name) >= 0)
+                    ? True : False, sprintf("%s: %s: %s() was compiled to native code", what, mode, c.function));
+            }
+        }
+        # tiered execution on the IR tier
+        if (c.calls) {
+            return;
+        }
+        assertEq(expected, getOutput(ExecModeHarness::run_ir_tier(sprintf("%s --enable-debug --exec-mode=tiered %s",
+            qore_bin, args))), sprintf("%s: %s", what, ExecModeHarness::IRTierName));
+    }
+
+    testReturn() {
+        foreach hash<auto> c in (Cases) {
+            if (c.flow == "return") {
+                checkCase(c);
+            }
+        }
+    }
+}

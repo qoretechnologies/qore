@@ -1601,11 +1601,14 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(void_type, {ptr_type}, false));
 
     // Debug-step hooks (issue #5352): void qore_rt_dbg_step(const AbstractStatement* statement,
-    // void* statements_block, ExceptionSink* xsink)
+    // void* statements_block, ExceptionSink* xsink, void* frame)
     module.getOrInsertFunction("qore_rt_dbg_step",
-            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_dbg_synthetic_block_step",
-            llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
+            llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type, ptr_type, ptr_type}, false));
+    // void qore_rt_dbg_take_return(ExceptionSink* xsink, void* frame) (qore#6200)
+    module.getOrInsertFunction("qore_rt_dbg_take_return",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
 
     // Local variable helpers
     module.getOrInsertFunction("qore_rt_instantiate_local",
@@ -4783,6 +4786,8 @@ void QoreIRToLLVM::emitExceptionExitTail(llvm::Module& module) {
     emitPreinstantiatedCleanup(module, true);
     emitInvokeCleanup(module);
     emitLocalUninstantiation(module);
+    // a return that a debugger requested at a step event ends here (qore#6200)
+    emitDebugReturnTake(module);
     builder->CreateRet(getNothingReturnValue());
     if (saved_insert) {
         builder->SetInsertPoint(saved_insert, saved_ip);
@@ -13083,8 +13088,8 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
                 ptr_type);
         llvm::Value* line_val = llvm::ConstantInt::get(i64_type, static_cast<uint64_t>(abs_line));
         auto fn = module.getOrInsertFunction("qore_rt_dbg_synthetic_block_step",
-                llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
-        builder->CreateCall(fn, {file_ptr, line_val, sb_ptr, xsink_arg});
+                llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type, ptr_type, ptr_type}, false));
+        builder->CreateCall(fn, {file_ptr, line_val, sb_ptr, xsink_arg, getDebugFrameToken()});
     } else {
         // the statement lives as long as the parse tree that the function was lowered from, which outlives the
         // native code
@@ -13097,15 +13102,34 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
             builder->CreateStore(stmt_ptr, stmt_cache_ptr);
         }
         auto fn = module.getOrInsertFunction("qore_rt_dbg_step",
-                llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
-        builder->CreateCall(fn, {stmt_ptr, sb_ptr, xsink_arg});
+                llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type, ptr_type}, false));
+        builder->CreateCall(fn, {stmt_ptr, sb_ptr, xsink_arg, getDebugFrameToken()});
     }
-    // Honor a debugger-raised exception (the only flow-control signal honored
-    // mid-native-frame); routes to the instruction's exception target or the
-    // function-level error-return block.
+    // An exception that the debugger raised, or a return that it requested, which the hook raised as a thread_exit
+    // (qore_rt_dbg_step()): routes to the instruction's exception target or to the function-level error return,
+    // where the return ends (emitDebugReturnTake())
     emitExceptionCheck(module, llvm_func, inst);
     builder->CreateBr(cont);
     builder->SetInsertPoint(cont);
+}
+
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::getDebugFrameToken() {
+    if (native_entry_slots) {
+        return native_entry_slots;
+    }
+    return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitDebugReturnTake(llvm::Module& module) {
+    // only the functions with the step hooks (see emitDebugStepHook())
+    if (aot_mode || !current_ir_func || !current_ir_func->source_dpgm_addr || !native_entry_slots) {
+        return;
+    }
+    auto fn = module.getOrInsertFunction("qore_rt_dbg_take_return",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+    builder->CreateCall(fn, {xsink_arg, native_entry_slots});
 }
 
 void QoreIRToLLVM::annotateAotExecutableExprFallback(llvm::Value* call,
@@ -13261,6 +13285,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     native_call_frame_storage = nullptr;
     native_function_context_storage = nullptr;
     native_call_thread_data = nullptr;
+    native_entry_slots = nullptr;
     open_native_call_frames = 0;
     bg_helper_count = 0;
     obe_handler_count = 0;
@@ -14251,6 +14276,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             llvm::IRBuilder<> ab(&entry, entry.getFirstInsertionPt());
             slots = ab.CreateAlloca(slots_type, nullptr, "native_entry_slots");
         }
+        native_entry_slots = slots;
         builder->CreateCall(module.getOrInsertFunction("qore_rt_get_native_entry_slots",
             llvm::FunctionType::get(void_type, {ptr_type}, false)), {slots});
         auto load_slot = [&](unsigned i, const char* name) -> llvm::Value* {
@@ -16333,6 +16359,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         emitPreinstantiatedCleanup(module, true);
         emitInvokeCleanup(module);
         emitLocalUninstantiation(module);
+        // a return that a debugger requested at a step event ends here (qore#6200)
+        emitDebugReturnTake(module);
         builder->CreateRet(getNothingReturnValue());
     }
 
