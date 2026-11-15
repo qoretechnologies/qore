@@ -63,12 +63,15 @@ class AOTDumpInfoFindCallRefTest inherits QUnit::Test {
         write(src, "%new-style\n"
             "class K { auto m(auto x) { return x; } }\n"
             "sub f(list<hash<auto>> l, code c, K k) {\n" + body + "\n}\n");
-        string compile_out = backquote(sprintf("%s %s -c --parse-option=PO_MODERN -o %s %s 2>&1", env, qcc_bin, out,
-            src));
-        if (!is_file(out)) {
-            testSkip("qcc is not available or cannot compile " + name + ": " + compile_out);
+        # skip only when there is no qcc: a source that qcc cannot compile is a failure
+        if (system(sprintf("%s %s --version >/dev/null 2>&1", env, qcc_bin))) {
+            testSkip("qcc is not available: " + qcc_bin);
         }
         int status;
+        string compile_out = backquote(sprintf("%s %s -c --parse-option=PO_MODERN -o %s %s 2>&1", env, qcc_bin, out,
+            src), \status);
+        assertEq(0, status, name + ": qcc compiles the source: " + compile_out);
+        assertTrue(is_file(out), name + ": qcc writes the object: " + compile_out);
         string d = backquote(sprintf("%s %s --dump-info --dump-sections %s 2>&1", env, qcc_bin, out), \status);
         assertEq(0, status, name + ": " + d);
         return d;
@@ -153,7 +156,7 @@ class AOTDumpInfoFindCallRefTest inherits QUnit::Test {
     }
 
     testClosureThenSlot() {
-        # the closure's body entry (its location and parse options) is skipped, so the slot after it is read
+        # a named call after a closure is read correctly
         string d = dump("closure", "    auto x = auto sub () { return 1; };\n    auto y = c(a: 1);");
         checkWellFormed("closure before another slot", d);
         assertEq(1, topKindCount(d, "CLOSURE_CREATE"), d);
