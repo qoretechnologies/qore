@@ -69,10 +69,12 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
         // created is cleared below (ThreadTask applies it to the task's own code)
         QoreModuleCleanupDelegateHelper cleanup_delegate(task->isModuleCleanupDelegate());
         sl.unlock();
-        // the task can take this worker out of the pool while it runs (ThreadPool::detachCurrentThread())
+        // the task can take this worker out of the pool while it runs (ThreadPool::detachCurrentThread()); the
+        // thread remains the pool's worker until the task's data and the thread-local data are released below, as
+        // they can hold the last reference to the pool, whose destructor must then leave stopping the pool to the
+        // manager thread (qore#6253)
         current = this;
         task->run(xsink).discard(xsink);
-        current = nullptr;
         // Handle any exceptions from the task so they don't leak into the next task
         // on this thread.  Without this, a failed task leaves xsink dirty, and the
         // next ThreadTask::run() sees *xsink == true in the program-context check
@@ -81,15 +83,19 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
         // the task has finished: end any cancellation aimed at it before running its destructors,
         // and so that the request cannot carry over to the next, unrelated task on this worker
         end_thread_cancellation();
-        sl.lock();
+        // the task's data is released without this thread's lock, as the task ran: it can run the pool's destructor,
+        // which takes the pool's lock, and the pool's lock must not be requested while this one is held (see below);
+        // the task stays assigned to this busy thread until then, so the pool does not hand it another one
         task->del(xsink);
-        task = 0;
         // Clear all thread-local data (program tld hash + thread_local vars + thread
         // resources) only after task cleanup/derefs complete so destructors still
         // have access to thread-local state if needed, while preventing leakage
         // between unrelated tasks on the same worker thread.
         clear_all_program_thread_local_data();
         cleanup_delegate.reset();
+        current = nullptr;
+        sl.lock();
+        task = 0;
         // Task complete — decrement thread_counter that was incremented at submit time
         --qore_thread_counter_share;
         thread_counter.dec();
@@ -127,11 +133,6 @@ void ThreadPoolThread::finalize(ExceptionSink* xsink) {
 
 static void tp_start_thread(ExceptionSink* xsink, ThreadPool* tp) {
     tp->worker(xsink);
-    // the reference that the pool's object gave the manager when a task of the pool released the object; the manager
-    // no longer uses the pool (qore#6253)
-    if (tp->takeManagerRef()) {
-        tp->deref(xsink);
-    }
 }
 
 ThreadPool::ThreadPool(ExceptionSink* xsink, int n_max, int n_minidle, int n_maxidle, int n_release_ms,
@@ -311,6 +312,12 @@ void ThreadPool::worker(ExceptionSink* xsink) {
     dh.clear();
 #endif
 
+    // the reference that the pool's destructor gave this thread when a task of the pool released the object
+    // (qore#6253): without it, the pool can be destroyed as soon as it is marked stopped and the lock is released, so
+    // it is read before
+    bool release_pool = manager_ref;
+    manager_ref = false;
+
     stopped = true;
     stopCond.broadcast();
 
@@ -332,6 +339,11 @@ void ThreadPool::worker(ExceptionSink* xsink) {
         i->cancel(xsink);
         i->del(xsink);
         thread_counter.dec();
+    }
+
+    // the last use of the pool by this thread
+    if (release_pool) {
+        deref(xsink);
     }
 }
 
@@ -448,6 +460,10 @@ ThreadPool::constructor(int max_threads = 0, int min_idle_threads = 0, int max_i
     @code{.py}
 delete tp;
     @endcode
+
+    @note when a task of the pool releases the last reference to the pool (also through the data of the task, such as
+    a closure that holds the pool, or a thread-local variable), the pool is stopped by its manager thread: the
+    destructor returns without waiting for the workers, including the one running the task
  */
 ThreadPool::destructor() {
     if (tp->isOwnWorker()) {
@@ -476,8 +492,8 @@ tp.stop();
     including the one that runs the calling task, so it would never return; a task can stop its pool from another
     thread (for example with the @ref background "background" operator)
 
-    @note the pool is also stopped when its object is destroyed; a task must therefore not release the last reference
-    to the pool that runs it, as the destructor would then wait for the task
+    @note the pool is also stopped when its object is destroyed; see @ref Qore::Thread::ThreadPool::destructor() "the destructor"
+    for a pool that a task of its own releases
 
     @see ThreadPool::stopWait()
  */

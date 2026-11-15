@@ -332,5 +332,42 @@ class ThreadPoolTest inherits QUnit::Test {
         make();
         go.push(1);
         assertEq("released", done.get(30000));
+
+        # the closure of the task holds the last reference: it is released with the task's data, after the task
+        # has run, and a queued task is canceled
+        {
+            Queue go2();
+            Queue done2();
+            code make2 = sub () {
+                ThreadPool tp(1);
+                tp.submit(sub () {
+                    go2.get();
+                    done2.push(tp.toString() ? "ran" : "");
+                });
+                tp.submit(sub () { done2.push("queued task ran"); }, sub () { done2.push("canceled"); });
+            };
+            make2();
+            go2.push(1);
+            assertEq("ran", done2.get(30000), "the task holding the pool ran");
+            assertEq("canceled", done2.get(30000), "the queued task was canceled");
+        }
+
+        # a detached worker releases the last reference to its pool
+        {
+            Queue go3();
+            Queue done3();
+            code make3 = sub () {
+                ThreadPool tp(1);
+                tp.submit(sub () {
+                    go3.get();
+                    tp.detachCurrentThread();
+                    remove tp;
+                    done3.push("released");
+                });
+            };
+            make3();
+            go3.push(1);
+            assertEq("released", done3.get(30000), "a detached worker released its pool");
+        }
     }
 }
