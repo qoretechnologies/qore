@@ -50,11 +50,15 @@ extern QoreClass* QC_EVENTNOTIFIER;
 
 /** @cond INTERNAL */
 
-// Returns epoch time in microseconds
-static inline int64 h1_epoch_us() {
-    int us;
-    int64 secs = q_epoch_us(us);
-    return secs * 1000000LL + us;
+// Returns the active streams of the operation \a op, for the idle check of its connection (#6184)
+static int h1_op_active_streams(const void* op) {
+    return static_cast<const Http1ClientPollOperationPriv*>(op)->getActiveStreamCount();
+}
+
+// Returns the monotonic clock in microseconds: the idle deadline is an interval, which a step of the system clock must
+// not end or stop (#6150)
+static inline int64 h1_monotonic_us() {
+    return q_get_monotonic_us();
 }
 
 // ============================================================
@@ -1366,12 +1370,20 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     // On subsequent entries (after a previous handleIdle or dispatchResponse
     // has armed the deadline), close the connection if the deadline has
     // elapsed.  Defense-in-depth for peers that never close idle connections.
-    if (idle_timeout_us > 0 && idle_deadline_us > 0 && h1_epoch_us() >= idle_deadline_us) {
-        ASYNC_IO_TRACE("H1 handleIdle: IDLE-TIMEOUT deadline reached fd=%d\n", fd);
-        sock_obj->closeIo(xsink);
-        setError("HTTP1-IDLE-TIMEOUT",
-            "closing idle HTTP/1.1 connection after idle_timeout expired", xsink);
-        return nullptr;
+    if (idle_timeout_us > 0 && idle_deadline_us > 0 && h1_monotonic_us() >= idle_deadline_us) {
+        // a request that has reserved the connection's stream and not yet submitted is not closed under: the
+        // connection then starts a new idle period (#6184)
+        if (!AbstractHttpPollConnectionPriv::idleCloseAllowed(stream_lock, connection_priv, h1_op_active_streams,
+            this, xsink)) {
+            ASYNC_IO_TRACE("H1 handleIdle: IDLE-TIMEOUT deadline reached with a reserved stream fd=%d\n", fd);
+            idle_deadline_us = 0;
+        } else {
+            ASYNC_IO_TRACE("H1 handleIdle: IDLE-TIMEOUT deadline reached fd=%d\n", fd);
+            sock_obj->closeIo(xsink);
+            setError("HTTP1-IDLE-TIMEOUT",
+                "closing idle HTTP/1.1 connection after idle_timeout expired", xsink);
+            return nullptr;
+        }
     }
 
     setStateUnlessClosed(H1State::WAIT_READ, "idle");
@@ -1436,7 +1448,7 @@ QoreHashNode* Http1ClientPollOperationPriv::armIdleDeadline(QoreHashNode* poll_i
     if (idle_timeout_us <= 0 || !poll_info) {
         return poll_info;
     }
-    int64_t now_us = h1_epoch_us();
+    int64_t now_us = h1_monotonic_us();
     if (idle_deadline_us == 0) {
         idle_deadline_us = now_us + idle_timeout_us;
         ASYNC_IO_TRACE("H1 armIdleDeadline: arming now+%lldus fd=%d\n",

@@ -1,0 +1,177 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxRootClearTest
+
+#! Tests that SandboxManager::clearFilesystemSandboxRoot() restores the state from before the root was set
+class SandboxRootClearTest inherits QUnit::Test {
+    private {
+        # the canonical form of the directory (on macOS /tmp is a symbolic link to /private/tmp)
+        string tmp = realpath("/tmp");
+        string usr = realpath("/usr");
+    }
+
+    constructor() : QUnit::Test("SandboxManager clear sandbox root", "1.0", \ARGV) {
+        addTestCase("a fresh manager", \testFresh());
+        addTestCase("allow-all default", \testAllowAll());
+        addTestCase("with an allowed path rule", \testExistingRule());
+        addTestCase("with a denied path rule and default deny", \testDenied());
+        addTestCase("replacing the root", \testReplace());
+        addTestCase("clearing without a root changes nothing", \testNoRoot());
+        addTestCase("an identical user rule: one of the two remains", \testIdenticalRule());
+        addTestCase("clearing twice", \testClearTwice());
+        addTestCase("replacing a root replaces its rule", \testReplaceRule());
+        addTestCase("rules added after the root remain", \testRuleAfterRoot());
+        addTestCase("the root still confines access while it is set", \testConfines());
+        set_return_value(main());
+    }
+
+    private SandboxManager allowAll() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.setFilesystemDefaultPolicy(True);
+        return sm;
+    }
+
+    testFresh() {
+        SandboxManager sm();
+        hash<auto> orig = sm.getFilesystemConfiguration();
+        sm.setFilesystemSandboxRoot(tmp);
+        assertNeq(orig, sm.getFilesystemConfiguration(), "setting the root changes the configuration");
+        sm.clearFilesystemSandboxRoot();
+        assertEq(orig, sm.getFilesystemConfiguration());
+        assertNothing(sm.getFilesystemSandboxRoot());
+    }
+
+    testAllowAll() {
+        SandboxManager sm = allowAll();
+        hash<auto> orig = sm.getFilesystemConfiguration();
+        assertFalse(sm.filesystemRestricts());
+        sm.setFilesystemSandboxRoot(tmp);
+        assertTrue(sm.filesystemRestricts());
+        sm.clearFilesystemSandboxRoot();
+        assertFalse(sm.filesystemRestricts());
+        assertEq(orig, sm.getFilesystemConfiguration());
+        assertFalse(sm.restricts());
+    }
+
+    testExistingRule() {
+        SandboxManager sm = allowAll();
+        sm.addFilesystemAllowedPath("/var", QSEC_READ);
+        hash<auto> orig = sm.getFilesystemConfiguration();
+        sm.setFilesystemSandboxRoot(tmp);
+        sm.clearFilesystemSandboxRoot();
+        assertEq(orig, sm.getFilesystemConfiguration());
+        assertTrue(sm.filesystemRestricts(), "the pre-existing rule still restricts");
+        # a rule equal to the root rule that was added before the root: one remains
+        sm = allowAll();
+        sm.addFilesystemAllowedPath(tmp, QSEC_ALL);
+        orig = sm.getFilesystemConfiguration();
+        sm.setFilesystemSandboxRoot(tmp);
+        sm.clearFilesystemSandboxRoot();
+        assertEq(orig, sm.getFilesystemConfiguration());
+    }
+
+    testDenied() {
+        SandboxManager sm();
+        sm.addFilesystemDeniedPath("/etc");
+        sm.setFilesystemDefaultPolicy(False);
+        hash<auto> orig = sm.getFilesystemConfiguration();
+        sm.setFilesystemSandboxRoot(tmp);
+        sm.clearFilesystemSandboxRoot();
+        assertEq(orig, sm.getFilesystemConfiguration());
+        assertEq("deny", sm.getFilesystemConfiguration().default_policy);
+        assertTrue(sm.filesystemRestricts());
+    }
+
+    testReplace() {
+        SandboxManager sm = allowAll();
+        hash<auto> orig = sm.getFilesystemConfiguration();
+        sm.setFilesystemSandboxRoot(tmp);
+        sm.setFilesystemSandboxRoot(usr);
+        sm.clearFilesystemSandboxRoot();
+        assertEq(orig, sm.getFilesystemConfiguration(), "no rule of the first root remains");
+        assertFalse(sm.filesystemRestricts());
+    }
+
+    testNoRoot() {
+        SandboxManager sm = allowAll();
+        sm.addFilesystemAllowedPath(tmp, QSEC_ALL);
+        hash<auto> orig = sm.getFilesystemConfiguration();
+        sm.clearFilesystemSandboxRoot();
+        assertEq(orig, sm.getFilesystemConfiguration());
+    }
+
+    testConfines() {
+        SandboxManager sm = allowAll();
+        sm.setFilesystemSandboxRoot(tmp);
+        assertEq(tmp, sm.getFilesystemSandboxRoot());
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse("auto sub t(string path) { return is_readable(path); }", "root-clear");
+        # a readable file outside the root on every platform (/etc/hostname does not exist on macOS)
+        string outside = get_script_path();
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("t", outside));
+        sm.clearFilesystemSandboxRoot();
+        assertTrue(p.callFunction("t", outside) ?? False);
+    }
+
+    testIdenticalRule() {
+        SandboxManager sm = allowAll();
+        sm.addFilesystemAllowedPath(tmp, QSEC_ALL);
+        assertEq(1, sm.getFilesystemConfiguration().allowed_paths.size());
+        sm.setFilesystemSandboxRoot(tmp);
+        assertEq(2, sm.getFilesystemConfiguration().allowed_paths.size(), "the root adds its own rule");
+        sm.clearFilesystemSandboxRoot();
+        hash<auto> cfg = sm.getFilesystemConfiguration();
+        assertEq(1, cfg.allowed_paths.size(), "exactly one of the two equal rules remains");
+        assertEq(tmp, cfg.allowed_paths[0].path);
+        assertNothing(cfg.sandbox_root);
+        assertTrue(sm.filesystemRestricts());
+    }
+
+    testClearTwice() {
+        SandboxManager sm = allowAll();
+        sm.setFilesystemSandboxRoot(tmp);
+        sm.clearFilesystemSandboxRoot();
+        hash<auto> cleared = sm.getFilesystemConfiguration();
+        sm.clearFilesystemSandboxRoot();
+        assertEq(cleared, sm.getFilesystemConfiguration(), "the second clear changes nothing");
+        assertFalse(sm.filesystemRestricts());
+        # with another rule: the second clear must not remove it
+        sm.addFilesystemAllowedPath(usr, QSEC_READ);
+        cleared = sm.getFilesystemConfiguration();
+        sm.clearFilesystemSandboxRoot();
+        assertEq(cleared, sm.getFilesystemConfiguration());
+    }
+
+    testReplaceRule() {
+        SandboxManager sm = allowAll();
+        sm.setFilesystemSandboxRoot(tmp);
+        sm.setFilesystemSandboxRoot(usr);
+        hash<auto> cfg = sm.getFilesystemConfiguration();
+        assertEq(usr, cfg.sandbox_root);
+        assertEq(1, cfg.allowed_paths.size(), "the rule of the old root is gone");
+        assertEq(usr, cfg.allowed_paths[0].path, "the rule of the new root is there");
+        # setting the same root again does not accumulate rules
+        sm.setFilesystemSandboxRoot(usr);
+        assertEq(1, sm.getFilesystemConfiguration().allowed_paths.size());
+    }
+
+    testRuleAfterRoot() {
+        SandboxManager sm = allowAll();
+        sm.setFilesystemSandboxRoot(tmp);
+        sm.addFilesystemAllowedPath(tmp + "/x", QSEC_READ);
+        sm.clearFilesystemSandboxRoot();
+        list<auto> rules = sm.getFilesystemConfiguration().allowed_paths;
+        assertEq(1, rules.size(), "only the rule of the root is removed");
+        assertEq(tmp + "/x", rules[0].path);
+    }
+}

@@ -205,28 +205,34 @@ QoreValue NewHashDeclNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) 
     return evalImplInternal<true>(needs_deref, xsink);
 }
 
+QORE_INTERN_NOINLINE const TypedHashDecl* NewHashDeclNode::resolveRuntimeHashDecl(ExceptionSink* xsink) const {
+    // a hashdecl with type parameters in generic code, such as HD<U>, is the hashdecl of the running instantiation,
+    // such as HD<int>, as in VarRefNewObjectNode::constructValue() (qore#5720)
+    if (hd) {
+        return qore_substitute_hashdecl_type_params(hd);
+    }
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        xsink->raiseException("HASHDECL-ERROR",
+            "cannot resolve hashdecl '%s' for instantiation: no program context",
+            dynamic_hashdecl_name.c_str());
+        return nullptr;
+    }
+    const TypedHashDecl* resolved_hd = qore_aot_resolve_call_hashdecl_path(pgm, dynamic_hashdecl_name.c_str(),
+        qore_get_current_receiver_type_info());
+    if (!resolved_hd) {
+        xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s' for instantiation",
+            dynamic_hashdecl_name.c_str());
+    }
+    return resolved_hd;
+}
+
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreValue NewHashDeclNode::evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const {
-    const TypedHashDecl* resolved_hd = hd;
+    const TypedHashDecl* resolved_hd = concrete_hd;
     if (!resolved_hd) {
-        QoreProgram* pgm = getProgram();
-        if (!pgm) {
-            xsink->raiseException("HASHDECL-ERROR",
-                "cannot resolve hashdecl '%s' for instantiation: no program context",
-                dynamic_hashdecl_name.c_str());
-            return QoreValue();
-        }
-        resolved_hd = qore_aot_resolve_hashdecl_path(pgm, dynamic_hashdecl_name.c_str());
+        resolved_hd = resolveRuntimeHashDecl(xsink);
         if (!resolved_hd) {
-            std::string error;
-            QoreAOTTypeResolver resolver(pgm);
-            const QoreTypeInfo* ti = resolver.resolve(dynamic_hashdecl_name.c_str(), error);
-            ti = qore_substitute_type_params_if_needed(ti);
-            resolved_hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
-        }
-        if (!resolved_hd) {
-            xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s' for instantiation",
-                dynamic_hashdecl_name.c_str());
             return QoreValue();
         }
     }
