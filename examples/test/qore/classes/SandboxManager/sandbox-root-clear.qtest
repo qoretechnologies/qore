@@ -116,9 +116,11 @@ class SandboxRootClearTest inherits QUnit::Test {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
         p.setSandboxManager(sm);
         p.parse("auto sub t(string path) { return is_readable(path); }", "root-clear");
-        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("t", "/etc/hostname"));
+        # a readable file outside the root on every platform (/etc/hostname does not exist on macOS)
+        string outside = get_script_path();
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("t", outside));
         sm.clearFilesystemSandboxRoot();
-        assertTrue(p.callFunction("t", "/etc/hostname") ?? False);
+        assertTrue(p.callFunction("t", outside) ?? False);
     }
 
     testIdenticalRule() {
