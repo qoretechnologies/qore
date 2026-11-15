@@ -35,11 +35,13 @@ public hashdecl ExtractionPipelineOptions {
     #! Number of parallel extractions for extractBatch(); default 1 (sequential)
     int batch_parallel = 1;
     #! Optional thread-start callable used for parallel batch extraction
-    /** Required when the enclosing @ref Qore::Program "Program" has
-        @ref Qore::PO_NO_THREAD_CONTROL set and \c batch_parallel > 1; the
-        callable must take a zero-arg code reference and return the integer
-        thread ID.  When not set in a non-sandboxed program, Qore's
-        @ref background operator is used directly.
+    /** The callable must take a zero-arg code reference and return the
+        integer thread ID.  When not set, the \c start_thread capability of the
+        code that creates the pipeline is used, if a host set one
+        (@ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"), and
+        otherwise Qore's @ref background operator; required with
+        @ref Qore::PO_NO_THREAD_CONTROL and \c batch_parallel > 1 only when
+        the module is loaded by its path
     */
     *code<int(code<nothing()>)> start_thread;
     #! Force the LLM to call the extraction tool; default @ref True
@@ -118,9 +120,10 @@ public class ExtractionPipeline {
         @param options optional pipeline configuration
 
         @throw EXTRACTION-PIPELINE-ERROR if the schema has no fields
-        @throw EXTRACTION-ARG-ERROR if the pipeline is constructed in a program
-            with @ref Qore::PO_NO_THREAD_CONTROL set and \c batch_parallel > 1
-            but no \c start_thread callable is supplied
+        @throw EXTRACTION-ARG-ERROR if the module was loaded by its path into a
+            program with @ref Qore::PO_NO_THREAD_CONTROL set, \c batch_parallel
+            is > 1, and no \c start_thread callable is supplied or set as a
+            capability
     */
     constructor(LlmBackend llm_backend, hash<ExtractionSchemaInfo> extraction_schema,
             *hash<ExtractionPipelineOptions> options) {
@@ -135,7 +138,8 @@ public class ExtractionPipeline {
         max_retries = options.max_retries ?? 2;
         user_prompt_template = options.user_prompt_template;
         batch_parallel = options.batch_parallel ?? 1;
-        start_thread = options.start_thread;
+        # without the option, the capability of the code that the host runs, if any (qorus#867)
+        start_thread = exists options.start_thread ? options.start_thread : get_thread_capability("start_thread");
 
 %ifdef PO_NO_THREAD_CONTROL
         if (batch_parallel > 1 && !start_thread) {

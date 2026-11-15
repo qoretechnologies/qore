@@ -37,6 +37,8 @@ module QoreStructuredExtraction {
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
     license = "MIT";
+    # the extraction pipeline starts threads for its callers (qorus#867)
+    domains = "THREAD_CONTROL";
 }
 
 /** @mainpage QoreStructuredExtraction Module
@@ -80,21 +82,19 @@ if (result.valid) {
 
     @section qorestructuredextractionsandbox QoreStructuredExtraction Module in Sandboxed Programs
 
-    The @ref QoreStructuredExtraction::ExtractionPipeline "ExtractionPipeline" class
-    supports parallel batch extraction via the \c batch_parallel option; under a
-    sandboxed @ref Qore::Program "Program" with @ref Qore::PO_NO_THREAD_CONTROL set,
-    the @ref background operator is unavailable, so the caller must supply a
-    \c start_thread callable in @ref QoreStructuredExtraction::ExtractionPipelineOptions "ExtractionPipelineOptions":
+    The @ref QoreStructuredExtraction::ExtractionPipeline "ExtractionPipeline" class starts threads for parallel batch extraction (the \c batch_parallel option of
+    @ref QoreStructuredExtraction::ExtractionPipelineOptions "ExtractionPipelineOptions").  The module declares the
+    \c THREAD_CONTROL @ref function_domains "functional domain" in its module header, so when it is loaded from the
+    module path, it starts its threads also for a @ref Qore::Program "Program" with
+    @ref Qore::PO_NO_THREAD_CONTROL set; the threads run under the caller's sandbox, whose thread limit bounds them.
 
-    - \c start_thread: required when \c batch_parallel > 1 in a program with
-      @ref Qore::PO_NO_THREAD_CONTROL set; a
-      @ref closure "closure" or @ref call_reference "call reference" that accepts a
-      zero-arg code reference and returns the integer thread ID of the new thread
+    - \c start_thread: an optional @ref closure "closure" or @ref call_reference "call reference" that accepts a
+      zero-arg code reference and returns the integer thread ID of the new thread; without it, the \c start_thread
+      capability that a host sets for the code it runs (@ref Qore::Thread::ThreadCapabilityScope
+      "ThreadCapabilityScope") is used, and otherwise the @ref background operator; it is required with
+      @ref Qore::PO_NO_THREAD_CONTROL only when the module is loaded by its path, where the declaration does not apply
 
-    When running in a non-sandboxed program, \c start_thread is optional; if not
-    supplied, the @ref background operator is used directly.  When
-    \c batch_parallel is 1 (the default), no threads are spawned and the option is
-    ignored.
+    When \c batch_parallel is 1, no threads are started and the option is ignored.
 
     @par Example: Sandboxed parallel extraction
     @code{.py}

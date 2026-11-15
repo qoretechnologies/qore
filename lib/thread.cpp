@@ -78,6 +78,7 @@
 #include "qore/intern/QC_Semaphore.h"
 #include "qore/intern/QC_AutoSemaphore.h"
 #include "qore/intern/QC_AutoLock.h"
+#include "qore/intern/QC_ThreadCapabilityScope.h"
 #include "qore/intern/QC_AutoGate.h"
 #include "qore/intern/QC_AutoReadLock.h"
 #include "qore/intern/QC_AutoWriteLock.h"
@@ -723,7 +724,31 @@ public:
     // runs, so it is only used when no Program on the thread's program-context stack has a sandbox manager (see
     // QoreInheritedSandboxHelper and design/thread-sandbox-inheritance.md)
     const QoreSandboxContext* inherited_sandbox_context = nullptr;
+    // the context that QoreInheritedSandboxHelper applied when the thread started (the sandbox of the code that
+    // started it), or nullptr: inherited_sandbox_context is that context unless a task's capture replaced it
+    // (QoreSandboxCaptureHelper); only this one is not counted for the creator of a capability scope
+    // (qore_scope_creator_is_sandboxed())
+    const QoreSandboxContext* thread_start_sandbox_context = nullptr;
     const QoreSandboxProvenanceHelper* sandbox_provenance = nullptr;
+
+    //! a capability set of the thread, set by a ThreadCapabilityScope (qorus#867)
+    struct CapabilityScope {
+        //! the set (a reference), which is never changed once it is on the stack
+        QoreHashNode* caps;
+        //! the identity of the scope that set it
+        uint64_t gen;
+    };
+    //! the thread's capability sets, innermost last (see design/thread-capability-scope.md); a new thread has none
+    std::vector<CapabilityScope> capability_scopes;
+
+    //! releases the thread's capability sets
+    DLLLOCAL void releaseCapabilityScopes(size_t level, ExceptionSink* xsink) {
+        while (capability_scopes.size() > level) {
+            QoreHashNode* caps = capability_scopes.back().caps;
+            capability_scopes.pop_back();
+            caps->deref(xsink);
+        }
+    }
     //! the innermost QoreCallerSandboxHelper that a sandboxed caller created on this thread, if any
     const QoreCallerSandboxHelper* sandboxed_caller = nullptr;
     // the budgets of the sandbox calls with a time limit that the thread is running (see
@@ -1121,6 +1146,8 @@ public:
 
     DLLLOCAL void del(ExceptionSink* xsink) {
         finalizing = true;
+        // the code of the open capability scopes belongs to the thread's Programs
+        releaseCapabilityScopes(0, xsink);
         releaseThreadLocalVars(xsink);
 
         tpd->del(xsink);
@@ -5082,6 +5109,16 @@ private:
 };
 }
 
+//! Returns true if the thread's inherited context is not counted for the creator of a capability scope
+/** Only the sandbox inherited from the code that started the thread (not a task's capture applied with
+    QoreSandboxCaptureHelper, which continues the submitter's operation), or a context that only such a sandbox
+    governed when it was captured (QoreSandboxContext::inherited_only)
+*/
+static bool skip_inherited_for_creator(const ThreadData* td) {
+    const QoreSandboxContext* ctx = td->inherited_sandbox_context;
+    return ctx && (ctx == td->thread_start_sandbox_context || ctx->inherited_only);
+}
+
 //! Visits the sandbox managers that the Programs and contexts of the current thread contribute
 /** The resolution order is: the current Program, then the enclosing caller Programs innermost
     first, then the call-program context fallback, and finally the sandbox the thread inherited from
@@ -5100,11 +5137,15 @@ private:
     @param pgm_id if non-null, set to the ID of the Program the manager was found on; must be 0 on entry
     @param policy true to resolve for a policy check (honours a policy barrier and a system-policy capability)
     @param visit called with each governing manager; returns false to end the walk
+    @param skip_inherited true to resolve for the creator of a capability scope: the sandbox that the thread
+    inherited from the code that started it, and contexts that only such a sandbox governed, are not counted
+    (qore_scope_creator_is_sandboxed())
 
     @return false if \a visit ended the walk, true otherwise
 */
 template <typename V>
-static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id, bool policy, V& visit) {
+static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id, bool policy, V& visit,
+        bool skip_inherited = false) {
     assert(td);
     assert(!pgm_id || !*pgm_id);
     // a module initialization barrier: nothing that the thread had when it was set is used
@@ -5122,6 +5163,11 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
     // an operation continued for another thread is governed by the sandbox of the thread that started it; the
     // Program of such a manager is only known by its ID (see get_cancel_scope_pgm_id())
     const QoreSandboxContext* continued = (policy && td->trusted_policy_depth) ? nullptr : td->sandbox_context;
+    // a continued operation that only an inherited sandbox governed does not count for the creator of a capability
+    // scope, as the inherited sandbox does not (qore_scope_creator_is_sandboxed())
+    if (skip_inherited && continued && continued->inherited_only) {
+        continued = nullptr;
+    }
     if (mib && continued == mib->sandbox_context) {
         continued = nullptr;
     }
@@ -5234,7 +5280,8 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
     // 4) the sandbox inherited from the code that started this thread: the outermost caller of everything the
     // thread runs; the Program of its manager is only known by its ID; not the one that the thread had when a module
     // initialization barrier was set
-    const QoreSandboxContext* inherited = td->inherited_sandbox_context;
+    const QoreSandboxContext* inherited = (skip_inherited && skip_inherited_for_creator(td))
+        ? nullptr : td->inherited_sandbox_context;
     if (mib && inherited == mib->inherited_sandbox_context) {
         inherited = nullptr;
     }
@@ -5259,7 +5306,7 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
     @return the referenced manager (the caller owns the reference), or nullptr if there is none
 */
 static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_t* pgm_id = nullptr,
-        bool policy = false) {
+        bool policy = false, bool skip_inherited = false) {
     if (pgm_id) {
         *pgm_id = 0;
     }
@@ -5268,7 +5315,7 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
         return nullptr;
     }
     QoreSandboxManagerCollector collect;
-    visit_thread_sandbox_stack(td, pgm_id, policy, collect);
+    visit_thread_sandbox_stack(td, pgm_id, policy, collect, skip_inherited);
     return collect.combine();
 }
 
@@ -5279,7 +5326,7 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
     @return false if \a visit ended the walk, true otherwise
 */
 template <typename V>
-static bool visit_thread_provenance(ThreadData* td, bool policy, V& visit) {
+static bool visit_thread_provenance(ThreadData* td, bool policy, V& visit, bool skip_inherited = false) {
     assert(td);
     const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
         || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
@@ -5292,13 +5339,22 @@ static bool visit_thread_provenance(ThreadData* td, bool policy, V& visit) {
             break;
         }
         const QoreSandboxContext* ctx = frame->getContext();
+        // the provenance of host code created where only an inherited sandbox governed does not count for the
+        // creator of a capability scope (qore_scope_creator_is_sandboxed())
+        if (skip_inherited && ctx->inherited_only) {
+            continue;
+        }
         QoreSandboxManager* sm = policy ? ctx->policy_manager : ctx->manager;
         if (sm && !visit(sm)) {
             return false;
         }
     }
     if (!policy || !td->trusted_policy_depth) {
-        const QoreSandboxContext* ctx = td->sandbox_context ? td->sandbox_context : td->inherited_sandbox_context;
+        const QoreSandboxContext* ctx = td->sandbox_context ? td->sandbox_context
+            : ((skip_inherited && skip_inherited_for_creator(td)) ? nullptr : td->inherited_sandbox_context);
+        if (skip_inherited && ctx && ctx->inherited_only) {
+            ctx = nullptr;
+        }
         if (ctx && !(mib && (ctx == mib->sandbox_context || ctx == mib->inherited_sandbox_context))) {
             QoreSandboxManager* sm = policy ? ctx->provenance_policy_manager : ctx->provenance_manager;
             if (sm && !visit(sm)) {
@@ -5309,13 +5365,13 @@ static bool visit_thread_provenance(ThreadData* td, bool policy, V& visit) {
     return true;
 }
 
-static QoreSandboxManager* find_thread_provenance_ref(bool policy) {
+static QoreSandboxManager* find_thread_provenance_ref(bool policy, bool skip_inherited = false) {
     ThreadData* td = thread_data.get();
     if (!td) {
         return nullptr;
     }
     QoreSandboxManagerCollector collect;
-    visit_thread_provenance(td, policy, collect);
+    visit_thread_provenance(td, policy, collect, skip_inherited);
     return collect.combine();
 }
 
@@ -5333,9 +5389,10 @@ bool qore_thread_sandbox_allows_uncontrolled_apis(bool policy) {
 }
 
 static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(qore_program_id_t* pgm_id = nullptr,
-        bool policy = false) {
-    ReferenceHolder<QoreSandboxManager> base(find_thread_sandbox_stack_ref_intern(pgm_id, policy), nullptr);
-    ReferenceHolder<QoreSandboxManager> provenance(find_thread_provenance_ref(policy), nullptr);
+        bool policy = false, bool skip_inherited = false) {
+    ReferenceHolder<QoreSandboxManager> base(find_thread_sandbox_stack_ref_intern(pgm_id, policy, skip_inherited),
+        nullptr);
+    ReferenceHolder<QoreSandboxManager> provenance(find_thread_provenance_ref(policy, skip_inherited), nullptr);
     if (!provenance) {
         return base.release();
     }
@@ -5355,6 +5412,39 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(qore_program_i
 
 QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
     return find_thread_sandbox_manager_ref_intern();
+}
+
+//! Returns true if a Program of the thread's program-context stack is sandboxed by its flag
+/** A Program that sandboxed code created is sandboxed for good (qore_program_is_sandboxed()) without a manager of its
+    own: the lookups of managers find its sandbox only through its callers, the thread's inherited sandbox and
+    provenance.  Every Program of the stack is checked, through any barrier.
+*/
+static bool thread_stack_has_sandboxed_program(const ThreadData* td) {
+    if (qore_program_private::isSandboxed(td->current_pgm)) {
+        return true;
+    }
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (qore_program_private::isSandboxed(ch->getOldProgram())) {
+            return true;
+        }
+    }
+    return qore_program_private::isSandboxed(td->call_program_context);
+}
+
+bool qore_scope_creator_is_sandboxed() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // everything but the sandbox that the thread inherited from the code that started it: the Programs of the
+    // calling code and its callers, also those sandboxed by their flag only, a continued operation's or a task's
+    // sandbox, and the provenance of objects and callbacks, except contexts that only an inherited sandbox governed
+    // when they were captured (QoreSandboxContext::inherited_only)
+    if (thread_stack_has_sandboxed_program(td)) {
+        return true;
+    }
+    ReferenceHolder<QoreSandboxManager> sm(find_thread_sandbox_manager_ref_intern(nullptr, false, true), nullptr);
+    return static_cast<bool>(sm);
 }
 
 bool qore_caller_is_untrusted() {
@@ -5712,6 +5802,18 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     }
     std::sort(program_ids.begin(), program_ids.end());
     program_ids.erase(std::unique(program_ids.begin(), program_ids.end()), program_ids.end());
+    // nothing but the sandbox inherited from the code that started the thread governs the capturing code (see
+    // qore_scope_creator_is_sandboxed()); only possible with such a sandbox, or a context that has the property
+    // already, so the common capture of sandboxed code does not look it up
+    if (current && td) {
+        bool possible = skip_inherited_for_creator(td) || (td->sandbox_context && td->sandbox_context->inherited_only);
+        for (const auto* frame = td->sandbox_provenance; !possible && frame; frame = frame->getPrevious()) {
+            possible = frame->getContext()->inherited_only;
+        }
+        if (possible && !qore_program_private::isSandboxed(td->current_pgm)) {
+            inherited_only = !qore_scope_creator_is_sandboxed();
+        }
+    }
     manager = current.release();
     policy_manager = policy.release();
     provenance_manager = provenance.release();
@@ -5909,7 +6011,9 @@ QoreInheritedSandboxHelper::QoreInheritedSandboxHelper(const QoreSandboxContext*
     ThreadData* td = thread_data.get();
     if (td) {
         old_ctx = td->inherited_sandbox_context;
+        old_start_ctx = td->thread_start_sandbox_context;
         td->inherited_sandbox_context = ctx;
+        td->thread_start_sandbox_context = ctx;
         active = true;
         // the thread continues the call that started it, under the same budgets
         td->sandbox_budgets.attach(td->tid, ctx->budgets, this);
@@ -5925,6 +6029,7 @@ void QoreInheritedSandboxHelper::reset() {
         ThreadData* td = thread_data.get();
         td->sandbox_budgets.leave(td->tid, this);
         td->inherited_sandbox_context = old_ctx;
+        td->thread_start_sandbox_context = old_start_ctx;
         active = false;
     }
 }
@@ -6403,6 +6508,49 @@ bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id) {
     }
     app_pgm_id = td->runtime_po_app_pgm_id;
     return true;
+}
+
+//! the identities of the capability scopes, unique in the process
+static std::atomic<uint64_t> capability_scope_gen{0};
+
+int thread_push_capability_scope(const QoreHashNode* caps, bool replace, size_t& level, uint64_t& gen,
+        ExceptionSink* xsink) {
+    ThreadData* td = thread_data.get();
+    // a set of any code: the hash given can be typed, and the values of the sets it is merged with have other types
+    ReferenceHolder<QoreHashNode> set(new QoreHashNode(autoTypeInfo), xsink);
+    if (!replace && !td->capability_scopes.empty()) {
+        set->merge(td->capability_scopes.back().caps, xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
+    set->merge(caps, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    gen = ++capability_scope_gen;
+    // the holder keeps the set if the push raises
+    td->capability_scopes.push_back(ThreadData::CapabilityScope{*set, gen});
+    set.release();
+    level = td->capability_scopes.size();
+    return 0;
+}
+
+void thread_pop_capability_scope(size_t level, uint64_t gen, ExceptionSink* xsink) {
+    ThreadData* td = thread_data.get();
+    // a scope of another thread, or one that an outer scope has already left, changes nothing
+    if (!level || level > td->capability_scopes.size() || td->capability_scopes[level - 1].gen != gen) {
+        return;
+    }
+    td->releaseCapabilityScopes(level - 1, xsink);
+}
+
+QoreHashNode* thread_get_capabilities() {
+    ThreadData* td = thread_data.get();
+    // an empty set (an independent scope) is no set
+    return td->capability_scopes.empty() || td->capability_scopes.back().caps->empty()
+        ? nullptr
+        : td->capability_scopes.back().caps->hashRefSelf();
 }
 
 // returns the description and the parse option name of the first domain in \a denied, thread control first
@@ -8056,6 +8204,7 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
     Thread->addSystemClass(initCounterClass(*Thread));
 
     Thread->addSystemClass(initAutoLockClass(*Thread));
+    Thread->addSystemClass(initThreadCapabilityScopeClass(*Thread));
     Thread->addSystemClass(initAutoGateClass(*Thread));
     Thread->addSystemClass(initAutoReadLockClass(*Thread));
     Thread->addSystemClass(initAutoWriteLockClass(*Thread));
