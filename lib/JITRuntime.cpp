@@ -442,6 +442,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_reload_chain_clear", reinterpret_cast<void*>(&qore_rt_reload_chain_clear) },
     { "qore_rt_reload_local_if_stale", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale) },
     { "qore_rt_reload_local_if_stale_aot", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_aot) },
+    { "qore_rt_obe_publish", reinterpret_cast<void*>(&qore_rt_obe_publish) },
+    { "qore_rt_obe_reload", reinterpret_cast<void*>(&qore_rt_obe_reload) },
+    { "qore_rt_obe_release", reinterpret_cast<void*>(&qore_rt_obe_release) },
+    { "qore_rt_obe_reload_released", reinterpret_cast<void*>(&qore_rt_obe_reload_released) },
     { "qore_rt_load_local_raw_aot", reinterpret_cast<void*>(&qore_rt_load_local_raw_aot) },
     { "qore_rt_reload_local_if_stale_raw_aot",
         reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_raw_aot) },
@@ -15157,6 +15161,98 @@ extern "C" DLLEXPORT void qore_rt_reload_local_if_stale_aot(QoreAOTContext* ctx,
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_reload_local_if_stale(ctx->locals[idx], cache, tracker, deferred,
             valid_epoch, epoch, xsink);
+}
+
+//! The variable of a record of qore_rt_obe_publish() and the other helpers of the table-driven handler code
+static inline LocalVar* qore_rt_obe_var(const QoreObeLocal& e, QoreAOTContext* ctx) {
+    if (e.var) {
+        return e.var;
+    }
+    assert(ctx && e.slot >= 0 && e.slot < ctx->num_locals);
+    return ctx->locals[e.slot];
+}
+
+extern "C" DLLEXPORT void qore_rt_obe_publish(QoreObeLocal* locals, const uint32_t* table, int32_t count,
+        const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
+    for (int32_t i = 0; i < count; ++i) {
+        const QoreObeLocal& e = locals[table[i] & QORE_OBE_TABLE_INDEX];
+        LocalVar* var = qore_rt_obe_var(e, ctx);
+        if (table[i] & QORE_OBE_TABLE_FRESH) {
+            if (e.ref_flag) {
+                *e.ref_flag = qore_rt_reload_local_if_stale_raw(var, e.cache, e.tracker, e.deferred, e.valid_epoch,
+                    *epoch, xsink);
+            } else {
+                qore_rt_reload_local_if_stale(var, e.cache, e.tracker, e.deferred, e.valid_epoch, *epoch, xsink);
+            }
+        }
+        qore_rt_sync_local(var, *e.cache);
+    }
+}
+
+//! Loads the value of the local that the inline reload of QoreIRToLLVM::emitLocalCacheLoad() loads
+static inline uint64_t qore_rt_obe_load(const QoreObeLocal& e, LocalVar* var, ExceptionSink* xsink) {
+    if (e.ref_flag) {
+        uint64_t loaded = qore_rt_load_local_raw(var, xsink);
+        *e.ref_flag = qore_rt_value_is_reference(loaded);
+        return loaded;
+    }
+    return qore_rt_load_local(var, xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_obe_reload(QoreObeLocal* locals, const uint32_t* table, int32_t count,
+        const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
+    for (int32_t i = 0; i < count; ++i) {
+        const QoreObeLocal& e = locals[table[i] & QORE_OBE_TABLE_INDEX];
+        LocalVar* var = qore_rt_obe_var(e, ctx);
+        assert(e.cache && e.tracker && e.deferred);
+        uint64_t old_tracker = *e.tracker;
+        uint64_t old_deferred = *e.deferred;
+        uint64_t reloaded = qore_rt_obe_load(e, var, xsink);
+        *e.cache = reloaded;
+        *e.tracker = reloaded;
+        *e.deferred = old_tracker;
+        qore_rt_decref(old_deferred, xsink);
+        if ((table[i] & QORE_OBE_TABLE_FRESH) && e.valid_epoch) {
+            *e.valid_epoch = *epoch;
+        }
+    }
+}
+
+extern "C" DLLEXPORT void qore_rt_obe_release(QoreObeLocal* locals, const uint32_t* table, int32_t count,
+        ExceptionSink* xsink) {
+    auto release = [xsink](uint64_t* slot) {
+        if (!slot) {
+            return;
+        }
+        uint64_t val = *slot;
+        // NOTHING
+        *slot = 0;
+        qore_rt_decref(val, xsink);
+    };
+    for (int32_t i = 0; i < count; ++i) {
+        const QoreObeLocal& e = locals[table[i] & QORE_OBE_TABLE_INDEX];
+        release(e.entry_owner);
+        release(e.deferred);
+        release(e.tracker);
+    }
+}
+
+extern "C" DLLEXPORT void qore_rt_obe_reload_released(QoreObeLocal* locals, const uint32_t* table, int32_t count,
+        const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
+    for (int32_t i = 0; i < count; ++i) {
+        const QoreObeLocal& e = locals[table[i] & QORE_OBE_TABLE_INDEX];
+        uint64_t* owner = e.tracker ? e.tracker : e.entry_owner;
+        if (!owner) {
+            continue;
+        }
+        LocalVar* var = qore_rt_obe_var(e, ctx);
+        uint64_t reloaded = qore_rt_obe_load(e, var, xsink);
+        *e.cache = reloaded;
+        *owner = reloaded;
+        if ((table[i] & QORE_OBE_TABLE_FRESH) && e.valid_epoch) {
+            *e.valid_epoch = *epoch;
+        }
+    }
 }
 
 extern "C" DLLEXPORT void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {

@@ -1704,6 +1704,68 @@ uint64_t qore_rt_load_local_raw_aot(QoreAOTContext* ctx, int32_t idx, ExceptionS
 uint8_t qore_rt_reload_local_if_stale_raw_aot(QoreAOTContext* ctx, int32_t idx, uint64_t* cache,
         uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch, ExceptionSink* xsink);
 
+// --- the table-driven code that runs pending handlers (qore#6110) ---
+
+//! A local of a function with on_block_exit handlers, as the helpers that run its pending handlers see it
+/** Native code fills an array of these in the entry block of the function (a record for each local that a site that
+    runs handlers publishes or reloads), and a site passes the array with a constant table of the indexes of the
+    records that it covers.  Without them, the code of each site grew with the number of locals of the function.  The
+    layout is the one that QoreIRToLLVM writes: the fields are pointers or 32-bit integers at 8-byte offsets.
+*/
+struct QoreObeLocal {
+    //! the variable in JIT code; null in AOT code
+    LocalVar* var;
+    //! the native cache of the local (its alloca)
+    uint64_t* cache;
+    //! the reload tracker of the local, if it has one
+    uint64_t* tracker;
+    //! the value that the cache held before the last reload, if the local has the slot
+    uint64_t* deferred;
+    //! the epoch of the last reload of the cache, if the local has it
+    uint64_t* valid_epoch;
+    //! the reference flag of the local, if it has one
+    uint8_t* ref_flag;
+    //! the value of the entry-time load that the local owns, if it does
+    uint64_t* entry_owner;
+    //! the slot of the local in AOT code
+    int32_t slot;
+    int32_t reserved;
+};
+
+//! the entry of a table of qore_rt_obe_publish() or qore_rt_obe_reload() that has the cache reloaded first/marked fresh
+constexpr uint32_t QORE_OBE_TABLE_FRESH = 0x80000000u;
+//! the mask of the index of the record in an entry of a table
+constexpr uint32_t QORE_OBE_TABLE_INDEX = 0x3fffffffu;
+
+//! Publishes the locals of the table to the runtime local stack before the handlers run (qore#6110)
+/** For each entry: a local with QORE_OBE_TABLE_FRESH is reloaded if its cache is stale
+    (qore_rt_reload_local_if_stale()), then its cache is published (qore_rt_sync_local()), as the inline code of
+    each site does.  \a epoch is the function's reload epoch, \a ctx the AOT context (null in JIT code).
+*/
+void qore_rt_obe_publish(QoreObeLocal* locals, const uint32_t* table, int32_t count, const uint64_t* epoch,
+        QoreAOTContext* ctx, ExceptionSink* xsink);
+
+//! Reloads the locals of the table from the runtime local stack after the handlers ran
+/** As the inline reload of a local (QoreIRToLLVM::reloadLocalFromRuntime()): the cache and the tracker get the value,
+    the deferred slot the tracker's old value, whose old content is released; an entry with QORE_OBE_TABLE_FRESH marks
+    the cache fresh for \a epoch.
+*/
+void qore_rt_obe_reload(QoreObeLocal* locals, const uint32_t* table, int32_t count, const uint64_t* epoch,
+        QoreAOTContext* ctx, ExceptionSink* xsink);
+
+//! Releases the reload storage of the locals of the table before handlers run out of line (qore#5942)
+/** For each entry in the order of the table: the entry-time load that the local owns, its deferred value and its
+    tracker, each set to NOTHING and released
+*/
+void qore_rt_obe_release(QoreObeLocal* locals, const uint32_t* table, int32_t count, ExceptionSink* xsink);
+
+//! Reloads the locals that qore_rt_obe_release() released, after the handlers ran
+/** The value is loaded from the runtime local stack into the cache and into the tracker, or into the entry owner if
+    the local has no tracker, and the cache is marked fresh for an entry with QORE_OBE_TABLE_FRESH.
+*/
+void qore_rt_obe_reload_released(QoreObeLocal* locals, const uint32_t* table, int32_t count, const uint64_t* epoch,
+        QoreAOTContext* ctx, ExceptionSink* xsink);
+
 //! Assign to a local variable via AOT context slot
 void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 void qore_rt_assign_local_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
