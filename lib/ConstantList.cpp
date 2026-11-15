@@ -659,6 +659,23 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
     qore_program_private* pgm_priv = qore_program_private::get(*getProgram());
     bool old_parse_commit_in_progress = pgm_priv->parse_commit_in_progress;
     pgm_priv->parse_commit_in_progress = true;
+    // the initializer runs with the parse options of the code that declares the constant, as the code of a function
+    // runs with those of its declaration, not with the run-time options in effect when the declaring code is
+    // committed, which are none while a module or a %requires is parsed; the compiled form of the constant runs with
+    // the same options (qore#6205, qore#6189)
+    struct ConstantInitRuntimeOptionsHelper {
+        const AbstractStatement* old_stmt;
+        const QoreProgramLocation* old_loc;
+        QoreParseOptions old_po;
+
+        DLLLOCAL ConstantInitRuntimeOptionsHelper(const QoreParseOptions& po) {
+            swap_runtime_parse_options(po, old_stmt, old_loc, old_po);
+        }
+
+        DLLLOCAL ~ConstantInitRuntimeOptionsHelper() {
+            update_runtime_statement_location(old_stmt, old_loc, old_po);
+        }
+    } init_po(pwo.parse_options);
     {
         try {
             ValueEvalOptimizedRefHolder v(saved_val, &xsink);
