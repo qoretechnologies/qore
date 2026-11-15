@@ -10819,9 +10819,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_in_place(
         uint64_t left_bits, uint64_t right_bits, ExceptionSink* xsink) {
     QoreValue left = fromBits(left_bits);
     QoreValue right = fromBits(right_bits);
-    // the left operand must be a string node held as an ordinary pointer: not an inline short string, and not an enum
-    // value, which does not own its member's string (the IR analysis never marks an append to one in place)
-    if (!left.isPlainPointer() || left.getType() != NT_STRING || right.getType() != NT_STRING) {
+    // the IR analysis marks an append in place only for a local freshly assigned a string node, never an enum value,
+    // which does not own its member's string; the IR interpreter checks that the left operand is a plain pointer
+    if (left.getType() != NT_STRING || left.isShortString()
+            || right.getType() != NT_STRING) {
         xsink->raiseException("IR-EXEC-ERROR",
             "in-place string append requires an assigned mutable string node on the left");
         return toBits(QoreValue());
