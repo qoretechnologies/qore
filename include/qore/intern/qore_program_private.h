@@ -677,6 +677,10 @@ public:
     //! true if the parse options cannot be changed; set by QoreProgram::lockOptions() from any thread
     std::atomic<bool> po_locked{false};
 
+    //! the restrictions that a locked Program keeps: those it inherited from its parent, or that it had when it was
+    //! locked; disabling one is refused (checkDisableParseOptions())
+    QoreParseOptions locked_restrictions;
+
     //! true if the Program has an exec class; set by QoreProgram::setExecClass() from any thread
     std::atomic<bool> exec_class{false};
 
@@ -1436,6 +1440,25 @@ public:
         // also check if options may be made more restrictive and the option also does so
         return (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked
             && (!po_allow_restrict || (po & QoreParseOptions::POSITIVE_OPTIONS)));
+    }
+
+    //! returns true if disabling \a po is refused: the parse options are locked and \a po holds a restriction that
+    //! limits what code can do, or options may not be changed at all
+    /** The reciprocal of checkSetParseOptions(): disabling a positive option makes the Program more restrictive and
+        is allowed as setting a restriction is, while disabling a restriction would lift what a locked Program has, as
+        a child inherits its parent's restrictions.  Free options and the options of style and backward compatibility
+        (\c PO_STYLE_OPTIONS, the other options of \c PO_MODERN, \c PO_REQUIRE_OUR and the keyword switches
+        \c PO_NO_TYPEDEF, \c PO_NO_ENUM and \c PO_NO_TRANSIENT, which restrict how code is written, not what it can
+        do) may be disabled, so that a locked child can parse code in another style
+    */
+    DLLLOCAL bool checkDisableParseOptions(const QoreParseOptions& po) {
+        static const QoreParseOptions may_disable = QoreParseOptions::FREE_OPTIONS
+            | QoreParseOptions::POSITIVE_OPTIONS
+            | QoreParseOptions(PO_STYLE_OPTIONS | PO_MODERN | PO_REQUIRE_OUR | PO_NO_TYPEDEF | PO_NO_ENUM
+                | PO_NO_TRANSIENT)
+            | QoreParseOptions::NO_SUMMARIZE | QoreParseOptions::STRICT_PARSE_ERRORS;
+        return (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked
+            && (!po_allow_restrict || !!(po & locked_restrictions & ~may_disable)));
     }
 
     DLLLOCAL void setParseOptionsIntern(const QoreParseOptions& po) {
@@ -3533,9 +3556,9 @@ public:
 
     DLLLOCAL int disableParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
         assert(xsink);
-        // only raise the exception if parse options are locked and the option is not a "free option"
-        // note: disabling PO_POSITIVE_OPTION is more restrictive so let's allow to disable
-        if (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked && !po_allow_restrict) {
+        // only raise the exception if parse options are locked and the option is not a "free option"; disabling a
+        // positive option is more restrictive and is allowed, disabling a restriction is not
+        if (checkDisableParseOptions(po)) {
             xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
             return -1;
         }
@@ -3557,6 +3580,17 @@ public:
         // the options given must be consistent: %modern with no compatibility option that changes the meaning of code
         if (checkModernConflict(QoreParseOptions(), po, true, "Program::replaceParseOptions()", xsink)) {
             return -1;
+        }
+        // a Program whose parse options are locked (a child that inherited its parent's restrictions, or a Program
+        // locked with Program::lockOptions()) keeps them: the options that the replacement removes and adds are
+        // checked as Program::disableParseOptions() and Program::setParseOptions() check them
+        if (po_locked) {
+            QoreParseOptions removed = pwo.parse_options & ~po;
+            QoreParseOptions added = po & ~pwo.parse_options;
+            if (checkDisableParseOptions(removed) || checkSetParseOptions(added)) {
+                xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
+                return -1;
+            }
         }
         //printd(5, "qore_program_private::replaceParseOptions() this: %p pgm: %p replacing po: %lld with po: %lld\n", this, pgm, pwo.parse_options, po);
         replaceParseOptionsIntern(po);
@@ -3580,9 +3614,8 @@ public:
     }
 
     DLLLOCAL int parseDisableParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
-        // only raise the exception if parse options are locked and the option is not a "free option"
-        // note: disabling PO_POSITIVE_OPTION is more restrictive so let's allow to disable
-        if (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked && !po_allow_restrict) {
+        // as disableParseOptions()
+        if (checkDisableParseOptions(po)) {
             parse_error(*loc, "parse options have been locked on this program object");
             return -1;
         }

@@ -1869,9 +1869,15 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
         // the mask must be the full-width one: the legacy PO_POSITIVE_OPTIONS cannot hold extended (bits 64+)
         // positive options, which would then pass to the child unchecked
         pwo.parse_options &= (p_pgm->priv->pwo.parse_options | ~QoreParseOptions::POSITIVE_OPTIONS);
+        // the child keeps the restrictions of its parent
+        locked_restrictions = p_pgm->priv->pwo.parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
     } else {
         pwo.parse_options = n_parse_options;
         po_locked = !(n_parse_options & PO_NO_CHILD_PO_RESTRICTIONS);
+        if (po_locked) {
+            // a locked child keeps the restrictions that it was created with
+            locked_restrictions = n_parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
+        }
     }
 
     // share the thread-local data of the parent's family
@@ -4073,6 +4079,8 @@ void QoreProgram::waitForTerminationAndDeref(ExceptionSink* xsink) {
 }
 
 void QoreProgram::lockOptions() {
+    // the restrictions that it has now are kept
+    priv->locked_restrictions |= priv->pwo.parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
     priv->po_locked = true;
 }
 
