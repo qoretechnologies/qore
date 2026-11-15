@@ -51,11 +51,10 @@ extern QoreClass* QC_EVENTNOTIFIER;
 
 /** @cond INTERNAL */
 
-// Returns epoch time in microseconds
-static inline int64_t h2_epoch_us() {
-    int us;
-    int64_t secs = q_epoch_us(us);
-    return secs * 1000000LL + us;
+// Returns the monotonic clock in microseconds: the idle deadline and the keepalive PING interval are intervals, which a
+// step of the system clock must not end or stop (#6150)
+static inline int64_t h2_monotonic_us() {
+    return q_get_monotonic_us();
 }
 
 // ============================================================
@@ -1087,7 +1086,7 @@ QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_
         return poll_info;
     }
 
-    int64_t now_us = h2_epoch_us();
+    int64_t now_us = h2_monotonic_us();
     bool expired = false;
     bool armed_now = false;
     {

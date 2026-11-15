@@ -107,11 +107,11 @@ public:
                 ready_cond.wait(lock);
             }
         } else {
-            // Compute absolute deadline
-            int us;
-            int64_t deadline_us = q_epoch_us(us) * 1000000LL + us + timeout_ms * 1000;
+            // the deadline is on the monotonic clock, as the condition's wait: a step of the system clock does not end
+            // or extend it (#6150)
+            int64_t deadline_us = q_get_monotonic_us() + timeout_ms * 1000;
             while (state.load(std::memory_order_acquire) == CONNECTING) {
-                int64_t now_us = q_epoch_us(us) * 1000000LL + us;
+                int64_t now_us = q_get_monotonic_us();
                 int64_t remaining_us = deadline_us - now_us;
                 if (remaining_us <= 0) {
                     return false;

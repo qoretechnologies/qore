@@ -46,8 +46,8 @@ HttpClientConnectionBase::HttpClientConnectionBase() : opener_policy(qore_socket
 HttpClientConnectionBase::HttpClientConnectionBase(std::string target_host, int target_port, bool ssl_required)
         : target_host(std::move(target_host)), target_port(target_port), ssl_required(ssl_required),
             opener_policy(qore_socket_ref_policy_sandbox_manager()) {
-    int us = 0;
-    created_us_ = q_epoch_us(us) * 1000000LL + us;
+    // on the monotonic clock: max_age is an interval, which a step of the system clock must not end or extend (#6150)
+    created_us_ = q_get_monotonic_us();
 }
 
 HttpClientConnectionBase::~HttpClientConnectionBase() {

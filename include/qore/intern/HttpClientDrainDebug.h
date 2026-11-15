@@ -51,6 +51,10 @@ public:
     //! The drain limit set by dbg_http_client_drain_limit(); 0: the limit of the operation
     std::atomic<int> drain_limit{0};
 
+    //! The max_age of the connection managers that HTTPClient objects create, set by dbg_http_client_max_age() (ms);
+    //! 0: the default (none)
+    std::atomic<int> max_age_ms{0};
+
     //! The streaming batch set by dbg_http2_client_streaming_batch(); 0: the batch of the operation
     std::atomic<int> streaming_batch{0};
 

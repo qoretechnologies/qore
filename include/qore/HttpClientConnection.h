@@ -696,8 +696,10 @@ public:
     */
     DLLEXPORT void drainInFlight();
 
-    //! Returns the connection creation timestamp (epoch microseconds).
-    /** Set once in the protected constructor; never updated.  Used by
+    //! Returns the time that the connection was created, in microseconds on the monotonic clock
+    /** The value is q_get_monotonic_us() when the connection was created, not a time of day: it only serves to measure
+        the connection's age, which a step of the system clock does not change.  Set once in the protected
+        constructor; never updated.  Used by
         @ref HttpClientConnectionManagerBase to enforce
         @ref HttpClientConnectionManagerBase::Options::max_age_ms at pool checkout.  Pure stored-state
         read — no syscall, no I/O thread coupling.
