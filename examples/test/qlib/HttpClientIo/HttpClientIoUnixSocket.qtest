@@ -23,9 +23,7 @@
 %requires HttpClientStreamingIo
 %requires RestClientIo
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class HttpClientIoUnixSocketTest
 

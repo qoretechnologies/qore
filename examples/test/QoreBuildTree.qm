@@ -30,6 +30,10 @@ module QoreBuildTree {
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
     license = "MIT";
+    # the paths are resolved once, when the module is loaded: a test can change its working directory later
+    init = sub () {
+        QoreBuildTree::Paths::init();
+    };
 }
 
 /** A test that runs a tool of the build (qpp, qcc), links against libqore or starts another qore takes them from the
@@ -49,21 +53,13 @@ if (!build) {
 public namespace QoreBuildTree {
     #! Returns the qore that runs this program as an absolute path, symbolic links resolved
     /** This is \c QORE_ARGV[0], the qore executable itself (not a wrapper script such as the one that the CI jobs can
-        give in \c QORE_BINARY); a bare name is looked up in \c PATH.
+        give in \c QORE_BINARY); a bare name is looked up in \c PATH.  It is resolved when this module is loaded, so a
+        later change of the working directory does not change it.
 
         @return the path of the qore that runs this program, or \c QORE_ARGV[0] if it cannot be found
     */
     public string sub qore_executable() {
-        string qore = QORE_ARGV[0];
-        if (qore !~ /\//) {
-            foreach string dir in ((ENV.PATH ?? "").split(":")) {
-                if (dir && is_executable(dir + "/" + qore)) {
-                    qore = dir + "/" + qore;
-                    break;
-                }
-            }
-        }
-        return is_file(qore) ? realpath(qore) : qore;
+        return Paths::qore;
     }
 
     #! Returns the build tree of the qore that runs this program, or NOTHING if it does not run from a build tree
@@ -112,17 +108,40 @@ public namespace QoreBuildTree {
 
     #! Returns the directories that can be the build tree of the qore under test, in the order they are checked
     public list<string> sub candidates() {
-        list<string> dirs = ();
-        string qore = qore_executable();
-        if (is_file(qore)) {
-            dirs += dirname(qore);
+        return Paths::candidates;
+    }
+
+    #! The paths of the qore under test, resolved when the module is loaded (relative paths are relative to the
+    #! working directory then)
+    class Paths {
+        public {
+            #! the qore that runs this program (see qore_executable())
+            static string qore;
+            #! the directories that can be the build tree of the qore under test (see candidates())
+            static list<string> candidates = ();
         }
-        if (ENV.LIBQORE_BINARY && is_file(ENV.LIBQORE_BINARY)) {
-            dirs += dirname(realpath(ENV.LIBQORE_BINARY));
+
+        #! Resolves the paths; called by the initialization of the module
+        static init() {
+            string exe = QORE_ARGV[0];
+            if (exe !~ /\//) {
+                foreach string dir in ((ENV.PATH ?? "").split(":")) {
+                    if (dir && is_executable(dir + "/" + exe)) {
+                        exe = dir + "/" + exe;
+                        break;
+                    }
+                }
+            }
+            qore = is_file(exe) ? realpath(exe) : exe;
+            if (is_file(qore)) {
+                candidates += dirname(qore);
+            }
+            if (ENV.LIBQORE_BINARY && is_file(ENV.LIBQORE_BINARY)) {
+                candidates += dirname(realpath(ENV.LIBQORE_BINARY));
+            }
+            if (ENV.QORE_LIBDIR && is_dir(ENV.QORE_LIBDIR)) {
+                candidates += realpath(ENV.QORE_LIBDIR);
+            }
         }
-        if (ENV.QORE_LIBDIR && is_dir(ENV.QORE_LIBDIR)) {
-            dirs += realpath(ENV.QORE_LIBDIR);
-        }
-        return dirs;
     }
 }

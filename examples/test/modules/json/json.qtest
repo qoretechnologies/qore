@@ -17,9 +17,7 @@
 
 %requires QUnit
 
-%try-module dataframe
-%define NoDataFrame
-%endtry
+%requires dataframe
 
 %exec-class JsonTest
 
@@ -811,9 +809,6 @@ string sub test(auto data) {
 
     #! 5. DataFrame row-list interchange
     toonDataFrameInterop() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         list<hash<auto>> rows = (
             {"id": 1, "name": "Ada", "active": True, "score": 95.5},
             {"id": 2, "name": "Bob", "active": False, "score": 88.25},
@@ -830,7 +825,6 @@ string sub test(auto data) {
 
         DataFrame::DataFrame round_trip(parsed);
         assertEq(rows, round_trip.toRecords());
-%endif
     }
 
     #! 6. determinism

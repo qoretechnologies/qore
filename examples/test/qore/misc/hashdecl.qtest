@@ -7,9 +7,7 @@
 %requires QUnit
 %requires reflection
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
 %exec-class HashDeclTest
 
@@ -1453,14 +1451,12 @@ hash<string, int> sub t() { hash<string, int> h(<D>{\"a\": 1, \"n\": 2}); return
         assertThrows("RUNTIME-TYPE-ERROR", "expects type 'list<hash<ParseB>>'", \hashdecl_pgm.callFunction(), "t",
             "hashdecl source not folded into a different hashdecl");
 
-%ifndef NoJson
         # JSON-derived values are the motivating case: every leaf of this document is a string
         hash<FoldTree> from_json = new hash<FoldTree>(auto_value(parse_json(
             '{"value": "a", "format": "f", "parts": [{"value": "b", "format": "g"}]}'
         )));
         assertEq(True, from_json.parts[0] instanceof hash<FoldTree>, "JSON-derived child folded");
         assertEq("b", from_json.parts[0].value, "JSON-derived child value");
-%endif
     }
 
     #! The parse-time verdict on a foldable container must match what the runtime does with it
