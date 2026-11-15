@@ -1860,6 +1860,9 @@
       @ref Qore::hours() "hours()", @ref Qore::minutes() "minutes()", @ref Qore::seconds() "seconds()",
       @ref Qore::milliseconds() "milliseconds()" and @ref Qore::microseconds() "microseconds()" now raise
       \c INVALID-DATE for a value that a relative date cannot hold; it wrapped to another duration (issue #6101)
+    - a float out of the range of an integer, an infinite float and NaN now @ref float_to_int_conversion "convert to an
+      integer" as a number does in every mode, saturated with NaN giving 0; the result was undefined and differed
+      between the execution modes (issue #6181)
     - a @ref find "find expression" nested in the result, in-expression or where expression of another one can now be
       compiled with @ref qcc_tool "qcc"; it was refused as an unsupported expression (issue #5974)
     - @ref qcc_tool "qcc" no longer crashes compiling a user module whose header has a \c del closure, and the compiled

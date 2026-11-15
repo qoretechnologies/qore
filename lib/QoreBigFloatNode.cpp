@@ -74,12 +74,13 @@ bool QoreBigFloatNode::getAsBoolImpl() const {
     return (bool)val;
 }
 
+// a float stored as a node (a negative NaN, some large negative values) converts as an inline float (issue #6181)
 int QoreBigFloatNode::getAsIntImpl() const {
-    return (int)val;
+    return (int)q_float_to_int64(val);
 }
 
 int64 QoreBigFloatNode::getAsBigIntImpl() const {
-    return (int64)val;
+    return q_float_to_int64(val);
 }
 
 double QoreBigFloatNode::getAsFloatImpl() const {

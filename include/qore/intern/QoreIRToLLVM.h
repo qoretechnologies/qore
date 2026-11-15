@@ -51,6 +51,7 @@ class FunctionEntry;
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/TargetParser/Triple.h>
 
 class QoreIRFunction;
 struct QoreJITObjectLayout;
@@ -85,6 +86,17 @@ public:
     //! Remove decref calls whose value is proven to be NOTHING.
     //! @return the number of calls removed
     static size_t pruneNoopDecrefs(llvm::Module& module);
+
+    //! Expands the scalar llvm.fptosi.sat.i64.f64 calls of createFloatToInt() for an x86-64 target
+    /** Called on the optimized module before code generation (JIT and AOT).  On x86-64 the saturating conversion
+        costs six instructions more than cvttsd2si, which gives 0x8000000000000000 for every value that does not fit
+        an int64 and for NaN: the call is replaced by cvttsd2si and a compare with that value, with the call kept in a
+        cold block taken only then (where it also gives the right result for -2^63).  Other targets keep the call
+        (AArch64: one fcvtzs).  Run after the optimization passes, so that they do not merge the cold block back.
+
+        @return the number of conversions expanded (issue #6181)
+    */
+    static size_t expandFloatToIntForTarget(llvm::Module& module, const llvm::Triple& triple);
 
     //! Enable AOT mode with the given slot map.
     //! When set, process-specific opcodes emit _aot helper calls with slot indices
@@ -1602,6 +1614,14 @@ private:
     // Ensure a value is a native int64_t for typed int operations.
     // Handles: native i64 (pass through), NaN-boxed INT48 or big int (runtime conversion).
     llvm::Value* ensureIntType(llvm::Value* val, uint32_t value_id);
+
+    //! Converts a native float to a native int as q_float_to_int64() does: truncated, saturated, NaN gives 0
+    /** An out-of-range value gives poison with fptosi; llvm.fptosi.sat gives the rule of q_float_to_int64() in the
+        JIT and AOT code and adds no block, so it can be emitted anywhere (also for a PHI's incoming value); for an
+        x86-64 target, expandFloatToIntForTarget() turns it into cvttsd2si and a cold branch after the optimization
+        passes (issue #6181)
+    */
+    llvm::Value* createFloatToInt(llvm::Value* val);
 
     llvm::Value* getCachedStableConversion(
         uint32_t value_id, const NativeConversionCache& cache) const;

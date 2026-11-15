@@ -1006,8 +1006,8 @@ extern "C" DLLEXPORT int64_t qore_rt_plus_equals_operand_to_int(uint64_t val) {
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_float_to_int(double val) {
-    // same conversion as QoreValue::getAsBigInt() for a float value
-    return static_cast<int64>(val);
+    // same conversion as QoreValue::getAsBigInt() for a float value (issue #6181)
+    return q_float_to_int64(val);
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_to_timeout(uint64_t val) {

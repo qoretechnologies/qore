@@ -562,6 +562,19 @@ static QoreValue columnar_make_column_value(const QoreListNode* source, const Co
     return columnar_make_typed_list(source, shape.element_type, shape.nullable, xsink);
 }
 
+// the buffer errors raised while a column is built name the element only; adds the column (issue #6181)
+static void columnar_add_column_to_buffer_error(const char* name, ExceptionSink* xsink) {
+    QoreValue err = xsink->getExceptionErr();
+    if (err.getType() != NT_STRING) {
+        return;
+    }
+    // the error code can be held in inline short string storage, which has no QoreStringNode
+    QoreStringDataHelper e(err);
+    if (e == "BUFFER-RANGE-ERROR" || e == "BUFFER-TYPE-ERROR") {
+        xsink->appendLastDescription(" (column '%s')", name);
+    }
+}
+
 static size_t columnar_value_size(QoreValue value) {
     switch (value.getType()) {
         case NT_LIST:
@@ -4076,6 +4089,7 @@ int QoreColumnarResult::addColumn(const char* name, QoreValue data, const QoreCo
             column_schema.name = schema.name;
             ValueHolder column_value(columnar_make_column_value(source, shape, xsink), xsink);
             if (*xsink) {
+                columnar_add_column_to_buffer_error(name, xsink);
                 return -1;
             }
 
@@ -4170,6 +4184,7 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHash(const QoreHashNode* colum
 
         ValueHolder column_value(columnar_make_column_value(source, shape, xsink), xsink);
         if (*xsink) {
+            columnar_add_column_to_buffer_error(i.getKey(), xsink);
             return nullptr;
         }
         if (rv->addColumn(i.getKey(), column_value.release(), schema, xsink)) {
