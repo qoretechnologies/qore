@@ -77,6 +77,32 @@ for make).  For an AOT module (`.qmod`), qcc lists everything the module was com
   opened when it was loaded from its source and, for an AOT module of a build tree, everything its own depfile lists;
 - the candidate files of the modules of its failed `%try-module` directives.
 
+### An optional module that becomes available
+
+A depfile lists files that exist, so it cannot make the build notice a module of a failed `%try-module` directive that
+is installed later; the loader refuses the AOT module then (`AOT-MODULE-STALE`: it was compiled without the module),
+and a build tree kept such modules until they were deleted by hand (qore#6145).  qcc therefore also writes the paths
+where those modules could be installed, and are not (`QoreModuleManager::getMissingModuleCandidateFiles()`: the
+directories of the module path, in the flat and the split forms, each name with the module API versions, `.qmod` and
+`.qm`), to `<qmod>.d.optional` (empty when there are none).
+
+`QORE_USER_MODULE_AOT_RULES()` gives a module whose sources have a `%try-module` directive a stamp
+(`<qmod>.optional.stamp`) that its `.qmod` depends on, and a check that runs in every build before it
+(`cmake/QoreOptionalModuleStamp.cmake`): the stamp is rewritten only when one of the listed paths exists, so that the
+module is rebuilt then, and is left as it is otherwise, also when another file is added to a directory of the module
+path.  After the rebuild the paths of a module that is available are no longer listed, and the stamp is left as it
+is; the stamp records the time of the list, so that a module that is installed again after a rebuild without it is
+seen too.  The directive is looked for in the module's `.qm` and `.qc` files when CMake configures the module: a directive
+added to a module is taken into account when CMake runs again, and one in a file that an `%include` directive opens
+is not seen.  A module that requires the module is not rebuilt: its depfile lists the source of the module, not its
+`.qmod`, and the loader does not refuse it either (its metadata records only its own failed directives), although it
+was compiled against a module without the optional one; the qmod cache does not supply it then (its entry records
+the optional modules of its dependencies).  The
+paths are absolute (a relative module path entry is resolved against the directory qcc runs in), as the check runs in
+another directory, and the qmod cache stores the list with the module (`qmod-build-cache.md`).  The paths are not in the depfile nor in the fingerprint file: a path that does not
+exist would make the module out of date in every build, and the loader checks the modules of failed `%try-module`
+directives itself.
+
 The depfile of a script object (`.qo`) is unchanged: it lists the modules the script loads directly, and its include
 closure as before.  Without a dependency file, the main source of the module and the `.qm` and `.qc` files of its
 directory are the sources.

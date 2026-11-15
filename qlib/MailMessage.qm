@@ -157,6 +157,45 @@ msg.addTO("My Best Friend <you@friend.com>");
       display name is written as an RFC 2047 encoded word, and
       @ref MailMessage::Message::getFrom() "Message::getFrom()", the sender of the SMTP envelope, is still the email
       address alone (<a href="https://github.com/qoretechnologies/qore/issues/6019">issue 6019</a>)
+    - Address handling and header encoding fixes
+      (<a href="https://github.com/qoretechnologies/qore/issues/6066">issue 6066</a>):
+      - only the display names and the other text of the \c To, \c CC and \c BCC headers are encoded (as RFC 2047
+        \c "B" encoded words), never the addresses, also in a mailbox with a comment, a group or a name without
+        angle brackets; a value with a non-ASCII display name was written as one \c "Q" encoded word with its
+        address, which a mail client cannot read as an address; a list of mailboxes is folded so that its lines are
+        at most 76 characters long
+      - @ref MailMessage::Message::getEmailAddress() "Message::getEmailAddress()" returns the whole address with
+        every RFC 5322 \c atext character (ex: <tt>J.O'B\@x.com</tt> was returned as <tt>B\@x.com</tt>), accepts
+        quoted local parts and non-ASCII (internationalized) addresses, which were rejected, and returns an
+        address in quotes, brackets or braces (as in CSV data); an encoded word, white space (including Unicode
+        white space), format characters (ex: a byte order mark) and text before an address are never part of the
+        address returned, and an address in a comment or before another address in a quoted string is not the
+        address of a mailbox
+      - the sender and recipient addresses of a parsed message are taken from the raw headers, so that an address
+        in an encoded word is not taken as the sender's or a recipient's address, and the \c From, \c To, \c CC
+        and \c BCC headers of a parsed message are written again as they were parsed, or with only their text
+        encoded if they have raw non-ASCII text; they were written decoded and encoded again as a whole; a header is
+        always written with the address that its value gives, so that a parsed message is sent to the same address
+      - every address of a \c To, \c CC or \c BCC entry with several addresses is a recipient
+        (@ref MailMessage::Message::getRecipients() "Message::getRecipients()"), so that the message is sent to all of
+        them: the entry is split as a list of mailboxes and its groups are expanded (see the new
+        @ref MailMessage::Message::getEmailAddresses() "Message::getEmailAddresses()"), and duplicate recipients are
+        removed; only the first address of an entry was a recipient
+        (<a href="https://github.com/qoretechnologies/qore/issues/6134">issue 6134</a>).  The value given to
+        @ref MailMessage::Message::addTO() "Message::addTO()", @ref MailMessage::Message::addCC() "addCC()" and
+        @ref MailMessage::Message::addBCC() "addBCC()" is therefore parsed as a list of addresses: a display name from
+        an untrusted source must be quoted, or given with the new
+        @ref MailMessage::Message::addTO(string, string) "addTO(string, string)",
+        @ref MailMessage::Message::addCC(string, string) "addCC(string, string)" and
+        @ref MailMessage::Message::addBCC(string, string) "addBCC(string, string)" variants, which quote it
+      - text that looks like an RFC 2047 encoded word but has white space, a quote, a parenthesis, an angle bracket,
+        a square bracket, a backslash, a comma or a semicolon is not an encoded word, so that it cannot change how
+        the rest of an address header is read; the address of a sender header (\c From) is the same after a message
+        is written and parsed again (<a href="https://github.com/qoretechnologies/qore/issues/6134">issue 6134</a>)
+      - encoded words are folded with the line ending given to
+        @ref MailMessage::Message::getHeaderString() "Message::getHeaderString()" (it was always CRLF), and a header
+        value that is not encoded cannot contain any control character other than horizontal tab (only NUL, CR and LF
+        were refused)
 
     @subsection mailmessage_v1_4 MailMessage 1.4
     - Added the @ref MailMessage::Message::getInfo() "MailMessage::getInfo()" method
@@ -252,13 +291,16 @@ public hashdecl MailMessageInfo {
     #! The message subject
     *string subject;
 
-    #! Any To: addresses
+    #! Any To: header entries, as returned by @ref MailMessage::Message::getTO() "Message::getTO()"; an entry can
+    #! have several addresses: see @ref MailMessage::Message::getRecipients() "Message::getRecipients()"
     *list<string> to;
 
-    #! Any CC: addresses
+    #! Any CC: header entries, as returned by @ref MailMessage::Message::getCC() "Message::getCC()"; an entry can
+    #! have several addresses: see @ref MailMessage::Message::getRecipients() "Message::getRecipients()"
     *list<string> cc;
 
-    #! Any BCC: addresses
+    #! Any BCC: header entries, as returned by @ref MailMessage::Message::getBCC() "Message::getBCC()"; an entry can
+    #! have several addresses: see @ref MailMessage::Message::getRecipients() "Message::getRecipients()"
     *list<string> bcc;
 
     #! The message body, if any
@@ -549,6 +591,14 @@ public class Message {
         list<string> cc(); # list of cc's
         list<string> bcc(); # list of bcc's
 
+        # the raw (undecoded) values of the To, CC and BCC headers of a parsed message, at the same positions as the
+        # decoded values in to, cc and bcc; NOTHING for a recipient that was added with addTO(), addCC() or
+        # addBCC(): the addresses are taken from the raw values, and a raw value is written again as it was parsed,
+        # so that its encoded words and its list of mailboxes are kept (issue #6066)
+        list<*string> to_raw();
+        list<*string> cc_raw();
+        list<*string> bcc_raw();
+
         # message data itself
         *data body;
 
@@ -569,6 +619,9 @@ public class Message {
         # the display name of the sender of a message created to be sent, if it has one; the From header is then
         # written with it (a parsed message has none, and its From header is written as it was parsed)
         *string sender_name;
+
+        # the raw (undecoded) value of the From header of a parsed message
+        *string from_raw;
 
         # SMTP mode: do not serialize a single "." alone on a line
         bool smtp_mode = True;
@@ -674,6 +727,12 @@ public class Message {
 
             hash h = parseHeader(hdr);
             string lk = h.firstKey().lwr();
+            # the raw value of an address header: the addresses are taken from it, since a decoded encoded word
+            # could look like an address (issue #6066), and it is written again as it was parsed
+            *string raw;
+            if (inlist(lk, ("from", "to", "cc", "bcc"))) {
+                raw = parseHeader(hdr, False).firstValue();
+            }
             if (lk == "mime-version")
                 mime = True;
             else if (lk == "content-type")
@@ -685,16 +744,20 @@ public class Message {
                 # sent (they were swapped, so getFrom() returned the decoded header value, which could contain a
                 # line break, instead of the address used in the SMTP MAIL FROM command)
                 from = h.firstValue();
-                sender = Message::getEmailAddress(h.firstValue()) ?? "";
+                from_raw = raw;
+                sender = Message::getEmailAddress(raw) ?? "";
                 continue;
             } else if (lk == "to") {
                 to += h.firstValue();
+                to_raw += raw;
                 continue;
             } else if (lk == "cc") {
                 cc += h.firstValue();
+                cc_raw += raw;
                 continue;
             } else if (lk == "bcc") {
                 bcc += h.firstValue();
+                bcc_raw += raw;
                 continue;
             } else if (lk == "subject") {
                 subject = h.firstValue();
@@ -1213,25 +1276,243 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     #! @endcond
 
     #! fetch the email address out of a sender/rcpt string
-    /** @param str an email address, or a display name and an email address in angle brackets (ex:
+    /** An email address is an RFC 5322 \c addr-spec (section 3.4.1): a local part, which is a sequence of \c atext
+        characters (letters, digits and <tt>!#$%&'*+-/=?^_`{|}~</tt>) and dots, or a quoted string (ex:
+        <tt>"John Doe"\@example.com</tt>), then \c "@" and a domain, which is a host name or a domain literal in
+        square brackets (ex: \c "[192.0.2.1]").  Non-ASCII letters, marks, digits, punctuation and symbols are
+        accepted in the local part and in the domain (internationalized email addresses and domain names, RFC 6531
+        and RFC 6532), but no white space (such as a no-break space) or control character, so that an address
+        cannot end a header or command line.
+
+        @param str an email address, or a display name and an email address in angle brackets (ex:
         \c "John Doe <john@example.com>")
 
-        @return the email address: the address in angle brackets at the end of the string if there is one, otherwise
-        the first email address found in the string, or @ref nothing if there is none
+        @return the email address, or @ref nothing if there is none; RFC 2047 encoded words in the string are text,
+        never part of an address, and the white space (including Unicode white space) and format characters (ex: a
+        byte order mark) around the string are ignored:
+        - the address in quotes, square brackets or braces, if the string is an address in them (ex:
+          <tt>"j\@x.com"</tt> or <tt>'j\@x.com'</tt>, as in CSV data)
+        - the address in angle brackets at the end of the string
+        - the string, if it is an address
+        - otherwise the first address in the string that is not in a comment (text in parentheses) or, if there is
+          one, not in a quoted string (a quoted local part is part of an address), and that starts
+          after white space or one of <tt>,;:<>()[]"</tt> (or at the start of the string) and ends before white
+          space, one of <tt>,;:<>()[]"'/?#&{}|!*\\</tt> or the end of the string, with only format characters
+          between them and the address (ex: \c "j@x.com" for <tt>"j\@x.com (John)"</tt>,
+          <tt>"(v\@x.com) j\@x.com"</tt> or <tt>"j\@x.com?subject=hi"</tt>)
+
+        @note an address with non-ASCII characters can only be sent to an SMTP server that supports the \c SMTPUTF8
+        extension (RFC 6531); see @ref SmtpClient::SmtpClient::sendMessage() "SmtpClient::sendMessage()"
 
         @since MailMessage 1.5.1 the address in angle brackets at the end of the string is returned when there is
-        one; the first text that looked like an address was returned, which could be in the display name
+        one; the first text that looked like an address was returned, which could be in the display name or in an
+        encoded word.  An address is returned whole with every \c atext character in its local part (ex:
+        <tt>J.O'B\@x.com</tt>; the text after the last character that was not a letter, a digit or one of
+        <tt>-._+=</tt> was returned: <tt>B\@x.com</tt>), and quoted local parts and non-ASCII characters are
+        accepted.  Text that is not an address is no longer returned: the text before an address separated from it
+        by spaces (<tt>"John Doe john\@x.com"</tt> gave <tt>"John Doe john\@x.com"</tt>, and gives
+        <tt>"john\@x.com"</tt>), text with a space before the \c "@" (<tt>"j \@x.com"</tt>), and an address that is
+        part of a longer word (<tt>"abc\@def\@ghi.com"</tt> gave <tt>"abc\@def"</tt>; the local part of
+        <tt>"http://user\@host.com/path"</tt> is now <tt>"//user"</tt>)
     */
     static *string getEmailAddress(string str) {
+        # an encoded word is text, never part of an address (issue #6066)
+        if (str.find("=?") >= 0) {
+            str = Message::removeEncodedWords(str);
+        }
+        string t = Message::trimSpace(str);
+        # an address in quotes, brackets or braces
+        *string inner = Message::unwrap(t);
+        if (exists inner && Message::isAddrSpec(inner)) {
+            return inner;
+        }
         # the address of a name-addr (RFC 5322 section 3.4) is in angle brackets after the display name, which can
         # contain text that looks like another address
-        *string addr = (str =~ x/<([a-zA-Z0-9\-\._\+=]+@[a-zA-Z0-9\-\._]+)>\s*$/)[0];
-        return addr ?? (str =~ x/([a-zA-Z0-9\-\._\+\ = ]+@[a-zA-Z0-9\-\._]+)/)[0];
+        *string addr = Message::getAngleAddress(t);
+        if (exists addr) {
+            return addr;
+        }
+        if (Message::isAddrSpec(t)) {
+            return t;
+        }
+        # the first address in the string that is not part of another word or in a comment or a quoted string, as
+        # a reader of the header sees it; an address in a quoted string is found if there is no other (ex: in
+        # "\"John j@x.com\"", which was accepted before)
+        bool has_quote = str.find("\"") >= 0;
+        if (str.find("(") >= 0 || has_quote) {
+            addr = AddrScanRx.extractGroups(Message::removeComments(str, True))[0];
+            if (exists addr || !has_quote) {
+                return addr;
+            }
+            if (str.find("(") >= 0) {
+                str = Message::removeComments(str, False);
+            }
+        }
+        return AddrScanRx.extractGroups(str)[0];
     }
+
+    #! @cond nodoc
+    # returns the string with every RFC 2047 encoded word replaced with a space; text that looks like an encoded
+    # word but has a character that an encoded word cannot have (white space or an RFC 5322 special, such as a
+    # quote, a parenthesis or a bracket) is not one, so that removing it cannot change where a quoted string, a
+    # comment or a bracket starts or ends (issue #6134)
+    private static string removeEncodedWords(string str) {
+        return EncodedWordSubst.subst(str);
+    }
+
+    # returns the string without white space, including Unicode white space, and format characters (ex: a byte
+    # order mark) at its start and end; linear in the length of the string
+    private static string trimSpace(string str) {
+        str = TrimStartSubst.subst(str);
+        if (!TrimEndRx.match(str)) {
+            return str;
+        }
+        list<string> chars = str.splitChars();
+        int end = chars.size();
+        while (end && (Message::isSpace(chars[end - 1]) || FormatCharRx.match(chars[end - 1]))) {
+            --end;
+        }
+        return str.substr(0, end);
+    }
+
+    # returns the string with its comments (RFC 5322 section 3.2.2: text in parentheses outside quoted strings,
+    # which can be nested) replaced with a space, and also its quoted strings if quotes is True, except a quoted
+    # local part (a quoted string followed by "@"); an unterminated comment or quoted string is kept; linear in the
+    # length of the string
+    private static string removeComments(string str, bool quotes) {
+        list<string> c = str.splitChars();
+        int n = c.size();
+        # the parts of the string returned; the text kept is added as a range of characters, not a character at a
+        # time (see joinChars())
+        list<string> rv = ();
+        # the offset of the text to keep, or of the start of the current comment
+        int start = 0;
+        int depth = 0;
+        bool escaped;
+        for (int i = 0; i < n; ++i) {
+            string ch = c[i];
+            if (depth) {
+                if (escaped) {
+                    escaped = False;
+                } else if (ch == "\\") {
+                    escaped = True;
+                } else if (ch == "(") {
+                    ++depth;
+                } else if (ch == ")" && !--depth) {
+                    rv += " ";
+                    start = i + 1;
+                }
+                continue;
+            }
+            if (ch == "\"") {
+                int j = i + 1;
+                for (; j < n; ++j) {
+                    if (escaped) {
+                        escaped = False;
+                    } else if (c[j] == "\\") {
+                        escaped = True;
+                    } else if (c[j] == "\"") {
+                        break;
+                    }
+                }
+                if (j == n) {
+                    # an unterminated quoted string is text
+                    break;
+                }
+                if (quotes && (j + 1 == n || c[j + 1] != "@")) {
+                    rv += Message::joinChars(c, start, i) + " ";
+                    start = j + 1;
+                }
+                i = j;
+                continue;
+            }
+            if (ch == "(") {
+                rv += Message::joinChars(c, start, i);
+                start = i;
+                depth = 1;
+            }
+        }
+        # the rest of the string, with an unterminated comment or quoted string
+        rv += Message::joinChars(c, start, n);
+        return rv.join("");
+    }
+
+    # returns the text in quotes, square brackets or braces if the string is in them
+    private static *string unwrap(string str) {
+        if (str.size() < 2) {
+            return;
+        }
+        string first = str.substr(0, 1);
+        string last = str.substr(-1);
+        if ((first == "\"" && last == "\"") || (first == "'" && last == "'") || (first == "[" && last == "]")
+            || (first == "{" && last == "}")) {
+            return Message::trimSpace(str.substr(1, -1));
+        }
+    }
+
+    # returns the address in angle brackets at the end of a trimmed string, if there is one; the last "<" is found
+    # without a regular expression, so the time is linear in the length of the string
+    private static *string getAngleAddress(string str) {
+        if (str.substr(-1) != ">") {
+            return;
+        }
+        int i = str.rfind("<");
+        if (i < 0) {
+            return;
+        }
+        string addr = Message::trimSpace(str.substr(i + 1, -1));
+        if (addr.find(">") < 0 && Message::isAddrSpec(addr)) {
+            return addr;
+        }
+    }
+    #! @endcond
 
     #! returns @ref True "True" if the string contains an email address, @ref False "False" if not
     static bool checkEmailAddress(string str) {
         return !Message::getEmailAddress(str).empty();
+    }
+
+    #! returns the email addresses of an address header value, which can be a list of mailboxes
+    /** @param str the value of a \c To, \c CC or \c BCC header, or of one entry of it (ex:
+        <tt>Ann \<a\@x.com\>, "Doe, John" \<j\@x.com\></tt>)
+
+        @return the email address of each mailbox of the value, in order (see @ref getEmailAddress()): the value is
+        split as an RFC 5322 list of mailboxes, at the commas that are not in a quoted string, a comment, angle
+        brackets or a domain literal, and the mailboxes of a group (<tt>"name: a\@x.com, b\@y.com;"</tt>) are
+        returned without the name of the group (an empty group, such as <tt>"undisclosed-recipients:;"</tt>, has no
+        address); an RFC 2047 encoded word is text, never part of an address.  A value that is not a list of
+        mailboxes gives the address that @ref getEmailAddress() returns for it, if any.  Duplicate addresses are
+        returned as they are; @ref getRecipients() removes them.
+
+        @since MailMessage 1.5.1
+    */
+    static list<string> getEmailAddresses(string str) {
+        # an encoded word is text, never part of an address, and its text cannot hide a separator
+        if (str.find("=?") >= 0) {
+            str = Message::removeEncodedWords(str);
+        }
+        list<string> parts = Message::splitMailboxList(str, True);
+        list<string> rv = ();
+        if (parts.size() > 1) {
+            foreach string part in (parts) {
+                # a part without "@" has no address (ex: the name of a group, or an empty part)
+                if (part.find("@") < 0) {
+                    continue;
+                }
+                *string addr = Message::getEmailAddress(part);
+                if (exists addr) {
+                    rv += addr;
+                }
+            }
+        }
+        if (!rv) {
+            # a single mailbox, or a value that is not a list of mailboxes
+            *string addr = Message::getEmailAddress(str);
+            if (exists addr) {
+                rv += addr;
+            }
+        }
+        return rv;
     }
 
     #! @cond nodoc
@@ -1319,59 +1600,688 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # returns a header with the sender in display format: the display name is encoded as an RFC 2047 "B" encoded word
     # if it is not printable ASCII and encode is True, and the address is never encoded
     private string doSenderHeader(string hdr, string eol, bool encode) {
-        # the sender of a parsed message, or of a message created with no display name, is written as it is
+        # the sender of a parsed message, or of a message created with no display name
         if (!sender_name.val()) {
+            return Message::doAddressHeader(hdr, from, from_raw, eol, encode, True);
+        }
+        if (!encode) {
             return Message::doHeaderValue(hdr, from, eol, encode);
         }
+        check_line_text(hdr, "message header name", "HEADER-ERROR");
         string name = sender_name;
-        if (!encode || name.isDataPrintableAscii()) {
-            return Message::doHeaderValue(hdr, from, eol, encode);
+        # a printable ASCII name is written as it is (as a quoted string if it has specials), with the address, which
+        # can have non-ASCII characters but no control character
+        if (name.isDataPrintableAscii()) {
+            return sprintf("%s: %s%s", hdr, from, eol);
         }
         # an encoded word cannot be in a quoted string, and the "B" encoding has no specials (RFC 2047 section 5),
         # so the name is encoded as it is; a line break in the name is encoded and cannot end the header line
+        return sprintf("%s: %s <%s>%s", hdr, mime_encode_header_word_b(name, eol), sender, eol);
+    }
+
+    private {
+        # white space, including Unicode white space (ex: a no-break space, a line or paragraph separator, NEL)
+        const SpaceChars = "\\s\\p{Z}\\x{85}";
+        # white space and format characters (ex: a byte order mark, a zero width space, a soft hyphen, a
+        # directional formatting character), which are trimmed from a string and can be before or after an
+        # address, but not in it
+        const TrimChars = SpaceChars + "\\p{Cf}";
+        # a non-ASCII character that can be in an address (RFC 6532 section 3.2): a letter, a mark, a digit, a
+        # punctuation character or a symbol, not white space or a control or format character
+        const NonAsciiRegex = "(?:(?=[^\\x00-\\x7f])[\\p{L}\\p{M}\\p{N}\\p{P}\\p{S}])";
+        # the local part of an address: a quoted string, or atext characters (RFC 5322 section 3.2.3) and dots, which
+        # can be anywhere in the local part, as in the addresses that the module accepted before; the quantifiers
+        # are possessive, so the time to match is linear in the length of the string
+        const LocalPartRegex = "(?:\"(?:[\\x20\\x21\\x23-\\x5b\\x5d-\\x7e]|\\\\[\\x20-\\x7e]|" + NonAsciiRegex
+            + ")*+\"|(?:[A-Za-z0-9!#$%&'*+/=?^_`{|}~.\\-]|" + NonAsciiRegex + ")++)";
+        # the domain of an address: a host name, which can have non-ASCII characters (an internationalized domain
+        # name), or a domain literal
+        const DomainRegex = "(?:(?:[A-Za-z0-9_.\\-]|" + NonAsciiRegex + ")++|\\[[\\x21-\\x5a\\x5e-\\x7e]++\\])";
+        # an address (RFC 5322 section 3.4.1 addr-spec)
+        const AddrSpecRegex = LocalPartRegex + "@" + DomainRegex;
+        # the characters besides white space that can be before an address in a string, and that separate the
+        # words of an address header for its encoding
+        const AddrStartChars = ",;:<>()\\[\\]\"";
+        # the end of an address in a string: format characters, then white space, one of these characters or the
+        # end of the string
+        const AddrEndRegex = "\\p{Cf}*(?=\\z|[" + SpaceChars + ",;:<>()\\[\\]\"'/?#&{}|!*\\\\])";
+        # an address in a string that is not part of another word: after the start of the string, white space or
+        # one of AddrStartChars, and format characters
+        const AddrScanRegex = "(?:\\A|[" + SpaceChars + AddrStartChars + "])\\p{Cf}*(" + AddrSpecRegex + ")"
+            + AddrEndRegex;
+        # an address at the start of a word, after format characters
+        const AddrWordRegex = "\\A(\\p{Cf}*)(" + AddrSpecRegex + ")" + AddrEndRegex;
+        # the characters that separate the words of an address header
+        const AddrSpecials = {",": True, ";": True, ":": True, "<": True, ">": True, "(": True, ")": True,
+            "[": True, "]": True, "\"": True};
+        # ASCII white space
+        const AsciiSpace = {" ": True, "\t": True, "\r": True, "\n": True, "\f": True, "\v": True};
+        # an encoded word (RFC 2047 section 2): its charset and its encoded text cannot have white space or a "?",
+        # and not a character that starts or ends a quoted string, a comment, an angle address or a domain literal,
+        # a backslash or a separator of mailboxes (RFC 2047 section 5), so that text that only looks like an encoded
+        # word, and is removed or decoded as one, cannot change how the rest of an address header is read (issue
+        # #6134); a ":" or a "@" can be in one, since a reader of the header sees text that is not an address
+        const EncodedWordPattern = "=\\?[^?\\s\"()<>\\[\\],;\\\\]+\\?[QqBb]\\?[^?\\s\"()<>\\[\\],;\\\\]*\\?=";
+        const EncodedWordRegex = "\\A" + EncodedWordPattern + "\\z";
+        # the longest line of an address header that is folded (RFC 5322 section 2.1.1: 78 characters)
+        const MaxHeaderLineLen = 76;
+    }
+
+    # the regular expressions above, compiled once: a pattern given as a string is compiled every time it is used
+    # (issue #6134)
+    private:internal {
+        static Regex AddrSpecRx("\\A" + AddrSpecRegex + "\\z");
+        static RegexExtract AddrScanRx(AddrScanRegex);
+        static RegexExtract AddrWordRx(AddrWordRegex);
+        static Regex EncodedWordRx(EncodedWordRegex);
+        static RegexSubst EncodedWordSubst(EncodedWordPattern, " ", RE_Global);
+        static RegexSubst TrimStartSubst("\\A[" + TrimChars + "]+", "");
+        static Regex TrimEndRx("[" + TrimChars + "]\\z");
+        static Regex FormatCharRx("\\A\\p{Cf}\\z");
+        static Regex SpaceRx("\\A[" + SpaceChars + "]\\z");
+        # a dot-atom (RFC 5322 section 3.2.3), which can have non-ASCII characters (RFC 6532 section 3.2)
+        static Regex DotAtomRx("\\A(?:[A-Za-z0-9!#$%&'*+/=?^_`{|}~\\-]|" + NonAsciiRegex
+            + ")++(?:\\.(?:[A-Za-z0-9!#$%&'*+/=?^_`{|}~\\-]|" + NonAsciiRegex + ")++)*+\\z");
+    }
+
+    # returns True if the string is an email address (an RFC 5322 addr-spec)
+    private static bool isAddrSpec(string str) {
+        return AddrSpecRx.match(str);
+    }
+
+    # returns True if the character is white space; an ASCII character is looked up without a regular expression
+    private static bool isSpace(string ch) {
+        if (ch.isDataAscii()) {
+            return AsciiSpace{ch} ?? False;
+        }
+        return SpaceRx.match(ch);
+    }
+
+    # splits a list of mailboxes at the commas that are not in a quoted string, a comment, angle brackets or a
+    # domain literal; NOTHING if a quoted string is not terminated.  If groups is True, the value is split for its
+    # addresses (issue #6134): also at the semicolons there and at the colons after a phrase, so that the display
+    # name of a group (RFC 5322 section 3.4: "name: a@x.com, b@y.com;") is a part of its own, and a quoted string,
+    # comment, angle address or domain literal that is not terminated is not one: the part where it starts is split
+    # again without it, so that it cannot hide the separators after it.  The time is linear in the length of the
+    # value: a part is split again at most once for each of the four kinds of construct.
+    private static *list<string> splitMailboxList(string value, bool groups = False) {
+        list<string> c = value.splitChars();
+        int n = c.size();
+        list<string> rv = ();
+        # the offset of the start of the current part
+        int start = 0;
+        # the kinds of construct that are not recognized, after one that was not terminated
+        hash<string, bool> off = {};
+        bool quoted;
+        bool escaped;
+        bool angle;
+        bool literal;
+        # True if the current part has a "@" or a "<" outside quoted strings and comments: a colon after it is not
+        # the end of the name of a group, which is a phrase (ex: in "j@x.com\r\nBcc: v@x.com")
+        bool addr;
+        int comment = 0;
+        int i = 0;
+        while (True) {
+            if (i == n) {
+                if (!groups) {
+                    if (quoted) {
+                        return;
+                    }
+                    break;
+                }
+                *string open = quoted ? "\"" : (comment ? "(" : (angle ? "<" : (literal ? "[" : NOTHING)));
+                if (!exists open) {
+                    break;
+                }
+                off{open} = True;
+                i = start;
+                quoted = escaped = angle = literal = addr = False;
+                comment = 0;
+                continue;
+            }
+            string ch = c[i++];
+            if (escaped) {
+                escaped = False;
+            } else if (quoted) {
+                if (ch == "\\") {
+                    escaped = True;
+                } else if (ch == "\"") {
+                    quoted = False;
+                }
+            } else if (comment) {
+                if (ch == "\\") {
+                    escaped = True;
+                } else if (ch == "(") {
+                    ++comment;
+                } else if (ch == ")") {
+                    --comment;
+                }
+            } else if (ch == "\"" && !off{ch}) {
+                quoted = True;
+            } else if (ch == "(" && !off{ch}) {
+                ++comment;
+            } else if (ch == "<" && !off{ch}) {
+                angle = addr = True;
+            } else if (ch == "@") {
+                addr = True;
+            } else if (ch == ">") {
+                angle = False;
+            } else if (ch == "[" && !off{ch}) {
+                literal = True;
+            } else if (ch == "]") {
+                literal = False;
+            } else if (!angle && !literal && (ch == "," || (groups && ((ch == ":" && !addr) || ch == ";")))) {
+                rv += Message::joinChars(c, start, i - 1);
+                start = i;
+                addr = False;
+            }
+        }
+        rv += Message::joinChars(c, start, n);
+        return rv;
+    }
+
+    # returns the characters from offset start to end (exclusive) as a string; a string is not built with a
+    # character appended at a time, which takes a time that is not linear in its length in some execution modes
+    private static string joinChars(list<string> c, int start, int end) {
+        return start < end ? c[start..end - 1].join("") : "";
+    }
+
+    # returns a mailbox (an address alone, or a display name and an address in angle brackets, RFC 5322 section
+    # 3.4) as a hash with "addr", "name" and "angle" (True if the address is in angle brackets), or NOTHING if the
+    # string is not a mailbox; the encoded words of the name are decoded if decode is True (for the raw value of a
+    # parsed header).  The address is found without a regular expression on the whole string, so the time is
+    # linear in its length.
+    private static *hash<auto> parseMailbox(string mailbox, bool decode) {
+        # format characters are trimmed for the address only: they are part of a display name (ex: a directional
+        # formatting character)
+        string trimmed = Message::trimSpace(mailbox);
+        if (Message::isAddrSpec(trimmed)) {
+            return {"addr": trimmed};
+        }
+        *string addr = Message::getAngleAddress(trimmed);
+        if (!exists addr) {
+            return;
+        }
+        *string name = Message::getPhraseText(mailbox.substr(0, mailbox.rfind("<")));
+        if (!exists name) {
+            return;
+        }
+        if (decode && name.val()) {
+            name = mime_decode_header(name);
+        }
+        return {"addr": addr, "name": name, "angle": True};
+    }
+
+    # returns the mailboxes of an address header value, or NOTHING if it is not a list of mailboxes
+    private static *list<hash<auto>> parseMailboxList(string value, bool decode) {
+        *list<string> parts = Message::splitMailboxList(value);
+        if (parts && parts.size() > 1) {
+            list<hash<auto>> rv = ();
+            foreach string part in (parts) {
+                *hash<auto> mb = Message::parseMailbox(part, decode);
+                if (!mb) {
+                    remove rv;
+                    break;
+                }
+                rv += mb;
+            }
+            if (rv) {
+                return rv;
+            }
+        }
+        # a single mailbox, whose display name can have a comma outside quotes (ex: "Doe, John <j@x.com>")
+        *hash<auto> mb = Message::parseMailbox(value, decode);
+        if (mb) {
+            return (mb,);
+        }
+    }
+
+    # returns an address header (From, To, CC, BCC) with only the display names and the other text of its mailboxes
+    # encoded (issue #6066): text that is not printable ASCII is encoded as RFC 2047 "B" encoded words, and the
+    # addresses are never encoded, since an encoded word is not an address (RFC 2047 section 5); a printable ASCII
+    # value is written as it is.  The raw value of a parsed header is used if given: it is written as it was parsed
+    # if it is printable ASCII (with its encoded words), and its encoded words cannot hide the commas between
+    # mailboxes.
+    private static string doAddressHeader(string hdr, string val, *string raw, string eol, bool encode,
+            bool sender = False) {
+        if (!encode) {
+            return Message::doHeaderValue(hdr, val, eol, encode);
+        }
+        string src = raw ?? val;
+        if (src.isDataPrintableAscii()) {
+            return Message::doHeaderValue(hdr, src, eol, encode);
+        }
         check_line_text(hdr, "message header name", "HEADER-ERROR");
-        return sprintf("%s: %s <%s>%s", hdr, mime_encode_header_word_b(name), sender, eol);
+        int start = hdr.size() + 2;
+        *list<hash<auto>> mailboxes = Message::parseMailboxList(src, exists raw);
+        string value = mailboxes
+            ? Message::foldMailboxes((map Message::formatHeaderMailbox($1.name, $1.addr, $1.angle, eol),
+                mailboxes), eol, start)
+            : Message::encodeAddressText(src, exists raw, eol, start);
+        # a sender header (From, Return-Receipt-To, Disposition-Notification-To) gives the address that the value
+        # gives, which is the sender of the envelope, so that a message that is parsed again has the same sender;
+        # otherwise the value is written as the display name of that address (a sender is a mailbox, never a group)
+        if (sender) {
+            *string addr = Message::getEmailAddress(src);
+            if (Message::getEmailAddress(value) !== addr) {
+                value = mime_encode_header_word_b(val, eol);
+                if (exists addr) {
+                    value += sprintf(" <%s>", addr);
+                }
+            }
+            return sprintf("%s: %s%s", hdr, value, eol);
+        }
+        # a recipient header gives the addresses that the value gives, so that a message that is parsed again (for
+        # example to forward it) is sent to the same addresses (issue #6134); otherwise the value is written as the
+        # display name of that address, or of a group with those addresses
+        list<string> addrs = Message::getEmailAddresses(src);
+        if (Message::getEmailAddresses(value) != addrs) {
+            value = mime_encode_header_word_b(val, eol);
+            if (addrs.size() == 1) {
+                value += sprintf(" <%s>", addrs[0]);
+            } else if (addrs) {
+                (int first, int last) = Message::getLineLengths(value, eol);
+                value += ": " + Message::foldMailboxes(addrs, eol, (value.find(eol) < 0 ? start + first : last) + 2)
+                    + ";";
+            }
+        }
+        return sprintf("%s: %s%s", hdr, value, eol);
+    }
+
+    # returns a mailbox for a header: the address alone (in angle brackets if it was in them) if it has no display
+    # name, otherwise the display name, as a quoted string if it has specials, or as a "B" encoded word if it is not
+    # printable ASCII, and the address
+    private static string formatHeaderMailbox(*string name, string addr, *bool angle, string eol) {
+        if (!name.val()) {
+            return angle ? sprintf("<%s>", addr) : addr;
+        }
+        if (name.isDataPrintableAscii()) {
+            return Message::formatMailbox(name, addr);
+        }
+        return sprintf("%s <%s>", mime_encode_header_word_b(name, eol), addr);
+    }
+
+    # returns the length of the first line of a string, and the length of its last line
+    private static list<int> getLineLengths(string str, string eol) {
+        int first = str.find(eol);
+        int last = str.rfind(eol);
+        int len = str.length();
+        return (first < 0 ? len : first, last < 0 ? len : len - last - eol.length());
+    }
+
+    # returns the mailboxes separated by commas, with a folded line before a mailbox that would make the line
+    # longer than MaxHeaderLineLen characters (RFC 5322 section 2.2.3)
+    private static string foldMailboxes(list<string> mailboxes, string eol, int start) {
+        string rv = "";
+        int len = start;
+        foreach string mb in (mailboxes) {
+            (int first, int last) = Message::getLineLengths(mb, eol);
+            if ($#) {
+                if ((len + 2 + first) > MaxHeaderLineLen) {
+                    rv += "," + eol + " ";
+                    len = 1;
+                } else {
+                    rv += ", ";
+                    len += 2;
+                }
+            }
+            rv += mb;
+            len = mb.find(eol) < 0 ? len + first : last;
+        }
+        return rv;
+    }
+
+    # returns the text of an address header that is not a list of mailboxes (ex: a group, a mailbox with a
+    # comment, or a display name without angle brackets) with only the text that is not printable ASCII encoded
+    # as RFC 2047 "B" encoded words: the addresses (an address in angle brackets, or at the start of a word), the
+    # specials (,;:<>()[]") and the printable ASCII text are written as they are, white space is written as a space
+    # or a folded line break, and a quoted string or a word that is not printable ASCII is encoded; encoded words
+    # separated by white space are one encoded word, since the white space between encoded words is dropped when
+    # they are decoded (RFC 2047 section 6.2).  The time is linear in the length of the value.
+    private static string encodeAddressText(string src, bool decode, string eol, int start) {
+        list<string> c = src.splitChars();
+        int n = c.size();
+        # the words of the value: hashes with "t" ("ws": white space, "lit": written as it is, "enc": text to
+        # encode) and "s" (the text)
+        list<hash<auto>> words = ();
+        # no quoted string or angle brackets after an unterminated one, so that every character is read once or
+        # twice
+        bool no_quote;
+        bool no_angle;
+        # the offset of the character that ended an unterminated domain literal: a domain literal that starts before
+        # it is unterminated too, so that every character is read at most twice
+        int literal_end = -1;
+        string word = "";
+        # the last character added to the word
+        string word_last = "";
+        int i = 0;
+        while (i < n) {
+            string ch = c[i];
+            if (Message::isSpace(ch)) {
+                Message::addAddressWord(\words, \word, decode);
+                if (!words || words.last().t != "ws") {
+                    words += {"t": "ws", "s": " "};
+                }
+                ++i;
+                continue;
+            }
+            if (ch == "\"" && !no_quote) {
+                string quoted = "\"";
+                string text = "";
+                bool escaped;
+                int j = i + 1;
+                for (; j < n; ++j) {
+                    quoted += c[j];
+                    if (escaped) {
+                        text += c[j];
+                        escaped = False;
+                    } else if (c[j] == "\\") {
+                        escaped = True;
+                    } else if (c[j] == "\"") {
+                        break;
+                    } else {
+                        text += c[j];
+                    }
+                }
+                if (j < n) {
+                    i = j + 1;
+                    # a quoted local part: the quoted string is the start of the word after it
+                    if (i < n && c[i] == "@") {
+                        word += quoted;
+                        word_last = "\"";
+                        continue;
+                    }
+                    Message::addAddressWord(\words, \word, decode);
+                    words += quoted.isDataPrintableAscii() ? {"t": "lit", "s": quoted} : {"t": "enc", "s": text};
+                    continue;
+                }
+                no_quote = True;
+            } else if (ch == "<" && !no_angle) {
+                string inner = "";
+                int j = i + 1;
+                for (; j < n && c[j] != ">" && c[j] != "<"; ++j) {
+                    inner += c[j];
+                }
+                if (j < n && c[j] == ">") {
+                    Message::addAddressWord(\words, \word, decode);
+                    string addr = Message::trimSpace(inner);
+                    if (Message::isAddrSpec(addr)) {
+                        words += {"t": "lit", "s": "<" + addr + ">"};
+                    } else {
+                        words += {"t": "lit", "s": "<"};
+                        Message::addAddressText(\words, inner, decode);
+                        words += {"t": "lit", "s": ">"};
+                    }
+                    i = j + 1;
+                    continue;
+                }
+                if (j == n) {
+                    no_angle = True;
+                }
+            } else if (ch == "[" && i > literal_end && word.val() && word_last == "@") {
+                # a domain literal is part of the address
+                int j = i;
+                string literal = "";
+                for (; j < n && c[j] != "]" && !Message::isSpace(c[j]); ++j) {
+                    literal += c[j];
+                }
+                if (j < n && c[j] == "]") {
+                    word += literal + "]";
+                    word_last = "]";
+                    i = j + 1;
+                    continue;
+                }
+                literal_end = j;
+            }
+            if (AddrSpecials{ch}) {
+                Message::addAddressWord(\words, \word, decode);
+                words += {"t": "lit", "s": ch};
+            } else {
+                word += ch;
+                word_last = ch;
+            }
+            ++i;
+        }
+        Message::addAddressWord(\words, \word, decode);
+
+        # encoded words separated by white space are one encoded word; the white space between two encoded words of
+        # a parsed header ("dec") is not text (RFC 2047 section 6.2), so it is not added, and a value that is parsed
+        # and written again is the same
+        list<hash<auto>> merged = ();
+        # True for a word of merged that ends with an encoded word of a parsed header
+        list<bool> merged_dec = ();
+        foreach hash<auto> w in (words) {
+            int k = merged.size();
+            bool dec = w.dec ?? False;
+            if (w.t == "enc" && k >= 2 && merged[k - 1].t == "ws" && merged[k - 2].t == "enc") {
+                merged[k - 2].s += (merged_dec[k - 2] && dec ? "" : " ") + w.s;
+                merged_dec[k - 2] = dec;
+                pop merged;
+                pop merged_dec;
+                continue;
+            }
+            merged += w;
+            merged_dec += dec;
+        }
+
+        string rv = "";
+        int len = start;
+        bool space;
+        *hash<auto> prev;
+        foreach hash<auto> w in (merged) {
+            if (w.t == "ws") {
+                space = True;
+                continue;
+            }
+            string s = w.t == "enc" ? mime_encode_header_word_b(w.s, eol) : w.s;
+            # an encoded word is separated from the words beside it by white space or a special
+            if (prev && !space && (w.t == "enc" || prev.t == "enc")
+                && !AddrSpecials{prev.s.substr(-1)} && !AddrSpecials{s.substr(0, 1)}) {
+                space = True;
+            }
+            (int first, int last) = Message::getLineLengths(s, eol);
+            if (space && rv.val()) {
+                if ((len + 1 + first) > MaxHeaderLineLen) {
+                    rv += eol + " ";
+                    len = 1;
+                } else {
+                    rv += " ";
+                    ++len;
+                }
+            }
+            rv += s;
+            len = s.find(eol) < 0 ? len + first : last;
+            space = False;
+            prev = w;
+        }
+        return rv;
+    }
+
+    # adds a word of an address header to the words to write: an address at its start is written as it is, and the
+    # rest is text
+    private static addAddressWord(reference<list<hash<auto>>> words, reference<string> word, bool decode) {
+        if (!word.val()) {
+            return;
+        }
+        *list<*string> m = AddrWordRx.extractGroups(word);
+        if (m) {
+            # format characters before the address are text
+            string prefix = m[0] ?? "";
+            Message::addAddressText(\words, prefix, decode);
+            words += {"t": "lit", "s": m[1]};
+            # the offset is in characters
+            Message::addAddressText(\words, word.substr(prefix.length() + m[1].length()), decode);
+        } else {
+            Message::addAddressText(\words, word, decode);
+        }
+        word = "";
+    }
+
+    # adds text of an address header to the words to write: printable ASCII text is written as it is, other text
+    # is encoded; an encoded word of a parsed header is decoded to be encoded again with the text beside it
+    private static addAddressText(reference<list<hash<auto>>> words, string text, bool decode) {
+        if (!text.val()) {
+            return;
+        }
+        if (decode && EncodedWordRx.match(text)) {
+            words += {"t": "enc", "s": mime_decode_header(text), "dec": True};
+        } else if (text.isDataPrintableAscii()) {
+            words += {"t": "lit", "s": text};
+        } else {
+            words += {"t": "enc", "s": text};
+        }
     }
     #! @endcond
 
     #! add a recipient to the Message's recipient list
-    /** @param recipient the email address to send the message to
+    /** @param recipient the email address to send the message to; an address with a display name, or several
+        addresses (a list of mailboxes or a group, ex: <tt>a\@x.com, Ann \<b\@y.com\></tt>), each of which is a
+        recipient (see @ref getRecipients())
         @return the list of "To:" addresses
 
         @throw MESSAGE-ADDTO-ERROR the recipient's email address is invalid
+
+        @note The value is parsed as a list of addresses: every address in it outside quoted strings and comments
+        is a recipient.  A display name that comes from an untrusted source must therefore not be written into the
+        value as it is (ex: with <tt>sprintf("%s <%s>", name, addr)</tt>, the name <tt>"attacker\@evil.com,"</tt>
+        makes <tt>attacker\@evil.com</tt> a recipient too); use @ref addTO(string, string) "addTO(string, string)",
+        which quotes the name.  If an address of a value cannot be sent in an SMTP command (an address with a
+        quoted local part with white space, a \c "<" or a \c ">"), the whole message is refused by
+        @ref SmtpClient::SmtpClient::sendMessage() "SmtpClient::sendMessage()" with \c MESSAGE-ERROR; it is not
+        sent to the other addresses either
     */
     list<string> addTO(string recipient) {
         if (!Message::checkEmailAddress(recipient))
             throw "MESSAGE-ADDTO-ERROR", sprintf("cannot determine email address in %y", recipient);
 
+        to_raw += NOTHING;
         return to += recipient;
     }
 
     #! add a recipient to the Message's cc list
-    /** @param recipient the email address to send the message to (cc)
+    /** @param recipient the email address to send the message to (cc); an address with a display name, or several
+        addresses (a list of mailboxes or a group, ex: <tt>a\@x.com, Ann \<b\@y.com\></tt>), each of which is a
+        recipient (see @ref getRecipients())
         @return the list of "CC:" addresses
 
         @throw MESSAGE-ADDCC-ERROR the recipient's email address is invalid
+
+        @note The value is parsed as a list of addresses: every address in it outside quoted strings and comments
+        is a recipient.  A display name that comes from an untrusted source must therefore not be written into the
+        value as it is (ex: with <tt>sprintf("%s <%s>", name, addr)</tt>, the name <tt>"attacker\@evil.com,"</tt>
+        makes <tt>attacker\@evil.com</tt> a recipient too); use @ref addCC(string, string) "addCC(string, string)",
+        which quotes the name.  If an address of a value cannot be sent in an SMTP command (an address with a
+        quoted local part with white space, a \c "<" or a \c ">"), the whole message is refused by
+        @ref SmtpClient::SmtpClient::sendMessage() "SmtpClient::sendMessage()" with \c MESSAGE-ERROR; it is not
+        sent to the other addresses either
     */
     list<string> addCC(string recipient) {
         if (!Message::checkEmailAddress(recipient))
             throw "MESSAGE-ADDCC-ERROR", sprintf("cannot determine email address in %y", recipient);
 
+        cc_raw += NOTHING;
         return cc += recipient;
     }
 
     #! add a recipient to the Message's bcc list
-    /** @param recipient the email address to send the message to (bcc)
+    /** @param recipient the email address to send the message to (bcc); an address with a display name, or several
+        addresses (a list of mailboxes or a group, ex: <tt>a\@x.com, Ann \<b\@y.com\></tt>), each of which is a
+        recipient (see @ref getRecipients())
         @return the list of "BCC:" addresses
 
         @throw MESSAGE-ADDBCC-ERROR the recipient's email address is invalid
+
+        @note The value is parsed as a list of addresses: every address in it outside quoted strings and comments
+        is a recipient.  A display name that comes from an untrusted source must therefore not be written into the
+        value as it is (ex: with <tt>sprintf("%s <%s>", name, addr)</tt>, the name <tt>"attacker\@evil.com,"</tt>
+        makes <tt>attacker\@evil.com</tt> a recipient too); use @ref addBCC(string, string) "addBCC(string, string)",
+        which quotes the name.  If an address of a value cannot be sent in an SMTP command (an address with a
+        quoted local part with white space, a \c "<" or a \c ">"), the whole message is refused by
+        @ref SmtpClient::SmtpClient::sendMessage() "SmtpClient::sendMessage()" with \c MESSAGE-ERROR; it is not
+        sent to the other addresses either
     */
     list<string> addBCC(string recipient) {
         if (!Message::checkEmailAddress(recipient))
             throw "MESSAGE-ADDBCC-ERROR", sprintf("cannot determine email address in %y", recipient);
 
+        bcc_raw += NOTHING;
         return bcc += recipient;
     }
+
+    #! adds a recipient with a display name and an email address
+    /** @param name the display name, which can have any characters (ex: a name from an untrusted source): it is
+        written as a quoted string, so that it cannot add a recipient; an empty name adds the address alone
+        @param address the email address, which must be an address alone (an RFC 5322 \c addr-spec, ex:
+        <tt>j\@x.com</tt>)
+        @return the list of "To:" addresses
+
+        @throw MESSAGE-ADDTO-ERROR the email address is not an address alone
+
+        @par Example:
+        @code{.py}
+msg.addTO(untrusted_name, "j@x.com");
+        @endcode
+
+        @since MailMessage 1.5.1
+    */
+    list<string> addTO(string name, string address) {
+        return addTO(Message::makeMailbox(name, address, "MESSAGE-ADDTO-ERROR"));
+    }
+
+    #! adds a recipient (cc) with a display name and an email address
+    /** @param name the display name, which can have any characters (ex: a name from an untrusted source): it is
+        written as a quoted string, so that it cannot add a recipient; an empty name adds the address alone
+        @param address the email address, which must be an address alone (an RFC 5322 \c addr-spec, ex:
+        <tt>j\@x.com</tt>)
+        @return the list of "CC:" addresses
+
+        @throw MESSAGE-ADDCC-ERROR the email address is not an address alone
+
+        @par Example:
+        @code{.py}
+msg.addCC(untrusted_name, "j@x.com");
+        @endcode
+
+        @since MailMessage 1.5.1
+    */
+    list<string> addCC(string name, string address) {
+        return addCC(Message::makeMailbox(name, address, "MESSAGE-ADDCC-ERROR"));
+    }
+
+    #! adds a recipient (bcc) with a display name and an email address
+    /** @param name the display name, which can have any characters (ex: a name from an untrusted source): it is
+        written as a quoted string, so that it cannot add a recipient; an empty name adds the address alone
+        @param address the email address, which must be an address alone (an RFC 5322 \c addr-spec, ex:
+        <tt>j\@x.com</tt>)
+        @return the list of "BCC:" addresses
+
+        @throw MESSAGE-ADDBCC-ERROR the email address is not an address alone
+
+        @par Example:
+        @code{.py}
+msg.addBCC(untrusted_name, "j@x.com");
+        @endcode
+
+        @since MailMessage 1.5.1
+    */
+    list<string> addBCC(string name, string address) {
+        return addBCC(Message::makeMailbox(name, address, "MESSAGE-ADDBCC-ERROR"));
+    }
+
+    #! @cond nodoc
+    # returns a mailbox with the name as a quoted string, which cannot have a separator or an address outside
+    # quotes; the address must be an addr-spec
+    private static string makeMailbox(string name, string address, string err) {
+        string addr = Message::trimSpace(address);
+        if (!Message::isAddrSpec(addr)) {
+            throw err, sprintf("%y is not an email address", address);
+        }
+        if (!name.val()) {
+            return addr;
+        }
+        return sprintf("\"%s\" <%s>", replace(replace(name, "\\", "\\\\"), "\"", "\\\""), addr);
+    }
+    #! @endcond
 
     #! returns the sender's address in display format
     /** @return the sender's address in display format: for a message created to be sent, the display name and the
@@ -1398,16 +2308,25 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     }
 
     #! returns the list of "To:" addresses
+    /** @return the entries of the \c To header, as they were added or parsed; an entry can have several
+        addresses (a list of mailboxes or a group); @ref getRecipients() returns the email addresses
+    */
     list<string> getTO() {
         return to;
     }
 
     #! returns the list of "CC:" addresses
+    /** @return the entries of the \c CC header, as they were added or parsed; an entry can have several
+        addresses (a list of mailboxes or a group); @ref getRecipients() returns the email addresses
+    */
     list<string> getCC() {
         return cc;
     }
 
     #! returns the list of "BCC:" addresses
+    /** @return the entries of the \c BCC header, as they were added or parsed; an entry can have several
+        addresses (a list of mailboxes or a group); @ref getRecipients() returns the email addresses
+    */
     list<string> getBCC() {
         return bcc;
     }
@@ -1418,9 +2337,53 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     }
 
     #! return all the email addresses the message will be sent to, a combination of the "To:", "CC:", and "BCC:" lists
+    /** @return the email addresses of the recipients, the recipients of the SMTP envelope: every address of every
+        \c To, \c CC and \c BCC entry, which can be a list of mailboxes or a group (see @ref getEmailAddresses()), in
+        order, without duplicates; addresses that differ only in the case of their domain are the same address (the
+        case of the local part is kept: it can be significant).  The addresses of a recipient of a parsed message
+        are taken from the raw header, before its encoded words are decoded.
+
+        @since MailMessage 1.5.1 the address of a recipient of a parsed message is taken from the raw header, and
+        every address of an entry with several addresses is returned (only the first was:
+        <a href="https://github.com/qoretechnologies/qore/issues/6134">issue 6134</a>)
+    */
     list<string> getRecipients() {
-        return cast<list<string>>(select (map getEmailAddress($1), (to + cc + bcc)), exists $1);
+        list<string> rv = ();
+        hash<string, bool> seen = {};
+        foreach hash<auto> i in ({"l": to, "r": to_raw}, {"l": cc, "r": cc_raw}, {"l": bcc, "r": bcc_raw}) {
+            foreach string v in (i.l) {
+                foreach string addr in (Message::getEmailAddresses(i.r[$#] ?? v)) {
+                    string key = Message::getAddressKey(addr);
+                    if (!seen{key}) {
+                        seen{key} = True;
+                        rv += addr;
+                    }
+                }
+            }
+        }
+        return rv;
     }
+
+    #! @cond nodoc
+    # returns the address with its domain in lower case, to compare addresses: the domain is not case-sensitive,
+    # but the local part can be (RFC 5321 section 2.4); a quoted local part that needs no quotes is written without
+    # them (RFC 5321 section 4.1.2: "a"@x.com is a@x.com)
+    private static string getAddressKey(string addr) {
+        int i = addr.substr(-1) == "]" ? addr.rfind("@[") : addr.rfind("@");
+        if (i < 0) {
+            return addr;
+        }
+        string local = addr.substr(0, i);
+        if (local.size() > 2 && local.substr(0, 1) == "\"" && local.substr(-1) == "\"") {
+            string inner = local.substr(1, -1);
+            inner =~ s/\\(.)/$1/gs;
+            if (DotAtomRx.match(inner)) {
+                local = inner;
+            }
+        }
+        return local + addr.substr(i).lwr();
+    }
+    #! @endcond
 
     #! returns @ref True "True" if the message can be sent, @ref False "False" if not
     /** To be able to send a message, there must be at least one recipient in the "To:" or the "CC:" or the "BCC:" lists
@@ -1724,20 +2687,29 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         @return a header string (ex: \c "Subject: =?UTF-8?Q?testing?=\r\n")
 
         @throw HEADER-ERROR the header name contains a NUL, CR or LF character, or \a encode is @ref False and the
-        value contains one; such a character would end the header line and start another header (header injection)
+        value contains one; such a character would end the header line and start another header (header injection);
+        or \a encode is @ref False and the value contains another control character than horizontal tab
 
         @since MailMessage 1.5.1 a header name with a NUL, CR or LF character, or such a value that is not encoded,
-        raises \c HEADER-ERROR
+        raises \c HEADER-ERROR, and so does a value that is not encoded with another control character than
+        horizontal tab; an encoded value is folded with \a eol
     */
     static string doHeaderValue(string hdr, string val, string eol = "\r\n", bool encode = True) {
         check_line_text(hdr, "message header name", "HEADER-ERROR");
         if (encode) {
             # a value with a control character is not printable ASCII, so a CR or LF is encoded with the rest
             if (!val.isDataPrintableAscii()) {
-                val = mime_encode_header_word_q(val);
+                val = mime_encode_header_word_q(val, eol);
             }
         } else {
             check_line_text(val, sprintf("message header %y value", hdr), "HEADER-ERROR");
+            # no other control character than horizontal tab can be in a header value (RFC 5322 section 2.2)
+            *string c = (val =~ x/([\x01-\x08\x0b\x0c\x0e-\x1f\x7f])/)[0];
+            if (c) {
+                throw "HEADER-ERROR", sprintf("message header %y value %y contains a control character (\\x%02x); "
+                    "a header value that is not encoded cannot contain control characters other than horizontal tab",
+                    hdr, val, ord(c));
+            }
         }
         return sprintf("%s: %s%s", hdr, val, eol);
     }
@@ -1752,32 +2724,40 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         The \c From header (and the \c Return-Receipt-To and \c Disposition-Notification-To headers) has the sender
         in display format (see @ref getSender()).  For a message created to be sent, a display name that is not
         printable ASCII is encoded as an <a href="http://tools.ietf.org/html/rfc2047">RFC 2047</a> \c "B" encoded
-        word when \a encode is @ref True "True", and the email address is never encoded; the \c From header of a
-        parsed message is written as it was parsed, encoded like other header values.
+        word when \a encode is @ref True "True", and the email address is never encoded.
 
-        @param eol the End-Of-Line marker for the string
-        @param encode encode non-ASCII values with quoted printable encoding (http://tools.ietf.org/html/rfc2047)
+        The \c To, \c CC and \c BCC headers, and the \c From header of a parsed message or of a message created
+        with no display name, are written with their addresses as they are when \a encode is @ref True "True":
+        only their other text that is not printable ASCII (display names, comments, group names) is encoded as
+        \c "B" encoded words, and a list of mailboxes is folded between mailboxes so that its lines are at most 76
+        characters long.  A header of a parsed message is written as it was parsed if it is printable ASCII.  The
+        address that a header gives (see @ref getEmailAddress()) is the address that its value gives, so that a
+        message that is parsed again is sent to the same addresses.
+
+        @param eol the End-Of-Line marker for the string, also used to fold long headers
+        @param encode encode non-ASCII values with RFC 2047 encoded words (http://tools.ietf.org/html/rfc2047)
 
         @return a string with all the message headers separated by the EOL marker
 
         @since MailMessage 1.5.1 the message is not changed: a \c Content-Type header was removed or taken as the
         type of the body; the \c From header has the display name of the sender, and only the display name is
-        encoded
+        encoded; only the text of the address headers is encoded, never their addresses, and encoded words are
+        folded with \a eol
     */
     string getHeaderString(string eol = "\r\n", bool encode = True) {
         string hdr = doSenderHeader("From", eol, encode);
 
         # To:
         foreach string l in (to)
-            hdr += Message::doHeaderValue("To", l, eol, encode);
+            hdr += Message::doAddressHeader("To", l, to_raw[$#], eol, encode);
 
         # CC:
         foreach string l in (cc)
-            hdr += Message::doHeaderValue("CC", l, eol, encode);
+            hdr += Message::doAddressHeader("CC", l, cc_raw[$#], eol, encode);
 
         # BCC:
         foreach string l in (bcc)
-            hdr += Message::doHeaderValue("BCC", l, eol, encode);
+            hdr += Message::doAddressHeader("BCC", l, bcc_raw[$#], eol, encode);
 
         # add the subject - use "QP" encoding to ensure correct transmission & display of special characters through all SMTP servers
         hdr += Message::doHeaderValue("Subject", subject, eol, encode);

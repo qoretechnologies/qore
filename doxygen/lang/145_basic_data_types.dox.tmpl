@@ -252,6 +252,28 @@ char first = "café"[0];                         # c'c'
 list<int> cps = map $1.ord(), iterate "café";   # (99, 97, 102, 233)
     @endcode
 
+    @anchor char_plus
+    The @ref plus_operator "+ operator" adds a @ref char value as a one-character string with any other operand
+    except a list, to which it is added as an element (<tt>c'a' + (1, 2)</tt> gives <tt>(c'a', 1, 2)</tt>); the
+    result is a @ref string "string", also as its parse-time type.  \c += on an lvalue that holds a char does the
+    same with every operand, a list included, as \c += on a string lvalue does: the lvalue is assigned the string
+    (<tt>auto v = c'a'; v += (1, 2);</tt> gives \c "a").  A char added with \c += to an lvalue of any other type
+    is added exactly as its one-character string is (<tt>int i = 1; i += c'5';</tt> gives \c 6, as
+    <tt>i += "5"</tt> does; <tt>list l = (); l += c'a';</tt> gives <tt>("a")</tt>).  A char added to a string takes
+    the string's @ref character_encoding "encoding"; otherwise the result is a UTF-8 string.  Code-point addition
+    takes \c int() (<tt>i += int(c'5')</tt>).  The other arithmetic and bitwise operators use a char's codepoint; the
+    soft comparison operators (\c ==, \c <, \c <=> and the others) compare a char with a string as a one-character
+    string (<tt>c'a' == "a"</tt> is \c True) and with any other value as its codepoint (<tt>c'a' == 97</tt> is
+    \c True), while the absolute comparison operators also compare the types (<tt>c'a' === "a"</tt> is \c False):
+    @code{.py}
+string rtf = "\\'e9";
+string hex = rtf[2] + rtf[3];   # "e9"
+string s = c'a' + 1;            # "a1"
+int next = int(c'a') + 1;       # 98
+int diff = c'b' - c'a';         # 1
+bool same = c'a' == "a";        # True
+    @endcode
+
     @par Pseudo Class for Type Char:
     @ref Qore::zzz8charzzz9
 
@@ -502,6 +524,11 @@ auto val = q.pop(20000);
     |\c us|Microseconds|\c 21194us|21194 microseconds
 
     @note In this relative date/time format, only seconds accept a fractional component
+
+    @note A literal in this format has no sign and is parsed as one value: its value (for \c Y, \c M, \c D and
+    \c h) or its whole hours (for \c m, \c s, \c ms and \c us) must be at most 2147483647, the largest value of the
+    signed 32-bit component of a relative date, or the literal is a parse error.  So <tt>-2147483648h</tt> is a parse
+    error, as it is the negation of \c 2147483648h, although <tt>hours(-2147483648)</tt> is a relative date in range.
 
     @subsubsection short_reldates Short Relative Time Format
     This and the next duration format are the two duration formats of

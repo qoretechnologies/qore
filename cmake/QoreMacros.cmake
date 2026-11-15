@@ -2942,6 +2942,45 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # file it ever depended on (see _QORE_DEPFILE_FRESH_READ_COMMAND())
     _QORE_DEPFILE_FRESH_READ_COMMAND(_qmod_depfile_fresh_read_command ${_name}-qmod)
 
+    # A module with %try-module directives is compiled without the modules that are not available then, which the
+    # module loader refuses once one of them is (AOT-MODULE-STALE): the .qmod depends on a stamp that is rewritten
+    # only when one of the paths where those modules could be installed exists, and that is checked by every build
+    # (cmake/QoreOptionalModuleStamp.cmake, qore#6145).  Only the modules whose sources have the directive get the
+    # check; a directive added to a module is seen when CMake runs again.
+    if (${_is_dir})
+        file(GLOB _qmod_try_sources "${_source_root}/*.qm" "${_source_root}/*.qc")
+    else()
+        set(_qmod_try_sources "${_source_root}")
+    endif()
+    set(_qmod_optional_stamp "")
+    foreach (_qmod_try_source IN LISTS _qmod_try_sources)
+        if (EXISTS "${_qmod_try_source}" AND NOT IS_DIRECTORY "${_qmod_try_source}")
+            file(STRINGS "${_qmod_try_source}" _qmod_try_lines LIMIT_COUNT 1
+                REGEX "^[ \t]*%try-(reexport-)?module[ \t(]")
+            if (_qmod_try_lines)
+                set(_qmod_optional_stamp ${_qmod_out}.optional.stamp)
+                break()
+            endif()
+        endif()
+    endforeach()
+    if (_qmod_optional_stamp)
+        # an output that is never made, so that the check runs in every build
+        set(_qmod_optional_check ${_qmod_out}.optional.check)
+        set_source_files_properties(${_qmod_optional_check} PROPERTIES SYMBOLIC TRUE)
+        add_custom_command(
+            OUTPUT ${_qmod_optional_check}
+            COMMAND ${CMAKE_COMMAND} -E echo_append ""
+            VERBATIM
+        )
+        add_custom_command(
+            OUTPUT ${_qmod_optional_stamp}
+            COMMAND ${CMAKE_COMMAND} -DCANDIDATES=${_qmod_dep}.optional -DSTAMP=${_qmod_optional_stamp}
+                -P ${QORE_CMAKE_DIR}/QoreOptionalModuleStamp.cmake
+            DEPENDS ${_qmod_optional_check} ${QORE_CMAKE_DIR}/QoreOptionalModuleStamp.cmake
+            VERBATIM
+        )
+    endif()
+
     # For split-dir modules, collect sibling resource files at cmake-time
     # so they can be declared as BYPRODUCTS of the copy step and tracked
     # by make for rebuild triggers when the source changes.  CONFIGURE_DEPENDS
@@ -3031,7 +3070,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 ${_qmod_cache_launcher} ${_qore_qcc_command} ${_qmod_opt_flags} -m ${_source_root}
                 --depfile=${_qmod_dep} --depfile-module-deps=source -o ${_qmod_out}
-            DEPENDS ${ARGN} ${_qmod_jar_srcs} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep}
+            DEPENDS ${ARGN} ${_qmod_jar_srcs} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep} ${_qmod_optional_stamp}
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
@@ -3096,7 +3135,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 ${_qmod_cache_launcher} ${_qore_qcc_command} ${_qmod_opt_flags} -m ${_source_root}
                 --depfile=${_qmod_dep} --depfile-module-deps=source -o ${_qmod_out}
-            DEPENDS ${ARGN} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep}
+            DEPENDS ${ARGN} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep} ${_qmod_optional_stamp}
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
