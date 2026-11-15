@@ -12973,7 +12973,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
-        const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
+        const QoreClass* qc = call->getRecordedClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
         writer.writeStringRef(class_ref.c_str());
         // with the parse-time abstract flag (issue #5824)

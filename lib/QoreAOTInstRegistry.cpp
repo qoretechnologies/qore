@@ -871,7 +871,7 @@ static bool instRegistryWriteCallTargetExpr(AOTInstWriteCtx& ctx, const QoreValu
     if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
-        const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
+        const QoreClass* qc = call->getRecordedClass();
         ctx.writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
         std::string method_ref = qore_aot_encode_self_method_ref(call, false);
         ctx.writer.writeStringRef(method_ref.c_str());

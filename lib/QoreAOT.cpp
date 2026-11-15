@@ -35788,7 +35788,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         const QoreMethod* method = call->getMethod();
         // Preserve the parse-time self-call class.  It can differ from the
         // declaring method class for inherited/self and explicit base calls.
-        const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
+        const QoreClass* qc = call->getRecordedClass();
         if (qc) {
             id.ref1 = qore_aot_encode_class_ref(qc);
         }
