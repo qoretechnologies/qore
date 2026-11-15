@@ -1615,12 +1615,9 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 
+    // the callee's receiver is made current after the variant search below (qore#5892)
     if (!receiver_type_info && self) {
         receiver_type_info = qore_get_object_receiver_type_info(self);
-    }
-    if (receiver_type_info) {
-        old_receiver_type_info = runtime_set_receiver_type_info(receiver_type_info);
-        restore_receiver_type_info = true;
     }
 
 #ifdef QORE_MANAGE_STACK
@@ -1676,9 +1673,17 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
         }
     }
 
+    // the variant is searched for in the caller's context: an explicit type argument of the call can be a type
+    // parameter of the caller's class (u.m<T>() in a method of a generic class C<T>), which is resolved with the
+    // receiver that is current; the parameter types of the candidates are substituted with the callee's receiver,
+    // which the search takes as an argument (qore#5892)
     bool runtime_resolved = !variant;
     if (runtime_resolved && findVariantImpl<LexicalInvocation, NAMED>(func, variant, cctx, invocation_policy)) {
         return;
+    }
+    if (receiver_type_info) {
+        old_receiver_type_info = runtime_set_receiver_type_info(receiver_type_info);
+        restore_receiver_type_info = true;
     }
     PreparedCall prepared;
     if constexpr (LexicalInvocation) {
@@ -1778,6 +1783,42 @@ struct LexicalUserArgumentFilter {
 };
 }
 
+namespace {
+//! makes the caller's receiver current for its scope and restores the callee's on every exit, also when an exception
+//! (std::bad_alloc) leaves it
+/** an explicit type argument of a call can be a type parameter of the CALLER's class (g.m<A>() in a method of a generic
+    class H<A>), which is resolved with the receiver that is current when it is substituted, but init() has made the
+    receiver of the callee current already (qore#5892)
+*/
+struct CallerReceiverScope {
+    const QoreTypeInfo* callee_receiver_type_info = nullptr;
+    bool active = false;
+
+    CallerReceiverScope(bool n_active, const QoreTypeInfo* caller_receiver_type_info) : active(n_active) {
+        if (active) {
+            callee_receiver_type_info = runtime_set_receiver_type_info(caller_receiver_type_info);
+        }
+    }
+
+    ~CallerReceiverScope() {
+        if (active) {
+            runtime_set_receiver_type_info(callee_receiver_type_info);
+        }
+    }
+};
+}
+
+// a call whose variant committed at parse time rejected its arguments searches for another one after init() has made
+// the callee's receiver current: explicit type arguments, which can name type parameters of the caller's class, are
+// resolved with the caller's receiver, as in the search that init() makes before (qore#5892)
+template <bool LexicalInvocation>
+__attribute__((noinline, cold)) int CodeEvaluationHelper::findVariantRetry(const QoreFunction* func,
+        const AbstractQoreFunctionVariant*& variant, const qore_class_private* cctx,
+        LexicalSemanticPolicy invocation_policy, bool explicit_type_args) {
+    CallerReceiverScope caller_receiver(explicit_type_args && restore_receiver_type_info, old_receiver_type_info);
+    return findVariantImpl<LexicalInvocation>(func, variant, cctx, invocation_policy);
+}
+
 CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArguments(const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, AbstractFunctionSignature* sig, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, bool runtime_resolved) {
@@ -1831,7 +1872,8 @@ CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArgumentsImp
             if (closure_type_args) {
                 explicit_type_param_instantiation = runtime_get_type_param_instantiation();
             }
-            int find_rc = findVariantImpl<LexicalInvocation>(func, variant, cctx, invocation_policy);
+            int find_rc = findVariantRetry<LexicalInvocation>(func, variant, cctx, invocation_policy,
+                old_explicit_inst);
             if (closure_type_args) {
                 explicit_type_param_instantiation = old_explicit_inst;
             }
@@ -2033,24 +2075,6 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     // H<A>), which is resolved with the receiver that is current when the arguments are inferred: init() has made the
     // receiver of the callee current already, so the caller's receiver is made current again for the inference.  Only
     // a call of a generic variant with explicit type arguments and a receiver gets here, so no other call is touched
-    //! makes the caller's receiver current for its scope and restores the callee's on every exit, also when an exception
-    //! (std::bad_alloc) leaves the inference
-    struct CallerReceiverScope {
-        const QoreTypeInfo* callee_receiver_type_info = nullptr;
-        bool active = false;
-
-        CallerReceiverScope(bool n_active, const QoreTypeInfo* caller_receiver_type_info) : active(n_active) {
-            if (active) {
-                callee_receiver_type_info = runtime_set_receiver_type_info(caller_receiver_type_info);
-            }
-        }
-
-        ~CallerReceiverScope() {
-            if (active) {
-                runtime_set_receiver_type_info(callee_receiver_type_info);
-            }
-        }
-    };
     bool inferred;
     {
         CallerReceiverScope caller_receiver(explicit_type_param_instantiation && restore_receiver_type_info,

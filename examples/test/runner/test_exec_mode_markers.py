@@ -213,12 +213,15 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - plugin-order-identity (#6136): its probes run in child processes that set their own --exec-mode, in qcc
         #   executables and with a module compiled by qcc
         # - dataframe-inline-mask-subscript (#6141): its probes run in child processes that set their own --exec-mode
+        # - explicit-type-param-method-call (#5892): its probes run in child processes that set their own --exec-mode
+        #   and in qcc executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/classes/deleted-program-types.qtest",
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
+                                 "examples/test/qore/classes/explicit-type-param-method-call.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
