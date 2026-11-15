@@ -1,0 +1,42 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class GenericZeroArgVariantSearchTest
+
+#! The variant search without parse diagnostics returns the type arguments of a generic variant found for a call
+#! without arguments
+/** QoreFunction::parseFindVariantNoDiagnostics(), which the AOT fallback resolution of a call uses, returned an empty
+    instantiation for a variant without parameters: it is checked by the C++ unit tests of a debug build of the
+    library.
+*/
+class GenericZeroArgVariantSearchTest inherits QUnit::Test {
+    constructor() : QUnit::Test("GenericZeroArgVariantSearch", "1.0", \ARGV) {
+%ifdef QoreDebug
+        addTestCase("unit tests", \testUnitTests());
+%else
+        addTestCase("requires a debug build", \testRequiresDebugBuild());
+%endif
+        set_return_value(main());
+    }
+
+%ifdef QoreDebug
+    testUnitTests() {
+        hash<auto> res = dbg_run_variant_search_tests();
+        assertGt(0, res.test_count, "the C++ unit tests ran");
+        assertEq(0, res.fail_count, sprintf("all %d C++ unit test assertions passed", res.test_count));
+    }
+%endif
+
+%ifndef QoreDebug
+    testRequiresDebugBuild() {
+        testSkip("the C++ unit tests require a debug build of the Qore library: dbg_run_variant_search_tests() is "
+            "registered by init_debug_functions(), which is only called when the library is built with DEBUG");
+    }
+%endif
+}

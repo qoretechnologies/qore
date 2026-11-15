@@ -66,9 +66,29 @@ class Inferred<T> {
     static string s(T t, auto i) { return "plain-T"; }
 }
 
+#! two receiver classes through one call site: the child class overrides the method without type parameters
+class Base {
+    public {}
+
+    string m<X>(X x) { return "base-X"; }
+    string m(auto x) { return "base-auto"; }
+}
+
+class Derived inherits Base {
+    public {}
+}
+
+class Override inherits Base {
+    public {}
+
+    string m(auto x) { return "override-auto"; }
+}
+
 class Box<T> {
     auto func(T a) { return g<T>(a); }
     auto stat(T a) { return Util::sm<T>(a); }
+    #! the call of qore#6152: a method with an explicit type argument naming the class's type parameter
+    auto meth(T a) { Util u(); return u.m<T>(a); }
     auto ctl(T a) { Util u(); return u.n(a); }
 }
 
@@ -103,6 +123,43 @@ string sub parse_call(string call) {
     return sprintf("%y", p.callFunction("t"));
 }
 
+#! one call site for every call: the variant selected at run time depends on the receiver and the argument
+string sub site(Base b, auto a) { return b.m<Obj>(a); }
+
+#! one call site whose type argument is the type parameter of the calling generic function
+string sub generic_site<T>(auto a) { Util u(); return u.m<T>(a); }
+
+#! the results of calls through one call site with live and deleted objects in turn
+string sub alternate(Obj o, Obj d) {
+    list<string> l = ();
+    for (int i = 0; i < 6; ++i) {
+        l += site(new Derived(), (i % 2) != 0 ? d : o);
+    }
+    return l.join(",");
+}
+
+#! the results of calls through one call site in several threads, each with live and deleted objects in turn
+string sub threads(Obj o, Obj d) {
+    Queue q();
+    for (int t = 0; t < 4; ++t) {
+        background sub () {
+            bool ok = True;
+            for (int i = 0; i < 200; ++i) {
+                bool del = ((i + t) % 2) != 0;
+                if (site(new Derived(), del ? d : o) != (del ? "base-auto" : "base-X")) {
+                    ok = False;
+                }
+            }
+            q.push(ok);
+        }();
+    }
+    list<bool> l = ();
+    for (int t = 0; t < 4; ++t) {
+        l += q.get(30s);
+    }
+    return sprintf("%y", l);
+}
+
 string sub probe(code c) {
     try {
         return sprintf("%y", c());
@@ -132,6 +189,7 @@ string sub probes(bool del) {
         probe(auto sub () { return g<Obj>(d); }),
         probe(auto sub () { return b.func(d); }),
         probe(auto sub () { return b.stat(d); }),
+        probe(auto sub () { return b.meth(d); }),
         probe(auto sub () { return b.ctl(d); }),
         probe(auto sub () { return n_typed(d); }),
         probe(auto sub () { return n_auto(d); }),
@@ -154,6 +212,16 @@ string sub probes(bool del) {
             parse_call("u.m<int>(1)"),
             probe(auto sub () { Zero z(); return z.z<int>(); }),
             probe(auto sub () { return Inferred::s<int>("str", "a"); }),
+        );
+    } else {
+        # the same call sites with a live object, a deleted object and other receivers in turn
+        Obj live();
+        l += (
+            alternate(live, d),
+            (map site($1, live), (new Derived(), new Override(), new Base(), new Override())).join(","),
+            (map site($1, d), (new Derived(), new Override())).join(","),
+            (generic_site<Obj>(live), generic_site<string>(live), generic_site<Obj>(live)).join(","),
+            threads(live, d),
         );
     }
     return foldl $1 + "|" + $2, l;

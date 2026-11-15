@@ -33,7 +33,11 @@ string sub example(string str) {
     the call and not removed or deleted since; for a member, a global variable, a variable of a closure or another
     expression, the variant is resolved at run time.  A variant selected so is resolved again at run time if the
     argument has no value after all, as for a method call that calls an overriding method whose return type accepts
-    no value.  A variant selected at parse time can still not
+    no value.  An untyped parameter (\c auto) is a worse match than a typed one for every value that the typed
+    parameter accepts, so a variant whose typed parameters accept the types of their arguments is selected at parse
+    time beside a variant that takes the same arguments with untyped parameters only: with <tt>f(Obj x)</tt> and
+    <tt>f(auto x)</tt>, a call with an argument of type \c Obj calls <tt>f(Obj x)</tt>.  A variant selected at parse
+    time can still not
     match at run time only because of the state of a value, which declared types do not describe: an argument that has
     no value (a member or variable of the type that was not assigned) or a deleted object; then the variant is resolved
     again at run time, as for a call resolved at run time, with the arguments as given.
