@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+# the children of this Program inherit its options and are locked (no %no-child-restrictions)
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class LockedOptionsAllowedTest
+
+#! Tests what a Program whose parse options are locked may still change (design/locked-parse-options.md)
+/** A locked child keeps the restrictions it inherited, but free options, options of style and backward
+    compatibility, and restrictions it added itself may be disabled
+*/
+class LockedOptionsAllowedTest inherits QUnit::Test {
+    constructor() : QUnit::Test("LockedOptionsAllowedTest", "1.0", \ARGV) {
+        addTestCase("a locked child may disable options of style it inherited", \styleOptions());
+        addTestCase("a locked child may disable free options", \freeOptions());
+        addTestCase("a locked child may parse code in another style with the parse directives", \styleDirectives());
+        addTestCase("a locked child may disable a restriction it added itself", \selfAddedRestriction());
+        set_return_value(main());
+    }
+
+    styleOptions() {
+        Program child();
+        assertTrue(child.getFullParseOptions().hasAll(PO_REQUIRE_TYPES | PO_STRICT_ARGS),
+            "the child inherits the options of %modern");
+        child.disableParseOptions(PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_REQUIRE_OUR);
+        assertFalse(child.getFullParseOptions().hasAny(PO_REQUIRE_TYPES | PO_STRICT_ARGS),
+            "the options of style are disabled");
+    }
+
+    freeOptions() {
+        Program child();
+        child.disableParseOptions(PO_NEW_STYLE);
+        assertFalse(child.getFullParseOptions().hasAll(PO_NEW_STYLE), "a free option is disabled");
+    }
+
+    styleDirectives() {
+        Program child();
+        child.parse("%old-style
+%loose-args
+int sub f(int $x) { return $x; }
+", "style");
+        assertEq(1, child.callFunction("f", 1), "code in the old style parses and runs");
+    }
+
+    selfAddedRestriction() {
+        Program child();
+        assertFalse(child.getFullParseOptions().hasAll(PO_NO_NETWORK), "the parent does not restrict the network");
+        child.setParseOptions(PO_NO_NETWORK);
+        assertTrue(child.getFullParseOptions().hasAll(PO_NO_NETWORK), "the child adds a restriction");
+        child.disableParseOptions(PO_NO_NETWORK);
+        assertFalse(child.getFullParseOptions().hasAll(PO_NO_NETWORK), "and may disable it again");
+    }
+}

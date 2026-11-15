@@ -160,9 +160,12 @@ ProgramControl::destructor() {
     Program, classes are the same classes, so the objects of this Program can be used, and global variables are
     shared.  This Program is not changed; code that is added to it later is not inherited.
 
-    @param parse_options the parse options of the new Program; the restrictions of this Program apply as well;
-    @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE" is kept also when this Program does not have it, as it only
-    allows code to be parsed in the new Program more than once
+    @param parse_options the parse options of the new Program; the restrictions of this Program apply as well, and
+    so do those of the Program whose code calls this method when it is restricted, locked or sandboxed (see
+    @ref locked_parse_options "locked parse options"): the new Program takes them, they cannot be disabled in it,
+    and it does not get the options that give more freedom that the calling Program lacks;
+    @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE" is kept also when this Program or the calling Program does not
+    have it, as it only allows code to be parsed in the new Program more than once
 
     @return the new Program
 
@@ -193,26 +196,36 @@ Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [f
     if (*xsink) {
         return QoreValue();
     }
+    // the code that creates the Program controls it, as does this Program, its parent
+    const QoreProgram* creator = getProgram();
+    // the new Program is a child of this Program, not of the calling code, but it takes and locks the restrictions
+    // of the calling code as a child of it would, so that code with access to the debugger cannot get a Program
+    // with fewer restrictions than its own (see qore_program_private::restrictForCreator())
+    bool restricted = false;
+    QoreParseOptions restrictions;
+    QoreParseOptions po = (creator && creator != p)
+        ? qore_program_private::restrictForCreator(creator, QoreParseOptions(parse_options), restrictions, restricted)
+        : QoreParseOptions(parse_options);
     // the new Program has this Program's options too: %modern cannot be in effect with a compatibility option that it
     // does not allow, given or inherited (issue #5682)
-    if (qore_program_private::checkNewProgramModernOptions(p, parse_options, xsink,
-            "ProgramControl::createEvalProgram()")) {
+    if (qore_program_private::checkNewProgramModernOptions(p, po, xsink, "ProgramControl::createEvalProgram()")) {
         return QoreValue();
     }
     QoreProgram* pgm;
     {
         InheritAllUserCodeHelper all_user_code;
-        pgm = new QoreProgram(p, parse_options);
+        pgm = new QoreProgram(p, po);
     }
     copy_holder.release();
+    if (restricted) {
+        qore_program_private::lockCreatorRestrictions(*pgm, restrictions);
+    }
     // a child Program has only the positive options of its parent; this one only allows the new Program to be
     // parsed again
     if (parse_options & PO_ALLOW_REPARSE) {
         qore_program_private::get(*pgm)->setParseOptionsIntern(PO_ALLOW_REPARSE);
     }
-    // the code that creates the Program controls it, as does this Program, its parent, whose chain the new Program
-    // already has
-    const QoreProgram* creator = getProgram();
+    // the new Program already has the creator chain of this Program, its parent
     if (creator) {
         qore_program_private::addCreator(*pgm, *creator);
     }

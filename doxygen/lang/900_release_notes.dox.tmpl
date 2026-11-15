@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Locked Program Keeps Its Restrictions
+    @ref Qore::Program::disableParseOptions() "Program::disableParseOptions()", the parse directives that disable
+    options and @ref Qore::Program::replaceParseOptions() "Program::replaceParseOptions()" can no longer remove the
+    restrictions of a locked child Program, and an independent Program of restricted code takes and locks that code's
+    restrictions; see @ref locked_parse_options.
+
     @par Completed Objects Are Released After Constructor Argument Errors
     An exception while @ref constructor_argument_cleanup "releasing a completed constructor's arguments" now releases
     the new object normally, running its destructor when no other reference remains; AST execution previously skipped
