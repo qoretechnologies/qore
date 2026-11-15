@@ -156,11 +156,33 @@ public namespace TestInterpreter {
             return;
         }
         string own = own_executable();
-        # the process environment itself: a compiled executable initializes its modules before it sets ENV
-        if (getenv(ParentExecutableVar) == own) {
+        if (TestInterpreterState::inherited(own) == own) {
             throw "TEST-RECURSION-ERROR", sprintf("the compiled test %y was run by itself as a child process (it took "
                 "its own executable for the qore interpreter); use TestInterpreter::qore_interpreter()", own);
         }
-        setenv(ParentExecutableVar, own);
+    }
+}
+
+#! the executable that the parent process recorded, read once, before this process records its own
+/** The process records its executable in the environment for its child processes the first time that it checks: what
+    it reads later is its own record, not its parent's, so the check compares the value read the first time
+*/
+class TestInterpreterState {
+    private:internal {
+        static Mutex lck();
+        static bool read;
+        static *string parent_executable;
+    }
+
+    #! returns the executable that the parent process recorded, if any, and records \a own for child processes
+    static *string inherited(string own) {
+        AutoLock al(lck);
+        if (!read) {
+            # the process environment itself: a compiled executable initializes its modules before it sets ENV
+            parent_executable = getenv(TestInterpreter::ParentExecutableVar);
+            setenv(TestInterpreter::ParentExecutableVar, own);
+            read = True;
+        }
+        return parent_executable;
     }
 }
