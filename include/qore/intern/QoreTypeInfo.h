@@ -4683,6 +4683,17 @@ DLLLOCAL const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTyp
 DLLLOCAL const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti,
     const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst = nullptr);
 
+//! Returns the hashdecl that a hashdecl with type parameters stands for in the running instantiation of generic code
+/** The type parameters (HD<U>) are substituted with the types of the current receiver and of the type parameter
+    instantiation of the current call (HD<int>), with qore_substitute_type_params_if_needed(), as
+    VarRefNewObjectNode does for the construction of a hashdecl (qore#5720)
+
+    @param hd the hashdecl, which must not be nullptr
+
+    @return the hashdecl of the instantiation, or \a hd itself if nothing is substituted
+*/
+DLLLOCAL const TypedHashDecl* qore_substitute_hashdecl_type_params(const TypedHashDecl* hd);
+
 //! Checks whether a target generic type argument accepts a source type argument
 DLLLOCAL qore_type_result_e qore_generic_type_arg_accepts(const QoreTypeInfo* target_arg,
     const QoreTypeInfo* source_arg, bool& may_not_match, bool& may_need_filter);

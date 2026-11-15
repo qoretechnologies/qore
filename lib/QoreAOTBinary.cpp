@@ -3505,6 +3505,13 @@ const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char
         return nullptr;
     }
 
+    // the type parser does not accept the AOT spellings of type parameters, and its errors would be left pending in
+    // the Program, to be raised when it ends (see QoreAOTTypeResolver::resolveComplexType()); such a path is resolved
+    // by qore_aot_resolve_call_hashdecl_path()
+    if (strstr(path, "typeparam<")) {
+        return nullptr;
+    }
+
     std::string type_path;
     if (!strncmp(path, "hash<", 5) || !strncmp(path, "*hash<", 6)) {
         type_path = path;

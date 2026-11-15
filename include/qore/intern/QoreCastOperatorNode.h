@@ -214,7 +214,8 @@ class QoreHashDeclCastOperatorNode : public QoreCastOperatorNode {
 public:
     DLLLOCAL QoreHashDeclCastOperatorNode(const QoreProgramLocation* loc, const TypedHashDecl* hd, QoreValue exp,
             bool or_nothing)
-            : QoreCastOperatorNode(loc, exp), hd(hd), or_nothing(or_nothing) {
+            : QoreCastOperatorNode(loc, exp), hd(hd), or_nothing(or_nothing),
+            concrete_hd(hd && !qore_type_contains_type_parameter(hd->getTypeInfo()) ? hd : nullptr) {
     }
 
     DLLLOCAL QoreHashDeclCastOperatorNode(const QoreProgramLocation* loc, const char* dynamic_hashdecl_name,
@@ -256,6 +257,16 @@ public:
         return dynamic_hashdecl_name;
     }
 
+    //! Returns the hashdecl of the cast as parsed, which can have type parameters, or nullptr
+    DLLLOCAL const TypedHashDecl* getHashDecl() const {
+        return hd;
+    }
+
+    //! Returns the hashdecl that every evaluation of the cast converts to, or nullptr if it is resolved each time
+    DLLLOCAL const TypedHashDecl* getConcreteHashDecl() const {
+        return concrete_hd;
+    }
+
 protected:
     template <bool Lexical>
     DLLLOCAL QoreValue castValueImpl(QoreValue inner, ExceptionSink* xsink) const;
@@ -266,6 +277,12 @@ protected:
     const TypedHashDecl* hd;
     std::string dynamic_hashdecl_name;
     bool or_nothing;
+    //! the hashdecl of the cast if it has no type parameters, else nullptr
+    /** A hashdecl with type parameters (hash<HD<U>> in generic code) is resolved when the cast is evaluated, with the
+        type parameters substituted by the types of the running instantiation, as is a hashdecl deferred at parse time
+        (qore#5720); a non-generic cast finds its hashdecl here with the one test it made before
+    */
+    const TypedHashDecl* concrete_hd = nullptr;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 };
@@ -274,7 +291,8 @@ class QoreComplexHashCastOperatorNode : public QoreCastOperatorNode {
 public:
     DLLLOCAL QoreComplexHashCastOperatorNode(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo,
             QoreValue exp, bool or_nothing)
-            : QoreCastOperatorNode(loc, exp), typeInfo(typeInfo), or_nothing(or_nothing) {
+            : QoreCastOperatorNode(loc, exp), typeInfo(typeInfo), or_nothing(or_nothing),
+            needs_substitution(qore_type_contains_type_parameter(typeInfo)) {
     }
 
     DLLLOCAL virtual ~QoreComplexHashCastOperatorNode() = default;
@@ -305,8 +323,17 @@ protected:
     template <bool Lexical>
     DLLLOCAL QoreValue evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const;
 
+    //! Returns the type the value is converted to: the cast type with the type parameters of the running
+    //! instantiation substituted in generic code (qore#5720)
+    DLLLOCAL const QoreTypeInfo* getRuntimeTypeInfo() const {
+        return needs_substitution ? qore_substitute_type_params(typeInfo, qore_get_current_receiver_type_info())
+            : typeInfo;
+    }
+
     const QoreTypeInfo* typeInfo;
     bool or_nothing;
+    //! true if the type has type parameters (generic code); see NewComplexHashNode::needs_substitution
+    bool needs_substitution;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 };
@@ -315,7 +342,8 @@ class QoreComplexListCastOperatorNode : public QoreCastOperatorNode {
 public:
     DLLLOCAL QoreComplexListCastOperatorNode(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo,
             QoreValue exp, bool or_nothing)
-            : QoreCastOperatorNode(loc, exp), typeInfo(typeInfo), or_nothing(or_nothing) {
+            : QoreCastOperatorNode(loc, exp), typeInfo(typeInfo), or_nothing(or_nothing),
+            needs_substitution(qore_type_contains_type_parameter(typeInfo)) {
     }
 
     DLLLOCAL virtual ~QoreComplexListCastOperatorNode() = default;
@@ -345,8 +373,17 @@ protected:
     template <bool Lexical>
     DLLLOCAL QoreValue evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const;
 
+    //! Returns the type the value is converted to: the cast type with the type parameters of the running
+    //! instantiation substituted in generic code (qore#5720)
+    DLLLOCAL const QoreTypeInfo* getRuntimeTypeInfo() const {
+        return needs_substitution ? qore_substitute_type_params(typeInfo, qore_get_current_receiver_type_info())
+            : typeInfo;
+    }
+
     const QoreTypeInfo* typeInfo;
     bool or_nothing;
+    //! true if the type has type parameters (generic code); see NewComplexHashNode::needs_substitution
+    bool needs_substitution;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 };

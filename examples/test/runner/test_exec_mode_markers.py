@@ -217,6 +217,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   and in qcc executables
         # - generic-call-parse-type (#5896, #6151): its probes run in child processes that set their own --exec-mode
         #   and in qcc executables
+        # - generic-method-hashdecl-paths (#5720, #5661): its probes run in child processes that set their own
+        #   --exec-mode, in qcc executables and in a qcc-compiled module
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
@@ -231,6 +233,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/relative-date-overflow.qtest",
                                  "examples/test/qore/operators/relative-date-multiply.qtest",
                                  "examples/test/qore/functions/generic-call-parse-type.qtest",
+                                 "examples/test/qore/classes/generic-method-hashdecl-paths.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",

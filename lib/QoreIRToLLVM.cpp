@@ -1496,6 +1496,11 @@ bool qore_ir_function_returns_pass_through(const QoreIRFunction& func, const Qor
     return true;
 }
 
+//! Returns true if a serialized type path has type parameters (see getAOTSerializableTypePath())
+static bool qore_ir_is_generic_type_path(const std::string& type_path) {
+    return type_path.find("typeparam<") != std::string::npos;
+}
+
 static std::string qore_ir_get_cast_type_path(QoreIROpcode opcode, const QoreCastOperatorNode* cast_node,
         const QoreTypeInfo* ti) {
     if (opcode == QoreIROpcode::CastHash) {
@@ -22992,7 +22997,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* type_path_ptr = qore_ir_create_global_string_ptr(builder, type_path);
                         llvm::Value* or_nothing_val = llvm::ConstantInt::get(i64_type,
                                 cast_node->isOrNothing() ? 1 : 0);
-                        auto helper = module.getOrInsertFunction("qore_rt_cast_by_type_path_aot",
+                        // a path with type parameters is resolved with the instantiation of the call (qore#5661)
+                        auto helper = module.getOrInsertFunction(qore_ir_is_generic_type_path(type_path)
+                                    ? "qore_rt_cast_by_generic_type_path_aot" : "qore_rt_cast_by_type_path_aot",
                                 llvm::FunctionType::get(i64_type,
                                     {ptr_type, i64_type, ptr_type, i64_type, ptr_type}, false));
                         result = builder->CreateCall(helper,
@@ -35413,10 +35420,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             cast_node->isOrNothing() ? 1 : 0);
                     auto cbtp_ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, i64_type, ptr_type, i64_type, ptr_type}, false);
-                    auto helper = module.getOrInsertFunction(
-                            "qore_rt_cast_by_type_path_aot", cbtp_ft);
-                    auto helper_throwing = module.getOrInsertFunction(
-                            "qore_rt_cast_by_type_path_aot_throwing", cbtp_ft);
+                    // a path with type parameters is resolved with the instantiation of the call (qore#5661)
+                    const bool generic = qore_ir_is_generic_type_path(type_path);
+                    auto helper = module.getOrInsertFunction(generic
+                            ? "qore_rt_cast_by_generic_type_path_aot" : "qore_rt_cast_by_type_path_aot", cbtp_ft);
+                    auto helper_throwing = module.getOrInsertFunction(generic
+                            ? "qore_rt_cast_by_generic_type_path_aot_throwing"
+                            : "qore_rt_cast_by_type_path_aot_throwing", cbtp_ft);
                     result = emitMaybeInvoke(helper, helper_throwing,
                             {aot_ctx_arg, inner_boxed, type_path_ptr, or_nothing_val, xsink_arg},
                             module, llvm_func, inst);

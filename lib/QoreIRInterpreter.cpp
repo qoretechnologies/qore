@@ -365,14 +365,8 @@ static const TypedHashDecl* resolveHashDeclByPath(const std::string& hd_path, Ex
             "cannot resolve hashdecl '%s': no program context", hd_path.c_str());
         return nullptr;
     }
-    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, hd_path.c_str());
-    if (!hd) {
-        std::string error;
-        QoreAOTTypeResolver resolver(pgm);
-        const QoreTypeInfo* ti = resolver.resolve(hd_path.c_str(), error);
-        ti = qore_substitute_type_params_if_needed(ti);
-        hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
-    }
+    const TypedHashDecl* hd = qore_aot_resolve_call_hashdecl_path(pgm, hd_path.c_str(),
+        qore_get_current_receiver_type_info());
     if (!hd) {
         xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s'", hd_path.c_str());
     }
