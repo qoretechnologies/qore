@@ -1,0 +1,43 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class CheckedConversionNodeResultTest
+
+#! int() and float() of an untyped value whose result a node holds (qore#6211)
+/** The IR interpreter's checked conversions (ToIntChecked, ToFloatChecked: int() and float() of a value whose type is
+    not known) released their result only for string(): an int above 48 bits, a negative NaN and a double such as
+    -5e307, which a QoreValue holds in a node, leaked.  The leak is not visible to a script; this test makes the
+    conversions in the execution mode of its process, and the leak is checked with
+    \c "QORE_PCRE2_NO_JIT=1 valgrind --leak-check=full qore -b --exec-mode=ir checked-conversion-node-result.qtest",
+    which reported "definitely lost" blocks before the fix.
+*/
+class CheckedConversionNodeResultTest inherits QUnit::Test {
+    constructor() : QUnit::Test("CheckedConversionNodeResult", "1.0", \ARGV) {
+        addTestCase("int() and float() with results held in nodes", \testConversions());
+        set_return_value(main());
+    }
+
+    testConversions() {
+        for (int i = 0; i < 4; ++i) {
+            assertEq((1000000000000000, 1.5), CheckedConversionNodeResultTest::probe(1e15, 1.5));
+            assertEq((281474976710656, -2.5), CheckedConversionNodeResultTest::probe("281474976710656", -2.5));
+            assertEq((-281474976710657, 0.0), CheckedConversionNodeResultTest::probe(-281474976710657n, "0"));
+            list<auto> l = CheckedConversionNodeResultTest::probe(9223372036854775807, -@nan@);
+            assertEq(9223372036854775807, l[0]);
+            assertTrue(l[1].nanp());
+            assertEq((1, -5e307), CheckedConversionNodeResultTest::probe(1.5, -5e307));
+        }
+    }
+
+    # the parameters are untyped, so that int() and float() are the checked conversions (ToIntChecked,
+    # ToFloatChecked), which a known operand type would turn into the unchecked ones
+    static list<auto> probe(auto a, auto b) {
+        return (int(a), float(b));
+    }
+}
