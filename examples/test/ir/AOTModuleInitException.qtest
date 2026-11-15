@@ -57,6 +57,26 @@ printf(\"%s\\n\", ModInitThrow::f());
 printf(\"%s\\n\", ModInitThrow::f());
 ";
 
+        #! a module that requires the module whose init closure raises an exception
+        const UserModuleSource = "%modern
+module ModInitUser {
+    version = \"1.0\";
+    desc = \"qore#6217: a module that requires a module whose initialization fails\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+%requires ModInitThrow
+public namespace ModInitUser {
+    public string sub f() { return ModInitThrow::f(); }
+}
+";
+
+        #! a program that uses the module that requires the failing one
+        const UserProgramSource = "%modern
+%requires ModInitUser
+printf(\"%s\\n\", ModInitUser::f());
+";
+
         const Programs = {
             "module path": "prog.q",
             "module compiled into the executable": "embedded.q",
@@ -69,6 +89,7 @@ printf(\"%s\\n\", ModInitThrow::f());
         qcc_bin = TestInterpreter::qcc_compiler();
         addTestCase("interpreted program", \interpretedTest());
         addTestCase("qcc executables", \executableTest());
+        addTestCase("a compiled module (qmod) and a module that requires the failing one", \qmodTest());
         set_return_value(main());
     }
 
@@ -118,16 +139,72 @@ printf(\"%s\\n\", ModInitThrow::f());
             foreach string opt in (("-O0", "-O3")) {
                 string label = sprintf("%s, %s", p.key, opt);
                 string exe = sprintf("%s/%s%s", tmp.path, p.value, opt);
-                hash<auto> c = run(sprintf("%s %s %s -o %s %s/%s", env(tmp.path), qcc_bin, opt, exe, tmp.path,
-                    p.value));
+                # the module required by its path is compiled into the executable when it is not found in the module
+                # path (where it would be a library module, which the executable loads when it runs)
+                TmpDir no_mods("qore-aot-modinit-nomods-");
+                hash<auto> c = run(sprintf("cd %s && %s %s %s -o %s %s/%s", tmp.path,
+                    env(p.value == "embedded.q" ? no_mods.path : tmp.path), qcc_bin, opt, exe, tmp.path, p.value));
                 assertTrue(is_file(exe), "built the executable " + label + ": " + c.out);
                 hash<auto> r = run(sprintf("%s %s", env(tmp.path), exe));
                 assertEq({"out": "module ready\n", "rc": 0}, r, label + ", init completes");
+                if (p.value == "embedded.q") {
+                    # the module is compiled into the executable: it runs without the module in the module path
+                    TmpDir empty("qore-aot-modinit-empty-");
+                    r = run(sprintf("MODINIT_THROW=1 %s %s", env(empty.path), exe));
+                    assertNeq(0, r.rc, label + ", without the module path, init raises: exit status");
+                    assertRegex("MODULE-INIT-REFUSED", r.out, label + ", without the module path, init raises");
+                }
                 r = run(sprintf("MODINIT_THROW=1 %s %s", env(tmp.path), exe));
                 assertNeq(0, r.rc, label + ", init raises: exit status");
                 assertRegex("MODULE-INIT-REFUSED", r.out, label + ", init raises: the exception is reported");
                 assertFalse(r.out =~ /module ready/, label + ", init raises: the program does not run");
             }
         }
+    }
+
+    qmodTest() {
+        if (!qcc_bin) {
+            testSkip("qcc is unavailable");
+        }
+        # the failing module compiled to a qmod, alone in its directory
+        TmpDir src("qore-aot-modinit-src-");
+        write(src.path + "/ModInitThrow.qm", ModuleSource);
+        TmpDir qmod("qore-aot-modinit-qmod-");
+        hash<auto> c = run(sprintf("%s %s -b --compile-module --strip-source --output %s/ModInitThrow.qmod "
+            "%s/ModInitThrow.qm", env(src.path), qore_bin, qmod.path, src.path));
+        if (!is_file(qmod.path + "/ModInitThrow.qmod")) {
+            testSkip("the module could not be compiled (AOT compilation unavailable?): " + c.out);
+        }
+        TmpDir tmp("qore-aot-modinit-qprog-");
+        write(tmp.path + "/prog.q", ProgramSource);
+        # interpreted, and as a qcc executable, with the compiled module
+        hash<auto> r = run(sprintf("MODINIT_THROW=1 %s %s -b %s/prog.q", env(qmod.path), qore_bin, tmp.path));
+        assertNeq(0, r.rc, "qmod, interpreted, init raises: exit status");
+        assertRegex("MODULE-INIT-REFUSED", r.out, "qmod, interpreted, init raises: the exception is reported");
+        string exe = tmp.path + "/prog-qmod";
+        c = run(sprintf("%s %s -O0 -o %s %s/prog.q", env(qmod.path), qcc_bin, exe, tmp.path));
+        assertTrue(is_file(exe), "built the executable with the qmod: " + c.out);
+        r = run(sprintf("%s %s", env(qmod.path), exe));
+        assertEq({"out": "module ready\n", "rc": 0}, r, "qmod executable, init completes");
+        r = run(sprintf("MODINIT_THROW=1 %s %s", env(qmod.path), exe));
+        assertNeq(0, r.rc, "qmod executable, init raises: exit status");
+        assertRegex("MODULE-INIT-REFUSED", r.out, "qmod executable, init raises: the exception is reported");
+        assertFalse(r.out =~ /module ready/, "qmod executable, init raises: the program does not run");
+
+        # a module that requires the failing one: the failing module's exception is reported
+        write(src.path + "/ModInitUser.qm", UserModuleSource);
+        write(tmp.path + "/user.q", UserProgramSource);
+        r = run(sprintf("MODINIT_THROW=1 %s %s -b %s/user.q", env(src.path), qore_bin, tmp.path));
+        assertNeq(0, r.rc, "required by a module, interpreted: exit status");
+        assertRegex("MODULE-INIT-REFUSED", r.out, "required by a module, interpreted: the exception is reported");
+        exe = tmp.path + "/user";
+        c = run(sprintf("%s %s -O0 -o %s %s/user.q", env(src.path), qcc_bin, exe, tmp.path));
+        assertTrue(is_file(exe), "built the executable of the module user: " + c.out);
+        r = run(sprintf("%s %s", env(src.path), exe));
+        assertEq({"out": "module ready\n", "rc": 0}, r, "required by a module, executable, init completes");
+        r = run(sprintf("MODINIT_THROW=1 %s %s", env(src.path), exe));
+        assertNeq(0, r.rc, "required by a module, executable, init raises: exit status");
+        assertRegex("MODULE-INIT-REFUSED", r.out, "required by a module, executable: the exception is reported");
+        assertFalse(r.out =~ /module ready/, "required by a module, executable: the program does not run");
     }
 }
