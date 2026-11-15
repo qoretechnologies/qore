@@ -473,6 +473,11 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      the reference of a default argument expression to one is (v34); the reader binds the capture to that variable
 //!      and reads the closure again when the Program has its top-level locals.  An earlier reader takes the text as
 //!      the name of a variable that does not exist (#5998).
+//! v37: a recorded `%module-cmd` directive (MODULE_COMMANDS section) has the restricting parse options that were in
+//!      force at the directive after its command (two u64: the low and the high 64 bits), so that the command is
+//!      replayed with the restrictions that the interpreted program had when it issued it (QoreModuleCommandContext).
+//!      A v9-v36 directive has none: its command is replayed with the parse options that the program is declared
+//!      with, which are a superset.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -508,9 +513,12 @@ constexpr uint16_t QORE_AOT_NATIVE_FIND_VERSION = 34;
 constexpr uint16_t QORE_AOT_NAMED_CALLREF_VERSION = 35;
 //! First format version whose closure captures can name a top-level local by its index (see v36 above).
 constexpr uint16_t QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION = 36;
+//! First format version whose recorded `%module-cmd` directives have the parse options in force at them (see v37
+//! above).
+constexpr uint16_t QORE_AOT_MODULE_CMD_OPTIONS_VERSION = 37;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_MODULE_CMD_OPTIONS_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -2058,10 +2066,17 @@ void serializeModulePathLists(QoreAOTBinaryWriter& writer,
 struct AOTModuleCommand {
     std::string module;
     std::string command;
+    //! true if the restricting parse options in force at the directive are recorded (v37 and later)
+    bool has_options = false;
+    //! the low 64 bits of the restricting parse options in force at the directive
+    int64_t options_lo = 0;
+    //! the high 64 bits of the restricting parse options in force at the directive
+    int64_t options_hi = 0;
 };
 
 //! Serialize `%module-cmd` directives into the MODULE_COMMANDS section.
-/** Wire format: `u32 count`, then `count × (module StringRef, command StringRef)`.
+/** Wire format: `u32 count`, then `count × (module StringRef, command StringRef, u64 options_lo, u64 options_hi)`
+    (the two options words are v37; before it an entry was the two string references only).
     `feature_flags` is ORed with `QORE_AOT_FEAT_MODULE_COMMANDS` when commands are emitted.
 */
 void serializeModuleCommands(QoreAOTBinaryWriter& writer,

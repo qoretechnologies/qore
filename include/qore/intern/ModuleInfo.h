@@ -652,17 +652,6 @@ struct DLHelper {
 class ModuleLoadMapHelper;
 struct QoreAOTModuleFileInfo;
 
-//! Where a module command issued with QoreModuleManager::issueRuntimeCmd() comes from
-enum class QoreModuleCmdOrigin {
-    //! A command issued by the calling code at run time (Program::issueModuleCmd()); a command for another Program
-    //! is checked against the calling code's sandbox and restrictions
-    Caller,
-    //! The target Program's own `%module-cmd` directive, replayed from its compiled (AOT) metadata when the Program
-    //! is created, as the directive runs when the Program's source is parsed in it: it is not a command from the
-    //! calling code to another Program
-    OwnDirective,
-};
-
 //! The attributes of the module manager's mutex: an error-checking mutex in a debug build, the default otherwise
 DLLLOCAL const pthread_mutexattr_t* qore_module_manager_mutex_attr();
 
@@ -685,12 +674,16 @@ public:
 
     DLLLOCAL void issueParseCmd(const QoreProgramLocation* loc, const char* mname, const QoreString& cmd);
 
-    //! Issues a module command to \a pgm at run time, loading the module in \a pgm if necessary
-    /** @param origin whether the command is issued by the calling code or is \a pgm's own replayed directive; only
-        a command issued by the calling code to another Program is checked as a cross-Program command
+    //! issues a module command at run time
+    /** @param origin how the command was issued: MC_RUNTIME, or MC_REPLAY for a command that a compiled program
+        records and replays when it is loaded
+        @param declared_po for a replayed command, the parse options that the compiled program is declared with:
+        the code that loads the program cannot loosen what the source it was compiled from had (see
+        QoreModuleCommandContext)
     */
     DLLLOCAL int issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd, ExceptionSink* xsink,
-            QoreModuleCmdOrigin origin = QoreModuleCmdOrigin::Caller);
+        QoreModuleCommandContext::Origin origin = QoreModuleCommandContext::MC_RUNTIME,
+        const QoreParseOptions* declared_po = nullptr);
 
     //! Registers a module under its current name
     /** The first time a module is registered, what was decided when it was loaded (see
@@ -1447,6 +1440,7 @@ public:
               api_major(mod_info.api_major), api_minor(mod_info.api_minor),
               module_init(mod_info.init), module_ns_init(mod_info.ns_init),
               module_delete(mod_info.del), module_parse_cmd(mod_info.parse_cmd),
+              cmd_caller_aware(mod_info.cmd_caller_aware),
               info(module_info.release(), &info_xsink), dlptr(dlptr), feature(mod_info.name),
               dependencies(mod_info.dependencies), aot(mod_info.is_aot), module_ns(mod_info.ns) {
         if (module_ns) {
@@ -1532,6 +1526,9 @@ protected:
     qore_module_ns_init_t module_ns_init;
     qore_module_delete_t module_delete;
     qore_module_parse_cmd_t module_parse_cmd;
+    //! true if the parse command handler honors the restrictions of the code that issues a command (see
+    //! QoreModuleInfo::cmd_caller_aware)
+    bool cmd_caller_aware;
     //! The sink outlives its metadata holder, including constructor failure cleanup.
     ExceptionSink info_xsink;
     ReferenceHolder<QoreHashNode> info;
@@ -1603,8 +1600,8 @@ public:
     DLLLOCAL virtual void issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd,
             ExceptionSink* xsink) override {
         if (xsink) {
-            xsink->raiseException(*loc, "PARSE-COMMAND-ERROR", "module '%s' loaded from '%s' is a user module; only "
-                "builtin modules can support parse commands", name.c_str(), filename.c_str());
+            xsink->raiseException(*loc, "PARSE-COMMAND-ERROR", QoreValue(), "module '%s' loaded from '%s' is a user "
+                "module; only builtin modules can support parse commands", name.c_str(), filename.c_str());
         }
     }
 

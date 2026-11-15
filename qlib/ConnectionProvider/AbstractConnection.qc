@@ -401,7 +401,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         sandboxed caller on a thread that no sandbox governs (ex: a request of a sandboxed user handled by a server
         thread) calls it with @p sandboxed set to @ref True.
 
-        @param sandboxed whether the caller is sandboxed; if not given, Qore::SandboxManager::isSandboxed() decides
+        @param sandboxed whether the caller is sandboxed; if not given, Qore::SandboxManager::isRestricted() decides
 
         @throw APP-SANDBOX-ACCESS-DENIED the caller is sandboxed, and the connection's module registers an app with
         network or filesystem I/O that the sandbox does not control and that is not declared sandbox-aware
@@ -415,7 +415,7 @@ conn.checkSandboxAccess(True);
         @since %ConnectionProvider 3.1
     */
     checkSandboxAccess(*bool sandboxed) {
-        if (!(sandboxed ?? SandboxManager::isSandboxed())) {
+        if (!(sandboxed ?? SandboxManager::isRestricted())) {
             return;
         }
         if (sandbox_check.needsCheck(True)) {
@@ -450,7 +450,7 @@ conn.checkSandboxAccess(True);
     */
     *hash<FileLocationRedirect> getFileLocationRedirect(string path, bool write) {
         # the common path is one call: only a sandboxed caller is checked
-        if (SandboxManager::isSandboxed()) {
+        if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
         }
         return getFileLocationRedirectImpl(path, write);
@@ -489,7 +489,7 @@ conn.checkSandboxAccess(True);
     */
     object getFileLocationHandler() {
         # the common path is one call: only a sandboxed caller is checked
-        if (SandboxManager::isSandboxed()) {
+        if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
         }
         return getFileLocationHandlerImpl();
@@ -551,7 +551,7 @@ conn.checkSandboxAccess(True);
     hash<PingInfo> ping(int ping_flags = 0) {
         # before the ping: a refused caller does not change the status of the connection for its other users
         # the common path is one call: only a sandboxed caller is checked
-        if (SandboxManager::isSandboxed()) {
+        if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
         }
         hash<PingInfo> rv(self{"name", "desc", "opts"} + {
@@ -807,7 +807,7 @@ conn.checkSandboxAccess(True);
     */
     object get(bool connect = True, *hash<auto> rtopts) {
         # the common path is one call: only a sandboxed caller is checked
-        if (SandboxManager::isSandboxed()) {
+        if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
         }
         if (!connect) {
@@ -854,7 +854,7 @@ conn.checkSandboxAccess(True);
     */
     object getAsync(bool connect = True, *hash<auto> rtopts) {
         # the common path is one call: only a sandboxed caller is checked
-        if (SandboxManager::isSandboxed()) {
+        if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
         }
         if (!connect) {
