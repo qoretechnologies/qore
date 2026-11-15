@@ -1446,11 +1446,12 @@ foreach string key in (keys hash)
     @code{.py} list = (1, 2) + ("three", "four", "five");@endcode
     @code{.py} hash = ( "key1" : 1, "key2" : 2) + ( "key3" : "three", "key4": "four");@endcode
     @code{.py} bin = bin1 + bin2;@endcode
+    @code{.py} string hex = rtf[i] + rtf[i + 1]; # two chars give a two-character string@endcode
 
     @par Arguments Processed by + (in order of precedence)
     |!Argument|!Processing
     |@ref list_type list|Gives the result of concatenating its arguments, i.e. <tt>(1, 2) + (3, 4) = (1, 2, 3, 4)</tt>
-    |@ref string_type "string"|Gives the result of concatenating its arguments
+    |@ref string_type "string" or @ref char "char"|Gives the result of concatenating its arguments; a @ref char "char" is added as a one-character string with any other argument, so that <tt>c'a' + c'b'</tt> gives \c "ab", <tt>c'a' + 1</tt> gives \c "a1" and <tt>c'a' + NOTHING</tt> gives \c "a" (see @ref char_plus)
     |@ref date_type "date"|Gives the result of adding date/time values (see @ref date_time_arithmetic)
     |@ref number_type "number"|Gives the result of adding its arguments
     |@ref float_type "float"|Gives the result of adding its arguments
@@ -2508,11 +2509,17 @@ if (x || y)
     @note Values replaced in a hash or object are released after the merge finishes and its lvalue locks are
     released, including after a partial merge fails; their destructors can read or modify the target.
 
+    A @ref char "char" \a expression is added exactly as its one-character string is, whatever the type of the
+    \a lvalue: <tt>int i = 1; i += c'5';</tt> gives \c 6, as <tt>i += "5"</tt> does, a list \a lvalue is appended
+    the string, and an \a lvalue with no value is assigned it; code-point addition takes \c int()
+    (<tt>i += int(c'5')</tt> gives \c 54).  See @ref char_plus.
+
     <b>Arguments Processed by +=</b>
     |!Argument|!Processing
     |\a lvalue (@ref list_type "list")|the expression will be evaluated and concatenated to the \a lvalue. If \a expression is a list, the lists will be concatenated, to ensure adding a single element to a list, use the @ref push "push operator"
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object")|the \a expression will be evaluated, and, if it is a hash or object, then it's members will be added to the \a lvalue, any duplicate elements in the \a lvalue will be overridden by elements in the \a expression.
     |\a lvalue (@ref string_type "string")|the \a expression will be evaluated and converted to a string if necessary and concatenated to the \a lvalue.
+    |\a lvalue (@ref char "char")|the \a lvalue is processed as a one-character string: it is assigned the string that concatenates the \a lvalue and the \a expression converted to a string (see @ref char_plus); a \c char lvalue cannot hold the string, so the operator is a parse error with an lvalue declared as \c char
     |\a lvalue (@ref number_type "number")|the \a expression will be evaluated and converted to a number if necessary and added to the \a lvalue.
     |\a lvalue (@ref float_type "float")|the \a expression will be evaluated and converted to a float if necessary and added to the \a lvalue.
     |\a lvalue (@ref binary_type "binary")|the \a expression will be evaluated and converted to a binary if necessary and added to the \a lvalue.

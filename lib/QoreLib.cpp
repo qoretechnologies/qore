@@ -3997,6 +3997,119 @@ int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeIn
     return 0;
 }
 
+int check_lvalue_string(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
+    // make sure the lvalue can be assigned a string value (a softchar lvalue converts a one-character string)
+    // raise a parse exception only if parse exceptions are not suppressed
+    if (!QoreTypeInfo::parseAccepts(typeInfo, stringTypeInfo)) {
+        if (getProgram()->getParseExceptionSink()) {
+            QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will "
+                "assign it a string value", QoreTypeInfo::getName(typeInfo), name);
+            qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
+        }
+        return -1;
+    }
+    return 0;
+}
+
+QoreStringNode* qore_plus_equals_char_string(const QoreValue v) {
+    assert(v.isChar());
+    // a char holds a valid codepoint, which UTF-8 always represents; a string that cannot be made is empty
+    QoreStringNode* rv = QoreValue::makeCharString(v.getChar(), QCS_UTF8, nullptr);
+    return rv ? rv : new QoreStringNode;
+}
+
+int64 qore_plus_equals_char_int_operand(const QoreValue v) {
+    assert(v.isChar());
+    SimpleRefHolder<QoreStringNode> str(qore_plus_equals_char_string(v));
+    return str->getAsBigInt();
+}
+
+double qore_plus_equals_char_float_operand(const QoreValue v) {
+    assert(v.isChar());
+    SimpleRefHolder<QoreStringNode> str(qore_plus_equals_char_string(v));
+    return str->getAsFloat();
+}
+
+//! the steps of QoreValue::getAsBigInt(), with a char converted as its string; \a CheckInt is false for a value that
+//! the caller knows is not an inline integer
+/** A copy of QoreValue::getAsBigInt() (lib/QoreValue.cpp), so that a non-char operand costs no more than that
+    conversion: keep both in step when a value tag is added or a step changes.
+*/
+template <bool CheckInt>
+static QORE_INTERN_ALWAYS_INLINE int64 qore_plus_equals_int_operand_steps(const QoreValue v) {
+    if constexpr (CheckInt) {
+        if (v.isInt()) {
+            return v.getInt();
+        }
+    }
+    if (v.isFloat()) {
+        return static_cast<int64>(v.getDouble());
+    }
+    if (v.isBool()) {
+        return v.getBool() ? 1 : 0;
+    }
+    if (v.isChar()) {
+        return qore_plus_equals_char_int_operand(v);
+    }
+    if (v.isEnum()) {
+        return qore_plus_equals_int_operand(v.getEnumMember()->getValue());
+    }
+    if (v.isPointer()) {
+        const AbstractQoreNode* n = v.get<const AbstractQoreNode>();
+        return n ? n->getAsBigInt() : 0;
+    }
+    if (v.isShortString()) {
+        char buf[8];
+        v.getShortString(buf);
+        return strtoll(buf, nullptr, 10);
+    }
+    if constexpr (!CheckInt) {
+        if (v.isInt()) {
+            return v.getInt();
+        }
+    }
+    return 0;
+}
+
+int64 qore_plus_equals_int_operand(const QoreValue v) {
+    return qore_plus_equals_int_operand_steps<true>(v);
+}
+
+int64 qore_plus_equals_boxed_int_operand(const QoreValue v) {
+    return qore_plus_equals_int_operand_steps<false>(v);
+}
+
+// the steps of QoreValue::getAsFloat() after its test for a float, with a char converted as its string: a copy of
+// QoreValue::getAsFloat() (lib/QoreValue.cpp), so that a non-char operand costs no more than that conversion; keep
+// both in step when a value tag is added or a step changes
+double qore_plus_equals_nonfloat_float_operand(const QoreValue v) {
+    if (v.isInt()) {
+        return static_cast<double>(v.getInt());
+    }
+    if (v.isBool()) {
+        return v.getBool() ? 1.0 : 0.0;
+    }
+    if (v.isChar()) {
+        return qore_plus_equals_char_float_operand(v);
+    }
+    if (v.isEnum()) {
+        return qore_plus_equals_float_operand(v.getEnumMember()->getValue());
+    }
+    if (v.isPointer()) {
+        const AbstractQoreNode* n = v.get<const AbstractQoreNode>();
+        return n ? n->getAsFloat() : 0.0;
+    }
+    if (v.isShortString()) {
+        char buf[8];
+        v.getShortString(buf);
+        return strtod(buf, nullptr);
+    }
+    if (v.isFloat()) {
+        return v.getDouble();
+    }
+    return 0.0;
+}
+
 int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
     // make sure the lvalue can be assigned a floating-point value
     // raise a parse exception only if parse exceptions are not suppressed

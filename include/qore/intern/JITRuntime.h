@@ -147,6 +147,8 @@ double qore_rt_div_float(double left, double right, ExceptionSink* xsink);
 
 //! Convert a QoreValue to int64_t
 int64_t qore_rt_to_int(uint64_t val);
+//! Convert the operand of += on an integer lvalue to int64_t: a char as its one-character string is
+int64_t qore_rt_plus_equals_operand_to_int(uint64_t val);
 
 //! Convert a QoreValue accepted by the timeout type to milliseconds
 int64_t qore_rt_to_timeout(uint64_t val);
