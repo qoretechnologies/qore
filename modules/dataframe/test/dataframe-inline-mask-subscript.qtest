@@ -12,6 +12,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 
 %requires QUnit
+%requires ../../../examples/test/TestInterpreter.qm
 %requires FsUtil
 
 %requires dataframe
@@ -59,7 +60,7 @@ printf(\"%d %d %y\\n\", df[m & n].numRows(), (m ^ n).count(), df[~n][\"id\"]);
     }
 
     constructor() : QUnit::Test("DataFrameInlineMaskSubscriptTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("inline RowMask expressions in each mode", \testModes());

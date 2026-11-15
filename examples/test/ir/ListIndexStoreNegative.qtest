@@ -16,6 +16,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -39,7 +40,7 @@ class ListIndexStoreNegativeTest inherits QUnit::Test {
     }
 
     private string runInMode(string code, string mode) {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = TestInterpreter::qore_interpreter();
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return "";
@@ -111,7 +112,7 @@ t();
             script.file.write("%modern\n%no-negative-offsets\nlist<auto> l = (1,);\nl[-1] = 99;\n");
             script.file.close();
             hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
-                ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0], mode, script.path));
+                TestInterpreter::qore_interpreter(), mode, script.path));
             assertNeq(0, r.rc, "refused: " + mode);
             assertRegex("PARSE-OPTION-ERROR: %no-negative-offsets cannot be used while %modern is in effect",
                 r.stderr + r.out, "refused: " + mode);

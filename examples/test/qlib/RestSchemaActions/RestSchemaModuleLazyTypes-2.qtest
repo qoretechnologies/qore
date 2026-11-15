@@ -12,6 +12,7 @@
 %requires Util
 %requires FsUtil
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %include RestSchemaModuleLazyTypes.qc
 

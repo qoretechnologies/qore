@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 # the process module bounds the time a child can run; without it, a child that hangs stalls the test until the test
@@ -45,7 +46,7 @@ class JitSyncCompilePriorityTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("JitSyncCompilePriorityTest", "1.0") {
-        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         foreach string mode in (Modes) {
             addTestCase(mode + ": a synchronous compile is not starved by the background queue", \syncFirstTest(),
                 (mode,));

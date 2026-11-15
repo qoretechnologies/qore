@@ -10,6 +10,7 @@
 %requires sshutil
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class SshUtilProgramRegistrationsTest
@@ -147,7 +148,7 @@ SshUtilRegistry::registerClientIdentityProvider(\"script\", new ClientProvider()
         f.write(ScriptCode);
         f.close();
 
-        string qore = ENV.QORE_BIN ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         int rc;
         string output = backquote(SshUtilProgramRegistrationsTest::quote(qore) + " "
             + SshUtilProgramRegistrationsTest::quote(script) + " 2>&1", \rc);

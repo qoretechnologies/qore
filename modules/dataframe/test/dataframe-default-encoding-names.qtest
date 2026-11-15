@@ -11,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 
 %requires QUnit
+%requires ../../../examples/test/TestInterpreter.qm
 %requires FsUtil
 %requires Util
 
@@ -61,7 +62,7 @@ class DataFrameDefaultEncodingNamesTest inherits QUnit::Test {
 
     #! runs the child script with the given default encoding and returns its results
     private hash<string, string> run(string encoding, string script, string mode, string dir) {
-        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore = TestInterpreter::qore_interpreter();
         string output = backquote(sprintf("QORE_CHARSET=%s %s %s %s %s 2>&1", encoding, qore, script, mode, dir));
         hash<string, string> results;
         foreach string line in (output.split("\n")) {

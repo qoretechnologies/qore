@@ -14,6 +14,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires uncontrolledprobe
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../ExecModeHarness.qm
 
@@ -194,7 +195,7 @@ allowed default arguments evaluated: 15
     }
 
     constructor() : Test("Uncontrolled API probe", "1.0") {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         addTestCase("a refused call evaluates no default argument", \defaultArgTest());
         addTestCase("an allowed call evaluates its default arguments", \defaultArgAllowedTest());

@@ -32,6 +32,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires DataProvider
 %requires i18n
@@ -2654,7 +2655,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
             env += " LD_LIBRARY_PATH=" + shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build"));
         }
         int rc;
-        output = backquote(sprintf("%s %s %s -C %s 2>&1", env, shellQuote(built ? build_qore : QORE_ARGV[0]),
+        output = backquote(sprintf("%s %s %s -C %s 2>&1", env, shellQuote(built ? build_qore : TestInterpreter::qore_interpreter()),
             shellQuote(root + DirSep + "bin/qore-data-provider-i18n"), args), \rc);
         return rc;
     }

@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires Util
 
@@ -67,7 +68,7 @@ class QfmtTest inherits QUnit::Test {
     #! Returns the interpreter running this test, which runs qfmt
     private string get_qore_path() {
         # not the qore found on PATH or in a build directory, which can be another version than the one tested
-        return ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        return TestInterpreter::qore_interpreter();
     }
 
     #! Run qfmt with given arguments and optional stdin input

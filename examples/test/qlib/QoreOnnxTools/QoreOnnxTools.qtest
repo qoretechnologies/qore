@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires QoreOnnxTools
 %requires ml
@@ -441,7 +442,7 @@ class QoreOnnxToolsTest inherits QUnit::Test {
 
     private static string makeCliCommand(list<string> args) {
         string root = get_script_dir() + "/../../../..";
-        string qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string cli = root + "/bin/qore-onnx";
         # qore-onnx requires reflection (and pulls in other binary modules
         # transitively); list every build/modules/<name> dir so CI runners

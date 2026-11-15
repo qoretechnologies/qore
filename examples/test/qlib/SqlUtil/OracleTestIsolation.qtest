@@ -9,6 +9,7 @@
 %requires Util
 %requires FsUtil
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./OracleTestIsolation.qm
@@ -109,7 +110,7 @@ class OracleTestIsolationTest inherits QUnit::Test {
         # the holder has no admin connection; when it has ended, however it ended, the shell that runs it says so, so
         # that a holder that fails before it holds the lock is reported instead of waited for
         system(sprintf("sh -c 'env -u QORE_DB_CONNSTR_ORACLE_SYS %s %s > %s/out 2>&1; echo ended > %s' &",
-            ENV.QORE_EXECUTABLE ?? "qore", script, dir, ready));
+            TestInterpreter::qore_interpreter(), script, dir, ready));
         File r();
         r.open2(ready);
         string line = r.readLine(False);

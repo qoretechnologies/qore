@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires dbitest
 
@@ -491,7 +492,7 @@ class DatasourceForkTest inherits QUnit::Test {
             "    printf(\"parent: done\\n\");\n"
             "}\n");
         script.file.close();
-        string output = backquote(sprintf("%s --enable-debug %s 2>&1", shellQuote(QORE_ARGV[0]),
+        string output = backquote(sprintf("%s --enable-debug %s 2>&1", shellQuote(TestInterpreter::qore_interpreter()),
             shellQuote(script.path)));
         assertRegex("opens=0 closes=0 commits=0 rollbacks=0 stmt_closes=0 inherited_calls=0", output);
         assertRegex("parent: done", output);

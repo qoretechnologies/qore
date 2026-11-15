@@ -12,6 +12,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires Util
 
 %exec-class ClosureDestructionOrderTest
@@ -65,7 +66,7 @@ our list<string> destruction_order = ();
         f.write(script);
         f.close();
 
-        string qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_exe = TestInterpreter::qore_interpreter();
         string cmd = sprintf("%s %s 2>&1", qore_exe, tmp_file);
         string output;
         int exit_code = 0;

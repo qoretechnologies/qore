@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires DataProvider
 %requires ProviderIndex
@@ -438,7 +439,7 @@ q.get();
         f.close();
 
         hash<ProviderIndexCreateOptions> opts = getOptions(1);
-        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore = TestInterpreter::qore_interpreter();
         if (qore.find(DirSep) >= 0) {
             qore = normalize_dir(qore);
         }
@@ -509,7 +510,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0], sub () {
         hash<ProviderIndexCreateOptions> opts = getOptions(1);
         # a worker command must be found in the PATH or given as an absolute path; the interpreter may have been
         # started with a path relative to the working directory, as run_tests.sh runs "build/qore"
-        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore = TestInterpreter::qore_interpreter();
         if (qore.find(DirSep) >= 0) {
             qore = normalize_dir(qore);
         }

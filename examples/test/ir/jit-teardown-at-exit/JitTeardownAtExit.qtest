@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class JitTeardownAtExitTest
 
@@ -41,7 +42,7 @@ class JitTeardownAtExitTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("JIT teardown at exit", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         # background compiles, compiled at the first call
         env = sprintf("env -u QORE_JIT_SYNC_COMPILE -u DEBUGINFOD_URLS LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "

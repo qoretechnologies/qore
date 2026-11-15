@@ -10,6 +10,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires Util
 %requires FsUtil
 
@@ -53,7 +54,7 @@ printf(\"%y %y %y %y %y\\n\", namedSize(1), namedSize(1.5), positionalSize(2), n
 
     constructor() : Test("AOTRuntimeNamedCallReturnTypeTest", "1.0") {
         # the paths are made absolute, because the compiler runs in a temporary directory
-        qore_bin = AOTRuntimeNamedCallReturnTypeTest::absolutePath(ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        qore_bin = AOTRuntimeNamedCallReturnTypeTest::absolutePath(TestInterpreter::qore_interpreter());
         libqore_dir = normalize_dir(ENV.QORE_LIBDIR ?? dirname(qore_bin));
         qcc_bin = AOTRuntimeNamedCallReturnTypeTest::absolutePath(ENV.QORE_QCC_EXECUTABLE ?? ENV.QCC ?? ENV.QORE_QCC
             ?? (libqore_dir + DirSep + "qcc"));

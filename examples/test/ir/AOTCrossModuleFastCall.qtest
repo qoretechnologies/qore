@@ -10,6 +10,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -70,7 +71,7 @@ sandbox: [True, 22]
 
     constructor() : QUnit::Test("AOTCrossModuleFastCallTest", "1.0", \ARGV) {
         ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         fixture_dir = get_script_dir() + "/AOTCrossModuleFastCall";
 

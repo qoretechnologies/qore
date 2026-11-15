@@ -37,6 +37,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class AOTInstanceOfTypePathTest
@@ -164,7 +165,7 @@ printf(\"second Program: %s\\n\", p.callFunction(\"run\"));
     }
 
     constructor() : QUnit::Test("AOTInstanceOfTypePathTest", "1.0") {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("AOT instanceof gives the results of the AST interpreter", \sameAsAstTest());

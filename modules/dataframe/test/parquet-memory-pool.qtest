@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../../../examples/test/TestInterpreter.qm
 %requires FsUtil
 
 %exec-class ParquetMemoryPoolTest
@@ -39,7 +40,7 @@ class ParquetMemoryPoolTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("Parquet memory pool", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         env = sprintf("env -u DEBUGINFOD_URLS LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
         script = get_script_dir() + "/data/parquet-memory-pool.q";

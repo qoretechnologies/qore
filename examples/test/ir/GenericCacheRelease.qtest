@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 
 %exec-class GenericCacheReleaseTest
 
@@ -30,7 +31,7 @@ class GenericCacheReleaseTest inherits QUnit::Test {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("dbg_generic_cache_counts() is only built with DEBUG");
         }
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         int status;
         string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s/GenericCacheRelease.qr "

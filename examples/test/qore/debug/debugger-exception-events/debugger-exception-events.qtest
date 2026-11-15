@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 
@@ -283,7 +284,7 @@ c_t_wh/1: [\"DIVISION-BY-ZERO@168\"] rv=null
     }
 
     constructor() : QUnit::Test("DebuggerExceptionEventsTest", "1.0") {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
         script = get_script_dir() + "/DebuggerExceptionEvents.q";

@@ -26,6 +26,7 @@
 %no-child-restrictions
 
 %requires QUnit
+%requires ../TestInterpreter.qm
 
 %exec-class AOTExampleScriptsTest
 
@@ -43,7 +44,7 @@ class AOTExampleScriptsTest inherits QUnit::Test {
         source_root = realpath(get_script_dir() + "/../../..");
         script_dir = source_root + "/examples/aot";
 
-        string qore_bin = ENV.QORE_BINARY ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         *string build_dir = realpath(ENV.QORE_BUILD_DIR ?? ENV.QORE_LIBDIR
             ?? (ENV.LIBQORE_BINARY ? dirname(ENV.LIBQORE_BINARY) : dirname(qore_bin)));
         # realpath() raises an exception for a path that does not exist

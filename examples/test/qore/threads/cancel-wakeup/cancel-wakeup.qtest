@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 
@@ -62,7 +63,7 @@ class CancelWakeupTest inherits QUnit::Test {
         if (PlatformOS == "Windows") {
             testSkip("requires POSIX processes and FIFOs");
         }
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         string worker = get_script_dir() + "/cancel-wakeup-worker.q";
         string pem = get_script_dir() + "/../../classes/HTTPClient/h2-proxy-handoff/localhost.pem";
         foreach string mode in (ExecModeHarness::ExecModes) {

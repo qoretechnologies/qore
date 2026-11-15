@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires FsUtil
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class StackDumpTest
 
@@ -392,7 +393,7 @@ int sub run_test() {
     }
 
     private static string getQoreBinary() {
-        return ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        return TestInterpreter::qore_interpreter();
     }
 }
 

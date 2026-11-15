@@ -10,6 +10,7 @@
 %requires Util
 %requires FsUtil
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires OpenApi3
 %requires json
 
@@ -303,7 +304,7 @@ class OpenApi3TypeCacheLifetimeTest inherits QUnit::Test {
     private hash<auto> getHubScans(int n) {
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
-        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore = TestInterpreter::qore_interpreter();
         string cmd = sprintf("QORE_SCAN_STATS=%s %s %s %d 2>&1", dir + DirSep + "scan-stats", qore,
             get_script_dir() + DirSep + "OpenApi3HubScans.q", n);
         string output = backquote(cmd);

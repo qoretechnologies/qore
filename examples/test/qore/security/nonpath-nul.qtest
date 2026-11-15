@@ -14,6 +14,7 @@
 %requires Util
 %requires FsUtil
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class NonPathNulTest
 
@@ -87,7 +88,7 @@ class NonPathNulTest inherits QUnit::Test {
             # the command cut at the NUL character would print "exec-ran"
             f.write("%modern\nexec(\"echo exec-ran\\x00-and-more\");\n");
         }
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         int rc;
         string output = backquote(sprintf("%s %s 2>&1", qore_bin, script), \rc);
         assertNeq(0, rc);

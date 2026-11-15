@@ -5,8 +5,9 @@
 
 %modern
 %no-child-restrictions
+%requires ../TestInterpreter.qm
 
-string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 string timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
     "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");

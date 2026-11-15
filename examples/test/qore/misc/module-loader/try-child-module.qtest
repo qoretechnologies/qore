@@ -20,6 +20,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires FsUtil
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 
 %exec-class TryChildModuleTest
 
@@ -52,7 +53,7 @@ public class TryChildModuleTest inherits QUnit::Test {
             dir = getcwd() + "/" + dir;
         }
 
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
 
         set_return_value(main());
     }

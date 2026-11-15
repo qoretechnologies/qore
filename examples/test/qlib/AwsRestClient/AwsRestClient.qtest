@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Logger
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires Mime
 %requires ConnectionProvider
 %requires HttpServerUtil
@@ -312,7 +313,7 @@ class AwsTest inherits QUnit::Test {
         on_exit delete sts_http;
 
         string script = get_script_dir() + "/assume-role-without-xml.q";
-        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore = TestInterpreter::qore_interpreter();
         string qlib = normalize_dir(get_script_dir() + "/../../../../qlib");
         *string module_dir = ENV.QORE_MODULE_DIR;
         string env = sprintf("QORE_MODULE_DIR=%s", shellQuote(qlib + (module_dir ? ":" + module_dir : "")));

@@ -10,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./PgsqlTestIsolation.qm
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires Util
 %requires FsUtil
 %requires ../../LoaderWarnings.qm
@@ -228,7 +229,7 @@ class PgsqlUpsertDiagnosticsTest inherits QUnit::Test {
         string stdout_path = tmp_dir + "/stdout.txt";
         string stderr_path = tmp_dir + "/stderr.txt";
         # the child is the interpreter running this test, as the qore found on PATH can be another version or missing
-        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore = TestInterpreter::qore_interpreter();
         probe.rc = system(sprintf("%s %s%s %s > %s 2> %s", shellQuote(qore),
             form == "source" ? "-DSourceModules " : "", shellQuote(probe_path), shellQuote(result_path),
             shellQuote(stdout_path), shellQuote(stderr_path)));

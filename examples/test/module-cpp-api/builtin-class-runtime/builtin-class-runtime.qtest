@@ -9,6 +9,7 @@
 %requires cppapiuser
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class BuiltinClassRuntimeTest
@@ -68,7 +69,7 @@ printf(\"done\\n\");
     }
 
     constructor() : QUnit::Test("builtin classes of a module loaded at runtime", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         addTestCase("subclasses parsed while the class runs", \subclassParseTest());
         set_return_value(main());

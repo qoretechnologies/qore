@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires ../../../ExecModeHarness.qm
 
 %exec-class DestructorRecursionTest
@@ -25,7 +26,7 @@ class DestructorRecursionTest inherits QUnit::Test {
     }
 
     runawayTest() {
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         string worker = get_script_dir() + "/destructor-recursion-worker.q";
         foreach string mode in (ExecModeHarness::ExecModes) {
             string out = ExecModeHarness::run(sprintf("'%s' --exec-mode=%s '%s'", qore, mode, worker),

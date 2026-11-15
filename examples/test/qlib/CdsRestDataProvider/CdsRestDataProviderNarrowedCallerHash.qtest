@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires Util
 
 %exec-class CdsRestDataProviderNarrowedCallerHashTest
@@ -66,7 +67,7 @@ class CdsRestDataProviderNarrowedCallerHashTest inherits QUnit::Test {
         # interpreter options are the arguments before the script
         list<string> opts = map $1, QORE_ARGV[1..], $1 =~ /^-/;
         string helper = get_script_dir() + "CdsRestDataProviderAutoConfigHelper.q";
-        string cmd = sprintf("env CDS_URL=%s %s %s %s %s 2>&1", shellQuote(CdsUrl), shellQuote(QORE_ARGV[0]),
+        string cmd = sprintf("env CDS_URL=%s %s %s %s %s 2>&1", shellQuote(CdsUrl), shellQuote(TestInterpreter::qore_interpreter()),
             (map shellQuote($1), opts).join(" "), shellQuote(helper), (map shellQuote($1), classes).join(" "));
         int rc;
         string out = backquote(cmd, \rc);

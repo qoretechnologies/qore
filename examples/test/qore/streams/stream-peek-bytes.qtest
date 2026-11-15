@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class StreamPeekBytesTest
@@ -116,7 +117,7 @@ class StreamPeekBytesTest inherits QUnit::Test {
     }
 
     nativeReaders() {
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         string native = ENV.QORE_STREAM_PEEK_TEST ?? dirname(qore) + "/qore-stream-peek-test";
         if (!is_file(native)) {
             testSkip("the native stream peek test executable is not available");

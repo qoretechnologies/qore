@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class ThreadExitProgramReleaseTest
@@ -33,7 +34,7 @@ class ThreadExitProgramReleaseTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("ThreadExitProgramReleaseTest", "1.0") {
-        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         addTestCase("deleting a Program while a thread that ran code in it exits", \deleteDuringThreadExit());
         addTestCase("a thread exits after a Program it ran code in was deleted", \deleteBeforeThreadExit());
         addTestCase("a hold for another Program does not hold the thread", \holdForOtherProgram());

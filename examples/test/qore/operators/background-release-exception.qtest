@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires FsUtil
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class BackgroundReleaseExceptionTest
 
@@ -50,7 +51,7 @@ release.dec();
     }
 
     constructor() : QUnit::Test("BackgroundReleaseExceptionTest", "1.0") {
-        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         addTestCase("an object captured by the closure", \testCapturedObject());
         addTestCase("an object passed as an argument of a call reference", \testArgumentObject());
         addTestCase("an object held by an operator", \testOperatorObject());

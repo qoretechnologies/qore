@@ -6,6 +6,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 %exec-class BlockScopeUnwindTest
@@ -92,9 +93,9 @@ class BlockScopeUnwindTest inherits QUnit::Test {
     }
 
     private {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR
-            ?? dirname(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore");
+            ?? dirname(TestInterpreter::qore_interpreter());
         string worker = get_script_dir() + DirSep + "unwind-checks.q";
         string top_level_worker = get_script_dir() + DirSep + "top-level-unwind.q";
     }

@@ -20,6 +20,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class NonblockingIoTest
@@ -443,7 +444,7 @@ class NonblockingIoTest inherits QUnit::Test {
         File sync = sync_pipe.r;
         File sync_w = sync_pipe.w;
         string sync_path = sync_pipe.path;
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore = TestInterpreter::qore_interpreter();
         string cmd = sprintf("%s %s %s %s %s %s %d", qore, join_paths(get_script_dir(), "NonblockingStdio.qr"),
             data_pipe.path, sync_path, stream, method, size);
         Counter done(1);

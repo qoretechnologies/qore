@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires ../../../ExecModeHarness.qm
 
 %exec-class WatchPollCancelTest
@@ -26,7 +27,7 @@ class WatchPollCancelTest inherits QUnit::Test {
     }
 
     stopRepeatedly() {
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         string worker = get_script_dir() + "/watch-poll-cancel-worker.q";
         foreach string mode in (ExecModeHarness::ExecModes) {
             string out = ExecModeHarness::run(sprintf("'%s' --exec-mode=%s '%s' 500", qore, mode, worker),
