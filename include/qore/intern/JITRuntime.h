@@ -147,6 +147,8 @@ double qore_rt_div_float(double left, double right, ExceptionSink* xsink);
 
 //! Convert a QoreValue to int64_t
 int64_t qore_rt_to_int(uint64_t val);
+//! Convert the operand of += on an integer lvalue to int64_t: a char as its one-character string is
+int64_t qore_rt_plus_equals_operand_to_int(uint64_t val);
 
 //! Convert a QoreValue accepted by the timeout type to milliseconds
 int64_t qore_rt_to_timeout(uint64_t val);
@@ -516,8 +518,8 @@ void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache, uint64_t* tra
 uint8_t qore_rt_value_is_reference(uint64_t value);
 
 //! Returns the argument of an `any` parameter with the complex type of a list or hash stripped (qore#6032)
-/** Takes the reference of \a value and returns a reference: a shared container is copied with a plain type, as
-    QoreTypeInfo::acceptInputParam() does for an `any` parameter; any other value is returned as it is
+/** Takes the reference of \a value and returns a reference: a container with a complex type is copied with a plain
+    one, as QoreTypeInfo::acceptInputParam() does for an `any` parameter; any other value is returned as it is
 */
 uint64_t qore_rt_strip_any_param(uint64_t value);
 
@@ -1901,6 +1903,36 @@ QoreAOTContext* qore_rt_get_aot_call_target_context(QoreAOTContext* ctx, int32_t
 //! Try to resolve the callee AOT context for a pre-resolved direct call slot.
 //! Returns nullptr without raising when the target does not have cached AOT.
 QoreAOTContext* qore_rt_try_get_aot_call_target_context(QoreAOTContext* ctx, int32_t slot);
+
+//! The size of the buffer in a native frame that holds the state of a call of a function of another module
+constexpr size_t QORE_RT_CROSS_MODULE_CALL_STATE_SIZE = 1024;
+//! The alignment of that buffer
+constexpr size_t QORE_RT_CROSS_MODULE_CALL_STATE_ALIGN = 16;
+
+//! Resolves the native fast entry of a function of another AOT module for a direct call slot (qore#6035)
+/** @param ctx the caller's AOT context
+    @param slot the call slot
+    @param fast_symbol the symbol of the fast entry that the call was compiled for (its ABI contract)
+    @param fast_fn set to the fast entry, or nullptr
+
+    @return the callee's AOT context, with \a fast_fn set, if the call can be made natively; nullptr (without an
+    exception) if the call takes its runtime path: the callee has no registered fast entry with that symbol (a module
+    rebuilt with another ABI or loaded from source), runs in another Program than its own, or is generic
+*/
+QoreAOTContext* qore_rt_try_get_cross_module_fast_entry(QoreAOTContext* ctx, int32_t slot,
+    const char* fast_symbol, const void** fast_fn);
+
+//! Enters the Program of the callee of a native call of another module's function (qore#6035)
+/** Builds the call's state in \a state_buf (QORE_RT_CROSS_MODULE_CALL_STATE_SIZE bytes): the Program that runs the
+    function, its entry, and the runtime parse options of its module's code, as qore_rt_call_direct_aot() sets them;
+    qore_rt_leave_cross_module_call() must be called with the buffer in any case.
+
+    @return 0 if the call can be made, -1 if an exception was raised in \a xsink (the call is then not made)
+*/
+int qore_rt_enter_cross_module_call(QoreAOTContext* ctx, int32_t slot, void* state_buf, ExceptionSink* xsink);
+
+//! Leaves the Program entered by qore_rt_enter_cross_module_call() and destroys the state in \a state_buf
+void qore_rt_leave_cross_module_call(void* state_buf);
 
 //! Returns true when an assigned object is valid and needs no provenance guard.
 //! Used only to guard receiver-independent AOT fast entries; tagged receivers use guarded dispatch.

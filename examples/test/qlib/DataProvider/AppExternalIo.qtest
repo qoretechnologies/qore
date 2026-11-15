@@ -96,6 +96,8 @@ public class AppExternalIoTest inherits QUnit::Test {
         addTestCase("an explicitly sandboxed caller is refused an undeclared external I/O app",
             \explicitSandboxedTest());
         addTestCase("a sandboxed caller is refused an undeclared external I/O app", \sandboxedTest());
+        addTestCase("code that a sandbox allowing uncontrolled APIs governs is trusted for the rule",
+            \uncontrolledApiPolicyTest());
         addTestCase("a system-policy capability called by sandboxed code is refused unless it says it is trusted",
             \capabilityTest());
         addTestCase("the catalog refuses sandboxed code the providers of such an app's actions", \centralActionTest());
@@ -148,13 +150,25 @@ public class AppExternalIoTest inherits QUnit::Test {
     }
 
     #! Returns a Program with a sandbox that calls the code it is given
-    private static Program getSandboxed(int opts = PO_NEW_STYLE) {
+    /** @param allow_uncontrolled whether the sandbox allows uncontrolled APIs, as a host's sandbox for trusted code
+        does (SandboxManager::setUncontrolledApiPolicy())
+    */
+    private static Program getSandboxed(int opts = PO_NEW_STYLE, bool allow_uncontrolled = False) {
         SandboxManager sm();
         sm.blockPrivateNetworks();
         sm.setNetworkDefaultPolicy(True);
+        if (allow_uncontrolled) {
+            sm.setFilesystemDefaultPolicy(True);
+            sm.setUncontrolledApiPolicy(True);
+        }
         Program p(opts);
         p.setSandboxManager(sm);
-        p.parse("auto sub through(code c) { return c(); }", "app-external-io-sandbox");
+        # barrier(): a policy barrier that the sandboxed code establishes itself, unless its parse options forbid it
+        string src = "auto sub through(code c) { return c(); }\n";
+        if (!(opts & PO_NO_UNCONTROLLED_APIS)) {
+            src += "auto sub barrier(code c) { return SandboxManager::callWithSystemPolicy(c); }\n";
+        }
+        p.parse(src, "app-external-io-sandbox");
         return p;
     }
 
@@ -311,6 +325,40 @@ public class AppExternalIoTest inherits QUnit::Test {
         }
     }
 
+    uncontrolledApiPolicyTest() {
+        hash<DataProviderAppInfo> app = appInfo("AppExternalIoPolicy", {"external_io": True});
+        code check = sub () { DataProviderActionCatalog::checkSandboxAccess(app); };
+
+        # a sandbox that a host attaches to trusted code for its limits or interrupts, and that allows uncontrolled
+        # APIs: its code is not restricted, so it is not refused the app
+        Program trusted = getSandboxed(PO_NEW_STYLE, True);
+        assertTrue(trusted.callFunction("through", \SandboxManager::isSandboxed()), "a sandbox governs it");
+        assertFalse(trusted.callFunction("through", \SandboxManager::isRestricted()), "it is not restricted");
+        trusted.callFunction("through", check);
+        # also under a policy barrier and in a capability
+        trusted.callFunction("through", sub () { SandboxManager::callWithSystemPolicy(check); });
+        trusted.callFunction("through", SandboxManager::createSystemPolicyCall(check));
+
+        # the default sandbox refuses uncontrolled APIs: its code is restricted
+        Program restricted = getSandboxed();
+        assertTrue(restricted.callFunction("through", \SandboxManager::isRestricted()), "the default is restricted");
+        assertRefused(app, sub () { restricted.callFunction("through", check); }, "the default sandbox");
+
+        # code that the trusting sandbox governs and that runs a callback that the restricted code created: both
+        # govern it, and the restricting sandbox decides
+        code restricted_check = restricted.callFunction("through", code sub () {
+            return sub () { DataProviderActionCatalog::checkSandboxAccess(app); };
+        });
+        assertRefused(app, sub () { trusted.callFunction("through", restricted_check); },
+            "a callback of restricted code run under a trusting sandbox");
+
+        # the factories and connections of the catalog decide the same way: an explicit decision is not changed
+        trusted.callFunction("through", sub () { DataProviderActionCatalog::checkSandboxAccess(app, False); });
+        assertRefused(app, sub () {
+            trusted.callFunction("through", sub () { DataProviderActionCatalog::checkSandboxAccess(app, True); });
+        }, "a consumer that decides the caller is sandboxed");
+    }
+
     capabilityTest() {
         Program p = getSandboxed();
         hash<DataProviderAppInfo> app = appInfo("AppExternalIoCapability", {"external_io": True});
@@ -319,9 +367,19 @@ public class AppExternalIoTest inherits QUnit::Test {
         # the default fails closed: a capability called by sandboxed code still serves a sandboxed caller
         assertRefused(app, sub () { p.callFunction("through", SandboxManager::createSystemPolicyCall(check)); },
             "a system-policy capability called by sandboxed code");
+        # a policy barrier that trusted code establishes for the sandboxed code: the barrier is established (it is
+        # judged by the Program of the trusted code), and the catalog sees the sandbox through it
         assertRefused(app, sub () {
             p.callFunction("through", sub () { SandboxManager::callWithSystemPolicy(check); });
-        }, "a policy barrier in sandboxed code");
+        }, "a policy barrier of trusted code called by sandboxed code");
+        # qore#5741: the default sandbox refuses the sandboxed code a policy barrier of its own at run time, before the
+        # app is checked
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*callWithSystemPolicy", \p.callFunction(),
+            ("barrier", check), "a policy barrier in sandboxed code");
+        # under a sandbox that allows uncontrolled APIs, the sandboxed code's own barrier is established; the code is
+        # not restricted, so the app is not refused
+        Program trusting = getSandboxed(PO_NEW_STYLE, True);
+        trusting.callFunction("barrier", check);
         # trusted code that uses the app on purpose in a capability says so
         p.callFunction("through", SandboxManager::createSystemPolicyCall(sub () {
             DataProviderActionCatalog::checkSandboxAccess(app, False);
@@ -506,11 +564,23 @@ public class AppExternalIoTest inherits QUnit::Test {
                 DataProviderActionCatalog::registerAction(action);
             }));
         }, NOTHING, "registerAction in a capability");
+        code register_action = sub () { DataProviderActionCatalog::registerAction(action); };
+        # a policy barrier that trusted code establishes for the sandboxed code: the barrier is established (it is
+        # judged by the Program of the trusted code), and the catalog refuses the registration
         assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", sub () {
-            p.callFunction("through", sub () {
-                SandboxManager::callWithSystemPolicy(sub () { DataProviderActionCatalog::registerAction(action); });
-            });
-        }, NOTHING, "registerAction under a policy barrier");
+            p.callFunction("through", sub () { SandboxManager::callWithSystemPolicy(register_action); });
+        }, NOTHING, "registerAction under a policy barrier of trusted code");
+        # qore#5741: the default sandbox refuses the sandboxed code a policy barrier of its own at run time
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*callWithSystemPolicy", \p.callFunction(),
+            ("barrier", register_action), "registerAction under a policy barrier of the sandboxed code");
+        # under a sandbox that allows uncontrolled APIs, the sandboxed code's own barrier is established, and the
+        # catalog refuses the registration: what code that a sandbox governs registers carries that sandbox
+        Program trusting = getSandboxed(PO_NEW_STYLE, True);
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", \trusting.callFunction(), ("barrier", register_action),
+            "registerAction under a policy barrier of code that a trusting sandbox governs");
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", sub () {
+            trusting.callFunction("through", sub () { SandboxManager::callWithSystemPolicy(register_action); });
+        }, NOTHING, "registerAction under a policy barrier of trusted code for code that a trusting sandbox governs");
         assertNothing(DataProviderActionCatalog::getAppAction(owned, "tenant"));
         # trusted code registers the same action
         DataProviderActionCatalog::registerAction(action);

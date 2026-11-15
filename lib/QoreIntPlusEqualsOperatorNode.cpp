@@ -48,5 +48,6 @@ QoreValue QoreIntPlusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
         return v.plusEqualsBigInt(ms, "<+= operator>");
     }
 
-    return v.plusEqualsBigInt(rh->getAsBigInt(), "<+= operator>");
+    // a char is added as its one-character string is (qore_plus_equals_int_operand())
+    return v.plusEqualsBigInt(qore_plus_equals_int_operand(*rh), "<+= operator>");
 }

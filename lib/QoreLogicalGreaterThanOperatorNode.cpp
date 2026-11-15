@@ -249,8 +249,9 @@ bool QoreLogicalGreaterThanOperatorNode::doGreaterThan(const QoreValue& lh, cons
     }
 
     if (lt == NT_DATE || rt == NT_DATE) {
-        DateTimeValueHelper ld(l);
-        DateTimeValueHelper rd(r);
+        // a number converted to a relative date out of range raises INVALID-DATE (qore#6103)
+        DateTimeValueHelper ld(l, xsink);
+        DateTimeValueHelper rd(r, xsink);
         return DateTime::compareDates(*ld, *rd) > 0;
     }
 
