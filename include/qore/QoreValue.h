@@ -564,7 +564,8 @@ public:
         tag test for the fast path of code that handles those values separately
     */
     DLLLOCAL bool isPlainPointer() const {
-        return tag() == TAG_POINTER;
+        // one shift and compare, as for isShortString()
+        return (bits >> 48) == TAG16_POINTER;
     }
 
     //! Returns true if the value is a short string stored inline

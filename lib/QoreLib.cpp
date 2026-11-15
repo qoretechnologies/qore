@@ -3942,9 +3942,9 @@ static QORE_INTERN_NOINLINE QoreValue replace_enum_value_for_write(QoreValue& v)
 }
 
 void ensure_unique(QoreValue& v, ExceptionSink* xsink) {
-    if (v.isEnum()) {
+    if (v.isEnum()) [[unlikely]] {
         // replaces the enum value with an owned copy of its base value and releases the enum value
-        qore_value_copy_on_write(v).discard(xsink);
+        replace_enum_value_for_write(v).discard(xsink);
         return;
     }
 
@@ -3988,9 +3988,8 @@ QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* copy) {
 }
 
 QoreValue qore_value_copy_on_write(QoreValue& v) {
-    if (v.isEnum()) [[unlikely]] {
-        return replace_enum_value_for_write(v);
-    }
+    // an enum value does not own its base value's node: its callers replace it with an owned copy instead
+    assert(!v.isEnum());
     AbstractQoreNode* n = v.getInternalNode();
     assert(n && n->getType() != NT_OBJECT);
     if (n->is_unique()) {
