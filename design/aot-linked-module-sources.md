@@ -92,8 +92,11 @@ directories of the module path, in the flat and the split forms, each name with 
 module is rebuilt then, and is left as it is otherwise, also when another file is added to a directory of the module
 path.  After the rebuild the paths of a module that is available are no longer listed, and the stamp is left as it
 is; the stamp records the time of the list, so that a module that is installed again after a rebuild without it is
-seen too.  The directive is looked for when CMake configures the module: a directive added to a module is taken into
-account when CMake runs again.  The paths are not in the depfile nor in the fingerprint file: a path that does not
+seen too.  The directive is looked for in the module's `.qm` and `.qc` files when CMake configures the module: a directive
+added to a module is taken into account when CMake runs again, and one in a file that an `%include` directive opens
+is not seen.  A module that requires the rebuilt one is rebuilt in turn, as its depfile lists the rebuilt module.  The
+paths are absolute (a relative module path entry is resolved against the directory qcc runs in), as the check runs in
+another directory, and the qmod cache stores the list with the module (`qmod-build-cache.md`).  The paths are not in the depfile nor in the fingerprint file: a path that does not
 exist would make the module out of date in every build, and the loader checks the modules of failed `%try-module`
 directives itself.
 

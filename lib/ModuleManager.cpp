@@ -4250,7 +4250,14 @@ void QoreModuleManager::getModuleCandidatePaths(const char* name, QoreProgram* p
         bool found = !stat(path.c_str(), &sb) && S_ISREG(sb.st_mode);
         if (missing) {
             if (!found) {
-                files.emplace_back(path.c_str());
+                // an absolute path: the build checks it from another directory than the one qcc runs in
+                if (path.c_str()[0] == '/') {
+                    files.emplace_back(path.c_str());
+                } else {
+                    char* cwd = getcwd(nullptr, 0);
+                    files.emplace_back(cwd ? std::string(cwd) + "/" + path.c_str() : std::string(path.c_str()));
+                    free(cwd);
+                }
             }
             return;
         }

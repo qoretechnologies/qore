@@ -11692,7 +11692,7 @@ int main(int argc, char** argv) {
                                        std::string(), source_file,
                                        &module_deps, qcc_output_is_qmod(output))
                         || (qcc_output_is_qmod(output)
-                            && !write_optional_module_candidates(depfile_path, optional_candidates)))) {
+                            && !write_optional_module_candidates(depfile_path, std::move(optional_candidates))))) {
                 rc = 1;
             }
         }
@@ -11729,7 +11729,7 @@ int main(int argc, char** argv) {
                                                 source_file, nullptr,
                                                 &module_deps, qcc_output_is_qmod(output))
                     || (qcc_output_is_qmod(output)
-                        && !write_optional_module_candidates(depfile_path, optional_candidates)))) {
+                        && !write_optional_module_candidates(depfile_path, std::move(optional_candidates))))) {
                 rc = 1;
             }
         }

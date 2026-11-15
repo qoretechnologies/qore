@@ -1083,7 +1083,18 @@ qore_external_user_module(\"qlib/Fixture\" \"\")
 project(QoreQmodOptionalModule NONE)
 find_package(Qore REQUIRED)
 qore_external_user_module(\"qlib/OptFixture.qm\" \"\")
+qore_external_user_module(\"qlib/OptParen.qm\" \"\")
 ");
+        # the directive with its exception variable right after it, without a space
+        write(src_dir + "/qlib/OptParen.qm", "%modern\n"
+            "%try-module($ex) OptionalDep6145Paren\n"
+            "%endtry\n"
+            "module OptParen {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"optional module fixture\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n");
         # a qcc that lists the path where the optional module could be installed while it is not there, as qcc does
         # (<depfile>.optional), and nothing once it is: the module is then available, and compiled in
         string candidate = module_dir + "/OptionalDep6145.qmod";
@@ -1107,7 +1118,11 @@ qore_external_user_module(\"qlib/OptFixture.qm\" \"\")
             "echo qmod > \"$out\"\n"
             "[ -n \"$dep\" ] && echo \"$out:\" > \"$dep\"\n"
             "if [ -n \"$dep\" ]; then\n"
-            "    if [ -f %s ]; then : > \"$dep.optional\"; else echo %s > \"$dep.optional\"; fi\n"
+            "    case \"$out\" in\n"
+            "        *OptFixture.qmod)\n"
+            "            if [ -f %s ]; then : > \"$dep.optional\"; else echo %s > \"$dep.optional\"; fi ;;\n"
+            "        *) : > \"$dep.optional\" ;;\n"
+            "    esac\n"
             "fi\n"
             "exit 0\n", shellQuote(log), shellQuote(candidate), shellQuote(candidate)));
         chmod(qcc, 0755);
@@ -1121,35 +1136,38 @@ qore_external_user_module(\"qlib/OptFixture.qm\" \"\")
         string qmod = build_dir + "/qlib-qmod/OptFixture.qmod";
         string build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
         assertTrue(is_file(qmod), "the fixture qmod is compiled: " + configure + build);
-        assertEq(1, compiles());
+        # each module is compiled once
+        assertEq(2, compiles());
         assertTrue(is_file(qmod + ".optional.stamp"), "the module with a %try-module directive has a stamp");
+        assertTrue(is_file(build_dir + "/qlib-qmod/OptParen.qmod.optional.stamp"),
+            "a %try-module($ex) directive is found too");
 
         # nothing changed: nothing is recompiled
         run(sprintf("cmake --build %s", shellQuote(build_dir)));
-        assertEq(1, compiles(), "an unchanged build recompiles nothing");
+        assertEq(2, compiles(), "an unchanged build recompiles nothing");
 
         # another file in the directory where the module could be installed: nothing is recompiled
         write(module_dir + "/Unrelated.qmod", "another module\n");
         write(module_dir + "/notes.txt", "a file\n");
         run(sprintf("cmake --build %s", shellQuote(build_dir)));
-        assertEq(1, compiles(), "an unrelated file in the module directory recompiles nothing");
+        assertEq(2, compiles(), "an unrelated file in the module directory recompiles nothing");
 
         # the optional module is installed: the qmod is recompiled, once
         write(candidate, "the optional module\n");
         build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
-        assertEq(2, compiles(), "the installed optional module recompiles the qmod: " + build);
+        assertEq(3, compiles(), "the installed optional module recompiles the qmod: " + build);
         run(sprintf("cmake --build %s", shellQuote(build_dir)));
-        assertEq(2, compiles(), "the build after the recompile recompiles nothing");
+        assertEq(3, compiles(), "the build after the recompile recompiles nothing");
 
         # the module is removed and the qmod is recompiled without it; installing it again recompiles it again
         unlink(candidate);
         TestFileTime::set_file_times(now() + 2s, src_dir + "/qlib/OptFixture.qm");
         run(sprintf("cmake --build %s", shellQuote(build_dir)));
-        assertEq(3, compiles(), "a changed source recompiles the qmod");
+        assertEq(4, compiles(), "a changed source recompiles the qmod");
         TestFileTime::set_file_times(now() + 4s, build_dir + "/qlib-qmod/OptFixture.qmod.d.optional");
         write(candidate, "the optional module again\n");
         build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
-        assertEq(4, compiles(), "the module installed again recompiles the qmod: " + build);
+        assertEq(5, compiles(), "the module installed again recompiles the qmod: " + build);
 
         # the real qcc lists the paths where a module of a failed %try-module directive could be installed
         string real_qcc = qore_build_dir + "/qcc";

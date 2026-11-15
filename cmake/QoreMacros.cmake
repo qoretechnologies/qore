@@ -2956,7 +2956,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     foreach (_qmod_try_source IN LISTS _qmod_try_sources)
         if (EXISTS "${_qmod_try_source}" AND NOT IS_DIRECTORY "${_qmod_try_source}")
             file(STRINGS "${_qmod_try_source}" _qmod_try_lines LIMIT_COUNT 1
-                REGEX "^[ \t]*%try-(reexport-)?module[ \t]")
+                REGEX "^[ \t]*%try-(reexport-)?module[ \t(]")
             if (_qmod_try_lines)
                 set(_qmod_optional_stamp ${_qmod_out}.optional.stamp)
                 break()
