@@ -2,8 +2,10 @@
 #
 # Writes a deterministic digest file for a newline-separated list of inputs.
 # The digest output is updated only when the input content summary changes;
-# SUCCESS_STAMP is always touched so mtime-driven build tools can complete the
-# rule without propagating unchanged content to downstream targets.
+# SUCCESS_STAMP, when given, is always touched so mtime-driven build tools can
+# complete the rule without propagating unchanged content to downstream
+# targets.  A target that runs the script on every build (the qcc format
+# fingerprint, see qore_aot_runtime_identity_targets()) gives none.
 
 # Script mode does not inherit the parent project's policy settings. Preserve
 # empty list entries until the explicit filter below removes blank input lines.
@@ -14,9 +16,6 @@ if (NOT DEFINED INPUT_LIST OR "${INPUT_LIST}" STREQUAL "")
 endif ()
 if (NOT DEFINED OUTPUT OR "${OUTPUT}" STREQUAL "")
     message(FATAL_ERROR "OUTPUT is required")
-endif ()
-if (NOT DEFINED SUCCESS_STAMP OR "${SUCCESS_STAMP}" STREQUAL "")
-    message(FATAL_ERROR "SUCCESS_STAMP is required")
 endif ()
 
 file(READ "${INPUT_LIST}" _input_text)
@@ -42,9 +41,11 @@ get_filename_component(_output_dir "${OUTPUT}" DIRECTORY)
 if (_output_dir)
     file(MAKE_DIRECTORY "${_output_dir}")
 endif ()
-get_filename_component(_success_stamp_dir "${SUCCESS_STAMP}" DIRECTORY)
-if (_success_stamp_dir)
-    file(MAKE_DIRECTORY "${_success_stamp_dir}")
+if (DEFINED SUCCESS_STAMP AND NOT "${SUCCESS_STAMP}" STREQUAL "")
+    get_filename_component(_success_stamp_dir "${SUCCESS_STAMP}" DIRECTORY)
+    if (_success_stamp_dir)
+        file(MAKE_DIRECTORY "${_success_stamp_dir}")
+    endif ()
 endif ()
 
 set(_digest "format=1\n")
@@ -73,4 +74,6 @@ if (NOT "${_current}" STREQUAL "${_digest}")
     file(WRITE "${OUTPUT}" "${_digest}")
 endif ()
 
-execute_process(COMMAND "${CMAKE_COMMAND}" -E touch "${SUCCESS_STAMP}")
+if (DEFINED SUCCESS_STAMP AND NOT "${SUCCESS_STAMP}" STREQUAL "")
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E touch "${SUCCESS_STAMP}")
+endif ()
