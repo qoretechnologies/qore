@@ -21,7 +21,7 @@ What may still be disabled on a locked Program:
 - options of style and backward compatibility: `PO_STYLE_OPTIONS`, the other options of `PO_MODERN`,
   `PO_REQUIRE_OUR`, and the keyword switches `PO_NO_TYPEDEF`, `PO_NO_ENUM` and `PO_NO_TRANSIENT`, which restrict how
   code is written, not what it can do, so that a locked child can parse code in another style;
-- positive options, which makes the Program more restrictive;
+- positive options, which make the Program more restrictive;
 - restrictions that the Program added itself after it was locked in, which its creator was free not to set.
 
 ## Implementation
@@ -36,4 +36,10 @@ What may still be disabled on a locked Program:
 - `examples/test/qore/classes/Program/parse-options.qtest`: a child may disable a restriction it set itself;
 - `examples/test/qore/classes/Program/locked-options-allowed.qtest`: what a locked child may still disable (style,
   free and self-added options, and the directives of another style);
-- the regression test of the restrictions that cannot be removed is pending (see the branch's notes).
+- `examples/test/qore/classes/Program/inherited-restrictions.qtest`: a child cannot disable a restriction it
+  inherited (with an int mask or a `ParseOptions` object, also when its parent is sandboxed), code parsed into it
+  afterwards still cannot use what it restricts, and a Program locked with `Program::lockOptions()` keeps the
+  restrictions it had then but may disable those added after the lock;
+- `examples/test/qore/classes/Program/locked-options-replace.qtest`: `Program::replaceParseOptions()` cannot drop a
+  locked restriction (one created with, inherited, locked with `lockOptions()`, or an extended one that an int
+  replacement cannot hold), while a replacement that only adds restrictions is made.
