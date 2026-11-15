@@ -131,6 +131,19 @@ public:
     // because invalid options can cause an exception to be thrown
     DLLLOCAL Datasource* get(DatasourceStatementHelper* dsh, ExceptionSink* xsink) const;
 
+    //! returns the user name of the connections of the pool, for messages
+    /** Immutable, so it is read without a lock; the values in use of a connection belong to the thread that holds it
+        (qore#6142)
+    */
+    DLLLOCAL const std::string& getUser() const {
+        return user;
+    }
+
+    //! returns the database name of the connections of the pool, for messages; see getUser()
+    DLLLOCAL const std::string& getDb() const {
+        return db;
+    }
+
     DLLLOCAL void setQueue(Queue* n_q, QoreValue n_arg, ExceptionSink* xsink) {
         if (q)
             q->deref(xsink);

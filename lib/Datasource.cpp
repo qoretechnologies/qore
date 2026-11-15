@@ -472,7 +472,7 @@ void qore_ds_private::statementExecuted(int rc) {
 }
 
 void qore_ds_private::clearTypedResultHashDeclCache() {
-    AutoLocker al(m);
+    QoreDsLock al(m);
     size_t count = 0;
     for (auto& i : typed_result_hashdecl_cache) {
         if (count && !(count % 100)) {
@@ -486,7 +486,7 @@ void qore_ds_private::clearTypedResultHashDeclCache() {
 
 const TypedHashDecl* qore_ds_private::getTypedResultHashDecl(const char* driver_name, const std::string& signature,
         const qore_dbi_typed_result_members_t& members, ExceptionSink* xsink) {
-    AutoLocker al(m);
+    QoreDsLock al(m);
 
     auto i = typed_result_hashdecl_cache.find(signature);
     if (i != typed_result_hashdecl_cache.end()) {
@@ -558,7 +558,7 @@ public:
     PendingOptionSetterHelper(qore_ds_private& ds, const char* name,
             const std::shared_ptr<const qore_ds_option_setter>& setter) : ds(ds) {
         assert(setter);
-        AutoLocker al(ds.m);
+        QoreDsLock al(ds.m);
         // an option is set by one thread at a time
         assert(!ds.pending_opt_setter);
         // the name is assigned first: if it cannot be, nothing is pending
@@ -570,7 +570,7 @@ public:
     ~PendingOptionSetterHelper() {
         // the reference is released after the lock: the caller holds another, but the lock is a leaf lock
         std::shared_ptr<const qore_ds_option_setter> setter;
-        AutoLocker al(ds.m);
+        QoreDsLock al(ds.m);
         setter.swap(ds.pending_opt_setter);
     }
 
@@ -592,6 +592,47 @@ thread_local void* dbg_option_commit_hook_arg = nullptr;
 void qore_ds_private::setDbgOptionCommitHook(dbg_option_commit_hook_t hook, void* arg) {
     dbg_option_commit_hook = hook;
     dbg_option_commit_hook_arg = arg;
+}
+
+namespace {
+//! the number of sections on a qore_ds_private::m that the current thread is in (qore#6142)
+thread_local int qore_ds_m_depth = 0;
+//! the hook that a view of the pending connection values calls, for the calling thread (qore#6142)
+thread_local qore_ds_pending_params::dbg_view_hook_t dbg_pending_view_hook = nullptr;
+thread_local void* dbg_pending_view_hook_arg = nullptr;
+}
+
+int QoreDsLock::dbgDepth() {
+    return qore_ds_m_depth;
+}
+
+QoreThreadLock& QoreDsLock::checkLeaf(QoreThreadLock& l) {
+    // QoreThreadLock is not recursive: a leaf section entered with an m held can deadlock, and a section that holds
+    // an m can call driver code (see QoreDsLock)
+    assert(!qore_ds_m_depth);
+    return l;
+}
+
+void QoreDsLock::dbgEnter() {
+    ++qore_ds_m_depth;
+}
+
+void QoreDsLock::dbgLeave() {
+    assert(qore_ds_m_depth > 0);
+    --qore_ds_m_depth;
+}
+
+void qore_ds_pending_params::setDbgViewHook(dbg_view_hook_t hook, void* arg) {
+    dbg_pending_view_hook = hook;
+    dbg_pending_view_hook_arg = arg;
+}
+
+void qore_ds_pending_params::dbgCheck(const QoreDsLock& l) const {
+    // the values are guarded by the lock of their owner, and by no other
+    assert(l.holds(m));
+    if (dbg_pending_view_hook) {
+        dbg_pending_view_hook(m, dbg_pending_view_hook_arg);
+    }
 }
 #endif
 
@@ -688,7 +729,7 @@ void qore_ds_private::prepareOption(const char* name, const std::shared_ptr<cons
         tmp.emplace(name, setter);
         prep.node = tmp.extract(tmp.begin());
     }
-    AutoLocker al(m);
+    QoreDsLock al(m);
     // an option is set by one thread at a time, and a driver does not set options from its own option-setting function
     assert(!placeholder_opt);
     // assigned first, so that nothing is changed if it cannot be
@@ -701,13 +742,13 @@ void qore_ds_private::prepareOption(const char* name, const std::shared_ptr<cons
 
 QoreDsApplyStoredOptionsHelper::QoreDsApplyStoredOptionsHelper(const Datasource& ds) : ds(ds) {
     qore_ds_private* priv = qore_ds_private::get(const_cast<Datasource&>(ds));
-    AutoLocker al(priv->m);
+    QoreDsLock al(priv->m);
     ++priv->applying_stored_options;
 }
 
 QoreDsApplyStoredOptionsHelper::~QoreDsApplyStoredOptionsHelper() {
     qore_ds_private* priv = qore_ds_private::get(const_cast<Datasource&>(ds));
-    AutoLocker al(priv->m);
+    QoreDsLock al(priv->m);
     assert(priv->applying_stored_options > 0);
     --priv->applying_stored_options;
 }
@@ -720,7 +761,7 @@ void qore_ds_private::cancelOption(const char* name, OptionCommitPrep& prep) noe
     if (!prep.member || !prep.created_member) {
         return;
     }
-    AutoLocker al(m);
+    QoreDsLock al(m);
     placeholder_opt = false;
     // the member created for the value, which still has no value: the option is set by one thread at a time
     assert(prep.member->val.isNothing());
@@ -743,7 +784,7 @@ void qore_ds_private::commitOption(const char* name, QoreValue val,
     // the pending setter of the option (see setOption()), released after the lock as well
     std::shared_ptr<const qore_ds_option_setter> old_pending;
 
-    AutoLocker al(m);
+    QoreDsLock al(m);
     // nothing below allocates or fails: the member and the record of the setter were allocated by prepareOption()
     hash_assignment_priv ha(*qore_hash_private::get(*opt), prep.member, prep.created_member);
     old_val = ha.swap(new_val.release());
@@ -766,6 +807,17 @@ void qore_ds_private::commitOption(const char* name, QoreValue val,
 }
 
 qore_ds_option_snapshot qore_ds_private::getOptionSnapshot() const {
+    return getOptionSnapshotIntern(nullptr);
+}
+
+qore_ds_copy_snapshot qore_ds_private::getCopySnapshot() const {
+    qore_ds_pending_params::Values vals;
+    qore_ds_option_snapshot opts = getOptionSnapshotIntern(&vals);
+    return qore_ds_copy_snapshot{std::move(opts), std::move(vals)};
+}
+
+qore_ds_option_snapshot qore_ds_private::getOptionSnapshotIntern(qore_ds_pending_params::Values* pending_vals)
+        const {
     // the values that the driver of an open connection reports, including its defaults; read first and without the
     // lock, as the driver is not called with it held.  Without a connection, the kept values below are the options
     ReferenceHolder<QoreHashNode> vals(private_data ? getCurrentOptionHash(true) : new QoreHashNode(autoTypeInfo),
@@ -776,7 +828,13 @@ qore_ds_option_snapshot qore_ds_private::getOptionSnapshot() const {
     qore_ds_option_setter_map_t setters;
     std::string pending;
     {
-        AutoLocker al(m);
+        // a leaf section: a copy is never made with an m held
+        QoreDsLock al(m, QoreDsLock::Leaf);
+        if (pending_vals) {
+            // the pending connection values, in the same section as the options (qore#6142)
+            qore_ds_pending_params::ConstView v(this->pending, al);
+            *pending_vals = v.get();
+        }
         ConstHashIterator hi(opt);
         while (hi.next()) {
             qore_hash_private::get(**kept)->setKeyValueIntern(hi.getKey(), hi.get().refSelf());
@@ -870,23 +928,25 @@ QoreHashNode* qore_ds_private::getConfigHash() const {
             h->setKeyValue("port", port, nullptr);
         }
     } else {
-        if (!p_username.empty()) {
-            h->setKeyValue("user", new QoreStringNode(p_username), nullptr);
+        // the pending values, copied with the lock held: another thread can be setting them (qore#6142)
+        const qore_ds_pending_params::Values p = getPendingValues();
+        if (!p.username.empty()) {
+            h->setKeyValue("user", new QoreStringNode(p.username), nullptr);
         }
-        if (!p_password.empty()) {
-            h->setKeyValue("pass", new QoreStringNode(p_password), nullptr);
+        if (!p.password.empty()) {
+            h->setKeyValue("pass", new QoreStringNode(p.password), nullptr);
         }
-        if (!p_dbname.empty()) {
-            h->setKeyValue("db", new QoreStringNode(p_dbname), nullptr);
+        if (!p.dbname.empty()) {
+            h->setKeyValue("db", new QoreStringNode(p.dbname), nullptr);
         }
-        if (!p_db_encoding.empty()) {
-            h->setKeyValue("charset", new QoreStringNode(p_db_encoding), nullptr);
+        if (!p.db_encoding.empty()) {
+            h->setKeyValue("charset", new QoreStringNode(p.db_encoding), nullptr);
         }
-        if (!p_hostname.empty()) {
-            h->setKeyValue("host", new QoreStringNode(p_hostname), nullptr);
+        if (!p.hostname.empty()) {
+            h->setKeyValue("host", new QoreStringNode(p.hostname), nullptr);
         }
-        if (p_port) {
-            h->setKeyValue("port", p_port, nullptr);
+        if (p.port) {
+            h->setKeyValue("port", p.port, nullptr);
         }
     }
 
@@ -924,23 +984,25 @@ QoreStringNode* qore_ds_private::getConfigString() const {
             str->sprintf(":%d", port);
         }
     } else {
-        if (!p_username.empty()) {
-            str->concat(p_username);
+        // the pending values, copied with the lock held: another thread can be setting them (qore#6142)
+        const qore_ds_pending_params::Values p = getPendingValues();
+        if (!p.username.empty()) {
+            str->concat(p.username);
         }
-        if (!p_password.empty()) {
-            str->sprintf("/%s", p_password.c_str());
+        if (!p.password.empty()) {
+            str->sprintf("/%s", p.password.c_str());
         }
-        if (!p_dbname.empty()) {
-            str->sprintf("@%s", p_dbname.c_str());
+        if (!p.dbname.empty()) {
+            str->sprintf("@%s", p.dbname.c_str());
         }
-        if (!p_db_encoding.empty()) {
-            str->sprintf("(%s)", p_db_encoding.c_str());
+        if (!p.db_encoding.empty()) {
+            str->sprintf("(%s)", p.db_encoding.c_str());
         }
-        if (!p_hostname.empty()) {
-            str->sprintf("%%%s", p_hostname.c_str());
+        if (!p.hostname.empty()) {
+            str->sprintf("%%%s", p.hostname.c_str());
         }
-        if (p_port) {
-            str->sprintf(":%d", p_port);
+        if (p.port) {
+            str->sprintf(":%d", p.port);
         }
     }
 
@@ -1081,7 +1143,7 @@ void qore_dbi_raise_fork_error(ExceptionSink* xsink, const Datasource& ds, const
 void qore_ds_private::abandon() {
     assert(isInherited());
     {
-        AutoLocker al(m);
+        QoreDsLock al(m);
         // the containers are replaced without being traversed; the statements drop their inherited data themselves
         if (!stmt_set.empty()) {
             std::unique_ptr<stmt_set_t> old(new stmt_set_t);
@@ -1158,7 +1220,7 @@ int Datasource::getCapabilities() const {
 }
 
 void qore_ds_private::adoptStatementData(QoreSQLStatement* stmt) {
-    AutoLocker al(m);
+    QoreDsLock al(m);
     stmt_set.erase(stmt);
     if (!stmt->getPrivateData()) {
         // the connection's thread already closed it
@@ -1978,27 +2040,27 @@ void Datasource::setPrivateData(void* data) {
 }
 
 void Datasource::setPendingUsername(const char* u) {
-    priv->p_username = u;
+    priv->setPendingString(&qore_ds_pending_params::Values::username, u);
 }
 
 void Datasource::setPendingPassword(const char* p) {
-    priv->p_password = p;
+    priv->setPendingString(&qore_ds_pending_params::Values::password, p);
 }
 
 void Datasource::setPendingDBName(const char* d) {
-    priv->p_dbname = d;
+    priv->setPendingString(&qore_ds_pending_params::Values::dbname, d);
 }
 
 void Datasource::setPendingDBEncoding(const char* c) {
-    priv->p_db_encoding = c;
+    priv->setPendingString(&qore_ds_pending_params::Values::db_encoding, c);
 }
 
 void Datasource::setPendingHostName(const char* h) {
-    priv->p_hostname = h;
+    priv->setPendingString(&qore_ds_pending_params::Values::hostname, h);
 }
 
 void Datasource::setPendingPort(int port) {
-    priv->p_port = port;
+    priv->setPendingPort(port);
 }
 
 const std::string &Datasource::getUsernameStr() const {
@@ -2065,28 +2127,35 @@ void Datasource::setQoreEncoding(const QoreEncoding* enc) {
     priv->qorecharset = enc;
 }
 
+namespace {
+//! returns a new string with \a str, or nullptr if it is empty
+QoreStringNode* qore_ds_pending_string(const std::string& str) {
+    return str.empty() ? nullptr : new QoreStringNode(str);
+}
+}
+
 QoreStringNode* Datasource::getPendingUsername() const {
-    return priv->p_username.empty() ? nullptr : new QoreStringNode(priv->p_username.c_str());
+    return qore_ds_pending_string(priv->getPendingString(&qore_ds_pending_params::Values::username));
 }
 
 QoreStringNode* Datasource::getPendingPassword() const {
-    return priv->p_password.empty() ? nullptr : new QoreStringNode(priv->p_password.c_str());
+    return qore_ds_pending_string(priv->getPendingString(&qore_ds_pending_params::Values::password));
 }
 
 QoreStringNode* Datasource::getPendingDBName() const {
-    return priv->p_dbname.empty() ? nullptr : new QoreStringNode(priv->p_dbname.c_str());
+    return qore_ds_pending_string(priv->getPendingString(&qore_ds_pending_params::Values::dbname));
 }
 
 QoreStringNode* Datasource::getPendingDBEncoding() const {
-    return priv->p_db_encoding.empty() ? nullptr : new QoreStringNode(priv->p_db_encoding.c_str());
+    return qore_ds_pending_string(priv->getPendingString(&qore_ds_pending_params::Values::db_encoding));
 }
 
 QoreStringNode* Datasource::getPendingHostName() const {
-    return priv->p_hostname.empty() ? nullptr : new QoreStringNode(priv->p_hostname.c_str());
+    return qore_ds_pending_string(priv->getPendingString(&qore_ds_pending_params::Values::hostname));
 }
 
 int Datasource::getPendingPort() const {
-    return priv->p_port;
+    return priv->getPendingPort();
 }
 
 const char* Datasource::getDriverName() const {

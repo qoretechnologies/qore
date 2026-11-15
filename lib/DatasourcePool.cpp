@@ -294,10 +294,10 @@ void DatasourcePool::cleanup(ExceptionSink* xsink) {
    sl.unlock();
 
 #ifndef DEBUG_1
-   xsink->raiseException("DATASOURCEPOOL-LOCK-EXCEPTION", "%s:%s@%s: TID %d terminated while in a transaction with connection %d; transaction will be automatically rolled back and the datasource returned to the pool", pool[0]->getDriverName(), pool[0]->getUsernameStr().c_str(), pool[0]->getDBNameStr().c_str(), tid, i->second);
+   xsink->raiseException("DATASOURCEPOOL-LOCK-EXCEPTION", "%s:%s@%s: TID %d terminated while in a transaction with connection %d; transaction will be automatically rolled back and the datasource returned to the pool", pool[0]->getDriverName(), config.getUser().c_str(), config.getDb().c_str(), tid, i->second);
 #else
    QoreString* sql = getAndResetSQL();
-   xsink->raiseException("DATASOURCEPOOL-LOCK-EXCEPTION", "%s:%s@%s: TID %d terminated while in a transaction; transaction will be automatically rolled back and the datasource returned to the pool\n%s", pool[0]->getDriverName(), pool[0]->getUsernameStr().c_str(), pool[0]->getDBNameStr().c_str(), tid, sql ? sql->getBuffer() : "<no data>");
+   xsink->raiseException("DATASOURCEPOOL-LOCK-EXCEPTION", "%s:%s@%s: TID %d terminated while in a transaction; transaction will be automatically rolled back and the datasource returned to the pool\n%s", pool[0]->getDriverName(), config.getUser().c_str(), config.getDb().c_str(), tid, sql ? sql->getBuffer() : "<no data>");
    if (sql)
       delete sql;
 #endif
@@ -333,11 +333,11 @@ void DatasourcePool::destructor(ExceptionSink* xsink) {
 
     for (unsigned j = 0; j < cmax; ++j) {
         if (j != curr && pool[j]->isInTransaction())
-            xsink->raiseException("DATASOURCEPOOL-ERROR", "%s:%s@%s: TID %d deleted DatasourcePool while TID %d using connection %d/%d was in a transaction", pool[0]->getDriverName(), pool[0]->getUsernameStr().c_str(), pool[0]->getDBNameStr().c_str(), q_gettid(), tid_list[j], j + 1, cmax);
+            xsink->raiseException("DATASOURCEPOOL-ERROR", "%s:%s@%s: TID %d deleted DatasourcePool while TID %d using connection %d/%d was in a transaction", pool[0]->getDriverName(), config.getUser().c_str(), config.getDb().c_str(), q_gettid(), tid_list[j], j + 1, cmax);
     }
 
     if (i != tmap.end() && pool[curr]->isInTransaction()) {
-        xsink->raiseException("DATASOURCEPOOL-LOCK-EXCEPTION", "%s:%s@%s: TID %d deleted DatasourcePool while in a transaction; transaction will be automatically rolled back", pool[0]->getDriverName(), pool[0]->getUsernameStr().c_str(), pool[0]->getDBNameStr().c_str(), tid);
+        xsink->raiseException("DATASOURCEPOOL-LOCK-EXCEPTION", "%s:%s@%s: TID %d deleted DatasourcePool while in a transaction; transaction will be automatically rolled back", pool[0]->getDriverName(), config.getUser().c_str(), config.getDb().c_str(), tid);
         sl.unlock();
 
         // execute rollback on Datasource before releasing to pool
@@ -588,16 +588,16 @@ Datasource* DatasourcePool::getDSIntern(bool& new_ds, int64& wait_total, Excepti
 
         if (!valid) {
             xsink->raiseException("DATASOURCEPOOL-ERROR", "%s:%s@%s: DatasourcePool deleted while TID %d waiting " \
-                "on a connection to become free", getDriverName(), pool[0]->getUsernameStr().c_str(),
-                pool[0]->getDBNameStr().c_str(), tid);
+                "on a connection to become free", getDriverName(), config.getUser().c_str(),
+                config.getDb().c_str(), tid);
             return nullptr;
         }
 
         if (rc && tl_timeout_ms) {
             xsink->raiseException("DATASOURCEPOOL-TIMEOUT", "%s:%s@%s: TID %d timed out on datasource pool after " \
                 "waiting " QLLD " millisecond%s for a free connection (max %d connections in use)",
-                                getDriverName(), pool[0]->getUsernameStr().c_str(),
-                                pool[0]->getDBNameStr().c_str(), tid,
+                                getDriverName(), config.getUser().c_str(),
+                                config.getDb().c_str(), tid,
                                 tl_timeout_ms, tl_timeout_ms == 1 ? "" : "s", max);
             return nullptr;
         }

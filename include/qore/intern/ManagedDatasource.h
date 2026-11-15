@@ -57,7 +57,64 @@ class ManagedDatasource : public AbstractThreadResource, public Datasource, publ
 
 protected:
     // connection/transaction lock
+    /** It is also the lock that the connection values in use are changed with (qore_ds_private::setConnectionValues()
+        is called with it held), so a thread that does not hold the connection reads them only with it held
+        (qore#6142).  It is taken and released only through DsLocker, lockDs() and unlockDs(), so that a debug build
+        knows the thread that holds it (see dbgHoldsDsLock())
+    */
     mutable QoreThreadLock ds_lock;
+
+#ifdef DEBUG
+    //! the thread that holds ds_lock (dbgThreadToken()), or nullptr (debug builds only); see dbgHoldsDsLock()
+    mutable std::atomic<const void*> ds_lock_owner{nullptr};
+
+    //! returns a value that identifies the current thread, cheaply (debug builds only)
+    DLLLOCAL static const void* dbgThreadToken() {
+        return (const void*)pthread_self();
+    }
+#endif
+
+    //! takes ds_lock
+    DLLLOCAL void lockDs() const {
+        ds_lock.lock();
+#ifdef DEBUG
+        ds_lock_owner.store(dbgThreadToken(), std::memory_order_relaxed);
+#endif
+    }
+
+    //! releases ds_lock
+    DLLLOCAL void unlockDs() const {
+#ifdef DEBUG
+        assert(dbgHoldsDsLock());
+        ds_lock_owner.store(nullptr, std::memory_order_relaxed);
+#endif
+        ds_lock.unlock();
+    }
+
+    //! holds ds_lock for its scope
+    class DsLocker {
+    public:
+        DLLLOCAL explicit DsLocker(const ManagedDatasource& ds) : ds(ds) {
+            ds.lockDs();
+        }
+
+        DLLLOCAL ~DsLocker() {
+            ds.unlockDs();
+        }
+
+        DsLocker(const DsLocker&) = delete;
+        DsLocker& operator=(const DsLocker&) = delete;
+
+    private:
+        const ManagedDatasource& ds;
+    };
+
+#ifdef DEBUG
+    //! returns true if the current thread holds ds_lock (debug builds only)
+    DLLLOCAL bool dbgHoldsDsLock() const {
+        return ds_lock_owner.load(std::memory_order_relaxed) == dbgThreadToken();
+    }
+#endif
 
     // TID of the thread holding the connection/transaction lock, or -1; see lockTid()
     std::atomic<int> tid{-1};
@@ -174,6 +231,9 @@ public:
         // datasource is next used (see forkCheckUnlocked())
         cond.reinitAfterFork();
         ds_lock.reinitAfterFork();
+#ifdef DEBUG
+        ds_lock_owner.store(nullptr, std::memory_order_relaxed);
+#endif
         waiting = 0;
     }
 
@@ -216,6 +276,8 @@ public:
     DLLLOCAL QoreStringNode* getPendingDBEncoding() const;
     DLLLOCAL QoreStringNode* getPendingHostName() const;
     DLLLOCAL int getPendingPort() const;
+    //! returns the port in use; read with ds_lock held, as the thread that holds the connection changes it
+    DLLLOCAL int getPort() const;
     DLLLOCAL void setTransactionLockTimeout(int t_ms);
     DLLLOCAL int getTransactionLockTimeout() const;
     // returns true if a new transaction was started
@@ -305,6 +367,15 @@ public:
         return lockTidInProcess() == q_gettid();
     }
 
+    //! the connection values in use are changed with ds_lock held (qore#6142)
+    DLLLOCAL virtual bool helperHoldsConnectionValuesLockImpl() const {
+#ifdef DEBUG
+        return dbgHoldsDsLock();
+#else
+        return true;
+#endif
+    }
+
     DLLLOCAL virtual void helperEndActionNoConnectImpl(bool new_transaction) {
         // the lock is released only if the action acquired it
         if (new_transaction) {
@@ -359,23 +430,23 @@ public:
     */
     DLLLOCAL DatasourceLockHelper(ManagedDatasource& n_ds, ExceptionSink* xsink, QoreDbiForkCheck fork_mode)
             : ds(n_ds) {
-        ds.ds_lock.lock();
+        ds.lockDs();
         if (ds.forkCheckUnlocked(xsink, fork_mode) < 0) {
             valid = false;
-            ds.ds_lock.unlock();
+            ds.unlockDs();
             return;
         }
         had_lock = ds.lockTid() == q_gettid();
         valid = !ds.grabLock(xsink);
         if (!valid)
-            ds.ds_lock.unlock();
+            ds.unlockDs();
     }
 
     DLLLOCAL ~DatasourceLockHelper() {
         if (valid) {
             if (!had_lock)
                 ds.releaseLockIntern();
-            ds.ds_lock.unlock();
+            ds.unlockDs();
         }
     }
 

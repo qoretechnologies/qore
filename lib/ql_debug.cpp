@@ -120,6 +120,8 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/resource.h>
+#include <csignal>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -10475,6 +10477,385 @@ static void ut_datasource_option_commit_window(UnitTestCounters& c) {
     xsink.clear();
     ut_dsopt_seen_setter.reset();
 }
+
+namespace {
+//! what the hook of the views of the pending connection values observed (qore#6142)
+struct UtDsPendingProbe {
+    //! the number of critical sections on the pending values
+    int calls = 0;
+    //! the number of them in which another thread found the lock of the values held
+    int busy = 0;
+};
+
+//! the hook of the views of the pending connection values: another thread tries to take their lock, which must be
+//! held by this thread
+/** The other thread is joined before the hook returns, and it releases the lock at once if it got it, so the result
+    does not depend on timing: with the lock held, trylock() fails every time; without it, it succeeds every time
+*/
+void ut_ds_pending_hook(QoreThreadLock& m, void* arg) {
+    UtDsPendingProbe& p = *static_cast<UtDsPendingProbe*>(arg);
+    ++p.calls;
+    bool busy = false;
+    std::thread t([&m, &busy]() {
+        if (m.trylock()) {
+            busy = true;
+        } else {
+            m.unlock();
+        }
+    });
+    t.join();
+    if (busy) {
+        ++p.busy;
+    }
+}
+
+//! sets the hook of the views of the pending connection values for the current scope
+class UtDsPendingHookGuard {
+public:
+    UtDsPendingHookGuard(UtDsPendingProbe& p) {
+        qore_ds_pending_params::setDbgViewHook(ut_ds_pending_hook, &p);
+    }
+
+    ~UtDsPendingHookGuard() {
+        qore_ds_pending_params::setDbgViewHook(nullptr, nullptr);
+    }
+
+    UtDsPendingHookGuard(const UtDsPendingHookGuard&) = delete;
+    UtDsPendingHookGuard& operator=(const UtDsPendingHookGuard&) = delete;
+};
+
+//! runs \a f with the hook set, and checks that it entered exactly \a expected sections, each with the lock held
+template <typename F>
+void ut_ds_pending_sections(UnitTestCounters& c, int expected, const std::string& msg, F f) {
+    UtDsPendingProbe p;
+    {
+        UtDsPendingHookGuard g(p);
+        f();
+    }
+    UT_ASSERT_EQ(c, expected, p.calls, (msg + ": the number of sections on the pending values").c_str());
+    UT_ASSERT_EQ(c, p.calls, p.busy, (msg + ": the lock is held in every section").c_str());
+    UT_ASSERT_EQ(c, 0, QoreDsLock::dbgDepth(), (msg + ": no section is left entered").c_str());
+}
+
+//! returns the value of a string or "<none>"
+std::string ut_ds_str(QoreStringNode* str) {
+    SimpleRefHolder<QoreStringNode> h(str);
+    return str ? str->c_str() : "<none>";
+}
+
+//! returns the string value of a key of a hash, or "<none>"
+std::string ut_ds_hash_str(const QoreHashNode* h, const char* key) {
+    QoreValue v = h ? h->getKeyValue(key) : QoreValue();
+    if (v.getType() != NT_STRING) {
+        return "<none>";
+    }
+    return v.get<const QoreStringNode>()->c_str();
+}
+
+//! releases a ManagedDatasource
+struct UtManagedDsHolder {
+    ManagedDatasource* ds;
+
+    UtManagedDsHolder(ManagedDatasource* ds) : ds(ds) {
+    }
+
+    ~UtManagedDsHolder() {
+        if (ds) {
+            ExceptionSink xsink;
+            ds->deref(&xsink);
+            xsink.clear();
+        }
+    }
+
+    UtManagedDsHolder(const UtManagedDsHolder&) = delete;
+    UtManagedDsHolder& operator=(const UtManagedDsHolder&) = delete;
+};
+
+//! sets the connection values of a datasource
+template <typename T>
+void ut_ds_configure(T& ds, const char* tag) {
+    std::string t(tag);
+    ds.setPendingUsername((t + "-user").c_str());
+    ds.setPendingPassword((t + "-pass").c_str());
+    ds.setPendingDBName((t + "-db").c_str());
+    ds.setPendingDBEncoding("utf8");
+    ds.setPendingHostName((t + "-host").c_str());
+    ds.setPendingPort(1234);
+}
+
+#ifndef _Q_WINDOWS
+//! the result that a child process created with fork() reports to its parent
+struct UtDsChildResult {
+    int calls = -1;
+    int busy = -1;
+    int ok = 0;
+};
+
+//! waits for a child process; returns its wait status, or -1 if it cannot be waited for
+int ut_ds_wait_status(pid_t pid) {
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            return -1;
+        }
+    }
+    return status;
+}
+
+//! reads the result of a child process from \a fd; returns false if it did not report a complete result
+bool ut_ds_read_child_result(int fd, UtDsChildResult& r) {
+    char* p = reinterpret_cast<char*>(&r);
+    size_t left = sizeof(r);
+    while (left) {
+        ssize_t n = ::read(fd, p, left);
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
+        if (n <= 0) {
+            return false;
+        }
+        p += n;
+        left -= n;
+    }
+    return true;
+}
+
+//! in a child process created with fork(): an action of an inherited open ManagedDatasource that uses no connection
+//! (getOption()) gives the connection up and opens a new one, and so copies the pending values to the values in use
+/** With \a hook, the sections on the pending values are observed in the child (the hook's thread is started there);
+    the child reports the result through a pipe and exits.  A child that does not report, or does not exit with 0,
+    fails the test.
+*/
+void ut_ds_fork_get_option(UnitTestCounters& c, ManagedDatasource& md, bool hook, const char* msg) {
+    int fds[2];
+    UT_ASSERT_EQ(c, 0, pipe(fds), (std::string(msg) + ": pipe()").c_str());
+    pid_t pid = fork();
+    if (!pid) {
+        ::close(fds[0]);
+        UtDsChildResult r;
+        UtDsPendingProbe p;
+        {
+            std::unique_ptr<UtDsPendingHookGuard> g;
+            if (hook) {
+                g.reset(new UtDsPendingHookGuard(p));
+            }
+            ExceptionSink xsink;
+            ValueHolder v(md.getOption("opt", &xsink), &xsink);
+            // the connection of the parent was given up, and a new one was opened in this process
+            r.ok = !xsink && md.isOpen() && !qore_ds_private::get(md)->isInherited();
+            xsink.clear();
+        }
+        r.calls = p.calls;
+        r.busy = p.busy;
+        ssize_t n = ::write(fds[1], &r, sizeof(r));
+        _exit(n == static_cast<ssize_t>(sizeof(r)) ? 0 : 1);
+    }
+    ::close(fds[1]);
+    UT_ASSERT(c, pid > 0, (std::string(msg) + ": fork()").c_str());
+    if (pid <= 0) {
+        ::close(fds[0]);
+        return;
+    }
+    UtDsChildResult r;
+    bool reported = ut_ds_read_child_result(fds[0], r);
+    ::close(fds[0]);
+    int status = ut_ds_wait_status(pid);
+    UT_ASSERT(c, reported, (std::string(msg) + ": the child reports its result").c_str());
+    UT_ASSERT(c, WIFEXITED(status) && !WEXITSTATUS(status), (std::string(msg) + ": the child exits with 0").c_str());
+    UT_ASSERT(c, r.ok, (std::string(msg) + ": the child opened a connection of its own").c_str());
+    if (hook) {
+        UT_ASSERT_EQ(c, 1, r.calls, (std::string(msg) + ": the number of sections on the pending values").c_str());
+        UT_ASSERT_EQ(c, 1, r.busy, (std::string(msg) + ": the lock is held in the section").c_str());
+    }
+}
+#endif
+}
+
+//! qore#6142: the pending connection values of a datasource are read and written only with qore_ds_private::m held
+/** X1 (copy), X3 (the configuration of a closed datasource, the pending accessors and setters, the copy of the pending
+    values to another datasource and to the values in use) and X2 (the reopen of an inherited connection in a child
+    process created with fork()): the hook of the views runs in every critical section on the values, and another
+    thread finds the lock held in each one; the number of sections of each path is exact, so a path that reads the
+    values another way is found as well.  Before the fix, these readers copied the strings while another thread could
+    be assigning them (a std::string data race that can read freed memory).
+*/
+static void ut_datasource_pending_params_locked(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    DBIDriver* drv = ut_dsopt_driver();
+
+    // X1: a copy reads the pending values in one section, with the options
+    {
+        Datasource ds(drv);
+        ut_ds_configure(ds, "x1");
+        std::unique_ptr<Datasource> cp;
+        ut_ds_pending_sections(c, 1, "X1: Datasource::copy()", [&]() {
+            cp.reset(ds.copy());
+        });
+        UT_ASSERT(c, ut_ds_str(cp->getPendingDBName()) == "x1-db", "X1: the copy has the database name");
+        UT_ASSERT(c, ut_ds_str(cp->getPendingUsername()) == "x1-user", "X1: the copy has the user name");
+        UT_ASSERT(c, ut_ds_str(cp->getPendingHostName()) == "x1-host", "X1: the copy has the host name");
+        UT_ASSERT(c, ut_ds_str(cp->getPendingPassword()) == "x1-pass", "X1: the copy has the password");
+        UT_ASSERT(c, ut_ds_str(cp->getPendingDBEncoding()) == "utf8", "X1: the copy has the encoding");
+        UT_ASSERT_EQ(c, 1234, cp->getPendingPort(), "X1: the copy has the port");
+
+        UtManagedDsHolder md(new ManagedDatasource(drv));
+        ut_ds_configure(*md.ds, "x1m");
+        UtManagedDsHolder mcp(nullptr);
+        ut_ds_pending_sections(c, 1, "X1: ManagedDatasource::copy()", [&]() {
+            mcp.ds = md.ds->copy();
+        });
+        UT_ASSERT(c, ut_ds_str(mcp.ds->getPendingDBName()) == "x1m-db", "X1: the managed copy has the database name");
+    }
+
+    // X3: the configuration of a closed datasource, and the accessors of the pending values
+    {
+        Datasource ds(drv);
+        ut_ds_configure(ds, "x3");
+        ReferenceHolder<QoreHashNode> h(nullptr);
+        ut_ds_pending_sections(c, 1, "X3: getConfigHash() of a closed datasource", [&]() {
+            h = ds.getConfigHash();
+        });
+        UT_ASSERT(c, ut_ds_hash_str(*h, "db") == "x3-db", "X3: the configuration hash has the database name");
+        UT_ASSERT(c, ut_ds_hash_str(*h, "host") == "x3-host", "X3: the configuration hash has the host name");
+        UT_ASSERT_EQ(c, 1234, h->getKeyValue("port").getAsBigInt(), "X3: the configuration hash has the port");
+        SimpleRefHolder<QoreStringNode> str;
+        ut_ds_pending_sections(c, 1, "X3: getConfigString() of a closed datasource", [&]() {
+            str = ds.getConfigString();
+        });
+        UT_ASSERT(c, !strcmp(str->c_str(), "qore-ut-dsopt:x3-user/x3-pass@x3-db(utf8)%x3-host:1234"),
+            "X3: the configuration string has the values");
+        ut_ds_pending_sections(c, 1, "X3: getPendingDBName()", [&]() {
+            ut_ds_str(ds.getPendingDBName());
+        });
+        ut_ds_pending_sections(c, 1, "X3: getPendingPort()", [&]() {
+            ds.getPendingPort();
+        });
+        ut_ds_pending_sections(c, 1, "X3: setPendingDBName()", [&]() {
+            ds.setPendingDBName("x3-db2");
+        });
+        ut_ds_pending_sections(c, 1, "X3: setPendingPort()", [&]() {
+            ds.setPendingPort(4321);
+        });
+        UT_ASSERT(c, ut_ds_str(ds.getPendingDBName()) == "x3-db2", "X3: the new database name is pending");
+        UT_ASSERT_EQ(c, 4321, ds.getPendingPort(), "X3: the new port is pending");
+
+        // the source and the target are each read or written in a section of their own, never together
+        Datasource target(drv);
+        ut_ds_pending_sections(c, 2, "X3: setPendingConnectionValues()", [&]() {
+            qore_ds_private::get(target)->setPendingConnectionValues(qore_ds_private::get(ds));
+        });
+        UT_ASSERT(c, ut_ds_str(target.getPendingDBName()) == "x3-db2", "X3: the target has the database name");
+
+        // the managed datasource: its configuration methods take the transaction lock, not the lock of the values
+        UtManagedDsHolder md(new ManagedDatasource(drv));
+        ut_ds_configure(*md.ds, "x3m");
+        ReferenceHolder<QoreHashNode> mh(nullptr);
+        ut_ds_pending_sections(c, 1, "X3: ManagedDatasource::getConfigHash() of a closed datasource", [&]() {
+            mh = md.ds->getConfigHash(&xsink);
+        });
+        UT_ASSERT(c, ut_ds_hash_str(*mh, "user") == "x3m-user", "X3: the managed configuration has the user name");
+        ut_ds_pending_sections(c, 1, "X3: ManagedDatasource::getConfigString() of a closed datasource", [&]() {
+            SimpleRefHolder<QoreStringNode> s(md.ds->getConfigString(&xsink));
+        });
+
+        // an open datasource: the values in use are read by the thread that holds the connection, without the lock
+        // of the pending values; opening it copies the pending values in one section
+        ut_ds_pending_sections(c, 1, "X3: open() copies the pending values", [&]() {
+            ds.open(&xsink);
+        });
+        UT_ASSERT(c, ds.getDBNameStr() == "x3-db2", "X3: the database name is in use after the open");
+        UT_ASSERT_EQ(c, 4321, ds.getPort(), "X3: the port is in use after the open");
+        ut_ds_pending_sections(c, 0, "X3: getConfigHash() of an open datasource", [&]() {
+            ReferenceHolder<QoreHashNode> oh(ds.getConfigHash(), &xsink);
+        });
+        ds.close();
+
+        ut_ds_pending_sections(c, 1, "X3: ManagedDatasource::open()", [&]() {
+            md.ds->open(&xsink);
+        });
+        ut_ds_pending_sections(c, 1, "X3: ManagedDatasource::reset()", [&]() {
+            md.ds->reset(&xsink);
+        });
+        UT_ASSERT_EQ(c, 1234, md.ds->getPort(), "X3: the managed port is in use");
+        md.ds->close(&xsink);
+    }
+
+#ifndef _Q_WINDOWS
+    // X2: in a child process created with fork(), getOption() gives the inherited connection up and opens a new one,
+    // which copies the pending values to the values in use in one section
+    {
+        UtManagedDsHolder md(new ManagedDatasource(drv));
+        ut_ds_configure(*md.ds, "x2");
+        UT_ASSERT_EQ(c, 0, md.ds->open(&xsink), "X2: the datasource is opened in the parent");
+        ut_ds_fork_get_option(c, *md.ds, true, "X2: getOption() of an inherited connection");
+        md.ds->close(&xsink);
+    }
+#endif
+
+    UT_ASSERT(c, !xsink, "X1-X3: no exception");
+    xsink.clear();
+}
+
+//! qore#6142: the debug checks of the locks of the connection values pass on every path that uses them (X4)
+/** Each path runs with the checks active and without a helper thread: the leaf sections on the pending values assert
+    that the thread holds no qore_ds_private::m, and the copy of the pending values to the values in use asserts that
+    the thread holds the ds_lock of a ManagedDatasource.  In a child process created with fork(), a call of an entry
+    point of the pending values from inside a section on another datasource's m aborts the child (the "call under m"
+    mutant, which can deadlock in a release build).
+*/
+static void ut_datasource_pending_params_checks(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    DBIDriver* drv = ut_dsopt_driver();
+    UtManagedDsHolder md(new ManagedDatasource(drv));
+    ut_ds_configure(*md.ds, "x4");
+    UT_ASSERT(c, ut_ds_str(md.ds->getPendingHostName()) == "x4-host", "X4: setPending*() and getPending*()");
+    {
+        UtManagedDsHolder cp(md.ds->copy());
+        UT_ASSERT(c, ut_ds_str(cp.ds->getPendingDBName()) == "x4-db", "X4: copy()");
+    }
+    {
+        ReferenceHolder<QoreHashNode> h(md.ds->getConfigHash(&xsink), &xsink);
+        UT_ASSERT(c, ut_ds_hash_str(*h, "db") == "x4-db", "X4: getConfigHash() of a closed datasource");
+    }
+    UT_ASSERT_EQ(c, 0, md.ds->open(&xsink), "X4: open()");
+    UT_ASSERT_EQ(c, 0, md.ds->reset(&xsink), "X4: reset()");
+    UT_ASSERT(c, md.ds->getDBNameStr() == "x4-db", "X4: the values are in use");
+    UT_ASSERT_EQ(c, 0, QoreDsLock::dbgDepth(), "X4: no section on m is left entered");
+#ifndef _Q_WINDOWS
+    ut_ds_fork_get_option(c, *md.ds, false, "X4: getOption() of an inherited connection");
+
+    // the negative case: an entry point of the pending values called from inside a section on an m
+    pid_t pid = fork();
+    if (!pid) {
+        // no core file, and the default action of SIGABRT
+        struct rlimit rl = {0, 0};
+        setrlimit(RLIMIT_CORE, &rl);
+        signal(SIGABRT, SIG_DFL);
+        // the message of the expected assertion is not output
+        int null_fd = ::open("/dev/null", O_WRONLY);
+        if (null_fd >= 0) {
+            dup2(null_fd, STDERR_FILENO);
+        }
+        Datasource a(drv), b(drv);
+        {
+            // the lock of another datasource, so that a missing check completes instead of deadlocking
+            QoreDsLock al(qore_ds_private::get(b)->m);
+            SimpleRefHolder<QoreStringNode> s(a.getPendingUsername());
+        }
+        _exit(0);
+    }
+    UT_ASSERT(c, pid > 0, "X4: fork() for the call under m");
+    if (pid > 0) {
+        int status = ut_ds_wait_status(pid);
+        UT_ASSERT(c, WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT,
+            "X4: a call of an entry point under m aborts in a debug build");
+    }
+#endif
+    md.ds->close(&xsink);
+    UT_ASSERT(c, !xsink, "X4: no exception");
+    xsink.clear();
+}
+
 #endif
 
 //! records the line of every statement step and raises an exception at the step of one line, once
@@ -18497,6 +18878,17 @@ static void ut_old_background_self_call_helper(UnitTestCounters& c) {
     }
 }
 
+#ifdef DEBUG
+//! runs the tests of the locks of the connection values of a datasource (qore#6142; DEBUG builds only)
+static QoreValue f_dbg_run_datasource_pending_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ut_datasource_pending_params_locked(c);
+    ut_datasource_pending_params_checks(c);
+    return make_unit_test_result(c, xsink);
+}
+#endif
+
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
@@ -23080,6 +23472,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
+    qns.addBuiltinVariant("dbg_run_datasource_pending_tests", f_dbg_run_datasource_pending_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_run_program_thread_hub_tests", f_dbg_run_program_thread_hub_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_cancel_thread_after_end", f_dbg_cancel_thread_after_end, QCF_NO_FLAGS,

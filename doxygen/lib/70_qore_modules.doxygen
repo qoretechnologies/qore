@@ -275,6 +275,14 @@ static int my_set_option(Datasource* ds, const char* opt, const QoreValue val, E
     setters that the driver reads are those of the stored values that the connection is given.  A driver must not
     call \c Datasource::setOption() from its own open or option-setting functions.
 
+    A driver must not call \c Datasource::getPendingUsername(), \c Datasource::getPendingPassword(),
+    \c Datasource::getPendingDBName(), \c Datasource::getPendingDBEncoding(), \c Datasource::getPendingHostName(),
+    \c Datasource::getPendingPort(), \c Datasource::getConfigHash() or \c Datasource::getConfigString() from its
+    statement close or free functions (\c QDBI_METHOD_STMT_CLOSE, \c QDBI_METHOD_STMT_FREE): the pending connection
+    values are guarded by an internal lock of the datasource that is held while those functions are called, and the
+    lock is not recursive (<a href="https://github.com/qoretechnologies/qore/issues/6142">issue 6142</a>).  A debug
+    build of the %Qore library asserts this.
+
     See @ref sandbox_datasource_options in the language reference.
 
     @subsection module_example Complete Example

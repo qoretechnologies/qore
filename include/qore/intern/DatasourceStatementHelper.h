@@ -84,6 +84,20 @@ public:
         return helperHeldByCurrentThreadImpl(ds);
     }
 
+    //! returns true if the current thread holds the lock that the connection values in use are changed with
+    /** For assertions: a ManagedDatasource changes them with its \c ds_lock held, which a thread that does not hold
+        its connection takes to read them (qore#6142); the connections of a pool are changed only by the thread that
+        holds them
+    */
+    DLLLOCAL bool helperHoldsConnectionValuesLock() const {
+        return helperHoldsConnectionValuesLockImpl();
+    }
+
+    //! see helperHoldsConnectionValuesLock(); a debug build of a ManagedDatasource checks that it holds \c ds_lock
+    DLLLOCAL virtual bool helperHoldsConnectionValuesLockImpl() const {
+        return true;
+    }
+
     // must dereference the datasource-providing object
     virtual void helperDestructorImpl(QoreSQLStatement* s, ExceptionSink* xsink) = 0;
     virtual Datasource* helperStartActionImpl(ExceptionSink* xsink, bool& new_transaction) = 0;
