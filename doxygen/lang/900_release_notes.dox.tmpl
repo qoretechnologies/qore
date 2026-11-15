@@ -1860,11 +1860,6 @@
       without the sandbox of that code, both its own code and the \c %%module-cmd directives replayed in its
       Program, whereas the source module is governed by that sandbox; the compiled module's Program now gets the
       sandbox that its source module's Program gets (issue #5913)
-    - a @ref call_reference "call reference" that sandboxed code got from another Program with
-      @ref Qore::Program::getCallReference() "Program::getCallReference()" had no sandbox provenance: when trusted
-      code called it later, the sandbox of the code that got it did not govern the call, whereas a call reference
-      that sandboxed code makes itself (<tt>\\func()</tt>) keeps it; the reference now keeps the caller's sandbox in
-      the same way (see @ref sandbox_provenance) (issue #6149)
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected

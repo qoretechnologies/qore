@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - a qcc-compiled module dylib built, loaded and called under sandbox filesystem policy
 
 # A closure that the code of a compiled (qcc) module creates for a sandboxed caller keeps the caller's sandbox,
 # also when the caller's call is the first call of the module's function, which builds the function's compiled
