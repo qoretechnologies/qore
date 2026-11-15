@@ -879,14 +879,19 @@ Which errors depend on the thread (`qore_find_thread_stack_error()`):
 
 Every module load that loads or merges a module makes the same check
 (`qore_module_load_check_stack()`, called by
-`QoreModuleManager::loadModuleIntern()`): with less than
+`QoreModuleManager::loadModuleIntern()` and, for a statically linked AOT
+module, by `registerAOTStaticModuleIntern()` before it initializes the module or
+merges it into the `Program`): with less than
 `QORE_PARSE_STACK_RESERVE` (64 KB) left above the thread's stack limit, the
 load raises `PARSE-STACK-LIMIT-EXCEEDED`, so the dependencies of AOT and binary
 modules and child modules, which have no parse of their own to check, stop at
 the same point as a source parse. The check sits after the requests that need no
 stack and return at once: the `qore` feature (a version check) and a feature
 that the target `Program` already has (`hasFeature()`), so that a
-`load_module("json")` in a Program that has json succeeds with any stack. It
+`%requires json` in a Program that has json succeeds with any stack (a run-time
+`load_module("json")` returns before the module manager then). The error of a
+load made by a parse directive is located at the directive (that of the
+innermost load in progress), as a parse error is. It
 comes before every path that does need stack: a reload (`QMLO_RELOAD`, which
 parses the module again), the merge of a module that is already loaded into
 another `Program` (a run-time `Program::loadModule("json")`, for example) and a
