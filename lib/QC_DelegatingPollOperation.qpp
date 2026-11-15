@@ -43,7 +43,8 @@ public:
     SocketPollOperationBase* inner_base;
     ResolvedCallReferenceNode* on_complete_code;
     //! the run-time parse options of the code that created the operation, which on_complete_code runs with
-    //! (qore#6208): a callback that is a call reference to builtin code sets no options of its own
+    /** A callback that is a call reference to builtin code sets no options of its own (qore#6208)
+    */
     const QoreThreadRuntimeParseOptions on_complete_po = QoreThreadRuntimeParseOptions::capture();
     QoreObject* counter_obj;
     bool inner_has_abort;

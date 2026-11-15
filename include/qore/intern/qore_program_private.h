@@ -1722,10 +1722,8 @@ public:
     ResolvedCallReferenceNode* const on_exit;
     //! the run-time parse options of the code that set the handlers, which they run with (qore#6208)
     /** A handler that is a call reference to builtin code sets no options of its own, and the thread that enters the
-        Program has its own
-    */
-    /** Without the application of a call of module code, as the handlers run for every thread that enters the
-        Program
+        Program has its own.  Without the application of a call of module code, as the handlers run for every thread
+        that enters the Program
     */
     const QoreThreadRuntimeParseOptions po = QoreThreadRuntimeParseOptions::captureForThread();
 
