@@ -133,8 +133,9 @@ static std::string buildJoinKey(const std::vector<size_t>& key_col_indices,
     values of both, as dataFrameMergeColumnSchema() merges them (decimals of different precisions and scales,
     temporal columns of different time units or zones, with the native type dropped if it does not describe both),
     or none if there is none.  A date schema and a timestamp schema (date32[day] or date64[ms] and timestamp key
-    columns), which it does not merge, give the timestamp schema, so that the times of day are kept, with the unit
-    "us" if their units differ, the zone "UTC" if their zones differ, and no native type.  Date key columns hold dates
+    columns), which it does not merge, give the timestamp schema, so that the schema says that the key column holds
+    times of day, with the unit "us" if their units differ, the zone "UTC" if their zones differ, no native type,
+    and nullable if a side is.  Date key columns hold dates
     of one kind (checked before).
 */
 static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const ColumnData& right, bool right_values) {
@@ -202,6 +203,10 @@ static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const Col
     }
     if (zone(left) != zone(right)) {
         dest.columnar_schema.timezone = "UTC";
+    }
+    // nullable if a side is, as merged schemas are
+    if (left.columnar_schema.nullable || right.columnar_schema.nullable) {
+        dest.columnar_schema.nullable = true;
     }
 }
 
