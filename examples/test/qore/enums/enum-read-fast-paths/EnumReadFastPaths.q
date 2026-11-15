@@ -1,0 +1,175 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# fixture of enum-read-fast-paths.qtest: prints the type and the value of enum-typed values read through the fast
+# paths of the compiled modes (qore#6236)
+
+%modern
+%enable-all-warnings
+
+enum EI : int { One = 1, Seven = 7, Eight = 8 }
+enum EF : float { H = 0.5, Q = 0.25 }
+enum ES : string { X = "x", Y = "y" }
+enum EN : number { N1 = 1.5n, N2 = 2.5n }
+
+sub show(string label, auto v) {
+    if (v.typeCode() == NT_LIST) {
+        printf("%s: %y %y\n", label, (map $1.fullType(), v), v);
+    } else if (v.typeCode() == NT_HASH) {
+        printf("%s: %y %y\n", label, (map {$1.key: $1.value.fullType()}, v.pairIterator()), v);
+    } else {
+        printf("%s: %s %y\n", label, v.fullType(), v);
+    }
+}
+
+sub run(string label, code c) {
+    try {
+        show(label, c());
+    } catch (hash<ExceptionInfo> ex) {
+        printf("%s: %s: %s\n", label, ex.err, ex.desc);
+    }
+}
+
+EI sub retEI(EI e) {
+    return e;
+}
+
+EF sub retEF(EF e) {
+    return e;
+}
+
+EF sub localEF(EF e) {
+    EF c = e;
+    EF d = c;
+    return d;
+}
+
+auto sub loopEF(list<EF> l) {
+    EF last = EF::Q;
+    foreach EF x in (l) {
+        last = x;
+    }
+    return last;
+}
+
+auto sub loopEI(list<EI> l) {
+    EI last = EI::One;
+    foreach EI x in (l) {
+        last = x;
+    }
+    return last;
+}
+
+auto sub indexEF(list<EF> l) {
+    EF r = EF::Q;
+    for (int i = 0; i < l.size(); ++i) {
+        r = l[i];
+    }
+    return r;
+}
+
+auto sub indexEI(list<EI> l) {
+    EI r = EI::One;
+    for (int i = 0; i < l.size(); ++i) {
+        r = l[i];
+    }
+    return r;
+}
+
+sub cases(list<EI> l, list<EF> lf, list<ES> ls, list<EN> ln, EI e, EF ef, ES es, EN en) {
+    hash<string, EI> hh = {"a": EI::Seven};
+    hash<string, EI> h2();
+    h2.a = EI::Eight;
+    list<hash<string, EI>> lh = ({"a": EI::Seven}, {"a": EI::One});
+
+    # hash values read with a constant key
+    run("hash constant key", auto sub () { return hh.a; });
+    run("hash assigned key", auto sub () { return h2.a; });
+    run("hash constant key to int", auto sub () { int i = hh.a; return i; });
+    run("hash constant key to enum", auto sub () { EI x = hh.a; return x; });
+    run("hash float", auto sub () { hash<string, EF> h = {"a": EF::Q}; return h.a; });
+    run("hash string", auto sub () { hash<string, ES> h = {"a": ES::Y}; return h.a; });
+    run("hash number", auto sub () { hash<string, EN> h = {"a": EN::N2}; return h.a; });
+    run("hash values", auto sub () { return hh.values(); });
+
+    # map
+    run("map", auto sub () { return map $1, l; });
+    run("map float", auto sub () { return map $1, lf; });
+    run("map string", auto sub () { return map $1, ls; });
+    run("map number", auto sub () { return map $1, ln; });
+    run("map with select", auto sub () { return map $1, l, $1 > EI::One; });
+    run("map with select float", auto sub () { return map $1, lf, $1 > 0.3; });
+    run("map with select string", auto sub () { return map $1, ls, $1 == "x"; });
+    run("map hash key", auto sub () { return map $1.a, lh; });
+    run("map hash key float", auto sub () { list<hash<string, EF>> l2 = ({"a": EF::H},); return map $1.a, l2; });
+    run("map hash key string", auto sub () { list<hash<string, ES>> l2 = ({"a": ES::X},); return map $1.a, l2; });
+    run("map of map", auto sub () { return map $1, (map $1, l); });
+    run("map of select", auto sub () { return map $1, (select l, $1 > 1); });
+
+    # select
+    run("select", auto sub () { return select l, $1 > 0; });
+    run("select float", auto sub () { return select lf, $1 > 0.3; });
+    run("select string", auto sub () { return select ls, $1 == "y"; });
+    run("select number", auto sub () { return select ln, $1 > 2n; });
+    run("select hash key", auto sub () { return select lh, $1.a > 1; });
+    run("select of map", auto sub () { return select (map $1, l), $1 > 1; });
+
+    # folds that give one of the elements
+    run("foldl min", auto sub () { return foldl min($1, $2), l; });
+    run("foldl max", auto sub () { return foldl max($1, $2), l; });
+    run("foldr max", auto sub () { return foldr max($1, $2), l; });
+    run("foldl min float", auto sub () { return foldl min($1, $2), lf; });
+    run("foldr min float", auto sub () { return foldr min($1, $2), lf; });
+    run("min", auto sub () { return min(l); });
+    run("max", auto sub () { return max(l); });
+    run("min float", auto sub () { return min(lf); });
+
+    # locals, returns and captures
+    run("return", auto sub () { return retEI(e); });
+    run("return float", auto sub () { return retEF(ef); });
+    run("local float", auto sub () { return localEF(ef); });
+    run("loop", auto sub () { return loopEI(l); });
+    run("loop float", auto sub () { return loopEF(lf); });
+    run("index", auto sub () { return indexEI(l); });
+    run("index float", auto sub () { return indexEF(lf); });
+    run("capture", auto sub () { code c = auto sub () { return e; }; return c(); });
+    run("capture float", auto sub () { code c = auto sub () { return ef; }; return c(); });
+    run("capture local float", auto sub () { EF x = ef; code c = auto sub () { return x; }; return c(); });
+    run("copy", auto sub () { EI c = e; return c; });
+    run("ternary", auto sub () { return e ? e : EI::One; });
+    run("ternary float", auto sub () { return ef ? ef : EF::H; });
+    run("list element", auto sub () { return l[1]; });
+    run("list element float", auto sub () { return lf[0]; });
+    run("list store", auto sub () { list<EI> l2 = l; l2[0] = EI::Eight; return l2; });
+    run("list store float", auto sub () { list<EF> l2 = lf; l2[1] = EF::H; return l2; });
+    run("list literal", auto sub () { list<EI> l2 = (e, EI::One); return l2; });
+    run("list literal float", auto sub () { list<EF> l2 = (ef, EF::H); return l2; });
+    run("hash literal float", auto sub () { hash<string, EF> h = {"a": ef}; return h; });
+    run("string", auto sub () { return es; });
+    run("number", auto sub () { return en; });
+
+    # operators on enum values give plain values
+    run("foldl +", auto sub () { return foldl $1 + $2, l; });
+    run("foldl *", auto sub () { return foldl $1 * $2, l; });
+    run("foldl -", auto sub () { return foldl $1 - $2, l; });
+    run("foldl + string", auto sub () { return foldl $1 + $2, ls; });
+    run("map + 1", auto sub () { return map $1 + 1, l; });
+    run("map * 2", auto sub () { return map $1 * 2, l; });
+    run("map * 2 float", auto sub () { return map $1 * 2, lf; });
+    run("map hash key + 1", auto sub () { return map $1.a + 1, lh; });
+    run("map hash key * 2", auto sub () { return map $1.a * 2, lh; });
+    run("map sprintf", auto sub () { return map sprintf("%d", $1), l; });
+    run("join", auto sub () { return join(",", ls); });
+    run("+ 1", auto sub () { return e + 1; });
+    run("* 3", auto sub () { return e * 3; });
+    run("float * 2", auto sub () { return ef * 2; });
+    run("== 7", auto sub () { return e == 7; });
+    run("< 8", auto sub () { return e < 8; });
+    run("to int", auto sub () { int i = e; return i; });
+    run("to float", auto sub () { float f = ef; return f; });
+    run("list element + 1", auto sub () { return l[1] + 1; });
+    run("sum in a loop", auto sub () { int s = 0; foreach EI x in (l) { s += x; } return s; });
+}
+
+cases((EI::Seven, EI::One, EI::Eight), (EF::H, EF::Q), (ES::X, ES::Y), (EN::N1, EN::N2), EI::Seven, EF::Q, ES::Y,
+    EN::N2);

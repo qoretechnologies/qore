@@ -12544,8 +12544,9 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
         }
         const QoreTypeInfo* hash_val_type =
             QoreTypeInfo::getReturnComplexHashOrNothing(base_value_type);
+        // HashKeyAccessInt returns the value as a native int, which a value of an enum type is not (qore#6236)
         bool known_int_hash = hash_val_type
-            && QoreTypeInfo::parseReturns(hash_val_type, NT_INT) == QTI_IDENT;
+            && QoreTypeInfo::parseReturnsPlain(hash_val_type, NT_INT);
         bool should_invoke = !known_int_hash
             && !exception_stack.empty() && expressionCanThrow(expr);
         // Plain hash<auto> (no hashdecl, not object) never throws on key access
@@ -17005,21 +17006,22 @@ static QoreIROpcode analyzeFoldPatternIntern(const QoreValue& fold_expr, const Q
 
                 // Check if args are $1 and $2 (offsets 0 and 1)
                 if (impl_arg0 && impl_arg1 && impl_arg0->getOffset() == 0 && impl_arg1->getOffset() == 1) {
-                    // min/max return the same type as their arguments
+                    // min/max return the same type as their arguments: one of the elements, so the elements of an
+                    // enum type (which are not plain ints or floats) take the generic path (qore#6236)
                     // Try the argument type first, then fall back to list element type
                     result_type = getExprTypeInfo(arg0);
-                    if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
+                    if (QoreTypeInfo::parseReturnsPlain(result_type, NT_INT)) {
                         return is_min ? QoreIROpcode::FoldlMinInt : QoreIROpcode::FoldlMaxInt;
-                    } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
+                    } else if (QoreTypeInfo::parseReturnsPlain(result_type, NT_FLOAT)) {
                         return is_min ? QoreIROpcode::FoldlMinFloat : QoreIROpcode::FoldlMaxFloat;
                     }
                     // Fall back to list element type if available
                     if (list_type) {
                         const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
                         if (elem_type) {
-                            if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT) {
+                            if (QoreTypeInfo::parseReturnsPlain(elem_type, NT_INT)) {
                                 return is_min ? QoreIROpcode::FoldlMinInt : QoreIROpcode::FoldlMaxInt;
-                            } else if (QoreTypeInfo::parseReturns(elem_type, NT_FLOAT) == QTI_IDENT) {
+                            } else if (QoreTypeInfo::parseReturnsPlain(elem_type, NT_FLOAT)) {
                                 return is_min ? QoreIROpcode::FoldlMinFloat : QoreIROpcode::FoldlMaxFloat;
                             }
                         }
@@ -17390,10 +17392,11 @@ static QoreIROpcode qore_ir_select_opcode_for_element_type(QoreIROpcode opcode, 
     switch (opcode) {
         case QoreIROpcode::SelectPositiveInt:
         case QoreIROpcode::SelectNonZeroInt:
-            if (QoreTypeInfo::isType(elem_type, NT_INT)) {
+            // the elements of an enum type are not plain ints or floats (qore#6236)
+            if (QoreTypeInfo::isPlainType(elem_type, NT_INT)) {
                 return opcode;
             }
-            if (QoreTypeInfo::isType(elem_type, NT_FLOAT)) {
+            if (QoreTypeInfo::isPlainType(elem_type, NT_FLOAT)) {
                 return opcode == QoreIROpcode::SelectPositiveInt ? QoreIROpcode::SelectPositiveFloat
                     : QoreIROpcode::SelectNonZeroFloat;
             }
@@ -17459,10 +17462,12 @@ static QoreIROpcode analyzeSelectPattern(const QoreValue& select_expr,
 }
 
 //! Returns true if every value of the type is an immediate scalar (an int, a float or a bool), which is no node
+/** The value of an enum type is a TAG_ENUM value, which is not (qore#6236)
+*/
 static bool qore_ir_type_is_immediate_scalar(const QoreTypeInfo* ti) {
-    return ti && QoreTypeInfo::hasType(ti) && (QoreTypeInfo::parseReturns(ti, NT_INT) == QTI_IDENT
-        || QoreTypeInfo::parseReturns(ti, NT_FLOAT) == QTI_IDENT
-        || QoreTypeInfo::parseReturns(ti, NT_BOOLEAN) == QTI_IDENT);
+    return ti && QoreTypeInfo::hasType(ti) && (QoreTypeInfo::parseReturnsPlain(ti, NT_INT)
+        || QoreTypeInfo::parseReturnsPlain(ti, NT_FLOAT)
+        || QoreTypeInfo::parseReturnsPlain(ti, NT_BOOLEAN));
 }
 
 //! Lowers a functional operator and releases its source, if it is a temporary, once the operator has run
@@ -18645,9 +18650,10 @@ QoreIRValue QoreIRLowering::lowerMapImpl(const QoreValue& expr, std::string& err
     {
         const QoreTypeInfo* list_type = getExprTypeInfo(map->getRight());
         const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+        // the elements of an enum type are not plain ints or floats (qore#6236)
         if (elem_type) {
-            if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT
-                    || QoreTypeInfo::parseReturns(elem_type, NT_FLOAT) == QTI_IDENT) {
+            if (QoreTypeInfo::parseReturnsPlain(elem_type, NT_INT)
+                    || QoreTypeInfo::parseReturnsPlain(elem_type, NT_FLOAT)) {
                 return lowerMapNative(map, expr, error);
             }
         }
@@ -18671,10 +18677,11 @@ QoreIRValue QoreIRLowering::lowerMapImpl(const QoreValue& expr, std::string& err
 
             // Check if value type is known int for MapHashKeyInt detection
             if (hk_opcode == QoreIROpcode::MapHashKeyValue) {
-                // Check if the value type for this key is known to be int
+                // Check if the value type for this key is known to be int; MapHashKeyInt gives the values as plain
+                // ints, which the values of an enum type are not (qore#6236)
                 const QoreTypeInfo* hash_val_type = QoreTypeInfo::getUniqueReturnComplexHash(elem_type);
                 if (hash_val_type
-                        && QoreTypeInfo::parseReturns(hash_val_type, NT_INT) == QTI_IDENT) {
+                        && QoreTypeInfo::parseReturnsPlain(hash_val_type, NT_INT)) {
                     hk_opcode = QoreIROpcode::MapHashKeyInt;
                 }
             }
@@ -19169,10 +19176,11 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     bool elem_is_int = false;
     bool elem_is_float = false;
     if (elem_type && !iterate_right) {
-        if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT) {
+        // the elements of an enum type are not plain ints or floats (qore#6236)
+        if (QoreTypeInfo::parseReturnsPlain(elem_type, NT_INT)) {
             use_direct_index = true;
             elem_is_int = true;
-        } else if (QoreTypeInfo::parseReturns(elem_type, NT_FLOAT) == QTI_IDENT) {
+        } else if (QoreTypeInfo::parseReturnsPlain(elem_type, NT_FLOAT)) {
             use_direct_index = true;
             elem_is_float = true;
         } else {
@@ -19187,8 +19195,8 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         && !invariant_map_local->closureUse()
         && !QoreTypeInfo::isReference(invariant_map_local->parseGetTypeInfo())
         && !q_env_is_set("QORE_DISABLE_IR_INVARIANT_TYPED_MAP_FILL")
-        && (QoreTypeInfo::parseReturns(expTypeInfo, NT_INT) == QTI_IDENT
-            || QoreTypeInfo::parseReturns(expTypeInfo, NT_FLOAT) == QTI_IDENT);
+        && (QoreTypeInfo::parseReturnsPlain(expTypeInfo, NT_INT)
+            || QoreTypeInfo::parseReturnsPlain(expTypeInfo, NT_FLOAT));
 
     // the AST interpreter gives the result list the common type of its values (QoreMapOperatorNode::evalImpl());
     // see QoreIROpcode::ListAppendElement
@@ -19747,11 +19755,12 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     bool elem_is_bool = false;
     bool elem_is_string = false;
     if (elem_type) {
-        if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT) {
+        // the elements of an enum type are not plain ints or floats (qore#6236)
+        if (QoreTypeInfo::parseReturnsPlain(elem_type, NT_INT)) {
             elem_is_int = true;
-        } else if (QoreTypeInfo::parseReturns(elem_type, NT_FLOAT) == QTI_IDENT) {
+        } else if (QoreTypeInfo::parseReturnsPlain(elem_type, NT_FLOAT)) {
             elem_is_float = true;
-        } else if (QoreTypeInfo::parseReturns(elem_type, NT_BOOLEAN) == QTI_IDENT) {
+        } else if (QoreTypeInfo::parseReturnsPlain(elem_type, NT_BOOLEAN)) {
             elem_is_bool = true;
         } else if (QoreTypeInfo::parseReturns(elem_type, NT_STRING) == QTI_IDENT) {
             elem_is_string = true;
@@ -20229,10 +20238,11 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     bool elem_is_int = false;
     bool elem_is_float = false;
     if (elem_type) {
-        if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT) {
+        // the elements of an enum type are not plain ints or floats (qore#6236)
+        if (QoreTypeInfo::parseReturnsPlain(elem_type, NT_INT)) {
             use_direct_index = true;
             elem_is_int = true;
-        } else if (QoreTypeInfo::parseReturns(elem_type, NT_FLOAT) == QTI_IDENT) {
+        } else if (QoreTypeInfo::parseReturnsPlain(elem_type, NT_FLOAT)) {
             use_direct_index = true;
             elem_is_float = true;
         }
@@ -20531,10 +20541,11 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
         return QoreIRValue();
     }
 
+    // the elements of an enum type are not plain ints or floats (qore#6236)
     bool elem_is_int = element_type
-        && QoreTypeInfo::parseReturns(element_type, NT_INT) == QTI_IDENT;
+        && QoreTypeInfo::parseReturnsPlain(element_type, NT_INT);
     bool elem_is_float = element_type
-        && QoreTypeInfo::parseReturns(element_type, NT_FLOAT) == QTI_IDENT;
+        && QoreTypeInfo::parseReturnsPlain(element_type, NT_FLOAT);
     bool use_direct_index = !q_env_is_set("QORE_DISABLE_IR_TYPED_FOLDR_DIRECT_INDEX")
         && (elem_is_int || elem_is_float);
 
@@ -20771,8 +20782,9 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     // the AST interpreter gives the result list the common type of its values
     // (QoreMapSelectOperatorNode::evalImpl()); see QoreIROpcode::ListAppendElement
     bool track_value_type = need_result && !qore_ir_map_value_type_is_exact(map_type);
-    bool map_is_int = QoreTypeInfo::parseReturns(map_type, NT_INT) == QTI_IDENT;
-    bool map_is_float = QoreTypeInfo::parseReturns(map_type, NT_FLOAT) == QTI_IDENT;
+    // the values of an enum type are not plain ints or floats (qore#6236)
+    bool map_is_int = QoreTypeInfo::parseReturnsPlain(map_type, NT_INT);
+    bool map_is_float = QoreTypeInfo::parseReturnsPlain(map_type, NT_FLOAT);
     // a tracked value type folds each value as it is appended (see QoreIROpcode::ListAppendElement), which the
     // typed scalar stores do not do
     bool use_typed_scalar_construction = need_result && (map_is_int || map_is_float) && !track_value_type;
@@ -20786,9 +20798,10 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     bool elem_is_int = false;
     bool elem_is_float = false;
     if (elem_type) {
-        if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT) {
+        // the elements of an enum type are not plain ints or floats (qore#6236)
+        if (QoreTypeInfo::parseReturnsPlain(elem_type, NT_INT)) {
             elem_is_int = true;
-        } else if (QoreTypeInfo::parseReturns(elem_type, NT_FLOAT) == QTI_IDENT) {
+        } else if (QoreTypeInfo::parseReturnsPlain(elem_type, NT_FLOAT)) {
             elem_is_float = true;
         }
     }
@@ -22378,8 +22391,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             break;
         }
     }
-    bool result_is_int = QoreTypeInfo::parseReturns(root.list_element_type, NT_INT) == QTI_IDENT;
-    bool result_is_float = QoreTypeInfo::parseReturns(root.list_element_type, NT_FLOAT) == QTI_IDENT;
+    // the elements of an enum type are not plain ints or floats (qore#6236)
+    bool result_is_int = QoreTypeInfo::parseReturnsPlain(root.list_element_type, NT_INT);
+    bool result_is_float = QoreTypeInfo::parseReturnsPlain(root.list_element_type, NT_FLOAT);
     bool use_typed_list_sink = build_result_list && functional_stages_only
         && QoreTypeInfo::getUniqueReturnComplexList(base_source_type)
         && (result_is_int || result_is_float);
