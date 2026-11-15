@@ -8116,8 +8116,9 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         }
         return nullptr;
     }
-    // the final IR: a statement made of a fused local int operation makes its step event in the operation, so that it
-    // is one instruction for the interpreter and in the size of the function (QoreJIT::getMaxJITIRInstructions())
+    // the final IR: a statement whose first instruction is a fused local int operation makes its step event in the
+    // operation, which saves an instruction for the interpreter and in the size of the function
+    // (QoreJIT::getMaxJITIRInstructions()): `i += 1;` is one instruction
     qore_ir_fold_debug_statements(*func);
     // the interpreter makes the check of a call's target in the load of the target (issue #5784)
     qore_ir_fuse_call_target_checks(*func);

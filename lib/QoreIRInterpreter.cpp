@@ -8902,10 +8902,16 @@ static QORE_INTERN_NOINLINE void qore_ir_release_failed_method_call(QoreListNode
 //! (QoreIRDebugStatementInstruction::folded_host) with \c debug_active cleared, so that the event is not made again;
 //! the next instruction reads the debugger's state again.  Only fused local int operations that cannot raise an
 //! exception keep an event (qore_ir_fold_debug_statements()), so that no exception path runs with the cleared state,
-//! no other instruction pays for the check, and the frame keeps no state for it.
+//! no other instruction pays for the check, and the frame keeps no state for it.  The event runs in its own location,
+//! the statement's, as a DebugStatement instruction does on the line where its statement starts, and not in the
+//! location of the operation, which the dispatch of the operation set.
 #define QORE_IR_DISPATCH_FOLDED_DEBUG_STEP() \
     if (debug_active) [[unlikely]] { \
         if (QoreIRDebugStatementInstruction* folded_step = qore_ir_folded_debug_step(inst)) { \
+            if (folded_step->cached_start_line >= 0) { \
+                *rl_cache.loc_ptr = folded_step->loc; \
+                last_ephemeral_line = folded_step->cached_start_line; \
+            } \
             inst = folded_step; \
             goto dispatch_folded_step; \
         } \
@@ -16367,12 +16373,18 @@ load_local_done:
                     }
                 }
                 if (QoreIRInstruction* folded_host = static_cast<QoreIRDebugStatementInstruction*>(inst)->folded_host) {
-                    // the event of a statement made of one operation, which keeps it (qore_ir_folded_debug_step()):
-                    // the operation follows in the statement's location, without its event; the operation is never
+                    // the event of a statement whose first operation keeps it (qore_ir_folded_debug_step()): the
+                    // operation follows, without its event; the operation is never
                     // the last instruction of its block, so the next instruction reads the debugger's state again
                     assert(ip + 1 < block->instructions.size());
                     inst = folded_host;
                     debug_active = false;
+                    // the operation's location, if it starts on another line, as the dispatch of the operation after
+                    // a DebugStatement instruction sets it
+                    if (inst->cached_start_line >= 0 && inst->cached_start_line != last_ephemeral_line) {
+                        *rl_cache.loc_ptr = inst->loc;
+                        last_ephemeral_line = inst->cached_start_line;
+                    }
                     goto dispatch_folded_step_host;
                 }
                 ++ip;

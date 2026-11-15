@@ -10836,29 +10836,61 @@ private:
     bool raised = false;
 };
 
-//! the step event of a statement made of a fused local int operation, which the operation makes
+//! Returns the number of step events that the operations of the IR of function \a name of \a pgm keep
+//! (qore_ir_folded_debug_step()), or -1 if the function has no IR
+static int ut_folded_debug_steps(QoreProgram* pgm, const char* name) {
+    const QoreFunction* qf = reinterpret_cast<const QoreFunction*>(pgm->findFunction(name));
+    const AbstractQoreFunctionVariant* variant = qf && qf->numVariants() == 1 ? qf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const QoreIRFunction* ir = uvb ? uvb->getCachedIR() : nullptr;
+    if (!ir) {
+        return -1;
+    }
+    int count = 0;
+    for (const auto& block : ir->blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_folded_debug_step(inst.get())) {
+                ++count;
+            }
+        }
+    }
+    return count;
+}
+
+//! the step event of a statement whose first instruction is a fused local int operation, which the operation makes
 //! (qore_ir_fold_debug_statements()), is made before the operation, and an exception raised by the debugger at it
-//! leaves the statement before the operation runs
+//! leaves the statement before the operation runs, to the statement's exception path
 /** The debugger is attached while the function runs in a thread of its own, so that it runs in the tier of the
     execution mode (with a debugger attached at its call, a function runs with the AST interpreter); the thread waits
-    for the attach on a queue
+    for the attach on a queue, in a closure, after it signals that it waits there, so that the function was called
+    before the attach: a method call in the function itself would keep its locals on the stack
+    of local variables, which the IR does not fold the statements of.
+
+    The statements are folded only in a Program without PO_ALLOW_DEBUGGER, whose IR keeps the locals that only the IR
+    uses (a Program that allows a debugger keeps every local on the stack of local variables, where the debugger's
+    locals are); a debugger can still be attached to it, as it does not have PO_NO_DEBUGGING.  \a allow_debugger
+    gives the same function in a Program with PO_ALLOW_DEBUGGER, whose statements are not folded, as the reference:
+    the step events and results must be the same.
 */
-static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, QoreProgram* parent, qore_exec_mode_t mode) {
+static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_mode_t mode, bool allow_debugger) {
     ExceptionSink xsink;
-    QoreProgram* pgm = parent
-        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER)
-        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER);
+    // a Program of its own, whose parse options are not restricted or extended by those of a parent Program; with the
+    // options of %modern from the start, which the execution modes other than AST need (qore_parse_options_support_ir())
+    QoreProgram* pgm = new QoreProgram(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS
+        | (allow_debugger ? PO_ALLOW_DEBUGGER : 0));
+    UT_ASSERT_EQ(c, allow_debugger, static_cast<bool>(pgm->getParseOptions64() & PO_ALLOW_DEBUGGER),
+        "the folded debug step target program allows a debugger as requested");
     pgm->setExecMode(mode, true);
     // the code is parsed as at the top level, with no return type of running code (see ut_self_call_without_method())
     const QoreTypeInfo* old_return_type = saveReturnTypeInfo(nullptr);
     pgm->parse("%modern\n"
         "class Q {\n"                                       // 2
-        "    public { static Queue qin(); static Queue qout(); }\n" // 3
+        "    public { static Queue qin(); static Queue qout(); static Queue qready(); }\n" // 3
         "}\n"
-        "string sub work() {\n"                              // 5
+        "string sub work(code wait) {\n"                     // 5
         "    int a = 1;\n"                                   // 6
         "    int b = 3;\n"                                   // 7
-        "    Q::qin.get();\n"                                 // 8
+        "    wait();\n"                                      // 8
         "    a += 2;\n"                                      // 9
         "    ++a;\n"                                         // 10
         "    a += b;\n"                                      // 11
@@ -10870,7 +10902,10 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, QoreProgra
         "    }\n"
         "}\n"
         "sub start() {\n"
-        "    background Q::qout.push(work());\n"
+        "    background Q::qout.push(work(sub () { Q::qready.push(1); Q::qin.get(); }));\n"
+        "}\n"
+        "sub ready() {\n"
+        "    Q::qready.get();\n"
         "}\n"
         "sub release() {\n"
         "    Q::qin.push(1);\n"
@@ -10888,6 +10923,41 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, QoreProgra
         return;
     }
 
+    // work() is called once first, with thresholds of 1, so that it runs on the tier of the execution mode when the
+    // debugger attaches: with the IR interpreter with IR execution, and as native code with JIT and tiered execution,
+    // whose compile after the call is waited for
+    if (mode != QEM_AST) {
+        {
+            uint64_t ir_threshold = QoreJIT::getIRThreshold();
+            uint64_t jit_threshold = QoreJIT::getJITThreshold();
+            QoreJIT::setIRThreshold(1);
+            QoreJIT::setJITThreshold(1);
+            ON_BLOCK_EXIT([ir_threshold, jit_threshold] () {
+                QoreJIT::setIRThreshold(ir_threshold);
+                QoreJIT::setJITThreshold(jit_threshold);
+            });
+            pgm->callFunction("start", nullptr, &xsink).discard(&xsink);
+            if (!xsink) {
+                pgm->callFunction("ready", nullptr, &xsink).discard(&xsink);
+                pgm->callFunction("release", nullptr, &xsink).discard(&xsink);
+                pgm->callFunction("result", nullptr, &xsink).discard(&xsink);
+            }
+            QoreJIT::instance().waitForBgCompileQueue();
+        }
+        UT_ASSERT(c, !xsink, "the folded statements run before the debugger attaches");
+        const QoreFunction* qf = reinterpret_cast<const QoreFunction*>(pgm->findFunction("work"));
+        const UserVariantBase* uvb = qf && qf->numVariants() == 1 ? qf->first()->getUserVariantBase() : nullptr;
+        if (mode != QEM_IR) {
+            UT_ASSERT(c, uvb && uvb->hasCachedFunction(), "the function of the folded statements is native code");
+        }
+        if (xsink) {
+            xsink.handleExceptions();
+            xsink.clear();
+            pgm->waitForTerminationAndDeref(&xsink);
+            return;
+        }
+    }
+
     // the thread waits for the attach in work()
     pgm->callFunction("start", nullptr, &xsink).discard(&xsink);
     UT_ASSERT(c, !xsink, "the thread of the folded statements starts");
@@ -10898,6 +10968,11 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, QoreProgra
         pgm->waitForTerminationAndDeref(&xsink);
         return;
     }
+
+    // the thread is in work(), waiting in the closure, when the debugger attaches: a function that is called with a
+    // debugger attached runs with the AST interpreter
+    pgm->callFunction("ready", nullptr, &xsink).discard(&xsink);
+    UT_ASSERT(c, !xsink, "the thread of the folded statements waits for the attach");
 
     FoldedStepDebugProgram dbg;
     dbg.first_line = 9;
@@ -10921,6 +10996,12 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, QoreProgra
         xsink.handleExceptions();
         xsink.clear();
     }
+    // the four statements of fused local int operations keep their step events in the IR of the IR and JIT tiers
+    // of the Program without PO_ALLOW_DEBUGGER, and none in the other one
+    if (mode != QEM_AST) {
+        UT_ASSERT_EQ(c, allow_debugger ? 0 : 4, ut_folded_debug_steps(pgm, "work"),
+            "the statements of the target function are folded only without PO_ALLOW_DEBUGGER");
+    }
 
     dbg.removeProgram(pgm);
     dbg.waitForTerminationAndClear(&xsink);
@@ -10929,10 +11010,13 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, QoreProgra
     UT_ASSERT(c, !xsink, "folded debug step target program cleanup succeeds");
 }
 
-static void ut_debug_step_folded_statements(UnitTestCounters& c, QoreProgram* parent) {
-    // the statements are folded in the IR of the IR and JIT tiers; the AST interpreter gives the same events
-    for (qore_exec_mode_t mode : {QEM_AST, QEM_IR, QEM_JIT}) {
-        ut_debug_step_folded_statements_mode(c, parent, mode);
+static void ut_debug_step_folded_statements(UnitTestCounters& c, QoreProgram* /* parent */) {
+    // the statements are folded in the IR of the IR and JIT tiers; the AST interpreter, and the same function in a
+    // Program that allows a debugger, whose statements are not folded, give the same events and results
+    for (qore_exec_mode_t mode : {QEM_AST, QEM_IR, QEM_JIT, QEM_TIERED}) {
+        for (bool allow_debugger : {false, true}) {
+            ut_debug_step_folded_statements_mode(c, mode, allow_debugger);
+        }
     }
 }
 
