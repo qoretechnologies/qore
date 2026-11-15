@@ -285,8 +285,9 @@ static int my_set_option(Datasource* ds, const char* opt, const QoreValue val, E
     restricted if any entry does not allow uncontrolled APIs; read each entry's result once, and derive the aggregate
     from those results, as a host can change a policy at any time.  A restricted connection is checked against the
     policy managers of the entries that restrict it; a restricted entry without a policy manager is never a
-    permission.  Call them as \c Datasource::getConnectOptions() is called: from the open function, or while the
-    thread holds the connection (also for the driver's own reconnect):
+    permission, and so is an empty record (\c size() == 0, which \c QoreDatasourceConnectChoosers::allowsUncontrolledApis()
+    reports as restricted).  Call them as \c Datasource::getConnectOptions() is called: from the open function, or while
+    the thread holds the connection (also for the driver's own reconnect):
 
     @code{.cpp}
 static int my_check_connect(Datasource* ds, ExceptionSink* xsink) {
@@ -319,6 +320,13 @@ static int my_check_connect(Datasource* ds, ExceptionSink* xsink) {
     return 0;
 }
     @endcode
+
+    The record covers the connection only: the values and the options that a connect uses.  Input that the calling
+    code passes with a single call, such as the options of \c Datasource::bulkLoadBegin(), the arguments and the text
+    of a statement, or the arguments of any other per-call method, is chosen by the code that makes the call, at the
+    time of the call, and is not recorded as a chooser.  A driver therefore judges such input by the calling code
+    (\c QoreModuleCommandRestrictions::getCallerRestrictions() and the caller's sandbox policy), never by the record of
+    the connection: a connection that the record allows does not make the input of a sandboxed caller trusted.
 
     A driver must not call \c Datasource::getPendingUsername(), \c Datasource::getPendingPassword(),
     \c Datasource::getPendingDBName(), \c Datasource::getPendingDBEncoding(), \c Datasource::getPendingHostName(),

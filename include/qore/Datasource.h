@@ -78,6 +78,11 @@ struct qore_ds_pool_record;
     uncontrolled APIs (allowsUncontrolledApis()), and it is then checked against the policy managers of the entries
     that restrict it (getPolicyManagerRef()).
 
+    An empty object is restricted: allowsUncontrolledApis() returns false for it.  A filled record always has an entry
+    (the creator), and Datasource::getConnectChoosers() and Datasource::addOptionChooser() leave the object empty when
+    they raise an exception; a driver that derives the decision from the entries itself (allowsUncontrolledApis(size_t)
+    for each entry) must therefore treat size() == 0 as restricted, never as "no entry restricts".
+
     The object is created by the caller, is not copyable, holds its own references to the records, and may be read on
     any thread once it is filled.
 
