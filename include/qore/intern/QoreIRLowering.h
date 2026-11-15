@@ -913,6 +913,9 @@ private:
         //! for the last entry of a try statement that an exit leaves (the Scope entry of its try block, the
         //! CatchScope entry of its catch block): try_depth in the statement, 0 for the other entries (#5992)
         int try_end_depth = 0;
+        //! for an entry with try_end_depth: the exception target outside the try statement, which an exception raised
+        //! once the statement has ended goes to (#6128)
+        QoreIRBasicBlock* try_outer_target = nullptr;
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
         QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord
