@@ -472,6 +472,8 @@ class LockFileCreationRaceTest(unittest.TestCase):
                 # what macOS's openat() gives the job that lost the race
                 raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
             return real_open(path, flags, mode, dir_fd=dir_fd)
+        # os is the one module of the process, so this replaces os.open() for the whole process while the test runs;
+        # only the opens that create @p target behave differently, every other one is the real os.open()
         patcher = unittest.mock.patch.object(qc.os, "open", racing_open)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -518,8 +520,22 @@ class LockFileCreationRaceTest(unittest.TestCase):
         entry = {"schema": qc.SCHEMA, "key": key, "base_key": base, "deps": [], "optional": [], "resolution": [],
                  "mode": 0o755, "files": {(s or "qmod"): qc.sha256_file(p) for s, p in files.items()}}
         state = self.lose_creation_race(key + ".lock")
-        self.cache.store(base, key, entry, files)
+        import fcntl
+        real_open_lock = self.cache.open_lock
+        modes = []
+
+        def recording_open_lock(k, create=True):
+            fd = real_open_lock(k, create)
+            if fd is not None:
+                modes.append(fcntl.fcntl(fd, fcntl.F_GETFL) & os.O_ACCMODE)
+            return fd
+        with unittest.mock.patch.object(self.cache, "open_lock", recording_open_lock):
+            self.cache.store(base, key, entry, files)
         self.assertTrue(state["raced"])
+        # the store held the lock file it opened for writing (it sets the entry's last use through it), not the
+        # read-only fallback for a cache that cannot be written
+        self.assertEqual([os.O_RDWR], modes)
+        self.assertEqual(state["other"], os.lstat(self.cache.lock_path(key)).st_ino)
         self.assertEqual([key], [e["key"] for _, e in self.cache.candidates(base)])
 
 
@@ -558,6 +574,16 @@ class OpenOrCreateTest(unittest.TestCase):
             os.close(fd)
         with open(p) as f:
             self.assertEqual("content", f.read())
+
+    def test_link_is_not_followed_without_o_nofollow(self):
+        """A caller that leaves O_NOFOLLOW out gets it anyway: a dangling link raises OSError (without it, O_EXCL gives
+        EEXIST and the open that follows the link ENOENT, forever)"""
+        target = os.path.join(self.dir, "target")
+        os.symlink(target, os.path.join(self.dir, "dangling"))
+        with self.assertRaises(OSError):
+            os.close(qc.open_or_create("dangling", self.dfd, os.O_RDWR))
+        self.assertFalse(os.path.lexists(target))
+        self.assertTrue(os.path.islink(os.path.join(self.dir, "dangling")))
 
     def test_link_is_not_followed(self):
         target = os.path.join(self.dir, "target")

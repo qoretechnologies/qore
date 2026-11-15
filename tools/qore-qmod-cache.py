@@ -1218,9 +1218,12 @@ def open_or_create(name, dir_fd, flags, mode=0o666):
     between them (an entry's lock file is removed with the entry), it is created again; each further pass of the loop
     means that another job created and removed the file meanwhile, so it never waits for time to pass.
 
-    @param flags the flags of the open without O_CREAT and O_EXCL (with O_NOFOLLOW, a link raises OSError: O_EXCL
-    never follows one)
+    @param flags the flags of the open without O_CREAT and O_EXCL; O_NOFOLLOW is always added, so a link in the
+    place of the file raises OSError
     """
+    # O_EXCL never follows a link, so a dangling one gives EEXIST; the open after it must not follow it either, or it
+    # gives ENOENT and the loop never ends (and a link is never what a lock file of the cache may be, see Cache)
+    flags |= os.O_NOFOLLOW
     while True:
         try:
             return os.open(name, flags | os.O_CREAT | os.O_EXCL, mode, dir_fd=dir_fd)
