@@ -3648,8 +3648,10 @@ int QuicSession::sendStreamCloseFrame(int64_t stream_id, const void* data, size_
             it2->second.close_frame_staged = true;
             // a pong kept before is not sent after the close frame
             it2->second.pending_pong.clear();
-            // the connection's record outlives the stream and the session (#6077); setting it is one atomic
-            // store, which calls nothing
+            // the connection's record outlives the stream and the session (#6077).  It is set here, under the
+            // session's mutex, because every close frame of the stream is staged here and the callers hold the
+            // mutex already (the frame state's close frame comes through sendStreamControlFrame() under it);
+            // setting it is one atomic store, which calls nothing, so it cannot block or re-enter
             auto rit = ws_close_records_.find(stream_id);
             if (rit != ws_close_records_.end()) {
                 rit->second->setCloseSent();

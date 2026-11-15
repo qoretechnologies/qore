@@ -8076,10 +8076,21 @@ int Socket::sendHttp2StreamWebSocketClose(int stream_id, binary frame, softbool 
     for the stream any more.  The stream context of a WebSocket connection takes the record when it is created (see
     @ref AsyncSocketIo::AbstractStreamContext::isWebSocketCloseSent() "AbstractStreamContext::isWebSocketCloseSent()").
 
+    The record of a stream is created when the stream's WebSocket frame state is registered by the I/O controller;
+    the socket keeps the records of its session after the session ends, until the next one ends.
+
     @param stream_id the HTTP/2 stream ID
 
-    @return the read-only record of the stream, or @ref nothing if no HTTP/2 session is active or the session has no
-    such stream
+    @return the read-only record of the stream, or @ref nothing if the stream has no WebSocket frame state
+
+    @par Example:
+    @code{.py}
+*WebSocketCloseRecord rec = sock.getHttp2StreamWebSocketCloseRecord(stream_id);
+    @endcode
+
+    @note the record reveals only whether a close frame was sent on a stream of this socket; like the other methods
+    of this class, this method is not available to a program without network access
+    (@ref Qore::PO_NO_NETWORK "PO_NO_NETWORK")
 
     @since %Qore 3.0
 */
@@ -9356,13 +9367,25 @@ int Socket::submitQuicStreamWebSocketClose(int session_id, int stream_id, binary
     for the stream any more.  The stream context of a WebSocket connection takes the record when it is created (see
     @ref AsyncSocketIo::AbstractStreamContext::isWebSocketCloseSent() "AbstractStreamContext::isWebSocketCloseSent()").
 
+    The record of a stream is created when the stream's WebSocket frame state is registered by the I/O controller and
+    kept for the life of the QUIC session; a stream context holds its own reference, which outlives the session.
+
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID
 
     @return the read-only record of the stream, or @ref nothing if no QUIC session with the given ID is active or the
-    session has no streaming response on the stream
+    stream has no WebSocket frame state
 
     @throw QUIC-ERROR invalid session or stream ID
+
+    @par Example:
+    @code{.py}
+*WebSocketCloseRecord rec = sock.getQuicStreamWebSocketCloseRecord(session_id, stream_id);
+    @endcode
+
+    @note the record reveals only whether a close frame was sent on a stream of this socket; like the other methods
+    of this class, this method is not available to a program without network access
+    (@ref Qore::PO_NO_NETWORK "PO_NO_NETWORK")
 
     @since %Qore 3.0
 */

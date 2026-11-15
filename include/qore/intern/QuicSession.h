@@ -2079,6 +2079,13 @@ private:
 
     //! The records of the close frames of the WebSocket streams, created when their frame state is registered and
     //! kept for the session's life (getWebSocketCloseRecord(), #6077); protected by mtx_
+    /** Unlike an HTTP/2 socket (one connection), the listener socket of a QUIC session serves every session, so it
+        does not keep the records of a session that was removed: that would keep a record for every WebSocket stream
+        the listener ever served.  A stream context takes its record when it is created, right after the stream is
+        dispatched, and a session is removed only after its drain period, so a context finds its session unless its
+        handler thread is delayed past that period; it then gets no record, and a send fails for the removed session
+        (QUIC-ERROR) instead of with WEBSOCKET-CLOSING-ERROR.  The context's reference otherwise outlives the session.
+    */
     std::unordered_map<int64_t, WebSocketCloseRecordRef> ws_close_records_;
 
     //! Per-stream WebSocket frame state for tunnels that want C++ frame parsing

@@ -42,7 +42,21 @@
     Objects of this class are returned by
     @ref Qore::Socket::getHttp2StreamWebSocketCloseRecord() "Socket::getHttp2StreamWebSocketCloseRecord()" and
     @ref Qore::Socket::getQuicStreamWebSocketCloseRecord() "Socket::getQuicStreamWebSocketCloseRecord()"; they cannot
-    be created or changed by Qore code.
+    be created or changed by Qore code, so the guarantee does not depend on the code of a handler.
+
+    @par Sandboxing
+    The class has no functional domain: an object holds one boolean about a stream of a socket that the program
+    already holds, and reveals nothing else (no address, data or state of other streams).  Objects can only be
+    obtained through the methods of @ref Qore::Socket "Socket" above, whose network domain
+    (@ref Qore::PO_NO_NETWORK "PO_NO_NETWORK") keeps them from a program without network access.
+
+    @par Example:
+    @code{.py}
+*WebSocketCloseRecord rec = sock.getHttp2StreamWebSocketCloseRecord(stream_id);
+if (rec && rec.isCloseSent()) {
+    # no data frame may be sent on the stream any more
+}
+    @endcode
 
     @since %Qore 3.0
 */
@@ -56,7 +70,17 @@ private WebSocketCloseRecord::constructor() {
 }
 
 //! Returns @ref True if a close frame was sent on the stream
-/** @return @ref True if a close frame was sent on the stream
+/** The value is read without a lock; once @ref True, it stays @ref True.
+
+    @return @ref True if a close frame was sent on the stream, by the stream's WebSocket frame state or by the
+    application
+
+    @par Example:
+    @code{.py}
+bool closing = rec.isCloseSent();
+    @endcode
+
+    @since %Qore 3.0
 */
 bool WebSocketCloseRecord::isCloseSent() [flags=CONSTANT] {
     return r->isCloseSent();

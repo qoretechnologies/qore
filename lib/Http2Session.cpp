@@ -3302,8 +3302,10 @@ int Http2Session::sendStreamCloseFrame(int32_t stream_id, const void* data, size
     } else {
         // a pong kept before is not sent after the close frame
         pending_pongs.erase(stream_id);
-        // the connection's record outlives the stream and the session (#6077); setting it is one atomic store,
-        // which calls nothing
+        // the connection's record outlives the stream and the session (#6077).  It is set here, under the
+        // session's mutex, because every close frame of the stream is recorded here and the callers hold the mutex
+        // already (the frame state's close frame comes through sendStreamControlFrame() under it); setting it is one
+        // atomic store, which calls nothing, so it cannot block or re-enter while the mutex is held
         auto rit = ws_close_records.find(stream_id);
         if (rit != ws_close_records.end()) {
             rit->second->setCloseSent();
