@@ -111,6 +111,93 @@ int main(int argc, char** argv) {
 
         #! the number of source modules in the chain that the optional module starts
         const OptChainLength = 40;
+
+        #! a C++ host that registers the module into a Program, then uses up stack (KB) in a thread of the given size
+        #! (KB) and registers it into another Program
+        /** It prints the error of the second registration (on stderr, from qore_aot_register_into_program_v2()), then
+            "registered", then "result: <value>" if the module could be used, or "failed" and the error of the parse
+        */
+        const RegisterStackHostCode = "#include <qore/Qore.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+extern \"C\" void qore_StatPlain_register(QoreProgram*);
+
+static void register_and_run() {
+    ExceptionSink xsink;
+    QoreProgram* pgm = new QoreProgram(PO_NEW_STYLE);
+    qore_StatPlain_register(pgm);
+    fflush(stderr);
+    printf(\"registered\\n\");
+    fflush(stdout);
+    pgm->parse(\"%requires StatPlain\\nstring sub main() { return StatPlain::value(); }\\n\", \"host\", &xsink);
+    if (!xsink) {
+        ValueHolder v(pgm->callFunction(\"main\", nullptr, &xsink), &xsink);
+        if (!xsink && v->getType() == NT_STRING) {
+            printf(\"result: %s\\n\", v->get<const QoreStringNode>()->c_str());
+        }
+    }
+    fflush(stdout);
+    if (xsink) {
+        printf(\"failed\\n\");
+        fflush(stdout);
+        xsink.handleExceptions();
+    }
+    pgm->waitForTerminationAndDeref(&xsink);
+    xsink.clear();
+}
+
+//! uses about 1KB of stack for each level, then registers the module
+static __attribute__((noinline)) int burn(int n) {
+    volatile char buf[1024];
+    buf[0] = static_cast<char>(n);
+    buf[sizeof buf - 1] = buf[0];
+    if (n > 0) {
+        return burn(n - 1) + buf[sizeof buf - 1];
+    }
+    register_and_run();
+    return buf[0];
+}
+
+static int burn_kb = 0;
+
+static void* work(void*) {
+    QoreForeignThreadHelper foreign;
+    // the first registration, with the whole stack: the module is initialized (its initialization checks the stack
+    // itself); the one made after burn() merges the registered module into another Program
+    ExceptionSink xsink;
+    QoreProgram* first = new QoreProgram(PO_NEW_STYLE);
+    qore_StatPlain_register(first);
+    burn(burn_kb);
+    first->waitForTerminationAndDeref(&xsink);
+    xsink.clear();
+    return nullptr;
+}
+
+int main(int argc, char** argv) {
+    if (argc != 3) {
+        return 2;
+    }
+    burn_kb = atoi(argv[2]);
+    qore_init(QL_GPL, \"UTF-8\", true);
+    int rc = 1;
+    pthread_attr_t attr;
+    if (!pthread_attr_init(&attr)) {
+        pthread_t thread;
+        if (!pthread_attr_setstacksize(&attr, static_cast<size_t>(atoi(argv[1])) * 1024)
+                && !pthread_create(&thread, &attr, work, nullptr) && !pthread_join(thread, nullptr)) {
+            rc = 0;
+        }
+        pthread_attr_destroy(&attr);
+    }
+    qore_cleanup();
+    return rc;
+}
+";
+
+        #! the stack size of the thread of RegisterStackHostCode (KB)
+        const RegisterStackSize = 512;
     }
 
     private {
@@ -133,6 +220,7 @@ int main(int argc, char** argv) {
         addTestCase("a statically registered module is checked with its linked metadata", \staticModuleTest());
         addTestCase("the optional module of a statically registered module runs short of stack",
             \staticModuleStackTest());
+        addTestCase("a static registration with less than the parse stack reserve left", \registerStackTest());
         set_return_value(main());
     }
 
@@ -275,5 +363,56 @@ int main(int argc, char** argv) {
         }
         assertGt(0, used, "the module is used with a large stack");
         assertGt(0, stack_errors, "the check of the optional module runs short of a small stack");
+    }
+
+    #! The registration of a statically linked module itself stops while the parse stack reserve remains
+    /** StatPlain has no dependencies and no optional modules, so its registration loads no module.  The host registers
+        it into a first Program with the whole stack, which initializes it, then into another Program, which merges the
+        registered module into it (queueChildModules(), addToProgram()) with no initialization, whose own stack check
+        would stop it: only the check of registerAOTStaticModuleIntern() can.  The host uses up more of its thread's
+        stack at each run before the second registration, until it fails with PARSE-STACK-LIMIT-EXCEEDED (reported
+        before the host prints "registered"), and the module is then not used.  Each earlier run must use the module.
+        The runs end at the first failure: with less stack left, the host itself could run out of it.  Without the
+        check, the merge runs with less stack left than any module load is given, and the first stack error is that of
+        the parse after it, if the host does not crash first (issue #6047).
+    */
+    registerStackTest() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        TmpDir tmp("qore-aot-static-register-stack-");
+        string src_dir = tmp.path + "/src";
+        mkdir(src_dir);
+        writeModule(src_dir, "StatPlain", "", "public namespace StatPlain { public string sub value() { "
+            "return \"plain\"; } }");
+        string obj = tmp.path + "/StatPlain.qo";
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -c -o %s %s", env, src_dir, qcc_bin, obj,
+            src_dir + "/StatPlain.qm"));
+        assertTrue(is_file(obj), "compiled the module object: " + out);
+        string exe = buildHost(tmp.path, RegisterStackHostCode, obj);
+        int used;
+        bool stopped;
+        for (int kb = 0; kb < RegisterStackSize; kb += 4) {
+            int status;
+            out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s %d %d 2>&1", env, tmp.path, exe, RegisterStackSize, kb),
+                \status);
+            string label = sprintf("%dK used", kb);
+            assertEq(0, status, label + ": " + out);
+            # the output of the registration: what the host printed before "registered"
+            int end = out.find("registered\n");
+            assertGe(0, end, label + ": " + out);
+            if (out.substr(0, end) =~ /PARSE-STACK-LIMIT-EXCEEDED/) {
+                # the registration failed: the module is not used
+                assertFalse(out =~ /result:/, label + ": " + out);
+                assertRegex("\\bfailed\\b", out, label);
+                stopped = True;
+                break;
+            }
+            # with more than the reserve left at the registration, the module is used
+            assertRegex("result: plain", out, label + ": " + out);
+            ++used;
+        }
+        assertGt(0, used, "the module is used with enough stack");
+        assertTrue(stopped, "the registration stops while the parse stack reserve remains");
     }
 }
