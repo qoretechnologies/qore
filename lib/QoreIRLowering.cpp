@@ -10047,8 +10047,9 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
         return QoreIRValue();
     }
     // an unused value (an expression statement, the update of a for loop) is the only difference from the
-    // pre-increment: both change the lvalue the same way (LValueHelper::postIncrementBigInt() and preIncrementBigInt(), and
-    // the float and number versions), so it is lowered as the pre-increment, with its fused paths (qore#6199)
+    // pre-increment: both change the lvalue the same way (LValueHelper::postIncrementBigInt() and
+    // preIncrementBigInt(), and the float and number versions), so it is lowered as the pre-increment, with its fused
+    // paths (qore#6199)
     if (!base_op->needsReturnValue()) {
         return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node) != nullptr, true,
             base_op->loc, error);
@@ -10135,11 +10136,12 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
         return QoreIRValue();
     }
     // an unused value (an expression statement, the update of a for loop) is the only difference from the
-    // pre-decrement: both change the lvalue the same way (LValueHelper::postDecrementBigInt() and preDecrementBigInt(), and
-    // the float and number versions), so it is lowered as the pre-decrement, with its fused paths (qore#6199)
+    // pre-decrement: both change the lvalue the same way (LValueHelper::postDecrementBigInt() and
+    // preDecrementBigInt(), and the float and number versions), so it is lowered as the pre-decrement, with its fused
+    // paths (qore#6199)
     if (!base_op->needsReturnValue()) {
-        return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node) != nullptr, false,
-            base_op->loc, error);
+        return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node) != nullptr,
+            false, base_op->loc, error);
     }
     // Typed int post-decrement on simple VarRef (exclude references — need lvalue write-through)
     if (dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node)) {

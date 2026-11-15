@@ -83,6 +83,61 @@ int sub int_local_used(int value) {
     return a * 1000000 + b * 10000 + c * 100 + total;
 }
 
+int sub id(int v) {
+    return v;
+}
+
+#! used forms in contexts whose value is used, beside unused forms, which must keep the old value
+hash<auto> sub used_contexts() {
+    int i = 5;
+    int arg = id(i++) * 100 + i;
+    int k = 0;
+    int n = 0;
+    if (k++) {
+        n = 1;
+    }
+    int j = 1;
+    list<int> l = (i++, j--);
+    int a = 5;
+    int b = 1;
+    bool c = True;
+    c ? a++ : b--;
+    c = False;
+    c ? a++ : b--;
+    int s = 1;
+    s++;
+    int sw;
+    switch (s++) {
+        case 2: sw = 2; break;
+        default: sw = -1; break;
+    }
+    int w = 3;
+    int loops = 0;
+    while (w-- > 0) {
+        loops++;
+    }
+    int coalesce = 5;
+    int cv = coalesce++ ?? 0;
+    int cmp = 5;
+    int cr = cmp++ > 5 ? 1 : 0;
+    int closure_var = 5;
+    code f = int sub () { return closure_var++; };
+    int closure_old = f();
+    return {
+        "arg": arg,
+        "if": n * 100 + k,
+        "list": l,
+        "i": i,
+        "j": j,
+        "ternary": a * 100 + b,
+        "switch": sw * 100 + s,
+        "while": loops * 100 + w,
+        "coalesce": cv * 100 + coalesce,
+        "compare": cr * 100 + cmp,
+        "closure": closure_old * 100 + closure_var,
+    };
+}
+
 int sub int_return_post(int value) {
     int x = value;
     return x++;
@@ -426,6 +481,7 @@ int sub threads() {
 show("int local statements", int_local_statements(5));
 show("int local used", int_local_used(5));
 show("int return post", int_return_post(5));
+show("used contexts", used_contexts());
 show("for loop", for_loop(10));
 show("for loop body count", for_loop_body_count(9));
 show("while loop", while_loop(4));
