@@ -190,6 +190,15 @@ public:
         return type_param_instantiation.empty() ? nullptr : &type_param_instantiation;
     }
 
+    //! Returns the parse-time return type of a call of the given function (see parseArgsVariant())
+    /** the type parameters of the callee are substituted with the instantiation of the call, or for a call resolved
+        at run time, with its explicit type arguments, their bounds or auto (qore#5896, qore#6151); for a call resolved
+        at run time, whose class context is not known here, the type is the union of the return types of all the
+        variants, accessible to the call or not: the type that parseArgsVariant() gives the call, or a wider one (or
+        nullptr); the type is not kept in the node, as each call made by the IR interpreter copies its node
+    */
+    DLLLOCAL const QoreTypeInfo* getCallReturnTypeInfo(QoreFunction* func) const;
+
     DLLLOCAL const QoreTypeParamInstantiation* getExplicitTypeParamInstantiation() const {
         if (!has_explicit_type_args) {
             return nullptr;
@@ -575,9 +584,7 @@ protected:
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
-        return variant
-            ? variant->parseGetReturnTypeInfo()
-            : (fe ? fe->getFunction()->parseGetUniqueReturnTypeInfo() : nullptr);
+        return getCallReturnTypeInfo(fe ? fe->getFunction() : nullptr);
     }
 };
 

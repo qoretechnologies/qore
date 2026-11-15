@@ -204,6 +204,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   encodings differ
         # - relative-date-range (#6101): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - generic-call-parse-type (#5896, #6151): its probes run in child processes that set their own --exec-mode
+        #   and in qcc executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
@@ -214,6 +216,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",
+                                 "examples/test/qore/functions/generic-call-parse-type.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
