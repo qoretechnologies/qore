@@ -1708,7 +1708,8 @@ void qore_string_private::splice_simple(size_t offset, size_t num, const char* s
             memmove(buf + offset + str_len, buf + offset + num, ol - end);
         }
     } else if (num > str_len) { // make list smaller
-        memmove(buf + offset + str_len, buf + offset + num, sizeof(char) * (len - offset - str_len));
+        // move the trailing entries down: only the len - end bytes after the removed range exist
+        memmove(buf + offset + str_len, buf + end, sizeof(char) * (len - end));
     }
 
     memcpy(buf + offset, str, str_len);
@@ -1970,8 +1971,10 @@ void qore_string_private::splice_complex(qore_offset_t offset, qore_offset_t num
         //    str->priv->buf, str->priv->len, end, num, len);
         if (end != ol)
             memmove(buf + (end - num + str->priv->len), buf + end, ol - end);
-    } else if ((size_t)num > str->priv->len) // make string smaller
-        memmove(buf + offset + str->priv->len, buf + offset + num, sizeof(char) * (len - offset - str->priv->len));
+    } else if ((size_t)num > str->priv->len) { // make string smaller
+        // move the trailing bytes down: only the len - end bytes after the removed range exist
+        memmove(buf + offset + str->priv->len, buf + end, sizeof(char) * (len - end));
+    }
 
     memcpy(buf + offset, str->priv->effective_buf(), str->priv->len);
 
