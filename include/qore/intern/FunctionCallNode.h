@@ -191,6 +191,15 @@ public:
         return type_param_instantiation.empty() ? nullptr : &type_param_instantiation;
     }
 
+    //! Returns the parse-time return type of a call of the given function (see parseArgsVariant())
+    /** the type parameters of the callee are substituted with the instantiation of the call, or for a call resolved
+        at run time, with its explicit type arguments, their bounds or auto (qore#5896, qore#6151); for a call resolved
+        at run time, whose class context is not known here, the type is the union of the return types of all the
+        variants, accessible to the call or not: the type that parseArgsVariant() gives the call, or a wider one (or
+        nullptr); the type is not kept in the node, as each call made by the IR interpreter copies its node
+    */
+    DLLLOCAL const QoreTypeInfo* getCallReturnTypeInfo(QoreFunction* func) const;
+
     DLLLOCAL const QoreTypeParamInstantiation* getExplicitTypeParamInstantiation() const {
         if (!has_explicit_type_args) {
             return nullptr;
@@ -576,9 +585,7 @@ protected:
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
-        return variant
-            ? variant->parseGetReturnTypeInfo()
-            : (fe ? fe->getFunction()->parseGetUniqueReturnTypeInfo() : nullptr);
+        return getCallReturnTypeInfo(fe ? fe->getFunction() : nullptr);
     }
 };
 
@@ -712,6 +719,16 @@ public:
     template <bool Lexical>
     DLLLOCAL QoreValue execImpl(LexicalSemanticPolicy policy, QoreObject* o, const char* cstr, const qore_class_private* ctx, ExceptionSink* xsink)
             const;
+    //! calls the method looked up by name in the class of the object, as execImpl() does when the method resolved at
+    //! parse time does not apply (the location of the call must be set)
+    template <bool Lexical>
+    DLLLOCAL QoreValue execByNameImpl(LexicalSemanticPolicy policy, QoreObject* o, const char* cstr,
+            const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const;
+    //! sets the location of the call and calls execByNameImpl() out of line, so that the callers on the hot path of
+    //! calls inline it only once (through execImpl())
+    template <bool Lexical>
+    DLLLOCAL QoreValue execByName(LexicalSemanticPolicy policy, QoreObject* o, const char* cstr,
+            const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const;
     //! Raises the exception that exec() raises for an object that has been deleted before it evaluates the
     //! arguments (issue #5784)
     /** @return -1 if the exception was raised, 0 if the object is valid

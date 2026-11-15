@@ -180,7 +180,7 @@ date LoggerEvent::getTimeStamp() {
     @see @ref getStartTime()
 */
 date LoggerEvent::getRelativeTime() {
-    return event->getRelativeTime();
+    return event->getRelativeTime(xsink);
 }
 
 //! Returns throwable info, if any

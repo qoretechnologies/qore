@@ -2090,6 +2090,8 @@ hash<auto> Datasource::getOptionHash() [flags=RET_VALUE_ONLY] {
     - a value that is refused - an option that the driver does not have, or a value that the driver does not accept
       on an open connection - is not kept: the option keeps its previous value, also on the next connection (since
       %Qore 3.0)
+    - the calling code is recorded as the code that set the option: a driver judges the option by it, also when other
+      code opens a connection later (since %Qore 3.0; see @ref sandbox_datasource_options)
 
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver, or the option name or a string option value contains a NUL character (since %Qore 3.0); option values are not shown in the exception
     @throw DATASOURCE-ERROR the datasource must be open for this call

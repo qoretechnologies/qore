@@ -2023,6 +2023,13 @@ public:
     */
     bool value_accepted = false;
 
+    //! Transient (never serialized): the IR interpreter strips the complex type of the returned list or hash
+    /** Set by the interpreter's analysis of the function (buildInterpreterAnalysis()) when its return type is `any`
+        and the value's facts do not rule out a list or hash, as native code converts it
+        (qore_ir_return_needs_coercion()); qore#6058
+    */
+    mutable bool interpreter_strips_any = false;
+
     //! Transient (never serialized): set by the AOT function-body outliner on
     //! returns moved into a helper.  The lowering emits
     //! qore_rt_outline_signal_return() immediately before the ret so the
