@@ -3833,7 +3833,8 @@ public:
             : list(&list), xsink(xsink) {
     }
 
-    ~LValueRemoveSelectors() {
+    // inlined in the removal functions, which hold one each: an out-of-line call costs every removal
+    QORE_INTERN_ALWAYS_INLINE ~LValueRemoveSelectors() {
         // the exception of a selector is raised before any exception raised since
         if (sel_xsink) {
             ExceptionSink since;
