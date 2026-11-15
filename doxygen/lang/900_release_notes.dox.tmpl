@@ -1806,6 +1806,9 @@
       \c OBJECT-ALREADY-DELETED naming the method (<tt>cannot call C::m()</tt>) in every mode
       (<a href="https://github.com/qoretechnologies/qore/issues/5824">issue 5824</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/6057">issue 6057</a>)
+    - a call through \c self of an @ref abstract "abstract method" that another parent class implements raised
+      \c RUNTIME-OVERLOAD-ERROR instead of calling the implementation, except in programs compiled with qcc
+      (<a href="https://github.com/qoretechnologies/qore/issues/3070">issue 3070</a>)
     - a block whose @ref on_exit "on_exit" or @ref on_success "on_success" handler raised a
       @ref thread_exit "thread_exit" ran its @ref on_error "on_error" handlers with no exception, which crashed the
       process

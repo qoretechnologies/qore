@@ -495,6 +495,12 @@ QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execImpl(LexicalSema
             : qore_method_private::evalWithPolicy<Lexical>(policy, *method, xsink, rc, o, args, ctx, nullptr, nullptr,
                 explicit_inst);
     }
+    return execByNameImpl<Lexical>(policy, o, c_str, ctx, rc, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execByNameImpl(LexicalSemanticPolicy policy, QoreObject* o,
+        const char* c_str, const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const {
     // the method is looked up by name in the class of the object
     if (runtime_arg_names) {
         // resolved on the method of the class of the object, as a call with positional arguments (see execNamed())
@@ -1052,6 +1058,14 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
     return err;
 }
 
+template <bool Lexical>
+QORE_INTERN_NOINLINE QoreValue AbstractMethodCallNode::execByName(LexicalSemanticPolicy policy, QoreObject* o,
+        const char* c_str, const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    // the location of this call is the location of the call stack frame of the called code
+    QoreRcCallSiteHelper call_site(rc, loc);
+    return execByNameImpl<Lexical>(policy, o, c_str, ctx, rc, xsink);
+}
+
 QoreValue SelfFunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
@@ -1079,14 +1093,16 @@ QORE_INTERN_ALWAYS_INLINE QoreValue SelfFunctionCallNode::evalCommon(LexicalSema
         // list.  Binding to the parse-time variant instead silently skipped such overrides.
         // must have a class context here
         assert(class_ctx || runtime_cls);
-        // exec() sets the call site
+        // exec() sets the call site; a call of an abstract method has no parse-time class (see parseInitCall()), so
+        // the method is looked up by name (issue #3070)
         return execImpl<Lexical>(policy, self, ns.ostr, class_ctx ? class_ctx : runtime_cls, xsink);
     }
 
     if (is_abstract) {
         // issue #5933: a qualified call of an abstract method is dispatched by the name of the method (not the
-        // qualified name) on the class of the object, which implements it; exec() sets the call site
-        return execImpl<Lexical>(policy, self, ns.getIdentifier(), class_ctx ? class_ctx : runtime_cls, xsink);
+        // qualified name) on the class of the object, which implements it, also for an object of the class of the
+        // call (issue #3070)
+        return execByName<Lexical>(policy, self, ns.getIdentifier(), class_ctx ? class_ctx : runtime_cls, rc, xsink);
     }
 
     if (!method) {
@@ -1235,6 +1251,13 @@ int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_
         if (qore_method_private::get(*method)->isAbstract()) {
             assert(!variant);
             is_abstract = true;
+            // the class of the object implements the method, also when it inherits the implementation from another
+            // parent class than the one that declares the method, so an unqualified call has no parse-time class:
+            // AbstractMethodCallNode::exec() then looks the method up by name also for an object of the class of
+            // the call, and the call costs nothing more at run time than other virtual self calls
+            if (ns.size() == 1) {
+                qc = nullptr;
+            }
         }
     }
     return err;
