@@ -10,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../QoreBuildTree.qm
 
 %exec-class ParseStackBoundaryTest
 
@@ -32,8 +33,16 @@ public class ParseStackBoundaryTest inherits QUnit::Test {
         if (!Option::HAVE_STACK_GUARD) {
             testSkip("runtime built without native stack protection");
         }
-        string root = realpath(get_script_dir() + "/../../../..");
-        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        # the fixture is built with the headers and linked with the libqore of the build of the qore under test
+        *string libdir = QoreBuildTree::build_dir();
+        if (!libdir) {
+            fail(QoreBuildTree::no_build_dir_message());
+        }
+        *string root = QoreBuildTree::source_dir(libdir);
+        if (!root) {
+            fail(sprintf("the CMakeCache.txt of the build tree %y of the qore under test names no source directory",
+                libdir));
+        }
         TmpDir dir("qore-parse-stack-boundary-");
         string exe = dir.path + "/parse-stack-boundary";
         list<string> args = (ENV.CXX ?? "c++", "-std=c++17", "-pthread", "-g", "-O2", "-I" + root + "/include",

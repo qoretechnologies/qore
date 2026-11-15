@@ -16,6 +16,7 @@
 %requires i18n
 
 %requires json
+%requires ../../../examples/test/QoreBuildTree.qm
 
 %exec-class QoreI18nCliTest
 
@@ -104,22 +105,18 @@ class QoreI18nCliTest inherits QUnit::Test {
         assertEq("{count} files", imported_catalog.locales.cs.messages."1 file".forms.other);
     }
 
+    #! Returns the qore under test if it runs from a build tree, whose binary modules the tool loads
     private *string getQoreBin() {
-        string root = normalize_dir(dirname(get_script_path()) + DirSep + "../../..");
-        string qore_bin = root + DirSep + "build/qore";
-        if (is_executable(qore_bin)) {
-            return qore_bin;
-        }
-        qore_bin = root + DirSep + "build-ci/qore";
-        return is_executable(qore_bin) ? qore_bin : NOTHING;
+        return QoreBuildTree::build_dir() ? QoreBuildTree::qore_executable() : NOTHING;
     }
 
     private string runTool(string qore_bin, string args) {
-        string module_dir = "build/modules/astparser:build/modules/i18n";
+        string build = QoreBuildTree::build_dir();
+        string module_dir = build + "/modules/astparser:" + build + "/modules/i18n";
         if (exists ENV.QORE_MODULE_DIR) {
             module_dir += ":" + ENV.QORE_MODULE_DIR;
         }
-        string lib_path = ENV.LD_LIBRARY_PATH ?? "build";
+        string lib_path = ENV.LD_LIBRARY_PATH ?? build;
         return backquote(sprintf("QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s %s 2>&1",
             shellQuote(module_dir), shellQuote(lib_path), shellQuote(qore_bin), shellQuote(tool), args));
     }

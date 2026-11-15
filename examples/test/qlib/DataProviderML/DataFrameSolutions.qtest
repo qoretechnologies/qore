@@ -14,13 +14,9 @@
 %requires DataProviderML
 %requires ml
 
-%try-module dataframe
-%define NoDataFrame
-%endtry
+%requires dataframe
 
-%try-module DataProviderDataFrame
-%define NoDataProviderDataFrame
-%endtry
+%requires DataProviderDataFrame
 
 %exec-class DataFrameSolutionsTest
 
@@ -32,14 +28,6 @@ class DataFrameSolutionsTest inherits QUnit::Test {
     }
 
     etlAnalyticsSolution() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
-%ifdef NoDataProviderDataFrame
-        testSkip("DataProviderDataFrame module not available");
-        return;
-%endif
         DataFrame::DataFrame orders({
             "id": (1, 2, 3, 4, 5, 6),
             "customer_id": (10, 20, 10, 30, 20, 40),
@@ -95,10 +83,6 @@ class DataFrameSolutionsTest inherits QUnit::Test {
     }
 
     aiAnalyticsSolution() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         DataFrame::DataFrame features({
             "feature1": (0.0, 0.1, 0.2, 10.0, 10.1, 10.2),
             "feature2": (0.0, 0.1, 0.0, 10.0, 10.1, 10.0),

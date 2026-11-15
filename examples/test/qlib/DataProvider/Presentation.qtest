@@ -36,6 +36,7 @@
 %requires DataProvider
 %requires i18n
 %requires json
+%requires ../../QoreBuildTree.qm
 
 %exec-class DataProviderPresentationTest
 
@@ -2640,36 +2641,33 @@ class DataProviderPresentationTest inherits QUnit::Test {
         @return the exit status of the tool
     */
     private int runI18nTool(string root, string args, reference<string> output) {
-        string build_qore = root + DirSep + "build/qore";
-        bool built = is_executable(build_qore);
+        # the qore under test runs the tool; the binary modules come from its build tree when it has one
+        *string build = QoreBuildTree::build_dir();
+        bool built = exists build;
         list<string> module_path = (root + DirSep + "qlib", get_script_dir());
         if (built) {
-            module_path += (root + DirSep + "build/modules/i18n", root + DirSep + "build/modules/json");
+            module_path += (build + DirSep + "modules/i18n", build + DirSep + "modules/json");
         }
         if (exists ENV.QORE_MODULE_DIR) {
             module_path += ENV.QORE_MODULE_DIR;
         }
         string env = "QORE_MODULE_DIR=" + shellQuote(module_path.join(PathSep));
         if (built) {
-            env += " LD_LIBRARY_PATH=" + shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build"));
+            env += " LD_LIBRARY_PATH=" + shellQuote(ENV.LD_LIBRARY_PATH ?? build);
         }
         int rc;
-        output = backquote(sprintf("%s %s %s -C %s 2>&1", env, shellQuote(built ? build_qore : QORE_ARGV[0]),
+        output = backquote(sprintf("%s %s %s -C %s 2>&1", env, shellQuote(QoreBuildTree::qore_executable()),
             shellQuote(root + DirSep + "bin/qore-data-provider-i18n"), args), \rc);
         return rc;
     }
 
     sourceCatalogSyncTest() {
         string root = sourceRoot();
-        string qore_bin = root + DirSep + "build/qore";
-        if (!is_executable(qore_bin)) {
-            testSkip("built qore executable not available");
-            return;
-        }
+        string qore_bin = qoreUnderTest();
 
         list<string> module_path = (
-            root + DirSep + "build/modules/i18n",
-            root + DirSep + "build/modules/json",
+            buildDir() + DirSep + "modules/i18n",
+            buildDir() + DirSep + "modules/json",
             root + DirSep + "qlib"
         );
         if (exists ENV.QORE_MODULE_DIR) {
@@ -2677,7 +2675,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
         }
         string local_env = sprintf("QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s",
             shellQuote(module_path.join(PathSep)),
-            shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")));
+            shellQuote(ENV.LD_LIBRARY_PATH ?? buildDir()));
 
         assertEq(0, system(sprintf("%s %s %s --help >/dev/null",
             local_env, shellQuote(qore_bin),
@@ -2703,11 +2701,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
 
     sourceCatalogTranslationCheckTest() {
         string root = sourceRoot();
-        string qore_bin = root + DirSep + "build/qore";
-        if (!is_executable(qore_bin)) {
-            testSkip("built qore executable not available");
-            return;
-        }
+        string qore_bin = qoreUnderTest();
 
         hash<auto> qore_app = DataProviderActionCatalog::getAppEx("Qore");
         hash<string, hash<auto>> catalogs =
@@ -2976,6 +2970,21 @@ class DataProviderPresentationTest inherits QUnit::Test {
             "source-tree verification rejects removed message ids");
     }
 
+    #! Returns the build tree of the qore under test; skips the test case if the qore does not run from one
+    private string buildDir() {
+        *string dir = QoreBuildTree::build_dir();
+        if (!dir) {
+            testSkip(QoreBuildTree::no_build_dir_message());
+        }
+        return dir;
+    }
+
+    #! Returns the qore under test, which runs the tool with the binary modules of its build tree
+    private string qoreUnderTest() {
+        buildDir();
+        return QoreBuildTree::qore_executable();
+    }
+
     #! runs a command; its output, which is not checked, is shown only with verbosity 3
     private int runQuiet(string command) {
         return system(m_options.verbose > 2 ? command : command + " >/dev/null 2>&1");
@@ -2984,8 +2993,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
     private int runCatalogCheck(string root, string qore_bin,
             string output) {
         list<string> module_path = (
-            root + DirSep + "build/modules/i18n",
-            root + DirSep + "build/modules/json",
+            buildDir() + DirSep + "modules/i18n",
+            buildDir() + DirSep + "modules/json",
             root + DirSep + "qlib"
         );
         if (exists ENV.QORE_MODULE_DIR) {
@@ -2994,7 +3003,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
         return runQuiet(sprintf(
             "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check -o %s -a Qore",
             shellQuote(module_path.join(PathSep)),
-            shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
+            shellQuote(ENV.LD_LIBRARY_PATH ?? buildDir()),
             shellQuote(qore_bin),
             shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
             shellQuote(output)));
@@ -3004,8 +3013,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             string output, bool require_standard_locales = False,
             bool require_complete_locales = False) {
         list<string> module_path = (
-            root + DirSep + "build/modules/i18n",
-            root + DirSep + "build/modules/json",
+            buildDir() + DirSep + "modules/i18n",
+            buildDir() + DirSep + "modules/json",
             root + DirSep + "qlib"
         );
         if (exists ENV.QORE_MODULE_DIR) {
@@ -3014,7 +3023,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
         return runQuiet(sprintf(
             "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-tree -o %s %s %s",
             shellQuote(module_path.join(PathSep)),
-            shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
+            shellQuote(ENV.LD_LIBRARY_PATH ?? buildDir()),
             shellQuote(qore_bin),
             shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
             shellQuote(output), require_standard_locales
@@ -3026,8 +3035,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
     private int runOwnerCatalogCheck(string root, string qore_bin,
             string output, string owner, list<string> modules) {
         list<string> module_path = (
-            root + DirSep + "build/modules/i18n",
-            root + DirSep + "build/modules/json",
+            buildDir() + DirSep + "modules/i18n",
+            buildDir() + DirSep + "modules/json",
             root + DirSep + "qlib"
         );
         if (exists ENV.QORE_MODULE_DIR) {
@@ -3038,7 +3047,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
         return runQuiet(sprintf(
             "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check -o %s --owner %s %s",
             shellQuote(module_path.join(PathSep)),
-            shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
+            shellQuote(ENV.LD_LIBRARY_PATH ?? buildDir()),
             shellQuote(qore_bin),
             shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
             shellQuote(output), shellQuote(owner),
@@ -3052,8 +3061,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
         list<string> module_path = (
             root + DirSep + "qlib",
             output,
-            root + DirSep + "build/modules/i18n",
-            root + DirSep + "build/modules/json"
+            buildDir() + DirSep + "modules/i18n",
+            buildDir() + DirSep + "modules/json"
         );
         if (exists ENV.QORE_MODULE_DIR) {
             module_path += ENV.QORE_MODULE_DIR;
@@ -3063,7 +3072,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
         return runQuiet(sprintf(
             "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-source-tree -o %s %s %s %s",
             shellQuote(module_path.join(PathSep)),
-            shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
+            shellQuote(ENV.LD_LIBRARY_PATH ?? buildDir()),
             shellQuote(qore_bin),
             shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
             shellQuote(output), owner_args.join(" "),
@@ -3077,8 +3086,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
         list<string> module_path = (
             root + DirSep + "qlib",
             output,
-            root + DirSep + "build/modules/i18n",
-            root + DirSep + "build/modules/json"
+            buildDir() + DirSep + "modules/i18n",
+            buildDir() + DirSep + "modules/json"
         );
         if (exists ENV.QORE_MODULE_DIR) {
             module_path += ENV.QORE_MODULE_DIR;
@@ -3088,7 +3097,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
         return runQuiet(sprintf(
             "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --update-source-tree -o %s %s",
             shellQuote(module_path.join(PathSep)),
-            shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
+            shellQuote(ENV.LD_LIBRARY_PATH ?? buildDir()),
             shellQuote(qore_bin),
             shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
             shellQuote(output), owner_args.join(" ")));
