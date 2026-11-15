@@ -128,4 +128,13 @@ ast, ir, jit, tiered, tiered with thresholds 1 (tlow), qcc -O0 and -O3.
   rows (`f_var_hwrite`, `f_var_lwrite`, `f_var_awrite`, `m_var_hwrite`), `f_tmp_read` and `m_tmp_read`: the code
   delta is 0 in every row; the only deltas are in libc alone (±7..21 per call, the placement class).  e317abfe88 had
   `fh` +4775 per call (+21.7%) and `fl` +4290 in IR mode.  `f_tmp_write` (a giving site) is -246 in IR mode, in libc.
-- The full matrix against batch R (8a1ac4346b) after the merge: see branch1-notes.txt (table-<tag>.txt on cuttah).
+- Against batch R (8a1ac4346b) after the merge, at 969e33ab5d (matrix q, run 0 of every case; `table-q-r0.txt` on
+  cuttah): no non-giving row costs more code; the method calls that give nothing are 4 instructions per call cheaper
+  in jit, tiered and tlow (`m_four`, `m_int`, `m_nine`, `m_var_hwrite`, `rv_cm`, ...) and `m_poly` 17.5..19.5 in ir,
+  tiered and tlow: `qore_rt_dot_eval_method_direct_impl<false>()`, the instantiation that only the calls that give
+  nothing call, is specialized for no given arguments (impl 91 -> 89, entry 9 -> 7 per call in `m_four` jit).  The
+  calls that give a temporary to a callee whose parameter takes it over pay: `*_try_w`, `s_tmp_write`,
+  `ref_tmp_write` +1067..1073 per call in ir and tiered (the call path instead of the inline call), +167..187 in
+  jit, tlow and qcc, `f_try_w` qcc -O0/-O3 +4352/+4303 (+57%: the consume path instead of the fast entry).
+  `m_poly` jit is -437 (the call of a method of another class that gives its arguments takes them over: fewer
+  allocations), as against develop since e317abfe88.
