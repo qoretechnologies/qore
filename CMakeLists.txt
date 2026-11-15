@@ -2773,7 +2773,7 @@ endif()
 # warnings about code that nothing uses: libqore and qcc were compiled without any warning flag, so static functions
 # that nothing calls were never reported (ten were found by a manual sweep, qore#6163); a static function whose only
 # caller is itself is still not reported by the compilers, only by a sweep
-set(QORE_UNUSED_WARNING_FLAGS "-Wunused-function" CACHE STRING
+set(QORE_UNUSED_WARNING_FLAGS "-Wunused-function -Wunused-variable -Wunused-but-set-variable" CACHE STRING
     "warnings about unused code enabled for libqore and qcc (gcc and clang; empty to disable)")
 set(QORE_UNUSED_WARNINGS_ENABLED FALSE)
 if (QORE_UNUSED_WARNING_FLAGS AND (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
