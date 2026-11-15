@@ -117,7 +117,8 @@ C dc = new D();
 hash<string, code> refs = {
     "function": \f(),
     "static method": \C::s(),
-    # references by a scoped path, which a program compiled with qcc resolves when it is loaded (deferred references)
+    # references by a scoped path (the deferred references of objects compiled per file are tested in
+    # ir/AOTNamedCallRefModules.qtest)
     "function in a namespace": \NS::f(),
     "static method in a namespace": \NS::K::s(),
     "method, typed receiver": \typed.m(),

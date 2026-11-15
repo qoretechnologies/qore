@@ -139,6 +139,16 @@ string sub unknownName(auto v) {
         return ex.err;
     }
 }
+# compares references compiled as deferred references, which are resolved when they are evaluated, and calls them
+# positionally
+string sub comparisons() {
+    code f1 = \\f();
+    code f2 = \\f();
+    code s1 = \\K::s();
+    code s2 = \\K::s();
+    return sprintf(\"function: %y static method: %y function and static method: %y calls: %s / %s\", f1 == f2,
+        s1 == s2, f1 == s1, f1(1, \"p\"), s2(\"q\", 1.5));
+}
 ";
 
         const MainCode = "int sub main() {
@@ -146,6 +156,7 @@ string sub unknownName(auto v) {
         printf(\"%s\\n%s\\n\", viaFunctionRef(v), viaStaticRef(v));
     }
     printf(\"%s\\n\", unknownName(1));
+    printf(\"%s\\n\", comparisons());
     return 0;
 }
 ";
@@ -155,6 +166,12 @@ K::s(int count, string label) count=1 label=\"y\"
 f(string label, float count) label=\"x\" count=2.5
 K::s(string label, float count) label=\"y\" count=2.5
 RUNTIME-OVERLOAD-ERROR
+";
+
+        #! the output of the comparisons of the deferred references, which only the executable built from per-file
+        #! objects prints
+        const DeferredComparisons = "function: True static method: True function and static method: False calls: "
+            "f(int count, string label) count=1 label=\"p\" / K::s(string label, float count) label=\"q\" count=1.5
 ";
     }
 
@@ -239,7 +256,8 @@ RUNTIME-OVERLOAD-ERROR
             string exe = tmp.path + DirSep + "deferred" + opt;
             out = backquote(sprintf("%s %s %s -o %s %s/*.qo 2>&1", env, qcc_bin, opt, exe, lib));
             assertTrue(is_file(exe), "linked the executable " + opt + ": " + out);
-            assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "deferred references " + opt);
+            assertEq(Expected + DeferredComparisons, backquote(sprintf("%s %s 2>&1", env, exe)),
+                "deferred references " + opt);
         }
     }
 }
