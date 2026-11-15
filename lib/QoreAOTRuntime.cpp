@@ -13477,7 +13477,11 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     printd(2, "AOT v3: exec-class set to '%s'\n", exec_class_name.c_str());
                 }
             } else {
-                printd(0, "AOT v3: failed to read program metadata: %s\n", meta_error.c_str());
+                // reported in every build, as the program cannot be loaded (qore#6127)
+                fprintf(stderr, "AOT-ERROR: the AOT-compiled program (%s) cannot be loaded: failed to read its "
+                    "program metadata: %s\n", (label && *label) ? label : "<unknown path>", meta_error.c_str());
+                rc = 2;
+                break;
             }
         }
 
@@ -13508,7 +13512,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             std::string cmd_error;
             if (!applyAOTModuleCommandsToProgram(*qpgm, metadata,
                     static_cast<uint32_t>(metadata_len), label, cmd_error)) {
-                printd(0, "AOT v3: %s\n", cmd_error.c_str());
+                fprintf(stderr, "AOT-ERROR: the AOT-compiled program (%s) cannot be loaded: %s\n",
+                    (label && *label) ? label : "<unknown path>", cmd_error.c_str());
                 rc = 2;
                 break;
             }
@@ -13579,7 +13584,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             }
             if (!deserializer.deserializeIntoProgram(*qpgm,
                     metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
-                printd(0, "AOT: metadata deserialization failed: %s\n",
+                fprintf(stderr, "AOT-ERROR: the AOT-compiled program (%s) cannot be loaded: metadata "
+                    "deserialization failed: %s\n", (label && *label) ? label : "<unknown path>",
                     deser_error.c_str());
                 rc = 2;
                 break;

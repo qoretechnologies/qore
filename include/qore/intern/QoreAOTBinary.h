@@ -546,6 +546,11 @@ constexpr uint8_t QORE_AOT_COMPRESSION_ZLIB = 1;
 constexpr uint8_t QORE_AOT_COMPRESSION_ZSTD = 2;
 constexpr uint8_t QORE_AOT_COMPRESSION_SECTIONED_ZSTD = 3;
 
+//! The maximum size of compressed AOT metadata once decompressed: of the metadata after the header, of a section or
+//! of the string pool, and of all metadata together with sectioned compression; the reader refuses more, so the
+//! writer must not compress more (qore#6127)
+constexpr size_t QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE = 100 * 1024 * 1024;
+
 //! NEW_OBJECT expression-slot ref2 marker for constructors that must resolve their class at runtime.
 constexpr const char* QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT = "deferred-create-object";
 
@@ -1203,6 +1208,11 @@ public:
     //! Header feature flags used by payload-level compatibility choices while
     //! section writers serialize values.
     uint64_t feature_flags = 0;
+
+    //! The function with the most slot map and debug IR metadata written by serializeSlotMaps() and the size of
+    //! that metadata, to name it when the metadata exceeds QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE (qore#6127)
+    std::string largest_func_metadata_name;
+    size_t largest_func_metadata_size = 0;
 
     //! Keep evaluated pending constants for incremental object declaration preloads.
     //! Final executables/modules run their native initializers and must not retain
