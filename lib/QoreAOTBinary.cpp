@@ -3536,6 +3536,12 @@ const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char
     return QoreTypeInfo::getTypedHash(ti);
 }
 
+std::string qore_aot_encode_expr_hashdecl_path(const TypedHashDecl* hd) {
+    return qore_type_contains_type_parameter(hd->getTypeInfo())
+        ? qore_get_aot_serializable_type_path(hd->getTypeInfo())
+        : hd->getNamespacePath();
+}
+
 static std::string qoreAOTHashDeclDefaultDynamicName(const std::string& path, bool& or_nothing) {
     or_nothing = false;
 
@@ -6551,6 +6557,26 @@ QoreAOTDefaultTypeParamSignatureHelper::QoreAOTDefaultTypeParamSignatureHelper(c
 
 QoreAOTDefaultTypeParamSignatureHelper::~QoreAOTDefaultTypeParamSignatureHelper() {
     g_aot_default_type_param_signature = old;
+}
+
+const TypedHashDecl* qore_aot_decode_expr_hashdecl_path(QoreProgram* pgm, const char* path) {
+    if (const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, path)) {
+        return hd;
+    }
+    if (!pgm || !path || !strstr(path, "typeparam<")) {
+        return nullptr;
+    }
+    std::string error;
+    QoreAOTTypeResolver resolver(pgm);
+    // in the code of a generic callable being read (an expression slot of its body), its type parameters are those
+    // of the signature that owns them; a default value being read has its own signature (see
+    // QoreAOTTypeResolver::resolve())
+    const UserSignature* owner = qore_aot_get_type_param_owner();
+    const QoreTypeInfo* ti = owner && !g_aot_default_type_param_signature
+            && qore_aot_type_path_has_signature_type_param(path)
+        ? resolver.resolveForSignature(path, error, owner)
+        : resolver.resolve(path, error);
+    return ti && !qore_type_info_is_aot_deferred(ti) ? QoreTypeInfo::getUniqueReturnHashDecl(ti) : nullptr;
 }
 
 const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& error) {
@@ -10571,7 +10597,7 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                     bool inner_ok = inner.isNothing() || itype == NT_HASH;
                     if (hd && inner_ok) {
                         writer.writeU8(5);  // expression default: hashdecl cast
-                        writer.writeStringRef(hd->getNamespacePath().c_str());
+                        writer.writeStringRef(qore_aot_encode_expr_hashdecl_path(hd).c_str());
                         writer.writeU8(hdc->isOrNothing() ? 1 : 0);
                         writer.writeU8(inner.isNothing() ? 0 : 1);
                         if (!inner.isNothing() && !writer.writeValue(inner)) {
@@ -13064,7 +13090,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
                 return false;
             }
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
-            writer.writeStringRef(hd->getNamespacePath().c_str());
+            writer.writeStringRef(qore_aot_encode_expr_hashdecl_path(hd).c_str());
             return write_parse_arg_list(vrn->getParseArgs());
         }
         if (vrn->isComplexHashConstruct()) {
@@ -13903,7 +13929,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
         if (nhd->hd) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
-            writer.writeStringRef(nhd->hd->getNamespacePath().c_str());
+            writer.writeStringRef(qore_aot_encode_expr_hashdecl_path(nhd->hd).c_str());
         } else if (nhd->isDynamicHashDeclConstruct()) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
             writer.writeStringRef(nhd->getDynamicHashDeclName().c_str());
@@ -13962,7 +13988,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(hdc->getCastTypeInfo());
         if (hd || hdc->getCastTypeInfo() == hashTypeInfo || hdc->isDynamicHashDeclCast()) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_HASHDECL));
-            writer.writeStringRef(hd ? hd->getNamespacePath().c_str()
+            writer.writeStringRef(hd ? qore_aot_encode_expr_hashdecl_path(hd).c_str()
                 : (hdc->isDynamicHashDeclCast() ? hdc->getDynamicHashDeclName().c_str() : "hash"));
             writer.writeU8(hdc->isOrNothing() ? 1 : 0);
             // Serialize the inner expression being cast
@@ -19790,6 +19816,16 @@ static bool readAndSetupVariantSignature(
                 }
             }
             const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, hd_path);
+            if (!hd && hd_path && strstr(hd_path, "typeparam<")) {
+                // a hashdecl with type parameters of the callable or its class (qore#6173)
+                std::string type_error;
+                const QoreTypeInfo* hti = has_callable_type_params
+                    ? type_resolver->resolveForSignature(hd_path, type_error, sig)
+                    : type_resolver->resolve(hd_path, type_error);
+                if (hti && !qore_type_info_is_aot_deferred(hti)) {
+                    hd = QoreTypeInfo::getUniqueReturnHashDecl(hti);
+                }
+            }
             if (!hd && (!hd_path || !*hd_path || !strcmp(hd_path, "hash"))) {
                 printd(0, "AOT deser: cannot resolve hashdecl '%s' for default value\n",
                     hd_path ? hd_path : "(null)");
