@@ -629,9 +629,6 @@ public:
         std::vector<uint8_t>&& paramFlags = std::vector<uint8_t>(),
         QoreProgram* localOwnerPgm = nullptr);
 
-    DLLLOCAL void replaceResolvedTypes(const QoreTypeInfo* retType,
-        std::vector<const QoreTypeInfo*>&& paramTypes);
-
     DLLLOCAL virtual ~UserSignature() {
         // type-parameter types are cached by signature address, which the next signature allocated can reuse
         qore_purge_derived_types(this, nullptr, nullptr);
@@ -2073,11 +2070,6 @@ public:
     */
     DLLLOCAL const QoreProgramLocation* getAOTBodyLocation() const {
         return aot_body_loc;
-    }
-
-    //! Returns true if this variant's AOT context has already been materialized.
-    DLLLOCAL bool hasMaterializedAOTContext() const {
-        return cached_aot_ctx.load(std::memory_order_acquire) != nullptr;
     }
 
     //! Returns the cached AOT context for direct AOT fast-entry dispatch.
