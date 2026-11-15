@@ -866,7 +866,8 @@ public:
     }
 
     //! raises the error of a call of the method @a mname of the class @a cls on the object, which has been deleted
-    DLLLOCAL void raiseDeletedCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink) const;
+    // the error path of startCall() and checkCurrentObjectCall(), kept out of the code that every call runs
+    DLLLOCAL QORE_INTERN_NOINLINE void raiseDeletedCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink) const;
 
     DLLLOCAL void endCall(ExceptionSink* xsink);
 
