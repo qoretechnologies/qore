@@ -45,6 +45,15 @@ class QoreColumnarResult;
 class DatasourceStatementHelper;
 class ResolvedCallReferenceNode;
 class SqlMutationContext;
+class QoreModuleCommandRestrictions;
+class QoreSandboxManager;
+
+//! defined if Datasource::getOptionRestrictions() and Datasource::getOptionPolicyManagerRef() are available
+/** A driver judges an option by the code that set it, not by the code that opens the connection (qore#5741)
+
+    @since %Qore 3.0
+*/
+#define _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS 1
 
 //! the base class for accessing databases in Qore through a Qore DBI driver
 /** This class is not thread-safe or even thread-aware.  Thread safety and thread
@@ -677,6 +686,8 @@ public:
 
         @return -1 for error (exception raised), 0 for OK
 
+        @note the calling code is recorded as the code that set the option; see getOptionRestrictions()
+
         @deprecated use setOption(const char*, const QoreValue, ExceptionSink*);
     */
     DLLEXPORT int setOption(const char* opt, const QoreValue val, ExceptionSink* xsink);
@@ -699,8 +710,81 @@ public:
 
         This function returns the same value as getOptionHash() but the caller should not modify the value returned, also
         this function is meant to be used during the open() call to read any options that may be relevant for opening a new connection
+
+        @note
+        - while the driver's option-setting function runs for setOption() on an open connection, an option that had no
+          value before appears in the hash as a placeholder entry with no value (\c NOTHING): its value is stored only
+          once the driver accepts it.  The Qore library does not give a placeholder to the driver's option-setting
+          function when it opens a connection meanwhile (a driver that reconnects from its option-setting function),
+          but a driver's open function that reads this hash directly sees it.  A placeholder has no setter during an
+          open: getOptionRestrictions() returns false for it, and the driver treats it as not set.  An option whose
+          stored value is \c NOTHING (set to no value with setOption()) has a setter, and is a value like any other
+        - while a connection is opened, getOptionRestrictions() and getOptionPolicyManagerRef() report the setters of
+          the stored values that the connection is given, also while another value of an option is being set
+        - a driver must not call setOption() on the datasource from its own open or option-setting functions
     */
     DLLEXPORT const QoreHashNode* getConnectOptions() const;
+
+    //! returns the restrictions of the code that set an option
+    /** A driver applies the options of a datasource when a connection is opened (getConnectOptions()), which can
+        happen long after they were set, on another thread and for other code: a DatasourcePool opens a connection on
+        the thread that first needs it, and trusted code can open a datasource that sandboxed code configured.  An
+        option that does something that restricted or sandboxed code must not do (such as adding to a classpath) is
+        therefore judged by the code that set it: whoever configures a datasource decides what its options may do.
+
+        The code that set an option is recorded when it is set: by setOption() (also on an open connection, where
+        the new setter is pending while the driver's option-setting function runs: it is visible to the driver but
+        not yet stored, and copies of the datasource do not see it; it is stored with the value once the driver
+        accepts it, and a value that is refused keeps the previous setter), by the
+        options of a Datasource constructor or of a connection string, and, for every connection of a
+        DatasourcePool, the code that created the pool.  A copy of a datasource (also for the connections of a pool
+        that is copied) keeps the setters of the options that it copies.
+
+        The restrictions are those that QoreModuleCommandRestrictions::getCallerRestrictions() gave the code that set
+        the option.
+
+        Call it as getConnectOptions() is called: from the driver's open and option-setting functions, or while the
+        calling thread holds the connection.
+
+        @param opt the name of the option, as a key of getConnectOptions() or as passed to the driver's option-setting
+        function
+        @param restrictions receives the restrictions of the code that set the option if they are known
+
+        @return true if the code that set the option is known and \a restrictions were set, false if not (the option
+        is not set, or it was set in a way that recorded no setter): then the driver judges the code that is running
+
+        @note A driver checks these restrictions first, and an option that they refuse (the setter was sandboxed or
+        restricted) is refused whatever getOptionPolicyManagerRef() returns: that manager is nullptr whenever no
+        sandbox policy governed the setter, also for sandboxed code that ran inside a trusted
+        \c SandboxManager::callWithSystemPolicy() call (a barrier), so a missing policy is not a permission.  Only an
+        option that these restrictions allow is then checked against the policy, if there is one
+
+        @see getOptionPolicyManagerRef()
+        @see the feature macro \c _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool getOptionRestrictions(const char* opt, QoreModuleCommandRestrictions& restrictions) const;
+
+    //! returns the filesystem policy of the code that set an option
+    /** The manager that a policy check made by the code that set the option would have used
+        (QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)), for an option whose value names files that the
+        driver reads: the driver checks them against this policy instead of against the policy of the code that opens
+        the connection, so that the code that configured the datasource can read only what its own policy allows.
+
+        @param opt the name of the option
+
+        @return a new reference to the policy manager (the caller owns it), or nullptr if no sandbox policy governed
+        the code that set the option, or if the setter is not known (see getOptionRestrictions())
+
+        @note Call it after getOptionRestrictions() has allowed the option, never instead of it: nullptr does not mean
+        that the setter was trusted (under a trusted barrier, \c SandboxManager::callWithSystemPolicy(), the code that
+        set the option has no policy manager but can still be sandboxed), so a driver that refuses the option for a
+        restricted setter refuses it before it looks at the policy
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreSandboxManager* getOptionPolicyManagerRef(const char* opt) const;
 
     //! returns a hash representing the configuration of the current object
     /**

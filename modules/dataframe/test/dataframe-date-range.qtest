@@ -85,10 +85,11 @@ class DataFrameDateRangeTest inherits QUnit::Test {
         # the microseconds of a time value in the range, near its end
         date in_range = years(292471) + hours(1828) + seconds(54) + microseconds(100);
         DataFrame::DataFrame df({"v": (in_range,)});
-        assertEq((9223372036854000100,), map get_epoch_microseconds($1), df.getColumn("v"),
+        # a column of time values returns them as time values (qore#6107)
+        assertEq((9223372036854000100,), map get_duration_microseconds($1), df.getColumn("v"),
             "a time value near the end of the range");
         # a time value whose parts have different signs
-        assertEq((9223365456000000000,), map get_epoch_microseconds($1),
+        assertEq((9223365456000000000,), map get_duration_microseconds($1),
             (new DataFrame::DataFrame({"v": (years(292472) - days(365),)})).getColumn("v"),
             "a time value with parts of different signs");
         foreach date d in ((years(300000), -years(300000), years(292471) + days(1000))) {
@@ -97,8 +98,11 @@ class DataFrameDateRangeTest inherits QUnit::Test {
                 label + ": column hash");
             assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame(({"v": d},)); }, (),
                 label + ": records");
-            DataFrame::DataFrame nulls({"v": (first, NOTHING)});
+            # a column of time values is filled only with time values (qore#6107)
+            DataFrame::DataFrame nulls({"v": (1h, NOTHING)});
             assertThrows("DATAFRAME-DATE-RANGE-ERROR", \nulls.fillna(), d, label + ": fillna()");
+            DataFrame::DataFrame dates({"v": (first, NOTHING)});
+            assertEq(NOTHING, dates.fillna(d).getColumn("v")[1], label + ": fillna() of a column of dates");
         }
     }
 
