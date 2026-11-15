@@ -900,12 +900,19 @@ enum qore_dbg_program_entry_site_e : int {
     QDPES_INSTANTIATION_VAR = 4,
     //! the steps of the entry once the thread's context is switched (ProgramThreadCountContextHelper::enterSwitched())
     QDPES_SWITCHED = 5,
+    //! after the Program's thread entry handler ran (ThreadEntryHandlerFrame::enterHandlers())
+    QDPES_ENTRY_HANDLER = 6,
+    //! the Program's thread exit handler (ThreadEntryHandlerFrame::exitHandlers())
+    QDPES_EXIT_HANDLER = 7,
+    //! the steps of the entry after the Program's entry handler ran (ProgramThreadCountContextHelper::enterSwitched())
+    QDPES_ENTERED = 8,
 };
 
-//! Makes the next entry into another Program that reaches \a site throw std::bad_alloc there; -1 disarms it
+//! Makes the next step of an entry into another Program at \a site throw std::bad_alloc; several sites can be armed,
+//! each fails once; -1 disarms all of them
 DLLLOCAL void qore_dbg_fail_next_program_entry(int site);
 
-//! Returns true, and disarms the hook, if the next entry is armed to fail at \a site
+//! Returns true, and disarms the site, if the next step at \a site is armed to fail
 DLLLOCAL bool qore_dbg_program_entry_fails(int site);
 #endif
 
@@ -2355,8 +2362,11 @@ public:
 private:
     //! runs the entry handler of the Program, if any; see enter()
     DLLLOCAL QORE_INTERN_NOINLINE int enterHandlers(ThreadData* td, QoreProgram* pgm, ExceptionSink* xsink);
-    //! runs the exit handler paired with the entry handler that ran; see exit()
+    //! runs the exit handler paired with the entry handler that ran; see exit(); never throws: a C++ exception is
+    //! recorded in the sink
     DLLLOCAL QORE_INTERN_NOINLINE void exitHandlers(ThreadData* td, ExceptionSink* xsink);
+    //! leaves the frame for an entry whose handler failed: no exit handler runs for it; never throws
+    DLLLOCAL void failEntry(ThreadData* td, ExceptionSink& handler_xsink) noexcept;
 
     //! the thread's entered Program before the frame
     QoreProgram* old_entry_pgm = nullptr;

@@ -1697,16 +1697,21 @@ void ThreadProgramData::delProgram(QoreProgram* pgm) {
 }
 
 #ifdef DEBUG
-//! the step of the next entry into another Program that fails with std::bad_alloc, or -1
-static std::atomic<int> dbg_program_entry_fail_site{-1};
+//! the steps of entries into other Programs that fail with std::bad_alloc, one bit per site
+static std::atomic<unsigned> dbg_program_entry_fail_sites{0};
 
 void qore_dbg_fail_next_program_entry(int site) {
-    dbg_program_entry_fail_site.store(site, std::memory_order_seq_cst);
+    if (site < 0) {
+        dbg_program_entry_fail_sites.store(0, std::memory_order_seq_cst);
+        return;
+    }
+    assert(site < 32);
+    dbg_program_entry_fail_sites.fetch_or(1u << site, std::memory_order_seq_cst);
 }
 
 bool qore_dbg_program_entry_fails(int site) {
-    int expected = site;
-    return dbg_program_entry_fail_site.compare_exchange_strong(expected, -1, std::memory_order_seq_cst);
+    const unsigned bit = 1u << site;
+    return dbg_program_entry_fail_sites.fetch_and(~bit, std::memory_order_seq_cst) & bit;
 }
 #endif
 
@@ -4436,21 +4441,59 @@ int ThreadEntryHandlerFrame::enterHandlers(ThreadData* td, QoreProgram* pgm, Exc
     // the caller's sink can already hold an exception, as when a destructor runs while the stack unwinds, so the
     // handler gets a sink of its own, which also tells whether it failed
     ExceptionSink handler_xsink;
-    token = run_thread_entry_handler(td, handlers->on_enter, nullptr, handler_xsink);
+    try {
+        token = run_thread_entry_handler(td, handlers->on_enter, nullptr, handler_xsink);
+#ifdef DEBUG
+        if (qore_dbg_program_entry_fails(QDPES_ENTRY_HANDLER)) {
+            throw std::bad_alloc();
+        }
+#endif
+    } catch (...) {
+        // a C++ exception (std::bad_alloc) during or after the handler fails the entry as a Qore exception does: the
+        // frame is left without the exit handler, and the exception propagates to the code that enters the Program,
+        // which undoes the rest of the entry (issue #6198)
+        failEntry(td, handler_xsink);
+        if (xsink) {
+            xsink->assimilate(handler_xsink);
+        }
+        throw;
+    }
     if (!handler_xsink) {
         return 0;
     }
     // the entry failed: no exit handler runs for it
-    token.discard(&handler_xsink);
-    token = QoreValue();
-    handlers->deref(&handler_xsink);
-    handlers = nullptr;
-    td->entry_pgm = old_entry_pgm;
-    active = false;
+    failEntry(td, handler_xsink);
     if (xsink) {
         xsink->assimilate(handler_xsink);
     }
     return -1;
+}
+
+//! records a C++ exception that a handler step raised in \a xsink; never throws
+static void record_entry_handler_failure(ExceptionSink& xsink, const char* step) noexcept {
+    try {
+        xsink.raiseException("THREAD-ENTRY-HANDLER-ERROR", "the Program's thread %s handler could not be completed: "
+            "out of memory or an internal error", step);
+    } catch (...) {
+        // nothing more can be recorded
+    }
+}
+
+void ThreadEntryHandlerFrame::failEntry(ThreadData* td, ExceptionSink& handler_xsink) noexcept {
+    try {
+        token.discard(&handler_xsink);
+    } catch (...) {
+        record_entry_handler_failure(handler_xsink, "entry");
+    }
+    token = QoreValue();
+    try {
+        handlers->deref(&handler_xsink);
+    } catch (...) {
+        record_entry_handler_failure(handler_xsink, "entry");
+    }
+    handlers = nullptr;
+    td->entry_pgm = old_entry_pgm;
+    active = false;
 }
 
 void ThreadEntryHandlerFrame::exit(ExceptionSink* xsink) {
@@ -4480,17 +4523,38 @@ void ThreadEntryHandlerFrame::exitHandlers(ThreadData* td, ExceptionSink* xsink)
     // the handler runs even if an exception is pending; it gets a sink of its own, whose exceptions are added after
     // the pending ones
     ExceptionSink handler_xsink;
-    if (handlers->on_exit) {
-        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &handler_xsink);
-        // the list takes the reference to the value returned by the entry handler
-        args->push(token, &handler_xsink);
-        token = QoreValue();
-        ValueHolder rv(run_thread_entry_handler(td, handlers->on_exit, *args, handler_xsink), &handler_xsink);
-    } else {
-        token.discard(&handler_xsink);
-        token = QoreValue();
+    // the frame is left in any case: a C++ exception (std::bad_alloc) from the handler or its arguments is recorded
+    // in the sink, so that the code that leaves or undoes an entry completes (issue #6198)
+    try {
+#ifdef DEBUG
+        if (qore_dbg_program_entry_fails(QDPES_EXIT_HANDLER)) {
+            throw std::bad_alloc();
+        }
+#endif
+        if (handlers->on_exit) {
+            ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &handler_xsink);
+            // the list takes the reference to the value returned by the entry handler, whatever the outcome of the
+            // push, so the frame gives it up first
+            QoreValue entry_value = token;
+            token = QoreValue();
+            args->push(entry_value, &handler_xsink);
+            ValueHolder rv(run_thread_entry_handler(td, handlers->on_exit, *args, handler_xsink), &handler_xsink);
+        }
+    } catch (...) {
+        record_entry_handler_failure(handler_xsink, "exit");
     }
-    handlers->deref(&handler_xsink);
+    // the value of the entry handler, if the exit handler did not take it
+    try {
+        token.discard(&handler_xsink);
+    } catch (...) {
+        record_entry_handler_failure(handler_xsink, "exit");
+    }
+    token = QoreValue();
+    try {
+        handlers->deref(&handler_xsink);
+    } catch (...) {
+        record_entry_handler_failure(handler_xsink, "exit");
+    }
     handlers = nullptr;
     if (xsink) {
         xsink->assimilate(handler_xsink);
@@ -4755,8 +4819,16 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         // call within the entered Program, the usual case, costs only this comparison
         if (td->entry_pgm != pgm) {
             this->xsink = xsink;
-            if (entry_frame.enter(td, pgm, xsink)) {
-                failed = true;
+            try {
+                if (entry_frame.enter(td, pgm, xsink)) {
+                    failed = true;
+                }
+            } catch (...) {
+                // the exception propagates from the constructor, whose destructor then does not run (a helper that
+                // calls set() later runs it, which finds nothing left to undo: the frame is inactive and the deferral
+                // restored; issue #6198)
+                restoreDeferral();
+                throw;
             }
         }
         return;
@@ -4910,6 +4982,11 @@ void ProgramThreadCountContextHelper::enterSwitched(ThreadData* td, ExceptionSin
         restore = false;
         return;
     }
+#ifdef DEBUG
+    if (qore_dbg_program_entry_fails(QDPES_ENTERED)) {
+        throw std::bad_alloc();
+    }
+#endif
 
     // the Program's thread initialization code runs on the thread's first entry into the Program that succeeds; a
     // first entry whose entry handler failed left it pending

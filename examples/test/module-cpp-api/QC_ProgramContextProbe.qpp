@@ -31,12 +31,14 @@
 #include <new>
 
 // runs enter, which enters a Program from C++, and reports what the entry leaves (see enterProgram())
-static QoreHashNode* enter_program_report(ExceptionSink* xsink, const std::function<bool()>& enter) {
+// the exceptions of the entry go to a sink of its own, reported with the key "error" (the first one's name)
+static QoreHashNode* enter_program_report(ExceptionSink* xsink, const std::function<bool(ExceptionSink*)>& enter) {
     QoreProgram* before = getProgram();
     bool caught = false;
     bool entered = false;
+    ExceptionSink entry_xsink;
     try {
-        entered = enter();
+        entered = enter(&entry_xsink);
     } catch (std::bad_alloc&) {
         caught = true;
     }
@@ -44,6 +46,10 @@ static QoreHashNode* enter_program_report(ExceptionSink* xsink, const std::funct
     rv->setKeyValue("caught", caught, xsink);
     rv->setKeyValue("entered", entered, xsink);
     rv->setKeyValue("restored", getProgram() == before, xsink);
+    if (entry_xsink) {
+        rv->setKeyValue("error", entry_xsink.getExceptionErr().refSelf(), xsink);
+        entry_xsink.clear();
+    }
     return rv.release();
 }
 
@@ -91,13 +97,14 @@ static int ProgramContextProbe::getStaticParseOptions() [flags=CONSTANT] {
     @param program the Program to enter
 
     @return a hash with the keys \c caught (True if std::bad_alloc was thrown), \c entered (True if the Program was
-    the current one inside the helper) and \c restored (True if the calling Program is the current one afterwards)
+    the current one inside the helper), \c restored (True if the calling Program is the current one afterwards) and,
+    if the entry raised a Qore exception, \c error (the name of the first one)
 */
 static hash<auto> ProgramContextProbe::enterProgram(Program[QoreProgram] program) {
     QoreProgram* pgm = *program;
-    return enter_program_report(xsink, [pgm, xsink]() -> bool {
-        QoreExternalProgramContextHelper pch(xsink, pgm);
-        return !*xsink && getProgram() == pgm;
+    return enter_program_report(xsink, [pgm](ExceptionSink* entry_xsink) -> bool {
+        QoreExternalProgramContextHelper pch(entry_xsink, pgm);
+        return !*entry_xsink && getProgram() == pgm;
     });
 }
 
@@ -114,12 +121,12 @@ static hash<auto> ProgramContextProbe::enterProgram(Program[QoreProgram] program
 */
 static hash<auto> ProgramContextProbe::commitProgram(Program[QoreProgram] program, string code) {
     QoreProgram* pgm = *program;
-    return enter_program_report(xsink, [pgm, code, xsink]() -> bool {
-        pgm->parsePending(code->c_str(), "program-context-probe", xsink);
-        if (*xsink) {
+    return enter_program_report(xsink, [pgm, code](ExceptionSink* entry_xsink) -> bool {
+        pgm->parsePending(code->c_str(), "program-context-probe", entry_xsink);
+        if (*entry_xsink) {
             return false;
         }
-        pgm->parseCommit(xsink);
-        return !*xsink;
+        pgm->parseCommit(entry_xsink);
+        return !*entry_xsink;
     });
 }

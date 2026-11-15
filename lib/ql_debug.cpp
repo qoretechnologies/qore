@@ -23606,9 +23606,9 @@ static QoreValue f_dbg_env_read_race_result(const QoreListNode* params, RuntimeC
 #endif
 
 #ifdef DEBUG
-//! Makes the next entry into another Program fail with std::bad_alloc at the given step
-/** Tests that a failed entry leaves the thread as it was (ProgramThreadCountContextHelper; issue #6198); -1 disarms
-    the hook
+//! Makes the next step of an entry into another Program at the given site fail with std::bad_alloc
+/** Tests that a failed entry leaves the thread as it was (ProgramThreadCountContextHelper; issue #6198); several sites
+    can be armed, each fails once; -1 disarms all of them
 */
 static QoreValue f_dbg_fail_next_program_entry(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
