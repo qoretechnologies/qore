@@ -2294,7 +2294,12 @@ static QoreValue qore_rt_assign_local_transfer(LocalVar* var, QoreValue value,
     if (helper.assign(value, "<lvalue>", true)) {
         return QoreValue();
     }
-    return helper.getValue();
+    // the node that the local stores, which stays valid after the helper is gone: the callers pass a copy of a hash or
+    // a list; helper.getValue() would return a scalar that the local stores natively in a node that the helper keeps
+    // and releases when it is destroyed (qore#6094)
+    QoreValue stored(helper.getInternalNode());
+    assert(stored.getType() == NT_HASH || stored.getType() == NT_LIST);
+    return stored;
 }
 
 extern "C" DLLEXPORT void qore_rt_assign_local(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
@@ -15391,6 +15396,12 @@ extern "C" DLLEXPORT void qore_rt_unique_local_aot(QoreAOTContext* ctx, int32_t 
     if (!lvar) {
         return;
     }
+    // only a hash or a list is copied: QoreLValue::getValue() would return a large int or a special float that the
+    // variable stores natively in a new node (qore#6094)
+    qore_type_t t = lvar->val.getType();
+    if (t != NT_HASH && t != NT_LIST) {
+        return;
+    }
     bool copied = false;
     QoreValue unique = qore_ir_unique_container(lvar->val.getValue(), copied);
     if (!copied) {
@@ -17468,8 +17479,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 return toBits(QoreValue());
             }
             lvh.startContainerRemoval();
-            QoreValue container = lvh.getValue();
-            qore_type_t ct = container.getType();
+            // the type alone: getValue() would box a large int or a special float that the parent stores
+            // natively in a new node (qore#6094)
+            qore_type_t ct = lvh.getType();
             if ((last_is_hash_slice || last_is_hash_list)
                     && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
                 res = executeLVHashKeySliceRemove(lvh, ct, last_step,

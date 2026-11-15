@@ -18195,8 +18195,9 @@ load_local_done:
                                 lvh.startContainerRemoval();
                                 // Now remove/delete the final key/element from the container
                                 const LVPathStep& last_step = path_copy.back();
-                                QoreValue container = lvh.getValue();
-                                qore_type_t ct = container.getType();
+                                // the type alone: getValue() would box a large int or a special float that the
+                                // parent stores natively in a new node (qore#6094)
+                                qore_type_t ct = lvh.getType();
                                 bool last_is_hash = (last_step.kind == LVPathStepKind::HashKeyConst
                                         || last_step.kind == LVPathStepKind::HashKey);
                                 bool last_is_hash_list = last_is_hash && last_step.slice_values.size() == 1
