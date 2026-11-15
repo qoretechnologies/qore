@@ -2934,6 +2934,9 @@ pgm.setSandboxManager(sm);
 
     @note Once set, the sandbox manager restricts filesystem and network access for code
     running in this program.
+    @note A %Program that sandboxed code created, or added code to, keeps the sandbox of that code (see
+    @ref sandbox_program_capability): the manager set here governs the %Program's code together with that sandbox,
+    so it can only add restrictions to it, and removing the manager does not remove that sandbox
 
     @throw SANDBOX-ACCESS-ERROR the code of a sandboxed %Program, or of a %Program that restricts a functional domain,
     cannot replace the sandbox manager of a %Program that has one; it can only give one to a %Program that has none,
@@ -2947,8 +2950,10 @@ nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sandbox_ma
    // (issue #5659).  A composition of the old and new managers is not stored instead: the old manager would no
    // longer be the one that its owner's limits, interrupt requests and configuration changes act on
    if (qore_calling_code_is_untrusted()) {
-       QoreSandboxManagerHelper current(p);
-       if (current && current.get() != *sandbox_manager) {
+       // the sandbox of the code that created the Program is not replaced (see Program::getSandboxManager()), so
+       // giving the Program a manager of its own only adds restrictions to it
+       ReferenceHolder<QoreSandboxManager> current(qore_program_private::get(*p)->getOwnSandboxManagerRef(), nullptr);
+       if (current && *current != *sandbox_manager) {
            return xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code, or code whose functional domains "
                "are restricted, cannot replace the sandbox manager of a Program");
        }
@@ -2969,14 +2974,14 @@ if (sm) {
     @endcode
 
     @note NOTHING does not mean that the code of the %Program is not sandboxed: a %Program that sandboxed code
-    creates has no manager of its own, but its code is governed by the sandbox of its callers, and, as the
-    %Program object keeps the sandbox that it was created in, by that sandbox when its code is called through the
-    object (Program::callFunction(), Program::getCallReference() and the like), also by trusted code
+    creates, or adds code to, has no manager of its own, but it keeps the sandbox of that code, which governs its
+    code wherever it runs, also when trusted code calls it (see @ref sandbox_program_capability); this method returns
+    only the manager set with setSandboxManager()
 
     @since Qore 3.0
  */
 *SandboxManager Program::getSandboxManager() [flags=CONSTANT] {
-   QoreSandboxManager* sm = qore_program_private::get(*p)->getSandboxManagerRef();
+   QoreSandboxManager* sm = qore_program_private::get(*p)->getOwnSandboxManagerRef();
    if (!sm) {
        return QoreValue();
    }

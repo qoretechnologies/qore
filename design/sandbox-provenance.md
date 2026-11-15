@@ -26,6 +26,29 @@ or sandboxed code a Program object with more freedom than the tenant itself has.
 `sandbox_program_capability` in doxygen/lang/222_sandboxing.dox.tmpl and the `Program` class documentation in
 lib/QC_Program.qpp.
 
+## A Program keeps the sandbox of the code that created it
+
+Object provenance and the caller walk govern the code of a Program only while it is reached through an object,
+closure or caller that carries the sandbox. A Program that sandboxed code creates is reachable without them: its
+code can import a function into a Program of the host, the host can copy its functions into an evaluation Program
+(`ProgramControl::createEvalProgram()`), and a binary module's thread can enter it with
+`QoreExternalProgramContextHelper`. The `sandboxed` flag alone (issue #5659) marks such code as untrusted for the
+decisions made from it (what it creates, the paths reserved for trusted code), but applies no policy, interrupt or
+limit, so the code called in those ways ran with the freedom of the trusted code that called it.
+
+So the Program also keeps the sandbox itself: `qore_program_private::creator_sandbox_manager`, the manager that
+`qore_caller_sandbox_ref()` resolves for the creating code, is set in the constructor whenever the constructor marks
+the Program sandboxed, and by `markSandboxedParse()` when sandboxed code parses code into a Program (a later addition
+is combined with the one set, so it only adds restrictions). It is separate from the Program's own manager:
+`QoreProgram::setSandboxManager()` (also with `nullptr`) and `Program::getSandboxManager()` act on the own manager
+only, and the two govern the Program's code together. Every lookup of a Program's sandbox resolves both:
+`getSandboxManagerRefs()` returns references to both without allocating, which the walk of the thread's sandbox
+stack visits as one Program (`visit_thread_sandbox_stack()`), so the uncontrolled-API check still allocates
+nothing; `getSandboxManagerRef()` combines them (a composition is allocated only when both are set and differ); and
+entering the Program starts the call budgets of both (`ProgramThreadCountContextHelper`). Adding it increments
+`qore_sandbox_manager_generation`, as setting a manager does, so that no thread's cached "no manager on the chain"
+result hides it. The manager is released with the own manager when the Program is cleared.
+
 The existing nearest-caller rule is otherwise unchanged. Interrupt checks include every contributing manager;
 threads reserve a slot in each distinct contributing manager and roll back all reservations on failure. The
 context's Program IDs preserve cancellation scope. Contexts are immutable after construction and restore the

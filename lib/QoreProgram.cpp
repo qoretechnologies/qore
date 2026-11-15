@@ -705,6 +705,13 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
         sandboxed.store(true, std::memory_order_release);
+        // the Program keeps the sandbox of the code that creates it, which governs its code wherever it runs, also
+        // when trusted code calls it without the Program object (see creator_sandbox_manager); before the Program is
+        // registered, so that nothing has to be undone if the lookup fails
+        ReferenceHolder<QoreSandboxManager> creator_sm(qore_caller_sandbox_ref(), nullptr);
+        if (creator_sm) {
+            addCreatorSandbox(*creator_sm);
+        }
     }
     registerProgram();
     // the Program's ID is known now
@@ -727,9 +734,15 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
 }
 
 void qore_program_private::markSandboxedParse() {
-    // the flag is never cleared, so a Program that is sandboxed already needs no lookup
-    if (!sandboxed.load(std::memory_order_acquire) && qore_caller_is_sandboxed()) {
-        sandboxed.store(true, std::memory_order_release);
+    if (!qore_caller_is_sandboxed()) {
+        return;
+    }
+    sandboxed.store(true, std::memory_order_release);
+    // the code that is added runs with the sandbox of the code that adds it, also when trusted code calls it later;
+    // a Program that is sandboxed already is checked as well, as the code may come from another sandbox
+    ReferenceHolder<QoreSandboxManager> sm(qore_caller_sandbox_ref(), nullptr);
+    if (sm) {
+        addCreatorSandbox(*sm);
     }
 }
 
@@ -2264,15 +2277,20 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         exec_class_rv.discard(xsink);
         exec_class_rv = QoreValue();
 
-        // clear sandbox manager if set
+        // clear the sandbox managers if set
         {
             QoreSandboxManager* sm;
+            QoreSandboxManager* creator_sm;
             {
                 AutoLocker al(sm_lock);
                 sm = sandbox_manager.exchange(nullptr, std::memory_order_acq_rel);
+                creator_sm = creator_sandbox_manager.exchange(nullptr, std::memory_order_acq_rel);
             }
             if (sm) {
                 sm->deref(xsink);
+            }
+            if (creator_sm) {
+                creator_sm->deref(xsink);
             }
         }
 

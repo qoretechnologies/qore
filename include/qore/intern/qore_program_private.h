@@ -1076,6 +1076,18 @@ public:
     */
     std::atomic<bool> sandboxed{false};
 
+    //! the sandbox of the code that created the Program or added code to it (referenced), or nullptr
+    /** Set when sandboxed code, or C++ code acting for it, creates the Program (in the constructor) or adds code to
+        it (markSandboxedParse()), to the manager that governs that code (qore_caller_sandbox_ref()); a later addition
+        combines its manager with the one already set, so it never loosens the sandbox.  It governs the Program's code
+        together with \c sandbox_manager wherever the code runs, called by trusted code included (an imported
+        function, a function copied into an evaluation Program, a call by a thread that a binary module entered the
+        Program with), as every lookup of a Program's sandbox resolves it (getSandboxManagerRefs()).
+        Program::setSandboxManager() does not change it, so the Program's code cannot lose the sandbox of the code
+        that created it.  Written only under sm_lock; released with \c sandbox_manager when the Program is cleared.
+    */
+    std::atomic<QoreSandboxManager*> creator_sandbox_manager{nullptr};
+
     //! true if the Program stays allocated while any code can run: a module's Program (see
     //! qore_program_set_module_lifetime()); never cleared once set
     std::atomic<bool> module_lifetime{false};
@@ -1926,12 +1938,41 @@ public:
         }
     }
 
-    //! Returns a ref'd sandbox manager pointer, or nullptr if none/already deleted
-    /** The caller must call deref() on the returned pointer when done.
+    //! Returns a ref'd pointer to the sandbox that governs the Program's code, or nullptr if none/already deleted
+    /** The sandbox is the Program's own manager combined with the sandbox of the code that created it (see
+        \c creator_sandbox_manager); a composition is allocated only when the Program has both and they differ.
+
+        The caller must call deref() on the returned pointer when done.
         Thread-safe: a program with no manager is recognized without any lock; otherwise it acquires sm_lock and
         calls optRef() to avoid use-after-free.
+
+        @throw std::bad_alloc the composition of the two managers could not be allocated
     */
     DLLLOCAL QoreSandboxManager* getSandboxManagerRef();
+
+    //! Returns references to the Program's own sandbox manager and to the sandbox of the code that created it
+    /** Allocates nothing; the caller must call deref() on each pointer returned that is not nullptr.  The managers
+        govern the Program's code together (see \c creator_sandbox_manager).
+    */
+    DLLLOCAL void getSandboxManagerRefs(QoreSandboxManager*& own, QoreSandboxManager*& creator);
+
+    //! Returns a ref'd pointer to the sandbox manager set with QoreProgram::setSandboxManager(), or nullptr
+    DLLLOCAL QoreSandboxManager* getOwnSandboxManagerRef();
+
+    //! Returns true if the Program has a sandbox manager of its own or the sandbox of the code that created it
+    /** Reads the pointers without the lock, for the checks made on every entry into the Program
+    */
+    DLLLOCAL bool hasSandboxManager() const {
+        return sandbox_manager.load(std::memory_order_acquire)
+            || creator_sandbox_manager.load(std::memory_order_acquire);
+    }
+
+    //! Adds the sandbox of the code that creates the Program or adds code to it (see \c creator_sandbox_manager)
+    /** @param sm the manager, borrowed; combined with the one already set, if any
+
+        @throw std::bad_alloc the composition of the managers could not be allocated
+    */
+    DLLLOCAL void addCreatorSandbox(QoreSandboxManager* sm);
 
     //! Returns true if the Program's code may not change the state of trusted modules (qore#5664)
     /** The state of a trusted module is its public variables and the static members of its classes: one value that
@@ -1958,7 +1999,7 @@ public:
         programSandboxedFlag())
     */
     DLLLOCAL static bool isSandboxedForModuleState(const qore_program_private& pp) {
-        return pp.sandbox_manager.load(std::memory_order_acquire) || programSandboxedFlag(pp, 0);
+        return pp.hasSandboxManager() || programSandboxedFlag(pp, 0);
     }
 
     //! Returns the permanent \c sandboxed flag of the Program where the Program has one (qore#5659)
