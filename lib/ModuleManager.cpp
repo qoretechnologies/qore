@@ -2932,6 +2932,23 @@ static void qore_append_unsupported_api_modules(QoreString& desc, const std::vec
     }
 }
 
+//! Raises the parse stack error and returns -1 if a module load in this thread has reached the parse stack reserve
+/** Every module load that loads or merges a module comes through loadModuleIntern(), including the loads of the
+    dependencies of a binary or AOT module (loadAOTBinaryModuleDependencies(), the dependencies of a binary module's
+    description) and of child modules, which load the modules that they depend on in turn, with no stack check of
+    their own: the load stops while the parse stack reserve remains, as the parse of a source module does (issue
+    #6047; see QoreModuleManager::parseLoadModule()).  The checks are made after the requests that need no stack (the
+    \c qore feature, a feature that the Program already has) and before every path that loads, reloads or merges a
+    module (see design/qore-module-structure.md)
+*/
+static int qore_module_load_check_stack(ExceptionSink& xsink) {
+    if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
+        xsink.raiseException(QORE_PARSE_STACK_ERR, QORE_PARSE_STACK_DESC);
+        return -1;
+    }
+    return 0;
+}
+
 QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
         QoreProgram* pgm, bool reexport, mod_op_e op, version_list_t* version, const char* src, QoreProgram* mpgm,
         unsigned load_opt, int warning_mask, qore_binary_module_desc_t mod_desc_func, QoreProgram* path_pgm,
@@ -2941,15 +2958,6 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
     // a module Program that is not handed on is destroyed without the module manager mutex
     UnlockedModuleProgramRelease<ReferenceHolder<QoreProgram>> pholder_release(pholder);
-
-    // every module load comes here, including the loads of the dependencies of a binary or AOT module
-    // (loadAOTBinaryModuleDependencies(), the dependencies of a binary module's description) and of child modules,
-    // which load the modules that they depend on in turn, with no stack check of their own: the load stops while the
-    // parse stack reserve remains, as the parse of a source module does (issue #6047; see parseLoadModule())
-    if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
-        xsink.raiseException(QORE_PARSE_STACK_ERR, QORE_PARSE_STACK_DESC);
-        return nullptr;
-    }
 
     // temporary string buffer
     QoreString tmp_buf;
@@ -3072,6 +3080,11 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         if (!mi || !mi->isInjected()) {
             return xsink ? nullptr : mi;
         }
+        // a reload parses the module again: checked as the loads below are (the reload returns before the check
+        // after the lookup of a feature that the Program already has)
+        if (qore_module_load_check_stack(xsink)) {
+            return nullptr;
+        }
 
         // rename module and make private
         map.erase(mmi);
@@ -3148,6 +3161,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     if (pgm && (pgm->getParseOptions() & PO_NO_MODULES)) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "cannot load modules ('%s' " \
             "requested) into the current Program object because PO_NO_MODULES is set", name);
+        return nullptr;
+    }
+
+    // the stack check sits after the returns that need no stack (the "qore" feature, a feature that the Program
+    // already has) and before the merge of a loaded module, which needs stack as a new load does: see
+    // qore_module_load_check_stack() and design/qore-module-structure.md
+    if (qore_module_load_check_stack(xsink)) {
         return nullptr;
     }
 
@@ -4303,16 +4323,10 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
     assert(!xsink);
 
     // a module that is loaded from its source is parsed in the stack of the parse that requires it, and the parses
-    // nest with the modules that require each other, with the parser's large frames and no stack check of its own:
-    // the load stops while enough stack remains (issue #6047)
-    if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
-        if (loc) {
-            parse_raise_stack_error(loc);
-        } else {
-            xsink.raiseException(QORE_PARSE_STACK_ERR, QORE_PARSE_STACK_DESC);
-        }
-        return -1;
-    }
+    // nest with the modules that require each other, with the parser's large frames and no stack check of their own:
+    // loadModuleIntern() stops the load while enough stack remains (qore_module_load_check_stack(); not for a module
+    // that the Program already has, which loads nothing), and its error is a parse error of the directive below
+    // (issue #6047)
 
     QoreString str;
     mod_op_e mo;

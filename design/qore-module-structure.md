@@ -877,21 +877,25 @@ Which errors depend on the thread (`qore_find_thread_stack_error()`):
   rule never makes the loaded modules depend silently on a small custom thread
   stack, and keeps develop's handling of a module's own runaway recursion.
 
-Every module load starts with the same check
-(`QoreModuleManager::loadModuleIntern()`): with less than
+Every module load that loads or merges a module makes the same check
+(`qore_module_load_check_stack()`, called by
+`QoreModuleManager::loadModuleIntern()`): with less than
 `QORE_PARSE_STACK_RESERVE` (64 KB) left above the thread's stack limit, the
-load raises `PARSE-STACK-LIMIT-EXCEEDED` before anything else, so the
-dependencies of AOT and binary modules and child modules, which have no parse
-of their own to check, stop at the same point as a source parse. The check
-comes before the lookup of a module that is already loaded, which a load into
-another `Program` (a run-time `Program::loadModule("json")`, for example) then
-fails too with that little stack left. This is deliberate: the lookup's path
-(`qore_check_load_module_intern()`) still loads the module's pending optional
-children (`queueChildModules()`, the parse of a source module) and merges the
-module into the `Program` (`addToProgram()`, which runs the namespace
-initialization of an AOT module), so it needs stack as a new load does, and a
-thread that has less than the reserve left cannot parse code either. A check
-after the lookup would let those run with less stack than any parse is given.
+load raises `PARSE-STACK-LIMIT-EXCEEDED`, so the dependencies of AOT and binary
+modules and child modules, which have no parse of their own to check, stop at
+the same point as a source parse. The check sits after the requests that need no
+stack and return at once: the `qore` feature (a version check) and a feature
+that the target `Program` already has (`hasFeature()`), so that a
+`load_module("json")` in a Program that has json succeeds with any stack. It
+comes before every path that does need stack: a reload (`QMLO_RELOAD`, which
+parses the module again), the merge of a module that is already loaded into
+another `Program` (a run-time `Program::loadModule("json")`, for example) and a
+new load. The merge path (`qore_check_load_module_intern()`) loads the module's
+pending optional children (`queueChildModules()`, the parse of a source module)
+and merges the module into the `Program` (`addToProgram()`, which runs the
+namespace initialization of an AOT module), so it needs stack as a new load
+does, and a thread that has less than the reserve left cannot parse code
+either.
 
 An AOT module compiled when the module of one of its `%try-module` directives
 was missing is stale once that module can be loaded; the check
