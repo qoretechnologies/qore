@@ -1450,6 +1450,7 @@ void LValueHelper::ensureUniqueSlow(const QoreValue& current) {
         return;
     }
     // an opaque reference
+    assert(current.isOpaque());
     ensureUniqueNode();
 }
 

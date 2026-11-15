@@ -10820,7 +10820,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_in_place(
     QoreValue left = fromBits(left_bits);
     QoreValue right = fromBits(right_bits);
     // the IR analysis marks an append in place only for a local freshly assigned a string node, never an enum value,
-    // which does not own its member's string; the IR interpreter checks that the left operand is a plain pointer
+    // which does not own its member's string: the IR interpreter also checks that the left operand is a plain pointer
+    // before calling this helper, but native (JIT and AOT) code calls it relying on the IR analysis alone
+    assert(!left.isEnum());
     if (left.getType() != NT_STRING || left.isShortString()
             || right.getType() != NT_STRING) {
         xsink->raiseException("IR-EXEC-ERROR",
