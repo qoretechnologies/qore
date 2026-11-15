@@ -178,6 +178,33 @@ class G inherits Base, MidImpl {
     }
 }
 
+# the implementations are private and private:internal (issue #6158): a private:internal method can only be called
+# from its own class
+class PrivBase {
+    abstract string m(int i);
+    abstract string n(int i);
+}
+
+class PrivImpl {
+    private string m(int i) {
+        return "PrivImpl::m " + i;
+    }
+
+    private:internal string n(int i) {
+        return "PrivImpl::n " + i;
+    }
+}
+
+class PrivD inherits PrivBase, PrivImpl {
+    string callM() {
+        return m(17);
+    }
+
+    string callN() {
+        return n(18);
+    }
+}
+
 sub check(string name, code c) {
     try {
         printf("%s: %s\n", name, c());
@@ -211,4 +238,6 @@ for (int i = 0; i < 3; ++i) {
     check("closure", string sub () { D d(); return d.callClosure(); });
     check("call reference", string sub () { D d(); return d.callReference(); });
     check("private:internal implementing class", string sub () { P p(); return p.callM(); });
+    check("private implementation", string sub () { PrivD d(); return d.callM(); });
+    check("private:internal implementation", string sub () { PrivD d(); return d.callN(); });
 }

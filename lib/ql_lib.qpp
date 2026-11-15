@@ -706,6 +706,8 @@ nothing exec(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS,PROCESS] {
     @throw THREAD-CANCELLED the thread was cancelled while waiting for the process; the process is killed
     @throw PROGRAM-INTERRUPTED the Program was interrupted by its @ref Qore::SandboxManager "SandboxManager" while
     waiting for the process; the process group is killed
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "SandboxManager" governing the call does not allow
+    \c /bin/sh, which runs the command, to be executed (see @ref sandbox_fs_shell)
 
     @par Process group behavior:
     - With a @ref Qore::SandboxManager "SandboxManager" attached, the child process is started in a new process group so
