@@ -108,6 +108,10 @@ class ColumnarResultSchemaDataTest inherits QUnit::Test {
         addTestCase("fromRows()", \fromRowsCase());
         addTestCase("nullability", \nullability());
         addTestCase("library-produced columns round trip", \validRoundTrip());
+        addTestCase("deserialize() raises DESERIALIZATION-ERROR for an invalid schema", \deserializeSchemaErrors());
+        addTestCase("int columns with number values", \intNumbers());
+        addTestCase("schema nesting depth", \schemaDepth());
+        addTestCase("fixed_size columns", \fixedSize());
         set_return_value(main());
     }
 
@@ -193,6 +197,9 @@ class ColumnarResultSchemaDataTest inherits QUnit::Test {
             return valueMatches(value, "int");
         }
         if (!inlist(valueType(value), KindValueTypes{kind})) {
+            return False;
+        }
+        if (kind == "int" && value.typeCode() == NT_NUMBER && value != value.toInt()) {
             return False;
         }
         switch (kind) {
@@ -373,6 +380,10 @@ class ColumnarResultSchemaDataTest inherits QUnit::Test {
             if (!inlist(valueType(v), KindValueTypes{k})) {
                 return False;
             }
+            # a number in an int column has no fractional part
+            if (k == "int" && v.typeCode() == NT_NUMBER && v != v.toInt()) {
+                return False;
+            }
             if ((k == "fixed_size_list" || k == "binary") && v.size() != 2) {
                 return False;
             }
@@ -418,8 +429,7 @@ class ColumnarResultSchemaDataTest inherits QUnit::Test {
                         if (!err) {
                             assertTrue(False, sprintf("%s: accepted with schema %y", label, r.schemaV2()[0]));
                         } else {
-                            assertTrue(inlist(err.err, ("DESERIALIZATION-ERROR", "COLUMNAR-SCHEMA-ERROR")),
-                                label + ": " + err.err);
+                            assertEq("DESERIALIZATION-ERROR", err.err, label);
                         }
                     }
                 }
@@ -473,6 +483,9 @@ class ColumnarResultSchemaDataTest inherits QUnit::Test {
             return True;
         }
         if (!inlist(valueType(value), KindValueTypes{kind})) {
+            return False;
+        }
+        if (kind == "int" && value.typeCode() == NT_NUMBER && value != value.toInt()) {
             return False;
         }
         switch (kind) {
@@ -726,6 +739,159 @@ class ColumnarResultSchemaDataTest inherits QUnit::Test {
         assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
             ColumnarResult::fromColumnHash({"c": (1, <01>)}, {"c": {"schema": {"kind": "number"}}});
         });
+    }
+
+    #! returns serialized ColumnarResult data for a payload with one column \c c
+    private static hash<SerializationInfo> payload(hash<auto> schema, list<auto> values) {
+        hash<auto> p = {"version": 1, "row_count": values.size(), "columns": ({"name": "c",
+            "schema": schema + {"name": "c"}, "data": {"storage": "value", "value": values}},)};
+        hash<SerializationInfo> sd = Serializable::serializeToData(p);
+        string pidx = sd._data._index;
+        string cidx = string(max(map $1.toInt(), keys sd._index) + 1);
+        sd._index{cidx} = <ObjectSerializationInfo>{"_class": "Qore::SQL::ColumnarResult",
+            "_class_data": {"Qore::SQL::ColumnarResult": {"payload": {"_index": pidx}}}};
+        sd._data = {"_index": cidx};
+        return sd;
+    }
+
+    #! an invalid schema in serialized data raises DESERIALIZATION-ERROR
+    private deserializeSchemaErrors() {
+        # a valid payload is accepted
+        ColumnarResult r = Serializable::deserialize(payload({"kind": "list", "nullable": True,
+            "children": ({"name": "item", "kind": "int"},)}, ((1, 2), NOTHING)));
+        assertEq(2, r.numRows());
+        list<hash<auto>> cases = (
+            {"label": "child kind and buffer type", "schema": {"kind": "list", "children": ({"name": "item",
+                "kind": "int", "buffer_type": "float32"},)}, "values": ((1,),)},
+            {"label": "kind and buffer type", "schema": {"kind": "binary", "buffer_type": "int64"},
+                "values": (<01>,)},
+            {"label": "child decimal precision", "schema": {"kind": "list", "children": ({"name": "item",
+                "kind": "decimal128", "precision": 50},)}, "values": ((1n,),)},
+            {"label": "child decimal scale", "schema": {"kind": "list", "children": ({"name": "item",
+                "kind": "decimal128", "precision": 10, "scale": 11},)}, "values": ((1n,),)},
+            {"label": "child time unit", "schema": {"kind": "list", "children": ({"name": "item",
+                "kind": "timestamp", "time_unit": "x"},)}, "values": ((2026-01-01T00:00:00Z,),)},
+            {"label": "child value", "schema": {"kind": "list", "children": ({"name": "item", "kind": "string"},)},
+                "values": ((1,),)},
+            {"label": "native type with a NUL character", "schema": {"kind": "string", "native_type": "a\x00b"},
+                "values": ("x",)},
+        );
+        foreach hash<auto> c in (cases) {
+            assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), (payload(c.schema, c.values),),
+                c.label);
+        }
+    }
+
+    #! an int column holds ints, or numbers with no fractional part (as an Arrow import of unsigned 64-bit integers
+    #! does); fromColumnHash() and deserialize() accept the same columns
+    private intNumbers() {
+        list<auto> big = (1, 18446744073709551615n, NOTHING);
+        ColumnarResult r = ColumnarResult::fromColumnHash({"c": big}, {"c": {"schema": {"kind": "int"}}});
+        hash<auto> schema = r.schemaV2()[0];
+        assertEq(("int", NOTHING), (schema.kind, schema.buffer_type));
+        assertEq(big, r.getColumn("c"));
+        checkRoundTrip("int numbers", r);
+        ColumnarResult d = Serializable::deserialize(payload({"kind": "int", "nullable": True}, big));
+        assertEq(r.schemaV2(), d.schemaV2());
+        # ints alone are stored in a buffer
+        r = ColumnarResult::fromColumnHash({"c": (1, 2)}, {"c": {"schema": {"kind": "int"}}});
+        assertEq("int64", r.schemaV2()[0].buffer_type);
+        # a number with a fractional part is refused by both
+        assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+            ColumnarResult::fromColumnHash({"c": (1.5n, 2n)}, {"c": {"schema": {"kind": "int"}}});
+        });
+        assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), (payload({"kind": "int"}, (1.5n, 2n)),));
+        # with an int buffer type, a number cannot be stored
+        assertThrows("BUFFER-TYPE-ERROR", sub () {
+            ColumnarResult::fromColumnHash({"c": (1, 2n)}, {"c": {"schema": {"kind": "int", "buffer_type": "int64"}}});
+        });
+    }
+
+    #! returns a list schema with \a depth levels of list children
+    private static hash<auto> nestedSchema(int depth) {
+        hash<auto> schema = {"name": "item", "kind": "int"};
+        for (int i = 0; i < depth; ++i) {
+            schema = {"name": "item", "kind": "list", "children": (schema,)};
+        }
+        return schema;
+    }
+
+    #! returns serialized ColumnarResult data with a list column whose schema has \a depth levels of list children;
+    #! the schema entries are made directly in the serialization index
+    private static hash<SerializationInfo> deepPayload(int depth) {
+        ColumnarResult src = ColumnarResult::fromColumnHash({"c": (NOTHING,)}, {"c": {"schema": {"kind": "list",
+            "children": ({"name": "item", "kind": "int"},)}}});
+        hash<SerializationInfo> sd = Serializable::serializeToData(src);
+        string top;
+        foreach hash<auto> i in (sd._index.pairIterator()) {
+            if (i.value.hasKey("_members") && i.value._members.name === "c" && exists i.value._members.kind) {
+                top = i.key;
+            }
+        }
+        int next = max(map $1.toInt(), keys sd._index) + 1;
+        string cur = top;
+        for (int d = 0; d < depth; ++d) {
+            string lidx = string(next++);
+            string cidx = string(next++);
+            hash<auto> m = sd._index{cur}._members;
+            m.children = {"_index": lidx};
+            sd._index{cur}._members = m;
+            sd._index{lidx} = <ListSerializationInfo>{"_list": "auto", "_elements": ({"_index": cidx},)};
+            sd._index{cidx} = <HashSerializationInfo>{"_hash": "^auto", "_members": {"name": "item", "kind": "list",
+                "type": "auto", "nullable": True}};
+            cur = cidx;
+        }
+        return sd;
+    }
+
+    #! a column schema can be nested at most 64 levels deep
+    private schemaDepth() {
+        ColumnarResult r = ColumnarResult::fromColumnHash({"c": (NOTHING,)}, {"c": {"schema": nestedSchema(63)}});
+        checkRoundTrip("depth 63", r);
+        r = ColumnarResult::fromColumnHash({"c": (NOTHING,)}, {"c": {"schema": nestedSchema(64)}});
+        checkRoundTrip("depth 64", r);
+        foreach int depth in ((65, 1000)) {
+            assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+                ColumnarResult::fromColumnHash({"c": (NOTHING,)}, {"c": {"schema": nestedSchema(depth)}});
+            }, NOTHING, sprintf("fromColumnHash() depth %d", depth));
+        }
+        Serializable::deserialize(deepPayload(60));
+        foreach int depth in ((70, 20000)) {
+            assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), (deepPayload(depth),),
+                sprintf("deserialize() depth %d", depth));
+        }
+    }
+
+    #! the values of a fixed_size column have its size, and its null values cannot need more padding than its other
+    #! values or 2^24 elements
+    private fixedSize() {
+        hash<auto> fsl = {"kind": "fixed_size_list", "fixed_size": 2147483647,
+            "children": ({"name": "item", "kind": "int"},)};
+        hash<auto> fsb = {"kind": "binary", "fixed_size": 2147483647};
+        foreach hash<auto> schema in ((fsl, fsb)) {
+            assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+                ColumnarResult::fromColumnHash({"c": (NOTHING,)}, {"c": {"schema": schema}});
+            }, NOTHING, schema.kind);
+            assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(),
+                (payload(schema + {"nullable": True}, (NOTHING,)),), schema.kind);
+            # nested in a list
+            assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+                ColumnarResult::fromColumnHash({"c": ((NOTHING, NOTHING),)}, {"c": {"schema": {"kind": "list",
+                    "children": (schema + {"name": "item"},)}}});
+            }, NOTHING, "nested " + schema.kind);
+        }
+        # null values whose padding is bounded are accepted
+        ColumnarResult r = ColumnarResult::fromColumnHash({"c": (NOTHING, NOTHING, (1, 2))},
+            {"c": {"schema": {"kind": "fixed_size_list", "fixed_size": 2,
+            "children": ({"name": "item", "kind": "int"},)}}});
+        checkRoundTrip("fixed_size_list", r);
+        r = ColumnarResult::fromColumnHash({"c": (NOTHING, NOTHING)}, {"c": {"schema": {"kind": "binary",
+            "fixed_size": 16}}});
+        checkRoundTrip("all-null fixed-size binary", r);
+        # as many null values as other values, whatever the size
+        r = ColumnarResult::fromColumnHash({"c": (NOTHING, <0102030405060708>)}, {"c": {"schema": {"kind": "binary",
+            "fixed_size": 8}}});
+        checkRoundTrip("fixed-size binary", r);
     }
 
     #! returns the name of the type of a value as used in KindValueTypes

@@ -185,6 +185,28 @@ class DataFrameColumnarSchemaDataTest inherits QUnit::Test {
                 assertEq("DATAFRAME-IO-ERROR", ex.err, sprintf("temporal fill %y", fill));
             }
         }
+        # decimal and temporal columns whose values no longer fit their buffer: toColumnarResult() gives them the
+        # schema of their values
+        ColumnarResult dt = ColumnarResult::fromColumnHash({
+            "n": (1.25n, NOTHING),
+            "t": (2026-01-01T00:00:00Z, NOTHING),
+            "u": (1s, NOTHING),
+        }, {
+            "n": {"native_type": "numeric(10,2)"},
+            "t": {"native_type": "timestamp"},
+            "u": {"native_type": "interval"},
+        });
+        foreach auto fill in (("x", <01>, 1.123456n)) {
+            DataFrame df = DataFrame::fromColumnarResult(dt).fillna(fill);
+            ColumnarResult copy = df.toColumnarResult();
+            hash<auto> row = copy.toRows()[1];
+            hash<auto> record = df.toRecords()[1];
+            foreach string col in (("n", "t", "u")) {
+                assertEq(record{col}, row{col}, sprintf("%s fill %y", col, fill));
+            }
+            ColumnarResult rt = Serializable::deserialize(Serializable::serialize(copy));
+            assertEq(copy.schemaV2(), rt.schemaV2(), sprintf("fill %y", fill));
+        }
     }
 
     #! columns that the library produces convert to and from a DataFrame and export to Arrow and Parquet
