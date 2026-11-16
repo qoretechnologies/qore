@@ -43,8 +43,9 @@ for executions that give nothing observable (`fh(h, i)`).
 `interpreter_gives_call_args` is a byte: `QORE_IR_GIVES_CALL_ARGS` for a call that gives consumed arguments, with
 `QORE_IR_GIVES_CALL_TEMPS` if one of them is not a read of a plain local (not through a reference, not closure-bound,
 in a function that creates no reference) that nothing writes from the read to the call in its block (`f(o, o =
-NOTHING)` writes it).  Such a local holds the value for the whole call, as no callee can write it, so a parameter that takes the read over cannot release the value observably: the reads of top-level locals, which
-are not IR-only and so are consumed (`read_needs_release_at_return()`), give the bit 0 only.  A call site is not
+NOTHING)` writes it).  Such a local holds the value for the whole call, as no callee can write it, so a parameter
+that takes the read over cannot release the value observably: the reads of top-level locals, which are not IR-only and
+so are consumed (`read_needs_release_at_return()`), give the bit 0 only.  A call site is not
 inlined if `callee_ir->param_take_over && (inst->interpreter_gives_call_args & QORE_IR_GIVES_CALL_TEMPS)` (closures,
 whose inline cache has no instruction: `GIVEN && callee_ir->param_take_over`).  A site that gives no such temporary is
 inlined exactly as on develop; only the decision of the state, made once per site, changes.  A giving site is made by
@@ -121,9 +122,12 @@ every binding, with no change to the inline, direct-parameter and fast-entry cal
   the take emptied): a function with a guard that has a deopt target takes no parameter over
   (`qore_ir_function_may_deopt()`, checked only for a function with parameters that take their arguments over); a
   debug build asserts that no such function has one, so that the debug suites find a lowering that makes it, and a
-  release build calls it without the take-over (`printd()` at level 0).  No lowering makes such a guard today: only `GuardNotNothing` is made, and it has
-  a deopt target only in a try block (or the release block of a replaced return), where the values that it would
-  check are made by invokes, which end their block, so `maybeInsertNotNothingGuard()` makes none for them (checked
+  release build calls it without the take-over and reports nothing (`printd()` is compiled only in a debug build).
+  The IR interpreter makes the same check for its frame's move (`buildInterpreterAnalysis()`: a release build then
+  leaves the parameters on their variables until the frame loads them).  No lowering makes such a guard today: only
+  `GuardNotNothing` is made, and it has a deopt target only in a try block (or the release block of a replaced
+  return), where the values that it would check are made by invokes, which end their block, so
+  `maybeInsertNotNothingGuard()` makes none for them (checked
   with `QORE_AOT_DUMP_IR` on `ParamReassignRelease.qr` and on probes of slices, ranges, member and key reads in try
   blocks).  The hand-back helpers of 1d03004059 (`qore_rt_return_param()`) and the `_raw` takes were removed;
 - the take-over of a callee's AOT IR, which does not set `param_take_over`, is cached in
@@ -182,9 +186,11 @@ ast, ir, jit, tiered, tiered with thresholds 1 (tlow), qcc -O0 and -O3.
   on R for the same rows (-327..-348).  The alternative, a bit with which a giving caller tells the frame that it
   gave a temporary (option c), cannot leave the path of a call that gives nothing exactly as on R: the AST
   interpreter's call (`UserVariantBase::eval()`, `setupCall()`, `evalTiered()`) gives its evaluated arguments to
-  the parameters and is the same code as the IR interpreter's call that gives nothing (`evalFunction()`), so the
-  bit would be a store on that shared path (top-level code, which tiered execution runs on the AST tier, gives
-  temporaries to IR callees: `ParamReassignRelease.qr`'s round loop); and the frame would need a test of the bit
+  the parameters and is the same code as the IR interpreter's call that gives nothing
+  (`qore_rt_call_function_direct()` → `evalFunctionTmpArgs()` → `UserFunctionVariant::evalFunction()` →
+  `UserVariantBase::eval()` → `setupCall()` → `evalTiered()`), so the bit would be a store on that shared path
+  (top-level code, which tiered execution runs on the AST tier, gives temporaries to IR callees:
+  `ParamReassignRelease.qr`'s round loop); and the frame would need a test of the bit
   where it has none (`execute()` has no branch on the path of a frame bound from the runtime stack that the bit
   could share: a sentinel `IRDirectParams` costs the frames with direct parameters and no arguments a jump).
 - Standard call and map rows against R (spinster, same build): `f_four`, `m_four`, `s_four`, `cl_int`, `map_cb` are
