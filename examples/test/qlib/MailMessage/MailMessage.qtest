@@ -2343,6 +2343,23 @@ lorem ipsum\r
                 assertEq({"X-H": "ポ"}, m.getHeaders());
                 assertEq("body ポ\r\n", m.getBody());
             });
+        # raw 8-bit Latin-1 header lines in text tagged UTF-8, which are not valid UTF-8 (issue #6326)
+        addParseWorkCase("separate raw latin-1", 1000,
+            string sub (int n) {
+                binary b;
+                map b += binary("X-H: ") + <e9> + binary("\r\n"), xrange(n);
+                return binary_to_string(b + binary("Content-Type: text/plain; charset=ISO-8859-1\r\n\r\nbody\r\n"),
+                    "UTF-8");
+            },
+            sub (Message m, int n) { assertEq({"X-H": "é", "Content-Type": "text/plain; charset=ISO-8859-1"},
+                m.getHeaders()); });
+        addParseWorkCase("folded raw latin-1", 1000,
+            string sub (int n) {
+                binary b = binary("Subject: s");
+                map b += binary("\r\n ") + <e9>, xrange(n);
+                return binary_to_string(b + binary("\r\n\r\nbody\r\n"), "UTF-8");
+            },
+            sub (Message m, int n) { assertEq("s" + strmul(" é", n), m.getSubject()); });
         addParseWorkCase("encoded words", 1000,
             string sub (int n) {
                 return sprintf("Subject: s%s\r\n\r\nbody\r\n", strmul("\r\n =?UTF-8?Q?=C3=B6?=", n));
