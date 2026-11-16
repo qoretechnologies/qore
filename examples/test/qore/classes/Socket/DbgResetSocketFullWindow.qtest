@@ -79,7 +79,10 @@ class DbgResetSocketFullWindowTest inherits QUnit::Test {
         while (True) {
             *hash<SocketPollInfo> info = op.continuePoll();
             if (!info) {
-                testSkip("the buffers took the whole write");
+                # a client that does not read takes far less than the write: the send must have blocked
+                assertTrue(False, sprintf("the write of %d bytes to a client that does not read never blocked",
+                    WriteSize));
+                return;
             }
             if (++calls > 1 && call_function("dbg_tcp_peer_window", peer) == 0) {
                 break;

@@ -17017,7 +17017,20 @@ static int64 dbg_unacknowledged_bytes(int fd) {
     return getsockopt(fd, SOL_SOCKET, SO_NWRITE, &n, &len) || n < 0 ? 0 : n;
 #elif defined(TIOCOUTQ)
     int n = 0;
-    return ::ioctl(fd, TIOCOUTQ, &n) || n < 0 ? 0 : n;
+    if (::ioctl(fd, TIOCOUTQ, &n) || n <= 0) {
+        return 0;
+    }
+#if defined(__linux__) && defined(TCP_INFO)
+    // the count is the difference of the sequence numbers, which includes the FIN of a socket shut down for writing:
+    // it is not data, and a peer whose window is 0 can take it (Linux 6.10 or later accepts a bare FIN then)
+    struct tcp_info ti;
+    socklen_t len = sizeof ti;
+    if (!getsockopt(fd, IPPROTO_TCP, TCP_INFO, &ti, &len)
+            && (ti.tcpi_state == TCP_FIN_WAIT1 || ti.tcpi_state == TCP_CLOSING || ti.tcpi_state == TCP_LAST_ACK)) {
+        --n;
+    }
+#endif
+    return n;
 #else
     return 0;
 #endif
@@ -17065,14 +17078,16 @@ static constexpr int DbgAckCheckMs = 10;
 //! returns true if the TCP connection of \a fd is closed: reset by the peer, or fully closed
 /** The count of bytes not acknowledged (the difference of the sequence numbers that \c TIOCOUTQ and \c SO_NWRITE
     give) is not cleared when a reset discards the send buffer, so it stays above 0 once the connection is closed:
-    nothing left can then arrive, and the wait is over.  False if the system does not tell.
+    nothing left can then arrive, and the wait is over.  On macOS, a connection whose state cannot be read (the stack
+    dropped it) is closed too.  False if the system does not tell.
 */
 static bool dbg_tcp_closed(int fd) {
 #if defined(DARWIN) && defined(TCP_CONNECTION_INFO)
     struct tcp_connection_info ti;
     socklen_t len = sizeof ti;
+    // the option fails for a connection that the stack dropped (ECONNRESET, for example), which is closed as well;
     // TCPS_CLOSED is 0 (netinet/tcp_fsm.h)
-    return !getsockopt(fd, IPPROTO_TCP, TCP_CONNECTION_INFO, &ti, &len) && !ti.tcpi_state;
+    return getsockopt(fd, IPPROTO_TCP, TCP_CONNECTION_INFO, &ti, &len) || !ti.tcpi_state;
 #elif defined(__linux__) && defined(TCP_INFO)
     struct tcp_info ti;
     socklen_t len = sizeof ti;
