@@ -5601,6 +5601,20 @@ QoreSandboxManager* qore_module_init_lift_manager_ref() {
     return mib.loader_manager;
 }
 
+QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(const QoreTrustedBuildTag&) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+    // a trusted loader: nothing below the barrier is the loader's, as for library code that trusted code loads
+    try {
+        td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
+            td->sandbox_context, td->inherited_sandbox_context, false, false, nullptr, QORE_NO_PROGRAM_ID});
+        pushed = true;
+    } catch (std::bad_alloc&) {
+    }
+}
+
 QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool active) {
     ThreadData* td = thread_data.get();
     if (!td) {

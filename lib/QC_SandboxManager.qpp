@@ -1155,6 +1155,65 @@ static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_
     return qore_bind_sandbox_call(call, true, xsink);
 }
 
+//! Creates a capability that builds shared state for every caller as trusted code, also for a sandboxed caller
+/** A %Program that code creates, or that code commits code in, keeps the sandbox that governs that code, which then
+    governs the %Program's code wherever it runs (see @ref sandbox_program_capability): this includes trusted code
+    that a sandboxed caller calls.  Trusted infrastructure that builds shared state lazily for whichever caller needs
+    it first, such as a %Program that every caller then uses (a container of mappers, a loaded service, a cached
+    helper), would give that state the first caller's sandbox, its policy and its interrupts and limits, for every
+    later caller.
+
+    The capability returned runs @p call on the caller's thread as a trusted build: the arguments are evaluated by
+    the caller, under the caller's own sandbox, then @p call runs in the %Program that created the capability, under
+    a construction barrier, as the initialization of library code that trusted code loads runs:
+    - a %Program that it creates, or commits code in, keeps no sandbox of the caller: no policy, no interrupts, no
+      limits; it is governed only by the manager that the host gives it (Program::setSandboxManager())
+    - the threads that it starts inherit no sandbox of the caller, and objects that it creates have no sandbox
+      provenance
+    - the caller's filesystem and network policy does not apply to the build itself, nor do the caller's interrupt
+      requests while it runs; the call budgets (wall and CPU time, stack, memory) that the caller's thread is in still
+      count it
+    - objects and callbacks that the caller (or other sandboxed code) created keep their own provenance: what the
+      build calls of them is governed by their sandbox
+
+    @param call a plain callback (not a bound callback or another capability) of code that no sandbox governs,
+    created outside sandbox execution
+
+    @return a capability for the fixed callback
+
+    @throw SANDBOX-CAPABILITY-ERROR a sandbox governs the creating code, the creating code is sandboxed, or @p call has
+    sandbox provenance, belongs to a sandboxed %Program, or is a bound callback or a capability
+
+    @note
+    - create the capability during trusted startup or module initialization, before any tenant code runs, and keep
+      it where tenant code cannot reach it (a private static member); a sandboxed caller that gets the capability can
+      build what the callback builds without its own sandbox
+    - the callback must build only from trusted metadata (configuration, the host's own sources), and must validate
+      the arguments that it is given: it must never parse code that the caller supplies, or the caller's code would
+      run without its sandbox
+    - unlike createSystemPolicyCall(), which masks only the policy of the caller for a fixed operation, this capability
+      also detaches what the operation creates from the caller's interrupts and limits
+
+    @par Example:
+    @code{.py}
+# during trusted startup: builds the shared mapper container from the system's metadata
+const BuildMappers = SandboxManager::createTrustedBuildCall(\build_mapper_container());
+# later, for whichever caller needs the container first
+Program sub get_container() {
+    return container ?? (container = BuildMappers());
+}
+    @endcode
+
+    @see
+    - createSystemPolicyCall()
+    - createSystemThreadCall()
+
+    @since %Qore 3.0
+*/
+static code SandboxManager::createTrustedBuildCall(code call) [dom=UNCONTROLLED_API; flags=RET_VALUE_ONLY] {
+    return qore_create_trusted_build_call(call, xsink);
+}
+
 //! Creates a capability that starts a fixed operation in a new thread that no sandbox governs
 /** Trusted infrastructure that does work for sandboxed callers, such as building shared state that every caller then
     uses, cannot do that work on the caller's thread: what it creates there keeps the caller's sandbox (its

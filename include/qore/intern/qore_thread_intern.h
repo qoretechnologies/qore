@@ -706,6 +706,10 @@ DLLLOCAL QoreSandboxManager* qore_module_init_lift_manager_ref();
     its static initializers and init closure belong to no sandbox, and so do the objects they create.  Every later
     call into the module is governed by its caller as any other call.
 */
+//! Selects the barrier of a trusted build (see QoreModuleInitSandboxBarrierHelper)
+struct QoreTrustedBuildTag {
+};
+
 class QoreModuleInitSandboxBarrierHelper {
 public:
     //! Establishes the barrier for a module that is library code (\a active), or a lift for one that is not
@@ -720,11 +724,24 @@ public:
         be initialized as library code otherwise.
     */
     DLLLOCAL QoreModuleInitSandboxBarrierHelper(bool active);
+
+    //! The barrier of a trusted build (SandboxManager::createTrustedBuildCall()): its loader is trusted
+    /** The code that runs under it is trusted library code built by trusted code, whoever called the capability: no
+        sandbox of the code below the barrier is seen, and none is recorded as the loader's (the capability was created
+        by code that no sandbox governed, and runs a fixed callback)
+    */
+    DLLLOCAL explicit QoreModuleInitSandboxBarrierHelper(const struct QoreTrustedBuildTag&);
+
     DLLLOCAL ~QoreModuleInitSandboxBarrierHelper();
 
     //! returns true if a lift was needed and could not be recorded
     DLLLOCAL bool failed() const {
         return failed_lift;
+    }
+
+    //! returns true if the barrier is in effect
+    DLLLOCAL bool established() const {
+        return pushed;
     }
 
 private:

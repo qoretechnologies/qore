@@ -1,0 +1,278 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - sandbox file-system policy, interrupts and thread limits of Programs and threads that a trusted build creates
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# SandboxManager::createTrustedBuildCall(): a Program that trusted code builds for a sandboxed caller through the
+# capability keeps no sandbox of the caller (no policy, no interrupts, no limits), threads that the build starts inherit
+# none, the caller's callbacks keep their own provenance, and the capability cannot be created by or for sandboxed code
+
+%modern
+%no-child-restrictions
+%allow-debugger
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%exec-class SandboxTrustedBuildTest
+
+# the file that the sandbox denies; set in globalSetUp()
+our string DeniedFile;
+
+#! the code parsed in the Programs that the tests build
+const ProbeSource = "%modern
+hash<auto> sub probe(string path) {
+    hash<auto> h = {};
+    try {
+        Qore::ReadOnlyFile f(path);
+        h.fs = \"read:\" + trim(f.read(-1));
+    } catch (hash<ExceptionInfo> ex) {
+        h.fs = ex.err;
+    }
+    return h;
+}
+string sub spin(Qore::Thread::Queue started, int max_ms) {
+    started.push(True);
+    int deadline = clock_get_monotonic_us() + max_ms * 1000;
+    while (clock_get_monotonic_us() < deadline) {
+    }
+    return \"not stopped\";
+}
+string sub threads() {
+    # the first thread runs until the second one has been tried, so a sandbox would count it
+    Qore::Thread::Queue release();
+    Qore::Thread::Counter done(1);
+    background sub () {
+        release.get();
+        done.dec();
+    }();
+    string rv;
+    try {
+        background sub () {}();
+        rv = \"started\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv = ex.err;
+    }
+    release.push(True);
+    done.waitForZero();
+    return rv;
+}
+";
+
+#! trusted code: builds a Program from trusted source
+Program sub build_program() {
+    Program p(PO_MODERN);
+    p.parse(ProbeSource, "built");
+    return p;
+}
+
+#! trusted code: commits trusted source in a Program that it is given
+sub build_into(Program p) {
+    p.parse(ProbeSource, "built into");
+}
+
+#! trusted code: reads the denied file itself
+hash<auto> sub build_read() {
+    try {
+        ReadOnlyFile f(DeniedFile);
+        return {"fs": "read:" + trim(f.read(-1))};
+    } catch (hash<ExceptionInfo> ex) {
+        return {"fs": ex.err};
+    }
+}
+
+#! trusted code: reads the denied file in a thread that it starts
+hash<auto> sub build_thread() {
+    Queue q();
+    background sub () {
+        q.push(build_read());
+    }();
+    return q.get();
+}
+
+#! trusted code: calls a callback that it is given
+auto sub build_calling(code c) {
+    return c();
+}
+
+#! trusted code: creates a trusted build capability
+code sub make_capability(code c) {
+    return SandboxManager::createTrustedBuildCall(c);
+}
+
+class SandboxTrustedBuildTest inherits QUnit::Test {
+    private {
+        #! the sandboxed Program
+        Program sandboxed;
+        #! its manager: denies DeniedFile, limits threads to 1
+        SandboxManager manager;
+        #! the capabilities, created during trusted setup
+        code BuildProgram;
+        code BuildInto;
+        code BuildRead;
+        code BuildThread;
+        code BuildCalling;
+    }
+
+    #! the code of the sandboxed Program
+    const SandboxedSource = "%modern
+auto sub call(code c, *softlist<auto> args) {
+    return call_function_args(c, args);
+}
+code sub reader(string path) {
+    return hash<auto> sub () {
+        try {
+            Qore::ReadOnlyFile f(path);
+            return {\"fs\": \"read\"};
+        } catch (hash<ExceptionInfo> ex) {
+            return {\"fs\": ex.err};
+        }
+    };
+}
+code sub create_capability(code c) {
+    return Qore::SandboxManager::createTrustedBuildCall(c);
+}
+Program sub mk(string src) {
+    Program c(PO_MODERN);
+    c.parse(src, \"child\");
+    return c;
+}
+";
+
+    #! what code governed by the sandbox gets
+    const Governed = {"fs": "FILESYSTEM-ACCESS-DENIED"};
+
+    #! what code that no sandbox governs gets
+    const Ungoverned = {"fs": "read:secret"};
+
+    constructor() : QUnit::Test("sandbox trusted build", "1.0", \ARGV) {
+        addTestCase("a Program built for a sandboxed caller keeps no policy of the caller", \policy());
+        addTestCase("a Program built for a sandboxed caller keeps no interrupts of the caller", \interrupts());
+        addTestCase("a Program built for a sandboxed caller keeps no limits of the caller", \limits());
+        addTestCase("the build and its threads", \buildAndThreads());
+        addTestCase("the caller's callbacks keep their provenance", \callerCallbacks());
+        addTestCase("the capability cannot be created by or for sandboxed code", \guards());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        DeniedFile = tmp_location() + DirSep + "qore-trusted-build-" + get_random_string(12);
+        File file();
+        file.open2(DeniedFile, O_CREAT | O_WRONLY | O_TRUNC);
+        file.write("secret\n");
+
+        # the capabilities are created during trusted setup, before any sandboxed code runs
+        BuildProgram = SandboxManager::createTrustedBuildCall(\build_program());
+        BuildInto = SandboxManager::createTrustedBuildCall(\build_into());
+        BuildRead = SandboxManager::createTrustedBuildCall(\build_read());
+        BuildThread = SandboxManager::createTrustedBuildCall(\build_thread());
+        BuildCalling = SandboxManager::createTrustedBuildCall(\build_calling());
+
+        manager = new SandboxManager();
+        manager.addFilesystemDeniedPath(DeniedFile);
+        manager.setUncontrolledApiPolicy(True);
+        manager.setMaxThreads(1);
+        sandboxed = new Program(PO_MODERN);
+        sandboxed.setSandboxManager(manager);
+        sandboxed.parse(SandboxedSource, "sandboxed");
+    }
+
+    globalTearDown() {
+        unlink(DeniedFile);
+    }
+
+    policy() {
+        # built by trusted code that the sandboxed caller calls directly: the Program keeps the caller's sandbox
+        Program plain = sandboxed.callFunction("call", \build_program());
+        assertEq(Governed, plain.callFunction("probe", DeniedFile));
+        # built through the capability: it keeps none
+        Program built = sandboxed.callFunction("call", BuildProgram);
+        assertEq(Ungoverned, built.callFunction("probe", DeniedFile));
+
+        # code that trusted code commits in a trusted Program for the sandboxed caller
+        Program t(PO_MODERN);
+        sandboxed.callFunction("call", \build_into(), t);
+        assertEq(Governed, t.callFunction("probe", DeniedFile));
+        Program t2(PO_MODERN);
+        sandboxed.callFunction("call", BuildInto, t2);
+        assertEq(Ungoverned, t2.callFunction("probe", DeniedFile));
+        assertNothing(t2.getSandboxManager());
+    }
+
+    interrupts() {
+        Program plain = sandboxed.callFunction("call", \build_program());
+        Program built = sandboxed.callFunction("call", BuildProgram);
+        # the caller's sandbox's interrupt stops the code of the Program that keeps it
+        assertEq("PROGRAM-INTERRUPTED", spinInterrupted(plain, 300000));
+        # and not that of the Program built through the capability: it spins to its end
+        assertEq("not stopped", spinInterrupted(built, 2000));
+    }
+
+    limits() {
+        Program plain = sandboxed.callFunction("call", \build_program());
+        Program built = sandboxed.callFunction("call", BuildProgram);
+        assertEq("THREAD-CREATION-FAILURE", plain.callFunction("threads"));
+        assertEq("started", built.callFunction("threads"));
+    }
+
+    buildAndThreads() {
+        # the caller's policy does not apply to the build itself
+        assertEq(Governed, sandboxed.callFunction("call", \build_read()));
+        assertEq(Ungoverned, sandboxed.callFunction("call", BuildRead));
+        # nor to the threads that it starts, which inherit no sandbox of the caller
+        assertEq(Ungoverned, sandboxed.callFunction("call", BuildThread));
+    }
+
+    callerCallbacks() {
+        # a callback that the sandboxed caller created and gives the build keeps the caller's sandbox
+        code c = sandboxed.callFunction("reader", DeniedFile);
+        assertEq(Governed, c());
+        assertEq(Governed, sandboxed.callFunction("call", BuildCalling, c));
+    }
+
+    guards() {
+        # sandboxed code cannot create the capability
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "created by code that a sandbox governs", \sandboxed.callFunction(),
+            ("create_capability", \build_program()));
+        # nor trusted code that it calls
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "created by code that a sandbox governs", \sandboxed.callFunction(),
+            ("call", \make_capability(), \build_program()));
+        # a callback that sandboxed code created
+        code c = sandboxed.callFunction("reader", DeniedFile);
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "must not have sandbox provenance",
+            \SandboxManager::createTrustedBuildCall(), c);
+        # code of a Program that sandboxed code created, imported into a trusted Program
+        Program child = sandboxed.callFunction("mk", ProbeSource + "sub export_to(Program h) { h.importFunction(\"probe\", "
+            "\"probe2\"); }");
+        Program host(PO_MODERN);
+        child.callFunction("export_to", host);
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "belongs to a sandboxed Program",
+            \SandboxManager::createTrustedBuildCall(), host.getCallReference("probe2"));
+        # a capability or a bound callback
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "not a bound callback or a capability",
+            \SandboxManager::createTrustedBuildCall(), BuildProgram);
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "not a bound callback or a capability",
+            \SandboxManager::createTrustedBuildCall(), SandboxManager::createSystemPolicyCall(\build_program()));
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "cannot be registered as a system-policy callback",
+            \SandboxManager::createSystemPolicyCall(), BuildProgram);
+        # the capability created by trusted code works
+        code cap = make_capability(\build_program());
+        assertEq(Ungoverned, sandboxed.callFunction("call", cap).callFunction("probe", DeniedFile));
+    }
+
+    #! runs spin() of the Program in a thread, requests the sandbox's interrupt once it spins, returns its result
+    private string spinInterrupted(Program p, int max_ms) {
+        Queue started();
+        Queue result();
+        background sub () {
+            try {
+                result.push(p.callFunction("spin", started, max_ms));
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err);
+            }
+        }();
+        started.get();
+        manager.requestInterrupt();
+        on_exit manager.clearInterrupt();
+        return result.get();
+    }
+}

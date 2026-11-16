@@ -75,7 +75,20 @@ an expression's code (`%requires`, `%define`) still take effect in the Program: 
 issue. The walk's cache of a context with no manager on its chain (`sandboxChainClear()`) is shared by policy and
 other lookups, so a Program with a manager in any slot counts as having one: a Program created in a system-policy
 capability has a kept sandbox but no kept policy manager, and a policy check must not cache "none" for the other
-lookups. The managers are released with the own manager when the Program is cleared, or when it is
+lookups. Trusted infrastructure that builds shared state lazily for whichever caller needs it first (a Program that every
+caller then uses) would give it the first caller's sandbox; it builds it through a capability made during trusted
+startup with `SandboxManager::createTrustedBuildCall()` (`qore_create_trusted_build_call()`), a
+`SandboxBoundCallReference` in build mode: a call evaluates its arguments in the caller's context, enters the Program
+that created it, masks the caller's policy (`QoreSandboxTrustedPolicyHelper`, as `createSystemPolicyCall()` does) and
+runs the callback under a construction barrier, the module initialization barrier with a trusted loader
+(`QoreModuleInitSandboxBarrierHelper(QoreTrustedBuildTag)`). Under it nothing of the caller below the barrier is seen:
+`qore_caller_is_sandboxed()` is false, so what the callback creates or commits keeps no sandbox of the caller, threads
+that it starts inherit none, and objects that it creates have no provenance; the provenance of the caller's objects and
+callbacks that it calls applies above the barrier. The caller's call budgets still count the build (they are frames of
+the thread, not found by the walk), its interrupt requests do not reach it. Creating the capability is refused to code
+that any sandbox governs or that is sandboxed, and for a callback that has provenance, belongs to a sandboxed Program,
+or is a bound callback or a capability; a trusted build capability cannot be registered with
+`createSystemPolicyCall()` either. The managers are released with the own manager when the Program is cleared, or when it is
 destroyed without being cleared. The constructor throws `std::bad_alloc` if the creator's sandbox cannot be resolved
 (no Program is created); the parse entry points raise an out-of-memory exception and do not parse.
 
