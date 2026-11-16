@@ -4396,6 +4396,11 @@ namespace {
 // Default internal entries have canonical semantics, including when entered from a legacy native callback.
 // Explicit lexical entries carry their value through recursive checks without changing a shared type.
 struct DefaultTypeMatchPolicy {
+    //! a deleted object does not match a class type (issue #3272: instanceof, cast<>)
+    static constexpr bool deleted_object_keeps_class = false;
+    //! true if SQL NULL can be accepted by a type that does not accept it (see QoreTypeInfo::acceptsBrokenSoftNull())
+    static constexpr bool may_accept_broken_soft_null = false;
+
     qore_type_result_e value(const QoreTypeInfo* ti, const QoreValue& n, bool fold) const {
         return fold ? QoreTypeInfo::runtimeAcceptsValueOrFold(ti, n) : QoreTypeInfo::runtimeAcceptsValue(ti, n);
     }
@@ -4406,6 +4411,9 @@ struct DefaultTypeMatchPolicy {
 };
 
 struct LexicalTypeMatchPolicy {
+    static constexpr bool deleted_object_keeps_class = false;
+    static constexpr bool may_accept_broken_soft_null = true;
+
     LexicalSemanticPolicy policy;
 
     qore_type_result_e value(const QoreTypeInfo* ti, const QoreValue& n, bool fold) const {
@@ -4414,6 +4422,37 @@ struct LexicalTypeMatchPolicy {
 
     qore_type_result_e spec(const QoreTypeSpec& spec, const QoreValue& n, bool exact, bool fold) const {
         return spec.runtimeAcceptsValue(n, exact, fold, policy);
+    }
+};
+
+//! the match of a call argument in the run-time selection of a variant: a deleted object keeps its class, as at parse
+//! time and for a variant selected at parse time (issue #6159); using it in the called code raises
+//! OBJECT-ALREADY-DELETED
+template <typename BasePolicy>
+struct CallArgTypeMatchPolicy : BasePolicy {
+    static constexpr bool deleted_object_keeps_class = true;
+
+    qore_type_result_e value(const QoreTypeInfo* ti, const QoreValue& n, bool fold) const {
+        if (!QoreTypeInfo::hasType(ti)) {
+            return QTI_WILDCARD;
+        }
+        for (auto& t : ti->getAcceptSpecs()) {
+            qore_type_result_e rv = t.spec.runtimeAcceptsValueImpl(n, t.exact, fold, *this);
+            if (rv != QTI_NOT_EQUAL) {
+                return rv;
+            }
+        }
+        // SQL NULL, which no class type accepts, is matched as by the base policy
+        if constexpr (BasePolicy::may_accept_broken_soft_null) {
+            if (n.getType() == NT_NULL) {
+                return BasePolicy::value(ti, n, fold);
+            }
+        }
+        return QTI_NOT_EQUAL;
+    }
+
+    qore_type_result_e spec(const QoreTypeSpec& spec, const QoreValue& n, bool exact, bool fold) const {
+        return spec.runtimeAcceptsValueImpl(n, exact, fold, *this);
     }
 };
 
@@ -5240,9 +5279,11 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 if (rv == QTI_NOT_EQUAL) {
                     return rv;
                 }
-                // issue #3272: do not return a match for deleted objects
-                if (!obj->isValid()) {
-                    return QTI_NOT_EQUAL;
+                // issue #3272: do not return a match for deleted objects, except to select a variant (issue #6159)
+                if constexpr (!MatchPolicy::deleted_object_keeps_class) {
+                    if (!obj->isValid()) {
+                        return QTI_NOT_EQUAL;
+                    }
                 }
                 return (rv == QTI_IDENT && exact) ? QTI_IDENT : QTI_AMBIGUOUS;
             }
@@ -5256,8 +5297,14 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
             } else if (ot == NT_WEAKREF) {
                 obj = n.get<const WeakReferenceNode>()->get();
             }
-            if (!obj || !obj->isValid()) {
+            if (!obj) {
                 return QTI_NOT_EQUAL;
+            }
+            // issue #3272: a deleted object does not match, except to select a variant (issue #6159)
+            if constexpr (!MatchPolicy::deleted_object_keeps_class) {
+                if (!obj->isValid()) {
+                    return QTI_NOT_EQUAL;
+                }
             }
             if (obj->getInstantiatedTypeInfo() == u.ti) {
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
@@ -5624,12 +5671,14 @@ static int qore_typed_container_quality(const QoreTypeInfo* ti, const QoreListNo
 
 qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, const QoreValue& n, int& quality,
         bool& content_dependent) {
-    return runtimeAcceptsCallArgImpl(ti, n, quality, content_dependent, DefaultTypeMatchPolicy{});
+    return runtimeAcceptsCallArgImpl(ti, n, quality, content_dependent,
+        CallArgTypeMatchPolicy<DefaultTypeMatchPolicy>{});
 }
 
 qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, const QoreValue& n, int& quality,
         bool& content_dependent, LexicalSemanticPolicy policy) {
-    return runtimeAcceptsCallArgImpl(ti, n, quality, content_dependent, LexicalTypeMatchPolicy{policy});
+    return runtimeAcceptsCallArgImpl(ti, n, quality, content_dependent,
+        CallArgTypeMatchPolicy<LexicalTypeMatchPolicy>{{policy}});
 }
 
 template <typename MatchPolicy>

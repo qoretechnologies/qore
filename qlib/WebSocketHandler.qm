@@ -844,6 +844,13 @@ public class WebSocketConnection {
             sendDirectLocked(encoded);
             return;
         }
+        # before direct sends are enabled, the frame state of an HTTP/2 or HTTP/3 stream can have sent its close
+        # frame already (for an error in the client's frames): a data frame is refused now, as the stream context
+        # refuses it once direct sends are enabled, instead of being buffered and dropped (#6077)
+        if (stream_ctx && (encoded[0] & 0x0f) < WSOP_Close && stream_ctx.isWebSocketCloseSent()) {
+            throw "WEBSOCKET-CLOSING-ERROR", "cannot send a message on a WebSocket connection that is closing; no "
+                "data frame may follow a close frame (RFC 6455 section 5.5.1)";
+        }
         try {
             channel.send(encoded);
         } catch (hash<ExceptionInfo> ex) {

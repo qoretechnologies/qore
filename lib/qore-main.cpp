@@ -421,11 +421,11 @@ void qore_cleanup() {
     // Stop JIT background compilation before destroying programs/functions: BgCompileWork holds
     // raw pointers to UserVariantBase members.  Keep the LLVM engine alive, however, because user
     // module delete callbacks below can still call functions through published native entry points.
-    // A compile still in LLVM is detached rather than awaited, as LLVM can take without bound; its
-    // thread no longer reads those pointers.  QoreJIT::shutdown() below releases the engine if the
-    // compile has ended by then; otherwise qore_fork_child_quick_exit() releases it if the compile has
-    // ended at the end, or ends the process with _exit() if it still runs (see
-    // QoreJIT::stopBackgroundCompiler() and QoreJIT::exitQuickly(); qore#5842).
+    // A compile still in LLVM is detached rather than awaited here, so that the teardown below goes on
+    // while it ends; its thread no longer reads those pointers, and it skips what it can of LLVM.
+    // QoreJIT::shutdown() below waits for it and releases the engine, so that no compile is in LLVM when
+    // this function returns and the process can return from main() (see
+    // QoreJIT::stopBackgroundCompiler(); qore#5842, qore#6296).
     QoreJIT::instance().stopBackgroundCompiler();
 
     // drop any user-module QoreObject references held by the async I/O
@@ -494,6 +494,9 @@ void qore_cleanup() {
     // reachable and is released with the process
     if (modules_left || qore_program_private::hasLeftPrograms()) {
         printd(5, "qore_cleanup() leaving the library as it is: a Program was left for a foreign thread\n");
+        // a background compile still in LLVM is waited for, so that no compile is in LLVM when this function returns
+        // (issue #6296); the engine stays, as the foreign thread can still run compiled code
+        QoreJIT::instance().finishDetachedCompile();
         return;
     }
 

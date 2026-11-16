@@ -54,6 +54,73 @@ def no_core_dumps():
         signal.signal(sig, signal.SIG_DFL)
 
 
+def start_in_session(args, **kwargs):
+    """Starts a command of the harness (a runner, or a shell that runs the runner's functions) in a session of its own
+
+    end_session() then ends every process that the command started: a runner that is killed, or that a time limit of
+    the harness ends, runs no trap, and its watchdog's reader, which holds the write end of its event FIFO, would
+    otherwise run until its own time limit (issue #6298)
+    """
+    return subprocess.Popen(args, start_new_session=True, preexec_fn=no_core_dumps, **kwargs)
+
+
+def session_processes(sid):
+    """Returns the IDs of the processes of the session that have not ended (zombies are left out on Linux)"""
+    if os.path.isdir("/proc/self"):
+        pids = []
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit():
+                continue
+            try:
+                with open(f"/proc/{entry}/stat") as f:
+                    stat = f.read()
+            except OSError:
+                continue
+            # after the command's name in parentheses: state, ppid, pgrp, session
+            fields = stat[stat.rindex(")") + 2:].split()
+            if fields[0] != "Z" and int(fields[3]) == sid:
+                pids.append(int(entry))
+        return pids
+    result = subprocess.run(["pgrep", "-s", str(sid)], capture_output=True, text=True)
+    return [int(pid) for pid in result.stdout.split()]
+
+
+def end_session(process):
+    """Kills every process of the session of a command started with start_in_session() and waits for the command
+
+    The session, not the command's process group: the runner runs its tests and its watchdog's reader under timeout,
+    which puts each of them in a process group of its own.  The processes that a test of the run starts in a session of
+    their own are not in it; the runner ends them.
+    """
+    killed = None
+    while True:
+        pids = set(session_processes(process.pid)) - {os.getpid()}
+        # a list that the kills did not change has only processes that end (their kill is delivered) or zombies
+        if not pids or pids == killed:
+            break
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        killed = pids
+    process.wait()
+
+
+def run_in_session(args, timeout, capture_output=False, **kwargs):
+    """subprocess.run() for a command of the harness: when the time limit expires, or the harness fails while the
+    command runs, every process of the command's session is killed, not only the command (see start_in_session())"""
+    if capture_output:
+        kwargs["stdout"] = kwargs["stderr"] = subprocess.PIPE
+    with start_in_session(args, **kwargs) as process:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except BaseException:
+            end_session(process)
+            raise
+    return subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
+
+
 class RunnerTree:
     """A tree that run_tests.sh runs in, with Python scripts as its tests, or qore scripts with the qore of the build"""
 
@@ -128,8 +195,8 @@ class RunnerTree:
 
     def run_shell(self, script, timeout=120, **variables):
         """Runs a shell script in the tree; RUN_TESTS names the runner"""
-        return subprocess.run(["sh", "-c", script], cwd=self.root, env=self.env(RUN_TESTS=str(RUN_TESTS), **variables),
-                              capture_output=True, text=True, timeout=timeout, preexec_fn=no_core_dumps)
+        return run_in_session(["sh", "-c", script], timeout, cwd=self.root,
+                              env=self.env(RUN_TESTS=str(RUN_TESTS), **variables), capture_output=True, text=True)
 
     def run(self, timeout=120, **variables):
         """Runs the runner in the tree; returns its result, with its output in both streams in "output\""""
@@ -306,9 +373,8 @@ class InterruptedRunnerTest(unittest.TestCase):
                 # alive pipe reports it
                 output_path = tree.root / "runner.out"
                 with open(output_path, "wb") as output_file:
-                    runner = subprocess.Popen(["sh", str(RUN_TESTS)], cwd=tree.root, env=env, stdout=output_file,
-                                              stderr=subprocess.STDOUT, pass_fds=tuple(write_ends),
-                                              preexec_fn=no_core_dumps)
+                    runner = start_in_session(["sh", str(RUN_TESTS)], cwd=tree.root, env=env, stdout=output_file,
+                                              stderr=subprocess.STDOUT, pass_fds=tuple(write_ends))
                 for fd in write_ends:
                     os.close(fd)
                 write_ends = []
@@ -350,9 +416,10 @@ class InterruptedRunnerTest(unittest.TestCase):
                 self.assertEqual([alive_r], readable, "a process of the run is left after signal %d" % sig)
                 self.assertEqual(b"", os.read(alive_r, 1), "a process of the run is left after signal %d" % sig)
             finally:
-                if runner is not None and runner.poll() is None:
-                    runner.kill()
-                    runner.wait()
+                # a run that a failure left ends: the runner, and its watchdog's reader, which a runner that is killed
+                # does not end
+                if runner is not None:
+                    end_session(runner)
                 # a test that is left (after a failure) is released from its FIFO, if it waits there
                 try:
                     os.close(os.open(tree.root / "hold", os.O_WRONLY | os.O_NONBLOCK))
@@ -439,6 +506,62 @@ class InterruptedRunnerTest(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")
+@unittest.skipUnless(HAVE_TIMEOUT, "the runner reads its events without a watchdog without a timeout command")
+class KilledRunnerTest(unittest.TestCase):
+    """A runner that the harness kills, as at the time limit of a case, leaves no process of its run (issue #6298)
+
+    A killed runner runs no trap, so nothing tells its watchdog's reader to end, and the reader holds the write end of
+    the event FIFO, so it never reads its end: it ran until its own time limit (300 s), and the test until its limit.
+    """
+
+    def test_a_killed_runner_leaves_no_process_of_its_run(self):
+        with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
+            tree = RunnerTree(directory)
+            # every process of the run inherits the write ends of these pipes (see InterruptedRunnerTest.interrupt())
+            ready_r = alive_r = None
+            write_ends = []
+            runner = None
+            try:
+                ready_r, ready_w = os.pipe()
+                alive_r, alive_w = os.pipe()
+                for fd in (ready_w, alive_w):
+                    write_ends.append(fcntl.fcntl(fd, fcntl.F_DUPFD, 50))
+                    os.close(fd)
+                ready_fd = write_ends[0]
+                hold = tree.root / "hold"
+                os.mkfifo(hold)
+                tree.add_test("blocks.qtest", f"""\
+                    # test-timeout: 600
+                    import os
+                    os.write({ready_fd}, b"running\\n")
+                    open({str(hold)!r}).read()
+                    """)
+                with open(tree.root / "runner.out", "wb") as output_file:
+                    runner = start_in_session(["sh", str(RUN_TESTS)], cwd=tree.root, env=tree.env(),
+                                              stdout=output_file, stderr=subprocess.STDOUT,
+                                              pass_fds=tuple(write_ends))
+                for fd in write_ends:
+                    os.close(fd)
+                write_ends = []
+                # the test runs: the runner has started its watchdog's reader
+                readable, _, _ = select.select([ready_r], [], [], 120)
+                self.assertEqual([ready_r], readable, "the test did not start")
+                self.assertEqual(b"running\n", os.read(ready_r, 100))
+                # the harness ends the run, as at the time limit of a case or after a failure
+                end_session(runner)
+                # the pipe is at its end once no process of the run holds it; a process that is left keeps it open,
+                # which the time limit of the select ends as a failure
+                readable, _, _ = select.select([alive_r], [], [], 60)
+                self.assertEqual([alive_r], readable, "a process of the killed run is left")
+                self.assertEqual(b"", os.read(alive_r, 1), "a process of the killed run is left")
+            finally:
+                if runner is not None:
+                    end_session(runner)
+                for fd in write_ends + [ready_r, alive_r]:
+                    if fd is not None:
+                        os.close(fd)
+
+
 class FailedFifoTest(unittest.TestCase):
     """A watchdog whose event FIFO fails reports it; it does not take it for the time limit"""
 
@@ -543,9 +666,9 @@ class RunnerDescendantsTest(unittest.TestCase):
                 (proc / str(pid) / "status").write_text(f"Name:\tp{pid}\nPPid:\t{ppid}\n")
             (proc / "102").mkdir()
             (proc / "102" / "status").symlink_to(proc / "gone")
-            result = subprocess.run(["sh", "-c", runner_function("runner_descendants") + "runner_descendants 100"],
-                                    env=dict(os.environ, QORE_TEST_PROC=str(proc)), capture_output=True, text=True,
-                                    timeout=60)
+            result = run_in_session(["sh", "-c", runner_function("runner_descendants") + "runner_descendants 100"],
+                                    60, env=dict(os.environ, QORE_TEST_PROC=str(proc)), capture_output=True,
+                                    text=True)
             self.assertEqual(["101", "103"], sorted(result.stdout.split()), result.stdout + result.stderr)
 
 
@@ -585,8 +708,7 @@ class WatchdogReadTest(unittest.TestCase):
                 echo "run_with_watchdog: $? WATCHDOG_TEST_EXIT=$WATCHDOG_TEST_EXIT" \\
                     "WATCHDOG_TIMED_OUT=$WATCHDOG_TIMED_OUT WATCHDOG_ERROR=$WATCHDOG_ERROR"
                 """)
-            result = subprocess.run(["sh", "-c", script], cwd=directory, capture_output=True, text=True, timeout=120,
-                                    preexec_fn=no_core_dumps)
+            result = run_in_session(["sh", "-c", script], 120, cwd=directory, capture_output=True, text=True)
             result.output = result.stdout + result.stderr
             return result
 

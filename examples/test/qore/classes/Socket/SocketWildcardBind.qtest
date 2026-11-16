@@ -31,7 +31,8 @@
 
     The tests can run at the same time as other programs: a port is never released before the test binds it again,
     and the ports held at given numbers are bound without SO_REUSEADDR, so that none is a port that another program
-    uses.
+    uses.  A port that only connections hold can still be bound by number by another program that reuses the
+    address (issue #6322); the test of a given port reports that program's listener as the cause instead of failing.
 */
 
 %modern
@@ -56,6 +57,8 @@ class SocketWildcardBindTest inherits QUnit::Test {
             \timeWaitTest());
         addTestCase("a datagram socket on all interfaces is refused a port held for IPv4", \datagramTest());
         addTestCase("a given port on which no socket listens is bound and serves IPv4 clients", \freePortTest());
+        addTestCase("a given port that another program binds by number while connections hold it is reported",
+            \takenFreePortTest());
         set_return_value(main());
     }
 
@@ -68,9 +71,12 @@ class SocketWildcardBindTest inherits QUnit::Test {
     }
 
     #! returns the port of a connection to a listener on 127.0.0.1 that is then closed, and the connection's sockets
-    /** No socket listens on the port, the system assigns the port to no other socket while the connection holds it,
-        and a bind of the port is refused unless it reuses the address, as the bind of a server restarted on its port
-        does.  A port that is released before it is bound again could be taken by a concurrent program first.
+    /** No socket listens on the port, the system assigns the port to no other socket while the connection holds it
+        (neither to a bind of port 0 nor to a connect() of any destination), and a bind of the port is refused unless
+        it reuses the address, as the bind of a server restarted on its port does.  A port that is released before it
+        is bound again could be taken by a concurrent program first.  Another program can still bind the port by
+        number with \c SO_REUSEADDR, as one that restarts a server on a port that it had released does, and listen
+        on it; no socket keeps such a bind from the port (see bindFreePort())
     */
     private static list<auto> connectionHeldPort() {
         Socket probe = listener("127.0.0.1");
@@ -205,8 +211,20 @@ class SocketWildcardBindTest inherits QUnit::Test {
         # the restarted server reuses the address and binds the port
         Socket restarted();
         on_exit restarted.close();
-        restarted.bindINET(NOTHING, port, True);  # all-interfaces: tests the bind on all interfaces
-        restarted.listen();
+        try {
+            restarted.bindINET(NOTHING, port, True);  # all-interfaces: tests the bind on all interfaces
+            restarted.listen();
+        } catch (hash<ExceptionInfo> ex) {
+            # another program can bind the port by number while only the closed connection holds it, as for
+            # freePortTest() (see bindFreePort())
+            *list<string> listeners = PortHolder::tcp_listeners(port);
+            if (listeners) {
+                testSkip("another program listens on port %d (%s), which it bound by number while the closed "
+                    "connection held it; no socket keeps such a bind from the port (%s: %s)", port,
+                    join(", ", listeners), ex.err, ex.desc);
+            }
+            rethrow;
+        }
         assertEq(port, restarted.getSocketInfo(False).port, "the restarted server binds its port");
     }
 
@@ -233,16 +251,64 @@ class SocketWildcardBindTest inherits QUnit::Test {
     }
 
     freePortTest() {
-        # a port on which no socket listens, which a connection holds so that no other program can take it first
+        # a port on which no socket listens, which a connection holds so that the system assigns it to no other socket
         (int port, Socket held_client, Socket held_peer) = connectionHeldPort();
         on_exit {
             held_client.close();
             held_peer.close();
         }
+        *string taken = bindFreePort(port);
+        if (taken) {
+            testSkip("%s", taken);
+        }
+    }
+
+    takenFreePortTest() {
+        # another program binds the held port by number, reusing the address, and listens on it, as a program that
+        # restarts a server on a port that it had released does; the bind on all interfaces is then refused, and that
+        # is reported as the cause instead of a failure of the bind
+        (int port, Socket held_client, Socket held_peer) = connectionHeldPort();
+        on_exit {
+            held_client.close();
+            held_peer.close();
+        }
+        Socket other;
+        try {
+            other = listener("127.0.0.1", port);
+        } catch (hash<ExceptionInfo> ex) {
+            # this system keeps the port from a bind by number while connections hold it: the given port is bound
+            assertEq(NOTHING, bindFreePort(port), sprintf("the held port %d is bound (%s: %s)", port, ex.err,
+                ex.desc));
+            return;
+        }
+        on_exit other.close();
+        assertTrue(PortHolder::tcp_listeners(port).val(), sprintf("the listener on port %d is reported", port));
+        *string taken = bindFreePort(port);
+        assertRegex(sprintf("another program listens on port %d", port), taken ?? "<nothing>");
+    }
+
+    #! binds the given port on all interfaces and checks that an IPv4 client reaches it
+    /** @return why the port could not be bound if a socket listens on it, which another program can bind by number
+        while connections hold it; the bind's exception is rethrown if no socket listens on the port
+    */
+    private *string bindFreePort(int port) {
         Socket s();
         on_exit s.close();
-        s.bindINET(NOTHING, port, True);  # all-interfaces: tests the bind on all interfaces
-        s.listen();
+        try {
+            s.bindINET(NOTHING, port, True);  # all-interfaces: tests the bind on all interfaces
+            s.listen();
+        } catch (hash<ExceptionInfo> ex) {
+            # the held port is in use only if another program bound it by number with SO_REUSEADDR and listens on
+            # it: the connections that hold it do not listen, and the system assigns it to no other socket
+            *list<string> listeners = PortHolder::tcp_listeners(port);
+            if (listeners) {
+                return sprintf("another program listens on port %d (%s), which it bound by number while the test "
+                    "held the port with connections, as a program that restarts a server on a port that it had "
+                    "released does; no socket keeps such a bind from the port (%s: %s)", port,
+                    join(", ", listeners), ex.err, ex.desc);
+            }
+            rethrow;
+        }
         assertEq(port, s.getSocketInfo(False).port, "the given port is bound");
         Socket client();
         on_exit client.close();

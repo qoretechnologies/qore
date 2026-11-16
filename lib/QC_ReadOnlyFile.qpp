@@ -393,6 +393,11 @@ int ReadOnlyFile::close() {
 
     @note text in a stateful @ref character_encoding "character encoding" (ex: \c "UTF-7", \c "ISO-2022-JP", \c "IBM930") is read in the shift state left by the characters read before it; each string returned is valid on its own (it starts and ends in the initial shift state, so its bytes can differ from the bytes read), and no bytes after the characters returned are read; once characters have been read, lines and all of the remaining text are read in the same shift state, until the position (ReadOnlyFile::setPos()), the file, or the encoding is changed
 
+    @note On native Windows ports, %Qore cannot wait for data on a file descriptor (\c select() works only on
+    sockets there), so the timeout does not limit the wait for data: each read of the file blocks until data is
+    available or the end of the file is reached.  The timeout is checked only before each further read of a call that
+    reads its data in several parts, so the timeout exception is thrown only if the timeout period has passed then
+
     @see ReadOnlyFile::readBinary()
 
     @since
@@ -430,6 +435,10 @@ binary b = f.readShortBinary(4096);
     @throw FILE-READ-TIMEOUT timeout limit exceeded
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin,
     @ref stdout, @ref stderr) when @ref no-terminal-io is set
+
+    @note On native Windows ports, %Qore cannot wait for data on a file descriptor (\c select() works only on
+    sockets there), so the timeout is not applied: the call blocks until data is available or the end of the file is
+    reached
 
     @since %Qore 3.0
  */
@@ -770,6 +779,11 @@ binary b = f.readShortBinary(4096);
     @throw FILE-READ-TIMEOUT timeout limit exceeded
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
 
+    @note On native Windows ports, %Qore cannot wait for data on a file descriptor (\c select() works only on
+    sockets there), so the timeout does not limit the wait for data: each read of the file blocks until data is
+    available or the end of the file is reached.  The timeout is checked only before each further read of a call that
+    reads its data in several parts, so the timeout exception is thrown only if the timeout period has passed then
+
     @see ReadOnlyFile::read()
  */
 *binary ReadOnlyFile::readBinary(softint size, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
@@ -934,6 +948,10 @@ if (!isDataAvailable(30s))
     @return @ref True "True" if data becomes available for reading from the file within the timeout period, @ref False "False" if not
 
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
+
+    @note On native Windows ports, %Qore cannot wait for data on a file descriptor (\c select() works only on
+    sockets there), so this method returns @ref True "True" at once for an open file, whether or not data is
+    available, and a following read blocks until data is available or the end of the file is reached
  */
 bool ReadOnlyFile::isDataAvailable(timeout timeout_ms = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::isDataAvailable", xsink))

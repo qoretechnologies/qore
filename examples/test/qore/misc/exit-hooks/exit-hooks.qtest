@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class ExitHooksTest
@@ -158,7 +159,7 @@ class ExitHooksTest inherits QUnit::Test {
         f.close();
         string output = dir + "/output.txt";
         string command = sprintf("EXIT_HOOK_TEST='%s' QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1", mode,
-            get_script_dir() + PathSep + (ENV.QORE_MODULE_DIR ?? ""), QORE_ARGV[0], script, output);
+            get_script_dir() + PathSep + (ENV.QORE_MODULE_DIR ?? ""), TestInterpreter::qore_interpreter(), script, output);
         int rc = system(command);
         string out = ReadOnlyFile::readTextFile(output);
         return {"rc": rc, "output": out, "lines": (map $1, trim(out).split("\n"), $1 !~ /^\s/ && $1 !~ /^(unhandled|call stack)/)};

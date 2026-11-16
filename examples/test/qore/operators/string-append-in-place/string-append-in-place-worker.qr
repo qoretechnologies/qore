@@ -1,0 +1,540 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# appends to strings in loops; run by string-append-in-place.qtest
+
+/** Each check appends to a string that a sandbox made, and prints "name=how|value": "how" is "in-place" if the
+    string kept growing in its own buffer, or "copied" if an append copied it, and "value" describes the string the
+    appends made.
+
+    A string that code governed by a memory-limited sandbox allocates is charged to the sandbox, and so is its growth
+    when the host appends to it in place, until the string is freed (qore#5665); a copy that the host makes is not
+    charged to the sandbox, and the sandbox's string is freed when the variable releases it.  So after the appends, the
+    sandbox's memory usage is at least the size of the string if and only if every append was made in place: this does
+    not depend on timing, and it does not need library debugging.
+*/
+
+%no-child-restrictions
+
+enum ES : string {
+    Long = "a long string value that is not short",
+}
+
+const SandboxCode = "%new-style
+string sub make_string(int n) {
+    return strmul(\"x\", n);
+}
+string sub make_latin1(int n) {
+    return convert_encoding(strmul(\"\\u00e9\", n), \"ISO-8859-1\");
+}
+";
+
+#! the size of the string that the sandbox makes
+const Start = 1000;
+#! the number of appends of each check
+const Appends = 2000;
+
+our string global_string;
+
+class Holder {
+    public {
+        string member;
+    }
+}
+
+#! a sandbox and its program
+class Sandbox {
+    public {
+        SandboxManager sm();
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+    }
+
+    constructor() {
+        sm.setMemoryLimit(64 * 1024 * 1024);
+        p.setSandboxManager(sm);
+        p.parse(SandboxCode, "sandbox");
+    }
+
+    #! returns a string that the sandbox made, which is charged to it
+    string makeString() {
+        return p.callFunction("make_string", Start);
+    }
+
+    #! returns an ISO-8859-1 string that the sandbox made
+    string makeLatin1() {
+        return p.callFunction("make_latin1", Start);
+    }
+
+    #! returns how the appends to a string of the sandbox were made and describes the string
+    string result(string s) {
+        return sprintf("%s|%d:%s:%s", sm.getMemoryUsage() >= s.size() ? "in-place" : "copied", s.size(),
+            s.encoding(), convert_encoding(s.substr(-12), "UTF-8"));
+    }
+}
+
+string sub piece_call() {
+    return "ab";
+}
+
+*string sub maybe_piece(int i) {
+    return i % 3 ? "cd" : NOTHING;
+}
+
+string sub check_variable() {
+    Sandbox sb();
+    string s = sb.makeString();
+    string piece = "ab";
+    for (int i = 0; i < Appends; ++i) {
+        s += piece;
+    }
+    return sb.result(s);
+}
+
+string sub check_parameter(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    for (int i = 0; i < Appends; ++i) {
+        s += piece;
+    }
+    return sb.result(s);
+}
+
+string sub check_call() {
+    Sandbox sb();
+    string s = sb.makeString();
+    for (int i = 0; i < Appends; ++i) {
+        s += piece_call();
+    }
+    return sb.result(s);
+}
+
+string sub check_optional_call() {
+    Sandbox sb();
+    string s = sb.makeString();
+    for (int i = 0; i < Appends; ++i) {
+        s += maybe_piece(i);
+    }
+    return sb.result(s);
+}
+
+string sub check_concatenation(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    for (int i = 0; i < Appends; ++i) {
+        s += piece + "c";
+    }
+    return sb.result(s);
+}
+
+string sub check_substring(string source) {
+    Sandbox sb();
+    string s = sb.makeString();
+    for (int i = 0; i < Appends; ++i) {
+        s += source.substr(1, 2);
+    }
+    return sb.result(s);
+}
+
+string sub check_list_element(list<auto> l) {
+    Sandbox sb();
+    string s = sb.makeString();
+    for (int i = 0; i < Appends; ++i) {
+        s += l[i % 2];
+    }
+    return sb.result(s);
+}
+
+string sub check_typed_list_element(list<string> l) {
+    Sandbox sb();
+    string s = sb.makeString();
+    for (int i = 0; i < Appends; ++i) {
+        s += l[i % 2];
+    }
+    return sb.result(s);
+}
+
+string sub check_hash_element(hash<auto> h) {
+    Sandbox sb();
+    string s = sb.makeString();
+    for (int i = 0; i < Appends; ++i) {
+        s += h.piece;
+    }
+    return sb.result(s);
+}
+
+string sub check_auto_variable() {
+    Sandbox sb();
+    string s = sb.makeString();
+    auto piece = "ab";
+    for (int i = 0; i < Appends; ++i) {
+        s += piece;
+    }
+    return sb.result(s);
+}
+
+# a value of another type is appended as its string
+string sub check_int() {
+    Sandbox sb();
+    string s = sb.makeString();
+    for (int i = 0; i < Appends; ++i) {
+        s += i;
+    }
+    return sb.result(s);
+}
+
+string sub check_mixed(list<auto> l) {
+    Sandbox sb();
+    string s = sb.makeString();
+    for (int i = 0; i < Appends; ++i) {
+        s += l[i % l.size()];
+    }
+    return sb.result(s);
+}
+
+# NOTHING leaves the string unchanged
+string sub check_nothing() {
+    Sandbox sb();
+    string s = sb.makeString();
+    *string none;
+    for (int i = 0; i < Appends; ++i) {
+        s += none;
+        s += i % 2 ? "ab" : none;
+    }
+    return sb.result(s);
+}
+
+# a UTF-8 operand is converted to the string's ISO-8859-1 encoding
+string sub check_latin1(string piece) {
+    Sandbox sb();
+    string s = sb.makeLatin1();
+    for (int i = 0; i < Appends; ++i) {
+        s += piece;
+    }
+    return sb.result(s);
+}
+
+# an ISO-8859-1 operand is converted to the string's UTF-8 encoding
+string sub check_utf8(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    for (int i = 0; i < Appends; ++i) {
+        s += piece;
+    }
+    return sb.result(s);
+}
+
+# a string that another variable holds is copied before it is appended to
+string sub check_shared(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    string alias = s;
+    for (int i = 0; i < Appends; ++i) {
+        s += piece;
+    }
+    return sb.result(s) + sprintf(":%d", alias.size());
+}
+
+# a string appended to itself is copied
+string sub check_self() {
+    Sandbox sb();
+    string s = sb.makeString();
+    for (int i = 0; i < 3; ++i) {
+        s += s;
+    }
+    return sb.result(s);
+}
+
+# a local that a closure also appends to
+string sub check_closure_bound(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    code append = sub () {
+        s += piece;
+    };
+    for (int i = 0; i < Appends; ++i) {
+        s += piece;
+        append();
+    }
+    return sb.result(s);
+}
+
+# a local of a closure
+string sub check_closure_local(string piece) {
+    code check = string sub () {
+        Sandbox sb();
+        string s = sb.makeString();
+        for (int i = 0; i < Appends; ++i) {
+            s += piece;
+        }
+        return sb.result(s);
+    };
+    return check();
+}
+
+string sub check_global(string piece) {
+    Sandbox sb();
+    global_string = sb.makeString();
+    for (int i = 0; i < Appends; ++i) {
+        global_string += piece;
+    }
+    string rv = sb.result(global_string);
+    remove global_string;
+    return rv;
+}
+
+string sub check_member(string piece) {
+    Sandbox sb();
+    Holder holder();
+    holder.member = sb.makeString();
+    for (int i = 0; i < Appends; ++i) {
+        holder.member += piece;
+    }
+    return sb.result(holder.member);
+}
+
+string sub check_hash_lvalue(string piece) {
+    Sandbox sb();
+    hash<auto> h = {"s": sb.makeString()};
+    for (int i = 0; i < Appends; ++i) {
+        h.s += piece;
+    }
+    return sb.result(h.s);
+}
+
+string sub check_list_lvalue(string piece) {
+    Sandbox sb();
+    list<auto> l = (sb.makeString(),);
+    for (int i = 0; i < Appends; ++i) {
+        l[0] += piece;
+    }
+    return sb.result(l[0]);
+}
+
+string sub check_reference(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    reference<string> r = \s;
+    for (int i = 0; i < Appends; ++i) {
+        r += piece;
+    }
+    return sb.result(s);
+}
+
+sub append_through(reference<string> r, string piece) {
+    for (int i = 0; i < Appends; ++i) {
+        r += piece;
+    }
+}
+
+string sub check_reference_parameter(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    append_through(\s, piece);
+    return sb.result(s);
+}
+
+# a string local assigned an enum value appends to its own copy: the enum member never changes
+string sub check_enum(string piece) {
+    string s = ES::Long;
+    for (int i = 0; i < 10; ++i) {
+        s += piece;
+    }
+    auto a = ES::Long;
+    for (int i = 0; i < 10; ++i) {
+        a += piece;
+    }
+    return sprintf("%s|%s|%s", s, a, ES::Long);
+}
+
+# appends in a try block (issue #6280)
+string sub check_try_literal() {
+    Sandbox sb();
+    string s = sb.makeString();
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += "ab";
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        s = ex.err;
+    }
+    return sb.result(s);
+}
+
+string sub check_try_variable(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += piece;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        s = ex.err;
+    }
+    return sb.result(s);
+}
+
+string sub check_try_call() {
+    Sandbox sb();
+    string s = sb.makeString();
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += piece_call();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        s = ex.err;
+    }
+    return sb.result(s);
+}
+
+string sub check_try_int() {
+    Sandbox sb();
+    string s = sb.makeString();
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += i;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        s = ex.err;
+    }
+    return sb.result(s);
+}
+
+string sub check_try_mixed(list<auto> l) {
+    Sandbox sb();
+    string s = sb.makeString();
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += l[i % l.size()];
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        s = ex.err;
+    }
+    return sb.result(s);
+}
+
+string sub check_try_nested(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            try {
+                s += piece;
+            } catch (hash<ExceptionInfo> ex) {
+                s = ex.err;
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        s = ex.err;
+    }
+    return sb.result(s);
+}
+
+# an append that raises an exception leaves the string as it was, and the handler sees it
+string sub check_try_exception(string piece) {
+    Sandbox sb();
+    string s = sb.makeLatin1();
+    string seen = "none";
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += i == Appends - 1 ? "\u20ac" : piece;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        seen = sprintf("%s:%d:%s", ex.err, s.size(), convert_encoding(s.substr(-4), "UTF-8"));
+    }
+    return sb.result(s) + ":" + seen;
+}
+
+# appends in a catch block
+string sub check_catch(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    try {
+        throw "CATCH";
+    } catch (hash<ExceptionInfo> ex) {
+        for (int i = 0; i < Appends; ++i) {
+            s += piece;
+        }
+    }
+    return sb.result(s);
+}
+
+# a string that another variable holds is copied before it is appended to in a try block too
+string sub check_try_shared(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    string alias = s;
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += piece;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        s = ex.err;
+    }
+    return sb.result(s) + sprintf(":%d", alias.size());
+}
+
+# an exception raised after an append in the same try block: the handler sees the string as appended
+string sub check_try_after(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    string seen = "none";
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += piece;
+            if (i == Appends - 1) {
+                throw "AFTER", s.substr(-4);
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        seen = sprintf("%s:%s:%d", ex.err, ex.desc, s.size());
+    }
+    return sb.result(s) + ":" + seen;
+}
+
+# each check runs twice: the first call runs in the IR interpreter in the JIT and tiered modes, the second compiled
+# code (the harness compiles a function synchronously after its first call)
+hash<string, code<string()>> checks = {
+    "variable": \check_variable(),
+    "parameter": string sub () { return check_parameter("ab"); },
+    "call": \check_call(),
+    "optional-call": \check_optional_call(),
+    "concatenation": string sub () { return check_concatenation("ab"); },
+    "substring": string sub () { return check_substring("xaby"); },
+    "list-element": string sub () { return check_list_element(("ab", "cd")); },
+    "typed-list-element": string sub () { return check_typed_list_element(("ab", "cd")); },
+    "hash-element": string sub () { return check_hash_element({"piece": "ab"}); },
+    "auto-variable": \check_auto_variable(),
+    "int": \check_int(),
+    "mixed": string sub () { return check_mixed(("ab", 1, 2.5, True, NOTHING, NULL, 3n, ("l",), {"h": 1})); },
+    "nothing": \check_nothing(),
+    "latin1": string sub () { return check_latin1("\u00e9a"); },
+    "utf8": string sub () { return check_utf8(convert_encoding("\u00e9a", "ISO-8859-1")); },
+    "shared": string sub () { return check_shared("ab"); },
+    "self": \check_self(),
+    "closure-bound": string sub () { return check_closure_bound("ab"); },
+    "closure-local": string sub () { return check_closure_local("ab"); },
+    "global": string sub () { return check_global("ab"); },
+    "member": string sub () { return check_member("ab"); },
+    "hash-lvalue": string sub () { return check_hash_lvalue("ab"); },
+    "list-lvalue": string sub () { return check_list_lvalue("ab"); },
+    "reference": string sub () { return check_reference("ab"); },
+    "reference-parameter": string sub () { return check_reference_parameter("ab"); },
+    "enum": string sub () { return check_enum("ab"); },
+    "try-literal": \check_try_literal(),
+    "try-variable": string sub () { return check_try_variable("ab"); },
+    "try-call": \check_try_call(),
+    "try-int": \check_try_int(),
+    "try-mixed": string sub () { return check_try_mixed(("ab", 1, 2.5, True, NOTHING, NULL, 3n, ("l",), {"h": 1})); },
+    "try-nested": string sub () { return check_try_nested("ab"); },
+    "try-exception": string sub () { return check_try_exception("\u00e9a"); },
+    "catch": string sub () { return check_catch("ab"); },
+    "try-shared": string sub () { return check_try_shared("ab"); },
+    "try-after": string sub () { return check_try_after("ab"); },
+};
+
+foreach hash<auto> i in (checks.pairIterator()) {
+    string first = i.value();
+    string second = i.value();
+    printf("%s=%s\n", i.key, first);
+    printf("%s-again=%s\n", i.key, second);
+}

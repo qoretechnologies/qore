@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CastUndefinedTypeTest
+
+#! Tests that an undefined type in the target type of cast<>() is a parse error for every operand (qore#6260)
+/** A cast of NOTHING (a literal or a constant) to an or-nothing type, or under %broken-cast, gives NOTHING without a
+    conversion; the parser returned that result before it resolved and checked the target type, so an undefined or
+    invalid type in it (ex: cast<*enum<NoSuchEnum>>(NOTHING), cast<*Gen<int, int>>(NOTHING)) or a type that cannot be
+    cast to (ex: cast<*code>(NOTHING)) was accepted.  The checks are in
+    cast-undefined-type-worker.qr, which parses the code of each check with Program::parse() and runs it; it is run in
+    each execution mode and on the IR tier, and every run must give the results below.
+*/
+class CastUndefinedTypeTest inherits QUnit::Test {
+    public {
+        #! the result of every check the worker makes
+        const Expected = {
+            "enum-or-nothing-literal": "PARSE-EXCEPTION: reference to undefined enum 'NoSuchEnum'",
+            "enum-literal": "PARSE-EXCEPTION: reference to undefined enum 'NoSuchEnum'",
+            "enum-or-nothing-int-literal": "PARSE-EXCEPTION: reference to undefined enum 'NoSuchEnum'",
+            "enum-int-literal": "PARSE-EXCEPTION: reference to undefined enum 'NoSuchEnum'",
+            "enum-or-nothing-variable": "PARSE-EXCEPTION: reference to undefined enum 'NoSuchEnum'",
+            "enum-variable": "PARSE-EXCEPTION: reference to undefined enum 'NoSuchEnum'",
+            "enum-or-nothing-constant": "PARSE-EXCEPTION: reference to undefined enum 'NoSuchEnum'",
+            "enum-constant": "PARSE-EXCEPTION: reference to undefined enum 'NoSuchEnum'",
+            "enum-or-nothing-name-literal": "PARSE-EXCEPTION: reference to undefined type 'NoSuchEnum'",
+            "class-or-nothing-literal": "PARSE-EXCEPTION: reference to undefined type 'NoSuchClass'",
+            "class-literal": "PARSE-EXCEPTION: reference to undefined type 'NoSuchClass'",
+            "class-or-nothing-constant": "PARSE-EXCEPTION: reference to undefined type 'NoSuchClass'",
+            "hashdecl-or-nothing-literal": "PARSE-EXCEPTION: illegal access to unknown member in undefined hashdecl "
+                "'NoSuchHashDecl'",
+            "hashdecl-literal": "PARSE-EXCEPTION: illegal access to unknown member in undefined hashdecl "
+                "'NoSuchHashDecl'",
+            "list-or-nothing-literal": "PARSE-EXCEPTION: reference to undefined type 'NoSuchClass'",
+            "softlist-or-nothing-literal": "PARSE-EXCEPTION: reference to undefined type 'NoSuchClass'",
+            "generic-class-arguments-or-nothing-literal": "PARSE-TYPE-ERROR: cannot resolve '*Gen<int, int>'; generic "
+                "class 'Gen' declares 1 type parameter, but 2 type arguments were provided",
+            "generic-class-arguments-or-nothing-variable": "PARSE-TYPE-ERROR: cannot resolve '*Gen<int, int>'; generic "
+                "class 'Gen' declares 1 type parameter, but 2 type arguments were provided",
+            "generic-hashdecl-or-nothing-literal": "PARSE-TYPE-ERROR: cannot resolve generic hashdecl 'GH' without "
+                "explicit type arguments",
+            "generic-hashdecl-hash-or-nothing-literal": "PARSE-TYPE-ERROR: cannot resolve 'GH'; generic hashdecl 'GH' "
+                "declares 1 type parameter and must be used with explicit type arguments",
+            "hash-key-type-or-nothing-literal": "PARSE-TYPE-ERROR: invalid complex hash type '*hash<int, int>'; hash "
+                "key type must be 'string'; cannot declare a hash with key type 'int'",
+            "buffer-element-type-or-nothing-literal": "PARSE-TYPE-ERROR: cannot resolve '*buffer<int>'; invalid buffer "
+                "element type 'int'. Supported storage element types are: int8, int16, int32, int64, float32, float64, "
+                "bool, string, decimal128. Use 'buffer<*T>' for nullable elements and '*buffer<T>' for an optional "
+                "buffer value",
+            "list-arguments-or-nothing-literal": "PARSE-TYPE-ERROR: cannot resolve '*list<string, int>' with 2 type "
+                "arguments; base type 'list' takes a single type name giving list element value type",
+            "enum-arguments-or-nothing-literal": "PARSE-TYPE-ERROR: cannot resolve '*enum<Color, int>'; base type "
+                "'enum' takes a single enum name as a subtype argument",
+            "code-or-nothing-literal": "PARSE-EXCEPTION: cannot cast<> to type '*code'",
+            "code-or-nothing-variable": "PARSE-EXCEPTION: cannot cast<> to type '*code'",
+            "reference-or-nothing-literal": "PARSE-EXCEPTION: cannot cast<> to type '*reference<int>'",
+            "closure-or-nothing-literal": "PARSE-EXCEPTION: cannot cast<> to type '*code'",
+            "broken-cast-class-literal": "PARSE-EXCEPTION: reference to undefined type 'NoSuchClass'",
+            "broken-cast-enum-literal": "PARSE-EXCEPTION: reference to undefined enum 'NoSuchEnum'",
+            "defined-enum-or-nothing-literal": "null nothing",
+            "defined-enum-or-nothing-constant": "null nothing",
+            "defined-later-enum-or-nothing-literal": "null nothing",
+            "defined-class-or-nothing-literal": "null nothing",
+            "defined-later-class-or-nothing-literal": "null nothing",
+            "defined-hashdecl-or-nothing-literal": "null nothing",
+            "defined-broken-cast-class-literal": "null nothing",
+            "defined-enum-or-nothing-member": "1 enum<Color>",
+            "defined-generic-class-or-nothing-literal": "null nothing",
+            "defined-generic-hashdecl-or-nothing-literal": "null nothing",
+            "defined-typedef-or-nothing-literal": "null nothing",
+            "defined-object-or-nothing-literal": "null nothing",
+            "defined-hash-or-nothing-literal": "null nothing",
+            "defined-list-or-nothing-literal": "null nothing",
+            "defined-int-or-nothing-literal": "null nothing",
+            "defined-softlist-or-nothing-literal": "null nothing",
+            "defined-complex-hash-or-nothing-literal": "null nothing",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("CastUndefinedTypeTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s", libqore_dir,
+                qore_bin, mode, getWorker()));
+            checkWorkerOutput(mode, out);
+        }
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testIrTier() {
+        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b "
+            "--exec-mode=tiered %s", libqore_dir, qore_bin, getWorker())));
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "cast-undefined-type-worker.qr";
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them; any other output fails
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

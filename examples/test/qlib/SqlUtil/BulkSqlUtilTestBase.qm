@@ -21,9 +21,7 @@ module BulkSqlUtilTestBase {
 %requires BulkSqlUtil
 %requires Schema
 
-%try-module dataframe
-%define NoDataFrame
-%endtry
+%requires dataframe
 
 public class SqlUtilTestSchema inherits AbstractSchema {
     constructor(AbstractDatasource ds, *string dts, *string its) : AbstractSchema(ds, dts, its) {
@@ -84,9 +82,7 @@ public class SqlTestBase inherits QUnit::Test {
         addTestCase("BulkColumnarInsert", \bulkColumnarInsertTest());
         addTestCase("BulkHashOfBuffersInsert", \bulkHashOfBuffersInsertTest());
         addTestCase("BulkInputValidation", \bulkInputValidationTest());
-%ifndef NoDataFrame
         addTestCase("BulkDataFrameInsert", \bulkDataFrameInsertTest());
-%endif
         addTestCase("BulkUpsert", \bulkUpsertTest());
     }
 
@@ -227,7 +223,6 @@ public class SqlTestBase inherits QUnit::Test {
 
     }
 
-%ifndef NoDataFrame
     bulkDataFrameInsertTest() {
         if (!table) testSkip("no DB connection");
         if (table.getDatasource().getDriverName() != "pgsql")
@@ -235,7 +230,6 @@ public class SqlTestBase inherits QUnit::Test {
 
         runSimpleColumnarInsert("qore_bulk_dataframe_test", new DataFrame::DataFrame(getSimpleBufferColumns()));
     }
-%endif
 
     private runSimpleColumnarInsert(string table_name, auto data) {
         AbstractDatasource ds = table.getDatasource();

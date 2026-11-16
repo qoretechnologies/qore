@@ -231,21 +231,27 @@ public:
     */
     DLLEXPORT bool tryBeginIdleClose(active_stream_count_t active_streams, const void* op) override;
 
-    //! Reserves a stream for a connection whose active streams are counted by its owner (a Qore-level connection)
-    /** Like tryReserveStream(), with the active streams and the limit given by the caller: fails if the connection
-        is draining, closed or closing for its idle timeout, or if \a max_streams is not 0 and \a active_streams and
-        the reservations reach it.  The reservation is released with releaseStreamReservation(), as one of
-        tryReserveStream(); the idle timeout of the connection's operation does not close a connection with a
-        reservation (#6184).
+    //! Reserves a stream for a connection whose active streams are counted by its operation (a Qore-level connection)
+    /** Like tryReserveStream(), with the active streams read with \a active_streams from the operation \a op and the
+        limit given by the caller: fails if the connection is draining, closed or closing for its idle timeout, or if
+        \a max_streams is not 0 and the active streams and the reservations reach it.  The active streams are read
+        under @ref reserve_lock, as in tryBeginIdleClose(), which a release of a reservation takes: a submit counts its
+        active stream before it releases its reservation, so a request that is being submitted is in one of the two
+        counts, and two requests cannot reserve the last stream of a connection.  The draining and closed states are
+        checked after the count, as in tryReserveStream(): a connection stops accepting requests before the response
+        that ends it releases its stream, so a connection whose released stream is counted is seen draining.  The
+        reservation is released with releaseStreamReservation(), as one of tryReserveStream(); the idle timeout of the
+        connection's operation does not close a connection with a reservation (#6184).
 
-        @param active_streams the active streams of the connection, as its owner counts them
+        @param active_streams returns the active streams of the operation \a op
+        @param op the connection's operation
         @param max_streams the most streams of the connection; 0: no limit
 
         @return true if a stream was reserved
 
         @since %Qore 3.0 (@ref QORE_HAS_HTTP_CLIENT_PENDING_RESERVATION)
     */
-    DLLEXPORT bool tryReservePendingStream(int active_streams, int max_streams);
+    DLLEXPORT bool tryReservePendingStream(active_stream_count_t active_streams, const void* op, int max_streams);
 
     //! Holds the connection against its idle timeout, or releases the hold
     /** While held, tryBeginIdleClose() returns false: the idle timeout of the connection's operation does not close

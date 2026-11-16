@@ -544,6 +544,25 @@ void qore_rt_reload_chain_rotate(uint64_t* tracker, uint64_t* deferred, Exceptio
 //! Clear one local reload-chain slot at a temp boundary (no-op for an empty slot).
 void qore_rt_reload_chain_clear(uint64_t* slot, ExceptionSink* xsink);
 
+//! the index of an absent slot in a table of qore_rt_reload_chain_flush()
+constexpr uint32_t QORE_RELOAD_CHAIN_NO_SLOT = 0xffffffffu;
+
+//! Flushes the reload chains of the locals of a function at a temp boundary (qore#6299)
+/** @param slots the addresses of the tracker, deferred and valid-epoch slots of the function
+    @param table \a pairs pairs of indexes in \a slots, of a tracker and of its deferred slot, either of which can be
+    QORE_RELOAD_CHAIN_NO_SLOT, then \a epochs indexes of valid-epoch slots
+    @param pairs the number of pairs: each is rotated (qore_rt_reload_chain_rotate()), or its slot cleared
+    (qore_rt_reload_chain_clear()) if it has one, in the order of the table
+    @param epochs the number of valid-epoch slots that get the value of \a epoch, which is incremented then, so that
+    the caches of their locals are stale
+    @param epoch the reload epoch of the function, or null if it has none (then \a epochs is 0)
+    @param xsink for the exceptions of the destructors of the values released
+
+    The same as the inline code of a flush of a smaller function, in one call.
+*/
+void qore_rt_reload_chain_flush(uint64_t** slots, const uint32_t* table, int32_t pairs, int32_t epochs,
+        uint64_t* epoch, ExceptionSink* xsink);
+
 //! Clear caller-owned argument cleanup slots after callee ownership has been established.
 void qore_rt_clear_arg_cleanups(uint64_t** arg_cleanups, int32_t count, ExceptionSink* xsink);
 
@@ -1956,7 +1975,9 @@ uint64_t qore_rt_self_member_assign(const char* member_name, uint64_t rhs_bits,
     int32_t mode_raw, ExceptionSink* xsink);
 uint64_t qore_rt_self_member_compound(const char* member_name, int32_t compound_op,
     uint64_t rhs_bits, ExceptionSink* xsink);
-uint64_t qore_rt_self_member_update(const char* member_name, int32_t unary_op,
+//! Applies ++ or -- (\a unary_op, an LVUnaryOp) to a member of the current object; \a ref_rv is 0 if the value of a
+//! post operation is not used, so that the old value of a number is not copied
+uint64_t qore_rt_self_member_update(const char* member_name, int32_t unary_op, int32_t ref_rv,
     ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_assign(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
@@ -2011,6 +2032,15 @@ uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx, int32_t slot, uint6
 //! args is an array of nargs NaN-boxed QoreValues.
 //! Returns the NaN-boxed result; sets xsink on exception.
 uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
+//! as qore_rt_call_with_args(), giving the references of the temporary arguments (arg_cleanups) to the callee
+uint64_t qore_rt_call_with_args_consume_args(uint64_t expr_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+    ExceptionSink* xsink);
+
+//! Loads the value of a parameter that takes its argument over for the cache of its normal entry and releases the
+//! reference of its runtime variable, which leaves the cache with the only reference that the call gave (#5958)
+uint64_t qore_rt_take_param(LocalVar* var, ExceptionSink* xsink);
+//! AOT variant of qore_rt_take_param()
+uint64_t qore_rt_take_param_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 //! AOT variant: resolve expression from context slot, then delegate to qore_rt_call_with_args
 uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
@@ -2523,9 +2553,11 @@ enum : int {
 /** Sets \a rv to the conversion of a value that the builtin accepts; any other value raises the error of the builtin
     call (RUNTIME-OVERLOAD-ERROR), as with the AST interpreter (issue #5660)
 
-    @return false if the value is not accepted and the error was raised
+    @return 0 if the value is not accepted and the error was raised, 1 with the result in \a rv, 2 with the result in
+    \a rv if it holds a reference that the caller must release: a string, and an int above 48 bits, a negative NaN or a
+    double in the tag-collision range (about -2.2e307 to -8.7e307), which a node holds (issue #6211)
 */
-DLLLOCAL bool qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink);
+DLLLOCAL int qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink);
 
 //! Returns true if the builtin conversion of the given kind accepts a value of the given type
 /** string(softstring), int(*softint) and float(softfloat) accept a string, an int, a float, a number, a boolean, a

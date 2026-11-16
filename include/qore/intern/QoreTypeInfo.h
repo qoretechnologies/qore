@@ -1128,6 +1128,41 @@ public:
         return ti->return_vec[0].spec.getEnum();
     }
 
+    //! returns true if the type returns only plain values of the given base type
+    /** The type of an enum returns the values of its members, which are \c TAG_ENUM values and not values of the
+        enum's base type, although isType() and parseReturns() give its base type; a fast path that holds or passes
+        on values of the type as native or plain values of the base type would lose their enum type (qore#6236)
+    */
+    DLLLOCAL static bool isPlainType(const QoreTypeInfo* ti, qore_type_t t) {
+        return isType(ti, t) && !getReturnEnum(ti);
+    }
+
+    //! returns true if the type returns exactly plain values of the given base type; see isPlainType()
+    /** A type parameter is not plain, although parseReturns() gives its bound: the values of \c T: \c int are the
+        members of an int enum when the type argument is the enum, as are those of \c T: \c EI (isType() is false for a
+        type parameter)
+    */
+    DLLLOCAL static bool parseReturnsPlain(const QoreTypeInfo* ti, qore_type_t t) {
+        return parseReturns(ti, t) == QTI_IDENT && !getReturnEnum(ti) && !getTypeParameterSourceType(ti);
+    }
+
+    //! returns true if any of the types that the type returns is an enum, also one that is not its first (a union)
+    /** getReturnEnum() gives only the enum of the first return type: a union whose enum is another member (ex:
+        union<string, E>) returns the members of the enum as well, and accepts no plain value of its base type that
+        another member does not accept (qore#6259); see isPlainType()
+    */
+    DLLLOCAL static bool returnsEnum(const QoreTypeInfo* ti) {
+        if (!hasType(ti)) {
+            return false;
+        }
+        for (auto& i : ti->return_vec) {
+            if (i.spec.getEnum()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getComplexHashValueType(const QoreTypeInfo* ti);
 

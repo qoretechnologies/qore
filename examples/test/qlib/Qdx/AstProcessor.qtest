@@ -355,7 +355,9 @@ class LiteralTransport { }
             f.open2(config, O_CREAT | O_WRONLY | O_TRUNC);
             f.write(sprintf("INPUT = \"%s\"\nOUTPUT_DIRECTORY = \"%s\"\n"
                 "GENERATE_HTML = YES\nGENERATE_LATEX = NO\nQUIET = YES\n"
-                "MARKDOWN_SUPPORT = NO\nEXTRACT_ALL = YES\n", input, dir.path));
+                "MARKDOWN_SUPPORT = NO\nEXTRACT_ALL = YES\n"
+                # no graphs: Doxygen runs Graphviz dot for them by default, which need not be installed (#6231)
+                "HAVE_DOT = NO\n", input, dir.path));
         }
         int rc = system("doxygen " + shellQuote(config) + " >" + shellQuote(log) + " 2>&1");
         string diagnostics = ReadOnlyFile::readTextFile(log);

@@ -344,6 +344,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_EncodingConversionOutputStream.qpp
     lib/QC_StreamPipe.qpp
     lib/QC_Digest.qpp
+    lib/QC_WebSocketCloseRecord.qpp
     lib/QC_PipeInputStream.qpp
     lib/QC_PipeOutputStream.qpp
     lib/QC_StreamWriter.qpp
@@ -1748,6 +1749,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreStandardException.cpp
     lib/QoreXSinkException.cpp
     lib/QoreClass.cpp
+    lib/QoreClassGivenArgs.cpp
     lib/TypedHashDecl.cpp
     lib/QoreEnumDecl.cpp
     lib/QoreReflection.cpp
@@ -1858,6 +1860,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRExprRegistry.cpp
     lib/JITRuntime.cpp
     lib/JITRuntimeGivenArgs.cpp
+    lib/JITRuntimeTakeOver.cpp
     lib/QoreIRInterpreter.cpp
     lib/QoreIRInterpreterGivenArgs.cpp
     lib/QoreIRIntrinsic.cpp
@@ -1866,6 +1869,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRLowering.cpp
     lib/QoreIRToLLVM.cpp
     lib/QoreIRVerifier.cpp
+    lib/QoreIRTakeOver.cpp
     lib/QoreAOT.cpp
     lib/QoreAOTBatchMemory.cpp
     lib/QoreAOTRuntime.cpp
@@ -2429,6 +2433,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_FileOutputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StreamPipe.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Digest.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_WebSocketCloseRecord.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_PipeInputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_PipeOutputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StreamWriter.cpp\"
@@ -2575,8 +2580,12 @@ if (SINGLE_COMPILATION_UNIT)
     # - JITRuntimeGivenArgs.cpp, QoreIRInterpreterGivenArgs.cpp: the code of the calls that give the references of
     #   their temporary arguments to the callee (issue #5882); in the SCU, it would change how the compiler inlines
     #   the helpers that the code of the calls that give nothing uses, and so that code
+    # - QoreIRTakeOver.cpp, QoreClassGivenArgs.cpp, JITRuntimeTakeOver.cpp: the analysis of the parameters that take
+    #   their arguments over, and the calls with the arguments given to them of the code that a member holds and of
+    #   the callees that the JIT runtime finds at run time (issue #5958), for the same reason
     set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp
-        lib/JITRuntimeGivenArgs.cpp lib/QoreIRInterpreterGivenArgs.cpp)
+        lib/JITRuntimeGivenArgs.cpp lib/QoreIRInterpreterGivenArgs.cpp lib/QoreIRTakeOver.cpp
+        lib/QoreClassGivenArgs.cpp lib/JITRuntimeTakeOver.cpp)
     if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1)
         # sources that cannot share a translation unit with the LLVM users (see cmake/QoreScuChunks.cmake)
         list(APPEND LIBQORE_EXTRA_SRC ${LIBQORE_SCU_ISOLATED_SRC})
@@ -2770,6 +2779,18 @@ if (ADDRESS_SANITIZER)
     target_link_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 endif()
 
+# warnings about code that nothing uses: libqore and qcc were compiled without any warning flag, so static functions
+# that nothing calls were never reported (ten were found by a manual sweep, qore#6163); a static function whose only
+# caller is itself is still not reported by the compilers, only by a sweep
+set(QORE_UNUSED_WARNING_FLAGS "-Wunused-function -Wunused-variable -Wunused-but-set-variable" CACHE STRING
+    "warnings about unused code enabled for libqore and qcc (gcc and clang; empty to disable)")
+set(QORE_UNUSED_WARNINGS_ENABLED FALSE)
+if (QORE_UNUSED_WARNING_FLAGS AND (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
+    separate_arguments(_qore_unused_flags UNIX_COMMAND "${QORE_UNUSED_WARNING_FLAGS}")
+    target_compile_options(libqore PRIVATE ${_qore_unused_flags})
+    set(QORE_UNUSED_WARNINGS_ENABLED TRUE)
+endif()
+
 # What decides the frame sizes of libqore besides its code (issue #5852), as get_qore_library_info() reports it and
 # tools/check-stack-usage.py checks it: the build type and its flags (a multi-config generator chooses the
 # configuration at build time, so it has none here), the target triple, which names the C library
@@ -2854,6 +2875,18 @@ add_executable(qore-substring-view-mutation-test examples/test/qore/strings/subs
 target_include_directories(qore-substring-view-mutation-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-substring-view-mutation-test PRIVATE libqore)
+add_executable(qore-char-offsets-test examples/test/qore/strings/char-offsets/char_offsets.cpp)
+target_include_directories(qore-char-offsets-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-char-offsets-test PRIVATE libqore)
+add_executable(qore-byte-offsets-test examples/test/qore/strings/byte-offsets/byte_offsets.cpp)
+target_include_directories(qore-byte-offsets-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-byte-offsets-test PRIVATE libqore)
+add_executable(qore-ascii-string-index-test examples/test/qore/strings/ascii_string_index.cpp)
+target_include_directories(qore-ascii-string-index-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-ascii-string-index-test PRIVATE libqore)
 add_executable(qore-number-round-trip-test EXCLUDE_FROM_ALL
     examples/test/qore/vars/number_round_trip.cpp)
 target_include_directories(qore-number-round-trip-test PRIVATE
@@ -2908,6 +2941,15 @@ target_include_directories(qore-stream-peek-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
 # the readers keep an IconvHelper for text in stateful encodings, which is inline
 target_link_libraries(qore-stream-peek-test PRIVATE libqore ${ICONV_LIBRARY})
+add_executable(qore-stream-writer-ints-test examples/test/qore/streams/stream_writer_ints.cpp)
+target_include_directories(qore-stream-writer-ints-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
+# the readers keep an IconvHelper for text in stateful encodings, which is inline
+target_link_libraries(qore-stream-writer-ints-test PRIVATE libqore ${ICONV_LIBRARY})
+add_executable(qore-string-offset-bounds-test examples/test/qore/strings/string_offset_bounds.cpp)
+target_include_directories(qore-string-offset-bounds-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-string-offset-bounds-test PRIVATE libqore)
 add_executable(qore-utf8-validation-test examples/test/qore/strings/utf8_validation.cpp)
 target_include_directories(qore-utf8-validation-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
@@ -3086,6 +3128,9 @@ add_subdirectory(examples/plugins/sample-buffer EXCLUDE_FROM_ALL)
 
 # qcc - Qore Code Compiler (AOT)
 add_executable(qcc qcc-main.cpp)
+if (QORE_UNUSED_WARNINGS_ENABLED)
+    target_compile_options(qcc PRIVATE ${_qore_unused_flags})
+endif()
 # qcc's test hooks run a command named in the environment at fixed points of a compile (QORE_QCC_TEST_*_COMMAND, see
 # qcc_run_test_hook() in qcc-main.cpp), for the tests that change a source while qcc compiles; a qcc that is
 # packaged must never run a command taken from its environment, so they are only in a debug build by default, and
@@ -3190,6 +3235,8 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp
+    # the analysis of the parameters that take their arguments over, compiled from QoreIRVerifier.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRTakeOver.cpp
     ${CMAKE_SOURCE_DIR}/qcc-main.cpp
 )
 

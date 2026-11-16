@@ -2,15 +2,18 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
 %modern
+%no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class FormatNumberTest
 
 public class FormatNumberTest inherits QUnit::Test {
     constructor() : Test("FormatNumberTest", "1.0") {
         addTestCase("Simple format_number() exercise", \formatNumberTestMethod(), NOTHING);
+        addTestCase("single-byte default encoding", \singleByteDefaultEncoding());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -24,5 +27,21 @@ public class FormatNumberTest inherits QUnit::Test {
         assertEq("-48.392.093.894,235", format_number(".,3", -48392093894.2349));
         assertEq("32.000", format_number(".,0", 32000.1239));
         assertEq("32.001", format_number(".", 32000.998));
+    }
+
+    #! the separators of a format are taken one character at a time also with a single-byte default encoding
+    /** QoreString::concat() with a position and a length took the rest of the string in a single-byte encoding
+        (issue #6238), so with a single-byte default encoding, format_number(".,2", 1234567.891) gave
+        "1.,2234.,2567,289"
+    */
+    singleByteDefaultEncoding() {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string code = "printf(\"%s|%s|%s|%s|%s|%s\", get_default_encoding(), format_number(\".,2\", 1234567.891), "
+            "format_number(\".,3\", -48392093894.2349), (1234567.891n).format(\".,2\"), "
+            "(1234567.891).format(\".,2\"), parse_number(\"1.234.567,89\", \".,\"));";
+        string cmd = sprintf("env LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --charset=ISO-8859-1 -e '%s' 2>&1",
+            libqore_dir, libqore_dir, qore_bin, code);
+        assertEq("ISO-8859-1|1.234.567,89|-48.392.093.894,235|1.234.567,89|1.234.567,89|1234567.89", backquote(cmd));
     }
 }

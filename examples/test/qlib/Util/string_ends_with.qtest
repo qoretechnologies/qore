@@ -19,6 +19,9 @@ public class StringEndsWithTest inherits QUnit::Test {
             ("FOO", "FOO"),
             ("FOO", "OO"),
             ("FOO", "O"),
+            # a suffix that ends with a multi-byte character (issue #6246)
+            ("café", "é"),
+            ("café", "fé"),
         );
 
         list params_false = (

@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -60,7 +61,7 @@ class IRConstantContainerMaterializationTest inherits QUnit::Test {
         # the scripts run their code too few times for tiered execution to compile it, so native code is only
         # required with JIT execution
         ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("a constant hash is loaded, not rebuilt", \testHashShape());

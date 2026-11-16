@@ -10,8 +10,8 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
-%requires FsUtil
 %requires ../TestInterpreter.qm
+%requires FsUtil
 
 %exec-class AOTInitParseOptionsTest
 

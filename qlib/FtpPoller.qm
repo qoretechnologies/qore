@@ -165,6 +165,9 @@ poller.waitStop();
     @section ftppollerrelnotes FtpPoller Module Release Notes
 
     @section ftppollerv2_2 Version 2.2
+    - an empty \c "regex_mask" option matches every file; it caused the constructor to throw an
+      \c INVALID-MEMBER exception
+      (<a href="https://github.com/qoretechnologies/qore/issues/3377">issue 3377</a>)
     - FTP errors during polling are now logged with the new \c "log_error" callback (falling back to \c "log_info" if
       not set) instead of being reported only as informational messages
     - added the \c "error_delay" option so that the delay before retrying a poll after an FTP error can be configured
@@ -401,7 +404,8 @@ public class FtpPoller {
         - \c path: the remote path(s) for retrieving the files; if a list of strings is given then each path will be
           polled for matching files according to the \c "mask" or \c "regex_mask" option
         - \c poll_interval: the integer polling interval in seconds (default: 10 seconds; must be > 0 if given)
-        - \c regex_mask: a regular expression to use as a mask (overrides any \c "mask" value)
+        - \c regex_mask: a regular expression to use as a mask (overrides any \c "mask" value); an empty string
+          matches every file
         - \c reopts: regular expression match options (ex RE_Caseless for case-insensitive matches)
         - \c sleep: (required when the module is loaded by its path into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" to use instead of @ref Qore::sleep() (if not
@@ -458,10 +462,14 @@ public class FtpPoller {
         }
 
         bool re = False;
-        if (conf.regex_mask) {
-            mask = remove conf.regex_mask;
-            re = True;
-            conf -= "mask";
+        # an empty regex_mask is a regex that matches every file; it must be removed from the options in any case
+        if (conf.hasKey("regex_mask")) {
+            *string regex_mask = remove conf.regex_mask;
+            if (exists regex_mask) {
+                mask = regex_mask;
+                re = True;
+                conf -= "mask";
+            }
         }
 
         # set options
@@ -508,7 +516,8 @@ public class FtpPoller {
         - \c poll_interval: the integer polling interval in seconds (default: 10 seconds; must be > 0 if given)
         - \c port: the integer port number to connect to (default 21; must be > 0 if given)
         - \c protocol: either \c "ftp" (the detault) or \c "ftps" for secure FTP
-        - \c regex_mask: a regular expression to use as a mask (overrides any \c "mask" value)
+        - \c regex_mask: a regular expression to use as a mask (overrides any \c "mask" value); an empty string
+          matches every file
         - \c reopts: regular expression match options (ex RE_Caseless for case-insensitive matches)
         - \c start_thread: (required when imported into a context where @ref Qore::PO_NO_THREAD_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" for starting threads; must return the integer
@@ -569,10 +578,14 @@ public class FtpPoller {
         }
 
         bool re = False;
-        if (conf.regex_mask) {
-            mask = remove conf.regex_mask;
-            re = True;
-            conf -= "mask";
+        # an empty regex_mask is a regex that matches every file; it must be removed from the options in any case
+        if (conf.hasKey("regex_mask")) {
+            *string regex_mask = remove conf.regex_mask;
+            if (exists regex_mask) {
+                mask = regex_mask;
+                re = True;
+                conf -= "mask";
+            }
         }
 
         # set options

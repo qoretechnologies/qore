@@ -99,6 +99,7 @@ DLLLOCAL void init_alloc_tracking_functions(QoreNamespace& ns);
 #include "qore/intern/ql_string.h"
 #include "qore/intern/ql_pwd.h"
 #include "qore/intern/ql_misc.h"
+#include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/ql_websocket.h"
 #include "qore/intern/ql_list.h"
 #include "qore/intern/ql_thread.h"
@@ -194,6 +195,7 @@ DLLLOCAL QoreClass* initStringOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initFileOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStreamPipeClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initDigestClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initWebSocketCloseRecordClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initPipeInputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initPipeOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStreamWriterClass(QoreNamespace& ns);
@@ -285,6 +287,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclHashSerializationInfo,
     * hashdeclListSerializationInfo,
     * hashdeclUrlInfo,
+    * hashdeclHttpContentTypeInfo,
     * hashdeclModuleParseOptionMaskInfo,
     * hashdeclFtpResponseInfo,
     * hashdeclExtraPollFdInfo,
@@ -1603,6 +1606,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclHashSerializationInfo = init_hashdecl_HashSerializationInfo(qns);
     hashdeclListSerializationInfo = init_hashdecl_ListSerializationInfo(qns);
     hashdeclUrlInfo = init_hashdecl_UrlInfo(qns);
+    hashdeclHttpContentTypeInfo = init_hashdecl_HttpContentTypeInfo(qns);
     hashdeclModuleParseOptionMaskInfo = init_hashdecl_ModuleParseOptionMaskInfo(qns);
     hashdeclFtpResponseInfo = init_hashdecl_FtpResponseInfo(qns);
     preinitAbstractPollableIoObjectClass();
@@ -1666,6 +1670,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initStderrOutputStreamClass(qns));
     qns.addSystemClass(initStreamPipeClass(qns));
     qns.addSystemClass(initDigestClass(qns));
+    qns.addSystemClass(initWebSocketCloseRecordClass(qns));
     qns.addSystemClass(initStreamWriterClass(qns));
     qns.addSystemClass(initStreamReaderClass(qns));
     qns.addSystemClass(initBufferedStreamReaderClass(qns));

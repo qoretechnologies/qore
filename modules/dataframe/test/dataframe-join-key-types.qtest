@@ -225,11 +225,13 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
         DataFrame::DataFrame dec_s3 = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
             {"v": (1.25n, 4.125n)}, {"v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 3}}}));
         foreach string how in (("inner", "left", "right", "outer")) {
-            # a float32 non-key column and a float32 key column keep their schema
+            # a float32 non-key column and a float32 key column keep their schema, which is the type of their Arrow
+            # export (a joined column that holds its values as float64 has a ColumnarResult schema with the buffer
+            # type of its storage: qore#6214)
             DataFrame::DataFrame j = f32.join(g, ("k",), how);
-            assertEq(f32_schema, schema(j, "v"), how + ": a float32 non-key column");
+            assertEq(f32_schema, exportSchema(j, "v"), how + ": a float32 non-key column");
             j = f32.join(f32, ("v",), how);
-            assertEq(f32_schema, schema(j, "v"), how + ": a float32 key column");
+            assertEq(f32_schema, exportSchema(j, "v"), how + ": a float32 key column");
             # decimal key columns of one schema keep it, of two schemas get a common one, which holds the keys of
             # both sides exactly on export
             j = dec.join(dec, ("v",), how);
@@ -263,6 +265,11 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
     }
 
     #! returns the columnar schema of a column: its kind, element type, precision, scale, time unit and zone
+    #! returns the schema of a column of a DataFrame after an Arrow round trip
+    private hash<auto> exportSchema(DataFrame::DataFrame df, string name) {
+        return schema(DataFrame::DataFrame::fromArrowIpc(df.toArrowIpc()), name);
+    }
+
     private hash<auto> schema(DataFrame::DataFrame df, string name) {
         foreach hash<auto> column in (df.toColumnarResult().schemaV2()) {
             if (column.name == name) {

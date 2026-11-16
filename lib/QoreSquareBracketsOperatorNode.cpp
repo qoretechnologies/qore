@@ -44,6 +44,7 @@ QoreOperatorNode* QoreSquareBracketsOperatorNode::copyBackground(ExceptionSink* 
     if (rv) {
         rv->typeInfo = typeInfo;
         rv->rhs_list_range = rhs_list_range;
+        rv->right_needs_eval = right_needs_eval;
         rv->string_index_char = string_index_char;
         rv->negative_offsets = negative_offsets;
     }
@@ -118,6 +119,7 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rti = parse_context.typeInfo;
+    right_needs_eval = right.needsEval();
 
     if (!(parse_context.pflag & PF_FOR_ASSIGNMENT)) {
         QorePluginResolvedOperationInfo plugin_op;
@@ -320,6 +322,21 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
     }
     return err;
+}
+
+void QoreSquareBracketsOperatorNode::setCompiledCodeOptions() {
+    string_index_char = true;
+    negative_offsets = true;
+    // an offset list with a range is evaluated as a list of ranges (see parseCheckValueTypes()); the value types of a
+    // list read from compiled code are not set, so its values are checked
+    if (right.getType() == NT_PARSE_LIST) {
+        for (const QoreValue& v : right.get<const QoreParseListNode>()->getValues()) {
+            if (v.getType() == NT_OPERATOR && dynamic_cast<const QoreRangeOperatorNode*>(v.getInternalNode())) {
+                rhs_list_range = true;
+                break;
+            }
+        }
+    }
 }
 
 int QoreSquareBracketsOperatorNode::parseCheckValueTypes(const QoreParseListNode* pln) {
@@ -751,8 +768,19 @@ FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIterat
     ValueEvalOptimizedRefHolder lhs(left, xsink);
     if (*xsink)
         return nullptr;
-
-    ValueEvalOptimizedRefHolder rhs(xsink);
+    // a container read from a variable is borrowed; the index or the range bounds are evaluated after it and can
+    // assign the variable another value (l[(l = x) ? 0 : 0]), which releases the only reference to the container
+    // before it is read, so the operator holds a reference of its own to a borrowed container while the index needs
+    // evaluation, as evalImpl() does (qore#6204); the iterator takes it over
+    if (!lhs.isTemp() && right_needs_eval && lhs->needsRef()) {
+        lhs.ensureReferencedValue();
+    }
+    // the container and the index are temporaries of the statement, which live until the statement ends, as in
+    // evalImpl() and in the other execution modes (qore#5712); an iterator takes references of its own
+    QoreStatementTempScope::holdReceiver(left, lhs, xsink);
+    // the destructor of a value that the scope released for the same expression can raise an exception
+    if (*xsink)
+        return nullptr;
 
     // do not evaluate the RHS if the RHS is a list with ranges
     if (rhs_list_range) {
@@ -762,7 +790,8 @@ FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIterat
                 string_index_char, negative_offsets, semantic_policy.brokenListRange(), xsink);
         }
     } else {
-        if (rhs.eval(right))
+        QoreOperandEvalHolder rhs(right, xsink);
+        if (*xsink)
             return nullptr;
         return getIndexesIterator(lhs, rhs, string_index_char, negative_offsets, value_type, xsink);
     }

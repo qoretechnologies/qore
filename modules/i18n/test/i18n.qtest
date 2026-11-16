@@ -12,6 +12,7 @@
 
 %requires FsUtil
 %requires QUnit
+%requires ../../../examples/test/TestInterpreter.qm
 %requires i18n
 
 %exec-class I18nTest
@@ -151,7 +152,7 @@ class I18nTest inherits QUnit::Test {
 
     localeDataFallbackBoundTest() {
         # the record is process-wide, so the bound is tested in a separate process
-        string qore = ENV.QORE_BINARY ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        string qore = TestInterpreter::qore_interpreter();
         TmpDir tmp("i18n-locale-fallback-bound-");
         string script = tmp.path + DirSep + "bound.qr";
         File f();
