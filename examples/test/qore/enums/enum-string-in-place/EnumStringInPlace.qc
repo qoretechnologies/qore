@@ -1,44 +1,34 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
-# test-exec-mode: children - its checks run in child processes that set their own execution modes
-# test-platform: macos - JIT and AOT code generation of the in-place string operations and their exception edges
 
-%modern
-%no-child-restrictions
-
-%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires ../../../ExecModeHarness.qm
-
-%exec-class EnumStringInPlaceTest
+# The cases of the EnumStringInPlace-<n>.qtest tests: each runs one part of them, so that each takes a short time,
+# and together they run every case (see addPartCase())
 
 #! Tests the operations that modify a string in place on string enum lvalues
-/** A string enum lvalue holds only the members of its enum, and the value that an operation leaves after modifying the
-    lvalue's string in place is a plain string, which the enum type refuses: +=, splice, extract, trim, chomp, remove
-    and delete of characters, the regex substitution (=~ s///) and transliteration (=~ tr///) operators raise
-    RUNTIME-TYPE-ERROR and leave the lvalue unchanged, in every execution mode.  The AST interpreter asserted that the
-    assignment of the string made by a regex substitution or a transliteration could not fail, and native code took
-    a reference to the string that the refused assignment had released (qore#6196); the other operations replaced
-    the enum value with a plain string, which the lvalue then held (qore#6195).  remove and delete of a single
-    character only read it, and leaves the lvalue unchanged without an error; += on a string enum lvalue with no value gave it the
-    enum's first member before appending to it, and now leaves it without a value.  trim and chomp of a list or a
-    hash whose element type (or the type of a hashdecl member) is a string enum raise the error before they change any
-    element.
+/** A string enum lvalue holds only the members of its enum, and the value that an operation leaves after modifying
+    the lvalue's string in place is a plain string, which the enum type refuses: +=, splice, extract, trim, chomp,
+    remove and delete of characters, the regex substitution (=~ s///) and transliteration (=~ tr///) operators raise
+    RUNTIME-TYPE-ERROR and leave the lvalue unchanged, in every execution mode.  The AST interpreter asserted that
+    the assignment of the string made by a regex substitution or a transliteration could not fail, and native code
+    took a reference to the string that the refused assignment had released (qore#6196); the other operations
+    replaced the enum value with a plain string, which the lvalue then held (qore#6195).  remove and delete of a
+    single character only read it and leave the lvalue unchanged without an error; += on a string enum lvalue with
+    no value gave it the enum's first member before appending to it, and now leaves it without a value.  trim and
+    chomp of a list or a hash whose element type (or the type of a hashdecl member) is a string enum raise the error
+    before they change any element.
 
-    The worker (enum-string-in-place-worker.qr, made by a generator from the operations and lvalue kinds) applies each
-    operation to string enum lvalues with a short member value (held inline) and a long one, of each kind: a local, a
-    closure-bound local, a global, an object member (also in a method of its object), a hashdecl member, a hash
-    element read with a constant and with a run-time key, a list element, a local changed through a reference, a
-    parameter and a local changed through a reference parameter; in a try block, in a function with no try block whose
-    caller catches the error, in a try block in a loop, and in top-level code; with and without the operation's value
-    used.  Lvalues with no value are left without one, and the operations on a string local and on lvalues of no type
-    holding an enum value are controls, which they change.  The members must keep their values.  The worker is run in
-    each execution mode, on the IR tier, and as a program compiled with qcc at -O0 and -O3; every run must give the
-    results of the AST interpreter.
+    The worker (enum-string-in-place-worker.qr, which make-worker.py makes from the operations and lvalue kinds)
+    applies each operation to string enum lvalues with a short member value (held inline) and a long one, of each
+    kind: a local, a closure-bound local, a global, an object member (also in a method of its object), a hashdecl
+    member, a hash element read with a constant and with a run-time key, a list element, a local changed through a
+    reference, a parameter and a local changed through a reference parameter; in a try block, in a function with no
+    try block whose caller catches the error, in a try block in a loop, and in top-level code; with and without the
+    operation's value used.  Lvalues with no value are left without one, and the operations on a string local and on
+    lvalues of no type holding an enum value are controls, which they change.  The members must keep their values.
+    The worker is run in each execution mode, on the IR tier, and as a program compiled with qcc at -O0 and -O3;
+    every run must give the results of the AST interpreter.
 */
-class EnumStringInPlaceTest inherits QUnit::Test {
+class EnumStringInPlaceBase inherits QUnit::Test {
     public {
         #! the operations, longest name first, and the description in their errors
         const Ops = (
@@ -231,9 +221,12 @@ class EnumStringInPlaceTest inherits QUnit::Test {
         string op_regex;
         #! the results of the AST interpreter, which every other run must give
         hash<string, string> ast_results;
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
     }
 
-    constructor() : QUnit::Test("EnumStringInPlaceTest", "1.0", \ARGV) {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         # a qore run from the PATH has no directory in its name; its library and qcc are found next to it
         if (qore_bin !~ /\//) {
@@ -251,15 +244,27 @@ class EnumStringInPlaceTest inherits QUnit::Test {
         op_desc = map {$1.op: $1.desc}, Ops;
         op_regex = "^(.+)-(" + (map $1.op, Ops).join("|") + ")$";
 
-        addTestCase("each execution mode", \testExecModes());
-        addTestCase("IR tier", \testIrTier());
-        addTestCase("compiled program", \testCompiledProgram());
+        # the jit and tiered runs compile every function natively and take the most time
+        addPartCase(1, "execution modes ast, ir and jit", \testExecModes(), (("ast", "ir", "jit"),));
+        addPartCase(2, "execution mode tiered", \testExecModes(), (("tiered",),));
+        addPartCase(2, "IR tier", \testIrTier());
+        addPartCase(2, "compiled program", \testCompiledProgram());
 
         set_return_value(main());
     }
 
-    testExecModes() {
-        foreach string mode in (ExecModeHarness::ExecModes) {
+    #! adds a test case if it is in the part that this test runs
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
+    }
+
+    #! runs the worker in the given execution modes; the parts together run it in every mode of
+    #! ExecModeHarness::ExecModes
+    testExecModes(list<string> modes) {
+        foreach string mode in (modes) {
+            assertTrue(inlist(mode, ExecModeHarness::ExecModes), "execution mode " + mode);
             checkWorkerOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b "
                 "--enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, getWorker())));
         }

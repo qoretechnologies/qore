@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the in-place string operations and their exception edges
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include EnumStringInPlace.qc
+
+%exec-class EnumStringInPlacePart1
+
+#! runs part 1 of 2 of the cases of EnumStringInPlaceBase: the execution modes ast, ir and jit
+class EnumStringInPlacePart1 inherits EnumStringInPlaceBase {
+    constructor() : EnumStringInPlaceBase("EnumStringInPlacePart1", 1) {
+    }
+}
