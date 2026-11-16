@@ -1,0 +1,11 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# the main program of the separately compiled static member consumer of lvalue-element-paths-exec-modes.qtest
+
+%modern
+int sub main() {
+    printf("%s\n", DeferredStaticConsumer::direct());
+    printf("%s\n", DeferredStaticConsumer::handler());
+    return 0;
+}
+main();

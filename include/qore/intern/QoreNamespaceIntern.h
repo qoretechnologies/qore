@@ -1478,7 +1478,7 @@ protected:
         if (runtime_namespace_writer_tid.load(std::memory_order_acquire) == q_gettid()) {
             return false;
         }
-        int rc = runtime_namespace_lock.rdlock();
+        [[maybe_unused]] int rc = runtime_namespace_lock.rdlock();
         assert(!rc);
 #ifdef DEBUG
         ++runtime_namespace_read_depth;
@@ -1492,7 +1492,7 @@ protected:
             assert(runtime_namespace_read_depth);
             --runtime_namespace_read_depth;
 #endif
-            int rc = runtime_namespace_lock.unlock();
+            [[maybe_unused]] int rc = runtime_namespace_lock.unlock();
             assert(!rc);
         }
     }
@@ -1514,7 +1514,7 @@ protected:
             ++runtime_namespace_writer_depth;
             return;
         }
-        int rc = runtime_namespace_lock.wrlock();
+        [[maybe_unused]] int rc = runtime_namespace_lock.wrlock();
         assert(!rc);
         assert(!runtime_namespace_writer_depth);
         runtime_namespace_writer_depth = 1;
@@ -1526,7 +1526,7 @@ protected:
         assert(runtime_namespace_writer_depth);
         if (!--runtime_namespace_writer_depth) {
             runtime_namespace_writer_tid.store(-1, std::memory_order_release);
-            int rc = runtime_namespace_lock.unlock();
+            [[maybe_unused]] int rc = runtime_namespace_lock.unlock();
             assert(!rc);
         }
     }

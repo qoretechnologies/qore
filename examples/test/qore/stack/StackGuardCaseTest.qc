@@ -63,7 +63,7 @@ class StackGuardCaseTest inherits QUnit::Test {
     constructor(string name, hash<string, hash<StackCase>> cases, string common = "")
             : QUnit::Test(name, "1.0", \ARGV) {
         self.common = common;
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
             "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
         trim timeout_cmd;

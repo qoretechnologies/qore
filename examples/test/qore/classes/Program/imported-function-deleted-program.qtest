@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 
@@ -67,7 +68,7 @@ held: held: True referenced: True continued: True err: \"PROGRAM-ERROR\"
     }
 
     constructor() : QUnit::Test("ImportedFunctionDeletedProgram", "1.0") {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         script = get_script_dir() + "/imported-function-deleted-program/imported.q";
 

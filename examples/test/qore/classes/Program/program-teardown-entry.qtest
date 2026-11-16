@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class ProgramTeardownEntryTest
@@ -33,7 +34,7 @@ class ProgramTeardownEntryTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("ProgramTeardownEntryTest", "1.0") {
-        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         addTestCase("a thread entering a Program while its cleanup callback runs", \enterDuringCleanup());
         addTestCase("teardown hold usage errors", \holdErrors());
         addTestCase("a background compile for a Program being deleted is refused", \bgCompileRefused());
