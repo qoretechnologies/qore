@@ -14609,6 +14609,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             error = "cancelled during LLVM native PHI predeclaration";
             return false;
         }
+        // AOT native code has no paths of the debugger's flow requests: their blocks are erased with what they hold
+        // when the blocks are lowered, so they get no PHIs, which the PHI fixup pass would read freed (#6201)
+        if (aot_mode && block->debug_flow) {
+            continue;
+        }
         auto llvm_block_it = block_map.find(block.get());
         if (llvm_block_it == block_map.end()) {
             error = "missing LLVM basic block mapping during native PHI predeclaration";

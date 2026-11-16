@@ -4272,12 +4272,20 @@ private:
 class QoreIRLowering::DebugFlowPathLowering {
 public:
     DLLLOCAL DebugFlowPathLowering(QoreIRLowering& l) : l(l), saved_exit_lowering_nesting(l.exit_lowering_nesting),
-            saved_inline_handlers_lowered(l.inline_handlers_lowered) {
+            saved_inline_handlers_lowered(l.inline_handlers_lowered), saved_try_replaced_return(l.try_replaced_return),
+            saved_try_replaced_return_base(l.try_replaced_return_base),
+            saved_try_replaced_depth(l.try_replaced_depth) {
         if (!l.debug_flow_path_depth++) {
             l.exit_lowering_nesting = 0;
         }
     }
     DLLLOCAL ~DebugFlowPathLowering() {
+        // the cleanups of a path that leave the outermost try statement of a handler release the value that a
+        // return in it replaces there (emitBlockCleanups()), which the code after the path, whose own cleanups leave
+        // that try statement later, still releases
+        l.try_replaced_return = saved_try_replaced_return;
+        l.try_replaced_return_base = saved_try_replaced_return_base;
+        l.try_replaced_depth = saved_try_replaced_depth;
         if (!--l.debug_flow_path_depth) {
             l.exit_lowering_nesting = saved_exit_lowering_nesting;
             l.inline_handlers_lowered = saved_inline_handlers_lowered;
@@ -4288,6 +4296,9 @@ private:
     QoreIRLowering& l;
     const int saved_exit_lowering_nesting;
     const size_t saved_inline_handlers_lowered;
+    const QoreIRValue saved_try_replaced_return;
+    const QoreIRValue saved_try_replaced_return_base;
+    const int saved_try_replaced_depth;
 };
 
 static bool qore_ir_block_may_return(const StatementBlock* block);
