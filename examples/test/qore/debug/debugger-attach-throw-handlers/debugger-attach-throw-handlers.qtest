@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
 
 %exec-class DebuggerAttachThrowHandlersTest
 
@@ -55,7 +56,7 @@ class DebuggerAttachThrowHandlersTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("DebuggerAttachThrowHandlers", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         tags = getTags();
         foreach hash<auto> c in (Cases) {
             addTestCase(c.function, \checkCase(), (c,));

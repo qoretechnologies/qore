@@ -11,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../TestInterpreter.qm
 
 %exec-class ParseLoadModuleLocationTest
 
@@ -105,7 +106,7 @@ public const X = probe(%d);
         }
         TmpDir dir("qore-parse-load-location-");
         writeFiles(dir.path);
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         string mdir = dir.path + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
         list<string> nested_errors;
         int loaded;

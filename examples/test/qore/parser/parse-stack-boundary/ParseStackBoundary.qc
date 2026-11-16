@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: MIT
 
 %requires ../../../TestBuildTools.qm
+%requires ../../../TestInterpreter.qm
 
 #! The cases of the ParseStackBoundary-<n>.qtest tests: each runs one part of them, so that each takes a short time,
 #! and together they run every case (see addPartCase()); parts 1 and 3 parse code in a single Program, part 2 loads
@@ -63,7 +64,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         if (ENV.LIBQORE_BINARY && is_file(ENV.LIBQORE_BINARY)) {
             push candidates, dirname(realpath(ENV.LIBQORE_BINARY));
         }
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         if (qore !~ /\//) {
             *string found;
             foreach string dir in ((ENV.PATH ?? "").split(":")) {
@@ -563,7 +564,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
 
     #! runs a script with the qore under test in a process of its own; returns its output
     private string runScript(string script, string mdir) {
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         int status;
         string output = backquote("QORE_MODULE_DIR=" + quote(mdir) + " " + quote(qore) + " " + quote(script)
             + " 2>&1", \status);

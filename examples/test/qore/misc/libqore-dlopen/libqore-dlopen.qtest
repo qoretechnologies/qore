@@ -11,6 +11,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../../../TestBuildTools.qm
+%requires ../../../TestInterpreter.qm
 
 %exec-class LibqoreDlopenTest
 
@@ -41,7 +42,7 @@ public class LibqoreDlopenTest inherits QUnit::Test {
         if (ENV.LIBQORE_BINARY && is_file(ENV.LIBQORE_BINARY)) {
             push candidates, dirname(realpath(ENV.LIBQORE_BINARY));
         }
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         if (qore !~ /\//) {
             *string found;
             foreach string dir in ((ENV.PATH ?? "").split(":")) {

@@ -10,6 +10,7 @@
 
 # a run on PostgreSQL has its own schema
 %requires ../../qlib/SqlUtil/PgsqlTestIsolation.qm
+%requires ../../TestInterpreter.qm
 
 %exec-class SqlutilDumpTest
 
@@ -222,7 +223,7 @@ class SqlutilDumpTest inherits QUnit::Test {
         ds.commit();
         string script = get_script_dir() + "/../../../../bin/sqlutil";
         string out = backquote(sprintf("%s %s %s -C --dump=tables:sqlutil_dump_t --dump=views:sqlutil_dump_v 2>&1",
-            QORE_ARGV[0], script, connstr));
+            TestInterpreter::qore_interpreter(), script, connstr));
         assertRegex("-- DDL of table sqlutil_dump_t\n", out);
         assertRegex("create table sqlutil_dump_t \\(", out);
         assertRegex("-- DDL of view sqlutil_dump_v\n", out);

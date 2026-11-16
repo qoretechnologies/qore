@@ -24,6 +24,7 @@ class ResultCountsTest inherits QUnit::Test {
     private {
         const Script = "%modern
 %requires QUNIT_PATH
+%requires ../../TestInterpreter.qm
 %exec-class CountedTest
 class CountedTest inherits QUnit::Test {
     constructor() : Test(\"CountedTest\", \"1.0\", \\ARGV) {
@@ -201,7 +202,7 @@ class CountedTest inherits QUnit::Test {
             }
         }
         # only the standard output is read: it is the junit report with --format=junit
-        cmd += sprintf("'%s' '%s' %s", ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore", path, args ?? "");
+        cmd += sprintf("'%s' '%s' %s", TestInterpreter::qore_interpreter(), path, args ?? "");
         int rc;
         string out = backquote(cmd, \rc);
         return {"rc": rc, "out": out};

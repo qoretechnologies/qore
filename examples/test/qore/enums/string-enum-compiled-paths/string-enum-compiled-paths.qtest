@@ -11,6 +11,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
 
 %exec-class StringEnumCompiledPathsTest
 
@@ -27,7 +28,7 @@
 */
 class StringEnumCompiledPathsTest inherits QUnit::Test {
     private {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string fixture = get_script_dir() + "/StringEnumCompiledPaths.q";
         string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/StringEnumCompiledPaths.expected");
     }
