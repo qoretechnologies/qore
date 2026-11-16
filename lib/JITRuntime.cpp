@@ -16989,8 +16989,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_compound_consume(
     return qore_rt_self_member_compound_impl(member_name, compound_op, rhs_holder, xsink);
 }
 
+// documented in JITRuntime.h
 extern "C" DLLEXPORT uint64_t qore_rt_self_member_update(
-        const char* member_name, int32_t unary_op, ExceptionSink* xsink) {
+        const char* member_name, int32_t unary_op, int32_t ref_rv, ExceptionSink* xsink) {
     if (*xsink || unary_op < static_cast<int32_t>(LVUnaryOp::PreInc)
             || unary_op > static_cast<int32_t>(LVUnaryOp::PostDec)) {
         return toBits(QoreValue());
@@ -17002,22 +17003,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_update(
     QoreValue res;
     switch (static_cast<LVUnaryOp>(unary_op)) {
         case LVUnaryOp::PreInc:
-            qore_rt_apply_lvalue_incdec<LVUnaryOp::PreInc>(lvh, res);
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PreInc>(lvh, ref_rv != 0, res);
             break;
         case LVUnaryOp::PreDec:
-            qore_rt_apply_lvalue_incdec<LVUnaryOp::PreDec>(lvh, res);
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PreDec>(lvh, ref_rv != 0, res);
             break;
         case LVUnaryOp::PostInc:
-            qore_rt_apply_lvalue_incdec<LVUnaryOp::PostInc>(lvh, res);
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PostInc>(lvh, ref_rv != 0, res);
             break;
         default:
             // the range of unary_op was checked above
             assert(static_cast<LVUnaryOp>(unary_op) == LVUnaryOp::PostDec);
-            qore_rt_apply_lvalue_incdec<LVUnaryOp::PostDec>(lvh, res);
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PostDec>(lvh, ref_rv != 0, res);
             break;
     }
-    // an int or float has no reference to release; a number can be the value that the lvalue kept
-    if (res.hasNode() && *xsink) {
+    // no value after an exception (a number can be the value that the lvalue kept)
+    if (*xsink) {
         res.discard(xsink);
         return toBits(QoreValue());
     }
@@ -17775,16 +17776,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         }
         switch (inst->unary_op) {
             case LVUnaryOp::PreInc:
-                qore_rt_apply_lvalue_incdec<LVUnaryOp::PreInc>(lvh, res);
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PreInc>(lvh, inst->ref_rv, res);
                 break;
             case LVUnaryOp::PreDec:
-                qore_rt_apply_lvalue_incdec<LVUnaryOp::PreDec>(lvh, res);
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PreDec>(lvh, inst->ref_rv, res);
                 break;
             case LVUnaryOp::PostInc:
-                qore_rt_apply_lvalue_incdec<LVUnaryOp::PostInc>(lvh, res);
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PostInc>(lvh, inst->ref_rv, res);
                 break;
             case LVUnaryOp::PostDec:
-                qore_rt_apply_lvalue_incdec<LVUnaryOp::PostDec>(lvh, res);
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PostDec>(lvh, inst->ref_rv, res);
                 break;
             case LVUnaryOp::EnsureUnique:
                 // the container of a variable that a weak reference is taken of (qore#5756)
@@ -18380,9 +18381,9 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_comp
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_update_throwing(
-        const char* member_name, int32_t unary_op, ExceptionSink* xsink) {
+        const char* member_name, int32_t unary_op, int32_t ref_rv, ExceptionSink* xsink) {
     uint64_t result = qore_rt_self_member_update(
-        member_name, unary_op, xsink);
+        member_name, unary_op, ref_rv, xsink);
     if (xsink && *xsink) {
         fromBits(result).discard(xsink);
         throw QoreJITException();

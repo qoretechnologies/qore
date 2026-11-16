@@ -16,6 +16,10 @@ global-ef-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EF>',
 global-ef-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EF>', but got type 'float' instead -> enum<EF> 0.5
 global-en-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
 global-en-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+self-member-ei-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+self-member-ef-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EF>', but got type 'float' instead -> enum<EF> 0.5
+self-member-en-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+control-self-member-number: none -> number 2.5
 member-ei-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
 member-ef-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EF>', but got type 'float' instead -> enum<EF> 0.5
 member-en-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5

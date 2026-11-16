@@ -10341,12 +10341,16 @@ QoreIRValue QoreIRLowering::lowerPreIncDec(const QoreValue& expr, const QoreValu
         // an unused post operator changes the lvalue as the pre operator does, but its error names the post operator,
         // as the AST interpreter's does: it takes the post operation where the lvalue's type can raise the error, and
         // the pre operation where it cannot, which does not copy the old value of a number lvalue
+        // the post operation's old value is unused: ref_rv = false, so that the old value of a number is not copied
         LVUnaryOp unary_op = increment ? LVUnaryOp::PreInc : LVUnaryOp::PreDec;
+        bool ref_rv = true;
         if (post && qore_ir_incdec_may_name_operator(qore_ir_incdec_lvalue_type(lvexp))) {
             unary_op = increment ? LVUnaryOp::PostInc : LVUnaryOp::PostDec;
+            ref_rv = false;
         }
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            lvexp, nullptr, loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, unary_op);
+            lvexp, nullptr, loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, unary_op,
+            LVBinaryMutOp::Push, QoreValue(), ref_rv);
         if (path_result.isValid()) {
             return path_result;
         }
@@ -15227,7 +15231,7 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
 QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreValue& lvalue,
         const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
         AssignmentMode mode, LVCompoundOp compound_op, LVUnaryOp unary_op,
-        LVBinaryMutOp binary_mut_op, const QoreValue& pattern_expr) {
+        LVBinaryMutOp binary_mut_op, const QoreValue& pattern_expr, bool ref_rv) {
     std::vector<LVPathStep> lv_path;
     std::vector<QoreValue> dynamic_operands;
     // Slice lvalues (HashKeySlice / ListIndexSlice / ListRangeSlice) are lvalues only of remove and delete
@@ -15353,6 +15357,7 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     path_inst->compound_op = compound_op;
     path_inst->unary_op = unary_op;
     path_inst->binary_mut_op = binary_mut_op;
+    path_inst->ref_rv = ref_rv;
     if (pattern_expr.hasNode()) {
         const_cast<QoreValue&>(path_inst->pattern_expr) = pattern_expr;
         // Copy ref_rv flag from the operator node (determines if return value is used)

@@ -38199,7 +38199,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 case QoreIROpcode::LValuePathUnary: {
                     if (direct_self_mutation) {
                         auto ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, i32_type, ptr_type}, false);
+                            {ptr_type, i32_type, i32_type, ptr_type}, false);
                         auto fn = module.getOrInsertFunction(
                             "qore_rt_self_member_update", ft);
                         auto fn_throwing = module.getOrInsertFunction(
@@ -38208,6 +38208,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {direct_member_ptr,
                              llvm::ConstantInt::get(i32_type,
                                 static_cast<int32_t>(path_inst->unary_op)),
+                             llvm::ConstantInt::get(i32_type, path_inst->ref_rv ? 1 : 0),
                              xsink_arg}, module, llvm_func, inst);
                     } else if (aot_slots) {
                         auto ft = llvm::FunctionType::get(i64_type,

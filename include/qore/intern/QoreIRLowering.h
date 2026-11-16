@@ -570,7 +570,7 @@ private:
         AssignmentMode mode, LVCompoundOp compound_op = LVCompoundOp::AddAssign,
         LVUnaryOp unary_op = LVUnaryOp::PreInc,
         LVBinaryMutOp binary_mut_op = LVBinaryMutOp::Push,
-        const QoreValue& pattern_expr = QoreValue());
+        const QoreValue& pattern_expr = QoreValue(), bool ref_rv = true);
     bool getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis) const;
     bool isNeverNothingInt(const QoreParseAnalysis& analysis) const;
     bool isNeverNothingFloat(const QoreParseAnalysis& analysis) const;

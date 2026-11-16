@@ -18588,16 +18588,16 @@ load_local_done:
                         }
                         switch (path_inst->unary_op) {
                             case LVUnaryOp::PreInc:
-                                qore_rt_apply_lvalue_incdec<LVUnaryOp::PreInc>(lvh, res);
+                                qore_rt_apply_lvalue_incdec<LVUnaryOp::PreInc>(lvh, path_inst->ref_rv, res);
                                 break;
                             case LVUnaryOp::PreDec:
-                                qore_rt_apply_lvalue_incdec<LVUnaryOp::PreDec>(lvh, res);
+                                qore_rt_apply_lvalue_incdec<LVUnaryOp::PreDec>(lvh, path_inst->ref_rv, res);
                                 break;
                             case LVUnaryOp::PostInc:
-                                qore_rt_apply_lvalue_incdec<LVUnaryOp::PostInc>(lvh, res);
+                                qore_rt_apply_lvalue_incdec<LVUnaryOp::PostInc>(lvh, path_inst->ref_rv, res);
                                 break;
                             case LVUnaryOp::PostDec:
-                                qore_rt_apply_lvalue_incdec<LVUnaryOp::PostDec>(lvh, res);
+                                qore_rt_apply_lvalue_incdec<LVUnaryOp::PostDec>(lvh, path_inst->ref_rv, res);
                                 break;
                             case LVUnaryOp::EnsureUnique: {
                                 // the container of a variable that a weak reference is taken of (qore#5756); a weak

@@ -167,11 +167,12 @@ DLLLOCAL QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh, LVCompoundOp
     @tparam Op the operation: LVUnaryOp::PreInc, PreDec, PostInc or PostDec
 
     @param lvh the lvalue
+    @param ref_rv false if the value of a post operation is not used: the old value of a number is not copied
     @param res set to the value of the operation (the new value, or the old value for a post operator), holding a
     reference; after an exception, the caller must release it (it can be the value that the lvalue kept)
 */
 template <LVUnaryOp Op>
-QORE_INTERN_ALWAYS_INLINE void qore_rt_apply_lvalue_incdec(LValueHelper& lvh, QoreValue& res) {
+QORE_INTERN_ALWAYS_INLINE void qore_rt_apply_lvalue_incdec(LValueHelper& lvh, bool ref_rv, QoreValue& res) {
     static_assert(Op == LVUnaryOp::PreInc || Op == LVUnaryOp::PreDec || Op == LVUnaryOp::PostInc
         || Op == LVUnaryOp::PostDec, "not an increment or decrement");
     // the descriptions are those of the AST operators (QorePreIncrementOperatorNode::evalImpl() and the others)
@@ -188,8 +189,8 @@ QORE_INTERN_ALWAYS_INLINE void qore_rt_apply_lvalue_incdec(LValueHelper& lvh, Qo
             res = lvh.getReferencedValue();
         } else {
             // no value if the lvalue's type refused the result
-            QoreNumberNode* n = Op == LVUnaryOp::PostInc ? lvh.postIncrementNumber(true, desc)
-                : lvh.postDecrementNumber(true, desc);
+            QoreNumberNode* n = Op == LVUnaryOp::PostInc ? lvh.postIncrementNumber(ref_rv, desc)
+                : lvh.postDecrementNumber(ref_rv, desc);
             if (n) {
                 res = n;
             }

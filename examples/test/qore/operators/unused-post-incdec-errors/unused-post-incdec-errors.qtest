@@ -26,10 +26,10 @@
 class UnusedPostIncDecErrorsTest inherits QUnit::Test {
     public {
         #! the number of checks that the fixture makes
-        const CheckCount = 84;
+        const CheckCount = 88;
 
         #! the number of checks whose lvalue accepts the result (the controls)
-        const NoErrorCount = 17;
+        const NoErrorCount = 18;
     }
 
     private {

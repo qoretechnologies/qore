@@ -1956,7 +1956,9 @@ uint64_t qore_rt_self_member_assign(const char* member_name, uint64_t rhs_bits,
     int32_t mode_raw, ExceptionSink* xsink);
 uint64_t qore_rt_self_member_compound(const char* member_name, int32_t compound_op,
     uint64_t rhs_bits, ExceptionSink* xsink);
-uint64_t qore_rt_self_member_update(const char* member_name, int32_t unary_op,
+//! Applies ++ or -- (\a unary_op, an LVUnaryOp) to a member of the current object; \a ref_rv is 0 if the value of a
+//! post operation is not used, so that the old value of a number is not copied
+uint64_t qore_rt_self_member_update(const char* member_name, int32_t unary_op, int32_t ref_rv,
     ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_assign(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);

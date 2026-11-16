@@ -54,6 +54,17 @@ class Holder {
         date d = 2026-01-01;
         number n = 1.5n;
     }
+
+    #! applies the operators to members named without and with "self."
+    selfMembers() {
+        try { ei++; r("self-member-ei-inc", ei); } catch (hash<ExceptionInfo> ex) { r("self-member-ei-inc", ei, ex); }
+        try { self.ef--; r("self-member-ef-dec", ef); } catch (hash<ExceptionInfo> ex) {
+            r("self-member-ef-dec", ef, ex);
+        }
+        try { en--; r("self-member-en-dec", en); } catch (hash<ExceptionInfo> ex) { r("self-member-en-dec", en, ex); }
+        n++;
+        r("control-self-member-number", n);
+    }
 }
 
 our EI g_ei = EI::Seven;
@@ -275,6 +286,10 @@ sub controls() {
 
 enum_locals();
 enum_globals();
+{
+    Holder h();
+    h.selfMembers();
+}
 enum_containers();
 untyped_containers();
 references();
