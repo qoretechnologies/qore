@@ -21083,6 +21083,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {builder->CreateIntToPtr(var_ptr, ptr_type),
                          llvm::ConstantInt::get(i64_type, fused->delta, true), xsink_arg});
                 }
+                // no exception check follows: the helper changes a closure-bound int or softint variable, which
+                // accepts any int (an enum variable takes the lvalue path, see qore_ir_is_enum_lvalue_type() in
+                // QoreIRLowering.cpp, qore#6197), and a read-only variable cannot be changed by ++, --, += or -=
                 if (inst->result.isValid()) {
                     values[inst->result.id] = result;
                 }
