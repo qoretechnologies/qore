@@ -33,6 +33,8 @@
 %requires AwsEventStream >= 1.1
 %requires QoreLlmTypes
 %requires QoreRagTypes
+# the structured-output schema helpers shared with the Anthropic provider (structuredOutputSchema())
+%requires AnthropicRestClient
 
 %requires json
 
@@ -140,6 +142,11 @@ hash<ChatResponse> r = p.chat((
     @section bedrockrestclientrelnotes Release Notes
 
     @subsection bedrockrestclient_v1_2 BedrockRestClient v1.2
+    - a structured-output schema (an OpenAI \c response_format json_schema,
+      @ref QoreLlmUtils::LlmRequestOptions::output_schema "LlmRequestOptions::output_schema" or the schema of
+      \c complete()) is enforced: natively with Converse \c outputConfig.textFormat for the models in
+      @ref BedrockRestClient::NativeStructuredOutputModelPrefixes "NativeStructuredOutputModelPrefixes", otherwise
+      as a single tool whose input is returned as the JSON content; see @ref bedrock_structured_output
     - a system block, a content block or a tool marked with \c cache_control is followed by a Converse
       \c cachePoint, so the request is cached up to it
     - usage counts the input read from and written to the prompt cache: the prompt and input counts are the whole
@@ -157,6 +164,23 @@ hash<ChatResponse> r = p.chat((
 
 #! Contains all public definitions in the BedrockRestClient module
 public namespace BedrockRestClient {
+#! The model id prefixes of the models that get native structured output (Converse \c outputConfig.textFormat)
+/** A model id matches when it starts with one of these prefixes, also after a cross-region or global inference
+    profile prefix (any \c "<region group>.", such as \c "eu.", \c "us.", \c "apac." or \c "global."), and at the
+    end of an inference profile ARN; see
+    @ref BedrockRestClient::BedrockLlmProvider::supportsNativeStructuredOutput() "BedrockLlmProvider::supportsNativeStructuredOutput()"
+*/
+public const NativeStructuredOutputModelPrefixes = ("anthropic.claude-",);
+
+#! The name of the tool that carries a structured-output schema for the models without native structured output
+public const StructuredOutputToolName = "structured_output";
+
+#! The most optional properties of a schema that Bedrock's native structured output takes
+public const MaxNativeStructuredOutputOptionalProperties = 12;
+
+#! The most union-typed properties of a schema that Bedrock's native structured output takes
+public const MaxNativeStructuredOutputUnionProperties = 16;
+
 #! Default Bedrock service identifier (used for SigV4 scope)
 public const BedrockService = "bedrock";
 
@@ -598,6 +622,32 @@ public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
     The \c LlmBackendConfig::model field must be a Bedrock model identifier
     (e.g. \c "anthropic.claude-3-5-sonnet-20240620-v1:0").  When omitted, a
     safe default of \c "amazon.nova-lite-v1:0" is used.
+
+    @par Structured Output
+    @anchor bedrock_structured_output
+    A structured-output schema (an OpenAI \c response_format json_schema,
+    @ref QoreLlmUtils::LlmRequestOptions::output_schema "LlmRequestOptions::output_schema" or the schema given to
+    @ref complete()) takes one of two routes:
+    - <b>native</b>: Converse \c outputConfig.textFormat with the \c json_schema, to which the model's answer is
+      constrained (Amazon Bedrock user guide, "Get validated JSON results from models",
+      https://docs.aws.amazon.com/bedrock/latest/userguide/structured-output.html, and "Structured outputs for
+      Anthropic Claude models",
+      https://docs.aws.amazon.com/bedrock/latest/userguide/claude-messages-structured-outputs.html), for a model
+      that @ref supportsNativeStructuredOutput(): its id starts with one of
+      @ref BedrockRestClient::NativeStructuredOutputModelPrefixes "NativeStructuredOutputModelPrefixes" (the Claude
+      models, \c "anthropic.claude-"), also after any cross-region or global inference profile prefix (\c "eu.",
+      \c "us.", \c "apac.", \c "global.", ...) and at the end of an inference profile ARN; and only for a schema
+      that Bedrock takes as it is: one that
+      @ref AnthropicRestClient::AnthropicLlmProvider::structuredOutputSchema() "AnthropicLlmProvider::structuredOutputSchema()"
+      leaves unchanged, without \c minLength, \c maxLength or an external \c $ref, and with at most 12 optional
+      and 16 union-typed properties; every object of the schema sent is closed (\c additionalProperties \c false),
+      as Bedrock requires
+    - <b>tool</b>: for every other model, and for a schema that Bedrock cannot take as it is (so that no constraint
+      is dropped), the schema is the input schema of a single tool,
+      @ref BedrockRestClient::StructuredOutputToolName "StructuredOutputToolName", with \c toolChoice auto (Claude
+      Opus 5.5 refuses a forced tool choice with HTTP 400), and the model is told to answer by calling it; the input
+      of that tool call is returned as the JSON content of the answer, not as a tool call.  A streamed answer
+      (@ref chatStream()) delivers that tool call as tool-call events.
 */
 public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     public {
@@ -634,7 +684,8 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             system_prompt, output_schema);
         hash<auto> resp = postConverse(body, opts);
         return <QoreLlmUtils::LlmCompletionResult>{
-            "content": extractConverseText(resp.body),
+            "content": extractConverseText(resp.body, getStructuredOutputTool(output_schema ?? opts.output_schema,
+                opts)),
             "usage": normalizeUsage(resp.body.usage),
         };
     }
@@ -645,7 +696,7 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         hash<auto> body = buildConverseBody(messages, tools, opts);
         hash<auto> resp = postConverse(body, opts);
-        return parseConverseResponse(resp.body, opts);
+        return parseConverseResponse(resp.body, opts, getStructuredOutputTool(opts.output_schema, opts));
     }
 
     #! Streams text, tool-call fragments, stop reason, and usage from ConverseStream
@@ -1178,16 +1229,41 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             }
         }
 
-        if (output_schema) {
-            # Bedrock Converse does not have a native response_format field;
-            # callers wanting strict JSON should use a tool with a single
-            # required structured-output tool.  For v1 we surface the schema
-            # to the model as a system-prompt hint.
-            push system_blocks, {
-                "text": "Respond with JSON matching the following schema: "
-                    + make_json(output_schema),
-            };
-            body.system = system_blocks;
+        # the structured output (see bedrock_structured_output)
+        if (*hash<auto> schema = output_schema ?? opts.output_schema) {
+            if (*hash<auto> native = getNativeStructuredOutputSchema(getBedrockModelId(opts), schema)) {
+                body.outputConfig = {
+                    "textFormat": {
+                        "type": "json_schema",
+                        "structure": {
+                            "jsonSchema": {
+                                # Converse takes the schema as a JSON string
+                                "schema": make_json(native),
+                                "name": BedrockLlmProvider::getStructuredOutputName(schema),
+                            },
+                        },
+                    },
+                };
+            } else {
+                hash<auto> tool_spec = {
+                    "toolSpec": {
+                        "name": StructuredOutputToolName,
+                        "description": "Returns the answer as structured data matching the input schema",
+                        "inputSchema": {"json": schema},
+                    },
+                };
+                if (body.toolConfig) {
+                    body.toolConfig.tools += tool_spec;
+                } else {
+                    body.toolConfig = {"tools": (tool_spec,)};
+                }
+                # toolChoice auto (the default): Claude Opus 5.5 refuses a forced tool choice (HTTP 400)
+                push system_blocks, {
+                    "text": sprintf("Give your final answer by calling the tool %y with the answer as its input; "
+                        "its input schema is the required format of the answer.", StructuredOutputToolName),
+                };
+                body.system = system_blocks;
+            }
         }
 
         return mergeRequestBodyOptions(body, opts);
@@ -1232,14 +1308,18 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
     #! Parses a Bedrock Converse response into the provider-neutral shape
     private:internal hash<QoreLlmUtils::ChatResponse> parseConverseResponse(
-            hash<auto> body, *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+            hash<auto> body, *hash<QoreLlmUtils::LlmRequestOptions> opts, *string structured_tool) {
         hash<auto> out_msg = body.output.message ?? {};
         list<string> text_parts = ();
         *list<hash<QoreLlmUtils::ChatToolCall>> tool_calls;
         *list<auto> reasoning_blocks;
+        *string structured_content;
         foreach hash<auto> block in (out_msg.content ?? ()) {
             if (block.text.val()) {
                 push text_parts, block.text;
+            } else if (structured_tool && block.toolUse.name == structured_tool) {
+                # the answer of the structured-output tool route is the input of its tool call
+                structured_content = make_json(block.toolUse.input ?? {});
             } else if (block.toolUse) {
                 if (!tool_calls) {
                     tool_calls = ();
@@ -1256,12 +1336,16 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 push reasoning_blocks, reasoning;
             }
         }
+        # the call of the structured-output tool ends the turn as an answer
+        *string stop_reason = (structured_content && !tool_calls && body.stopReason == "tool_use")
+            ? "end_turn"
+            : body.stopReason;
         return <QoreLlmUtils::ChatResponse>{
             "id": body.requestId ?? body.responseMetadata.requestId,
             "model": getBedrockModelId(opts),
-            "stop_reason": BedrockLlmProvider::mapStopReason(body.stopReason,
+            "stop_reason": BedrockLlmProvider::mapStopReason(stop_reason,
                 tool_calls),
-            "content": text_parts ? text_parts.join("") : NOTHING,
+            "content": structured_content ?? (text_parts ? text_parts.join("") : NOTHING),
             "tool_calls": tool_calls,
             "reasoning_blocks": reasoning_blocks,
             "usage": normalizeUsage(body.usage),
@@ -1270,14 +1354,177 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     }
 
     #! Extracts concatenated text from a Bedrock Converse response body
-    private:internal string extractConverseText(hash<auto> body) {
+    /** @param body the response body
+        @param structured_tool the name of the structured-output tool when the request took the tool route: the
+        input of its call is the answer, as JSON
+    */
+    private:internal string extractConverseText(hash<auto> body, *string structured_tool) {
         list<string> parts = ();
         foreach hash<auto> block in (body.output.message.content ?? ()) {
+            if (structured_tool && block.toolUse.name == structured_tool) {
+                return make_json(block.toolUse.input ?? {});
+            }
             if (block.text.val()) {
                 push parts, block.text;
             }
         }
         return parts.join("");
+    }
+
+    #! Returns the name of the structured-output tool if a request with this schema takes the tool route
+    /** @param schema the structured-output schema of the request, if any
+        @param opts the request options, for the model
+
+        @return @ref BedrockRestClient::StructuredOutputToolName "StructuredOutputToolName" for the tool route, or
+        NOTHING for no schema or the native route
+    */
+    private:internal *string getStructuredOutputTool(*hash<auto> schema,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        if (!schema || getNativeStructuredOutputSchema(getBedrockModelId(opts), schema)) {
+            return;
+        }
+        return StructuredOutputToolName;
+    }
+
+    #! Returns the name of a schema for Converse \c outputConfig.textFormat
+    static string getStructuredOutputName(hash<auto> schema) {
+        auto name = schema.title ?? schema.name;
+        return (name.typeCode() == NT_STRING && name =~ /^[a-zA-Z0-9_-]{1,64}$/) ? name : "structured_output";
+    }
+
+    #! Returns True if a model gets Bedrock's native structured output
+    /** The model id starts with one of @ref BedrockRestClient::NativeStructuredOutputModelPrefixes
+        "NativeStructuredOutputModelPrefixes", as it is or after a cross-region or global inference profile prefix:
+        a leading region group of lowercase letters and a dot (\c "eu.", \c "us.", \c "apac.", \c "global.", or any
+        other), so that new region groups and new Claude models need no change; the profile id at the end of an
+        inference profile ARN (\c "arn:aws:bedrock:<region>:<account>:inference-profile/<profile id>") is matched the
+        same way.
+
+        @param model_id the Bedrock model id, inference profile id or inference profile ARN
+
+        @par Example
+        @code{.py}
+bool native = BedrockLlmProvider::supportsNativeStructuredOutput("eu.anthropic.claude-opus-5-5"); # True
+        @endcode
+    */
+    static bool supportsNativeStructuredOutput(string model_id) {
+        # an inference profile ARN ends with the profile id
+        int slash = model_id.rfind("/");
+        if (slash >= 0) {
+            model_id = model_id.substr(slash + 1);
+        }
+        # a cross-region or global inference profile id: <region group>.<model id>
+        *string unprefixed = (model_id =~ x/^[a-z]+\.(.+)$/)[0];
+        foreach string prefix in (NativeStructuredOutputModelPrefixes) {
+            if (model_id.equalPartial(prefix) || (unprefixed && unprefixed.equalPartial(prefix))) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns the schema to send as Bedrock's native structured output, or NOTHING for the tool route
+    /** Native structured output is used for a model that supports it (@ref supportsNativeStructuredOutput()) and a
+        schema that Bedrock takes as it is, so that no constraint is dropped: one that
+        @ref AnthropicRestClient::AnthropicLlmProvider::structuredOutputSchema() "AnthropicLlmProvider::structuredOutputSchema()"
+        leaves unchanged, without \c minLength, \c maxLength or an external \c $ref, and with at most
+        @ref BedrockRestClient::MaxNativeStructuredOutputOptionalProperties "MaxNativeStructuredOutputOptionalProperties"
+        optional and @ref BedrockRestClient::MaxNativeStructuredOutputUnionProperties "MaxNativeStructuredOutputUnionProperties"
+        union-typed properties.  Every object of the schema returned is closed (\c additionalProperties \c false),
+        which Bedrock requires.
+
+        @param model_id the Bedrock model id
+        @param schema the structured-output schema
+
+        @return the schema to send natively, or NOTHING if the request takes the tool route
+    */
+    static *hash<auto> getNativeStructuredOutputSchema(string model_id, hash<auto> schema) {
+        if (!supportsNativeStructuredOutput(model_id)) {
+            return;
+        }
+        *hash<auto> reduced = AnthropicRestClient::AnthropicLlmProvider::structuredOutputSchema(schema);
+        # a schema with a constraint that would have to be dropped, or that cannot be expressed
+        if (!reduced || reduced != schema || hasUnsupportedNativeKeyword(schema)) {
+            return;
+        }
+        hash<string, int> counts = AnthropicRestClient::AnthropicLlmProvider::countStructuredOutputParameters(
+            schema);
+        if (counts.optional > MaxNativeStructuredOutputOptionalProperties
+                || counts.union > MaxNativeStructuredOutputUnionProperties) {
+            return;
+        }
+        return closeSchemaObjects(schema);
+    }
+
+    #! Returns True if a schema has a keyword that Bedrock's native structured output refuses besides Anthropic's
+    private static bool hasUnsupportedNativeKeyword(auto node) {
+        switch (node.typeCode()) {
+            case NT_LIST:
+                foreach auto v in (node) {
+                    if (hasUnsupportedNativeKeyword(v)) {
+                        return True;
+                    }
+                }
+                return False;
+            case NT_HASH:
+                break;
+            default:
+                return False;
+        }
+        if (exists node.minLength || exists node.maxLength) {
+            return True;
+        }
+        auto ref = node."$ref";
+        if (ref.typeCode() == NT_STRING && !ref.equalPartial("#")) {
+            return True;
+        }
+        foreach hash<auto> i in (node.pairIterator()) {
+            if (inlist(i.key, ("enum", "const", "required", "default", "examples"))) {
+                continue;
+            }
+            if (hasUnsupportedNativeKeyword(i.value)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns the schema with every object closed (\c additionalProperties \c false), as Bedrock requires
+    private static auto closeSchemaObjects(auto node) {
+        switch (node.typeCode()) {
+            case NT_LIST:
+                return map closeSchemaObjects($1), node;
+            case NT_HASH:
+                break;
+            default:
+                return node;
+        }
+        hash<auto!> rv = {};
+        foreach hash<auto> i in (node.pairIterator()) {
+            if (inlist(i.key, ("properties", "$defs", "definitions")) && i.value.typeCode() == NT_HASH) {
+                rv{i.key} = map {$1.key: closeSchemaObjects($1.value)}, i.value.pairIterator();
+            } else if (inlist(i.key, ("enum", "const", "required", "default", "examples"))) {
+                rv{i.key} = i.value;
+            } else {
+                rv{i.key} = closeSchemaObjects(i.value);
+            }
+        }
+        if ((rv.type == "object" || (rv.type.typeCode() == NT_LIST && inlist("object", rv.type))
+                || exists rv.properties) && !exists rv.additionalProperties) {
+            rv.additionalProperties = False;
+        }
+        return rv;
+    }
+
+    #! OpenAI-facade hook: routes an OpenAI \c response_format json_schema to Bedrock's structured output
+    /** Converse has no \c response_format field; the schema is carried in
+        @ref QoreLlmUtils::LlmRequestOptions::output_schema "LlmRequestOptions::output_schema" and sent natively or
+        as a tool (see @ref bedrock_structured_output).
+    */
+    applyOpenAiResponseFormat(reference<hash<auto!>> body_options,
+            reference<hash<QoreLlmUtils::LlmRequestOptions>> options,
+            hash<auto> output_schema, *hash<auto> response_format) {
+        options.output_schema = output_schema;
     }
 
     #! Maps Bedrock \c usage to the OpenAI-style counters
@@ -1460,7 +1707,8 @@ public class BedrockLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvide
             "module_name": Class::getClass(self).getModuleName(),
             "supports_streaming": True,
             "supports_tools": True,
-            "supports_structured_output": False,  # no native response_format in Converse
+            # natively (Converse outputConfig.textFormat) or as a tool; see bedrock_structured_output
+            "supports_structured_output": True,
             "supports_multimodal": True,
             # Claude's adaptive thinking at an effort (getClaudeReasoningEffortFields())
             "supports_reasoning_effort": True,

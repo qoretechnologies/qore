@@ -1,0 +1,218 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires AwsRestClient
+%requires BedrockRestClient
+
+%requires json
+
+%exec-class BedrockStructuredOutputTest
+
+#! records the body of each Converse request and answers it with a canned response; no request reaches AWS
+class CannedConverseHandler inherits AbstractHttpRequestHandler {
+    public {
+        *hash<auto> last_body;
+        hash<auto> response;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path !~ /\/converse$/) {
+            return makeResponse(404, "unknown path: " + cx.raw_path);
+        }
+        last_body = parse_json(body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body);
+        return makeResponse({"Content-Type": MimeTypeJson}, 200, make_json(response));
+    }
+}
+
+#! Regression test for issue #6365: a structured-output schema is enforced by BedrockLlmProvider
+/** A schema went to the model only as a system-prompt hint.  Now the Claude models (by model id prefix, also after
+    any inference profile prefix and in an inference profile ARN) get Converse \c outputConfig.textFormat, and other
+    models, or schemas Bedrock cannot take as they are, get the schema as a single tool whose input is returned as the
+    JSON content.  The request bodies are captured by a local HttpServer, which answers with canned responses.
+*/
+class BedrockStructuredOutputTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int port;
+        CannedConverseHandler handler();
+
+        const Schema = {
+            "type": "object",
+            "properties": {
+                "sentiment": {"type": "string", "enum": ("positive", "neutral", "negative")},
+                "score": {"type": "integer"},
+            },
+            "required": ("sentiment", "score"),
+        };
+
+        const Answer = {"sentiment": "negative", "score": 2};
+
+        const TextResponse = {
+            "output": {"message": {"role": "assistant", "content": ({"text": make_json(Answer)},)}},
+            "stopReason": "end_turn",
+            "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+        };
+
+        const ToolResponse = {
+            "output": {"message": {"role": "assistant", "content": (
+                {"text": "Here is the answer."},
+                {"toolUse": {"toolUseId": "t1", "name": "structured_output", "input": Answer}},
+            )}},
+            "stopReason": "tool_use",
+            "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+        };
+    }
+
+    constructor() : QUnit::Test("BedrockLlmProvider structured output", "1.0") {
+        addTestCase("model ids with native structured output", \modelIdTest());
+        addTestCase("native route: complete()", \nativeCompleteTest());
+        addTestCase("native route: chat() with an output schema", \nativeChatTest());
+        addTestCase("tool route: a model without native structured output", \toolRouteTest());
+        addTestCase("tool route: a schema Bedrock cannot take as it is", \toolRouteSchemaTest());
+        addTestCase("an OpenAI response_format is routed to the structured output", \responseFormatTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        http = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelError())});
+        http.setDefaultHandler("bedrock", handler);
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete http;
+    }
+
+    modelIdTest() {
+        # the request of each model id takes the native route (Converse outputConfig) or the tool route
+        foreach string id in ("anthropic.claude-opus-5-5", "eu.anthropic.claude-opus-5-5",
+                "us.anthropic.claude-sonnet-4-5-20250929-v1:0", "apac.anthropic.claude-haiku-4-5-20251001-v1:0",
+                "global.anthropic.claude-opus-5-5", "jp.anthropic.claude-opus-5-5",
+                "arn:aws:bedrock:eu-central-1:123456789012:inference-profile/eu.anthropic.claude-opus-5-5",
+                "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0") {
+            handler.response = TextResponse;
+            newProvider(id).complete("Classify.", "terrible service", Schema);
+            assertTrue(exists handler.last_body.outputConfig, "native: " + id);
+        }
+        foreach string id in ("amazon.nova-lite-v1:0", "eu.amazon.nova-pro-v1:0", "meta.llama3-1-70b-instruct-v1:0",
+                "us.deepseek.r1-v1:0", "openai.gpt-oss-120b-1:0", "mistral.mistral-large-2407-v1:0",
+                "eu.anthropicx.claude-opus-5-5", "anthropic.titan") {
+            handler.response = ToolResponse;
+            newProvider(id).complete("Classify.", "terrible service", Schema);
+            assertFalse(exists handler.last_body.outputConfig, "tool: " + id);
+            assertEq("structured_output", handler.last_body.toolConfig.tools[0].toolSpec.name, "tool: " + id);
+        }
+    }
+
+    nativeCompleteTest() {
+        handler.response = TextResponse;
+        hash<QoreLlmUtils::LlmCompletionResult> r = newProvider("eu.anthropic.claude-opus-5-5").complete(
+            "Classify.", "terrible service", Schema);
+        assertEq(Answer, parse_json(r.content));
+        checkNative(handler.last_body);
+    }
+
+    nativeChatTest() {
+        handler.response = TextResponse;
+        hash<QoreLlmUtils::ChatResponse> r = newProvider("anthropic.claude-opus-5-5").chat((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "terrible service"},
+        ), NOTHING, <QoreLlmUtils::LlmRequestOptions>{"output_schema": Schema});
+        assertEq(Answer, parse_json(r.content));
+        checkNative(handler.last_body);
+    }
+
+    toolRouteTest() {
+        handler.response = ToolResponse;
+        BedrockRestClient::BedrockLlmProvider p = newProvider("eu.amazon.nova-pro-v1:0");
+        hash<QoreLlmUtils::LlmCompletionResult> c = p.complete("Classify.", "terrible service", Schema);
+        assertEq(Answer, parse_json(c.content));
+        checkTool(handler.last_body, Schema);
+
+        # chat() with a tool of the caller's: both tools are offered; the answer is the structured tool's input
+        hash<QoreLlmUtils::ChatResponse> r = p.chat((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "terrible service"},
+        ), (<QoreLlmUtils::ToolDefinition>{"name": "lookup", "description": "looks up",
+            "parameters": {"type": "object", "properties": {}}},),
+            <QoreLlmUtils::LlmRequestOptions>{"output_schema": Schema});
+        assertEq(Answer, parse_json(r.content));
+        assertEq(NOTHING, r.tool_calls);
+        assertEq("end_turn", r.stop_reason);
+        assertEq(("lookup", "structured_output"), map $1.toolSpec.name, handler.last_body.toolConfig.tools);
+    }
+
+    toolRouteSchemaTest() {
+        # a string length constraint and a numeric bound, which Bedrock's native structured output refuses: they
+        # must not be dropped, so the schema goes as a tool, unchanged
+        hash<auto> schema = Schema + {"properties": Schema.properties + {
+            "reason": {"type": "string", "maxLength": 20},
+            "score": {"type": "integer", "minimum": 1, "maximum": 5},
+        }};
+        handler.response = ToolResponse;
+        hash<QoreLlmUtils::LlmCompletionResult> r = newProvider("eu.anthropic.claude-opus-5-5").complete(
+            "Classify.", "terrible service", schema);
+        assertEq(Answer, parse_json(r.content));
+        checkTool(handler.last_body, schema);
+        # a schema with more optional properties than Bedrock takes natively
+        hash<auto> wide = {"type": "object", "properties": map {"p" + $1: {"type": "string"}}, xrange(13)};
+        r = newProvider("eu.anthropic.claude-opus-5-5").complete("Fill.", "x", wide);
+        checkTool(handler.last_body, wide);
+    }
+
+    responseFormatTest() {
+        BedrockRestClient::BedrockLlmProvider p = newProvider("eu.anthropic.claude-opus-5-5");
+        hash<auto!> body_options = {};
+        hash<QoreLlmUtils::LlmRequestOptions> options();
+        p.applyOpenAiResponseFormat(\body_options, \options, Schema,
+            {"type": "json_schema", "json_schema": {"name": "sentiment", "schema": Schema}});
+        # no response_format in the Converse body; the schema is the request's output schema
+        assertEq({}, body_options);
+        assertEq(Schema, options.output_schema);
+    }
+
+    private checkNative(hash<auto> body) {
+        hash<auto> text_format = body.outputConfig.textFormat;
+        assertEq("json_schema", text_format.type);
+        # the schema is sent as a JSON string, with every object closed
+        assertEq(Schema + {"additionalProperties": False}, parse_json(text_format.structure.jsonSchema.schema));
+        assertEq("structured_output", text_format.structure.jsonSchema.name);
+        assertEq(NOTHING, body.toolConfig);
+        assertFalse(exists body.response_format);
+    }
+
+    private checkTool(hash<auto> body, hash<auto> schema) {
+        assertEq(NOTHING, body.outputConfig);
+        hash<auto> spec = (select body.toolConfig.tools, $1.toolSpec.name == "structured_output")[0].toolSpec;
+        # the schema unchanged, nothing dropped
+        assertEq(schema, spec.inputSchema.json);
+        # no forced tool choice (Claude Opus 5.5 refuses one)
+        assertEq(NOTHING, body.toolConfig.toolChoice);
+        assertTrue((select body.system, $1.text =~ /structured_output/).size() > 0);
+    }
+
+    private BedrockRestClient::BedrockLlmProvider newProvider(string model) {
+        return new BedrockRestClient::BedrockLlmProvider(<QoreLlmUtils::LlmBackendConfig>{
+            "model": model,
+            "url": "http://localhost:" + port,
+            "max_retries": 0,
+            "provider_options": {
+                "aws_region": "us-east-1",
+                "aws_keyid": "AKIA-TEST",
+                "aws_secret": "test-secret",
+                "aws_imds_disabled": True,
+            },
+        });
+    }
+}
