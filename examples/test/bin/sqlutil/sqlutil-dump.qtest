@@ -210,7 +210,15 @@ class SqlutilDumpTest inherits QUnit::Test {
         if (!connstr) {
             testSkip("QORE_DB_CONNSTR_PGSQL is not set");
         }
-        Datasource ds(connstr);
+        Datasource ds;
+        try {
+            ds = new Datasource(connstr);
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            # the driver's module cannot be loaded or the database cannot be reached, as the other PostgreSQL tests
+            # skip (see PgsqlRunSchema::setup())
+            testSkip(sprintf("cannot use QORE_DB_CONNSTR_PGSQL: %s: %s", ex.err, ex.desc));
+        }
         if (ds.getDriverName() != "pgsql") {
             testSkip(sprintf("the connection uses driver %y, not \"pgsql\"", ds.getDriverName()));
         }
