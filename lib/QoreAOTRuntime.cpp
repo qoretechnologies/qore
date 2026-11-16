@@ -11479,9 +11479,9 @@ static std::string makeAOTRegistrationFailureMessage(const char* label,
 //! sets the time zone that the code of an AOT image sets with %set-time-zone on the Program it is loaded into
 /** As the parser does for the directive (qore#6270): the Program's time zone is the zone that its code sets, and a
     program whose code sets none keeps its time zone.  The image records the zone only if the parser set it, so the
-    code's own %no-locale-control (after the directive) does not apply; the directive is ignored when the Program that
-    loads the image has PO_NO_LOCALE_CONTROL, which a module's Program inherits from it (the parser ignores the
-    directive without an error then, see QoreProgram::parseSetTimeZone())
+    code's own %no-locale-control (after the directive) does not apply; the directive is ignored when the restrictions
+    of the loading code have PO_NO_LOCALE_CONTROL (see \a ignore; the parser ignores the directive without an error
+    then, see QoreProgram::parseSetTimeZone())
 
     @param ignore true if the restrictions of the loading code disallow the directive: PO_NO_LOCALE_CONTROL inherited
     by a module's Program (the loading Program's options with the module parse option mask, before the module's own
