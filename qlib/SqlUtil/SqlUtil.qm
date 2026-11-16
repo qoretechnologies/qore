@@ -161,11 +161,14 @@ module SqlUtil {
       database's own truncation (<a href="https://github.com/qoretechnologies/qore/issues/2363">issue 2363</a>)
     - @ref SqlUtil::SqlUtilColumnField::setDefaultValue() "SqlUtilColumnField::setDefaultValue()" returns the object,
       as @ref DataProvider::AbstractDataField::setDefaultValue() "AbstractDataField::setDefaultValue()" does
-    - code that a @ref Qore::SandboxManager "SandboxManager" governs cannot open a database connection from a
-      connection string or a serialized configuration
+    - code restricted from the \c DATABASE domain (@ref Qore::PO_NO_DATABASE "PO_NO_DATABASE") cannot open a
+      database connection from a connection string, a datasource configuration or a serialized configuration
       (@ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()",
-      @ref SqlUtil::AbstractDatabase::getDatabase() "AbstractDatabase::getDatabase()", datasource deserialization):
-      \c PERMISSION-DENIED; it uses the datasources that its host provides
+      @ref SqlUtil::AbstractDatabase::getDatabase() "AbstractDatabase::getDatabase()", the
+      @ref SqlUtil::Table "Table" and @ref SqlUtil::Database "Database" constructors, datasource deserialization),
+      also through other code: the variants that take a connection string or configuration are in the \c DATABASE
+      domain, and \c PERMISSION-DENIED is raised when other code reaches them for it; it uses the datasources that
+      its host provides
     - @ref SqlUtil::AbstractTable::dropCommit() "AbstractTable::dropCommit()" commits each statement of the drop on
       its own, so a partitioned table that its driver drops one partition per statement stays within the database's
       lock limits however many partitions it has
@@ -7946,17 +7949,26 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         ds_do = new_ds_do;
     }
 
+    # private function: raises PERMISSION-DENIED if the calling code is restricted from the DATABASE domain
+    /* a connection string or a datasource configuration opens a connection of its own; the module's code may open one,
+       so the calling code decides: code restricted with PO_NO_DATABASE uses only the datasources that its host gives
+       it, also when it reaches this code through other module code, a closure or a callback (qore#6257)
+    */
+    sub check_caller_database() {
+        if (SandboxManager::isCallerRestricted(DOM_DATABASE)) {
+            throw "PERMISSION-DENIED", "code that is restricted from the DATABASE domain cannot open a database "
+                "connection from a connection string or configuration; use a datasource that the host provides";
+        }
+    }
+
     # private function used to deserialize datasources
     AbstractDatasource sub sqlutil_get_ds(string type, string config, *hash<auto> structured_config) {
         if (ds_get) {
             return ds_get(type, config);
         }
 
-        # a deserialized configuration opens a connection of its own: sandboxed code may use only the datasources that
-        # the host provides
-        if (SandboxManager::isSandboxed()) {
-            throw "PERMISSION-DENIED", "code that a sandbox governs cannot open a database connection from a connection string or configuration; use a datasource that the host provides";
-        }
+        # a deserialized configuration opens a connection of its own
+        check_caller_database();
         switch (type) {
             case "DatasourcePool":
                 return new DatasourcePool(structured_config ?? config);

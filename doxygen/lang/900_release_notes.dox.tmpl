@@ -1189,6 +1189,13 @@
     every member does), so that a module refuses an operation for a sandboxed caller only if
     <tt>!trustsUncontrolledApis() && restricts()</tt>.
 
+    @par Asking Whether the Calling Code Is Restricted From a Domain
+    @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()" and the C++ function
+    \c qore_caller_restricts_domain() (\c QORE_HAVE_CALLER_RESTRICTS_DOMAIN) tell module code whether the code that
+    calls it, not the module's own %Program, is restricted from a functional domain, so that it refuses an operation
+    that it performs for a restricted caller; see @ref sandbox_caller_domains
+    (<a href="https://github.com/qoretechnologies/qore/issues/6257">issue 6257</a>).
+
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
     @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check

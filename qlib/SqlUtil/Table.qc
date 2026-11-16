@@ -76,8 +76,11 @@ Table table("pgsql:user/pass@db%host", "table");
 
         @throw TABLE-DRIVER-ERROR no database-specific module can be loaded
         @throw OPTION-ERROR invalid or unsupported option passed
+        @note this variant is in the \c DATABASE @ref functional_domain_constants "functional domain": code that is
+        restricted with @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" cannot call it (since SqlUtil 3.11.0)
+        @throw PERMISSION-DENIED the calling code is restricted from the \c DATABASE domain (since SqlUtil 3.11.0)
     */
-    constructor(string ds, string name, *hash<auto> opts) {
+    constructor(string ds, string name, *hash<auto> opts) [dom=DATABASE] {
         t = AbstractTable::getTable(ds, name, opts);
     }
 
@@ -101,8 +104,11 @@ Table table("pgsql:user/pass@db%host", "table");
 
         @throw TABLE-DRIVER-ERROR no database-specific module can be loaded
         @throw OPTION-ERROR invalid or unsupported option passed
+        @note this variant is in the \c DATABASE @ref functional_domain_constants "functional domain": code that is
+        restricted with @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" cannot call it (since SqlUtil 3.11.0)
+        @throw PERMISSION-DENIED the calling code is restricted from the \c DATABASE domain (since SqlUtil 3.11.0)
     */
-    constructor(hash<auto> ds, string name, *hash<auto> opts) {
+    constructor(hash<auto> ds, string name, *hash<auto> opts) [dom=DATABASE] {
         t = AbstractTable::getTable(ds, name, opts);
     }
 
