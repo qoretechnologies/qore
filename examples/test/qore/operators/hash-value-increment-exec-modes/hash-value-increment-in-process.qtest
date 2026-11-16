@@ -10,7 +10,7 @@
 %exec-class HashValueIncrementInProcessTest
 
 #! Tests ++ and -- on the float and number values of typed hashes in the execution mode of the test itself
-/** The child processes of hash-value-increment-exec-modes.qtest check every execution mode against the AST
+/** The child processes of HashValueIncrementExecModes-<n>.qtest check every execution mode against the AST
     interpreter; these checks run in the process of the test, so each CI job checks them in its own execution mode.
 */
 class HashValueIncrementInProcessTest inherits QUnit::Test {

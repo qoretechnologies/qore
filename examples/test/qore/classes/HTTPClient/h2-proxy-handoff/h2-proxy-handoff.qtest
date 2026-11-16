@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../../qlib"
 %requires QUnit
+%requires ../../../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class H2ProxyHandoffTest
@@ -31,7 +32,7 @@ class H2ProxyHandoffTest inherits QUnit::Test {
     }
 
     testHandoff() {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         string dir = get_script_dir();
         # the worker's results are its standard output; its standard error is reported with them, but warnings

@@ -8,9 +8,7 @@
 %requires json
 %requires QUnit
 
-%try-module NdjsonDataProvider
-%define NoNdjsonDataProvider
-%endtry
+%requires NdjsonDataProvider
 
 %exec-class NdjsonTest
 
@@ -49,7 +47,6 @@ null
     }
 
     constructor() : Test("NdjsonTest", "1.0", \ARGV) {
-%ifndef NoNdjsonDataProvider
         addTestCase("data in the other byte order than its encoding", \byteOrderTest());
         addTestCase("NdjsonIterator basic", \testNdjsonIteratorBasic());
         addTestCase("NdjsonIterator empty lines", \testNdjsonIteratorEmptyLines());
@@ -66,7 +63,6 @@ null
         addTestCase("NdjsonReadDataProvider", \testNdjsonReadDataProvider());
         addTestCase("NdjsonReadDataProvider from string", \testNdjsonReadDataProviderFromString());
         addTestCase("NdjsonDataProviderFactory", \testNdjsonDataProviderFactory());
-%endif
         set_return_value(main());
     }
 
@@ -98,7 +94,6 @@ null
         assertEq(2, readNdjson(path, "UTF-16LE").size());
     }
 
-%ifndef NoNdjsonDataProvider
     testNdjsonIteratorBasic() {
         NdjsonDataProvider::NdjsonIterator iter(BasicNdjson);
         list<auto> results = ();
@@ -352,5 +347,4 @@ null
 
         assertEq(3, results.size());
     }
-%endif
 }

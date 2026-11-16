@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires ../../ExecModeHarness.qm
 
 %exec-class CdsRestDataProviderEnvClientOptionsTest
@@ -60,7 +61,7 @@ public class CdsRestDataProviderEnvClientOptionsTest inherits QUnit::Test {
     }
 
     constructor() : Test("CdsRestDataProviderEnvClientOptions", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         addTestCase("client options from the environment in each execution mode", \testExecModes());
         set_return_value(main());

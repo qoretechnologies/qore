@@ -7,15 +7,16 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../ExecModeHarness.qm
 %exec-class SubstringViewMutationTest
 
 class SubstringViewMutationTest inherits QUnit::Test {
     private {
-        string binary = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string binary = TestInterpreter::qore_interpreter();
         # QORE_BINARY can be the Debug/Release selector script; native tools belong beside the running binary.
-        string tools_dir = dirname(QORE_ARGV[0]);
+        string tools_dir = dirname(TestInterpreter::qore_interpreter());
         string source = get_script_dir() + "/substring-view-mutation.q";
         const Expected = "PASS: 88 language substring-view mutation checks\n";
     }

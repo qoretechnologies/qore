@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include CompoundAssignmentUnassigned.qc
+
+%exec-class CompoundAssignmentUnassignedPart4
+
+#! runs part 4 of 4 of the cases of CompoundAssignmentUnassignedBase: the default mode
+class CompoundAssignmentUnassignedPart4 inherits CompoundAssignmentUnassignedBase {
+    constructor() : CompoundAssignmentUnassignedBase("CompoundAssignmentUnassignedPart4", 4) {
+    }
+}

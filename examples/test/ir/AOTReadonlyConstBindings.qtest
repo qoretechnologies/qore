@@ -5,8 +5,8 @@
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/reflection"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires reflection
 
@@ -21,12 +21,12 @@ class AOTReadonlyConstBindingsTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("AOTReadonlyConstBindingsTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
-        reflection_module_dir = ENV.QORE_REFLECTION_MODULE_DIR
-            ?? get_script_dir() + "/../../../build/modules/reflection";
+        # the reflection module of the build of the qore that runs this test, which this test has loaded as well
+        reflection_module_dir = ENV.QORE_REFLECTION_MODULE_DIR ?? dirname(get_module_hash().reflection.filename);
 
         addTestCase("AOT qmod preserves readonly binding metadata and execution",
             \testAOTQmodReadonlyBindings());

@@ -1143,6 +1143,8 @@ public:
 
     // thread initialization user code
     ResolvedCallReferenceNode* thr_init = nullptr;
+    //! the run-time parse options of the code that set thr_init, which it runs with (qore#6208); protected by tlock
+    QoreThreadRuntimeParseOptions thr_init_po;
 
     //! the thread entry and exit handlers (Program::setThreadEntryHandler()), or nullptr
     /** Written only under tlock.  Atomic because a thread entering the Program reads it without the lock first, so
@@ -1720,6 +1722,12 @@ public:
     ResolvedCallReferenceNode* const on_enter;
     //! the exit handler or nullptr
     ResolvedCallReferenceNode* const on_exit;
+    //! the run-time parse options of the code that set the handlers, which they run with (qore#6208)
+    /** A handler that is a call reference to builtin code sets no options of its own, and the thread that enters the
+        Program has its own.  Without the application of a call of module code, as the handlers run for every thread
+        that enters the Program
+    */
+    const QoreThreadRuntimeParseOptions po = QoreThreadRuntimeParseOptions::captureForThread();
 
     //! creates the object with one reference and a reference to each handler given
     DLLLOCAL QoreThreadEntryHandlers(const ResolvedCallReferenceNode* on_enter,

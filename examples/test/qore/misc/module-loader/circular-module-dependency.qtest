@@ -30,6 +30,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires Util
 
 %exec-class CircularModuleDependencyTest
@@ -60,7 +61,7 @@ class CircularModuleDependencyTest inherits QUnit::Test {
         }
         # run the driver against the local (in-development) qore/libqore under test, with the fixture
         # modules (absolute) prepended to the inherited module path
-        string qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string modpath = dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
         string driver = dir + "/cross-cycle-attempt.qr";
 

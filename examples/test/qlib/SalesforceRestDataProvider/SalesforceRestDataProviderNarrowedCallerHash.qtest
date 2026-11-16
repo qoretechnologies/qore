@@ -9,7 +9,10 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires ../../ExecModeHarness.qm
+%prepend-module-path "${SCRIPT_DIR}"
+%requires SalesforceWorkerOutput
 
 %exec-class SalesforceRestDataProviderNarrowedCallerHashTest
 
@@ -44,7 +47,7 @@ public class SalesforceRestDataProviderNarrowedCallerHashTest inherits QUnit::Te
     }
 
     constructor() : Test("SalesforceRestDataProviderNarrowedCallerHash", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         addTestCase("options from the environment in each execution mode", \testExecModes());
         set_return_value(main());
@@ -55,14 +58,13 @@ public class SalesforceRestDataProviderNarrowedCallerHashTest inherits QUnit::Te
             string out = ExecModeHarness::run(sprintf("%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b "
                 "--enable-debug --exec-mode=%s %s", Env, libqore_dir, libqore_dir, qore_bin, mode,
                 get_script_dir() + DirSep + "env-options-worker.qr"), ExecModeHarness::NativeCheck::None);
-            hash<string, string> results = {};
-            foreach string line in (out.split("\n")) {
-                *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
-                if (parts) {
-                    results{parts[0]} = parts[1];
-                } else if (line.val()) {
-                    fail(sprintf("%s: unexpected worker output: %y", mode, out));
-                }
+            # the worker's output may only have its results and the warning that the optional child module of
+            # SalesforceRestDataProvider was skipped because an external module that it requires is absent
+            hash<string, string> results;
+            try {
+                results = parse_worker_output(out, "env-options-worker.qr");
+            } catch (hash<ExceptionInfo> ex) {
+                fail(sprintf("%s: %s: %s", mode, ex.err, ex.desc));
             }
             assertEq(Expected, results, mode);
         }

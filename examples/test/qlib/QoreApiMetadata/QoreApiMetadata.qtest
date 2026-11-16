@@ -24,12 +24,11 @@
 
 %modern
 
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/astparser"
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires json
 %requires QoreApiMetadata
+%requires ../../QoreBuildTree.qm
 
 %exec-class QoreApiMetadataTest
 
@@ -1096,14 +1095,13 @@ class QoreApiMetadataTest inherits QUnit::Test {
         }
     }
 
+    #! Returns the build tree of the qore under test, which has the .meta.json files; skips the test case without one
     private string getMetaDir() {
-        # find the build directory containing .meta.json files
-        string base = get_script_dir() + "/../../../../build";
-        if (!is_dir(base)) {
-            # fall back to current working directory + build
-            base = getcwd() + "/build";
+        *string build = QoreBuildTree::build_dir();
+        if (!build) {
+            testSkip(QoreBuildTree::no_build_dir_message());
         }
-        return base;
+        return build;
     }
 
     testQppBuildFromMetaFiles() {

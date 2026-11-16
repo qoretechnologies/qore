@@ -51,6 +51,14 @@ class S {
     static auto onHashCast<U>(U v) { return cast<*hash<string, U>>({"a": v}); }
     static auto softlistCast<U>(U v) { return cast<softlist<U>>(v); }
     static auto softlistListCast<U>(U v) { return cast<softlist<U>>((v,)); }
+    # default values of parameters (qore#6173)
+    static auto defNew<U>(U v, auto h = new hash<HD<U>>()) { return h; }
+    static auto defCast<U>(U v, auto h = cast<hash<HD<U>>>({})) { return h; }
+    static auto defNewInit<U>(U v, auto h = new hash<HD<U>>({"a": 2})) { return h; }
+    static auto defCastList<U>(U v, auto l = cast<list<hash<HD<U>>>>(())) { return l; }
+    static auto defOnCast<U>(U v, auto h = cast<*hash<HD<U>>>({})) { return h; }
+    static auto defNested<U>(U v, auto h = cast<hash<HD<list<U>>>>({})) { return h; }
+    static auto defTyped<U>(U v, hash<HD<U>> h = new hash<HD<U>>()) { return h; }
     # in a closure in the generic method
     static auto closureCast<U>(U v) { code c = auto sub () { return cast<hash<HD<U>>>({"a": v}); }; return c(); }
     static auto closureNew<U>(U v) { code c = auto sub () { return new hash<HD<U>>({"a": v}); }; return c(); }
@@ -118,6 +126,8 @@ class G<T> {
     }
     hash<string, list<U>> hashListAssign<U>(T t, U v) { hash<string, list<U>> h = {"k": (v,)}; return h; }
     static hash<HD2<T, U>> sctor<U>(T t, U v) { hash<HD2<T, U>> h({"a": t, "b": v}); return h; }
+    # a default value with the class's T and the method's U (qore#6173)
+    auto defHd2<U>(T t, U v, auto h = new hash<HD2<T, U>>()) { return h; }
 }
 
 #! returns the value that a background thread pushed, or raises an exception at once if the thread ended without one
@@ -140,6 +150,33 @@ class GT<T> {
     auto newT(T t) { return new hash<HD<T>>({"a": t}); }
     auto ctorT(T t) { hash<HD<T>> h({"a": t}); return h; }
     auto listT(T t) { return cast<list<T>>((t,)); }
+    # default values of parameters with the class's T (qore#6173)
+    auto defNewT(auto h = new hash<HD<T>>()) { return h; }
+    auto defCastT(auto h = cast<hash<HD<T>>>({})) { return h; }
+}
+
+#! member defaults of a generic class with the class's T (qore#6241)
+class GM<T> {
+    public {
+        hash<HD<T>> h1 = new hash<HD<T>>();
+        hash<HD<T>> h2();
+        hash<HD<T>> h3 = cast<hash<HD<T>>>({});
+        # with constructor arguments
+        hash<HD<T>> h4({});
+    }
+}
+
+#! a subclass of an instantiation of the generic class
+class GMI inherits GM<int> {
+}
+
+#! the same member defaults without type parameters, a control
+class MC {
+    public {
+        hash<HD<int>> h1 = new hash<HD<int>>();
+        hash<HD<int>> h2();
+        hash<HD<int>> h3 = cast<hash<HD<int>>>({});
+    }
 }
 
 #! one of the threads running different instantiations of the same generic methods at the same time
@@ -233,6 +270,14 @@ list<string> sub probes(*bool qcc) {
         probe("S.onHdCast", auto sub () { return S::onHdCast<int>(1); }),
         probe("S.onHdNothing", auto sub () { return S::onHdNothing<int>(); }),
         probe("S.softlistListCast", auto sub () { return S::softlistListCast<int>(1); }),
+        probe("S.defNew", auto sub () { return S::defNew<int>(1); }),
+        probe("S.defCast", auto sub () { return S::defCast<int>(1); }),
+        probe("S.defNewInit", auto sub () { return S::defNewInit<int>(1); }),
+        probe("S.defCastList", auto sub () { return S::defCastList<int>(1); }),
+        probe("S.defNew<string>", auto sub () { return S::defNew<string>("s"); }),
+        probe("S.defOnCast", auto sub () { return S::defOnCast<int>(1); }),
+        probe("S.defNested", auto sub () { return S::defNested<int>(1); }),
+        probe("S.defTyped", auto sub () { return S::defTyped<int>(1); }),
         probe("S.closureCast", auto sub () { return S::closureCast<int>(1); }),
         probe("S.closureNew", auto sub () { return S::closureNew<int>(1); }),
         probe("N.ctor", auto sub () { return n.ctor<int>(1); }),
@@ -272,6 +317,18 @@ list<string> sub probes(*bool qcc) {
         probe("G.listHdCast", auto sub () { return g.listHdCast<int>("x", 1); }),
         probe("G.hashListAssign", auto sub () { return g.hashListAssign<int>("x", 1); }),
         probe("G.sctor", auto sub () { return G<string>::sctor<int>("x", 1); }),
+        probe("G.defHd2", auto sub () { return g.defHd2<int>("x", 1); }),
+        probe("GM<int>.h1", auto sub () { GM<int> o(); return o.h1; }),
+        probe("GM<int>.h2", auto sub () { GM<int> o(); return o.h2; }),
+        probe("GM<int>.h3", auto sub () { GM<int> o(); return o.h3; }),
+        probe("GM<string>.h1", auto sub () { GM<string> o(); return o.h1; }),
+        probe("GM<string>.h2", auto sub () { GM<string> o(); return o.h2; }),
+        probe("GM<string>.h3", auto sub () { GM<string> o(); return o.h3; }),
+        probe("GM<int>.h4", auto sub () { GM<int> o(); return o.h4; }),
+        probe("GMI.h1", auto sub () { GMI o(); return o.h1; }),
+        probe("MC.h1", auto sub () { MC o(); return o.h1; }),
+        probe("MC.h2", auto sub () { MC o(); return o.h2; }),
+        probe("MC.h3", auto sub () { MC o(); return o.h3; }),
         # two instantiations of a generic class in turn: the class's T is the receiver's
         probe("GT<int>.cast", auto sub () { return gi.castT(1); }),
         probe("GT<string>.cast", auto sub () { return gs.castT("s"); }),
@@ -281,6 +338,8 @@ list<string> sub probes(*bool qcc) {
         probe("GT<string>.ctor", auto sub () { return gs.ctorT("s"); }),
         probe("GT<int>.list", auto sub () { return gi.listT(1); }),
         probe("GT<string>.list", auto sub () { return gs.listT("s"); }),
+        probe("GT<int>.defNew", auto sub () { return gi.defNewT(); }),
+        probe("GT<string>.defCast", auto sub () { return gs.defCastT(); }),
         probe("threads", auto sub () { return thread_probe(); }),
         probe("concrete.cast", auto sub () { return concrete_cast(1); }),
         probe("concrete.new", auto sub () { return concrete_new(1); }),

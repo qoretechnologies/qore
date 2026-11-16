@@ -9,6 +9,7 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 %exec-class AOTSoftReturnParamTest
@@ -23,7 +24,7 @@
 */
 class AOTSoftReturnParamTest inherits QUnit::Test {
     private {
-        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string qore_bin = executablePath(TestInterpreter::qore_interpreter());
         string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
         string probe = get_script_dir() + "/AOTSoftReturnParam/probe.q";
