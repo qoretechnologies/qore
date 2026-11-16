@@ -19140,7 +19140,7 @@ load_local_done:
                                         QoreStringNodeValueHelper str(lvh.getValue());
                                         QoreStringNode* nv = regex_op->getRegexSubst()->exec(*str, xsink);
                                         if (!*xsink && nv) {
-                                            if (!lvh.assign(nv) && path_inst->ref_rv) {
+                                            if (!lvh.assign(nv, "<=~ s/// operator>") && path_inst->ref_rv) {
                                                 res = nv->refSelf();
                                             }
                                         }
@@ -19160,7 +19160,7 @@ load_local_done:
                                         QoreStringNodeValueHelper str(lvh.getValue());
                                         QoreStringNode* nv = trans_op->getTransliteration()->exec(*str, xsink);
                                         if (!*xsink && nv) {
-                                            if (!lvh.assign(nv) && path_inst->ref_rv) {
+                                            if (!lvh.assign(nv, "<=~ tr/// operator>") && path_inst->ref_rv) {
                                                 res = nv->refSelf();
                                             }
                                         }

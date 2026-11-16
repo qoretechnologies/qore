@@ -18119,11 +18119,10 @@ static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* ins
                 if (regex_op && regex_op->getRegexSubst()) {
                     QoreStringNodeValueHelper str(lvh.getValue());
                     QoreStringNode* nv = regex_op->getRegexSubst()->exec(*str, xsink);
-                    if (!*xsink && nv) {
-                        lvh.assign(nv);
-                        if (inst->ref_rv) {
-                            res = nv->refSelf();
-                        }
+                    // the lvalue's type can refuse the plain string (ex: an enum type, qore#6196); assign() owns
+                    // the value in either case
+                    if (!*xsink && nv && !lvh.assign(nv, "<=~ s/// operator>") && inst->ref_rv) {
+                        res = nv->refSelf();
                     }
                 }
             }
@@ -18139,11 +18138,10 @@ static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* ins
                 if (trans_op && trans_op->getTransliteration()) {
                     QoreStringNodeValueHelper str(lvh.getValue());
                     QoreStringNode* nv = trans_op->getTransliteration()->exec(*str, xsink);
-                    if (!*xsink && nv) {
-                        lvh.assign(nv);
-                        if (inst->ref_rv) {
-                            res = nv->refSelf();
-                        }
+                    // the lvalue's type can refuse the plain string (ex: an enum type, qore#6196); assign() owns
+                    // the value in either case
+                    if (!*xsink && nv && !lvh.assign(nv, "<=~ tr/// operator>") && inst->ref_rv) {
+                        res = nv->refSelf();
                     }
                 }
             }

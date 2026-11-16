@@ -1,0 +1,1348 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# applies the operations that modify a string in place to string enum lvalues; run by enum-string-in-place.qtest
+# generated; see enum-string-in-place.qtest
+
+/** A string enum lvalue holds only the members of its enum: an operation that modifies the lvalue's string in place
+    (+=, splice, extract, trim, chomp, regex substitution and transliteration) leaves a plain string, which the enum
+    type refuses, so every such operation raises RUNTIME-TYPE-ERROR and leaves the lvalue unchanged, in every kind of
+    lvalue, and never changes the value of the enum member.  Each check prints "name=<error>|<description>|<type>
+    <value>", or "name=none|<type> <value>" if no error was raised; a check that uses the operation's value appends
+    "|<type> <value>" of the value.  The same operations on a string lvalue and on lvalues of no type holding an enum
+    value are controls, which they change.
+*/
+
+enum ESS : string {
+    A = " a\n",
+}
+
+enum ESL : string {
+    B = " a long string value that is not stored inline\n",
+}
+
+class Holder {
+    public {
+        ESS ess = ESS::A;
+        ESL esl = ESL::B;
+        ESL eslnv;
+        *ESL eslonv;
+        hash<string, ESL> hesl;
+    }
+
+    ess_rs() { ess =~ s/a/X/; }
+    ess_rsg() { ess =~ s/ /_/g; }
+    ess_tl() { ess =~ tr/a-z/A-Z/; }
+    esl_rs() { esl =~ s/a/X/; }
+    esl_rsg() { esl =~ s/ /_/g; }
+    esl_tl() { esl =~ tr/a-z/A-Z/; }
+}
+
+hashdecl HolderHash {
+    ESS ess = ESS::A;
+    ESL esl = ESL::B;
+}
+
+#! a string member followed by an enum member
+hashdecl MixedHash {
+    string s = " s ";
+    ESL e = ESL::B;
+}
+
+our ESS g_ess;
+our ESL g_esl;
+our ESL g_eslnv;
+
+#! returns the type and value of a value, with its line breaks escaped
+string sub q(auto v) {
+    return replace(sprintf("%s %y", v.fullType(), v), "\n", "\\n");
+}
+
+#! returns the type and value of a container and the types of its elements
+string sub qc(auto c) {
+    list<string> types = c.typeCode() == NT_HASH
+        ? (map c{$1}.fullType(), keys c)
+        : (map $1.fullType(), c);
+    return sprintf("%s [%s]", q(c), types.join(", "));
+}
+
+#! returns the result of a check of a container that raised no error
+string sub okc(auto c) {
+    return "none|" + qc(c);
+}
+
+#! returns the result of a check of a container that raised an error
+string sub errc(hash<ExceptionInfo> ex, auto c) {
+    return sprintf("%s|%s|%s", ex.err, ex.desc, qc(c));
+}
+
+#! returns the result of a check that raised no error: the type and value of the lvalue afterwards
+string sub ok(auto v) {
+    return "none|" + q(v);
+}
+
+#! returns the result of a check that raised an error: the error and the type and value of the lvalue afterwards
+string sub err(hash<ExceptionInfo> ex, auto v) {
+    return sprintf("%s|%s|%s", ex.err, ex.desc, q(v));
+}
+
+#! returns the result of a check that raised an error in a function that it called
+string sub err_out(hash<ExceptionInfo> ex) {
+    return sprintf("%s|%s", ex.err, ex.desc);
+}
+
+#! prints the results of a group of checks
+sub print_results(string group, hash<string, string> results) {
+    foreach hash<auto> i in (results.pairIterator()) {
+        printf("%s-%s=%s\n", group, i.key, i.value);
+    }
+}
+
+#! each operation on a ESS lvalue (local) in a try block
+hash<string, string> sub ess_local_in() {
+    hash<string, string> rv;
+    {
+        ESS v = ESS::A;
+        try { v =~ s/a/X/; rv.rs = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, v); }
+    }
+    {
+        ESS v = ESS::A;
+        try { v =~ s/ /_/g; rv.rsg = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, v); }
+    }
+    {
+        ESS v = ESS::A;
+        try { v =~ tr/a-z/A-Z/; rv.tl = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, v); }
+    }
+    {
+        ESS v = ESS::A;
+        auto r;
+        try { r = (v =~ s/a/X/); rv."rs-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, v) + "|" + q(r); }
+    }
+    {
+        ESS v = ESS::A;
+        auto r;
+        try { r = (v =~ tr/a-z/A-Z/); rv."tl-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, v) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESS lvalue (closure) in a try block
+hash<string, string> sub ess_closure_in() {
+    hash<string, string> rv;
+    {
+        ESS v = ESS::A;
+        code get = auto sub () { return v; };
+        try { v =~ s/a/X/; rv.rs = ok(get()); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, get()); }
+    }
+    {
+        ESS v = ESS::A;
+        code get = auto sub () { return v; };
+        try { v =~ s/ /_/g; rv.rsg = ok(get()); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, get()); }
+    }
+    {
+        ESS v = ESS::A;
+        code get = auto sub () { return v; };
+        try { v =~ tr/a-z/A-Z/; rv.tl = ok(get()); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, get()); }
+    }
+    {
+        ESS v = ESS::A;
+        code get = auto sub () { return v; };
+        auto r;
+        try { r = (v =~ s/a/X/); rv."rs-rv" = ok(get()) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, get()) + "|" + q(r); }
+    }
+    {
+        ESS v = ESS::A;
+        code get = auto sub () { return v; };
+        auto r;
+        try { r = (v =~ tr/a-z/A-Z/); rv."tl-rv" = ok(get()) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, get()) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESS lvalue (global) in a try block
+hash<string, string> sub ess_global_in() {
+    hash<string, string> rv;
+    {
+        g_ess = ESS::A;
+        try { g_ess =~ s/a/X/; rv.rs = ok(g_ess); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, g_ess); }
+    }
+    {
+        g_ess = ESS::A;
+        try { g_ess =~ s/ /_/g; rv.rsg = ok(g_ess); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, g_ess); }
+    }
+    {
+        g_ess = ESS::A;
+        try { g_ess =~ tr/a-z/A-Z/; rv.tl = ok(g_ess); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, g_ess); }
+    }
+    {
+        g_ess = ESS::A;
+        auto r;
+        try { r = (g_ess =~ s/a/X/); rv."rs-rv" = ok(g_ess) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, g_ess) + "|" + q(r); }
+    }
+    {
+        g_ess = ESS::A;
+        auto r;
+        try { r = (g_ess =~ tr/a-z/A-Z/); rv."tl-rv" = ok(g_ess) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, g_ess) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESS lvalue (member) in a try block
+hash<string, string> sub ess_member_in() {
+    hash<string, string> rv;
+    {
+        Holder o();
+        try { o.ess =~ s/a/X/; rv.rs = ok(o.ess); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, o.ess); }
+    }
+    {
+        Holder o();
+        try { o.ess =~ s/ /_/g; rv.rsg = ok(o.ess); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, o.ess); }
+    }
+    {
+        Holder o();
+        try { o.ess =~ tr/a-z/A-Z/; rv.tl = ok(o.ess); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, o.ess); }
+    }
+    {
+        Holder o();
+        auto r;
+        try { r = (o.ess =~ s/a/X/); rv."rs-rv" = ok(o.ess) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, o.ess) + "|" + q(r); }
+    }
+    {
+        Holder o();
+        auto r;
+        try { r = (o.ess =~ tr/a-z/A-Z/); rv."tl-rv" = ok(o.ess) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, o.ess) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESS lvalue (hashdecl) in a try block
+hash<string, string> sub ess_hashdecl_in() {
+    hash<string, string> rv;
+    {
+        hash<HolderHash> h();
+        try { h.ess =~ s/a/X/; rv.rs = ok(h.ess); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, h.ess); }
+    }
+    {
+        hash<HolderHash> h();
+        try { h.ess =~ s/ /_/g; rv.rsg = ok(h.ess); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, h.ess); }
+    }
+    {
+        hash<HolderHash> h();
+        try { h.ess =~ tr/a-z/A-Z/; rv.tl = ok(h.ess); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, h.ess); }
+    }
+    {
+        hash<HolderHash> h();
+        auto r;
+        try { r = (h.ess =~ s/a/X/); rv."rs-rv" = ok(h.ess) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, h.ess) + "|" + q(r); }
+    }
+    {
+        hash<HolderHash> h();
+        auto r;
+        try { r = (h.ess =~ tr/a-z/A-Z/); rv."tl-rv" = ok(h.ess) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, h.ess) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESS lvalue (hash) in a try block
+hash<string, string> sub ess_hash_in() {
+    hash<string, string> rv;
+    {
+        hash<string, ESS> h = {"k": ESS::A};
+        try { h.k =~ s/a/X/; rv.rs = ok(h.k); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, h.k); }
+    }
+    {
+        hash<string, ESS> h = {"k": ESS::A};
+        try { h.k =~ s/ /_/g; rv.rsg = ok(h.k); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, h.k); }
+    }
+    {
+        hash<string, ESS> h = {"k": ESS::A};
+        try { h.k =~ tr/a-z/A-Z/; rv.tl = ok(h.k); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, h.k); }
+    }
+    {
+        hash<string, ESS> h = {"k": ESS::A};
+        auto r;
+        try { r = (h.k =~ s/a/X/); rv."rs-rv" = ok(h.k) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, h.k) + "|" + q(r); }
+    }
+    {
+        hash<string, ESS> h = {"k": ESS::A};
+        auto r;
+        try { r = (h.k =~ tr/a-z/A-Z/); rv."tl-rv" = ok(h.k) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, h.k) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESS lvalue (hash-dyn) in a try block
+hash<string, string> sub ess_hash_dyn_in() {
+    hash<string, string> rv;
+    {
+        hash<string, ESS> h = {"k": ESS::A};
+        string key = "k";
+        try { h{key} =~ s/a/X/; rv.rs = ok(h{key}); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, h{key}); }
+    }
+    {
+        hash<string, ESS> h = {"k": ESS::A};
+        string key = "k";
+        try { h{key} =~ s/ /_/g; rv.rsg = ok(h{key}); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, h{key}); }
+    }
+    {
+        hash<string, ESS> h = {"k": ESS::A};
+        string key = "k";
+        try { h{key} =~ tr/a-z/A-Z/; rv.tl = ok(h{key}); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, h{key}); }
+    }
+    {
+        hash<string, ESS> h = {"k": ESS::A};
+        string key = "k";
+        auto r;
+        try { r = (h{key} =~ s/a/X/); rv."rs-rv" = ok(h{key}) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, h{key}) + "|" + q(r); }
+    }
+    {
+        hash<string, ESS> h = {"k": ESS::A};
+        string key = "k";
+        auto r;
+        try { r = (h{key} =~ tr/a-z/A-Z/); rv."tl-rv" = ok(h{key}) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, h{key}) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESS lvalue (list) in a try block
+hash<string, string> sub ess_list_in() {
+    hash<string, string> rv;
+    {
+        list<ESS> l = (ESS::A,);
+        try { l[0] =~ s/a/X/; rv.rs = ok(l[0]); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, l[0]); }
+    }
+    {
+        list<ESS> l = (ESS::A,);
+        try { l[0] =~ s/ /_/g; rv.rsg = ok(l[0]); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, l[0]); }
+    }
+    {
+        list<ESS> l = (ESS::A,);
+        try { l[0] =~ tr/a-z/A-Z/; rv.tl = ok(l[0]); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, l[0]); }
+    }
+    {
+        list<ESS> l = (ESS::A,);
+        auto r;
+        try { r = (l[0] =~ s/a/X/); rv."rs-rv" = ok(l[0]) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, l[0]) + "|" + q(r); }
+    }
+    {
+        list<ESS> l = (ESS::A,);
+        auto r;
+        try { r = (l[0] =~ tr/a-z/A-Z/); rv."tl-rv" = ok(l[0]) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, l[0]) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESS lvalue (ref) in a try block
+hash<string, string> sub ess_ref_in() {
+    hash<string, string> rv;
+    {
+        ESS v = ESS::A;
+        reference<ESS> rf = \v;
+        try { rf =~ s/a/X/; rv.rs = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, v); }
+    }
+    {
+        ESS v = ESS::A;
+        reference<ESS> rf = \v;
+        try { rf =~ s/ /_/g; rv.rsg = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, v); }
+    }
+    {
+        ESS v = ESS::A;
+        reference<ESS> rf = \v;
+        try { rf =~ tr/a-z/A-Z/; rv.tl = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, v); }
+    }
+    {
+        ESS v = ESS::A;
+        reference<ESS> rf = \v;
+        auto r;
+        try { r = (rf =~ s/a/X/); rv."rs-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, v) + "|" + q(r); }
+    }
+    {
+        ESS v = ESS::A;
+        reference<ESS> rf = \v;
+        auto r;
+        try { r = (rf =~ tr/a-z/A-Z/); rv."tl-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, v) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESS member in a method of its object
+hash<string, string> sub ess_self_in() {
+    hash<string, string> rv;
+    {
+        Holder o();
+        try { o.ess_rs(); rv.rs = ok(o.ess); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, o.ess); }
+    }
+    {
+        Holder o();
+        try { o.ess_rsg(); rv.rsg = ok(o.ess); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, o.ess); }
+    }
+    {
+        Holder o();
+        try { o.ess_tl(); rv.tl = ok(o.ess); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, o.ess); }
+    }
+    return rv;
+}
+
+#! applies an operation to a ESS local with no try block
+sub ess_local_raise(string op) {
+    ESS v = ESS::A;
+    switch (op) {
+        case "rs": v =~ s/a/X/; break;
+        case "rsg": v =~ s/ /_/g; break;
+        case "tl": v =~ tr/a-z/A-Z/; break;
+    }
+}
+
+#! each operation on a ESS local raised in a function that it calls
+hash<string, string> sub ess_local_out() {
+    hash<string, string> rv;
+    try { ess_local_raise("rs"); rv.rs = "none"; }
+    catch (hash<ExceptionInfo> ex) { rv.rs = err_out(ex); }
+    try { ess_local_raise("rsg"); rv.rsg = "none"; }
+    catch (hash<ExceptionInfo> ex) { rv.rsg = err_out(ex); }
+    try { ess_local_raise("tl"); rv.tl = "none"; }
+    catch (hash<ExceptionInfo> ex) { rv.tl = err_out(ex); }
+    return rv;
+}
+
+#! each operation on a ESS local in a try block in a loop
+hash<string, string> sub ess_local_loop() {
+    hash<string, string> rv;
+    {
+        ESS v = ESS::A;
+        int caught = 0;
+        for (int i = 0; i < 50; ++i) {
+            try { v =~ s/a/X/; } catch (hash<ExceptionInfo> ex) { ++caught; }
+        }
+        rv.rs = sprintf("%s (caught %d)", ok(v), caught);
+    }
+    {
+        ESS v = ESS::A;
+        int caught = 0;
+        for (int i = 0; i < 50; ++i) {
+            try { v =~ s/ /_/g; } catch (hash<ExceptionInfo> ex) { ++caught; }
+        }
+        rv.rsg = sprintf("%s (caught %d)", ok(v), caught);
+    }
+    {
+        ESS v = ESS::A;
+        int caught = 0;
+        for (int i = 0; i < 50; ++i) {
+            try { v =~ tr/a-z/A-Z/; } catch (hash<ExceptionInfo> ex) { ++caught; }
+        }
+        rv.tl = sprintf("%s (caught %d)", ok(v), caught);
+    }
+    return rv;
+}
+
+string sub ess_param_rs(ESS v) {
+    try { v =~ s/a/X/; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+sub ess_refparam_rs(reference<ESS> r) {
+    r =~ s/a/X/;
+}
+string sub ess_param_rsg(ESS v) {
+    try { v =~ s/ /_/g; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+sub ess_refparam_rsg(reference<ESS> r) {
+    r =~ s/ /_/g;
+}
+string sub ess_param_tl(ESS v) {
+    try { v =~ tr/a-z/A-Z/; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+sub ess_refparam_tl(reference<ESS> r) {
+    r =~ tr/a-z/A-Z/;
+}
+
+#! each operation on a ESS parameter and through a reference parameter
+hash<string, string> sub ess_params() {
+    hash<string, string> rv;
+    rv."param-rs" = ess_param_rs(ESS::A);
+    {
+        ESS v = ESS::A;
+        try { ess_refparam_rs(\v); rv."refparam-rs" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."refparam-rs" = err(ex, v); }
+    }
+    rv."param-rsg" = ess_param_rsg(ESS::A);
+    {
+        ESS v = ESS::A;
+        try { ess_refparam_rsg(\v); rv."refparam-rsg" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."refparam-rsg" = err(ex, v); }
+    }
+    rv."param-tl" = ess_param_tl(ESS::A);
+    {
+        ESS v = ESS::A;
+        try { ess_refparam_tl(\v); rv."refparam-tl" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."refparam-tl" = err(ex, v); }
+    }
+    return rv;
+}
+
+#! each operation on a ESL lvalue (local) in a try block
+hash<string, string> sub esl_local_in() {
+    hash<string, string> rv;
+    {
+        ESL v = ESL::B;
+        try { v =~ s/a/X/; rv.rs = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, v); }
+    }
+    {
+        ESL v = ESL::B;
+        try { v =~ s/ /_/g; rv.rsg = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, v); }
+    }
+    {
+        ESL v = ESL::B;
+        try { v =~ tr/a-z/A-Z/; rv.tl = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, v); }
+    }
+    {
+        ESL v = ESL::B;
+        auto r;
+        try { r = (v =~ s/a/X/); rv."rs-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, v) + "|" + q(r); }
+    }
+    {
+        ESL v = ESL::B;
+        auto r;
+        try { r = (v =~ tr/a-z/A-Z/); rv."tl-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, v) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESL lvalue (closure) in a try block
+hash<string, string> sub esl_closure_in() {
+    hash<string, string> rv;
+    {
+        ESL v = ESL::B;
+        code get = auto sub () { return v; };
+        try { v =~ s/a/X/; rv.rs = ok(get()); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, get()); }
+    }
+    {
+        ESL v = ESL::B;
+        code get = auto sub () { return v; };
+        try { v =~ s/ /_/g; rv.rsg = ok(get()); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, get()); }
+    }
+    {
+        ESL v = ESL::B;
+        code get = auto sub () { return v; };
+        try { v =~ tr/a-z/A-Z/; rv.tl = ok(get()); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, get()); }
+    }
+    {
+        ESL v = ESL::B;
+        code get = auto sub () { return v; };
+        auto r;
+        try { r = (v =~ s/a/X/); rv."rs-rv" = ok(get()) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, get()) + "|" + q(r); }
+    }
+    {
+        ESL v = ESL::B;
+        code get = auto sub () { return v; };
+        auto r;
+        try { r = (v =~ tr/a-z/A-Z/); rv."tl-rv" = ok(get()) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, get()) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESL lvalue (global) in a try block
+hash<string, string> sub esl_global_in() {
+    hash<string, string> rv;
+    {
+        g_esl = ESL::B;
+        try { g_esl =~ s/a/X/; rv.rs = ok(g_esl); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, g_esl); }
+    }
+    {
+        g_esl = ESL::B;
+        try { g_esl =~ s/ /_/g; rv.rsg = ok(g_esl); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, g_esl); }
+    }
+    {
+        g_esl = ESL::B;
+        try { g_esl =~ tr/a-z/A-Z/; rv.tl = ok(g_esl); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, g_esl); }
+    }
+    {
+        g_esl = ESL::B;
+        auto r;
+        try { r = (g_esl =~ s/a/X/); rv."rs-rv" = ok(g_esl) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, g_esl) + "|" + q(r); }
+    }
+    {
+        g_esl = ESL::B;
+        auto r;
+        try { r = (g_esl =~ tr/a-z/A-Z/); rv."tl-rv" = ok(g_esl) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, g_esl) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESL lvalue (member) in a try block
+hash<string, string> sub esl_member_in() {
+    hash<string, string> rv;
+    {
+        Holder o();
+        try { o.esl =~ s/a/X/; rv.rs = ok(o.esl); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, o.esl); }
+    }
+    {
+        Holder o();
+        try { o.esl =~ s/ /_/g; rv.rsg = ok(o.esl); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, o.esl); }
+    }
+    {
+        Holder o();
+        try { o.esl =~ tr/a-z/A-Z/; rv.tl = ok(o.esl); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, o.esl); }
+    }
+    {
+        Holder o();
+        auto r;
+        try { r = (o.esl =~ s/a/X/); rv."rs-rv" = ok(o.esl) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, o.esl) + "|" + q(r); }
+    }
+    {
+        Holder o();
+        auto r;
+        try { r = (o.esl =~ tr/a-z/A-Z/); rv."tl-rv" = ok(o.esl) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, o.esl) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESL lvalue (hashdecl) in a try block
+hash<string, string> sub esl_hashdecl_in() {
+    hash<string, string> rv;
+    {
+        hash<HolderHash> h();
+        try { h.esl =~ s/a/X/; rv.rs = ok(h.esl); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, h.esl); }
+    }
+    {
+        hash<HolderHash> h();
+        try { h.esl =~ s/ /_/g; rv.rsg = ok(h.esl); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, h.esl); }
+    }
+    {
+        hash<HolderHash> h();
+        try { h.esl =~ tr/a-z/A-Z/; rv.tl = ok(h.esl); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, h.esl); }
+    }
+    {
+        hash<HolderHash> h();
+        auto r;
+        try { r = (h.esl =~ s/a/X/); rv."rs-rv" = ok(h.esl) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, h.esl) + "|" + q(r); }
+    }
+    {
+        hash<HolderHash> h();
+        auto r;
+        try { r = (h.esl =~ tr/a-z/A-Z/); rv."tl-rv" = ok(h.esl) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, h.esl) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESL lvalue (hash) in a try block
+hash<string, string> sub esl_hash_in() {
+    hash<string, string> rv;
+    {
+        hash<string, ESL> h = {"k": ESL::B};
+        try { h.k =~ s/a/X/; rv.rs = ok(h.k); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, h.k); }
+    }
+    {
+        hash<string, ESL> h = {"k": ESL::B};
+        try { h.k =~ s/ /_/g; rv.rsg = ok(h.k); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, h.k); }
+    }
+    {
+        hash<string, ESL> h = {"k": ESL::B};
+        try { h.k =~ tr/a-z/A-Z/; rv.tl = ok(h.k); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, h.k); }
+    }
+    {
+        hash<string, ESL> h = {"k": ESL::B};
+        auto r;
+        try { r = (h.k =~ s/a/X/); rv."rs-rv" = ok(h.k) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, h.k) + "|" + q(r); }
+    }
+    {
+        hash<string, ESL> h = {"k": ESL::B};
+        auto r;
+        try { r = (h.k =~ tr/a-z/A-Z/); rv."tl-rv" = ok(h.k) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, h.k) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESL lvalue (hash-dyn) in a try block
+hash<string, string> sub esl_hash_dyn_in() {
+    hash<string, string> rv;
+    {
+        hash<string, ESL> h = {"k": ESL::B};
+        string key = "k";
+        try { h{key} =~ s/a/X/; rv.rs = ok(h{key}); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, h{key}); }
+    }
+    {
+        hash<string, ESL> h = {"k": ESL::B};
+        string key = "k";
+        try { h{key} =~ s/ /_/g; rv.rsg = ok(h{key}); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, h{key}); }
+    }
+    {
+        hash<string, ESL> h = {"k": ESL::B};
+        string key = "k";
+        try { h{key} =~ tr/a-z/A-Z/; rv.tl = ok(h{key}); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, h{key}); }
+    }
+    {
+        hash<string, ESL> h = {"k": ESL::B};
+        string key = "k";
+        auto r;
+        try { r = (h{key} =~ s/a/X/); rv."rs-rv" = ok(h{key}) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, h{key}) + "|" + q(r); }
+    }
+    {
+        hash<string, ESL> h = {"k": ESL::B};
+        string key = "k";
+        auto r;
+        try { r = (h{key} =~ tr/a-z/A-Z/); rv."tl-rv" = ok(h{key}) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, h{key}) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESL lvalue (list) in a try block
+hash<string, string> sub esl_list_in() {
+    hash<string, string> rv;
+    {
+        list<ESL> l = (ESL::B,);
+        try { l[0] =~ s/a/X/; rv.rs = ok(l[0]); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, l[0]); }
+    }
+    {
+        list<ESL> l = (ESL::B,);
+        try { l[0] =~ s/ /_/g; rv.rsg = ok(l[0]); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, l[0]); }
+    }
+    {
+        list<ESL> l = (ESL::B,);
+        try { l[0] =~ tr/a-z/A-Z/; rv.tl = ok(l[0]); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, l[0]); }
+    }
+    {
+        list<ESL> l = (ESL::B,);
+        auto r;
+        try { r = (l[0] =~ s/a/X/); rv."rs-rv" = ok(l[0]) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, l[0]) + "|" + q(r); }
+    }
+    {
+        list<ESL> l = (ESL::B,);
+        auto r;
+        try { r = (l[0] =~ tr/a-z/A-Z/); rv."tl-rv" = ok(l[0]) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, l[0]) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESL lvalue (ref) in a try block
+hash<string, string> sub esl_ref_in() {
+    hash<string, string> rv;
+    {
+        ESL v = ESL::B;
+        reference<ESL> rf = \v;
+        try { rf =~ s/a/X/; rv.rs = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, v); }
+    }
+    {
+        ESL v = ESL::B;
+        reference<ESL> rf = \v;
+        try { rf =~ s/ /_/g; rv.rsg = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, v); }
+    }
+    {
+        ESL v = ESL::B;
+        reference<ESL> rf = \v;
+        try { rf =~ tr/a-z/A-Z/; rv.tl = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, v); }
+    }
+    {
+        ESL v = ESL::B;
+        reference<ESL> rf = \v;
+        auto r;
+        try { r = (rf =~ s/a/X/); rv."rs-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, v) + "|" + q(r); }
+    }
+    {
+        ESL v = ESL::B;
+        reference<ESL> rf = \v;
+        auto r;
+        try { r = (rf =~ tr/a-z/A-Z/); rv."tl-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, v) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a ESL member in a method of its object
+hash<string, string> sub esl_self_in() {
+    hash<string, string> rv;
+    {
+        Holder o();
+        try { o.esl_rs(); rv.rs = ok(o.esl); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, o.esl); }
+    }
+    {
+        Holder o();
+        try { o.esl_rsg(); rv.rsg = ok(o.esl); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, o.esl); }
+    }
+    {
+        Holder o();
+        try { o.esl_tl(); rv.tl = ok(o.esl); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, o.esl); }
+    }
+    return rv;
+}
+
+#! applies an operation to a ESL local with no try block
+sub esl_local_raise(string op) {
+    ESL v = ESL::B;
+    switch (op) {
+        case "rs": v =~ s/a/X/; break;
+        case "rsg": v =~ s/ /_/g; break;
+        case "tl": v =~ tr/a-z/A-Z/; break;
+    }
+}
+
+#! each operation on a ESL local raised in a function that it calls
+hash<string, string> sub esl_local_out() {
+    hash<string, string> rv;
+    try { esl_local_raise("rs"); rv.rs = "none"; }
+    catch (hash<ExceptionInfo> ex) { rv.rs = err_out(ex); }
+    try { esl_local_raise("rsg"); rv.rsg = "none"; }
+    catch (hash<ExceptionInfo> ex) { rv.rsg = err_out(ex); }
+    try { esl_local_raise("tl"); rv.tl = "none"; }
+    catch (hash<ExceptionInfo> ex) { rv.tl = err_out(ex); }
+    return rv;
+}
+
+#! each operation on a ESL local in a try block in a loop
+hash<string, string> sub esl_local_loop() {
+    hash<string, string> rv;
+    {
+        ESL v = ESL::B;
+        int caught = 0;
+        for (int i = 0; i < 50; ++i) {
+            try { v =~ s/a/X/; } catch (hash<ExceptionInfo> ex) { ++caught; }
+        }
+        rv.rs = sprintf("%s (caught %d)", ok(v), caught);
+    }
+    {
+        ESL v = ESL::B;
+        int caught = 0;
+        for (int i = 0; i < 50; ++i) {
+            try { v =~ s/ /_/g; } catch (hash<ExceptionInfo> ex) { ++caught; }
+        }
+        rv.rsg = sprintf("%s (caught %d)", ok(v), caught);
+    }
+    {
+        ESL v = ESL::B;
+        int caught = 0;
+        for (int i = 0; i < 50; ++i) {
+            try { v =~ tr/a-z/A-Z/; } catch (hash<ExceptionInfo> ex) { ++caught; }
+        }
+        rv.tl = sprintf("%s (caught %d)", ok(v), caught);
+    }
+    return rv;
+}
+
+string sub esl_param_rs(ESL v) {
+    try { v =~ s/a/X/; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+sub esl_refparam_rs(reference<ESL> r) {
+    r =~ s/a/X/;
+}
+string sub esl_param_rsg(ESL v) {
+    try { v =~ s/ /_/g; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+sub esl_refparam_rsg(reference<ESL> r) {
+    r =~ s/ /_/g;
+}
+string sub esl_param_tl(ESL v) {
+    try { v =~ tr/a-z/A-Z/; return ok(v); } catch (hash<ExceptionInfo> ex) { return err(ex, v); }
+}
+sub esl_refparam_tl(reference<ESL> r) {
+    r =~ tr/a-z/A-Z/;
+}
+
+#! each operation on a ESL parameter and through a reference parameter
+hash<string, string> sub esl_params() {
+    hash<string, string> rv;
+    rv."param-rs" = esl_param_rs(ESL::B);
+    {
+        ESL v = ESL::B;
+        try { esl_refparam_rs(\v); rv."refparam-rs" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."refparam-rs" = err(ex, v); }
+    }
+    rv."param-rsg" = esl_param_rsg(ESL::B);
+    {
+        ESL v = ESL::B;
+        try { esl_refparam_rsg(\v); rv."refparam-rsg" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."refparam-rsg" = err(ex, v); }
+    }
+    rv."param-tl" = esl_param_tl(ESL::B);
+    {
+        ESL v = ESL::B;
+        try { esl_refparam_tl(\v); rv."refparam-tl" = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv."refparam-tl" = err(ex, v); }
+    }
+    return rv;
+}
+
+#! each operation on an ESL lvalue with no value (local)
+hash<string, string> sub eslnv_local_in() {
+    hash<string, string> rv;
+    {
+        ESL v;
+        try { v =~ s/a/X/; rv.rs = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, v); }
+    }
+    {
+        ESL v;
+        try { v =~ s/ /_/g; rv.rsg = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, v); }
+    }
+    {
+        ESL v;
+        try { v =~ tr/a-z/A-Z/; rv.tl = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, v); }
+    }
+    {
+        ESL v;
+        auto r;
+        try { r = (v =~ s/a/X/); rv."rs-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, v) + "|" + q(r); }
+    }
+    {
+        ESL v;
+        auto r;
+        try { r = (v =~ tr/a-z/A-Z/); rv."tl-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, v) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on an ESL lvalue with no value (local-or-nothing)
+hash<string, string> sub eslnv_local_or_nothing_in() {
+    hash<string, string> rv;
+    {
+        *ESL v;
+        try { v =~ s/a/X/; rv.rs = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, v); }
+    }
+    {
+        *ESL v;
+        try { v =~ s/ /_/g; rv.rsg = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, v); }
+    }
+    {
+        *ESL v;
+        try { v =~ tr/a-z/A-Z/; rv.tl = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, v); }
+    }
+    {
+        *ESL v;
+        auto r;
+        try { r = (v =~ s/a/X/); rv."rs-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, v) + "|" + q(r); }
+    }
+    {
+        *ESL v;
+        auto r;
+        try { r = (v =~ tr/a-z/A-Z/); rv."tl-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, v) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on an ESL lvalue with no value (member)
+hash<string, string> sub eslnv_member_in() {
+    hash<string, string> rv;
+    {
+        Holder o();
+        try { o.eslnv =~ s/a/X/; rv.rs = ok(o.eslnv); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, o.eslnv); }
+    }
+    {
+        Holder o();
+        try { o.eslnv =~ s/ /_/g; rv.rsg = ok(o.eslnv); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, o.eslnv); }
+    }
+    {
+        Holder o();
+        try { o.eslnv =~ tr/a-z/A-Z/; rv.tl = ok(o.eslnv); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, o.eslnv); }
+    }
+    {
+        Holder o();
+        auto r;
+        try { r = (o.eslnv =~ s/a/X/); rv."rs-rv" = ok(o.eslnv) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, o.eslnv) + "|" + q(r); }
+    }
+    {
+        Holder o();
+        auto r;
+        try { r = (o.eslnv =~ tr/a-z/A-Z/); rv."tl-rv" = ok(o.eslnv) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, o.eslnv) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on an ESL lvalue with no value (member-or-nothing)
+hash<string, string> sub eslnv_member_or_nothing_in() {
+    hash<string, string> rv;
+    {
+        Holder o();
+        try { o.eslonv =~ s/a/X/; rv.rs = ok(o.eslonv); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, o.eslonv); }
+    }
+    {
+        Holder o();
+        try { o.eslonv =~ s/ /_/g; rv.rsg = ok(o.eslonv); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, o.eslonv); }
+    }
+    {
+        Holder o();
+        try { o.eslonv =~ tr/a-z/A-Z/; rv.tl = ok(o.eslonv); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, o.eslonv); }
+    }
+    {
+        Holder o();
+        auto r;
+        try { r = (o.eslonv =~ s/a/X/); rv."rs-rv" = ok(o.eslonv) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, o.eslonv) + "|" + q(r); }
+    }
+    {
+        Holder o();
+        auto r;
+        try { r = (o.eslonv =~ tr/a-z/A-Z/); rv."tl-rv" = ok(o.eslonv) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, o.eslonv) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on an ESL lvalue with no value (hash)
+hash<string, string> sub eslnv_hash_in() {
+    hash<string, string> rv;
+    {
+        hash<string, *ESL> h = {"k": NOTHING};
+        try { h.k =~ s/a/X/; rv.rs = ok(h.k); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, h.k); }
+    }
+    {
+        hash<string, *ESL> h = {"k": NOTHING};
+        try { h.k =~ s/ /_/g; rv.rsg = ok(h.k); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, h.k); }
+    }
+    {
+        hash<string, *ESL> h = {"k": NOTHING};
+        try { h.k =~ tr/a-z/A-Z/; rv.tl = ok(h.k); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, h.k); }
+    }
+    {
+        hash<string, *ESL> h = {"k": NOTHING};
+        auto r;
+        try { r = (h.k =~ s/a/X/); rv."rs-rv" = ok(h.k) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, h.k) + "|" + q(r); }
+    }
+    {
+        hash<string, *ESL> h = {"k": NOTHING};
+        auto r;
+        try { r = (h.k =~ tr/a-z/A-Z/); rv."tl-rv" = ok(h.k) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, h.k) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on an ESL lvalue with no value (global)
+hash<string, string> sub eslnv_global_in() {
+    hash<string, string> rv;
+    {
+        remove g_eslnv;
+        try { g_eslnv =~ s/a/X/; rv.rs = ok(g_eslnv); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, g_eslnv); }
+    }
+    {
+        remove g_eslnv;
+        try { g_eslnv =~ s/ /_/g; rv.rsg = ok(g_eslnv); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, g_eslnv); }
+    }
+    {
+        remove g_eslnv;
+        try { g_eslnv =~ tr/a-z/A-Z/; rv.tl = ok(g_eslnv); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, g_eslnv); }
+    }
+    {
+        remove g_eslnv;
+        auto r;
+        try { r = (g_eslnv =~ s/a/X/); rv."rs-rv" = ok(g_eslnv) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, g_eslnv) + "|" + q(r); }
+    }
+    {
+        remove g_eslnv;
+        auto r;
+        try { r = (g_eslnv =~ tr/a-z/A-Z/); rv."tl-rv" = ok(g_eslnv) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, g_eslnv) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a control lvalue (string)
+hash<string, string> sub ctl_string_in() {
+    hash<string, string> rv;
+    {
+        string v = ESL::B;
+        try { v =~ s/a/X/; rv.rs = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, v); }
+    }
+    {
+        string v = ESL::B;
+        try { v =~ s/ /_/g; rv.rsg = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, v); }
+    }
+    {
+        string v = ESL::B;
+        try { v =~ tr/a-z/A-Z/; rv.tl = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, v); }
+    }
+    {
+        string v = ESL::B;
+        auto r;
+        try { r = (v =~ s/a/X/); rv."rs-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, v) + "|" + q(r); }
+    }
+    {
+        string v = ESL::B;
+        auto r;
+        try { r = (v =~ tr/a-z/A-Z/); rv."tl-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, v) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a control lvalue (auto)
+hash<string, string> sub ctl_auto_in() {
+    hash<string, string> rv;
+    {
+        auto v = ESL::B;
+        try { v =~ s/a/X/; rv.rs = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, v); }
+    }
+    {
+        auto v = ESL::B;
+        try { v =~ s/ /_/g; rv.rsg = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, v); }
+    }
+    {
+        auto v = ESL::B;
+        try { v =~ tr/a-z/A-Z/; rv.tl = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, v); }
+    }
+    {
+        auto v = ESL::B;
+        auto r;
+        try { r = (v =~ s/a/X/); rv."rs-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, v) + "|" + q(r); }
+    }
+    {
+        auto v = ESL::B;
+        auto r;
+        try { r = (v =~ tr/a-z/A-Z/); rv."tl-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, v) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a control lvalue (auto-short)
+hash<string, string> sub ctl_auto_short_in() {
+    hash<string, string> rv;
+    {
+        auto v = ESS::A;
+        try { v =~ s/a/X/; rv.rs = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, v); }
+    }
+    {
+        auto v = ESS::A;
+        try { v =~ s/ /_/g; rv.rsg = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, v); }
+    }
+    {
+        auto v = ESS::A;
+        try { v =~ tr/a-z/A-Z/; rv.tl = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, v); }
+    }
+    {
+        auto v = ESS::A;
+        auto r;
+        try { r = (v =~ s/a/X/); rv."rs-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, v) + "|" + q(r); }
+    }
+    {
+        auto v = ESS::A;
+        auto r;
+        try { r = (v =~ tr/a-z/A-Z/); rv."tl-rv" = ok(v) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, v) + "|" + q(r); }
+    }
+    return rv;
+}
+
+#! each operation on a control lvalue (auto-hash)
+hash<string, string> sub ctl_auto_hash_in() {
+    hash<string, string> rv;
+    {
+        hash<auto> h = {};
+        h.k = ESL::B;
+        try { h.k =~ s/a/X/; rv.rs = ok(h.k); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, h.k); }
+    }
+    {
+        hash<auto> h = {};
+        h.k = ESL::B;
+        try { h.k =~ s/ /_/g; rv.rsg = ok(h.k); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, h.k); }
+    }
+    {
+        hash<auto> h = {};
+        h.k = ESL::B;
+        try { h.k =~ tr/a-z/A-Z/; rv.tl = ok(h.k); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, h.k); }
+    }
+    {
+        hash<auto> h = {};
+        h.k = ESL::B;
+        auto r;
+        try { r = (h.k =~ s/a/X/); rv."rs-rv" = ok(h.k) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."rs-rv" = err(ex, h.k) + "|" + q(r); }
+    }
+    {
+        hash<auto> h = {};
+        h.k = ESL::B;
+        auto r;
+        try { r = (h.k =~ tr/a-z/A-Z/); rv."tl-rv" = ok(h.k) + "|" + q(r); }
+        catch (hash<ExceptionInfo> ex) { rv."tl-rv" = err(ex, h.k) + "|" + q(r); }
+    }
+    return rv;
+}
+
+# the checks
+print_results("ess-local-in", ess_local_in());
+print_results("ess-closure-in", ess_closure_in());
+print_results("ess-global-in", ess_global_in());
+print_results("ess-member-in", ess_member_in());
+print_results("ess-hashdecl-in", ess_hashdecl_in());
+print_results("ess-hash-in", ess_hash_in());
+print_results("ess-hash-dyn-in", ess_hash_dyn_in());
+print_results("ess-list-in", ess_list_in());
+print_results("ess-ref-in", ess_ref_in());
+print_results("ess-self-in", ess_self_in());
+print_results("ess-local-out", ess_local_out());
+print_results("ess-local-loop", ess_local_loop());
+print_results("ess-params", ess_params());
+print_results("esl-local-in", esl_local_in());
+print_results("esl-closure-in", esl_closure_in());
+print_results("esl-global-in", esl_global_in());
+print_results("esl-member-in", esl_member_in());
+print_results("esl-hashdecl-in", esl_hashdecl_in());
+print_results("esl-hash-in", esl_hash_in());
+print_results("esl-hash-dyn-in", esl_hash_dyn_in());
+print_results("esl-list-in", esl_list_in());
+print_results("esl-ref-in", esl_ref_in());
+print_results("esl-self-in", esl_self_in());
+print_results("esl-local-out", esl_local_out());
+print_results("esl-local-loop", esl_local_loop());
+print_results("esl-params", esl_params());
+print_results("eslnv-local-in", eslnv_local_in());
+print_results("eslnv-local-or-nothing-in", eslnv_local_or_nothing_in());
+print_results("eslnv-member-in", eslnv_member_in());
+print_results("eslnv-member-or-nothing-in", eslnv_member_or_nothing_in());
+print_results("eslnv-hash-in", eslnv_hash_in());
+print_results("eslnv-global-in", eslnv_global_in());
+print_results("string-in", ctl_string_in());
+print_results("auto-in", ctl_auto_in());
+print_results("auto-short-in", ctl_auto_short_in());
+print_results("auto-hash-in", ctl_auto_hash_in());
+{
+    hash<string, string> rv;
+    {
+        ESL v = ESL::B;
+        try { v =~ s/a/X/; rv.rs = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rs = err(ex, v); }
+    }
+    {
+        ESL v = ESL::B;
+        try { v =~ s/ /_/g; rv.rsg = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.rsg = err(ex, v); }
+    }
+    {
+        ESL v = ESL::B;
+        try { v =~ tr/a-z/A-Z/; rv.tl = ok(v); }
+        catch (hash<ExceptionInfo> ex) { rv.tl = err(ex, v); }
+    }
+    print_results("esl-toplevel", rv);
+}
+printf("es-members=%s\n", replace(sprintf("%y %y", ESS::A, ESL::B), "\n", "\\n"));
