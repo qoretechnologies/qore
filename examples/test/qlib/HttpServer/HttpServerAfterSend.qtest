@@ -542,12 +542,14 @@ l50Xb2GWQesIt9k5jF5IOw==
         Socket client();
         client.connect("127.0.0.1:" + port, 30s);
         on_exit client.close();
-        # the callback reads the complete response from the client socket without waiting: it has been written
+        # the callback reads the complete response from the client socket: it has been written when the callback runs,
+        # but it can take a moment to arrive at the client on a loaded host, so the read waits for it; a response that
+        # is only written after the callback returns is not read before the timeout, and the check fails (qore#6373)
         handler.setOrderProbe(auto sub () {
-            hash<auto> hdr = client.readHTTPHeader(0);
+            hash<auto> hdr = client.readHTTPHeader(30s);
             return {
                 "status_code": hdr.status_code,
-                "body": client.recv(hdr."content-length".toInt(), 0),
+                "body": client.recv(hdr."content-length".toInt(), 30s),
             };
         });
         on_exit handler.setOrderProbe();
