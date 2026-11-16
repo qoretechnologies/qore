@@ -90,8 +90,8 @@ enum Bad {
     Conversions between an enum and its base type are implicit in one direction only:
 
     |!Conversion|!Result
-    |an enum value to its base type, or to a type that the base type converts to (ex: <tt>int i = Color::Red;</tt>)|allowed; the value takes the target type (here \c int), also when it is passed to a parameter of the base type or returned from code declared to return the base type
-    |an enum value to a variable without a type, or of type \c auto|allowed; the value keeps its enum type
+    |an enum value to its base type, or to a type that the base type converts to (ex: <tt>int i = Color::Red;</tt>)|allowed; the value takes the target type (here \c int), also when it is passed to a parameter of the base type, returned from code declared to return the base type, or stored in a container whose value type is the base type (ex: an element of a \c list<int> or a member of a \c hash<string, int> or of a hashdecl, also when it is given in a list or hash literal)
+    |an enum value to a variable without a type, or of type \c auto|allowed; the value keeps its enum type, as it does in a container whose value type is \c auto (ex: a \c list<auto>)
     |a value of the base type to an enum-typed variable or parameter (ex: <tt>Color c = 2;</tt>)|not allowed, even when the value equals the value of a member: a \c PARSE-TYPE-ERROR exception is raised at parse time when the parser knows the value's type; otherwise (ex: an \c auto variable) a \c RUNTIME-TYPE-ERROR exception is raised at run time by an assignment, and a \c RUNTIME-OVERLOAD-ERROR exception by a call
     |a value of another enum type to an enum-typed variable or parameter|not allowed, with the same errors, even when both enums have the same base type
     |a value of the base type with @ref enum_cast "cast<enum<EnumName>>()"|allowed when the value is a member of the enum; otherwise a \c RUNTIME-CAST-ERROR exception is raised at run time

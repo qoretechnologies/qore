@@ -8195,9 +8195,12 @@ void QoreIRLowering::setReferenceLoadExceptionTarget(QoreIRInstruction* load, co
             || (definitely_assigned && facts.type_info
                 && QoreTypeInfo::parseReturns(facts.type_info, NT_NOTHING) == QTI_NOT_EQUAL));
         if (facts.never_nothing && facts.type_info) {
-            if (QoreTypeInfo::isType(facts.type_info, NT_INT)) {
+            // the value of an enum-typed variable is an enum value, not a plain int or float (qore#6274): a native
+            // representation would let a consumer, such as the scalar replacement of a list<int> literal, take it as
+            // a value of the base type
+            if (QoreTypeInfo::isPlainType(facts.type_info, NT_INT)) {
                 facts.representation = QoreIRValueRepresentation::NativeInt;
-            } else if (QoreTypeInfo::isType(facts.type_info, NT_FLOAT)) {
+            } else if (QoreTypeInfo::isPlainType(facts.type_info, NT_FLOAT)) {
                 facts.representation = QoreIRValueRepresentation::NativeFloat;
             } else if (QoreTypeInfo::isType(facts.type_info, NT_BOOLEAN)) {
                 facts.representation = QoreIRValueRepresentation::NativeBool;

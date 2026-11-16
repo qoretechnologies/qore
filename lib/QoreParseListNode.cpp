@@ -135,7 +135,7 @@ int QoreParseListNode::parseInitIntern(bool& needs_eval, QoreParseContext& parse
             if (vt != vtype && (qore_type_contains_type_parameter(vtype) || qore_type_contains_type_parameter(vt))) {
                 vtype = nullptr;
                 vcommon = false;
-            } else if (!QoreTypeInfo::matchCommonType(vtype, vt)) {
+            } else if (!QoreTypeInfo::matchLiteralCommonType(vtype, vt)) {
                 vcommon = false;
             }
         }
@@ -230,7 +230,7 @@ QoreValue QoreParseListNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
         if (!i) {
             vtype = vt;
             vcommon = true;
-        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
+        } else if (vcommon && !QoreTypeInfo::matchLiteralCommonType(vtype, vt)) {
             vcommon = false;
         }
 

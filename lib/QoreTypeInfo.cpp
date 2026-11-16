@@ -5114,11 +5114,11 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
         }
         case QTS_TYPE: {
             qore_type_t t = n.getType();
-            // Unwrap TAG_ENUM to base type only for direct lvalue/parameter assignments
-            // (e.g. "string s = EnumVal"), NOT for hash key or member assignments where
-            // the TAG_ENUM must be preserved through containers for later typed retrieval
-            if (n.isEnum() && u.t != NT_ALL
-                && strcmp(arg_type, "key") && strcmp(arg_type, "member")) {
+            // an enum value accepted by a plain type (e.g. "string s = EnumVal") is converted to its base value,
+            // whatever stores it: a variable, a parameter, a member, or a hash key or list element of a container
+            // whose value type is the plain type, as an assignment to the container's element converts it; only an
+            // enum type or auto keeps the enum value (qore#6274)
+            if (n.isEnum() && u.t != NT_ALL) {
                 QoreValue base_val = n.getEnumMember()->getValue();
                 base_val.ref();
                 n.discard(xsink);
@@ -7805,9 +7805,12 @@ static bool qore_retype_element_accepted(QoreValue& v, const QoreTypeInfo* elem_
     }
     // an element that is accepted only through a conversion (a soft type given a string, a float given an int, ...)
     // is converted as an assignment converts it; only an element that already has the type is left as it is, or
-    // the container would be stamped with an element type that its element does not have
+    // the container would be stamped with an element type that its element does not have; an enum value is
+    // converted to its base value by an element type of its base type, although that type is a superset of the
+    // enum's type (qore#6274)
     qore_type_result_e rv = policy.value(elem_ti, v, false);
-    if (rv == QTI_IDENT || (rv != QTI_NOT_EQUAL && QoreTypeInfo::superSetOf(elem_ti, v.getTypeInfo()))) {
+    if (!v.isEnum()
+            && (rv == QTI_IDENT || (rv != QTI_NOT_EQUAL && QoreTypeInfo::superSetOf(elem_ti, v.getTypeInfo())))) {
         return true;
     }
     if (key) {

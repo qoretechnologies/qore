@@ -1068,6 +1068,37 @@ public:
     // check for a common type
     DLLLOCAL static bool matchCommonType(const QoreTypeInfo*& ctype, const QoreTypeInfo* ntype);
 
+    //! matchCommonType() for the value type of a list or hash literal (qore#6274)
+    /** An enum value is not a value of its base type, although the base type accepts it, and a container whose value
+        type is the base type converts it to its base value: the values of an enum type and of another type (other
+        than \c NOTHING) have no common type, so that a literal that is not stored in a container of a declared type
+        keeps its enum values, and a container of a declared type converts them when they are stored in it
+    */
+    DLLLOCAL static bool matchLiteralCommonType(const QoreTypeInfo*& ctype, const QoreTypeInfo* ntype) {
+        if (ctype && ctype != anyTypeInfo && ctype != ntype && hasType(ntype)) {
+            const QoreEnumDecl* cenum = getAnyReturnEnum(ctype);
+            const QoreEnumDecl* nenum = getAnyReturnEnum(ntype);
+            if (cenum != nenum && !isType(ctype, NT_NOTHING) && !isType(ntype, NT_NOTHING)) {
+                ctype = autoTypeInfo;
+                return false;
+            }
+        }
+        return matchCommonType(ctype, ntype);
+    }
+
+    //! returns the enum of any return type of the type, if any
+    DLLLOCAL static const QoreEnumDecl* getAnyReturnEnum(const QoreTypeInfo* ti) {
+        if (!hasType(ti)) {
+            return nullptr;
+        }
+        for (const QoreReturnSpec& i : ti->return_vec) {
+            if (const QoreEnumDecl* ed = i.spec.getEnum()) {
+                return ed;
+            }
+        }
+        return nullptr;
+    }
+
     //! returns true if ti could return a complex type
     DLLLOCAL static bool isComplex(const QoreTypeInfo* ti) {
         if (!ti)

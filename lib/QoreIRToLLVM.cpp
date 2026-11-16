@@ -15511,7 +15511,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         }
                         if (!common_type) {
                             common_type = element_type;
-                        } else if (!QoreTypeInfo::matchCommonType(
+                        } else if (!QoreTypeInfo::matchLiteralCommonType(
                                 common_type, element_type)) {
                             common_type = autoTypeInfo;
                             break;
