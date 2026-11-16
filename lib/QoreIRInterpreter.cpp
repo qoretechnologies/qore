@@ -7908,13 +7908,44 @@ static QORE_INTERN_NOINLINE bool qore_ir_call_target_cache_hit(const QoreIRFunct
 /** Out of line and without state of the interpreter's frame, which is at its stack budget
     (tools/stack-usage-budgets.txt)
 */
+//! the arguments of the call that makes the check of its target after them (QoreIRInstruction::fused_call_check)
+struct QoreIRCallArgs {
+    const QoreIRInstruction* check;
+    const QoreIRInstruction* call;
+    const IRValueSlots& values;
+};
+
+//! builds the list of the arguments of a call that makes the check of its target (see QoreCallArgsSource): the
+//! operands of the call, after the receiver of a call on an object, which is the target of the check (operand 0 of
+//! the call); a call through self has no receiver operand, and its check has no target operand
+static QoreListNode* qore_ir_build_call_args(const void* ctx) {
+    const QoreIRCallArgs& call_args = *static_cast<const QoreIRCallArgs*>(ctx);
+    const QoreIRInstruction* call = call_args.call;
+    size_t first = call_args.check->operands.empty() ? 0 : 1;
+    if (call->operands.size() <= first) {
+        return nullptr;
+    }
+    QoreListNode* l = new QoreListNode(autoTypeInfo);
+    for (size_t i = first; i < call->operands.size(); ++i) {
+        QoreValue arg = getIRValue(call_args.values, call->operands[i]);
+        l->push(arg.needsRef() ? arg.refSelf() : arg, nullptr);
+    }
+    return l;
+}
+
 static QORE_INTERN_NOINLINE bool qore_ir_call_target_check_slow(const QoreIRFunction& func,
-        const QoreIRExprInstruction* ei, const QoreValue& target, ExceptionSink* xsink) {
+        const QoreIRExprInstruction* ei, const QoreValue& target, const QoreIRInstruction* call,
+        const IRValueSlots& values, ExceptionSink* xsink) {
     if (qore_ir_call_target_cache_hit(func, ei, target)) {
         return true;
     }
-    return !(ei->check_after_args ? qore_check_call_target_after_args(ei->expr, target, xsink)
-        : qore_check_call_target(ei->expr, target, xsink));
+    if (!ei->check_after_args) {
+        return !qore_check_call_target(ei->expr, target, xsink);
+    }
+    // the check after the arguments raises the error of the variant that the call resolves with them (issue #5824)
+    QoreIRCallArgs call_args{ei, call, values};
+    return !qore_check_call_target_after_args(ei->expr, target,
+        call ? QoreCallArgsSource{qore_ir_build_call_args, &call_args} : QoreCallArgsSource(), xsink);
 }
 
 // Drop duplicate runtime-local owners before each handler, including values written back by its predecessor.
@@ -10227,7 +10258,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // makes the check of a call's target (QoreIROpcode::CheckCallTarget, or the check that a call makes itself, see
     // QoreIRInstruction::fused_call_check); returns false if it raised an exception (issues #5784, #5823, #5824)
     // the common case, an object of the method's class that has not been deleted, is decided inline
-    auto call_target_check_ok = [&](const QoreIRInstruction* check_inst) QORE_IR_LAMBDA_INLINE -> bool {
+    auto call_target_check_ok = [&](const QoreIRInstruction* check_inst, const QoreIRInstruction* call_inst = nullptr)
+            QORE_IR_LAMBDA_INLINE -> bool {
         const QoreIRExprInstruction* ei = static_cast<const QoreIRExprInstruction*>(check_inst);
         if (check_inst->operands.empty()) {
             // no operand: the call is made through self, on the current object (issue #5823), which does not change
@@ -10243,7 +10275,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 return true;
             }
             return qore_ir_call_target_check_slow(func, ei, frame_self
-                ? QoreValue(static_cast<AbstractQoreNode*>(frame_self)) : QoreValue(), xsink);
+                ? QoreValue(static_cast<AbstractQoreNode*>(frame_self)) : QoreValue(), call_inst, values, xsink);
         }
         QoreValue target = getIRValue(values, check_inst->operands.front());
         const AbstractQoreNode* target_node = target.isPointer() ? target.getPtr() : nullptr;
@@ -10252,7 +10284,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     ei->check_class, ei->check_method_class, ei->check_any_class)) {
             return true;
         }
-        return qore_ir_call_target_check_slow(func, ei, target, xsink);
+        return qore_ir_call_target_check_slow(func, ei, target, call_inst, values, xsink);
     };
     debug_active = can_debug && tlpd->runtimeCheck();
     // the state of the debugger's events of the frame (see QoreIRDebugFrameState)
@@ -11982,7 +12014,7 @@ next_instruction:
                 // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
                 // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
                 // operands after the switch
-                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get(), inst)) {
                     inst = inst->fused_call_check.get();
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
@@ -17398,9 +17430,9 @@ load_local_done:
                 // node and stores it through to the local.
                 bool in_place = inst->string_append_in_place
                     && left.getType() == NT_STRING
-                    && !left.isShortString()
-                    // an enum value does not own its member's string (see qore_enum_value_copy_for_write())
-                    && !left.isEnum()
+                    // a string node held as an ordinary pointer: not an inline short string, and not an enum value,
+                    // which does not own its member's string (see qore_enum_value_copy_for_write())
+                    && left.isPlainPointer()
                     && left.get<QoreStringNode>()->is_unique();
                 QoreValue result = in_place
                     ? fromBits(qore_rt_string_append_in_place(
@@ -19487,7 +19519,7 @@ load_local_done:
                 // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
                 // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
                 // operands after the switch
-                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get(), inst)) {
                     inst = inst->fused_call_check.get();
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
@@ -19701,7 +19733,7 @@ load_local_done:
                 // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
                 // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
                 // operands after the switch
-                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get(), inst)) {
                     inst = inst->fused_call_check.get();
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
@@ -19831,7 +19863,7 @@ load_local_done:
                 // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
                 // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
                 // operands after the switch
-                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get(), inst)) {
                     inst = inst->fused_call_check.get();
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
@@ -19983,7 +20015,7 @@ load_local_done:
                 // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
                 // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
                 // operands after the switch
-                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get(), inst)) {
                     inst = inst->fused_call_check.get();
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
@@ -20071,7 +20103,7 @@ load_local_done:
                 // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
                 // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
                 // operands after the switch
-                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get(), inst)) {
                     inst = inst->fused_call_check.get();
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);

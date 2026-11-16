@@ -99,7 +99,9 @@ def sources(test):
 
 
 # a child process of the test's own binary: QORE_ARGV[0] given to a command it runs (strings and comments do not count)
-CHILD_BINARY = re.compile(r"\bQORE_ARGV\[0\]")
+# the test's own binary: QORE_ARGV[0], or the interpreter that examples/test/TestInterpreter.qm locates for it (which is
+# QORE_ARGV[0] in an interpreted test, and never the executable of a test compiled with qcc)
+CHILD_BINARY = re.compile(r"\bQORE_ARGV\[0\]|\bTestInterpreter::qore_interpreter\s*\(")
 
 
 def starts_children(test):
@@ -223,6 +225,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   executables
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
         #   under valgrind
+        # - float-int-conversion (#6181): its probes run in child processes that set their own --exec-mode and in qcc
+        #   executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
@@ -232,6 +236,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
                                  "examples/test/qore/classes/explicit-type-param-method-call.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",
+                                 "examples/test/qore/operators/float-int-conversion.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",

@@ -2543,8 +2543,55 @@ static const QoreValue* qore_ir_fusable_method_call_expr(const QoreIRInstruction
     }
 }
 
+//! true if @a call is the method call (a dot or self call; not a call reference) that makes the check @a check of its
+//! target when the check is fused into it
+static bool qore_ir_check_fuses_into(const QoreIRInstruction* check, const QoreIRInstruction* call) {
+    const QoreValue& check_expr = static_cast<const QoreIRExprInstruction*>(check)->expr;
+    const QoreValue* call_expr = qore_ir_fusable_method_call_expr(call);
+    return call_expr && check_expr.isPointer() && call_expr->isPointer() && check_expr.getType() != NT_FUNCREFCALL
+        && call_expr->getInternalNode() == check_expr.getInternalNode();
+}
+
+const QoreIRInstruction* qore_ir_call_of_target_check(const QoreIRInstruction* check, const QoreIRInstruction* next) {
+    return check && next && check->opcode == QoreIROpcode::CheckCallTarget && qore_ir_check_fuses_into(check, next)
+        ? next : nullptr;
+}
+
+static size_t qore_ir_fuse_call_target_checks_intern(QoreIRFunction& func,
+        std::unordered_set<const QoreIRFunction*>& visited);
+
 size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func) {
+    std::unordered_set<const QoreIRFunction*> visited;
+    return qore_ir_fuse_call_target_checks_intern(func, visited);
+}
+
+static size_t qore_ir_fuse_call_target_checks_intern(QoreIRFunction& func,
+        std::unordered_set<const QoreIRFunction*>& visited) {
+    if (!visited.insert(&func).second) {
+        // a handler shared by more than one block exit (#6087)
+        return 0;
+    }
     size_t count = 0;
+    // the helpers of background expressions and the handlers of block exits, which the interpreter runs as functions
+    // of their own, as the function itself (issue #5824: the check after the arguments of a call takes the call's
+    // arguments from the call that makes it)
+    for (auto& block : func.blocks) {
+        for (auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::BackgroundInt) {
+                // a background call of a function, of a closure or of a resolved self or static method is an
+                // expression instruction with the same opcode (see QoreIRLowering::lowerExprOpOrInvoke())
+                auto* bi = qore_ir_inst_cast<QoreIRBackgroundInstruction*>(inst.get());
+                if (bi && bi->helper_ir) {
+                    count += qore_ir_fuse_call_target_checks_intern(*bi->helper_ir, visited);
+                }
+            } else if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
+                if (obei->handler_ir) {
+                    count += qore_ir_fuse_call_target_checks_intern(*obei->handler_ir, visited);
+                }
+            }
+        }
+    }
     // the check of a method call's target directly before the call (after its arguments) goes into the call, which
     // makes it: the IR interpreter makes no instruction of its own for it (issue #5824)
     for (auto& block : func.blocks) {
@@ -2553,13 +2600,9 @@ size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func) {
             const QoreIRInstruction* check = insts[i].get();
             QoreIRInstruction* call = insts[i + 1].get();
             if (check->opcode == QoreIROpcode::CheckCallTarget && !call->fused_call_check) {
-                const QoreValue& check_expr = static_cast<const QoreIRExprInstruction*>(check)->expr;
-                const QoreValue* call_expr = qore_ir_fusable_method_call_expr(call);
                 // the check of a method call (a dot or self call; not of a call reference) and the call of the same
                 // expression
-                if (call_expr && check_expr.isPointer() && call_expr->isPointer()
-                        && check_expr.getType() != NT_FUNCREFCALL
-                        && call_expr->getInternalNode() == check_expr.getInternalNode()) {
+                if (qore_ir_check_fuses_into(check, call)) {
                     call->fused_call_check = std::move(insts[i]);
                     insts.erase(insts.begin() + i);
                     ++count;
@@ -10299,6 +10342,19 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
         }
         if (inst->opcode == QoreIROpcode::LoadLocal
                 || inst->opcode == QoreIROpcode::LoadClosure) {
+            return true;
+        }
+        // the fused int updates of a local, as in qore_ir_refine_local_value_facts(): an increment (++i, i++ and
+        // i += 1, the update of a for loop) keeps an assigned local assigned, and an addition of another local keeps
+        // it assigned when both are; they change no other local
+        if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+            return true;
+        }
+        if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+            const auto* add = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+            if (add->target && (!known.count(add->target) || !add->source || !known.count(add->source))) {
+                known.erase(add->target);
+            }
             return true;
         }
 

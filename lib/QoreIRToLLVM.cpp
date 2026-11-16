@@ -471,6 +471,7 @@ static bool isFastMethodCallEligible(
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/MDBuilder.h>
+#include <llvm/IR/IntrinsicsX86.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <limits>
@@ -799,6 +800,58 @@ static bool qore_ir_value_has_input_identical_type(
         return false;
     }
     return QoreTypeInfo::isInputIdentical(target_type, source_type);
+}
+
+size_t QoreIRToLLVM::expandFloatToIntForTarget(llvm::Module& module, const llvm::Triple& triple) {
+    if (triple.getArch() != llvm::Triple::x86_64) {
+        return 0;
+    }
+    llvm::LLVMContext& c = module.getContext();
+    llvm::Type* i64 = llvm::Type::getInt64Ty(c);
+    llvm::Type* dbl = llvm::Type::getDoubleTy(c);
+    std::vector<llvm::CallInst*> calls;
+    for (llvm::Function& function : module) {
+        for (llvm::BasicBlock& bb : function) {
+            for (llvm::Instruction& inst : bb) {
+                auto* call = llvm::dyn_cast<llvm::CallInst>(&inst);
+                if (call && call->getIntrinsicID() == llvm::Intrinsic::fptosi_sat && call->getType() == i64
+                        && call->getArgOperand(0)->getType() == dbl) {
+                    calls.push_back(call);
+                }
+            }
+        }
+    }
+    for (llvm::CallInst* call : calls) {
+        llvm::BasicBlock* head = call->getParent();
+        llvm::Function* function = head->getParent();
+        // the call and the instructions after it move to the tail; the successors' PHIs are updated
+        llvm::BasicBlock* tail = head->splitBasicBlock(call->getIterator(), "f2i.cont");
+        llvm::BasicBlock* cold = llvm::BasicBlock::Create(c, "f2i.sat", function, tail);
+        llvm::Instruction* head_br = head->getTerminator();
+        llvm::IRBuilder<> b(head_br);
+        llvm::Value* vec = b.CreateInsertElement(llvm::PoisonValue::get(llvm::FixedVectorType::get(dbl, 2)),
+            call->getArgOperand(0), static_cast<uint64_t>(0));
+        // cvttsd2si: the integer indefinite value 0x8000000000000000 for NaN and a value out of the range
+        llvm::Value* raw = b.CreateIntrinsic(llvm::Intrinsic::x86_sse2_cvttsd2si64, {}, {vec}, nullptr, "f2i");
+        llvm::Value* sentinel = b.CreateICmpEQ(raw,
+            llvm::ConstantInt::get(i64, static_cast<uint64_t>(1) << 63));
+        b.CreateCondBr(sentinel, cold, tail, llvm::MDBuilder(c).createBranchWeights(1, 1 << 20));
+        head_br->eraseFromParent();
+        // the saturating conversion in the cold block, also for -2^63, which gives the sentinel as its result
+#if LLVM_VERSION_MAJOR >= 19
+        call->moveBefore(*cold, cold->end());
+        llvm::BranchInst::Create(tail, cold);
+        llvm::PHINode* phi = llvm::PHINode::Create(i64, 2, "f2i.res", tail->begin());
+#else
+        llvm::BranchInst* cold_br = llvm::BranchInst::Create(tail, cold);
+        call->moveBefore(cold_br);
+        llvm::PHINode* phi = llvm::PHINode::Create(i64, 2, "f2i.res", &tail->front());
+#endif
+        call->replaceAllUsesWith(phi);
+        phi->addIncoming(raw, head);
+        phi->addIncoming(call, cold);
+    }
+    return calls.size();
 }
 
 size_t QoreIRToLLVM::pruneNoopDecrefs(llvm::Module& module) {
@@ -2224,6 +2277,93 @@ llvm::Value* QoreIRToLLVM::emitCallTargetFastTest(const QoreIRExprInstruction* c
 }
 
 // documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::emitCallTargetCheckHelper(const QoreIRExprInstruction* check, uint64_t call_bits, int32_t slot,
+        llvm::Value* target, llvm::Module& module, llvm::Function* llvm_func, std::string& error) {
+    if (!check->check_after_args) {
+        if (aot_mode) {
+            auto helper = module.getOrInsertFunction("qore_rt_check_call_target_aot",
+                llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
+            builder->CreateCall(helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), target, xsink_arg});
+        } else {
+            auto helper = module.getOrInsertFunction("qore_rt_check_call_target",
+                llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
+            builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, call_bits), target, xsink_arg});
+        }
+        return true;
+    }
+    // the check after the arguments raises the error of a call whose arguments deleted the object, which names the
+    // class of the variant that the call resolves with its arguments: they are passed to the helper, which is only
+    // called when the fast test did not decide the check (issue #5824); the operands of the call, after the receiver
+    // of a call on an object, which is the target of the check (operand 0 of the call); a call through self has no
+    // receiver operand, and its check has no target operand
+    llvm::Value* args = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    llvm::Value* kinds = args;
+    // -1: the call is not known
+    int nargs = -1;
+    if (fused_check_call) {
+        nargs = 0;
+        size_t first = check->operands.empty() ? 0 : 1;
+        const auto& operands = fused_check_call->operands;
+        if (operands.size() > first) {
+            nargs = static_cast<int>(operands.size() - first);
+            // in the entry block, so that the array is not allocated again in a loop
+            llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+            llvm::AllocaInst* arr = ab.CreateAlloca(llvm::ArrayType::get(i64_type, nargs), nullptr,
+                "call.target.check.args");
+            // the values are passed as they are, with the kind of each (QoreCompiledCallArgKind), which the helper
+            // converts: boxing them here would add code (the branches of boxing an int) that the optimizer merges
+            // with the boxing of the call's arguments, changing the code of the call that every iteration runs
+            std::vector<uint8_t> arg_kinds(nargs);
+            for (int i = 0; i < nargs; ++i) {
+                uint32_t id = operands[first + i].id;
+                llvm::Value* val = getVal(id, error);
+                if (!val) {
+                    return false;
+                }
+                llvm::Value* raw = val;
+                arg_kinds[i] = QORE_COMPILED_CALL_ARG_BOXED;
+                // a native value read from a boxed one (a list element, for example) is passed as the boxed value
+                // that it was read from, which the call's code has anyway: the native value can be computed only
+                // where the call's code needs it
+                auto boxed_source = nanboxed_values.count(id) ? native_boxed_sources.end()
+                    : native_boxed_sources.find(id);
+                if (boxed_source != native_boxed_sources.end()) {
+                    raw = boxed_source->second;
+                } else if (!nanboxed_values.count(id)) {
+                    if (val->getType() == double_type) {
+                        raw = builder->CreateBitCast(val, i64_type);
+                        arg_kinds[i] = QORE_COMPILED_CALL_ARG_FLOAT;
+                    } else if (val->getType() == i1_type) {
+                        raw = builder->CreateZExt(val, i64_type);
+                        arg_kinds[i] = QORE_COMPILED_CALL_ARG_BOOL;
+                    } else if (val->getType() == i64_type) {
+                        arg_kinds[i] = QORE_COMPILED_CALL_ARG_INT;
+                    }
+                }
+                builder->CreateStore(raw, builder->CreateConstGEP2_32(arr->getAllocatedType(), arr, 0, i));
+            }
+            args = arr;
+            llvm::Constant* kinds_data = llvm::ConstantDataArray::get(ctx, arg_kinds);
+            kinds = new llvm::GlobalVariable(module, kinds_data->getType(), true,
+                llvm::GlobalValue::PrivateLinkage, kinds_data, "call.target.check.arg.kinds");
+        }
+    }
+    if (aot_mode) {
+        auto helper = module.getOrInsertFunction("qore_rt_check_call_target_after_args_aot",
+            llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type, ptr_type, i32_type, ptr_type},
+                false));
+        builder->CreateCall(helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), target, args, kinds,
+            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+    } else {
+        auto helper = module.getOrInsertFunction("qore_rt_check_call_target_after_args",
+            llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+        builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, call_bits), target, args, kinds,
+            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+    }
+    return true;
+}
+
+// documented in QoreIRToLLVM.h
 llvm::Value* QoreIRToLLVM::needsRefInline(llvm::Value* qv) {
     // a pointer (0xFFFA), an inline enum value (0xFFFD), which holds its declaration, or an opaque reference (the
     // 0xFFD tag family), as QoreValue::needsRef() and ReleaseOwnedTemp
@@ -2593,6 +2733,13 @@ llvm::Value* QoreIRToLLVM::ensureIntType(llvm::Value* val, uint32_t value_id) {
     llvm::Value* result = builder->CreateCall(to_int, {val});
     cacheStableConversion(value_id, result, stable_int_conversions);
     return result;
+}
+
+llvm::Value* QoreIRToLLVM::createFloatToInt(llvm::Value* val) {
+    if (val->getType() != double_type) {
+        val = builder->CreateFPCast(val, double_type);
+    }
+    return builder->CreateIntrinsic(llvm::Intrinsic::fptosi_sat, {i64_type, double_type}, {val});
 }
 
 // Inline fast-path for ensureIntType: check INT48 tag inline, call runtime only for big ints.
@@ -16266,10 +16413,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
         }
 
-        for (const auto& inst_ptr : block->instructions) {
-            const QoreIRInstruction* inst = inst_ptr.get();
+        for (size_t inst_index = 0; inst_index < block->instructions.size(); ++inst_index) {
+            const QoreIRInstruction* inst = block->instructions[inst_index].get();
             if (!inst) {
                 continue;
+            }
+            // a check of a call's target that is not fused into its call (native code generation does not fuse
+            // them) takes the arguments of the call that follows it for the check after them (issue #5824)
+            if (inst->opcode == QoreIROpcode::CheckCallTarget
+                    && static_cast<const QoreIRExprInstruction*>(inst)->check_after_args) {
+                fused_check_call = inst_index + 1 < block->instructions.size()
+                    ? qore_ir_call_of_target_check(inst, block->instructions[inst_index + 1].get()) : nullptr;
             }
             const QoreIRStringConsumerCallInstruction* string_consumer_call =
                 nullptr;
@@ -16434,10 +16588,14 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // a call site and the frame that takes it, so the call site is otherwise always clear
             // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check; issue
             // #5824), made before the call as the instruction that it was
-            if (inst->fused_call_check
-                    && !lowerInstruction(inst->fused_call_check.get(), llvm_func, module, error)) {
-                appendQoreIRInstructionDiagnostic(error, inst->fused_call_check.get());
-                return false;
+            if (inst->fused_call_check) {
+                fused_check_call = inst;
+                bool lowered = lowerInstruction(inst->fused_call_check.get(), llvm_func, module, error);
+                fused_check_call = nullptr;
+                if (!lowered) {
+                    appendQoreIRInstructionDiagnostic(error, inst->fused_call_check.get());
+                    return false;
+                }
             }
             const bool call_site = qore_llvm_inst_is_call(inst);
             if (call_site) {
@@ -16691,7 +16849,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     } else if (val->getType()->isIntegerTy()) {
                         val = builder->CreateSExtOrTrunc(val, i64_type);
                     } else if (val->getType()->isFloatingPointTy()) {
-                        val = builder->CreateFPToSI(val, i64_type);
+                        val = createFloatToInt(val);
                     } else {
                         error = "PHI native-int incoming has unsupported LLVM type";
                         return false;
@@ -17272,8 +17430,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // a native float or bool is never a reference; it is converted as getAsBigInt() converts it
             if (native_float_locals.count(key)) {
                 // raw local cache: a native double
-                return builder->CreateFPToSI(builder->CreateLoad(double_type, alloca_it->second.storage(), name),
-                    i64_type);
+                return createFloatToInt(builder->CreateLoad(double_type, alloca_it->second.storage(), name));
             }
             if (native_bool_locals.count(key)) {
                 // raw local cache: a native bool
@@ -18181,13 +18338,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ? ensureIntTypeInline(val, inst->operands[0].id)
                     : val;
             } else if (val->getType() == double_type) {
-                values[inst->result.id] = builder->CreateFPToSI(val, i64_type);
+                values[inst->result.id] = createFloatToInt(val);
             } else if (val->getType() == i1_type) {
                 values[inst->result.id] = builder->CreateZExt(val, i64_type);
             } else if (val->getType()->isIntegerTy()) {
                 values[inst->result.id] = builder->CreateSExtOrTrunc(val, i64_type);
             } else if (val->getType()->isFloatingPointTy()) {
-                values[inst->result.id] = builder->CreateFPToSI(val, i64_type);
+                values[inst->result.id] = createFloatToInt(val);
             } else {
                 error = "unsupported type for ToInt lowering";
                 return false;
@@ -36540,21 +36697,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 immediate_dominator[cont_block] = builder->GetInsertBlock();
                 builder->CreateCondBr(self_valid, cont_block, check_block);
                 builder->SetInsertPoint(check_block);
-                // the check after the arguments raises the error of a call whose arguments deleted the object
-                const bool after_args = static_cast<const QoreIRExprInstruction*>(inst)->check_after_args;
-                if (aot_mode) {
-                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(self_call_bits);
-                    auto helper = module.getOrInsertFunction(after_args ? "qore_rt_check_call_target_after_args_aot"
-                            : "qore_rt_check_call_target_aot",
-                        llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
-                    builder->CreateCall(helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
-                        current_self_bits, xsink_arg});
-                } else {
-                    auto helper = module.getOrInsertFunction(after_args ? "qore_rt_check_call_target_after_args"
-                            : "qore_rt_check_call_target",
-                        llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
-                    builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, self_call_bits), current_self_bits,
-                        xsink_arg});
+                int32_t slot = aot_mode ? const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(self_call_bits) : -1;
+                if (!emitCallTargetCheckHelper(static_cast<const QoreIRExprInstruction*>(inst), self_call_bits, slot,
+                        current_self_bits, module, llvm_func, error)) {
+                    return false;
                 }
                 emitExceptionCheck(module, llvm_func, inst);
                 builder->CreateBr(cont_block);
@@ -36609,19 +36755,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             release_boxed();
             builder->CreateBr(cont_block);
             builder->SetInsertPoint(check_block);
-            // the check after the arguments raises the error of a call whose arguments deleted the object
-            const bool after_args = static_cast<const QoreIRExprInstruction*>(inst)->check_after_args;
-            if (aot_mode) {
-                auto helper = module.getOrInsertFunction(after_args ? "qore_rt_check_call_target_after_args_aot"
-                        : "qore_rt_check_call_target_aot",
-                    llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
-                builder->CreateCall(helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), boxed,
-                    xsink_arg});
-            } else {
-                auto helper = module.getOrInsertFunction(after_args ? "qore_rt_check_call_target_after_args"
-                        : "qore_rt_check_call_target",
-                    llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
-                builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, call_bits), boxed, xsink_arg});
+            if (!emitCallTargetCheckHelper(static_cast<const QoreIRExprInstruction*>(inst), call_bits, slot, boxed,
+                    module, llvm_func, error)) {
+                return false;
             }
             release_boxed();
             emitExceptionCheck(module, llvm_func, inst);

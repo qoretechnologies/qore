@@ -161,6 +161,13 @@ bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8
 */
 size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func);
 
+//! Returns @a next if it is the call that makes the check of its target @a check (a CheckCallTarget) when the check is
+//! fused into it (see qore_ir_fuse_call_target_checks()): the method call of the same expression; otherwise nullptr
+/** Native code generation, which does not fuse the checks, takes the arguments of the call for the check after them
+    from it (issue #5824).
+*/
+const QoreIRInstruction* qore_ir_call_of_target_check(const QoreIRInstruction* check, const QoreIRInstruction* next);
+
 struct QoreIROptimizationStats {
     size_t loops_analyzed = 0;
     size_t instructions_hoisted = 0;

@@ -1,0 +1,21 @@
+round 0
+class of the call: OBJECT-ALREADY-DELETED: cannot call X::m(int i) on an object that has already been deleted
+subclass with an override: OBJECT-ALREADY-DELETED: cannot call Y::m() on an object that has already been deleted
+subclass without an override: OBJECT-ALREADY-DELETED: cannot call Y2::m() on an object that has already been deleted
+abstract, class of the call: OBJECT-ALREADY-DELETED: cannot call PID::n() on an object that has already been deleted
+abstract, subclass with an override: OBJECT-ALREADY-DELETED: cannot call PIE::n() on an object that has already been deleted
+abstract, subclass without an override: OBJECT-ALREADY-DELETED: cannot call PIE2::n() on an object that has already been deleted
+round 1
+class of the call: OBJECT-ALREADY-DELETED: cannot call X::m(int i) on an object that has already been deleted
+subclass with an override: OBJECT-ALREADY-DELETED: cannot call Y::m() on an object that has already been deleted
+subclass without an override: OBJECT-ALREADY-DELETED: cannot call Y2::m() on an object that has already been deleted
+abstract, class of the call: OBJECT-ALREADY-DELETED: cannot call PID::n() on an object that has already been deleted
+abstract, subclass with an override: OBJECT-ALREADY-DELETED: cannot call PIE::n() on an object that has already been deleted
+abstract, subclass without an override: OBJECT-ALREADY-DELETED: cannot call PIE2::n() on an object that has already been deleted
+round 2
+class of the call: OBJECT-ALREADY-DELETED: cannot call X::m(int i) on an object that has already been deleted
+subclass with an override: OBJECT-ALREADY-DELETED: cannot call Y::m() on an object that has already been deleted
+subclass without an override: OBJECT-ALREADY-DELETED: cannot call Y2::m() on an object that has already been deleted
+abstract, class of the call: OBJECT-ALREADY-DELETED: cannot call PID::n() on an object that has already been deleted
+abstract, subclass with an override: OBJECT-ALREADY-DELETED: cannot call PIE::n() on an object that has already been deleted
+abstract, subclass without an override: OBJECT-ALREADY-DELETED: cannot call PIE2::n() on an object that has already been deleted

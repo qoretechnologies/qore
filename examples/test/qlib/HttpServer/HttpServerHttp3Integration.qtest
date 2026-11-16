@@ -907,6 +907,8 @@ l50Xb2GWQesIt9k5jF5IOw==
                 "logger": logger,
                 "request_timeout": 10s,
                 "connect_timeout": 5s,
+                # the request after the server's shutdown is not repeated: it fails at the first attempt
+                "max_request_retries": 0,
             },
         );
         on_exit mgr.closeAll();
@@ -917,18 +919,40 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Now shut down the server gracefully (which triggers GOAWAY)
         delete server;
+        # no other server can take the freed port and answer the request below (#6215)
+        Socket port_hold = holdFreedPort(port);
+        on_exit port_hold.close();
 
         # After server shutdown, the next request should fail
         bool got_error = False;
+        *hash<auto> unexpected;
         try {
-            mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
+            unexpected = mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
         } catch (hash<ExceptionInfo> ex) {
             got_error = True;
             if (m_options.verbose > 1) {
                 printf("testGoawayGracefulShutdown: got expected error: %s: %s\n", ex.err, ex.desc);
             }
         }
-        assertTrue(got_error, "request after GOAWAY shutdown should fail");
+        assertTrue(got_error, sprintf("request after GOAWAY shutdown should fail; got status %y, headers %y",
+            unexpected.status_code, unexpected.headers));
+    }
+
+    #! Holds a UDP port that a server of this case has just freed, until the returned socket is closed (#6215)
+    /** The kernel hands a freed UDP port out again at once, and tests running beside this one start QUIC servers on
+        port 0: one of them could take the port and answer the request that must fail after the server's shutdown.
+        The socket is bound to the port and never read, so nothing answers there.  The case is skipped if the port
+        was taken between the shutdown and the bind.
+    */
+    private Socket holdFreedPort(int port) {
+        Socket sock();
+        try {
+            sock.bindINET("0.0.0.0", string(port), False, AF_INET, SOCK_DGRAM);  # all-interfaces: holds the freed port against servers binding it on any address
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("the freed UDP port %d was taken by another process before it could be held: %s: %s",
+                port, ex.err, ex.desc));
+        }
+        return sock;
     }
 
     testClientGoawayDraining() {
@@ -962,6 +986,8 @@ l50Xb2GWQesIt9k5jF5IOw==
                 "request_timeout": 10s,
                 "connect_timeout": 5s,
                 "max_connections_per_host": 4,
+                # the requests after the server's shutdown are not repeated: they fail at the first attempt
+                "max_request_retries": 0,
             },
         );
         on_exit mgr.closeAll();
@@ -979,13 +1005,17 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Step 2: Trigger GOAWAY via server shutdown
         # HttpServer graceful shutdown sends GOAWAY frames to connected clients
         delete server;
+        # no other server can take the freed port and answer the requests below (#6215)
+        Socket port_hold = holdFreedPort(port);
+        on_exit port_hold.close();
 
         # Step 3: The next request drives I/O on the existing connection, which
         # processes the in-flight GOAWAY frames. The connection transitions to
         # Draining state. The request fails because the server is gone.
         bool got_error = False;
+        *hash<auto> unexpected;
         try {
-            mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
+            unexpected = mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
         } catch (hash<ExceptionInfo> ex) {
             got_error = True;
             if (m_options.verbose > 1) {
@@ -993,7 +1023,8 @@ l50Xb2GWQesIt9k5jF5IOw==
                     ex.err, ex.desc);
             }
         }
-        assertTrue(got_error, "request after server shutdown (GOAWAY) should fail");
+        assertTrue(got_error, sprintf("request after server shutdown (GOAWAY) should fail; got status %y, headers %y",
+            unexpected.status_code, unexpected.headers));
 
         # Step 4: After GOAWAY processing, the connection may still be in the
         # pool (draining/closed) or may have already been removed by the async
