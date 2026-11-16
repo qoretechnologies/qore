@@ -505,7 +505,8 @@ public:
     */
     std::atomic<bool> debugger_terminating{false};
 
-    // for the thread counter, used only with plock
+    // for the thread counter, used only with plock; the structure of the thread containers is changed under the stripe
+    // lock as well (see threadContainerLock())
     QoreCondition pcond;
     ptid_map_t tidmap;           // map of tids -> thread count in program object
     std::set<int> foreign_tids;  // the tids in tidmap of foreign threads
@@ -844,6 +845,40 @@ public:
         return opaque_shards[h >> (64 - OpaqueTargetShardBits)];
     }
 
+    // The containers that record the threads of a Program (tidmap, foreign_tids, parse_tids, deferred_derefs,
+    // pgm_data_map, and the thread-local data registry of a family's root: tld_registry, tld_members) are changed
+    // by many threads under locks of the Program that a child process created with fork() only initializes again
+    // (plock, tlock, tld_lock).  Each change of their structure (an insertion, an erasure, a clear) is also made
+    // under the lock of the Program's stripe, which the fork handlers acquire before fork()
+    // ("program_thread_containers"; QFLM_STRIPED), so that the child never gets one of them in the middle of a
+    // change.  An update of a value in place (a thread's count) changes no structure and needs no stripe lock.
+    //
+    // Each stripe lock is a LEAF lock: it is taken with the Program's own lock held, and nothing else is acquired
+    // while it is held (including another stripe's lock); it is held only around the change itself, never across a
+    // wait or a call into other code.
+    //! one stripe of the thread container locks, on its own cache line
+    struct alignas(64) ThreadContainerShard {
+        std::mutex lock;
+    };
+    //! the number of stripes; a power of two
+    static constexpr unsigned ThreadContainerShardBits = 6;
+    DLLLOCAL static ThreadContainerShard thread_container_shards[1u << ThreadContainerShardBits];
+
+    //! returns the lock of this Program's stripe; see thread_container_shards
+    DLLLOCAL std::mutex& threadContainerLock() const {
+        // Fibonacci hashing, as for the opaque target registry
+        uint64_t h = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this)) * 0x9E3779B97F4A7C15ull;
+        return thread_container_shards[h >> (64 - ThreadContainerShardBits)].lock;
+    }
+
+#ifdef DEBUG
+    //! a test hook called when a thread is added to the thread counts of a Program, with the stripe lock held
+    /** See dbg_hold_thread_container_change() in ql_debug.cpp
+    */
+    typedef void (*dbg_thread_container_hook_t)(const qore_program_private_base* pp);
+    DLLLOCAL static std::atomic<dbg_thread_container_hook_t> dbg_thread_container_hook;
+#endif
+
     struct PluginFallbackSiteInfo {
         std::string file;
         int line = -1;
@@ -1032,7 +1067,8 @@ public:
         thread, and a thread's end can free its hash in every family.
 
         Locks: a thread's hashes are guarded by its ThreadProgramData::pslock, the root's sets by tld_lock; tld_lock is
-        a leaf lock, taken while holding a thread's pslock or alone, and neither is held while a hash is dereferenced,
+        taken while holding a thread's pslock or alone, and only the root's stripe lock (threadContainerLock(), a leaf
+        lock) is taken while it is held, around a change of the sets; neither is held while a hash is dereferenced,
         as that can run destructors.  A thread touches a root only while it holds its own pslock and has a hash in the
         root's family; the root's teardown can only finish freeing the hashes after taking the pslock of every thread
         registered with it, so a root cannot be freed while a thread uses it this way.
@@ -1046,7 +1082,8 @@ public:
     //! the root this Program holds a dependency reference on, so that @ref tld_root cannot dangle, or nullptr
     qore_program_private* tld_parent_root = nullptr;
 
-    //! leaf lock for tld_registry, tld_members and tld_final
+    //! leaf lock for tld_registry, tld_members and tld_final; the sets are changed under the stripe lock as well (see
+    //! threadContainerLock())
     QoreThreadLock tld_lock;
 
     //! the threads that have thread-local data in this Program's family; used when this Program is a root
@@ -1073,7 +1110,8 @@ public:
     mutable QoreCondition tcond;   // cond variable for tclear to become false, used only with tlock
     mutable unsigned twaiting = 0; // threads waiting on tclear to become false
 
-    // thread-local variable storage - map from thread ID to thread-local storage
+    // thread-local variable storage - map from thread ID to thread-local storage; protected by tlock, and its
+    // structure is changed under the stripe lock as well (see threadContainerLock())
     pgm_data_map_t pgm_data_map;
 
     // time zone setting for the program
@@ -2098,16 +2136,63 @@ public:
         }
     }
 
+    //! Counts an entry of the given thread into the Program; called with plock held
+    /** @param tid the thread
+        @param foreign true if \a tid is the current thread and a foreign thread, which is recorded in foreign_tids
+
+        An exception (from an allocation) leaves the counts as they were.  The containers' structure is changed only
+        under the stripe lock (see thread_container_shards); the count of a thread that is in the Program already is
+        updated in place.
+    */
+    DLLLOCAL void countThreadEntryIntern(int tid, bool foreign) {
+        ptid_map_t::iterator i = tidmap.find(tid);
+        if (i != tidmap.end()) {
+            // a foreign thread in the Program is in foreign_tids already, unless it was counted on behalf of another
+            // thread first
+            if (!foreign || foreign_tids.find(tid) != foreign_tids.end()) {
+                ++i->second;
+                return;
+            }
+        }
+        std::lock_guard<std::mutex> cl(threadContainerLock());
+#ifdef DEBUG
+        if (i == tidmap.end()) {
+            if (dbg_thread_container_hook_t hook = dbg_thread_container_hook.load(std::memory_order_acquire)) {
+                hook(this);
+            }
+        }
+#endif
+        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
+        // only the TIDs in tidmap are counted)
+        if (foreign) {
+            foreign_tids.insert(tid);
+        }
+        if (i == tidmap.end()) {
+            tidmap.append(ptid_map_t::value_type(tid, 1));
+        } else {
+            ++i->second;
+        }
+    }
+
+    //! Removes all threads from parse_tids; called with plock held
+    DLLLOCAL void clearParseTidsIntern() {
+        if (!parse_tids.empty()) {
+            std::lock_guard<std::mutex> cl(threadContainerLock());
+            parse_tids.clear();
+        }
+    }
+
     // called from the new thread once the thread has been started (after preregisterNewThread())
     DLLLOCAL bool registerNewThread(int tid) {
         // grab program-level lock
         AutoLocker al(plock);
 
         assert(thread_count);
-        ++tidmap[tid];
+        countThreadEntryIntern(tid, false);
         // a thread that code run by a parse or its commit starts can enter the Program while it is committed
         // (refusedByCommit())
         if (parsing_in_progress || commit_entry_restricted) {
+            std::lock_guard<std::mutex> cl(threadContainerLock());
             parse_tids.insert(tid);
         }
         return cancel_new_threads;
@@ -2158,12 +2243,7 @@ public:
         if (!canEnterIntern(tid)) {
             return false;
         }
-        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
-        // only the TIDs in tidmap are counted)
-        if (tid == q_gettid() && q_thread_is_foreign()) {
-            foreign_tids.insert(tid);
-        }
-        ++tidmap[tid];
+        countThreadEntryIntern(tid, tid == q_gettid() && q_thread_is_foreign());
         // decThreadCount() publishes the transition to idle, so the transition to active is published here as well
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
@@ -2314,12 +2394,7 @@ public:
                 "inherited");
             return -1;
         }
-        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
-        // only the TIDs in tidmap are counted)
-        if (tid == q_gettid() && q_thread_is_foreign()) {
-            foreign_tids.insert(tid);
-        }
-        ++tidmap[tid];
+        countThreadEntryIntern(tid, tid == q_gettid() && q_thread_is_foreign());
         // decThreadCount() publishes the transition to idle, so the transition to active is published here as well
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
@@ -2389,12 +2464,7 @@ public:
             return -1;
         }
 
-        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
-        // only the TIDs in tidmap are counted)
-        if (tid == q_gettid() && q_thread_is_foreign()) {
-            foreign_tids.insert(tid);
-        }
-        ++tidmap[tid];
+        countThreadEntryIntern(tid, tid == q_gettid() && q_thread_is_foreign());
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
         }
@@ -2420,12 +2490,7 @@ public:
                 "cannot be accessed at runtime");
         }
 
-        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
-        // only the TIDs in tidmap are counted)
-        if (tid == q_gettid() && q_thread_is_foreign()) {
-            foreign_tids.insert(tid);
-        }
-        ++tidmap[tid];
+        countThreadEntryIntern(tid, tid == q_gettid() && q_thread_is_foreign());
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
         }
@@ -2450,10 +2515,13 @@ public:
         ptid_map_t::iterator i = tidmap.find(tid);
         assert(i != tidmap.end());
         if (!--i->second) {
-            tidmap.erase(i);
-            foreign_tids.erase(tid);
-            // the thread ends or leaves the Program: its TID can be given to another thread
-            parse_tids.erase(tid);
+            {
+                std::lock_guard<std::mutex> cl(threadContainerLock());
+                tidmap.erase(i);
+                foreign_tids.erase(tid);
+                // the thread ends or leaves the Program: its TID can be given to another thread
+                parse_tids.erase(tid);
+            }
             // a thread that still holds the parse lock releases its deferred references when it releases the lock
             if (parse_tid != tid) {
                 derefs = takeDeferredDerefs(tid, clear);
@@ -2486,7 +2554,13 @@ public:
         if (tidmap.find(tid) == tidmap.end() && parse_tid != tid) {
             return false;
         }
-        ++deferred_derefs[tid];
+        ptid_map_t::iterator i = deferred_derefs.find(tid);
+        if (i != deferred_derefs.end()) {
+            ++i->second;
+        } else {
+            std::lock_guard<std::mutex> cl(threadContainerLock());
+            deferred_derefs.append(ptid_map_t::value_type(tid, 1));
+        }
         return true;
     }
 
@@ -2502,7 +2576,10 @@ public:
             return 0;
         }
         unsigned derefs = di->second;
-        deferred_derefs.erase(di);
+        {
+            std::lock_guard<std::mutex> cl(threadContainerLock());
+            deferred_derefs.erase(di);
+        }
         clear = deferred_derefs.empty();
         return derefs;
     }
@@ -3604,6 +3681,7 @@ public:
         if (tld_final) {
             return -1;
         }
+        std::lock_guard<std::mutex> cl(threadContainerLock());
         tld_registry.insert(tpd);
         return 0;
     }
@@ -3613,6 +3691,7 @@ public:
     */
     DLLLOCAL void unregisterThreadData(ThreadProgramData* tpd) {
         AutoLocker al(tld_lock);
+        std::lock_guard<std::mutex> cl(threadContainerLock());
         tld_registry.erase(tpd);
     }
 
@@ -3653,6 +3732,7 @@ public:
                 return -1;
             }
             tlpd = i->second;
+            std::lock_guard<std::mutex> cl(threadContainerLock());
             pgm_data_map.erase(i);
         }
 
@@ -3763,7 +3843,10 @@ public:
 
             printd(5, "qore_program_private::setThreadVarData() (first) this: %p pgm: %p td: %p run: %s inst: %s\n", this, pgm, td, run ? "true" : "false", tlpd->inst ? "true" : "false");
 
-            pgm_data_map.insert(pgm_data_map_t::value_type(td, tlpd.get()));
+            {
+                std::lock_guard<std::mutex> cl(threadContainerLock());
+                pgm_data_map.append(pgm_data_map_t::value_type(td, tlpd.get()));
+            }
             new_tlpd = tlpd.release();
 
             sl.unlock();
@@ -3776,7 +3859,7 @@ public:
             return true;
         }
 
-        ThreadLocalProgramData* tlpd = pgm_data_map[td];
+        ThreadLocalProgramData* tlpd = i->second;
         new_tlpd = tlpd;
 
         sl.unlock();
@@ -5191,6 +5274,7 @@ public:
             pgm_data_map_t::iterator i = pgm_data_map.find(td);
             assert(i != pgm_data_map.end());
             tlpd = i->second;
+            std::lock_guard<std::mutex> cl(threadContainerLock());
             pgm_data_map.erase(i);
         }
         delete tlpd;
