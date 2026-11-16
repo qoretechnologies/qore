@@ -11477,8 +11477,9 @@ static std::string makeAOTRegistrationFailureMessage(const char* label,
 }
 
 //! sets the time zone that the code of an AOT image sets with %set-time-zone on the Program it is loaded into
-/** As the parser does for the directive (qore#6270): the Program's time zone is the zone that its code sets, and a
-    Program with PO_NO_LOCALE_CONTROL cannot set one; a program whose code sets none keeps its time zone
+/** As the parser does for the directive (qore#6270): the Program's time zone is the zone that its code sets; the
+    directive is ignored for a Program with PO_NO_LOCALE_CONTROL (QoreProgram::parseSetTimeZone() raises no error for
+    it either), and a program whose code sets none keeps its time zone
 */
 static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReader& reader, const char* label,
         std::string& error) {
@@ -11498,15 +11499,7 @@ static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReade
     }
     qore_program_private* pp = qore_program_private::get(*pgm);
     if (pp->pwo.parse_options & PO_NO_LOCALE_CONTROL) {
-        error = "AOT time zone '";
-        error += zone;
-        error += "' cannot be set";
-        if (label && *label) {
-            error += " in ";
-            error += label;
-        }
-        error += ": the Program does not allow its time zone to be changed (PO_NO_LOCALE_CONTROL)";
-        return false;
+        return true;
     }
     ExceptionSink xsink;
     if (pp->setTimeZoneDirective(zone.c_str(), &xsink)) {

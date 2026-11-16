@@ -2006,6 +2006,7 @@ static const char* aot_section_type_name(uint16_t type) {
         case QoreAOTSectionType::UNRUN_TOP_LEVEL_CODE: return "UNRUN_TOP_LEVEL_CODE";
         case QoreAOTSectionType::FUNCTIONAL_DOMAIN: return "FUNCTIONAL_DOMAIN";
         case QoreAOTSectionType::MODULE_DOMAINS: return "MODULE_DOMAINS";
+        case QoreAOTSectionType::TIME_ZONE: return "TIME_ZONE";
     }
     return "UNKNOWN";
 }
