@@ -3903,6 +3903,26 @@ const QoreComplexCodeTypeInfo* QoreTypeInfo::getComplexCodeType(const QoreTypeIn
     return dynamic_cast<const QoreComplexCodeTypeInfo*>(ti);
 }
 
+bool QoreTypeSpec::isExactScalarValueType(const QoreValue& n) const {
+    if (typespec == QTS_ENUM) {
+        return n.isEnum() && n.getEnumMember()->getEnumDecl() == u.ed;
+    }
+    if (typespec != QTS_TYPE || n.isEnum()) {
+        return false;
+    }
+    switch (u.t) {
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_NUMBER:
+        case NT_STRING:
+        case NT_BOOLEAN:
+        case NT_BINARY:
+            return n.getType() == u.t;
+        default:
+            return false;
+    }
+}
+
 const QoreUnionTypeInfo* QoreTypeInfo::getUnionType(const QoreTypeInfo* ti) {
     if (!ti || !hasType(ti)) {
         return nullptr;
@@ -8317,6 +8337,17 @@ void QoreTypeInfo::acceptInputInternImpl(ExceptionSink* xsink, const char* arg_t
             }
             doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink, vts);
             return;
+        }
+    }
+
+    // a union accepts a value of one of its member types as it is, whatever the order of its members: a member that
+    // is tried before it could accept the value by converting it (ex: int for an enum value in a union<int, EI>, or
+    // float for an int in a union<float, int>) (qore#6407)
+    if (union_type) {
+        for (auto& t : getAcceptSpecs()) {
+            if (!t.map && t.spec.isExactScalarValueType(n)) {
+                return;
+            }
         }
     }
 

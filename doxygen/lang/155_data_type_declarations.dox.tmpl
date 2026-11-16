@@ -2100,8 +2100,11 @@ union<int, string> sub getValue(bool useInt) {
     @endcode
 
     @par Member Order
-    Union member order is preserved. When a value matches multiple member types, the first matching
-    member in the source declaration is chosen.
+    Union member order is preserved.  A value whose own type is the type of a member (ex: an \c int for
+    <tt>union\<float, int\></tt>, a string for <tt>union\<softint, string\></tt>, or an @ref enums "enum" value for a
+    union of the enum and its base type) is accepted as it is, whatever the order of the members; otherwise, when
+    several members accept a value by converting it, the first such member in the source declaration converts it
+    (ex: an \c int for <tt>union\<float, number\></tt> becomes a \c float).
 
     @par Or-Nothing Unions
     The or-nothing modifier allows the union to also accept NOTHING:

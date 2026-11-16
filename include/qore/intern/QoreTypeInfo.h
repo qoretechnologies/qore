@@ -1261,6 +1261,8 @@ protected:
         qore_get_type_identity_serial()
     */
     uint64_t identity_serial = 0;
+    //! true for a union type, which accepts a value of one of its member types as it is (qore#6407)
+    bool union_type = false;
 
     DLLLOCAL QoreTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec, const QoreString& tname)
             : accept_vec(a_vec), return_vec(r_vec), tname(tname) {
@@ -4470,6 +4472,7 @@ public:
             const QoreString& name, type_vec_t members, bool or_nothing = false)
             : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing),
             members(std::move(members)) {
+        union_type = true;
     }
 
     //! Returns true if this is an or-nothing union type
