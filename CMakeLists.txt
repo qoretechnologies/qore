@@ -2926,6 +2926,10 @@ target_include_directories(qore-stream-peek-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
 # the readers keep an IconvHelper for text in stateful encodings, which is inline
 target_link_libraries(qore-stream-peek-test PRIVATE libqore ${ICONV_LIBRARY})
+add_executable(qore-string-offset-bounds-test examples/test/qore/strings/string_offset_bounds.cpp)
+target_include_directories(qore-string-offset-bounds-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-string-offset-bounds-test PRIVATE libqore)
 add_executable(qore-utf8-validation-test examples/test/qore/strings/utf8_validation.cpp)
 target_include_directories(qore-utf8-validation-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})

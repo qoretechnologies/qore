@@ -252,7 +252,11 @@ public:
             if (pos < 0) {
                 return -1;
             }
-        } else if (pos > 0 && pos > (qore_offset_t)len) {
+        } else if (pos >= (qore_offset_t)len) {
+            // a position at or past the end is the last byte; the terminator is not part of the string
+            if (!len) {
+                return -1;
+            }
             pos = len - 1;
         }
 
@@ -292,7 +296,11 @@ public:
             if (pos < 0) {
                 return -1;
             }
-        } else if (pos > 0 && pos > (qore_offset_t)len) {
+        } else if (pos >= (qore_offset_t)len) {
+            // a position at or past the end is the last byte; the terminator is not part of the string
+            if (!len) {
+                return -1;
+            }
             pos = len - 1;
         }
 
@@ -936,7 +944,8 @@ public:
             if (pos < 0)
                 pos = 0;
         }
-        else if (pos >= (qore_offset_t)str.len)
+        // nothing is concatenated from the end of str (or from an empty str)
+        if (pos >= (qore_offset_t)str.len)
             return;
 
         concat_intern(str.effective_buf() + pos, str.len - pos);
@@ -959,28 +968,35 @@ public:
                 return -1;
             if (pos < 0)
                 pos = 0;
-            else if (pos > (qore_offset_t)str.len)
-                return 0;
         }
+        // nothing is concatenated from the end of str (or from an empty str)
+        if (pos >= (qore_offset_t)str.len)
+            return 0;
 
         concat_intern(str.effective_buf() + pos, str.len - pos);
         return 0;
     }
 
+    // concatenates plen bytes of str from pos; a negative plen leaves that many bytes off the end of str; the range
+    // is clamped to str
     DLLLOCAL void concat_simple(const qore_string_private& str, qore_offset_t pos, qore_offset_t plen) {
         if (pos < 0) {
             pos = str.len + pos;
             if (pos < 0)
                 pos = 0;
-        } else if (pos >= (qore_offset_t)str.len)
+        }
+        // nothing is concatenated from the end of str (or from an empty str)
+        if (pos >= (qore_offset_t)str.len)
             return;
 
+        // the number of bytes after pos
+        qore_offset_t rest = str.len - pos;
         if (plen < 0) {
-            plen = str.len + plen;
+            plen = rest + plen;
             if (plen <= 0)
                 return;
-        } else if (plen > (qore_offset_t)str.len)
-            plen = str.len;
+        } else if (plen > rest)
+            plen = rest;
 
         concat_intern(str.effective_buf() + pos, plen);
     }
@@ -993,7 +1009,7 @@ public:
             return concatStateful(str, pos, &plen, xsink);
         }
         if (!getEncoding()->isMultiByte()) {
-            concat_simple(str, pos);
+            concat_simple(str, pos, plen);
             return 0;
         }
 
@@ -1012,8 +1028,9 @@ public:
             return -1;
         if (plen <= 0)
             return 0;
-        if (plen > (qore_offset_t)str.len)
-            plen = str.len;
+        // the bytes after pos
+        if (plen > (qore_offset_t)str.len - pos)
+            plen = str.len - pos;
 
         concat_intern(str.effective_buf() + pos, plen);
         return 0;
