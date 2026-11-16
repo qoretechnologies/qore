@@ -1710,6 +1710,10 @@ protected:
     //! True when native JIT compilation is permanently unavailable for this variant
     mutable std::atomic<bool> jit_compile_failed{false};
     bool is_closure = false;  //!< true for closure variants
+    //! true for a closure parsed in a member default of a generic hashdecl, which names the type parameters of the
+    //! hashdecl and runs with an instantiation of it as the receiver; a call of it with such a receiver runs the IR
+    //! specialized for the receiver, as a call of a method of a generic class does (qore#6269)
+    bool generic_hashdecl_code = false;
     //! the functional domains declared in Qore source with \c [dom=...] (QDOM_* bits; QDOM_DEFAULT = none)
     int64 declared_domain = QDOM_DEFAULT;
     //! Deopt counter: incremented on JIT guard failure, triggers recompilation
@@ -1834,6 +1838,13 @@ public:
     //! Sets the functional domains declared on this variant; must be called before the variant is added to its function
     DLLLOCAL void setDeclaredDomain(int64 dom) {
         declared_domain = dom;
+    }
+
+    //! Marks a closure parsed in a member default of a generic hashdecl (see \a generic_hashdecl_code)
+    /** must be called at parse time, before the closure can be called
+    */
+    DLLLOCAL void setGenericHashDeclCode() {
+        generic_hashdecl_code = true;
     }
 
     /** Install serialized closure IR during single-threaded AOT registration, before publication.

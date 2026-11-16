@@ -9173,11 +9173,23 @@ void UserVariantBase::attemptJITRecompilation() const {
         orig_name.c_str());
 }
 
-// The default call path tests only two null pointers; keep this predicate inline across evaluator specializations.
+//! Returns true if the receiver type is an instantiation of a generic hashdecl (hash<HD<string>> of HD<X>)
+static QORE_INTERN_NOINLINE bool qore_is_generic_hashdecl_receiver(const QoreTypeInfo* receiver_type_info) {
+    const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(receiver_type_info);
+    return hd && typed_hash_decl_private::get(*hd)->getParameterizedBase();
+}
+
+// Keep this predicate inline across evaluator specializations.
+/** @param generic_hashdecl_code true for a closure parsed in a member default of a generic hashdecl, which runs with
+    an instantiation of the hashdecl as the receiver (qore#6240, qore#6269); its types are substituted with the
+    receiver's type arguments as for a method of a generic class.  Other code is not specialized for such a receiver:
+    it is current also while a function that the closure or the member default calls runs
+*/
 static QORE_INTERN_ALWAYS_INLINE bool qore_has_generic_specialization_context(const QoreTypeInfo* receiver_type_info,
-        const QoreTypeParamInstantiation* type_param_instantiation) {
+        const QoreTypeParamInstantiation* type_param_instantiation, bool generic_hashdecl_code) {
     return (receiver_type_info && QoreTypeInfo::getParameterizedClassType(receiver_type_info))
-        || (type_param_instantiation && !type_param_instantiation->empty());
+        || (type_param_instantiation && !type_param_instantiation->empty())
+        || (generic_hashdecl_code && receiver_type_info && qore_is_generic_hashdecl_receiver(receiver_type_info));
 }
 
 QoreGenericSpecializationKey::QoreGenericSpecializationKey(const QoreTypeInfo* receiver_type_info,
@@ -9221,7 +9233,8 @@ std::string qore_make_generic_specialization_dispatch_key(
 QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
         const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_instantiation,
         bool raise_on_failure) const {
-    if (!statements || !qore_has_generic_specialization_context(receiver_type_info, type_param_instantiation)) {
+    if (!statements || !qore_has_generic_specialization_context(receiver_type_info, type_param_instantiation,
+            generic_hashdecl_code)) {
         return QoreSpecializedIRRef();
     }
 
@@ -9532,7 +9545,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         const QoreTypeParamInstantiation* specialization_type_param_instantiation =
             runtime_get_type_param_instantiation();
         if (qore_has_generic_specialization_context(specialization_receiver_type_info,
-                specialization_type_param_instantiation)) {
+                specialization_type_param_instantiation, generic_hashdecl_code)) {
             // the call holds the specialization while it runs (issue #5765)
             QoreSpecializedIRRef specialized_ir = getOrCreateSpecializedIR(name, specialization_receiver_type_info,
                 specialization_type_param_instantiation, false);
