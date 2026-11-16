@@ -101,6 +101,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Parse Directives Are Not Allowed in an Expression
+    A parse directive in the source of an @ref Qore::Expression "Expression" is now a parse exception and is not
+    applied; it changed the parse state of the Program that the expression was created in (see
+    @ref Qore::Expression::constructor() "Expression::constructor()").
+
     @par A Locked Program Keeps Its Restrictions
     @ref Qore::Program::disableParseOptions() "Program::disableParseOptions()", the parse directives that disable
     options and @ref Qore::Program::replaceParseOptions() "Program::replaceParseOptions()" can no longer remove the
