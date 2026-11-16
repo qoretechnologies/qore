@@ -1499,7 +1499,8 @@ public:
         return in_block_comment || !raw_close.empty();
     }
 
-    //! a line that qpp reads itself (a doc comment): a line comment or a literal continued from the line before ends
+    //! a line that qpp reads itself (a doc comment, a group start or a group's namespace) ends a line comment or a
+    //! literal continued from the line before
     void endSplice() {
         spliced_comment = false;
         spliced_literal = 0;
@@ -1509,15 +1510,10 @@ public:
     //! updates the state with a line of C++ code
     void text(const std::string& line) {
         size_t i = 0;
-        // a line comment continued from the line before (a backslash at its end); a line that is a line comment
-        // itself is read as one
+        // a line comment continued from the line before (a backslash at its end)
         if (spliced_comment) {
-            size_t f = line.find_first_not_of(" \t");
-            if (f == std::string::npos || line.compare(f, 2, "//")) {
-                spliced_comment = spliced(line);
-                return;
-            }
-            spliced_comment = false;
+            spliced_comment = spliced(line);
+            return;
         }
         // a string or character literal continued from the line before; its first character can be escaped by a
         // backslash before the one that joined the lines
@@ -5460,6 +5456,8 @@ public:
             if (!line.compare(0, 10, "namespace ")) {
                 // the text before has its lines (issue #2290)
                 checkBuf(buf);
+                // qpp reads the line
+                copied.endSplice();
                 size_t p = line.find(';');
                 if (p == std::string::npos) {
                     error("%s:%d: cannot find ';' in namespace declaration\n", fileName, lineNumber);
@@ -8801,6 +8799,8 @@ protected:
 
             if (!str.compare(0, 13, "/** @defgroup")) {
                 checkBuf(buf);
+                // qpp reads the group
+                copied.endSplice();
 
                 if (groups.add(new Group(str, fp, fileName, lineNumber, ppState))) {
                     rc = -1;
