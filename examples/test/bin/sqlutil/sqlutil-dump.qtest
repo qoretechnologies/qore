@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires SqlUtil
+
+%exec-class SqlutilDumpTest
+
+#! an Oracle database with synonyms, as the sqlutil dump code sees it; no Oracle server is needed
+class MockOracleDb {
+    public {
+        #! USER_SYNONYMS rows by synonym name as listed (in lower case unless the name needs quotes)
+        hash<string, hash<auto>> synonyms = {
+            "syn_a": {"synonym_name": "SYN_A", "table_owner": "SCOTT", "table_name": "EMP", "db_link": NULL},
+            "Syn B": {"synonym_name": "Syn B", "table_owner": "SCOTT", "table_name": "Emp Table",
+                "db_link": "REMOTE.EXAMPLE.COM"},
+        };
+    }
+
+    string getDriverName() {
+        return "oracle";
+    }
+
+    list<string> features() {
+        return (SqlUtil::DB_SYNONYMS,);
+    }
+
+    ListIterator synonymIterator() {
+        return new ListIterator(keys synonyms);
+    }
+}
+
+#! tests the DDL that bin/sqlutil dumps (--dump=type:name), with the dump code loaded into a Program
+class SqlutilDumpTest inherits QUnit::Test {
+    private {
+        Program p;
+    }
+
+    constructor() : QUnit::Test("SqlutilDumpTest", "1.0") {
+        addTestCase("synonyms are dumped from the catalog", \testSynonyms());
+        addTestCase("an unknown synonym raises an error", \testUnknownSynonym());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string script = get_script_dir() + "/../../../../bin/sqlutil";
+        p = new Program(PO_NEW_STYLE);
+        p.define("SqlUtilNoMain", True);
+        p.parsePending(ReadOnlyFile::readTextFile(script), script);
+        # dumps the given objects and returns the lines of output
+        p.parsePending("list<string> sub test_dump(object db, softlist<string> values, *code synonym_info) {
+    # the script's top-level variable for terminal colors, which main() sets
+    color = new TerminalColor(False);
+    list<string> lines = ();
+    new DumpObjects(db, values, {}, synonym_info, sub (string line) { lines += line; });
+    return lines;
+}", "test");
+        p.parseCommit();
+    }
+
+    private list<string> dump(object db, softlist<string> values) {
+        MockOracleDb mdb = cast<MockOracleDb>(db);
+        return p.callFunction("test_dump", db, values, *hash<auto> sub (string name) {
+            return mdb.synonyms{name};
+        });
+    }
+
+    testSynonyms() {
+        MockOracleDb db();
+        list<string> out = dump(db, "synonyms:all");
+        assertEq((
+            "-- DDL of synonym syn_a",
+            "create or replace synonym SYN_A for SCOTT.EMP;",
+            "-- DDL of synonym Syn B",
+            "create or replace synonym \"Syn B\" for SCOTT.\"Emp Table\"@REMOTE.EXAMPLE.COM;",
+        ), out);
+        assertEq(out[0..1], dump(db, "synonyms:syn_a"));
+    }
+
+    testUnknownSynonym() {
+        MockOracleDb db();
+        assertThrows("SYNONYMS-ERROR", "synonym nosuch does not exist", \dump(), (db, "synonyms:nosuch"));
+    }
+}

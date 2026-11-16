@@ -107,10 +107,14 @@ const DUMP_OBJECTS = {
     "procedures"    : ( "getobj" : "getProcedure", "sql" : "getCreateSql"),
     "packages"      : ( "getobj" : "getPackage", "sql" : "getCreateSql"),
     "types"         : ( "getobj" : "getType", "sql" : "getCreateSql"),
-    "synonyms"      : ( "getobj" : "getSynonym", "sql" : "getCreateSql"),
+    # synonyms are dumped from the catalog by DumpObjects::getSynonymSql()
+    "synonyms"      : {},
 };
 
+# a test that loads this script into a Program defines SqlUtilNoMain to use its functions and classes
+%ifndef SqlUtilNoMain
 main();
+%endif
 
 sub usage() {
     printf("%s - Qore SQL utility and database schema tool\n\n", color.bold("sqlutil"));
@@ -187,6 +191,24 @@ class GlobTables inherits Tables {
     }
 }
 
+#! returns an Oracle name for SQL: as it is if it is an ordinary upper-case name, otherwise in double quotes
+string sub oracle_name(string name) {
+    return name =~ /^[A-Z][A-Z0-9_$#]*$/ ? name : "\"" + replace(name, "\"", "\"\"") + "\"";
+}
+
+#! returns the DDL of an Oracle synonym from its row in USER_SYNONYMS (synonym_name, table_owner, table_name, db_link)
+string sub get_synonym_sql(hash<auto> row) {
+    string sql = sprintf("create or replace synonym %s for ", oracle_name(row.synonym_name));
+    if (row.table_owner) {
+        sql += oracle_name(row.table_owner) + ".";
+    }
+    sql += oracle_name(row.table_name);
+    if (row.db_link) {
+        sql += "@" + row.db_link;
+    }
+    return sql;
+}
+
 string sub get_regex(string str) {
     str =~ s/\./\\./g;
     str =~ s/\?/./g;
@@ -196,7 +218,7 @@ string sub get_regex(string str) {
     return str;
 }
 
-bool sub is_object_supported (SqlUtil::Database db, string type) {
+bool sub is_object_supported (object db, string type) {
     return inlist (MAP_OBJECT_FEATURE{type}, db.features());
 }
 
@@ -232,12 +254,34 @@ class DumpObjects {
     private {
         hash m_copt;
         list m_processed;
-        SqlUtil::Database m_db;
+        #! the database (SqlUtil::Database or an object with the same methods)
+        object m_db;
+        #! returns the row of a synonym in USER_SYNONYMS
+        code m_synonym_info;
+        #! writes a line of output
+        code m_output;
     }
 
-    constructor(SqlUtil::Database db, softlist values, hash copt) {
+    #! dumps the DDL of the given objects (\c "type:name" or \c "type:all")
+    /** @param db the database
+        @param values the objects to dump
+        @param copt the create options
+        @param synonym_info a closure that returns the USER_SYNONYMS row (\c synonym_name, \c table_owner,
+        \c table_name, \c db_link) of a synonym name, or @ref nothing if it does not exist; the default queries
+        the database
+        @param output a closure that writes a line of output (without its end of line); the default prints it
+    */
+    constructor(object db, softlist values, hash copt, *code synonym_info, *code output) {
         m_db = db;
         m_copt = copt;
+        m_output = output ?? sub (string line) { printf("%s\n", line); };
+        m_synonym_info = synonym_info ?? *hash<auto> sub (string name) {
+            # a synonym is listed in lower case unless the native_case option is used
+            AbstractDatasource ds = m_db.getDatasource();
+            string sql = "select synonym_name, table_owner, table_name, db_link from user_synonyms "
+                "where synonym_name = %v";
+            return ds.selectRow(sql, name) ?? ds.selectRow(sql, name.upr());
+        };
         doObjects(values);
     }
 
@@ -259,11 +303,11 @@ class DumpObjects {
                     if (is_object_supported (m_db, i))
                         doObjects(sprintf("%s:all", i));
                 continue;
-            } else if (!DUMP_OBJECTS{type}) {
-                printf("%s %y\n", color.error("Unable to dump object of type:"), type);
+            } else if (!DUMP_OBJECTS.hasKey(type)) {
+                m_output(sprintf("%s %y", color.error("Unable to dump object of type:"), type));
                 continue;
             } else if (!is_object_supported (m_db, type)) {
-                printf("%s %y\n", color.error("Unable to dump object of type:"), type);
+                m_output(sprintf("%s %y", color.error("Unable to dump object of type:"), type));
                 continue;
             }
 
@@ -278,19 +322,33 @@ class DumpObjects {
         }
     }
 
+    #! returns the DDL of a synonym from the catalog (issue #1734: SqlUtil has no synonym objects)
+    private string getSynonymSql(string name) {
+        *hash<auto> row = m_synonym_info(name);
+        if (!row) {
+            throw "SYNONYMS-ERROR", sprintf("synonym %s does not exist or is not accessible to this user", name);
+        }
+        return get_synonym_sql(row);
+    }
+
     private doObject(string type, string name) {
         if (processed(name))
             return;
 
-        *object o = call_object_method(m_db, DUMP_OBJECTS{type}.getobj, name);
-        if (!o) {
-            throw sprintf("%s-ERROR", type.upr()), sprintf("%s %s does not exist or is not accessible to this user",
-                type, name);
+        auto ret;
+        if (type == "synonyms") {
+            ret = getSynonymSql(name);
+        } else {
+            *object o = call_object_method(m_db, DUMP_OBJECTS{type}.getobj, name);
+            if (!o) {
+                throw sprintf("%s-ERROR", type.upr()), sprintf("%s %s does not exist or is not accessible to this "
+                    "user", type, name);
+            }
+            ret = call_object_method(o, DUMP_OBJECTS{type}.sql, m_copt);
         }
         string singular = type;
         singular =~ s/s$//;
-        printf("-- %s %s %s\n", color.dim("DDL of"), color.dim(singular), color.key(name));
-        any ret = call_object_method(o, DUMP_OBJECTS{type}.sql, m_copt);
+        m_output(sprintf("-- %s %s %s", color.dim("DDL of"), color.dim(singular), color.key(name)));
         string str;
         # unfortunately it can be list or string
         if (ret.typeCode() == NT_LIST) {
@@ -300,7 +358,7 @@ class DumpObjects {
             str = ret;
         if (str.substr(-1) != ";")
             str += ";";
-        printf("%s\n", str);
+        m_output(str);
     }
 
  } # class DumpObjects

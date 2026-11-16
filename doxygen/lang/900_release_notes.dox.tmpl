@@ -2520,6 +2520,9 @@
       as its argument; such a connection is closed without a TLS \c close_notify alert
     - fixed \c qget: \c ftp:// and \c ftps:// downloads, saving an empty body, the exit status and error output of a
       failed retrieval, and a \c Content-Disposition file name that could write outside the current directory
+    - fixed \c sqlutil \c --dump with \c synonyms, which failed with \c METHOD-DOES-NOT-EXIST: an Oracle synonym is
+      dumped as a <tt>create or replace synonym</tt> statement made from the catalog
+      (<a href="https://github.com/qoretechnologies/qore/issues/1734">issue 1734</a>)
     - fixed a crash when a file included with @ref include "%include" ends inside a literal or a block comment
     - fixed \c getEncoding() of @ref Qore::StringInputStream "StringInputStream",
       @ref Qore::StringOutputStream "StringOutputStream", @ref Qore::FileOutputStream "FileOutputStream" and
