@@ -847,21 +847,13 @@ DLLLOCAL int qore_call_reference_code_parse_options(const ResolvedCallReferenceN
 // declared in QoreSandboxProvenance.h: the callback that a sandbox-bound call reference wraps, otherwise nullptr
 DLLLOCAL const ResolvedCallReferenceNode* qore_get_sandbox_bound_callback(const AbstractQoreNode* callback);
 
-//! Returns the node as a ResolvedCallReferenceNodeIntern if it is one, otherwise nullptr
-/** The same result as dynamic_cast<const ResolvedCallReferenceNodeIntern*>(), which is too slow for the per-call
-    paths: a dynamic_cast compares the type names with strcmp() as it searches the class hierarchy.
-
-    ResolvedCallReferenceNode is a class of the public API, whose layout and vtable modules depend on, so it has no
-    flag or virtual function for its internal subclasses, and all of them have the type code NT_FUNCREF.  Instead,
-    a closure is excluded by its type code (only QoreClosureBase's constructor gives NT_RUNTIME_CLOSURE), and the
-    classes of the call reference values that the library creates, which are final, are identified by the address of
-    their type_info object, as qore_exact_node_cast() does.  A call reference that wraps a callback
-    (AbstractCallReferenceNode::getSandboxBoundCallback(): a sandbox-bound reference) is not one either, as no
-    internal class overrides that function.  Any other class (the base classes of the references in the parse tree, a
-    module's call reference, a node that is not a call reference) is tested with the dynamic_cast, so the result does
-    not depend on the list being complete.
+//! Returns the node as a ResolvedCallReferenceNodeIntern if its class is one of the final classes of the call
+//! reference values that the library creates, otherwise nullptr (also for a closure)
+/** The type tests of qore_get_resolved_call_reference_intern() without its fallback: a nullptr result does not mean
+    that the node is not a ResolvedCallReferenceNodeIntern.  The classes are identified by the address of their
+    type_info object, as qore_exact_node_cast() does.
 */
-DLLLOCAL inline const ResolvedCallReferenceNodeIntern* qore_get_resolved_call_reference_intern(
+DLLLOCAL inline const ResolvedCallReferenceNodeIntern* qore_get_listed_call_reference_intern(
         const AbstractQoreNode* r) {
     static_assert(std::is_final_v<FunctionCallReferenceNode> && std::is_final_v<MethodCallReferenceNode>
         && std::is_final_v<StaticMethodCallReferenceNode> && std::is_final_v<RunTimeObjectMethodReferenceNode>
@@ -869,7 +861,6 @@ DLLLOCAL inline const ResolvedCallReferenceNodeIntern* qore_get_resolved_call_re
         && std::is_final_v<DeferredStaticMethodCallReferenceNode>,
         "an exact type test is only equivalent to a dynamic_cast for a final class");
     if (!r || r->getType() == NT_RUNTIME_CLOSURE) {
-        assert(!dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r));
         return nullptr;
     }
     const std::type_info* t = &typeid(*r);
@@ -881,11 +872,40 @@ DLLLOCAL inline const ResolvedCallReferenceNodeIntern* qore_get_resolved_call_re
         assert(rv == dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r));
         return rv;
     }
-    if (qore_get_sandbox_bound_callback(r)) {
+    return nullptr;
+}
+
+//! Returns the node as a ResolvedCallReferenceNodeIntern if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const ResolvedCallReferenceNodeIntern*>(), which is too slow for the per-call
+    paths: a dynamic_cast compares the type names with strcmp() as it searches the class hierarchy.
+
+    ResolvedCallReferenceNode is a class of the public API, whose layout and vtable modules depend on, so it has no
+    flag or virtual function for its internal subclasses, and all of them have the type code NT_FUNCREF.  Instead,
+    a closure is excluded by its type code (only QoreClosureBase's constructor gives NT_RUNTIME_CLOSURE), and the
+    classes of the call reference values that the library creates, which are final, are identified by the address of
+    their type_info object (qore_get_listed_call_reference_intern()).  A call reference that wraps a callback
+    (AbstractCallReferenceNode::getSandboxBoundCallback(): a sandbox-bound reference) is not one either, as no
+    internal class overrides that function.  Any other class (the base classes of the references in the parse tree, a
+    module's call reference, a node that is not a call reference) is tested with the dynamic_cast, so the result does
+    not depend on the list being complete.
+*/
+DLLLOCAL inline const ResolvedCallReferenceNodeIntern* qore_get_resolved_call_reference_intern(
+        const AbstractQoreNode* r) {
+    if (const ResolvedCallReferenceNodeIntern* rv = qore_get_listed_call_reference_intern(r)) {
+        return rv;
+    }
+    if (!r || r->getType() == NT_RUNTIME_CLOSURE || qore_get_sandbox_bound_callback(r)) {
         assert(!dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r));
         return nullptr;
     }
     return dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r);
 }
+
+//! Returns a call reference value as a ResolvedCallReferenceNode, otherwise nullptr (a value of another type)
+/** The same result as dynamic_cast<ResolvedCallReferenceNode*>(): a closure and the library's own references are
+    identified by their type, as is a sandbox-bound reference; only a value of another class (a module's call
+    reference, or not a call reference) is tested with the dynamic_cast.
+*/
+DLLLOCAL ResolvedCallReferenceNode* qore_get_resolved_call_reference(AbstractQoreNode* n);
 
 #endif
