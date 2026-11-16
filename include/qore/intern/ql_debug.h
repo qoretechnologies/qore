@@ -260,6 +260,9 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! HttpClientConnectionManagerBase::swapNegotiatedConnection() was given the concrete connection that took over a
     //! negotiating connection, before it reads the negotiating connection
     Swap,
+    //! HttpClientConnectionManagerBase::acquireConnectionImpl() found a connection in its pool and released the pool
+    //! lock, before it returns the connection
+    Acquired,
     //! the number of hold points
     Count,
 };

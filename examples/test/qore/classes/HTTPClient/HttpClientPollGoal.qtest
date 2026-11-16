@@ -131,6 +131,8 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         addTestCase("a close of a negotiating connection waits for its hand-over", \testTakeoverDuringClose());
         addTestCase("a connect hands over its negotiating connection after a close of the client's connections",
             \testConnectSwapAfterClose());
+        addTestCase("a request keeps the pooled connection that it acquired across a close of the client's connections",
+            \testAcquireAfterClose());
         addTestCase("a request whose submit found the connection closed and that is invalidated before the error is "
             "classified fails in its poll operation", \testSubmitFailedThenInvalidated());
         addTestCase("a request on a multiplexed connection that another request closes is not closed a second time",
@@ -465,6 +467,86 @@ class HttpClientPollGoalTest inherits QUnit::Test {
             hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
             assertTrue(exists result.ex, "the request fails in its poll operation");
             assertFalse(spop.goalReached(), "a request that failed has not reached its goal");
+        }
+    }
+
+    #! A request acquires a keep-alive connection from the pool, and another thread closes the client's connections
+    #! after the pool lock was released and before the request uses the connection: the close releases the pool's
+    #! reference, and the request, which owns a reference of its own from the moment it found the connection, keeps it
+    #! alive and ends with an error (qore#6303: the connection manager handed out a borrowed connection, so the close
+    #! destroyed the connection before the request took a reference)
+    testAcquireAfterClose() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that orders the close and the acquire is only in debug builds");
+        }
+        H2Handler handler();
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("http-client-poll-goal", LoggerLevel::getLevelInfo()),
+        });
+        on_exit server.stop();
+        server.setDefaultHandler("plain", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+        }).port;
+        server.waitForAsyncIo();
+
+        HTTPClient hc({
+            "url": sprintf("http://localhost:%d", port),
+            "http3_mode": "disabled",
+        });
+
+        # a first request leaves its keep-alive connection in the pool
+        AbstractPollOperation first = hc.startPollSendRecv("GET", "/first");
+        hash<SocketPollResultInfo> first_result = exec(hc, first, HangGuard);
+        assertNothing(first_result.ex, "the first request succeeded");
+        assertTrue(first.goalReached(), "the first request reached its goal");
+
+        # the second request finds the connection in the pool and is held after the pool lock is released
+        Counter acquired_reached(1);
+        Counter acquired_release(1);
+        # the background threads of the test, which end before it does
+        Counter threads();
+        # registered before the hook is armed, so that a failure while arming it leaves none armed
+        on_exit {
+            call_function("dbg_http_hold_clear");
+            if (acquired_release.getCount()) {
+                acquired_release.dec();
+            }
+            threads.waitForZero(HangGuard);
+        }
+        call_function("dbg_http_hold_at", "acquired", acquired_reached, acquired_release);
+
+        Counter started(1);
+        *AbstractPollOperation spop;
+        *hash<ExceptionInfo> start_ex;
+        threads.inc();
+        background sub () {
+            on_exit {
+                started.dec();
+                threads.dec();
+            }
+            try {
+                spop = hc.startPollSendRecv("GET", "/second");
+            } catch (hash<ExceptionInfo> ex) {
+                start_ex = ex;
+            }
+        }();
+        assertEq(0, acquired_reached.waitForZero(HangGuard), "the request acquired the pooled connection");
+
+        # the close of the client's connections removes the connection from the pool and releases the pool's reference
+        hc.disconnect();
+
+        # the request uses the connection that it acquired
+        acquired_release.dec();
+        assertEq(0, started.waitForZero(HangGuard), "startPollSendRecv() returned");
+        if (spop) {
+            # the request finds the connection that it kept closed
+            hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
+            assertEq("HTTP-CLIENT-CONNECT-ERROR", result.ex.err, sprintf("the request reports the closed connection "
+                "(%s: %s)", result.ex.err ?? "-", result.ex.desc ?? "-"));
+        } else {
+            assertTrue(exists start_ex, "startPollSendRecv() raised an exception if it returned no poll operation");
         }
     }
 

@@ -397,35 +397,73 @@ void HttpClientConnectionManagerBase::detachAndDeref(HttpClientConnectionBase* c
     conn->deref(xsink);
 }
 
+// the deprecated acquire methods return the connection borrowed from the pool: the reference of the caller is
+// released before it gets the connection
+static HttpClientConnectionBase* borrow_acquired(HttpClientConnectionBase* conn) {
+    if (conn) {
+        ExceptionSink rel_xsink;
+        conn->deref(&rel_xsink);
+        rel_xsink.clear();
+    }
+    return conn;
+}
+
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
+        const char* scheme, const char* host, int port, ExceptionSink* xsink) {
+    return borrow_acquired(acquireConnectionRef(scheme, host, port, xsink));
+}
+
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionForStreamingSend(
+        const char* scheme, const char* host, int port, ExceptionSink* xsink) {
+    return borrow_acquired(acquireConnectionForStreamingSendRef(scheme, host, port, xsink));
+}
+
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionAsync(
+        const char* scheme, const char* host, int port, ExceptionSink* xsink) {
+    return borrow_acquired(acquireConnectionAsyncRef(scheme, host, port, xsink));
+}
+
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionRef(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
     SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase", "acquireConnection", xsink);
     if (*xsink) {
         return nullptr;
     }
-    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/true,
-        /*streaming_send=*/false, xsink);
+    return acquireConnectionChecked(scheme, host, port, /*wait_for_ready=*/true, /*streaming_send=*/false, xsink);
 }
 
-HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionForStreamingSend(
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionForStreamingSendRef(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
     SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase",
         "acquireConnectionForStreamingSend", xsink);
     if (*xsink) {
         return nullptr;
     }
-    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/true,
-        /*streaming_send=*/true, xsink);
+    return acquireConnectionChecked(scheme, host, port, /*wait_for_ready=*/true, /*streaming_send=*/true, xsink);
 }
 
-HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionAsync(
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionAsyncRef(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
     SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase", "acquireConnectionAsync", xsink);
     if (*xsink) {
         return nullptr;
     }
-    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/false,
-        /*streaming_send=*/false, xsink);
+    return acquireConnectionChecked(scheme, host, port, /*wait_for_ready=*/false, /*streaming_send=*/false, xsink);
+}
+
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionChecked(const char* scheme,
+        const char* host, int port, bool wait_for_ready, bool streaming_send, ExceptionSink* xsink) {
+    HttpClientConnectionBase* conn = acquireConnectionImpl(scheme, host, port, wait_for_ready, streaming_send, xsink);
+    // a connection is returned only without an exception, so that a caller that checks for either does not leak its
+    // reference and the stream slot reserved for it (with the streaming-send slot, for a streaming-send acquire)
+    if (conn && *xsink) {
+        conn->releaseStreamReservation(streaming_send);
+        ExceptionSink rel_xsink;
+        conn->deref(&rel_xsink);
+        rel_xsink.clear();
+        return nullptr;
+    }
+    return conn;
 }
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl(
@@ -449,6 +487,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         SandboxScan scan(*policy);
 
         // 1. Read-lock pool scan for a reusable connection.
+        HttpClientConnectionBase* live;
         {
             std::shared_lock<std::shared_mutex> rl(pool_lock_);
             if (shutdown_) {
@@ -456,10 +495,19 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                     "connection manager is shutting down");
                 return nullptr;
             }
-            HttpClientConnectionBase* live = findReusableLocked(key, streaming_send, scan);
+            live = findReusableLocked(key, streaming_send, scan);
+            // the caller's reference is taken while the pool holds the connection: a close of the client's
+            // connections can release the pool's reference as soon as the lock is released (qore#6303)
             if (live) {
-                return live;
+                live->ref();
             }
+        }
+        if (live) {
+#ifdef DEBUG
+            // tests hold the acquire here, after the pool lock is released, to close the client's connections
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::Acquired);
+#endif
+            return live;
         }
 
         // 2. No live connection — serialize creation per key.  First
@@ -543,6 +591,10 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
             // the connections that have reached max_age were evicted just now: one that was kept, as it was busy,
             // can be reused, as it counts against max_connections_per_host
             live_to_return = findReusableLocked(key, streaming_send, scan, false);
+            // the caller's reference, taken under the pool lock as above
+            if (live_to_return) {
+                live_to_return->ref();
+            }
 
             // Capacity check
             if (!live_to_return && opts_.max_connections_per_host) {
@@ -627,6 +679,8 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                 closed = true;
             } else {
                 pool_[key].push_back(conn_raw);
+                // the pool takes the creator's reference; the caller's is taken under the pool lock as above
+                conn_raw->ref();
                 // Record the observed protocol in the sticky bitmask — see
                 // hasEverObservedProtocol() docs for the race this guards
                 // against (H2 eviction between response arrival and the
@@ -656,6 +710,10 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         // and we just hit some weird ordering edge.  Validate
         // defensively.
         if (!reserved) {
+            // the caller's reference; the pool keeps its own
+            ExceptionSink rel_xsink;
+            conn_raw->deref(&rel_xsink);
+            rel_xsink.clear();
             xsink->raiseException("HTTPCLIENT-CAPACITY-ERROR",
                 "freshly-created connection unexpectedly at capacity");
             return nullptr;
@@ -1493,7 +1551,7 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         int timeout_ms, ExceptionSink* xsink, HttpClientEventSink* event_sink, bool* retry) {
-    HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
+    HttpClientConnectionBase* conn = acquireConnectionRef(scheme, host, port, xsink);
     if (!conn || *xsink) {
         return nullptr;
     }
@@ -1501,11 +1559,10 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
     if (retry && !conn->hasServedRequest()) {
         retry = nullptr;
     }
-    // Hold a strong ref for the duration of request().  The pool holds its
+    // A strong ref for the duration of request(), returned by the acquire.  The pool holds its
     // own ref; the I/O thread may fire onConnectionClosed → deref at any
     // time (even during our blocking Future wait), so without this extra
     // ref the connection can be freed under us.
-    conn->ref();
     // RAII deref — fires on every return path below.
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
 #ifdef DEBUG
@@ -1696,7 +1753,7 @@ int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method
         const char* host, int port, const char* path, const QoreHashNode* headers, const void* body,
         size_t body_len, QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink,
         bool* reused, bool* retry, HttpClientConnectionBase** conn_out) {
-    HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
+    HttpClientConnectionBase* conn = acquireConnectionRef(scheme, host, port, xsink);
     if (!conn || *xsink) {
         return -1;
     }
@@ -1708,9 +1765,8 @@ int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method
     if (retry && !conn->hasServedRequest()) {
         retry = nullptr;
     }
-    // a strong reference for the duration of the call: evicting the connection below releases the pool's
-    // reference, and the I/O thread can release the connection's own at any time
-    conn->ref();
+    // a strong reference for the duration of the call, returned by the acquire: evicting the connection below
+    // releases the pool's reference, and the I/O thread can release the connection's own at any time
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
 
     int64_t stream_id = conn->submitRequestStreaming(method, path, headers,

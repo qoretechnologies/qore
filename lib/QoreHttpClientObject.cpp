@@ -2044,16 +2044,19 @@ struct qore_httpclient_priv {
             return -1;
         }
         HttpClientConnectionManagerBase& mgr = *mgr_holder;
-        HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
+        HttpClientConnectionBase* conn = mgr.acquireConnectionRef(scheme,
             connection.host.c_str(), connection.port, xsink);
         if (!conn || *xsink) {
             return -1;
         }
 
-        // Release the stream reservation taken by acquireConnection.  The
-        // connection stays in the pool; the next send() finds it ready and
-        // reserves a stream of its own.
+        // Release the stream reservation and the reference taken by the
+        // acquire.  The connection stays in the pool; the next send() finds it
+        // ready and reserves a stream of its own.
         mgr.releaseConnection(conn);
+        ExceptionSink rel_xsink;
+        conn->deref(&rel_xsink);
+        rel_xsink.clear();
         return 0;
     }
 
@@ -4323,13 +4326,12 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
     }
     HttpClientConnectionManagerBase& mgr = *mgr_holder;
 
-    HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSend(scheme, this_connection.host.c_str(),
+    HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSendRef(scheme, this_connection.host.c_str(),
         this_connection.port, xsink);
     if (!conn || *xsink) {
         return nullptr;
     }
 
-    conn->ref();
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
     auto close_and_evict_conn = [&]() {
         ExceptionSink close_xsink;
@@ -4542,14 +4544,13 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
     }
     HttpClientConnectionManagerBase& mgr = *mgr_holder;
 
-    HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSend("https", this_connection.host.c_str(),
+    HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSendRef("https", this_connection.host.c_str(),
         this_connection.port, xsink);
     if (!conn || *xsink) {
         restore_forced_h3();
         return nullptr;
     }
 
-    conn->ref();
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
     auto close_and_evict_conn = [&]() {
         ExceptionSink close_xsink;
@@ -5582,15 +5583,14 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 
             // Acquire connection manually (can't use mgr.request() because
             // body must be pushed between submit and future-get)
-            HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSend(scheme,
+            HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSendRef(scheme,
                 this_connection.host.c_str(), this_connection.port, xsink);
             if (!conn || *xsink) {
                 return nullptr;
             }
-            // Hold a strong ref — the I/O thread may fire onConnectionClosed
+            // The acquire returns a strong ref — the I/O thread may fire onConnectionClosed
             // (which derefs the pool's ref) while we're blocking on pushSendData
             // or the Future/Channel wait.
-            conn->ref();
             ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
             auto close_and_evict_conn = [&]() {
                 ExceptionSink close_xsink;
@@ -7177,12 +7177,11 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     }
 
     const char* scheme = this_connection.ssl ? "https" : "http";
-    HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
+    HttpClientConnectionBase* conn = mgr.acquireConnectionRef(scheme,
         this_connection.host.c_str(), this_connection.port, xsink);
     if (!conn || *xsink) {
         return nullptr;
     }
-    conn->ref();
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
 
     conn->waitForReadyOrError(timeout_ms, xsink);
@@ -8797,13 +8796,9 @@ public:
             const std::shared_ptr<HttpClientConnectionManagerBase>& mgr, const con_info& target,
             const QoreSandboxContext& sandbox_context, ExceptionSink* xsink) {
         QoreSandboxContextHelper sch(sandbox_context);
-        HttpClientConnectionBase* conn = mgr->acquireConnectionAsync(target.ssl ? "https" : "http",
-            target.host.c_str(), target.port, xsink);
-        if (!conn || *xsink) {
-            return nullptr;
-        }
-        conn->ref();
-        return conn;
+        // the acquire returns a reference of the caller
+        return mgr->acquireConnectionAsyncRef(target.ssl ? "https" : "http", target.host.c_str(), target.port,
+            xsink);
     }
 
     //! Raises the error of a connection that closed before it could be used
@@ -9244,12 +9239,13 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         return nullptr;
     }
     HttpClientConnectionManagerBase& mgr = *mgr_holder;
-    HttpClientConnectionBase* conn = mgr.acquireConnectionAsync(scheme,
+    HttpClientConnectionBase* conn = mgr.acquireConnectionAsyncRef(scheme,
         this_connection.host.c_str(), this_connection.port, xsink);
     if (!conn || *xsink) {
         return nullptr;
     }
-    // Hold a strong ref for the duration of this function.  The pool holds
+    // A strong ref for the duration of this function, taken by the acquire
+    // while the pool held the connection (qore#6303).  The pool holds
     // its own ref, but the I/O thread may fire onConnectionClosed → deref
     // at any time — even between isClosed()/isReady() calls and
     // registerReadyNotifier — so without this extra ref the connection can
@@ -9261,7 +9257,6 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     // fast-path synchronous submit drops the ref at the end; slow-path
     // WAITING_CONNECT transfers the ref to the poll op's pending_conn slot.
     bool conn_local_ref_held = true;
-    conn->ref();
     auto release_local_conn_ref = [&]() {
         if (conn_local_ref_held) {
             ExceptionSink rel_xsink;
@@ -9607,7 +9602,7 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
     // and return a poll op that defers it to the continuePoll loop, matching
     // legacy startPollConnect behavior.
     ExceptionSink connect_xsink;
-    HttpClientConnectionBase* conn = mgr.acquireConnectionAsync(scheme,
+    HttpClientConnectionBase* conn = mgr.acquireConnectionAsyncRef(scheme,
         this_connection.host.c_str(), this_connection.port, &connect_xsink);
     if (!conn || connect_xsink) {
         // Extract error info for deferred raising
@@ -9657,9 +9652,10 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
         return rv.release();
     }
 
-    // `conn` is borrowed from the pool, whose reference a close of the client's connections by another thread can
-    // release at any time (and a failed hand-over below evicts it), so this function holds a reference of its own
-    // until it returns (qore#6303); the release discards any exception, as the other releases here do
+    // the acquire returned a reference of this function, taken while the pool held the connection: a close of the
+    // client's connections by another thread can release the pool's reference at any time, and a failed hand-over
+    // below evicts it (qore#6303); it is released when the function returns, discarding any exception, as the other
+    // releases here do
     struct ConnRefGuard {
         HttpClientConnectionBase* c;
         ~ConnRefGuard() {
@@ -9668,7 +9664,6 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
             rel_xsink.clear();
         }
     };
-    conn->ref();
     ConnRefGuard conn_ref{conn};
 
 #ifdef DEBUG

@@ -11826,6 +11826,14 @@ static void ut_http1_connection_timeout(UnitTestCounters& c) {
 // dispatch path: a registered manager receives onConnectionClosed exactly
 // once; after setManager(nullptr) it receives nothing.
 
+//! gives back the stream slot and the reference of a connection returned by an acquire method of the manager
+static void ut_release_acquired(HttpClientConnectionManagerBase* mgr, HttpClientConnectionBase* conn) {
+    mgr->releaseConnection(conn);
+    ExceptionSink rel_xsink;
+    conn->deref(&rel_xsink);
+    rel_xsink.clear();
+}
+
 class UtCountingManager : public HttpClientConnectionManagerBase {
 public:
     DLLLOCAL UtCountingManager(const HttpClientConnectionManagerBase::Options& opts,
@@ -12258,7 +12266,7 @@ static void ut_manager_new_connection_notified_after_reservation(UnitTestCounter
         xsink.clear();
         return;
     }
-    HttpClientConnectionBase* conn = mgr->acquireConnectionAsync("http", "unit-test.invalid", 80, &xsink);
+    HttpClientConnectionBase* conn = mgr->acquireConnectionAsyncRef("http", "unit-test.invalid", 80, &xsink);
     UT_ASSERT_EQ(c, 1, mgr->created.load(), "one connection was created");
     UT_ASSERT(c, !conn, "no connection is returned for a connection whose close notification has run");
     UT_ASSERT(c, xsink.isException(), "the creator gets an error");
@@ -13223,7 +13231,7 @@ static void ut_manager_new_connection_closed_before_reservation(UnitTestCounters
     }
     ut_new_connection_hook_calls = 0;
     qore_http_manager_new_connection_hook = ut_wait_for_connect_failure;
-    HttpClientConnectionBase* conn = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+    HttpClientConnectionBase* conn = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
     qore_http_manager_new_connection_hook = nullptr;
     UT_ASSERT_EQ(c, 1, ut_new_connection_hook_calls.load(), "the connect failed before the reservation");
     UT_ASSERT(c, !conn, "no connection is returned for a connection whose connect failed");
@@ -13437,7 +13445,7 @@ static void ut_manager_closed_new_connection_detached(UnitTestCounters& c) {
         HttpClientConnectionBase* conn;
         {
             UtNewConnectionHookHolder new_hook(ut_wait_for_connect_failure);
-            conn = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+            conn = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
         }
         UT_ASSERT(c, !conn, "no connection is returned for a connection whose connect failed");
         UT_ASSERT(c, xsink.isException(), "the failed connect raises an error");
@@ -13487,7 +13495,7 @@ static void ut_manager_evicted_closed_connection_detached(UnitTestCounters& c) {
         if (reached) {
             // the checkout evicts the closed connection; the new connection it makes is refused
             UtNewConnectionHookHolder new_hook(ut_wait_for_connect_failure);
-            HttpClientConnectionBase* acquired = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+            HttpClientConnectionBase* acquired = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
             UT_ASSERT(c, !acquired, "the checkout gets no connection");
             xsink.clear();
             UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "the closed connection is evicted");
@@ -13529,7 +13537,7 @@ static void ut_manager_notified_closed_connection_detached(UnitTestCounters& c) 
     UT_ASSERT_EQ(c, 1, mgr->getNotifications(), "the closed connection notifies its manager");
     {
         UtNewConnectionHookHolder new_hook(ut_wait_for_connect_failure);
-        HttpClientConnectionBase* acquired = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+        HttpClientConnectionBase* acquired = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
         UT_ASSERT(c, !acquired, "the checkout gets no connection");
         xsink.clear();
     }
@@ -13579,7 +13587,7 @@ static void ut_manager_shutdown_new_connection_detached(UnitTestCounters& c) {
     HttpClientConnectionBase* acquired;
     {
         UtNewConnectionHookHolder new_hook(ut_shut_down_manager_on_new_connection);
-        acquired = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+        acquired = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
     }
     ut_shutdown_manager = nullptr;
     ReferenceHolder<HttpClientConnectionBase> kept(ut_shutdown_new_connection, &xsink);
@@ -13993,17 +14001,17 @@ static void ut_manager_pool_sandbox(UnitTestCounters& c) {
         UT_ASSERT(c, !xsink.isException(), (label + "manager construction succeeds").c_str());
 
         // code without a sandbox opens the connection
-        HttpClientConnectionBase* conn = mgr->acquireConnection("http", "127.0.0.1", port, &xsink);
+        HttpClientConnectionBase* conn = mgr->acquireConnectionRef("http", "127.0.0.1", port, &xsink);
         UT_ASSERT(c, conn && !xsink.isException(), (label + "the connection is opened").c_str());
         if (!conn) {
             xsink.clear();
             return;
         }
-        mgr->releaseConnection(conn);
+        ut_release_acquired(*mgr, conn);
 
         // a sandbox that denies the destination does not get the connection, and cannot open another one
         ut_with_sandbox(*deny, [&]() {
-            HttpClientConnectionBase* r = mgr->acquireConnection("http", "127.0.0.1", port, &xsink);
+            HttpClientConnectionBase* r = mgr->acquireConnectionRef("http", "127.0.0.1", port, &xsink);
             UT_ASSERT(c, !r, (label + "a sandbox that denies the destination gets no connection").c_str());
             if (xsink.isException()) {
                 QoreStringValueHelper desc(xsink.getExceptionDesc());
@@ -14013,18 +14021,18 @@ static void ut_manager_pool_sandbox(UnitTestCounters& c) {
             UT_ASSERT(c, ut_take_exception(xsink, "NETWORK-ACCESS-DENIED"),
                 (label + "the sandbox's denial is raised").c_str());
             if (r) {
-                mgr->releaseConnection(r);
+                ut_release_acquired(*mgr, r);
             }
         });
         UT_ASSERT_EQ(c, 1, mgr->getConnectionCount("127.0.0.1", port), (label + "no other connection was opened").c_str());
 
         // a sandbox that allows it gets the pooled connection
         ut_with_sandbox(*allow, [&]() {
-            HttpClientConnectionBase* r = mgr->acquireConnection("http", "127.0.0.1", port, &xsink);
+            HttpClientConnectionBase* r = mgr->acquireConnectionRef("http", "127.0.0.1", port, &xsink);
             UT_ASSERT(c, r == conn && !xsink.isException(), (label + "a sandbox that allows it reuses the connection").c_str());
             xsink.clear();
             if (r) {
-                mgr->releaseConnection(r);
+                ut_release_acquired(*mgr, r);
             }
         });
         UT_ASSERT_EQ(c, 1, mgr->getConnectionCount("127.0.0.1", port), (label + "the connection was reused").c_str());
@@ -14621,7 +14629,7 @@ static void ut_manager_close_all(UnitTestCounters& c) {
     UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "pool empty after closeAll");
 
     // Subsequent acquireConnection raises HTTPCLIENT-SHUTDOWN
-    HttpClientConnectionBase* dead_conn = mgr->acquireConnection(
+    HttpClientConnectionBase* dead_conn = mgr->acquireConnectionRef(
         "http", "127.0.0.1", server_port, &xsink);
     UT_ASSERT(c, !dead_conn, "acquireConnection returns nullptr after closeAll");
     UT_ASSERT(c, xsink.isException(), "acquireConnection raises after closeAll");
@@ -15167,7 +15175,7 @@ static void ut_manager_negotiate_plaintext_uses_h1(UnitTestCounters& c) {
     // only failure here is the connection itself -- port 1 is refused.  Rejecting the target up
     // front with HTTPCLIENT-NEGOTIATE-SSL-REQUIRED would mean the transport was decided by the
     // client's protocol instead of by the request target.
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "http", "127.0.0.1", 1, &xsink);
     UT_ASSERT(c, !conn, "NEGOTIATE + plain HTTP to a refused port returns nullptr");
     UT_ASSERT(c, xsink.isException(),
@@ -15199,7 +15207,7 @@ static void ut_manager_negotiate_refused_port(UnitTestCounters& c) {
 
     // https scheme triggers the NEGOTIATE path.  Connect fails at TCP
     // (refused); the error propagates out of the negotiation helper.
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "https", "127.0.0.1", dead_port, &xsink);
     UT_ASSERT(c, !conn, "NEGOTIATE + refused port returns nullptr");
     UT_ASSERT(c, xsink.isException(),
@@ -15332,7 +15340,7 @@ static void ut_manager_h2_dispatch(UnitTestCounters& c) {
         return;
     }
 
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "http", "127.0.0.1", dead_port, &xsink);
     UT_ASSERT(c, !conn, "acquireConnection on refused port returns nullptr");
     UT_ASSERT(c, xsink.isException(),
@@ -15392,7 +15400,7 @@ static void ut_manager_h3_dispatch(UnitTestCounters& c) {
 
     // H3 requires HTTPS scheme — but we're just testing the manager
     // dispatch path (no PROTOCOL-NOT-IMPLEMENTED anymore)
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "https", "127.0.0.1", dead_port, &xsink);
     UT_ASSERT(c, !conn, "acquireConnection fails on refused port");
     UT_ASSERT(c, xsink.isException(),
@@ -15485,7 +15493,7 @@ static void ut_manager_proxy_h1_connect(UnitTestCounters& c) {
 
     // HTTPS through proxy: should attempt the connect (not raise
     // HTTPCLIENT-PROXY-ERROR anymore)
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "https", "target.example.com", 443, &xsink);
     UT_ASSERT(c, !conn, "acquireConnection(https via proxy) returns nullptr (connect refused)");
     UT_ASSERT(c, xsink.isException(),
@@ -15496,7 +15504,7 @@ static void ut_manager_proxy_h1_connect(UnitTestCounters& c) {
     xsink.clear();
 
     // Plain HTTP through proxy: also should attempt connect
-    conn = mgr->acquireConnection("http", "target.example.com", 80, &xsink);
+    conn = mgr->acquireConnectionRef("http", "target.example.com", 80, &xsink);
     UT_ASSERT(c, !conn, "acquireConnection(http via proxy) returns nullptr");
     UT_ASSERT(c, xsink.isException(),
         "acquireConnection(http via proxy) raises exception");
@@ -15519,7 +15527,7 @@ static void ut_manager_proxy_h3_rejected(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "manager(H3+proxy) construction succeeds");
     if (xsink) { xsink.clear(); return; }
 
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "https", "target.example.com", 443, &xsink);
     UT_ASSERT(c, !conn, "H3+proxy acquireConnection returns nullptr");
     UT_ASSERT(c, xsink.isException(), "H3+proxy raises exception");
@@ -22766,7 +22774,8 @@ bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point) {
     request waits for its connection to be ready first); \c "takeover": the hand-over of an ALPN-negotiating connection
     checked the connection and holds its method guard; \c "drain-wait": the close of an HTTP client connection has to
     wait for a call in flight (with a release Counter of 0, it only reports it); \c "swap": a negotiating connection was
-    handed over, and the connection manager is about to replace it in its pool with the connection that took it over
+    handed over, and the connection manager is about to replace it in its pool with the connection that took it over;
+    \c "acquired": the connection manager found a connection in its pool for a request and released the pool lock
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
 
@@ -22789,6 +22798,8 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::DrainWait);
     } else if (!strcmp(name->c_str(), "swap")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::Swap);
+    } else if (!strcmp(name->c_str(), "acquired")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Acquired);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();

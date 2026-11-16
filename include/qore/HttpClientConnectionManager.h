@@ -265,6 +265,12 @@ public:
             the pooled connections and no further connection can be opened (@c max_connections_per_host)
         @throw PROTOCOL-NOT-IMPLEMENTED if @c opts.protocol is H2 or H3
             (P3 limitation)
+
+        @deprecated the returned pointer is borrowed from the pool, whose reference a close of the connections by
+        another thread can release at any time, also before the caller takes a reference of its own; use
+        @ref acquireConnectionRef(), which returns a reference taken while the pool holds the connection
+        @note the library calls the reference-returning variant itself, not this virtual method, so an override in a
+        subclass is not called by the library
     */
     DLLEXPORT virtual HttpClientConnectionBase* acquireConnection(
         const char* scheme, const char* host, int port,
@@ -286,6 +292,12 @@ public:
             @c nullptr on error (@a xsink set)
 
         @since %Qore 3.0
+
+        @deprecated the returned pointer is borrowed from the pool, whose reference a close of the connections by
+        another thread can release at any time, also before the caller takes a reference of its own; use
+        @ref acquireConnectionForStreamingSendRef(), which returns a reference taken while the pool holds the connection
+        @note the library calls the reference-returning variant itself, not this virtual method, so an override in a
+        subclass is not called by the library
     */
     DLLEXPORT virtual HttpClientConnectionBase* acquireConnectionForStreamingSend(
         const char* scheme, const char* host, int port,
@@ -312,9 +324,76 @@ public:
             on error (@a xsink set).
 
         @since %Qore 3.0
+
+        @deprecated the returned pointer is borrowed from the pool, whose reference a close of the connections by
+        another thread can release at any time, also before the caller takes a reference of its own; use
+        @ref acquireConnectionAsyncRef(), which returns a reference taken while the pool holds the connection
+        @note the library calls the reference-returning variant itself, not this virtual method, so an override in a
+        subclass is not called by the library
     */
     DLLEXPORT virtual HttpClientConnectionBase* acquireConnectionAsync(
         const char* scheme, const char* host, int port,
+        ExceptionSink* xsink);
+
+    //! Acquires a connection, as @ref acquireConnection does, and returns a reference of the caller
+    /** The reference is taken while the pool holds the connection, so the connection stays valid for the caller even
+        if a close of the connections by another thread releases the pool's reference right after; the caller
+        releases the reference with @c deref() and gives back the reserved stream slot with
+        @ref releaseConnection() as for @ref acquireConnection.  A connection is returned only when no exception was
+        raised.
+
+        Does not call the virtual @ref acquireConnection, which a subclass may override.
+
+        @param scheme URL scheme ("http" or "https")
+        @param host target hostname
+        @param port target TCP port
+        @param xsink exception sink
+
+        @return a referenced connection, or @c nullptr on error (@a xsink set)
+
+        @throw HTTPCLIENT-CAPACITY-ERROR, HTTPCLIENT-CONNECT-ERROR, HTTPCLIENT-SHUTDOWN, NETWORK-ACCESS-DENIED as for
+        @ref acquireConnection
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT HttpClientConnectionBase* acquireConnectionRef(const char* scheme, const char* host, int port,
+        ExceptionSink* xsink);
+
+    //! Acquires a connection for incremental request-body streaming, as @ref acquireConnectionForStreamingSend
+    //! does, and returns a reference of the caller
+    /** The reference is taken while the pool holds the connection; see @ref acquireConnectionRef.
+
+        Does not call the virtual @ref acquireConnectionForStreamingSend, which a subclass may override.
+
+        @param scheme URL scheme ("http" or "https")
+        @param host target hostname
+        @param port target TCP port
+        @param xsink exception sink
+
+        @return a referenced connection, or @c nullptr on error (@a xsink set)
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT HttpClientConnectionBase* acquireConnectionForStreamingSendRef(const char* scheme, const char* host,
+        int port, ExceptionSink* xsink);
+
+    //! Acquires a connection without blocking for it to become READY, as @ref acquireConnectionAsync does, and
+    //! returns a reference of the caller
+    /** The reference is taken while the pool holds the connection; see @ref acquireConnectionRef.  The connection
+        may be in CONNECTING or READY state.
+
+        Does not call the virtual @ref acquireConnectionAsync, which a subclass may override.
+
+        @param scheme URL scheme ("http" or "https")
+        @param host target hostname
+        @param port target TCP port
+        @param xsink exception sink
+
+        @return a referenced connection, or @c nullptr on error (@a xsink set)
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT HttpClientConnectionBase* acquireConnectionAsyncRef(const char* scheme, const char* host, int port,
         ExceptionSink* xsink);
 
     //! Completes an asynchronous acquisition once the connection reports ready.
@@ -849,13 +928,18 @@ private:
     //! Internal: the network sandbox of the calling code and its decisions on the connections of a pool scan
     struct SandboxScan;
 
-    //! Internal: shared implementation for @ref acquireConnection and
-    //! @ref acquireConnectionAsync.  When @a wait_for_ready is @c false,
+    //! Internal: shared implementation for the acquire methods; returns a connection with a reference of the
+    //! caller, taken under the pool lock.  When @a wait_for_ready is @c false,
     //! newly-created connections are returned in CONNECTING state.  When
     //! @a streaming_send is true, the reservation also claims the
     //! per-connection incremental-body sender slot.
     DLLLOCAL HttpClientConnectionBase* acquireConnectionImpl(
         const char* scheme, const char* host, int port,
+        bool wait_for_ready, bool streaming_send, ExceptionSink* xsink);
+
+    //! Internal: calls @ref acquireConnectionImpl, which returns a referenced connection, and returns the connection
+    //! only when no exception was raised; otherwise gives back its stream slot and reference
+    DLLLOCAL HttpClientConnectionBase* acquireConnectionChecked(const char* scheme, const char* host, int port,
         bool wait_for_ready, bool streaming_send, ExceptionSink* xsink);
 
     //! Internal: scans the pool for a reusable connection (caller must
