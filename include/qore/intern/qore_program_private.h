@@ -714,8 +714,9 @@ public:
     std::atomic<bool> parse_commit_in_progress{false};
 
     //! the threads that code run by a parse or its commit started while it was in progress; protected by plock
-    /** They can enter the Program while it is committed (refusedByCommit()); cleared when the commit ends and when a
-        parse is rolled back (issue #6243)
+    /** They can enter the Program while it is committed (refusedByCommit()); cleared when a parse starts
+        (beginParse()), when the commit ends and when a parse is rolled back, and a thread is removed when it leaves the
+        Program (decThreadCount()), so that its TID cannot be admitted for another thread (issue #6243)
     */
     std::set<int> parse_tids;
 
@@ -2318,8 +2319,8 @@ public:
     DLLLOCAL int checkDeferredClosureInit(ExceptionSink* xsink) {
         int tid = q_gettid();
         AutoLocker al(plock);
-        if ((parsing_in_progress || commit_entry_restricted) && parse_tid != tid
-                && parse_tids.find(tid) == parse_tids.end()) {
+        // the same threads as the entry into the Program (incThreadCount())
+        if ((parsing_in_progress && parse_tid != tid) || refusedByCommit(tid)) {
             if (xsink) {
                 xsink->raiseException("PROGRAM-ERROR", "the Program accessed is currently undergoing parsing and "
                     "cannot be accessed at runtime");
@@ -2433,6 +2434,8 @@ public:
         if (!--i->second) {
             tidmap.erase(i);
             foreign_tids.erase(tid);
+            // the thread ends or leaves the Program: its TID can be given to another thread
+            parse_tids.erase(tid);
             // a thread that still holds the parse lock releases its deferred references when it releases the lock
             if (parse_tid != tid) {
                 derefs = takeDeferredDerefs(tid, clear);
@@ -6537,7 +6540,8 @@ DLLLOCAL bool qore_exit_hooks_started();
 #ifdef DEBUG
 //! Stops the commit of a parse of the Program armed with dbg_arm_parse_commit_gate() (debug builds, for tests)
 /** Called by qore_program_private::internParseCommit() once the commit has started and other threads cannot enter
-    the Program (\a point 0; see qore_program_private::refusedByCommit()), and once the new code has been merged into the Program and before the deferred
+    the Program (\a point 0; see qore_program_private::refusedByCommit()), and once the new code has been merged into
+    the Program and before the deferred
     initialization of its closures (\a point 1): the thread waits until dbg_release_parse_commit_gate() releases it,
     so that a test can try to enter the Program meanwhile (issue #6243).
 */

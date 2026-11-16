@@ -625,9 +625,18 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
         thread_hub->forkChild(tid, ++activity_gen, !own);
     }
     if (parse_tid != tid) {
-        // a thread of the parent was parsing; the parse does not go on in the child
+        // a thread of the parent was parsing; the parse does not go on in the child, nor does its commit
         parse_count = 0;
         parse_tid = -1;
+        commit_entry_restricted = false;
+    }
+    // the other threads of the parent do not exist in the child, whose TIDs can be given to other threads
+    {
+        bool own_parse_thread = parse_tids.find(tid) != parse_tids.end();
+        parse_tids.clear();
+        if (own_parse_thread) {
+            parse_tids.insert(tid);
+        }
     }
     tlock.reinitAfterFork();
     tcond.reinitAfterFork();
@@ -2020,6 +2029,9 @@ int qore_program_private::beginParse(ExceptionSink* xsink, ParseStartGuard& guar
             parsing_in_progress = true;
             guard.began = true;
         }
+        // the threads that code of an earlier parse or of a debugger evaluation started are not this parse's
+        // (issue #6243)
+        parse_tids.clear();
     }
 #ifdef DEBUG
     if (qore_dbg_parse_start_gate(pgm, xsink)) {
