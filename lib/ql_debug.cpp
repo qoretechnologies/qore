@@ -120,6 +120,8 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
+#include <sched.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -17005,10 +17007,72 @@ static QoreValue f_dbg_close_socket_at_next_ssl_io(const QoreListNode* params, R
     return QoreValue();
 }
 
-//! Debug-only: closes a socket so that its connection is reset at once
+//! returns the number of bytes in the send buffer of \a fd that the peer has not acknowledged, or 0 if unknown
+static int64 dbg_unacknowledged_bytes(int fd) {
+#ifdef DARWIN
+    int n = 0;
+    socklen_t len = sizeof n;
+    return getsockopt(fd, SOL_SOCKET, SO_NWRITE, &n, &len) || n < 0 ? 0 : n;
+#elif defined(TIOCOUTQ)
+    int n = 0;
+    return ::ioctl(fd, TIOCOUTQ, &n) || n < 0 ? 0 : n;
+#else
+    return 0;
+#endif
+}
+
+//! blocks until the peer has acknowledged everything written on \a fd, or the connection has ended; no timer is
+//! involved
+/** A reset (\c SO_LINGER 0) discards the data in the send buffer that has not been sent; on macOS a small write made
+    while an earlier one is unacknowledged is held back (Nagle), and loopback delivery is not synchronous with send(),
+    so a reset made at once discards the end of what was written (as for issue #6320).  The peer acknowledges data
+    when it arrives, whether its program reads it or not, so this only waits if more was written than the peer's
+    receive buffer takes.
+*/
+static void dbg_wait_send_buffer_empty(int fd) {
+#ifdef DARWIN
+    // the write filter fires for each change of the send buffer's space, as the peer acknowledges data
+    int kq = kqueue();
+    if (kq < 0) {
+        return;
+    }
+    ON_BLOCK_EXIT([kq] () { ::close(kq); });
+    struct kevent kev;
+    EV_SET(&kev, fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, nullptr);
+    if (kevent(kq, &kev, 1, nullptr, 0, nullptr) < 0) {
+        return;
+    }
+    while (dbg_unacknowledged_bytes(fd) > 0) {
+        struct kevent out;
+        int rc = kevent(kq, nullptr, 0, &out, 1, nullptr);
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        if (rc <= 0 || (out.flags & (EV_EOF | EV_ERROR))) {
+            return;
+        }
+    }
+#else
+    // loopback acknowledges data as it is delivered, before send() returns, so this normally does not wait
+    while (dbg_unacknowledged_bytes(fd) > 0) {
+        pollfd pfd = {fd, POLLOUT, 0};
+        if (::poll(&pfd, 1, -1) < 0 && errno != EINTR) {
+            return;
+        }
+        if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
+            return;
+        }
+        sched_yield();
+    }
+#endif
+}
+
+//! Debug-only: closes a socket so that its connection is reset at once, once what was written on it has arrived
 /** The close sets \c SO_LINGER with a zero timeout and skips the TLS close_notify alert and the shutdown that a close
     makes first, which on macOS discards unread data and ends the connection with a FIN.  Tests use it to have a peer
-    reset a connection deterministically.  DEBUG builds only.
+    reset a connection deterministically.  The close is made once the peer has acknowledged all the data written on
+    the socket (see dbg_wait_send_buffer_empty()), so that the reset does not discard the end of an answer still in
+    the send buffer.  DEBUG builds only.
 */
 static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
@@ -17022,6 +17086,10 @@ static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& r
         xsink);
     if (*xsink || !sock) {
         return QoreValue();
+    }
+    int fd = sock->getPollableDescriptor();
+    if (fd >= 0) {
+        dbg_wait_send_buffer_empty(fd);
     }
     sock->dbgResetOnClose();
     sock->close();
