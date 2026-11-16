@@ -960,11 +960,10 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         if (exec_mode == QEM_IR || exec_mode == QEM_JIT
             || (exec_mode == QEM_TIERED
                 && qore_parse_options_support_ir(runtime_parse_options))) {
-            // Try to use cached IR if available
-            QoreIRFunction* ir_func = cached_toplevel_ir;
-            bool need_lower = !ir_func && !toplevel_ir_failed;
-
-            if (need_lower) {
+            // the IR is lowered once; every run goes through the once flag, which makes what the lowering stored (the
+            // IR, its options, the failure) visible to the threads that run the code later
+            QoreIRFunction* ir_func = nullptr;
+            {
                 std::call_once(toplevel_ir_once, [this, pgm]() {
                     // Make the top-level function name unique per TopLevelStatementBlock
                     // to avoid name collisions in the JIT's compiled_functions map.
@@ -1162,6 +1161,10 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     option that one of them does not have.  Lowered code is %modern, so the options that compiled code relies on
     (negative offsets, strict arguments) are those of every statement.  The options of the Program can differ: with
     \c %push-parse-options, the options of the file end with it
+
+    @note when the statements have different restrictions (files parsed into one Program with different options), the
+    lowered code runs all of them with the restrictions of every one, which is more restrictive than the AST interpreter
+    for the statements that have fewer, never less
 */
 QoreParseOptions TopLevelStatementBlock::toplevelCodeParseOptions() const {
     assert(!statement_list.empty());

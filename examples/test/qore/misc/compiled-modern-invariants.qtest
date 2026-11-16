@@ -81,7 +81,8 @@ printf(\"top-level: %y\\n\", (tl[-1], tl[-2..-1], tl_pop, tx));
 
 # the top-level code of a child Program whose file has its own options (%push-parse-options): the options of the
 # Program end with the file, and its code runs with those of its statements; a child Program takes the execution mode
-# that it is given, not the one of the command line
+# that it is given, not the one of the command line (tiered execution runs top-level code whose Program options are
+# not %modern in the AST interpreter)
 Program p(PO_NO_CHILD_PO_RESTRICTIONS);
 p.parsePending(\"%push-parse-options\\n%modern\\nlist<int> l = (1, 2, 3); string popped; int i = 1;
 try { pop i; popped = \\\"accepted\\\"; } catch (hash<ExceptionInfo> ex) { popped = ex.err; }
