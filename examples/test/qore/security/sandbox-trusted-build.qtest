@@ -11,8 +11,11 @@
 %no-child-restrictions
 %allow-debugger
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../classes/SandboxManager"
 %requires QUnit
 %requires Util
+# a module that creates a system thread capability in its initialization (the only time it can be created)
+%requires SystemThreadWorker
 %exec-class SandboxTrustedBuildTest
 
 # the file that the sandbox denies; set in globalSetUp()
@@ -146,6 +149,11 @@ Holder sub new_holder() {
     return new Holder();
 }
 
+#! trusted code that sandboxed code calls: the closure gets the caller's sandbox as provenance
+code sub host_closure() {
+    return sub () {};
+}
+
 class SandboxTrustedBuildTest inherits QUnit::Test {
     private {
         #! the sandboxed Program
@@ -204,7 +212,7 @@ Program sub mk(string src) {
         addTestCase("an object of the caller passed to the build keeps its provenance", \callerObject());
         addTestCase("the sandbox of the Program that created the capability governs the build", \creatorSandbox());
         addTestCase("a Program sandboxed by its flag only cannot create the capability", \flagOnlyCreator());
-        addTestCase("the memory that a build keeps is not charged to the caller", \memory());
+        addTestCase("the memory that a build allocates counts against the caller's call", \memory());
         set_return_value(main());
     }
 
@@ -288,10 +296,12 @@ Program sub mk(string src) {
 
     guards() {
         # sandboxed code cannot create the capability
-        assertThrows("SANDBOX-CAPABILITY-ERROR", "created by code that a sandbox governs", \sandboxed.callFunction(),
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "a sandbox governs or that is sandboxed",
+            \sandboxed.callFunction(),
             ("create_capability", \build_program()));
         # nor trusted code that it calls
-        assertThrows("SANDBOX-CAPABILITY-ERROR", "created by code that a sandbox governs", \sandboxed.callFunction(),
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "a sandbox governs or that is sandboxed",
+            \sandboxed.callFunction(),
             ("call", \make_capability(), \build_program()));
         # a callback that sandboxed code created
         code c = sandboxed.callFunction("reader", DeniedFile);
@@ -311,6 +321,21 @@ Program sub mk(string src) {
             \SandboxManager::createTrustedBuildCall(), SandboxManager::createSystemPolicyCall(\build_program()));
         assertThrows("SANDBOX-CAPABILITY-ERROR", "cannot be registered as a system-policy callback",
             \SandboxManager::createSystemPolicyCall(), BuildProgram);
+        # a closure of a trusted Program that trusted code created while the sandboxed code called it
+        code hc = sandboxed.callFunction("call", \host_closure());
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "must not have sandbox provenance",
+            \SandboxManager::createTrustedBuildCall(), hc);
+        # a callback whose Program has been deleted
+        {
+            Program del(PO_MODERN);
+            del.parse("%modern\nsub f() {}", "deleted");
+            code dc = del.getCallReference("f");
+            delete del;
+            assertThrows("SANDBOX-CAPABILITY-ERROR", "has been deleted", \SandboxManager::createTrustedBuildCall(), dc);
+        }
+        # a system thread capability
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "not a bound callback or a capability",
+            \SandboxManager::createTrustedBuildCall(), SystemThreadWorker::Worker::deleted_program_cap);
         # the capability created by trusted code works
         code cap = make_capability(\build_program());
         assertEq(Ungoverned, sandboxed.callFunction("call", cap).callFunction("probe", DeniedFile));
@@ -341,6 +366,9 @@ hash<auto> sub read(string path) {
 code sub mk() {
     return Qore::SandboxManager::createTrustedBuildCall(\\read());
 }
+hash<auto> sub call_own(code cap, string path) {
+    return cap(path);
+}
 ", "creator");
         code cap = creator.callFunction("mk");
         assertEq(Ungoverned, sandboxed.callFunction("call", cap, DeniedFile));
@@ -350,6 +378,9 @@ code sub mk() {
         creator.setSandboxManager(sm);
         # the creator's own sandbox governs its code in the build, as through createSystemPolicyCall()
         assertEq(Governed, sandboxed.callFunction("call", cap, DeniedFile));
+        # also when its own code calls the capability, so that its Program is current already
+        assertEq(Governed, creator.callFunction("read", DeniedFile));
+        assertEq(Governed, creator.callFunction("call_own", cap, DeniedFile));
     }
 
     flagOnlyCreator() {
@@ -362,7 +393,7 @@ code sub mk() {
                 testSkip("dbg_trusted_build_from_flag_only_program() is only available in debug builds");
             }
             assertEq("SANDBOX-CAPABILITY-ERROR", ex.err);
-            assertRegex("created by sandboxed code", ex.desc);
+            assertRegex("that is sandboxed", ex.desc);
             return;
         }
         fail("the capability was created in a Program sandboxed by its flag");
@@ -371,24 +402,31 @@ code sub mk() {
     memory() {
         SandboxManager m();
         m.setUncontrolledApiPolicy(True);
-        m.setMemoryLimit(512 * 1024 * 1024);
+        m.setMemoryLimit(1024 * 1024);
         Program p(PO_MODERN);
         p.setSandboxManager(m);
-        p.parse(SandboxedSource, "memory");
+        p.parse(SandboxedSource + "
+code sub allocator() {
+    return int sub () {
+        list<string> l = ();
+        for (int i = 0; i < 400000; ++i) {
+            l += sprintf(\"tenant entry %d with some padding to use memory\", i);
+        }
+        return l.size();
+    };
+}
+", "memory");
         on_exit SharedState = ();
-        # about 30MB of shared state, kept after the build
-        int before = m.getMemoryUsage();
+        # the memory that a build allocates counts against the time of the caller's call, as its time does
+        assertThrows("SANDBOX-MEMORY-LIMIT", \p.callFunction(), ("call", BuildAlloc, 200000));
+        # the caller's own code that the build calls is charged to the caller's sandbox
+        code c = p.callFunction("allocator");
+        assertThrows("SANDBOX-MEMORY-LIMIT", c);
+        assertThrows("SANDBOX-MEMORY-LIMIT", \p.callFunction(), ("call", BuildCalling, c));
+        # with a limit that allows it, the shared state is built
+        m.setMemoryLimit(0);
         p.callFunction("call", BuildAlloc, 200000);
         assertEq(200000, SharedState.size());
-        int charged = m.getMemoryUsage() - before;
-        assertTrue(charged < 1024 * 1024, sprintf("the shared state is not charged (%d bytes charged)", charged));
-        # a caller with a small memory limit can have it built
-        SharedState = ();
-        m.setMemoryLimit(1024 * 1024);
-        p.callFunction("call", BuildAlloc, 200000);
-        assertEq(200000, SharedState.size());
-        # code that the caller runs itself is charged
-        assertThrows("SANDBOX-MEMORY-LIMIT", \p.callFunction(), ("call", \build_alloc(), 200000));
     }
 
     #! runs spin() of the Program in a thread, requests the sandbox's interrupt once it spins, returns its result

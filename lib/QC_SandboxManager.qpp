@@ -1168,12 +1168,15 @@ static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_
     a construction barrier, as the initialization of library code that trusted code loads runs:
     - a %Program that it creates, or commits code in, keeps no sandbox of the caller: no policy, no interrupts, no
       limits; it is governed only by the manager that the host gives it (Program::setSandboxManager())
-    - the threads that it starts inherit no sandbox of the caller, and objects that it creates have no sandbox
-      provenance
+    - the threads that it starts inherit no sandbox of the caller, and objects that it creates have none of the
+      caller's sandbox as provenance (they have the sandbox of the %Program that created the capability, if it has
+      one)
     - the caller's filesystem and network policy does not apply to the build itself, nor do the caller's interrupt
-      requests while it runs; the time and stack budgets of the caller's call still count it (a caller with a small
-      budget can make the build fail), but the memory that the build allocates is not charged to the caller's call
-    - the sandbox of the %Program that created the capability, if that %Program has one, governs the build
+      requests while it runs; the budgets of the caller's call (time, stack, memory) still count it: a caller with a
+      small budget can make the build fail, and the memory that the build allocates is charged to the caller's call
+      until it is freed or the call ends
+    - the sandbox of the %Program that created the capability, if that %Program has one, governs the build, also when
+      the code of that %Program calls the capability
     - objects and callbacks that the caller (or other sandboxed code) created keep their own provenance: what the
       build calls of them is governed by their sandbox
 

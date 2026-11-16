@@ -42,7 +42,6 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreSandboxProvenance.h"
-#include "qore/intern/QoreSandboxMemory.h"
 
 #include <shared_mutex>
 #include <optional>
@@ -2094,15 +2093,18 @@ public:
             // a trusted build's barrier is set before the Program that created the capability is entered: the
             // sandbox of that Program, if it has one, still governs the build
             std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
-            std::optional<QoreSandboxChargeSuspension> build_charge;
-            if (enterBuild(build_barrier, build_charge, xsink)) {
+            if (enterBuild(build_barrier, xsink)) {
                 return QoreValue();
             }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
             if (*xsink) {
                 return QoreValue();
             }
-            QoreSandboxTrustedPolicyHelper privilege;
+            // the caller's policy is masked for a system-policy callback; a trusted build's barrier hides it already
+            std::optional<QoreSandboxTrustedPolicyHelper> privilege;
+            if (!build) {
+                privilege.emplace();
+            }
             return qore_call_ref_invoke_named(callback, *evaluated, arg_names, policy, xsink);
         }
         return qore_call_ref_invoke_named(callback, args, arg_names, policy, xsink);
@@ -2140,15 +2142,18 @@ public:
             // a trusted build's barrier is set before the Program that created the capability is entered: the
             // sandbox of that Program, if it has one, still governs the build
             std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
-            std::optional<QoreSandboxChargeSuspension> build_charge;
-            if (enterBuild(build_barrier, build_charge, xsink)) {
+            if (enterBuild(build_barrier, xsink)) {
                 return QoreValue();
             }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
             if (*xsink) {
                 return QoreValue();
             }
-            QoreSandboxTrustedPolicyHelper privilege;
+            // the caller's policy is masked for a system-policy callback; a trusted build's barrier hides it already
+            std::optional<QoreSandboxTrustedPolicyHelper> privilege;
+            if (!build) {
+                privilege.emplace();
+            }
             return callback->invoke(*evaluated, xsink);
         }
         return callback->invoke(args, xsink);
@@ -2171,15 +2176,18 @@ public:
             // a trusted build's barrier is set before the Program that created the capability is entered: the
             // sandbox of that Program, if it has one, still governs the build
             std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
-            std::optional<QoreSandboxChargeSuspension> build_charge;
-            if (enterBuild(build_barrier, build_charge, xsink)) {
+            if (enterBuild(build_barrier, xsink)) {
                 return QoreValue();
             }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
             if (*xsink) {
                 return QoreValue();
             }
-            QoreSandboxTrustedPolicyHelper privilege;
+            // the caller's policy is masked for a system-policy callback; a trusted build's barrier hides it already
+            std::optional<QoreSandboxTrustedPolicyHelper> privilege;
+            if (!build) {
+                privilege.emplace();
+            }
             return callback->invokeLexical(*evaluated, xsink, policy);
         }
         return callback->invokeLexical(args, xsink, policy);
@@ -2216,8 +2224,7 @@ private:
 
         @return 0 for OK, -1 if the barrier could not be recorded (an out-of-memory exception is raised)
     */
-    int enterBuild(std::optional<QoreModuleInitSandboxBarrierHelper>& barrier,
-            std::optional<QoreSandboxChargeSuspension>& charge, ExceptionSink* xsink) const {
+    int enterBuild(std::optional<QoreModuleInitSandboxBarrierHelper>& barrier, ExceptionSink* xsink) const {
         if (!build) {
             return 0;
         }
@@ -2226,9 +2233,6 @@ private:
             xsink->outOfMemory();
             return -1;
         }
-        // the memory that the build allocates is shared state of every caller, not charged to the caller's call
-        // budget (see design/sandbox-resource-limits.md); the time budgets of the caller's call still count the build
-        charge.emplace();
         return 0;
     }
 };
@@ -2330,20 +2334,11 @@ private:
 
 ResolvedCallReferenceNode* qore_create_trusted_build_call(const ResolvedCallReferenceNode* callback,
         ExceptionSink* xsink) {
-    // any governing sandbox, whatever policy barrier is active: the capability removes the caller's sandbox from what
-    // its callback builds
-    {
-        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-        if (governing) {
-            xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a trusted build capability cannot be created by code "
-                "that a sandbox governs");
-            return nullptr;
-        }
-    }
-    // also sandboxed code that no manager governs (a Program sandboxed by its flag)
+    // code that any sandbox governs, whatever policy barrier is active, and sandboxed code that no manager governs (a
+    // Program sandboxed by its flag): the capability removes the caller's sandbox from what its callback builds
     if (qore_caller_is_sandboxed()) {
-        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a trusted build capability cannot be created by sandboxed "
-            "code");
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a trusted build capability cannot be created by code "
+            "that a sandbox governs or that is sandboxed");
         return nullptr;
     }
     if (QoreSandboxContext* creation = qore_get_call_reference_provenance(callback)) {

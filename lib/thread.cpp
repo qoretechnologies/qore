@@ -689,6 +689,10 @@ public:
         QoreSandboxManager* loader_manager;
         //! the ID of the Program of that code, or QORE_NO_PROGRAM_ID (see qore_caller_owner_program_id())
         qore_program_id_t loader_pgm_id;
+        //! true for the barrier of a trusted build (SandboxManager::createTrustedBuildCall()): the Program current
+        //! after it is the Program that created the capability, whose sandbox governs the build, also when it was
+        //! already current when the barrier was set (its code called the capability), so it is never hidden
+        bool build = false;
     };
     std::vector<ModuleInitBarrier> module_init_barriers;
 
@@ -5257,7 +5261,7 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
     if (!chain_clear) {
         // 1) the current program context; under a module initialization barrier, not the Program that loads the
         // module while no Program has been entered since
-        if (!mib || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
+        if (!mib || mib->build || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
             if (try_pgm(td->current_pgm, rv)) {
                 return rv;
             }
@@ -5524,7 +5528,7 @@ bool qore_caller_is_sandboxed() {
     // the code of a sandboxed Program that has no manager of its own (one that sandboxed code created) is sandboxed
     // also where no sandbox governs it, and so is the code that it calls: the Programs on the thread's call stack
     // are walked as in find_thread_sandbox_stack_ref_intern()
-    if (!mib || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
+    if (!mib || mib->build || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
         if (qore_program_is_sandboxed(td->current_pgm)) {
             return true;
         }
@@ -5609,7 +5613,7 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(const Qor
     // a trusted loader: nothing below the barrier is the loader's, as for library code that trusted code loads
     try {
         td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
-            td->sandbox_context, td->inherited_sandbox_context, false, false, nullptr, QORE_NO_PROGRAM_ID});
+            td->sandbox_context, td->inherited_sandbox_context, false, false, nullptr, QORE_NO_PROGRAM_ID, true});
         pushed = true;
     } catch (std::bad_alloc&) {
     }

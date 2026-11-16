@@ -78,21 +78,22 @@ capability has a kept sandbox but no kept policy manager, and a policy check mus
 lookups. Trusted infrastructure that builds shared state lazily for whichever caller needs it first (a Program that every
 caller then uses) would give it the first caller's sandbox; it builds it through a capability made during trusted
 startup with `SandboxManager::createTrustedBuildCall()` (`qore_create_trusted_build_call()`), a
-`SandboxBoundCallReference` in build mode: a call evaluates its arguments in the caller's context, enters the Program
-that created it, masks the caller's policy (`QoreSandboxTrustedPolicyHelper`, as `createSystemPolicyCall()` does) and
-runs the callback under a construction barrier, the module initialization barrier with a trusted loader
-(`QoreModuleInitSandboxBarrierHelper(QoreTrustedBuildTag)`). Under it nothing of the caller below the barrier is seen:
-`qore_caller_is_sandboxed()` is false, so what the callback creates or commits keeps no sandbox of the caller, threads
-that it starts inherit none, and objects that it creates have no provenance; the provenance of the caller's objects and
-callbacks that it calls applies above the barrier (a frame of the same context as one below the barrier is applied
-again: `QoreSandboxProvenanceHelper::apply()` does not skip a frame that the barrier hides). The barrier is set before
-the Program that created the capability is entered, so that Program's own sandbox, if it has one, governs the build.
-The time and stack budgets of the caller's call still count the build (they are frames of the thread, not found by the
-walk), the memory that it allocates is not charged to the caller (`QoreSandboxChargeSuspension`), and the caller's
-interrupt requests do not reach it. Creating the capability is refused to code
-that any sandbox governs or that is sandboxed, and for a callback that has provenance, belongs to a sandboxed Program,
-or is a bound callback or a capability; a trusted build capability cannot be registered with
-`createSystemPolicyCall()` either. The managers are released with the own manager when the Program is cleared, or when it is
+`SandboxBoundCallReference` in build mode: a call evaluates its arguments in the caller's context, sets a construction
+barrier, the module initialization barrier with a trusted loader (`QoreModuleInitSandboxBarrierHelper(QoreTrustedBuildTag)`,
+`ModuleInitBarrier::build`), then enters the Program that created it and runs the callback (no policy mask, unlike
+`createSystemPolicyCall()`: the barrier hides the caller's policy already). Under the barrier nothing of the caller below
+it is seen: `qore_caller_is_sandboxed()` is false for the caller, so what the callback creates or commits keeps no
+sandbox of the caller, threads that it starts inherit none, and objects that it creates have none of the caller's
+provenance. The current Program is never hidden by a build barrier (`ModuleInitBarrier::build`): it is the Program
+that created the capability, also when its own code called the capability, so that Program's own sandbox governs the
+build. The provenance of the caller's objects and callbacks that the build calls applies above the barrier: a frame
+of the same context as one that the barrier hides is applied again (`QoreSandboxProvenanceHelper::apply()`). The
+budgets of the caller's call (time, stack and memory: frames of the thread, not found by the walk) still count the
+build, so the caller's code that the build calls stays charged to the caller, and the memory that the build allocates
+is charged to the caller's call until it is freed or the call ends; the caller's interrupt requests do not reach it.
+Creating the capability is refused to code that a sandbox governs or that is sandboxed, and for a callback that has
+provenance, belongs to a sandboxed or deleted Program, or is a bound callback or a capability; a trusted build
+capability cannot be registered with `createSystemPolicyCall()` either. The managers are released with the own manager when the Program is cleared, or when it is
 destroyed without being cleared. The constructor throws `std::bad_alloc` if the creator's sandbox cannot be resolved
 (no Program is created); the parse entry points raise an out-of-memory exception and do not parse.
 
