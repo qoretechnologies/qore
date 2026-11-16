@@ -6846,6 +6846,18 @@ string sql = table.getSelectSql(sh, \args);
                     "of: %y (operator hash: %y)", getDesc(), cn, we.op, keys info.where_operator_map, we);
             }
 
+            # issue #2363: an operator that applies a column operator to the column, such as op_trunc_date(), whose
+            # result is compared with the operator's value or operator hash; the database's own implementation of
+            # the column operator is used
+            if (cmd.column_cop) {
+                if (we.arg.typeCode() != NT_HASH || !we.arg.hasKey("arg")) {
+                    throw "WHERE-ERROR", sprintf("%s: operator hash for key %y expects a hash with \"cop_arg\" and "
+                        "\"arg\" keys as its argument; got %y instead", getDesc(), cn, we.arg);
+                }
+                string ccn = doColumnOperatorIntern(\info, cmd.column_cop, we.arg.cop_arg, cn, column_name);
+                return doWhereExpressionIntern(\info, ccn, we.arg.arg, NOTHING, cprefix);
+            }
+
             if (cmd.recursive) {
                 cn = doWhereExpressionIntern(\info, cn, we.arg, column_name, cprefix);
                 delete we.arg;

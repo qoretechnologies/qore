@@ -156,6 +156,9 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - added @ref SqlUtil::op_trunc_date() "op_trunc_date()", which compares a date column truncated as
+      @ref SqlUtil::cop_trunc_date() "cop_trunc_date()" does with a value or another where operator, with the
+      database's own truncation (<a href="https://github.com/qoretechnologies/qore/issues/2363">issue 2363</a>)
     - @ref SqlUtil::SqlUtilColumnField::setDefaultValue() "SqlUtilColumnField::setDefaultValue()" returns the object,
       as @ref DataProvider::AbstractDataField::setDefaultValue() "AbstractDataField::setDefaultValue()" does
     - code that a @ref Qore::SandboxManager "SandboxManager" governs cannot open a database connection from a
@@ -5211,6 +5214,13 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     */
     public const string OP_SUBSTR = "substr";
 
+    #! the operator that compares a date column truncated with @ref cop_trunc_date() for use in @ref where_clauses
+    /** @see op_trunc_date()
+
+        @since %SqlUtil 3.11.0
+    */
+    public const string OP_TRUNC_DATE = "trunc_date";
+
     #! to combine SQL expressions with \c "or" for use in @ref where_clauses
     /** @see wop_or()
     */
@@ -7267,6 +7277,14 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 return sprintf("substring(%s from %v for %v) = %v", cn);
             },
         ),
+        # issue #2363: the column is truncated with the database's implementation of COP_TRUNC_DATE, and the
+        # result is compared as the where clause compares a column (see AbstractTable::doWhereExpressionIntern())
+        OP_TRUNC_DATE: (
+            "column_cop": COP_TRUNC_DATE,
+            "code": string sub (reference<hash<QueryInfo>> info, string cn, auto arg) {
+                throw "WHERE-ERROR", sprintf("operator %y is applied by the table", OP_TRUNC_DATE);
+            },
+        ),
         OP_OR: (
             "code": string sub (reference<hash<QueryInfo>> info, string cn, list<auto> arg) {
                 return info.table.getOrClause(\info, arg);
@@ -7282,6 +7300,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         - op_in_select(): for the \c "in" operator with a query argument
         - op_like(): for the \c "like" operator
         - op_substr(): for the \c "substr" operator
+        - op_trunc_date(): compares a date column truncated as @ref cop_trunc_date() does
         - op_ge(): for the \c ">=" operator when comparing column values to immediate values
         - op_gt(): for the \c ">" operator when comparing column values to immediate values
         - op_le(): for the \c "<=" operator when comparing column values to immediate values
@@ -7656,6 +7675,40 @@ int rows_updated = t.update(("counter": uop_divide(2)));
      */
     public hash<OperatorInfo> sub op_substr(int start, string text) {
         return make_op(OP_SUBSTR, (start, NOTHING, text));
+    }
+
+    #! returns an @ref OperatorInfo hash that truncates a date column as @ref cop_trunc_date() does and compares the result; for use in @ref where_clauses "where clauses"
+    /** @par Example:
+        @code{.py}
+# the rows of a day; on PostgreSQL: where date_trunc('day', ts) = %v
+*list<auto> rows = table.selectRows({"where": {"ts": op_trunc_date(DT_DAY, 2020-01-01)}});
+# the rows from a month on; on PostgreSQL: where date_trunc('month', ts) >= %v
+*list<auto> rows = table.selectRows({"where": {"ts": op_trunc_date(DT_MONTH, op_ge(2020-01-01))}});
+        @endcode
+
+        The column is truncated with the database's implementation of @ref cop_trunc_date() (ex: \c date_trunc() on
+        PostgreSQL, \c trunc() on Oracle, <tt>date_format()</tt> on MySQL), so the operator is supported where
+        @ref cop_trunc_date() is.
+
+        @param mask the truncation mask, one of the values in @ref sql_cop_trunc_date_enum
+        @param arg the value that the truncated column is compared with for equality, or a where operator hash that
+        is applied to the truncated column (ex: @ref op_ge() or @ref op_between())
+
+        @return an @ref OperatorInfo hash for use in @ref where_clauses "where clauses"
+
+        @throw COP-TRUNC-DATE-ERROR the mask is not a value in @ref sql_cop_trunc_date_enum
+
+        @note a column operator given directly as the value of a column in a where clause (ex:
+        <tt>{"ts": cop_trunc_date("ts", DT_DAY)}</tt>) compares the column with the operator's result
+        (<tt>ts = date_trunc('day', ts)</tt>); use this operator to compare the truncated column
+
+        @since %SqlUtil 3.11.0
+     */
+    public hash<OperatorInfo> sub op_trunc_date(string mask, auto arg) {
+        if (!inlist(mask, DT_ALL_VALUES)) {
+            throw "COP-TRUNC-DATE-ERROR", sprintf("Not allowed format argument: %n: allowed: %n", mask, DT_ALL_VALUES);
+        }
+        return make_op(OP_TRUNC_DATE, {"cop_arg": mask, "arg": arg});
     }
 
     #! returns an @ref OperatorInfo hash with a fake \c "_OR_" column name; the list of arguments to the function is combined such that each hash in the list generates SQL expressions combined with \a "and" logic, and each of those clauses is combined with \a "or" logic; this is for use in @ref where_clauses "where clauses"
