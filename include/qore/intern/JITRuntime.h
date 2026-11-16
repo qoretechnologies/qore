@@ -2011,6 +2011,15 @@ uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx, int32_t slot, uint6
 //! args is an array of nargs NaN-boxed QoreValues.
 //! Returns the NaN-boxed result; sets xsink on exception.
 uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
+//! as qore_rt_call_with_args(), giving the references of the temporary arguments (arg_cleanups) to the callee
+uint64_t qore_rt_call_with_args_consume_args(uint64_t expr_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+    ExceptionSink* xsink);
+
+//! Loads the value of a parameter that takes its argument over for the cache of its normal entry and releases the
+//! reference of its runtime variable, which leaves the cache with the only reference that the call gave (#5958)
+uint64_t qore_rt_take_param(LocalVar* var, ExceptionSink* xsink);
+//! AOT variant of qore_rt_take_param()
+uint64_t qore_rt_take_param_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 //! AOT variant: resolve expression from context slot, then delegate to qore_rt_call_with_args
 uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
@@ -2523,9 +2532,11 @@ enum : int {
 /** Sets \a rv to the conversion of a value that the builtin accepts; any other value raises the error of the builtin
     call (RUNTIME-OVERLOAD-ERROR), as with the AST interpreter (issue #5660)
 
-    @return false if the value is not accepted and the error was raised
+    @return 0 if the value is not accepted and the error was raised, 1 with the result in \a rv, 2 with the result in
+    \a rv if it holds a reference that the caller must release: a string, and an int above 48 bits, a negative NaN or a
+    double in the tag-collision range (about -2.2e307 to -8.7e307), which a node holds (issue #6211)
 */
-DLLLOCAL bool qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink);
+DLLLOCAL int qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink);
 
 //! Returns true if the builtin conversion of the given kind accepts a value of the given type
 /** string(softstring), int(*softint) and float(softfloat) accept a string, an int, a float, a number, a boolean, a

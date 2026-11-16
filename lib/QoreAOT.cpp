@@ -1146,12 +1146,6 @@ static bool hasAOTSelfRecursiveCall(const QoreIRFunction* ir_func) {
     return false;
 }
 
-//! Check if an AOT function is eligible for self-recursive Approach B fast entry.
-static bool isAOTSelfRecursiveEligible(const QoreIRFunction* ir_func,
-        const UserVariantBase* uvb) {
-    return isAOTFastEntryEligible(ir_func, uvb) && hasAOTSelfRecursiveCall(ir_func);
-}
-
 // Forward declaration
 static std::vector<std::string> extractAllDependencies(const char* source, int source_len,
     std::vector<std::string>* reexport_deps = nullptr,
@@ -15687,16 +15681,14 @@ static size_t projectAOTNonescapingObjectScalars(
                 if (return_kind == BatchCalleeReturnKind::NativeInt
                         && source_facts->representation
                             == QoreIRValueRepresentation::NativeInt
-                        && QoreTypeInfo::isType(member_type, NT_INT)
-                        && !QoreTypeInfo::getReturnEnum(member_type)) {
+                        && QoreTypeInfo::isPlainType(member_type, NT_INT)) {
                     projection.kind =
                         QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::NativeInt;
                 } else if (return_kind == BatchCalleeReturnKind::NativeFloat
                         && source_facts->representation
                             == QoreIRValueRepresentation::NativeFloat
-                        && QoreTypeInfo::isType(
-                            member_type, NT_FLOAT)) {
+                        && QoreTypeInfo::isPlainType(member_type, NT_FLOAT)) {
                     projection.kind =
                         QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::NativeFloat;
@@ -21280,7 +21272,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         }
         // Use namespace-qualified class path for unique LLVM symbol names
         const char* class_path = qc->getPath();
-        const char* class_name = qc->getName();
 
         // Helper lambda for method iteration
         auto processMethod = [&](QoreMethod* meth) {
@@ -23886,7 +23877,6 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         const std::vector<uint8_t>& metadata, const char* label,
         const QoreParseOptions& parse_options, const std::vector<AOTCompiledFunc>& compiled_funcs,
         const std::vector<AOTCompiledInitFunc>& compiled_init_funcs = {}) {
-    auto* i8_type = llvm::Type::getInt8Ty(ctx);
     auto* i32_type = llvm::Type::getInt32Ty(ctx);
     auto* i64_type = llvm::Type::getInt64Ty(ctx);
     auto* ptr_type = llvm::PointerType::get(ctx, 0);
@@ -26297,7 +26287,6 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>* fast_entries = nullptr) {
     // the metadata record of a module registered statically (see emitStaticModuleInfoRecord())
     assert(!compile_only || static_record);
-    auto* i8_type = llvm::Type::getInt8Ty(ctx);
     auto* i32_type = llvm::Type::getInt32Ty(ctx);
     auto* i64_type = llvm::Type::getInt64Ty(ctx);
     auto* ptr_type = llvm::PointerType::get(ctx, 0);
@@ -35996,7 +35985,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(vrn->getTypeInfo());
         if (hd) {
             id.kind = AOTExprKind::HASHDECL_NEW;
-            id.ref1 = hd->getNamespacePath();
+            id.ref1 = qore_aot_encode_expr_hashdecl_path(hd);
             id.call_args = vrn->getArgs();
             id.parse_args = vrn->getParseArgs();
             return id;
@@ -36035,7 +36024,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
         if (nhd->hd) {
             id.kind = AOTExprKind::HASHDECL_NEW;
-            id.ref1 = nhd->hd->getNamespacePath();
+            id.ref1 = qore_aot_encode_expr_hashdecl_path(nhd->hd);
             id.parse_args = nhd->args;
             return id;
         }
@@ -36764,7 +36753,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         const TypedHashDecl* cast_hd = QoreTypeInfo::getUniqueReturnHashDecl(hdc->getCastTypeInfo());
         if (cast_hd || hdc->isDynamicHashDeclCast()) {
             id.kind = AOTExprKind::CAST_HASHDECL;
-            id.ref1 = cast_hd ? cast_hd->getNamespacePath() : hdc->getDynamicHashDeclName();
+            id.ref1 = cast_hd ? qore_aot_encode_expr_hashdecl_path(cast_hd) : hdc->getDynamicHashDeclName();
             id.flags = hdc->isOrNothing() ? 1 : 0;
             return id;
         }

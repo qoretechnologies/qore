@@ -7,6 +7,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %exec-class AOTBuiltinTypePathCacheTest
 
 class AOTBuiltinTypePathCacheTest inherits QUnit::Test {
@@ -16,7 +17,7 @@ class AOTBuiltinTypePathCacheTest inherits QUnit::Test {
     }
 
     private nativeValidation() {
-        string native = ENV.QORE_AOT_BUILTIN_TYPE_PATH_TEST ?? dirname(QORE_ARGV[0]) + "/qore-aot-builtin-type-path-test";
+        string native = ENV.QORE_AOT_BUILTIN_TYPE_PATH_TEST ?? dirname(TestInterpreter::qore_interpreter()) + "/qore-aot-builtin-type-path-test";
         if (!is_file(native)) {
             testSkip("the native AOT builtin type path test executable is not available");
             return;

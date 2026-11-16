@@ -1,0 +1,179 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of qcc executables and of a qcc-compiled module
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class HashdeclMemberDefaultTypeParamTest
+
+#! The member defaults of an instantiation of a generic hashdecl use its type arguments (qore#6240)
+/** A member default of a generic hashdecl whose types use the hashdecl's own type parameter (hash<HD2<X, int>> n =
+    new hash<HD2<X, int>>() in hashdecl O<X>) made a value of the unsubstituted type (hash<HD2<X, int>>), which the
+    member of the instantiation (O<string>) rejected with RUNTIME-TYPE-ERROR in every mode: the instantiation shares
+    the generic hashdecl's initializers, which were evaluated without its type arguments.
+
+    The probes (hashdecl-member-default-typeparam/probes.q) make instantiations of generic hashdecls with member
+    defaults that construct, cast and initialize hashdecls, typed containers (nested too) and a generic class with the
+    type parameter, with two type parameters, with new and cast forms of the instantiation, and a non-generic hashdecl
+    as a control.  They run in each execution mode in a child process, with tiered execution at the IR tier and
+    promoted to native code, as qcc-compiled executables (-O0, -O3) and in a qcc-compiled module (-O0, -O3) loaded by a
+    child in each execution mode, all with the same results: the member defaults that make hashdecls with the type
+    parameter also in qcc-compiled code, whose records have the hashdecl's serializable type path (not HD2<X, int>)
+    since AOT format v40 (qore#6173, qore#6241).
+*/
+class HashdeclMemberDefaultTypeParamTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the results of the probes
+        const Expected = (
+            ("O<string>.n", "{} hash<HD2<string, int>>"),
+            ("O<string>.i", "{} hash<HD<string>>"),
+            ("O<string>.c", "{} hash<HD<string>>"),
+            ("O<string>.lh", "[] list<hash<HD<string>>>"),
+            ("OC<string>.l", "[] list<string>"),
+            ("OC<string>.hl", "{} hash<string, list<string>>"),
+            ("OC<string>.hx", "{} hash<string, string>"),
+            ("OC<string>.o", "\"RUNTIME-TYPE-ERROR\" string"),
+            ("O<string>", "\"hash<O<string>>\" string"),
+            ("O<int>.n new", "{} hash<HD2<int, int>>"),
+            ("O<int>.n cast", "{} hash<HD2<int, int>>"),
+            ("O2<int, string>.n", "{} hash<HD2<string, int>>"),
+            ("P.n", "{} hash<HD2<string, int>>"),
+            ("P.i", "{} hash<HD<string>>"),
+            ("P.l", "[] list<string>"),
+        );
+
+        #! the module that the probes are compiled in
+        const ModuleHeader = "%modern
+module HashdeclMemberDefaultTypeParam {
+    version = \"1.0\";
+    desc = \"hashdecl member default type parameter test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+";
+
+        #! the child that loads the compiled module and runs its probes
+        const ModuleChild = "%modern
+%requires HashdeclMemberDefaultTypeParam
+for (int i = 0; i < 4; ++i) {
+    map printf(\"%d: %s\\n\", i, $1), probes();
+}
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string expected;
+        #! the expected lines of each run
+        list<string> expected_lines;
+    }
+
+    constructor() : QUnit::Test("HashdeclMemberDefaultTypeParam", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        for (int i = 0; i < 4; ++i) {
+            map expected_lines += sprintf("%d: %s: %s", i, $1[0], $1[1]), Expected;
+        }
+        expected = (foldl $1 + "\n" + $2, expected_lines) + "\n";
+
+        addTestCase("interpreted and compiled programs", \testModes());
+        addTestCase("compiled module", \testModule());
+        set_return_value(main());
+    }
+
+    string getProbes() {
+        return ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "hashdecl-member-default-typeparam" + DirSep
+            + "probes.q");
+    }
+
+    #! checks the output of qcc-compiled code: each line must be the expected one
+    checkCompiled(string out, string label) {
+        list<string> lines = out.split("\n");
+        if (lines.last() === "") {
+            pop lines;
+        }
+        assertEq(expected_lines.size(), lines.size(), label + ": line count");
+        for (int i = 0; i < lines.size() && i < expected_lines.size(); ++i) {
+            assertEq(expected_lines[i], lines[i], sprintf("%s: line %d", label, i + 1));
+        }
+    }
+
+    testModes() {
+        TmpDir tmp("qore-hashdecl-member-default-typeparam-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(getProbes()
+            + "\nfor (int i = 0; i < 4; ++i) {\n    map printf(\"%d: %s\\n\", i, $1), probes();\n}\n");
+        f.close();
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=2 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), "tiered, IR tier");
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            checkCompiled(backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                libqore_dir, exe)), "qcc " + opt);
+        }
+    }
+
+    testModule() {
+        TmpDir tmp("qore-hashdecl-member-default-typeparam-module-");
+        string src = tmp.path + DirSep + "HashdeclMemberDefaultTypeParam.qm";
+        string qmod = tmp.path + DirSep + "HashdeclMemberDefaultTypeParam.qmod";
+        string child = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(child, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ModuleChild);
+        f.close();
+
+        string probes = getProbes();
+        string decl = "\nlist<string> sub probes() {";
+        assertTrue(probes.find(decl) >= 0, "the probes are declared as expected");
+        probes = replace(probes, decl, "\npublic list<string> sub probes() {");
+
+        foreach string opt in (("-O0", "-O3")) {
+            f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(ModuleHeader + probes);
+            f.close();
+            if (is_file(qmod)) {
+                unlink(qmod);
+            }
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+                "QORE_MODULE_DIR=%s %s %s --module --strip-source -o %s %s 2>&1", libqore_dir, libqore_dir,
+                libqore_dir, tmp.path, qcc_bin, opt, qmod, src));
+            assertTrue(is_file(qmod), sprintf("qcc %s compiled the module: %s", opt, out));
+            # the child must load the compiled module: there is no source to fall back to
+            unlink(src);
+
+            foreach string mode in (ExecModes) {
+                checkCompiled(backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=2 LD_LIBRARY_PATH=%s "
+                    "DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s 2>&1", libqore_dir,
+                    libqore_dir, tmp.path, qore_bin, mode, child)), sprintf("module %s, %s", opt, mode));
+            }
+        }
+    }
+}

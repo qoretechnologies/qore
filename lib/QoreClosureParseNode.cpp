@@ -32,6 +32,7 @@
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/typed_hash_decl_private.h"
 
 static LocalVar* qore_closure_vlist_self(const LVarSet* vlist) {
     if (!vlist) {
@@ -210,10 +211,14 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         }
     } else {
         // in generic code, the closure names its type parameters (see UserSignatureTypeParamContextHelper), or
-        // those of its class
+        // those of its class, or those of the generic hashdecl whose member default it is in, which is evaluated
+        // with the instantiation as the receiver (qore#6240, qore#6269)
+        const typed_hash_decl_private* hd = parse_get_hashdecl_type_param_context();
+        const bool in_generic_hashdecl = hd && hd->hasTypeParams();
         {
             const qore_class_private* qc = parse_get_class_priv();
-            needs_type_context = parse_get_signature_type_param_context() || (qc && qc->hasTypeParams());
+            needs_type_context = parse_get_signature_type_param_context() || (qc && qc->hasTypeParams())
+                || in_generic_hashdecl;
         }
         {
             // the closure runs when it is called: any number of times, including none, and after the code parsed after
@@ -226,6 +231,14 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         uf->parseCommit();
         if (uf->defaultsNeedObject()) {
             defaults_need_object = true;
+        }
+        // a call of the closure with an instantiation of the hashdecl as the receiver runs its IR specialized for it
+        // (qore#6269)
+        if (in_generic_hashdecl && uf->numVariants()) {
+            UserVariantBase* uvb = uf->first()->getUserVariantBase();
+            if (uvb) {
+                uvb->setGenericHashDeclCode();
+            }
         }
 
         // After parseCommit, the signature is available - create a typed callable type

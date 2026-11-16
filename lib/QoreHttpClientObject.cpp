@@ -261,18 +261,6 @@ const char* QoreHttpClientObject::getHttpStatusMessage(int code) {
     return "Unknown";
 }
 
-static void set_http2_response_info(ExceptionSink* xsink, QoreHashNode& headers, QoreHashNode& info,
-        int code) {
-    headers.setKeyValue("status_code", code, xsink);
-    const char* status_msg = QoreHttpClientObject::getHttpStatusMessage(code);
-    headers.setKeyValue("status_message", new QoreStringNode(status_msg), xsink);
-    headers.setKeyValue("http_version", new QoreStringNode("2"), xsink);
-
-    QoreStringNode* response_uri = new QoreStringNode();
-    response_uri->sprintf("HTTP/2 %d %s", code, status_msg);
-    info.setKeyValue("response-uri", response_uri, xsink);
-}
-
 // returns true if a Content-Type value declares its own charset or is a multipart type with a boundary, so no
 // charset parameter may be added to it
 static bool qore_http_content_type_has_charset(const char* content_type) {

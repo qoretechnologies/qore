@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class QppOutputPathsTest
@@ -48,7 +49,7 @@ int SecondCls::two() {
     }
 
     constructor() : QUnit::Test("QppOutputPathsTest", "1.0", \ARGV) {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string bin_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qpp_bin = ENV.QPP ?? ENV.QORE_QPP
             ?? (is_file(bin_dir + "/qpp") ? bin_dir + "/qpp" : dirname(qore_bin) + "/qpp");

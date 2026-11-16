@@ -12,6 +12,7 @@
 %requires cppapiuser
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires ../../ExecModeHarness.qm
 
 %exec-class ForkThreadChurnTest
@@ -112,7 +113,7 @@ class ForkThreadChurnTest inherits QUnit::Test {
         }
         # the thread of the JIT background compiler does not exist in the child: stopping the compiler at the child's
         # exit waited forever for it
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string scenario = get_script_dir() + DirSep + "ForkAfterBgJitScenario.qr";
         hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=tiered %s",
             qore_bin, scenario));

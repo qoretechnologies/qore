@@ -174,6 +174,21 @@ size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func);
 */
 const QoreIRInstruction* qore_ir_call_of_target_check(const QoreIRInstruction* check, const QoreIRInstruction* next);
 
+//! Moves the debugger's step event of each statement whose first instruction is a fused local int operation into the
+//! operation
+/** Run on the final IR of a function lowered for the IR interpreter and the JIT with the debugger's step events
+    (QoreIRFunction::source_dpgm_addr): a QoreIROpcode::DebugStatement instruction directly followed by an
+    IncrementLocalInt or AddAssignLocalInt instruction of int locals that only the IR uses, which cannot raise an
+    exception, is removed from its block and kept by the operation (qore_ir_folded_debug_step()), which makes the event
+    before the operation, as the instruction did, in both tiers.  The operation is the first instruction of the
+    statement, which can have more: `i += 1;` is then one instruction, as without the debugger's events, and
+    `x = ++i;` or `if (++i > n)` have one instruction less.  The exception path of the event becomes the operation's
+    exception target, which the operation itself does not use, so that the edges of the function's blocks are
+    unchanged.  Not run on the IR of AOT code, whose debug IR is serialized with its DebugStatement instructions.
+    Returns the number of events moved.
+*/
+size_t qore_ir_fold_debug_statements(QoreIRFunction& func);
+
 struct QoreIROptimizationStats {
     size_t loops_analyzed = 0;
     size_t instructions_hoisted = 0;
