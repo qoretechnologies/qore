@@ -86,6 +86,7 @@ public namespace MetaMod {
         addTestCase("a module without its metadata section is refused", \missingSectionTest());
         addTestCase("a module with the trailers of an earlier qcc is refused", \legacyTrailerTest());
         addTestCase("a binary module written in C++ has no module metadata", \nativeModuleTest());
+        addTestCase("a module that uses newer IR opcodes than the runtime knows is refused", \newerOpcodeTest());
         set_return_value(main());
     }
 
@@ -581,6 +582,37 @@ public namespace MetaMod {
             "installation";
         assertThrows("INVALID-METADATA", quoteRegex(error), \moduleInfo(), qmod);
         assertRefused(qmod, "cannot load binary module '.*MetaMod\\.qmod': " + quoteRegex(error), "earlier trailer");
+    }
+
+    #! a module compiled by a newer qcc, whose IR may use opcodes that this runtime does not know, is refused with an
+    #! error that asks for a newer Qore (qore#5911 added opcodes 432-437)
+    newerOpcodeTest() {
+        TmpDir tmp = initDirs();
+        string qmod = compileMeta();
+        binary orig = readFile(qmod);
+        # the header of the module's QORD code: the magic "QORD", the format version (u16 at offset 4) and the highest
+        # IR opcode ID that the code may use (u16 at offset 28)
+        int qord = orig.find(binary("QORD"));
+        assertTrue(qord >= 0, "the module holds its QORD code");
+        int max_opcode = getLe32(orig, qord + 28) & 0xffff;
+        assertTrue(max_opcode > 0, "the QORD header gives the highest opcode ID");
+        patch(qmod, qord + 28, le32(max_opcode + 1).substr(0, 2));
+        if (PlatformOS == "Darwin") {
+            signAdHoc(qmod, "module with newer opcodes");
+        }
+        int rc;
+        string out = loadMeta(\rc);
+        assertNeq(0, rc, "the module was not loaded: " + out);
+        assertNeq(-1, out.find(qmod), "the error names the module: " + out);
+        assertRegex(sprintf("binary was compiled with Qore [0-9.]+ \\(max opcode ID %d\\) but this runtime only "
+            "supports up to opcode ID %d; please update your Qore installation", max_opcode + 1, max_opcode), out);
+
+        # the module as compiled loads
+        write(qmod, orig);
+        if (PlatformOS == "Darwin") {
+            signAdHoc(qmod, "module as compiled");
+        }
+        assertLoads("module as compiled");
     }
 
     nativeModuleTest() {

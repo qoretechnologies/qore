@@ -1550,6 +1550,10 @@ parameter on its `/v1` path, so it must not be offered as an action option or in
 Empty conversation item lists omit `first_id` and `last_id`; the checked import makes only these
 pagination IDs optional, preserving their string types and the required `object`, `data`, and
 `has_more` envelope. Published and serialized response types are tested against this live response.
+Image generation and edit responses carry `safety_identifier`, the request's effective safety identifier
+or null, which the generated Azure document omits from `ImagesResponse`; the checked import adds the
+OpenAI API's nullable string declaration, and the response types are tested against a live image edit
+response.
 
 The checked import spec repairs specific generated contract errors: multipart files and media fields,
 optional file expiration with Azure's three-to-thirty-day bounds, video reference images, evaluation

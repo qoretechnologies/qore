@@ -85,11 +85,22 @@ protected:
     DLLEXPORT virtual ~DateTimeNode();
 
 public:
+    //! constructor for an empty absolute date/time value
+    /** Not explicit, like DateTime().
+
+        @since %Qore 3.0 as a separate constructor; before, DateTimeNode(bool) with the default argument \c false
+    */
+    DLLLOCAL DateTimeNode() : DateTimeNode(false) {
+    }
+
     //! constructor for an empty object
     /**
         @param r sets the "relative" flag for the object
+
+        @note explicit since %Qore 3.0: before, any pointer converted implicitly to an empty DateTimeNode through
+        this constructor; the default constructor is DateTimeNode()
     */
-    DLLEXPORT DateTimeNode(bool r = false);
+    DLLEXPORT explicit DateTimeNode(bool r);
 
     //! constructor for setting all parameters
     /**
@@ -107,8 +118,13 @@ public:
     //! constructor for setting an absolute date based on the number of seconds from January 1, 1970
     /**
         @param seconds the number of seconds from January 1, 1970
+
+        @note explicit since %Qore 3.0: before, an integer, a floating-point value or a \c bool converted
+        implicitly to an absolute date through this constructor (\c true to 1970-01-01 00:00:01); construct it
+        explicitly from an \c int64 (<tt>new DateTimeNode((int64)secs)</tt>: an argument of another integer type
+        is ambiguous with DateTimeNode(bool))
     */
-    DLLEXPORT DateTimeNode(int64 seconds);
+    DLLEXPORT explicit DateTimeNode(int64 seconds);
 
     //! constructor for setting an absolute date based on the number of seconds from January 1, 1970 (plus milliseconds)
     /**
@@ -134,8 +150,11 @@ public:
 
     //! constructor for setting the date from a string with a flexible format, silently accepts invalid date strings
     /** @param date the string to use to set the date
+
+        @note explicit since %Qore 3.0: before, any \c char pointer converted implicitly to a DateTimeNode through
+        this constructor
     */
-    DLLEXPORT DateTimeNode(const char* date);
+    DLLEXPORT explicit DateTimeNode(const char* date);
 
     //! constructor for setting the date from a string with a flexible format, throws a Qore-language exception if the date string is invalid
     /** @param date the string to use to set the date
@@ -165,8 +184,11 @@ public:
     //! constructor for setting an absolute date based on a "struct tm"
     /**
         @param tms a structure giving the absolute date to set
+
+        @note explicit since %Qore 3.0: before, a \c struct \c tm pointer converted implicitly to a DateTimeNode
+        through this constructor
     */
-    DLLEXPORT DateTimeNode(struct tm* tms);
+    DLLEXPORT explicit DateTimeNode(struct tm* tms);
 
     //! copy constructor
     DLLEXPORT DateTimeNode(const DateTimeNode& dt);
@@ -278,6 +300,16 @@ public:
     */
     DLLEXPORT DateTimeNode* add(const DateTime& dt, ExceptionSink* xsink) const;
 
+    //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+    /** There is no checked overload taking a pointer; pass the value that the pointer refers to
+        (<tt>date->add(*period, xsink)</tt> for a <tt>const DateTime* period</tt>; <tt>**holder</tt> for a
+        <tt>SimpleRefHolder&lt;DateTimeNode&gt; holder</tt>), which add(const DateTime&, ExceptionSink*) const
+        takes.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL DateTimeNode* add(const DateTime* dt, ExceptionSink* xsink) const = delete;
+
     //! subtracts a DateTime value from the current value and returns the new value, the caller owns the pointer's reference count
     /**
         @return a new DateTimeNode value, the caller owns the pointer's reference count
@@ -314,6 +346,16 @@ public:
         @since %Qore 3.0
     */
     DLLEXPORT DateTimeNode* subtractBy(const DateTime& dt, ExceptionSink* xsink) const;
+
+    //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+    /** There is no checked overload taking a pointer; pass the value that the pointer refers to
+        (<tt>end_time->subtractBy(*start_time, xsink)</tt> for a <tt>const DateTime* start_time</tt>;
+        <tt>**holder</tt> for a <tt>SimpleRefHolder&lt;DateTimeNode&gt; holder</tt>), which
+        subtractBy(const DateTime&, ExceptionSink*) const takes.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL DateTimeNode* subtractBy(const DateTime* dt, ExceptionSink* xsink) const = delete;
 
     //! returns the negative time from the current time
     /** @deprecated a relative date with a component that is the smallest int gives a saturated result (it wrapped

@@ -535,7 +535,12 @@ static QoreValue read_node_EN_SELF_CALL_body(AOTExprNodeReadCtx& ctx, QoreAOTNam
         qc, qcp);
     SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(*base, ql);
     base->deref(nullptr);
-    if (resolved_variant) {
+    if (method_ref.abstract_self_call) {
+        // as SelfFunctionCallNode::parseInitCall() marked it: a call to an abstract method is resolved at run time on
+        // the object's class, with no variant (issue #5824)
+        sfcn->setAbstractCall();
+    } else if (resolved_variant && !static_cast<const MethodVariantBase*>(resolved_variant)->isAbstract()) {
+        // an abstract variant is never bound to a call: parsing binds none
         sfcn->setVariant(resolved_variant);
         if (!type_param_instantiation.type_args.empty()) {
             sfcn->setTypeParamInstantiation(std::move(type_param_instantiation));

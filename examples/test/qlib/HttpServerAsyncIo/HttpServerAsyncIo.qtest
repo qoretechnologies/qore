@@ -332,8 +332,66 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         if (Option::HAVE_LIBRARY_DEBUGGING) {
             addTestCase("a step back of the system clock does not stop the SSE heartbeat",
                 \sseClockStepHeartbeatTest());
+            addTestCase("a step forward of the system clock does not time out an HttpIdlePollOperation",
+                \idleClockStepTest());
+            addTestCase("a step forward of the system clock does not time out an HttpKeepAlivePollOperation",
+                \keepAliveClockStepTest());
         }
         set_return_value(main());
+    }
+
+    #! A step forward of the system clock does not time out an idle connection (#6150)
+    /** The idle timeout is measured on the monotonic clock: on the system clock, a step forward of an hour ended a
+        timeout of a minute at once.  The step is made with dbg_set_realtime_offset() (debug builds).
+    */
+    idleClockStepTest() {
+        list<Socket> sp = socketPair();
+        on_exit map $1.close(), sp;
+        HttpIdlePollOperation op(sp[1], 60s);
+        on_exit op.abort();
+        op.continuePoll();
+        call_function("dbg_set_realtime_offset", 3600 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        op.continuePoll();
+        assertFalse(op.timedOut(), "the idle timeout has not expired");
+        assertEq("idle", op.getState());
+    }
+
+    #! A step forward of the system clock does not time out a keep-alive connection, in its idle phase or while it
+    #! reads a request header (#6150)
+    /** The idle timeout and the header read timeout are measured on the monotonic clock: on the system clock, a step
+        forward of an hour ended them at once.  The step is made with dbg_set_realtime_offset() (debug builds).
+    */
+    keepAliveClockStepTest() {
+        list<Socket> sp = socketPair();
+        on_exit map $1.close(), sp;
+        HttpKeepAlivePollOperation op(sp[1], 60s);
+        on_exit op.abort();
+        op.continuePoll();
+        {
+            call_function("dbg_set_realtime_offset", 3600 * 1000000);
+            on_exit call_function("dbg_set_realtime_offset", 0);
+            op.continuePoll();
+            assertFalse(op.timedOut(), "the idle timeout has not expired");
+            assertEq("idle", op.getPhase());
+        }
+
+        # a partial request header starts the header phase
+        sp[0].send("GET / HTTP/1.1\r\n");
+        int deadline = clock_get_monotonic_us() + 5000000;
+        while (op.getPhase() == "idle" && clock_get_monotonic_us() < deadline) {
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (!info) {
+                break;
+            }
+            Socket::poll((info,), 50ms);
+        }
+        assertEq("header", op.getPhase());
+        call_function("dbg_set_realtime_offset", 3600 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        op.continuePoll();
+        assertFalse(op.timedOut(), "the header read timeout has not expired");
+        assertEq("header", op.getPhase());
     }
 
     #! A step back of the system clock does not stop the SSE heartbeat

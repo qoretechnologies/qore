@@ -603,6 +603,10 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func);
 */
 DLLLOCAL const qore_class_private* qore_ir_function_class_context(const QoreIRFunction& func);
 
+//! sets QoreIRFunction::static_call_context and QoreIRFunction::static_class_ctx of the function lowered from the
+//! variant @a variant (issue #5824)
+DLLLOCAL void qore_ir_set_static_call_context(QoreIRFunction& func, const AbstractQoreFunctionVariant* variant);
+
 //! Returns true if the declared return type leaves every value returned by the function unchanged
 /** A call-site summary that substitutes the callee's returned value is only valid in this case.  The returns are
     checked in the function's own class context (qore_ir_function_class_context()), in any thread.  Defined in

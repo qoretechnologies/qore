@@ -135,6 +135,16 @@ int QoreLogicalGreaterThanOperatorNode::parseInitIntern(const char* name, QoreVa
         return err;
     }
 
+    // a plugin operation that applies to some values of the operands (an or-nothing or a union type with the
+    // plugin's type) is dispatched at runtime, so the operator is not specialized for the other types, and its
+    // result can be the plugin's (qore#5911)
+    if (qore_plugin_binary_operation_may_apply(parse_context.pgm, lti, rti, "gt")) {
+        typeInfo = autoTypeInfo;
+        parse_context.typeInfo = autoTypeInfo;
+        set_binary_analysis_gt(parse_context, left_analysis, right_analysis);
+        return err;
+    }
+
     // see if both arguments are constants, then eval immediately and substitute this node with the result
     if (left.isValue() && right.isValue()) {
         SimpleRefHolder<QoreLogicalGreaterThanOperatorNode> del(this);

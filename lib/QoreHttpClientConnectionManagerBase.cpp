@@ -48,6 +48,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include "qore/intern/HttpClientDrainDebug.h"
 
 #ifdef DEBUG
 std::atomic<void (*)(HttpClientConnectionBase*)> qore_http_manager_new_connection_hook{nullptr};
@@ -229,7 +230,7 @@ struct HttpClientConnectionManagerBase::SandboxScan {
 };
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
-        const std::string& key, bool streaming_send, SandboxScan& scan) {
+        const std::string& key, bool streaming_send, SandboxScan& scan, bool check_age) {
     auto it = pool_.find(key);
     if (it == pool_.end()) {
         return nullptr;
@@ -237,6 +238,15 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
 
     // A connection is checked against the network sandbox of the code that opened it; it is handed to other code
     // only if that code's sandbox allows its destinations, as a new connection to them would be checked
+
+    // a connection that has reached max_age is not reused: the checkout's slow path evicts it (evictDeadLocked()),
+    // which applies the same condition, and then scans without the check; ages are measured on the monotonic clock
+    // (#6150)
+    int64_t max_age_us = check_age && opts_.max_age_ms > 0 ? (int64_t)opts_.max_age_ms * 1000LL : -1;
+    int64_t now_us = max_age_us > 0 ? q_get_monotonic_us() : 0;
+    auto too_old = [max_age_us, now_us](HttpClientConnectionBase* conn) -> bool {
+        return max_age_us > 0 && conn->getActiveStreamCount() == 0 && (now_us - conn->getCreatedUs()) >= max_age_us;
+    };
 
     // For NEGOTIATE managers the pool may hold a mix of H1 and H2
     // connections under the same (host, port) key.  H2 is nearly always
@@ -253,7 +263,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
     if (opts_.protocol == HttpClientProtocol::NEGOTIATE) {
         // Pass 1: prefer H2.
         for (HttpClientConnectionBase* conn : it->second) {
-            if (conn->isClosed() || conn->isDraining()) {
+            if (conn->isClosed() || conn->isDraining() || too_old(conn)) {
                 continue;
             }
             if (conn->getProtocol() != HttpClientProtocol::H2) {
@@ -268,7 +278,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
         }
         // Pass 2: any live H1 (or other) connection.
         for (HttpClientConnectionBase* conn : it->second) {
-            if (conn->isClosed() || conn->isDraining()) {
+            if (conn->isClosed() || conn->isDraining() || too_old(conn)) {
                 continue;
             }
             if (conn->getProtocol() == HttpClientProtocol::H2) {
@@ -293,7 +303,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
 
     // Fixed-protocol manager: single pass, insertion order.
     for (HttpClientConnectionBase* conn : it->second) {
-        if (conn->isClosed() || conn->isDraining()) {
+        if (conn->isClosed() || conn->isDraining() || too_old(conn)) {
             continue;
         }
         if (!scan.allows(conn)) {
@@ -321,8 +331,8 @@ void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key,
         ? (int64_t)opts_.max_age_ms * 1000LL : -1;
     int64_t now_us = 0;
     if (max_age_us > 0) {
-        int us = 0;
-        now_us = q_epoch_us(us) * 1000000LL + us;
+        // the creation times of the connections are on the monotonic clock (#6150)
+        now_us = q_get_monotonic_us();
     }
 
     auto write_it = conns.begin();
@@ -342,7 +352,12 @@ void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key,
         // caller can close+deref after pool_lock_ drops (closeConnection
         // is unsafe under pool_lock_, see acquireConnectionImpl shutdown
         // branch ~line 360 for the established pattern).
+        // nor one with a stream reserved by a checkout that has not submitted on it yet (#6165).  The reservations
+        // are read first: a reservation is taken under pool_lock_ (held here for writing), so none appears after
+        // the read, and a submit counts its active stream before it releases its reservation, so a reservation that
+        // was released before the read shows in the active count read after it
         if (max_age_us > 0
+                && conn->getPendingStreamCount() == 0
                 && conn->getActiveStreamCount() == 0
                 && (now_us - conn->getCreatedUs()) >= max_age_us) {
             out_to_close->push_back(conn);
@@ -524,7 +539,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
             // for close-after-lock-drop instead of being kept in the pool.
             evictDeadLocked(key, &max_age_evicted, &closed_evicted);
             scan.reset();
-            live_to_return = findReusableLocked(key, streaming_send, scan);
+            // the connections that have reached max_age were evicted just now: one that was kept, as it was busy,
+            // can be reused, as it counts against max_connections_per_host
+            live_to_return = findReusableLocked(key, streaming_send, scan, false);
 
             // Capacity check
             if (!live_to_return && opts_.max_connections_per_host) {
@@ -950,8 +967,8 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                     // was stuck in when the timeout fired.  See
                     // /tmp/httpclient-negotiate-timeout-investigation.md
                     // for the audit that motivated this instrumentation.
-                    int us;
-                    int64_t now_us = q_epoch_us(us) * 1000000LL + us;
+                    // the submit time is on the monotonic clock (#6150)
+                    int64_t now_us = q_get_monotonic_us();
                     int64_t submit_us = neg->getNegSubmitTimeUs();
                     int64_t elapsed_us = submit_us > 0 ? (now_us - submit_us) : -1;
                     const char* neg_state = neg->getNegStateName();
@@ -1486,6 +1503,10 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
     conn->ref();
     // RAII deref — fires on every return path below.
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+#ifdef DEBUG
+    // a test holds the request here, with a stream of the connection reserved and nothing submitted (#6165)
+    QoreHttpClientDrainDebug::get().holdAfterReserve();
+#endif
 
     ReferenceHolder<QoreHashNode> submit_result(
         conn->submitRequest(method, path, headers, body, body_len, xsink, event_sink), xsink);

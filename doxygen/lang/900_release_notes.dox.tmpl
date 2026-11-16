@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Locked Program Keeps Its Restrictions
+    @ref Qore::Program::disableParseOptions() "Program::disableParseOptions()", the parse directives that disable
+    options and @ref Qore::Program::replaceParseOptions() "Program::replaceParseOptions()" can no longer remove the
+    restrictions of a locked child Program, and an independent Program of restricted code takes and locks that code's
+    restrictions; see @ref locked_parse_options.
+
     @par Completed Objects Are Released After Constructor Argument Errors
     An exception while @ref constructor_argument_cleanup "releasing a completed constructor's arguments" now releases
     the new object normally, running its destructor when no other reference remains; AST execution previously skipped
@@ -635,6 +641,19 @@
       \c setRelativeDateSeconds() and \c makeRelativeFromSeconds(), the \c DateTimeNode overloads and
       \c DateTimeValueHelper(const QoreValue&, ExceptionSink*); the overloads without an \c ExceptionSink are
       deprecated and saturate such a result (it wrapped before; see \c QORE_DATE_UNCHECKED_DEPRECATED, issue #6103)
+    - a pointer to a \c DateTime or \c DateTimeNode given where a \c DateTime value is expected (a constructor,
+      \c DateTime::setDate(), a <tt>const DateTime&</tt> argument) is a compile error, as the deleted
+      \c DateTime(const DateTime*) shows; it was converted through \c DateTime(bool) to an empty date
+    - \c DateTime(bool) is \c explicit, so a pointer of another type (ex: <tt>const AbstractQoreNode*</tt>) is no
+      longer converted implicitly to an empty \c DateTime; write <tt>DateTime(true)</tt> for an empty relative date
+    - \c DateTime(int64) is \c explicit, so an integer, a floating-point value or a \c bool (\c true gave
+      1970-01-01 00:00:01) is no longer converted implicitly to an absolute date; construct it from an \c int64
+      (<tt>DateTime((int64)secs)</tt>, as another integer type is ambiguous with \c DateTime(bool))
+    - \c DateTimeNode(bool) and \c DateTimeNode(int64) are \c explicit like those of \c DateTime, which affects
+      only code that can create a \c DateTimeNode temporary (its destructor is protected)
+    - the <tt>const char*</tt> and <tt>struct tm*</tt> constructors of \c DateTime (and, as for
+      \c DateTimeNode(bool), of \c DateTimeNode) are \c explicit, so a string or a \c struct \c tm pointer is no
+      longer converted implicitly to a date; construct it explicitly (<tt>DateTime(str)</tt>)
     @endparblock
 
     @par qget Command-Line Changes
@@ -761,6 +780,12 @@
     factor carries fractions as \c date("P...") does); they gave an int, and \c *= assigned it.  An \c int,
     \c float or \c number lvalue multiplied by a date with \c *= raises an exception at run time, as it cannot hold
     the result (issue #6109).
+
+    @par Calls Through Method References on Deleted Objects Name the Method
+    The \c OBJECT-ALREADY-DELETED exception of a call through a method call reference on a deleted object names the
+    method (<tt>cannot call U::m() ...</tt>) instead of <tt>cannot call a method ...</tt>, in every execution mode
+    (see @ref call_reference_deleted_object; <a href="https://github.com/qoretechnologies/qore/issues/6083">issue
+    6083</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Module Commands Know the Restrictions of the Code That Issues Them
@@ -1083,6 +1108,17 @@
     reads with the new \c Datasource::getOptionRestrictions() and \c Datasource::getOptionPolicyManagerRef(), so that
     whoever configures a datasource decides what its options may do; see @ref sandbox_datasource_options
     (<a href="https://github.com/qoretechnologies/qore/issues/5741">issue 5741</a>).
+
+    @par Asking Whether a Sandbox Restricts Anything
+    @ref Qore::SandboxManager::restricts() "SandboxManager::restricts()", \c networkRestricts(), \c filesystemRestricts()
+    and \c limitsRestrict() tell whether a sandbox manager restricts network access, filesystem access or resource
+    use at all; a manager that allows everything and sets no limit restricts nothing.  Binary modules use the matching
+    C++ methods of \c QoreSandboxManager (feature macro \c _QORE_HAS_SANDBOX_RESTRICTS_API) instead of testing whether
+    a sandbox manager is attached; see @ref sandbox_restricts.  The new
+    @ref Qore::SandboxManager::trustsUncontrolledApis() "SandboxManager::trustsUncontrolledApis()" and the matching C++
+    method tell whether the sandbox trusts its code to use uncontrolled APIs (for a combination of sandboxes, whether
+    every member does), so that a module refuses an operation that only an unrestricted caller may use unless the
+    sandbox trusts its caller.
 
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
@@ -1867,6 +1903,10 @@
       @ref Qore::Socket::startPollConnectSsl() "Socket::startPollConnectSsl()",
       @ref Qore::HTTPClient::startPollConnect() "HTTPClient::startPollConnect()") reports the connect's own error; on
       macOS, a refused or timed-out connect could be reported as <tt>Broken pipe</tt> (\c EPIPE) (issue #6119)
+    - the @ref splice "splice" and @ref extract "extract" operators no longer read past the end of a string when they
+      replace a range of it with a shorter string (issue #6188)
+    - the @ref splice "splice" and @ref extract "extract" operators no longer read past the end of a list, which could
+      crash, when they replace a range of it with fewer elements (issue #6192)
     - the heartbeat of @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" connections is measured on the
       monotonic clock: a step back of the system clock no longer stops the heartbeat PINGs for the size of the step
       (see @ref Qore::AsyncIoController::addTimerDelay() "AsyncIoController::addTimerDelay()")
@@ -1911,6 +1951,14 @@
     - a call through \c self of an @ref abstract "abstract method" that another parent class implements raised
       \c RUNTIME-OVERLOAD-ERROR instead of calling the implementation, except in programs compiled with qcc
       (<a href="https://github.com/qoretechnologies/qore/issues/3070">issue 3070</a>)
+    - a method call whose arguments deleted the object ran the method on the deleted object in the AST interpreter
+      and raised \c OBJECT-ALREADY-DELETED without the class of the method in the compiled modes; it now raises
+      \c OBJECT-ALREADY-DELETED naming the method (<tt>cannot call C::m()</tt>) in every mode
+      (<a href="https://github.com/qoretechnologies/qore/issues/5824">issue 5824</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6057">issue 6057</a>)
+    - a program compiled with qcc called a \c private:internal method of another parent class that implements an
+      @ref abstract "abstract method" through \c self, where the interpreters raise \c METHOD-IS-PRIVATE
+      (<a href="https://github.com/qoretechnologies/qore/issues/6158">issue 6158</a>)
     - a block whose @ref on_exit "on_exit" or @ref on_success "on_success" handler raised a
       @ref thread_exit "thread_exit" ran its @ref on_error "on_error" handlers with no exception, which crashed the
       process

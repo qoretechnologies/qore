@@ -44,6 +44,10 @@ qclass Expression [arg=QoreExpression* e];
 /** @param program The @ref Qore::Program "Program" object where the expression will be created
     @param source The source to the expression
     @param label the label for the expression
+
+    @throw PARSE-EXCEPTION the source is not a single expression; source that defines code (a function, class,
+    constant, namespace, variable and the like) is refused, and then the code that is pending in the
+    %Program (parsed with Program::parsePending() and not committed yet) is rolled back as well (since %Qore 3.0)
  */
 Expression::constructor(Program[QoreProgram] program, string source, string label) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreExpression> exp(new QoreExpression(**program, *source, *label, xsink), xsink);

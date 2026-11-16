@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - native mutators and language checks run in child processes
+# test-platform: macos - native substring buffer ownership and qcc code generation
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%exec-class SubstringViewMutationTest
+
+class SubstringViewMutationTest inherits QUnit::Test {
+    private {
+        string binary = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        # QORE_BINARY can be the Debug/Release selector script; native tools belong beside the running binary.
+        string tools_dir = dirname(QORE_ARGV[0]);
+        string source = get_script_dir() + "/substring-view-mutation.q";
+        const Expected = "PASS: 88 language substring-view mutation checks\n";
+    }
+
+    constructor() : QUnit::Test("Substring view mutation", "1.0", \ARGV) {
+        addTestCase("native buffer readers and mutators", \native());
+        addTestCase("unique views in all execution modes", \modes());
+        addTestCase("unique views in qcc at O0 and O3", \compiled());
+        set_return_value(main());
+    }
+
+    private native() {
+        string helper = ENV.QORE_SUBSTRING_VIEW_MUTATION_TEST ?? tools_dir + "/qore-substring-view-mutation-test";
+        if (!is_file(helper)) {
+            testSkip("native substring mutation test executable is not available");
+            return;
+        }
+        auto result = ExecModeHarness::run_command(quote(helper));
+        assertEq(0, result.rc, result.out);
+        assertTrue(result.stdout.startsWith("PASS:"), result.out);
+    }
+
+    private modes() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            auto result = ExecModeHarness::run_command(quote(binary) + " -b --enable-debug --exec-mode="
+                + mode + " " + quote(source));
+            assertEq(0, result.rc, result.out);
+            ExecModeHarness::check_native(result);
+            assertEq(Expected, result.stdout, mode);
+        }
+    }
+
+    private compiled() {
+        string qcc = ENV.QCC_BIN ?? tools_dir + "/qcc";
+        if (!is_file(qcc)) {
+            testSkip("qcc is not available");
+            return;
+        }
+        TmpDir tmp("substring-view-mutation-");
+        foreach string opt in (("0", "3")) {
+            string output = tmp.path + "/mutation-O" + opt;
+            auto result = ExecModeHarness::run_command(quote(qcc) + " -O" + opt + " --strip-source -o "
+                + quote(output) + " " + quote(source));
+            assertEq(0, result.rc, result.out);
+            result = ExecModeHarness::run_command(quote(output) + " -b --enable-debug");
+            assertEq(0, result.rc, result.out);
+            assertEq(Expected, result.stdout, "qcc -O" + opt);
+        }
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

@@ -217,7 +217,14 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   and in qcc executables
         # - generic-call-parse-type (#5896, #6151): its probes run in child processes that set their own --exec-mode
         #   and in qcc executables
+        # - generic-method-hashdecl-paths (#5720, #5661): its probes run in child processes that set their own
+        #   --exec-mode, in qcc executables and in a qcc-compiled module
+        # - AOTInitParseOptions (#6189): its checks run in child processes that set their own --exec-mode and in qcc
+        #   executables
+        # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
+        #   under valgrind
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
@@ -231,6 +238,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/relative-date-overflow.qtest",
                                  "examples/test/qore/operators/relative-date-multiply.qtest",
                                  "examples/test/qore/functions/generic-call-parse-type.qtest",
+                                 "examples/test/qore/classes/generic-method-hashdecl-paths.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
@@ -257,7 +265,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "modules/dataframe/test/dataframe-default-encoding-names.qtest",
                                  "modules/dataframe/test/dataframe-aot-plugin-helpers.qtest",
                                  "modules/dataframe/test/dataframe-plugin-exception-handler.qtest",
-                                 "modules/dataframe/test/dataframe-inline-mask-subscript.qtest"]),
+                                 "modules/dataframe/test/dataframe-inline-mask-subscript.qtest",
+                                 "modules/dataframe/test/parquet-memory-pool.qtest"]),
                          sorted(non_harness_children))
 
     def test_children_tests_check_nothing_in_their_own_process(self):

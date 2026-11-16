@@ -1828,6 +1828,8 @@ string files = backquote("ls", \rc);
     @throw THREAD-CANCELLED the thread was cancelled while running the command; the process is killed
     @throw PROGRAM-INTERRUPTED the Program was interrupted by its @ref Qore::SandboxManager "SandboxManager" while
     running the command; the process group is killed
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "SandboxManager" governing the call does not allow
+    \c /bin/sh, which runs the command, to be executed (see @ref sandbox_fs_shell)
 
     @see
     - system()

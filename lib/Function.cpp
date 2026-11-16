@@ -1644,7 +1644,7 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
         // of the call and its body see.  The caller is the call's Program context, unless that names the module's
         // Program already, otherwise the Program running on the thread
         QoreProgram* caller_pgm = (old_pgm && old_pgm != pgm_ctx) ? old_pgm : ::getProgram();
-        if (caller_pgm && caller_pgm != pgm_ctx && qore_program_is_module(pgm_ctx)) {
+        if (caller_pgm && caller_pgm != pgm_ctx && qore_program_is_module_inline(pgm_ctx)) {
             module_po_override.set(qore_get_module_call_runtime_po_override(pgm_ctx, caller_runtime_po, caller_pgm));
         }
         set(xsink, pgm_ctx, true);
@@ -1659,7 +1659,7 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
         // callFunction() the switch is deferred (see below) so the dom check is evaluated against the
         // CALLER's options (the cross-Program privilege model).
         if (!(call_flags & QCEF_DEFER_DOMAIN_PO)) {
-            QoreParseOptions pgm_po = pgm_ctx->getParseOptions();
+            QoreParseOptions pgm_po = qore_program_private::getParseOptions(*pgm_ctx);
             if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
                 old_rc_po = rc.getParseOptions();
                 rc.setParseOptions(pgm_po);
@@ -1705,7 +1705,7 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     // sandboxed target Program, while the body itself still runs under the called Program's options (so
     // e.g. load_module() registers into the target with the target's options).
     if (pgm_ctx && (call_flags & QCEF_DEFER_DOMAIN_PO)) {
-        QoreParseOptions pgm_po = pgm_ctx->getParseOptions();
+        QoreParseOptions pgm_po = qore_program_private::getParseOptions(*pgm_ctx);
         if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
             old_rc_po = rc.getParseOptions();
             rc.setParseOptions(pgm_po);
@@ -2260,7 +2260,7 @@ int CodeEvaluationHelper::processDefaultArgs(ExceptionSink* xsink, const QoreFun
         QoreParseOptions po;
         if (uvb) {
             QoreProgram* exec_pgm = getExecutionProgram();
-            po = uvb->getParseOptions((exec_pgm ? exec_pgm : uvb->pgm)->getParseOptions());
+            po = uvb->getParseOptions(qore_program_private::getParseOptions(*(exec_pgm ? exec_pgm : uvb->pgm)));
         } else {
             po = runtime_get_parse_options();
         }
@@ -6904,8 +6904,7 @@ QoreParseOptions qore_relieve_module_declared_domains(const QoreParseOptions& po
 }
 
 bool qore_program_is_module(const QoreProgram* pgm) {
-    // runs on every call of a user variant (see qore_get_user_call_runtime_po_override())
-    return pgm && qore_program_private::getParseOptions(*pgm).hasAny(QoreParseOptions(PO_IN_MODULE));
+    return qore_program_is_module_inline(pgm);
 }
 
 //! sets \a o, which the caller creates without an override, to the override of a call of module code; see
@@ -6966,7 +6965,7 @@ static void qore_set_module_call_runtime_po_override(QoreCallParseOptionsOverrid
 void qore_set_user_call_runtime_po_override_slow(RuntimeParseOptionsOverrideHelper& helper,
         const QoreProgram* exec_pgm, const UserVariantBase* uvb, const QoreParseOptions* caller_po,
         const QoreProgram* caller_pgm) {
-    bool module_code = qore_program_is_module(uvb->pgm);
+    bool module_code = qore_program_is_module_inline(uvb->pgm);
     QoreCallParseOptionsOverride o;
     if (exec_pgm && exec_pgm != uvb->pgm) {
         // the code runs in another Program, so its caller restrictions all apply: this is user code whose Program has
@@ -6975,11 +6974,11 @@ void qore_set_user_call_runtime_po_override_slow(RuntimeParseOptionsOverrideHelp
         o.mask = get_user_variant_runtime_po_override_mask();
         if (module_code) {
             o.value = keep_module_own_access_parse_options(
-                qore_compose_module_call_parse_options(exec_pgm->getParseOptions(),
+                qore_compose_module_call_parse_options(qore_program_private::getParseOptions(*exec_pgm),
                     caller_po ? *caller_po : runtime_get_effective_parse_options_for(caller_pgm)), uvb->pgm);
             o.replace = get_module_own_access_parse_options();
         } else {
-            o.value = exec_pgm->getParseOptions();
+            o.value = qore_program_private::getParseOptions(*exec_pgm);
         }
         helper.set(o);
         return;
@@ -7873,6 +7872,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     // Owning program for the per-Program background-compile drain (set unconditionally).
     func->pgm = pgm;
     func->pgm_id = pgm->getProgramId();
+    qore_ir_set_static_call_context(*func, variant);
     // Debug-step hook context (issue #5352): record the top-level StatementBlock and
     // the owning program's attached-debugger pointer slot so the JIT lowering can bake
     // the per-statement dbgStep hook (blockStatement context + cheap inline attach gate).
@@ -8208,7 +8208,11 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
                 // no-narrow container params must bind through the TLS paths so
                 // setupCall() gives them assignment semantics;
                 // direct params would pass the caller's tagged container through
-                || signature.lv[i]->isNoNarrowContainer()) {
+                || signature.lv[i]->isNoNarrowContainer()
+                // an `any` or a plain `auto!` param strips the complex type of a list or hash argument
+                // (setupCall()), which the direct binding does not do: the variable of an `auto!` param has the
+                // type `auto` (qore#6059)
+                || q_type_strips_complex_type(signature.lv[i]->getTypeInfoForLValue())) {
             all_params_direct_safe = false;
         }
     }
@@ -9062,17 +9066,19 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
         ArgvContextHelper argv_helper(argv.release(), xsink);
 
         if (!gate || (gate->enter(xsink) >= 0)) {
+            // the options of the call are read once, for its locals and its location
+            QoreParseOptions call_po = getParseOptions(qore_program_private::getParseOptions(*pgm));
             for (LocalVar* lv : ir->ast_visible_body_locals) {
                 if (!lv->closureUse()) {
-                    lv->instantiate(getParseOptions(pgm->getParseOptions()));
+                    lv->instantiate(call_po);
                 }
             }
 
             const AbstractStatement* old_stmt;
             const QoreProgramLocation* old_loc;
             QoreParseOptions old_po;
-            swap_runtime_statement_location(xsink, nullptr, signature.getParseLocation(),
-                getParseOptions(pgm->getParseOptions()), old_stmt, old_loc, old_po);
+            swap_runtime_statement_location(xsink, nullptr, signature.getParseLocation(), call_po, old_stmt, old_loc,
+                old_po);
 
             QoreValue ir_return_value;
             bool ok = false;
@@ -9226,7 +9232,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 #endif
     // Note: statements can be null for AOT-only functions (deserialized from binary metadata)
     // assert(statements);
-    QoreParseOptions po = getParseOptions(pgm->getParseOptions());
+    QoreParseOptions po = getParseOptions(qore_program_private::getParseOptions(*pgm));
 
     // the tier that this call found: a call that found the function on the AST tier promotes it (see below)
     const ExecutionTier entry_tier = current_tier.load(std::memory_order_acquire);
@@ -9756,7 +9762,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
             // have stale expression slots when called outside tiered mode.
             if (statements && !has_aot
                     && (mode == QEM_TIERED || mode == QEM_JIT || mode == QEM_IR)) {
-                QoreParseOptions po = getParseOptions(pgm->getParseOptions());
+                QoreParseOptions po = getParseOptions(qore_program_private::getParseOptions(*pgm));
                 if (qore_parse_options_support_ir(po)) {
                     return evalTiered(name, argv, self, xsink, true, completion);
                 }

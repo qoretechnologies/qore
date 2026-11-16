@@ -78,6 +78,7 @@
 #include "qore/intern/CompressionTransforms.h"
 #include "qore/intern/SseEventFramer.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/HttpClientDrainDebug.h"
 
 #include <atomic>
 #include <cassert>
@@ -1223,12 +1224,18 @@ struct qore_httpclient_priv {
     // Atomic: read from public isHttp3Active() without locking
     std::atomic<bool> http3_active{false};
 
-    // Alt-Svc cache entry
+    // Alt-Svc cache entry; its times are seconds on the monotonic clock (altSvcNow()): the lifetime (ma=) and the
+    // retry backoff are intervals, which a step of the system clock must not end or extend (#6166)
     struct AltSvcEntry {
         int port;                    // QUIC port from Alt-Svc header
-        int64 expiry_epoch;          // When this entry expires (epoch seconds)
-        int64 retry_after_epoch{0};  // After QUIC failure, don't retry before this time
+        int64 expiry;                // When this entry expires
+        int64 retry_after{0};        // After QUIC failure, don't retry before this time
     };
+
+    //! Returns the time for the Alt-Svc cache: seconds on the monotonic clock (#6166)
+    DLLLOCAL static int64 altSvcNow() {
+        return q_get_monotonic_us() / 1000000;
+    }
 
     // Alt-Svc cache: "host:port" → {quic_port, expiry}
     // Thread safety: protected by msock->m (held on all access paths)
@@ -1550,6 +1557,14 @@ struct qore_httpclient_priv {
                 // Proxy URL from the existing connection info
                 opts.proxy_url = getConnMgrProxyUrl();
                 opts.proxy_authorization = getConnMgrProxyAuthorization();
+#ifdef DEBUG
+                // a test of max_age sets it with dbg_http_client_max_age() (#6150)
+                opts.max_age_ms = QoreHttpClientDrainDebug::get().max_age_ms.load(std::memory_order_acquire);
+                // a test of the idle timeout shortens it with dbg_http_client_idle_timeout() (#6184)
+                if (int idle_ms = QoreHttpClientDrainDebug::get().idle_timeout_ms.load(std::memory_order_acquire)) {
+                    opts.idle_timeout_ms = idle_ms;
+                }
+#endif
                 std::shared_ptr<HttpClientConnectionManagerBase> new_mgr(
                     new HttpClientConnectionManagerBase(opts, xsink));
                 if (*xsink) {
@@ -3148,13 +3163,13 @@ struct qore_httpclient_priv {
         auto it = alt_svc_cache.find(origin);
         if (it != alt_svc_cache.end()) {
             // 5-minute backoff before retrying QUIC for this origin
-            it->second.retry_after_epoch = q_epoch() + 300;
+            it->second.retry_after = altSvcNow() + 300;
         } else {
             // Insert a backoff-only placeholder with port=0 so parseAltSvc()
-            // preserves the backoff (it keeps retry_after_epoch when updating
+            // preserves the backoff (it keeps retry_after when updating
             // existing entries) even if the next response re-advertises Alt-Svc.
-            alt_svc_cache[origin] = AltSvcEntry{0, q_epoch() + 3600,
-                q_epoch() + 300};
+            int64 now = altSvcNow();
+            alt_svc_cache[origin] = AltSvcEntry{0, now + 3600, now + 300};
         }
     }
 
@@ -5316,9 +5331,9 @@ void qore_httpclient_priv::parseAltSvc(const char* value, const char* host, int 
             if (it != alt_svc_cache.end()) {
                 // Update port and expiry but preserve retry_after backoff
                 it->second.port = alt_port;
-                it->second.expiry_epoch = q_epoch() + max_age;
+                it->second.expiry = altSvcNow() + max_age;
             } else {
-                alt_svc_cache[origin] = AltSvcEntry{alt_port, q_epoch() + max_age, 0};
+                alt_svc_cache[origin] = AltSvcEntry{alt_port, altSvcNow() + max_age, 0};
             }
         }
     }
@@ -5331,12 +5346,13 @@ std::optional<qore_httpclient_priv::AltSvcEntry> qore_httpclient_priv::lookupAlt
         return std::nullopt;
     }
     // Check if entry has expired
-    if (it->second.expiry_epoch <= q_epoch()) {
+    int64 now = altSvcNow();
+    if (it->second.expiry <= now) {
         alt_svc_cache.erase(it);
         return std::nullopt;
     }
     // Check if retry backoff is active (after QUIC failure)
-    if (it->second.retry_after_epoch > q_epoch()) {
+    if (it->second.retry_after > now) {
         return std::nullopt;
     }
     return it->second;

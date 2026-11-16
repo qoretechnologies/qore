@@ -191,7 +191,8 @@ list<hash<auto>> sub phase_categories() {
         (
             "name": "Fast-path slow-route helpers",
             "members": value_set((
-                "qore_rt_comparison_op", "qore_rt_binary_op", "qore_rt_unary_op",
+                "qore_rt_comparison_op", "qore_rt_plugin_comparison_op", "qore_rt_binary_op",
+                "qore_rt_unary_op",
             )),
         ),
         (

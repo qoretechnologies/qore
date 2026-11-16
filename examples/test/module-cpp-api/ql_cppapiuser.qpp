@@ -27,6 +27,7 @@
 #include "cppapiuser-module.h"
 #include <qore/OutputStream.h>
 #include <qore/QoreSandboxManager.h>
+#include <qore/QoreColumnarResult.h>
 
 #include <alloca.h>
 #include <atomic>
@@ -154,6 +155,18 @@ static std::shared_ptr<QoreSandboxCapture> sb_capture_get(int64 handle, Exceptio
         return std::shared_ptr<QoreSandboxCapture>();
     }
     return i->second;
+}
+
+// fills a hash with the restriction predicates of the resolved manager
+static void sb_fill_restricts(QoreHashNode& rv, const QoreSandboxManagerHelper& sm, ExceptionSink* xsink) {
+    rv.setKeyValue("sandboxed", static_cast<bool>(sm), xsink);
+    if (sm) {
+        rv.setKeyValue("restricts", sm->restricts(), xsink);
+        rv.setKeyValue("network", sm->networkRestricts(), xsink);
+        rv.setKeyValue("filesystem", sm->filesystemRestricts(), xsink);
+        rv.setKeyValue("limits", sm->limitsRestrict(), xsink);
+        rv.setKeyValue("trusts", sm->trustsUncontrolledApis(), xsink);
+    }
 }
 
 // stores a capture and returns its handle
@@ -983,6 +996,37 @@ hash<auto> cpp_api_find_create_timezone(string name, int epoch = 0) [flags=RET_V
     return rv.release();
 }
 
+//! returns the dates that the public default constructors of DateTime and DateTimeNode give in each form
+/** The converting constructors of DateTime and DateTimeNode are explicit, but the default constructors are not, so
+    that copy-list-initialization from an empty brace list keeps compiling; this function does not compile if one of
+    these forms is rejected
+
+    @return the dates of: <tt>DateTime w = {};</tt>, both elements of <tt>DateTime a[2] = {};</tt>,
+    <tt>return {};</tt> from a function returning a DateTime, <tt>{}</tt> given for a <tt>const DateTime&</tt>
+    parameter, <tt>DateTime d;</tt> and <tt>new DateTimeNode</tt>, each an empty absolute date
+*/
+list<date> cpp_api_date_default_forms() [flags=RET_VALUE_ONLY] {
+    DateTime w = {};
+    DateTime a[2] = {};
+    auto make_empty = []() -> DateTime {
+        return {};
+    };
+    auto copy_arg = [](const DateTime& dt) -> DateTimeNode* {
+        return new DateTimeNode(dt);
+    };
+    DateTime d;
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(dateTypeInfo), xsink);
+    rv->push(new DateTimeNode(w), xsink);
+    rv->push(new DateTimeNode(a[0]), xsink);
+    rv->push(new DateTimeNode(a[1]), xsink);
+    rv->push(new DateTimeNode(make_empty()), xsink);
+    rv->push(copy_arg({}), xsink);
+    rv->push(new DateTimeNode(d), xsink);
+    rv->push(new DateTimeNode, xsink);
+    return rv.release();
+}
+
 //! detaches the descriptor of a File object with QoreFile::detachFd() and returns the object's state afterwards
 /** Lets tests check that a detach leaves the object without the descriptor.  The descriptor is not closed here: it
     is returned, so that the test can close or destroy the File before passing it to cpp_api_fd_write_and_close().
@@ -1680,6 +1724,85 @@ nothing sb_mem_free(int handle) {
     return QoreValue();
 }
 
+//! Returns the restriction predicates of the sandbox manager that governs the current thread
+/** Resolves the manager with QoreSandboxManagerHelper (the manager of a call through several sandboxed Programs is
+    their composition), and reports QoreSandboxManager::restricts(), networkRestricts(), filesystemRestricts() and
+    limitsRestrict()
+
+    @param policy if @ref True "True", resolves the manager with QoreSandboxManagerHelper::Policy (the purpose of a
+    filesystem, network or process policy check, which honors a policy barrier); otherwise with
+    QoreSandboxManagerHelper::All
+
+    @return a hash with the keys \c sandboxed, \c restricts, \c network, \c filesystem, \c limits and \c trusts; only
+    \c sandboxed is present if no sandbox governs the thread
+*/
+hash<auto> sb_governing_restricts(bool policy = False) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    QoreSandboxManagerHelper sm(policy ? QoreSandboxManagerHelper::Policy : QoreSandboxManagerHelper::All);
+    sb_fill_restricts(**rv, sm, xsink);
+    return rv.release();
+}
+
+//! Resolves the governing manager, calls a callback, and reports the predicates before and after it
+/** The resolved manager (a composition of the members' managers when several sandboxes govern the thread) is held
+    across the callback, so that a change that the callback makes to a member is seen by the same composition object
+
+    @param mutate the callback that changes a manager
+    @param policy as for sb_governing_restricts()
+
+    @return a hash with the keys \c before and \c after, each as returned by sb_governing_restricts()
+*/
+hash<auto> sb_governing_restricts_around(code mutate, bool policy = False) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    QoreSandboxManagerHelper sm(policy ? QoreSandboxManagerHelper::Policy : QoreSandboxManagerHelper::All);
+    ReferenceHolder<QoreHashNode> before(new QoreHashNode(autoTypeInfo), xsink);
+    sb_fill_restricts(**before, sm, xsink);
+    rv->setKeyValue("before", before.release(), xsink);
+    ValueHolder res(mutate->execValue(nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> after(new QoreHashNode(autoTypeInfo), xsink);
+    sb_fill_restricts(**after, sm, xsink);
+    rv->setKeyValue("after", after.release(), xsink);
+    return rv.release();
+}
+
+//! Returns the predicates of QoreSandboxManager objects built in C++ that are reset with reset()
+/** Builds a manager that allows everything and sets a rule in each of the network and filesystem managers, resets
+    both with their reset() methods, and reports the predicates before and after; also reports a second allow-all
+    manager that was copied from the first before the reset with copyFrom()
+
+    @return a hash with the keys \c before, \c after and \c copy, each a hash with \c network, \c filesystem and \c default_allow (both default policies allow)
+*/
+hash<auto> sb_reset_restricts() {
+    QoreSandboxManager sm;
+    sm.network().setDefaultPolicy(true);
+    sm.filesystem().setDefaultPolicy(true);
+    sm.network().addAllowedPort(443, QSEC_NET_TCP);
+    sm.filesystem().addDeniedPath("/etc", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreSandboxManager copy;
+    copy.network().copyFrom(sm.network());
+    copy.filesystem().copyFrom(sm.filesystem());
+    auto fill = [&](const char* key, const QoreSandboxManager& m, QoreHashNode& rv) {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("network", m.networkRestricts(), xsink);
+        h->setKeyValue("filesystem", m.filesystemRestricts(), xsink);
+        h->setKeyValue("default_allow", m.network().getDefaultPolicy() && m.filesystem().getDefaultPolicy(), xsink);
+        rv.setKeyValue(key, h.release(), xsink);
+    };
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    fill("before", sm, **rv);
+    sm.network().reset();
+    sm.filesystem().reset();
+    fill("after", sm, **rv);
+    fill("copy", copy, **rv);
+    return rv.release();
+}
+
 //! Captures the sandbox that governs the current thread with QoreSandboxCapture; returns a handle for it
 /** @return the handle of the capture, for the other sb_capture functions; release it with sb_capture_free()
 */
@@ -1960,6 +2083,19 @@ nothing cpp_api_class_key_value_set(string key, auto value) {
     }
     ValueHolder old(kv_probe_class->setKeyValue(key->c_str(), value.refSelf()), xsink);
     return QoreValue();
+}
+
+//! Creates a ColumnarResult with QoreColumnarResult::fromColumnHash(), the C++ API that DBI drivers call
+/** Unlike ColumnarResult::fromColumnHash(), which checks the values that a script gives for a dense integer column,
+    the C++ API converts the driver's values of such a column to integers.
+
+    @param columns hash keyed by column name, where each value is a list or a typed buffer
+    @param desc optional schema metadata keyed by column name, as a driver gives it
+
+    @return a new ColumnarResult object
+*/
+object cpp_api_columnar_from_driver_column_hash(hash<auto> columns, *hash<auto> desc) {
+    return qore_columnar_result_to_object(QoreColumnarResult::fromColumnHash(columns, desc, xsink), xsink);
 }
 
 ///@}

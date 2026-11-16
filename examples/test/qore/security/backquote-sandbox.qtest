@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the shell run by the backquote operator and backquote() under the sandbox execute policy
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The backquote operator and backquote() run a command with the shell, which the sandbox's policy must allow to be
+# executed, as for system(): a sandbox that does not allow /bin/sh to be executed denies them in every execution mode
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class BackquoteSandboxTest
+
+class BackquoteSandboxTest inherits QUnit::Test {
+    public {
+        #! the sandboxed code: each function returns the output of the command or the error raised
+        const Source = "%modern
+string sub run_function() {
+    try {
+        return trim(backquote('echo ran'));
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub run_function_rc() {
+    try {
+        int rc;
+        return trim(backquote('echo ran', \\rc));
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub run_operator() {
+    try {
+        return trim(`echo ran`);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub run_system() {
+    try {
+        return string(system('true'));
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+        const Modes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+    }
+
+    constructor() : QUnit::Test("BackquoteSandboxTest", "1.0", \ARGV) {
+        foreach hash<auto> i in (Modes.pairIterator()) {
+            addTestCase(sprintf("a lockdown sandbox denies the backquote operator and backquote() (%s)", i.key),
+                denyCase(i.key, i.value));
+            addTestCase(sprintf("a sandbox that allows the shell runs the backquote operator and backquote() (%s)",
+                i.key), allowCase(i.key, i.value));
+        }
+        set_return_value(main());
+    }
+
+    private code denyCase(string name, ExecMode mode) {
+        return sub () {
+%ifdef Windows
+            testSkip("Windows");
+%endif
+            Program p = getProgram(SandboxManager::createLockdown(), mode);
+            foreach string func in ("run_function", "run_function_rc", "run_operator", "run_system") {
+                assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction(func), sprintf("%s: %s is denied", name, func));
+            }
+        };
+    }
+
+    private code allowCase(string name, ExecMode mode) {
+        return sub () {
+%ifdef Windows
+            testSkip("Windows");
+%endif
+            SandboxManager sm();
+            sm.addFilesystemAllowedPath("/bin/sh", QSEC_EXECUTE);
+            Program p = getProgram(sm, mode);
+            foreach string func in ("run_function", "run_function_rc", "run_operator") {
+                assertEq("ran", p.callFunction(func), sprintf("%s: %s runs the command", name, func));
+            }
+            assertEq("0", p.callFunction("run_system"), name + ": system() runs the command");
+        };
+    }
+
+    private static Program getProgram(SandboxManager sm, ExecMode mode) {
+        Program p(PO_NEW_STYLE);
+        p.setExecMode(mode);
+        p.parse(Source, "sandboxed");
+        p.setSandboxManager(sm);
+        return p;
+    }
+}

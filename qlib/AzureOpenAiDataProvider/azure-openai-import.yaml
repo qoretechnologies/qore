@@ -1415,6 +1415,99 @@ documents:
       replacement:
       - *id015
       - *id016
+  - reason: 'Azure OpenAI image generation and edit responses include a safety_identifier field (null when
+      the request gives neither safety_identifier nor user) that the generated Azure document omits from
+      ImagesResponse; the closed response type rejected every live image response. The OpenAI API declares
+      it on ImagesResponse as a nullable string; copy that declaration. Verified live with an image edit
+      on 2026-11-15 (qore#6169). Source: https://github.com/openai/openai-openapi/blob/f437d0eccb8ca02f47be33ccc243b849b5bb0b74/openapi.json
+      (ImagesResponse)'
+    replace_values:
+    - pointer: '#/components/schemas/OpenAI.ImagesResponse/properties'
+      expected:
+        created:
+          type: integer
+          format: unixtime
+          description: The Unix timestamp (in seconds) of when the image was created.
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenAI.Image'
+          description: The list of generated images.
+        background:
+          type: string
+          enum:
+          - transparent
+          - opaque
+          description: The background parameter used for the image generation. Either `transparent` or `opaque`.
+        output_format:
+          type: string
+          enum:
+          - png
+          - webp
+          - jpeg
+          description: The output format of the image generation. Either `png`, `webp`, or `jpeg`.
+        size:
+          type: string
+          enum:
+          - 1024x1024
+          - 1024x1536
+          - 1536x1024
+          description: The size of the image generated. Either `1024x1024`, `1024x1536`, or `1536x1024`.
+        quality:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          description: The quality of the image generated. Either `low`, `medium`, or `high`.
+        usage:
+          $ref: '#/components/schemas/OpenAI.ImageGenUsage'
+      replacement:
+        created:
+          type: integer
+          format: unixtime
+          description: The Unix timestamp (in seconds) of when the image was created.
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenAI.Image'
+          description: The list of generated images.
+        background:
+          type: string
+          enum:
+          - transparent
+          - opaque
+          description: The background parameter used for the image generation. Either `transparent` or `opaque`.
+        output_format:
+          type: string
+          enum:
+          - png
+          - webp
+          - jpeg
+          description: The output format of the image generation. Either `png`, `webp`, or `jpeg`.
+        size:
+          type: string
+          enum:
+          - 1024x1024
+          - 1024x1536
+          - 1536x1024
+          description: The size of the image generated. Either `1024x1024`, `1024x1536`, or `1536x1024`.
+        quality:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          description: The quality of the image generated. Either `low`, `medium`, or `high`.
+        usage:
+          $ref: '#/components/schemas/OpenAI.ImageGenUsage'
+        safety_identifier:
+          type:
+          - string
+          - 'null'
+          description: The effective safety identifier used for safety monitoring and abuse detection. This
+            is the non-empty `safety_identifier` from the request, or the deprecated `user` value when `safety_identifier`
+            is omitted, null, or empty.
 - name: AzureOpenAiAudio
   source: https://raw.githubusercontent.com/Azure/azure-rest-api-specs/a6943a926f76b3a2f90371b3466157eddf760e25/specification/cognitiveservices/data-plane/AzureOpenAI/inference/preview/2025-04-01-preview/inference.json
   output: azure-openai-audio.json

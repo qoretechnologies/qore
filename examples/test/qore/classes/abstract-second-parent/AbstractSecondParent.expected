@@ -21,6 +21,8 @@ background call from the declaring class: Impl::put 12
 closure: Impl::m 14
 call reference: Impl::m 15
 private:internal implementing class: Impl::m 16
+private implementation: PrivImpl::m 17
+private:internal implementation: METHOD-IS-PRIVATE: PrivImpl::n(int i) is not accessible in this context
 round 1
 unqualified self call: Impl::m 1
 qualified self call: Impl::m 2
@@ -44,6 +46,8 @@ background call from the declaring class: Impl::put 12
 closure: Impl::m 14
 call reference: Impl::m 15
 private:internal implementing class: Impl::m 16
+private implementation: PrivImpl::m 17
+private:internal implementation: METHOD-IS-PRIVATE: PrivImpl::n(int i) is not accessible in this context
 round 2
 unqualified self call: Impl::m 1
 qualified self call: Impl::m 2
@@ -67,3 +71,5 @@ background call from the declaring class: Impl::put 12
 closure: Impl::m 14
 call reference: Impl::m 15
 private:internal implementing class: Impl::m 16
+private implementation: PrivImpl::m 17
+private:internal implementation: METHOD-IS-PRIVATE: PrivImpl::n(int i) is not accessible in this context

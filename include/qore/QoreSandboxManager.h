@@ -163,10 +163,18 @@ public:
 
         @note When a sandbox root is set, all allowed paths must be within
         this root, and the root itself is implicitly allowed with QSEC_ALL.
+
+        @note Replacing a root removes the allowed path rule that setting the previous root added, and adds the rule
+        for the new one; on failure, the old root and the old rules are unchanged
     */
     DLLEXPORT int setSandboxRoot(const char* path, ExceptionSink* xsink);
 
     //! Clears the sandbox root directory
+    /** Removes the sandbox root and only the allowed path rule that setSandboxRoot() added for it, so that the
+        configuration is the one from before the root was set; allowed path rules that were added after the root
+        remain.  If an allowed path rule equal to the root's (the same path with QSEC_ALL) was added separately, one
+        of the two remains.  Does nothing if no root is set
+    */
     DLLEXPORT void clearSandboxRoot();
 
     //! Sets whether paths not explicitly listed are allowed or denied
@@ -181,6 +189,22 @@ public:
     /** @return true if default is allow, false if default is deny
     */
     DLLEXPORT bool getDefaultPolicy() const;
+
+    //! Returns @ref true if the manager restricts filesystem access
+    /** @return @ref true if the default policy denies access, or if there is any allowed or denied path rule;
+        @ref false if the default policy allows access and there are no path rules.  The sandbox root of this class is
+        a path rule, so it counts too
+
+        @note
+        - for the filesystem manager of a composition of sandbox managers, the result is the OR over the members
+        - there is no unreadable state in this predicate; callers that obtain the state another way (for example a
+          configuration hash with a missing or mistyped key) must treat it as restricting (fail closed)
+        - the result is a snapshot of the current configuration: concurrent reconfiguration of a shared manager is
+          not synchronized (as for the other readers of the manager)
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool isRestricting() const;
 
     //! Checks if access is allowed for the given path and mode
     /** This is the main enforcement method called from QoreFile, QoreDir, etc.
@@ -366,6 +390,23 @@ public:
 
     //! Gets the current default policy
     DLLEXPORT bool getDefaultPolicy() const;
+
+    //! Returns @ref true if the manager restricts network access
+    /** @return @ref true if the default policy denies access, or if there are allowed IP ranges, denied IP ranges
+        (blockPrivateNetworks() and blockLocalhost() add denied ranges), or allowed port rules; @ref false otherwise.
+        Allowed host patterns alone do not count: with the default policy "allow" they restrict nothing, and with
+        "deny" the default policy already counts
+
+        @note
+        - for the network manager of a composition of sandbox managers, the result is the OR over the members
+        - there is no unreadable state in this predicate; callers that obtain the state another way must treat it as
+          restricting (fail closed)
+        - the result is a snapshot of the current configuration: concurrent reconfiguration of a shared manager is
+          not synchronized (as for the other readers of the manager)
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool isRestricting() const;
 
     //! Checks if a connection is allowed - called AFTER DNS resolution
     /** @param addr The resolved socket address
@@ -670,6 +711,25 @@ public:
     */
     DLLEXPORT bool getUncontrolledApiPolicy() const;
 
+    //! Returns @ref true if the sandbox trusts the code it governs to use uncontrolled APIs
+    /** @return @ref true if the policy allows uncontrolled APIs (setUncontrolledApiPolicy()); for a composition of
+        sandbox managers, @ref true only if every member allows them (the AND over the members; the OR rule of
+        restricts() is the opposite direction, because here one member that does not trust makes the composition not
+        trust).  The default is @ref false
+
+        A binary module that refuses an operation that only an unrestricted caller may use (for example an
+        operation that runs code or does I/O that %Qore does not see) should refuse it unless trustsUncontrolledApis()
+        is true on the governing manager resolved with QoreSandboxManagerHelper::Policy, whatever the sandbox
+        restricts: a sandbox that allows all I/O but does not trust its code keeps that code from such operations (see
+        setUncontrolledApiPolicy()).
+
+        @note there is no unreadable state in this predicate; callers that obtain the state another way must treat
+        it as not trusting (fail closed)
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool trustsUncontrolledApis() const;
+
     //! Returns the memory account of the sandbox; for internal use
     DLLLOCAL QoreSandboxMemoryAccount* getMemoryAccount() const {
         return mem_account;
@@ -789,6 +849,50 @@ public:
     */
     DLLEXPORT bool checkNetworkBind(const struct sockaddr* addr, socklen_t len,
                                      int proto, ExceptionSink* xsink);
+
+    //! Returns @ref true if the sandbox restricts network access
+    /** @return the result of QoreNetworkSecurityManager::isRestricting(); the OR over the members for a composition
+        of sandbox managers
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool networkRestricts() const;
+
+    //! Returns @ref true if the sandbox restricts filesystem access
+    /** @return the result of QoreFilesystemSecurityManager::isRestricting(); the OR over the members for a
+        composition of sandbox managers
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool filesystemRestricts() const;
+
+    //! Returns @ref true if the sandbox sets a resource limit
+    /** @return @ref true if the maximum number of threads, the wall-clock time limit, the CPU time limit, the maximum
+        stack size or the memory limit is greater than 0 (0 or negative means unlimited); for a composition of
+        sandbox managers, if any member sets one
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool limitsRestrict() const;
+
+    //! Returns @ref true if the sandbox restricts anything
+    /** @return networkRestricts() || filesystemRestricts() || limitsRestrict()
+
+        Only the state of the manager is considered; the parse options and the functional domains of a Program are not
+        part of it.  A binary module should use this method, or the one for the kind of access it provides, to decide
+        whether a sandbox constrains the code it serves, and not whether a manager is attached or what
+        network().getConfiguration() holds: a manager that allows everything restricts nothing, and the
+        configuration of a composition of sandbox managers is empty.  There is no unreadable state in these
+        predicates; when the state is obtained another way and cannot be determined (for example a configuration hash
+        with a missing or mistyped key), treat the sandbox as restricting (fail closed).
+
+        The result is a snapshot of the current configuration: concurrent reconfiguration of a shared manager is not
+        synchronized (as for the other readers of the manager).  The interrupt state (requestInterrupt()) is not a
+        policy and is not reported.
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool restricts() const;
 
     //! Creates a copy with the same or stricter restrictions
     /** @return A new QoreSandboxManager with the same configuration
@@ -962,7 +1066,12 @@ public:
     QoreSandboxManagerHelper(Purpose purpose);
 
     //! Acquires a ref'd sandbox manager for the given program
-    /** @param pgm the program to get the sandbox manager from; if nullptr, no reference is acquired
+    /** The manager is the one set with QoreProgram::setSandboxManager().  A program that sandboxed code created, or
+        changed, also keeps the sandbox of that code, which is not returned here: it adds to the sandbox of the code
+        that calls the program, so a module must not install it as the manager of another program, which would govern
+        that program's code alone
+
+        @param pgm the program to get the sandbox manager from; if nullptr, no reference is acquired
     */
     QoreSandboxManagerHelper(QoreProgram* pgm);
 

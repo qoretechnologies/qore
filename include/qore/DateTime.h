@@ -125,11 +125,23 @@ protected:
    DLLLOCAL DateTime(qore_date_private *n_priv);
 
 public:
+   //! constructor for an empty absolute date/time value
+   /** Not explicit, so that copy-list-initialization from an empty brace list (<tt>DateTime dt = {};</tt>,
+       <tt>return {};</tt>, an argument <tt>{}</tt>) gives an empty absolute date.
+
+       @since %Qore 3.0 as a separate constructor; before, DateTime(bool) with the default argument \c false
+   */
+   DLLLOCAL DateTime() : DateTime(false) {
+   }
+
    //! constructor for an empty object
    /**
       @param r sets the "relative" flag for the object
+
+      @note explicit since %Qore 3.0: before, any pointer converted implicitly to an empty DateTime through this
+      constructor; the default constructor is DateTime()
    */
-   DLLEXPORT DateTime(bool r = false);
+   DLLEXPORT explicit DateTime(bool r);
 
    //! constructor for setting all parameters
    /** note that for absolute date/time values, the local time zone will be assumed
@@ -147,8 +159,13 @@ public:
    //! constructor for setting an absolute date based on the number of seconds from January 1, 1970
    /** note that the local time zone will be assumed
        @param seconds the number of seconds from January 1, 1970
+
+       @note explicit since %Qore 3.0: before, an integer, a floating-point value or a \c bool converted
+       implicitly to an absolute date through this constructor (\c true to 1970-01-01 00:00:01); construct it
+       explicitly from an \c int64 (<tt>DateTime((int64)secs)</tt>: an argument of another integer type is
+       ambiguous with DateTime(bool))
    */
-   DLLEXPORT DateTime(int64 seconds);
+   DLLEXPORT explicit DateTime(int64 seconds);
 
    //! constructor for setting an absolute date based on the number of seconds from January 1, 1970 (plus milliseconds)
    /** note that the local time zone will be assumed
@@ -174,8 +191,11 @@ public:
 
    //! constructor for setting the date from a string
    /** @param date the string to use to set the date in the format YYYYMMDDHHmmSS[.xxx]
+
+       @note explicit since %Qore 3.0: before, any \c char pointer converted implicitly to a DateTime through this
+       constructor
    */
-   DLLEXPORT DateTime(const char* date);
+   DLLEXPORT explicit DateTime(const char* date);
 
    //! constructor for setting the date from a string with a flexible format, throws a Qore-language exception if the date string is invalid
    /** @param date the string to use to set the date
@@ -194,11 +214,24 @@ public:
    //! constructor for setting an absolute date based on a "struct tm"
    /**
       @param tms a structure giving the absolute date to set
+
+      @note explicit since %Qore 3.0: before, a \c struct \c tm pointer converted implicitly to a DateTime through
+      this constructor
    */
-   DLLEXPORT DateTime(const struct tm *tms);
+   DLLEXPORT explicit DateTime(const struct tm *tms);
 
    //! copy constructor
    DLLEXPORT DateTime(const DateTime &dt);
+
+   //! not available: a pointer to a DateTime would otherwise be converted to \c bool and give an empty date
+   /** Copy the value that the pointer refers to instead (<tt>DateTime dt(*ptr);</tt>).  As this constructor is
+       deleted and is a better conversion than DateTime(bool), a pointer to a DateTime (or to a class derived from
+       it, such as DateTimeNode) can no longer be converted implicitly to a DateTime either, so such a pointer passed
+       where a <tt>const DateTime&</tt> is expected is an error instead of an empty date.
+
+       @since %Qore 3.0
+   */
+   DLLLOCAL DateTime(const DateTime* dt) = delete;
 
    //! destroys the object and frees all memory
    DLLEXPORT ~DateTime();
@@ -277,6 +310,13 @@ public:
 
    //! sets the date from a DateTime reference
    DLLEXPORT void setDate(const DateTime &date);
+
+   //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+   /** Pass the value that the pointer refers to (<tt>dt.setDate(*ptr);</tt>).
+
+       @since %Qore 3.0
+   */
+   DLLLOCAL void setDate(const DateTime* date) = delete;
 
    //! sets the time from hours, minutes, seconds, and milliseconds
    /**
@@ -372,6 +412,14 @@ public:
    */
    DLLEXPORT DateTime* add(const DateTime& dt, ExceptionSink* xsink) const;
 
+   //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+   /** There is no checked overload taking a pointer; pass the value that the pointer refers to
+       (<tt>a.add(*ptr, xsink)</tt>), which add(const DateTime&, ExceptionSink*) const takes.
+
+       @since %Qore 3.0
+   */
+   DLLLOCAL DateTime* add(const DateTime* dt, ExceptionSink* xsink) const = delete;
+
    //! returns a newly allocated difference without modifying either operand
    /** @deprecated a result out of range is saturated (it wrapped before %Qore 3.0); use
        subtractBy(const DateTime&, ExceptionSink*) const, which raises \c INVALID-DATE
@@ -404,6 +452,14 @@ public:
        @since %Qore 3.0
    */
    DLLEXPORT DateTime* subtractBy(const DateTime& dt, ExceptionSink* xsink) const;
+
+   //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+   /** There is no checked overload taking a pointer; pass the value that the pointer refers to
+       (<tt>a.subtractBy(*ptr, xsink)</tt>), which subtractBy(const DateTime&, ExceptionSink*) const takes.
+
+       @since %Qore 3.0
+   */
+   DLLLOCAL DateTime* subtractBy(const DateTime* dt, ExceptionSink* xsink) const = delete;
 
    //! adds the given number of seconds (and microseconds) to the date/time value
    /** this is a very fast operation and particularly useful for date arithmentic on absolute date/time values

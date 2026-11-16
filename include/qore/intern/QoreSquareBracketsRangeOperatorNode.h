@@ -38,7 +38,7 @@
 
 class RuntimeConfig;
 
-class QoreSquareBracketsRangeOperatorNode : public QoreNOperatorNodeBase<3>, public FunctionalOperator {
+class QoreSquareBracketsRangeOperatorNode final : public QoreNOperatorNodeBase<3>, public FunctionalOperator {
 public:
     DLLLOCAL QoreSquareBracketsRangeOperatorNode(const QoreProgramLocation* loc, QoreValue p0, QoreValue p1,
             QoreValue p2)
