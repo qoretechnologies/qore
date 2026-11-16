@@ -973,7 +973,8 @@ static QoreValue read_expr_static_method_call_intern(AOTExprReadCtx& ctx, const 
     if (receiver_type_path && *receiver_type_path) {
         QoreAOTTypeResolver type_resolver(ctx.pgm);
         std::string type_error;
-        receiver_type_info = type_resolver.resolve(receiver_type_path, type_error);
+        receiver_type_info = type_resolver.resolveForSignature(receiver_type_path, type_error,
+            qore_aot_get_type_param_owner());
         if (!receiver_type_info || !type_error.empty()) {
             ctx.error = "cannot resolve static method receiver type '";
             ctx.error += receiver_type_path;
@@ -1269,7 +1270,10 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
         if (object_type_path && *object_type_path) {
             QoreAOTTypeResolver type_resolver(ctx.pgm);
             std::string type_error;
-            object_type_info = type_resolver.resolve(object_type_path, type_error);
+            // a type parameter of the generic function that the code is in (B<U> b() in sub f<U>()) is resolved as that
+            // function's, so that the call's type arguments replace it (qore#6261)
+            object_type_info = type_resolver.resolveForSignature(object_type_path, type_error,
+                qore_aot_get_type_param_owner());
             if (!object_type_info || !type_error.empty()) {
                 ctx.error = "cannot resolve new-object type path '";
                 ctx.error += object_type_path;
@@ -1914,7 +1918,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     // the class of a closure that is not in a method is the class it runs in, not a class type with self (#5907)
     const QoreClass* static_class = nullptr;
     if (flags_str && !is_in_method && class_type_path && *class_type_path) {
-        static_class = QoreTypeInfo::getUniqueReturnClass(type_resolver.resolve(class_type_path, type_error));
+        static_class = QoreTypeInfo::getUniqueReturnClass(type_resolver.resolveForSignature(class_type_path,
+            type_error, qore_aot_get_type_param_owner()));
         closure_class = nullptr;
     }
 
@@ -2107,7 +2112,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
 
     // Set class type if in a method context
     if (!static_class && class_type_path && *class_type_path) {
-        ucf->setClassType(type_resolver.resolve(class_type_path, type_error));
+        ucf->setClassType(type_resolver.resolveForSignature(class_type_path, type_error,
+            qore_aot_get_type_param_owner()));
     }
 
     // Create QoreClosureParseNode
@@ -2652,7 +2658,10 @@ static QoreValue read_expr_scoped_new_object(AOTExprReadCtx& ctx) {
         if (object_type_path && *object_type_path) {
             QoreAOTTypeResolver type_resolver(ctx.pgm);
             std::string type_error;
-            object_type_info = type_resolver.resolve(object_type_path, type_error);
+            // a type parameter of the generic function that the code is in (B<U> b() in sub f<U>()) is resolved as that
+            // function's, so that the call's type arguments replace it (qore#6261)
+            object_type_info = type_resolver.resolveForSignature(object_type_path, type_error,
+                qore_aot_get_type_param_owner());
             if (!object_type_info || !type_error.empty()) {
                 ctx.error = "cannot resolve scoped-new-object type path '";
                 ctx.error += object_type_path;
@@ -2904,7 +2913,7 @@ static QoreValue read_expr_complex_hash_new(AOTExprReadCtx& ctx) {
     }
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
-    const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
+    const QoreTypeInfo* ti = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
     if (!ti) {
         if (call_args) {
             call_args->deref(nullptr);
@@ -2979,7 +2988,7 @@ static QoreValue read_expr_complex_list_new(AOTExprReadCtx& ctx) {
     }
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
-    const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
+    const QoreTypeInfo* ti = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
     if (!ti) {
         arg_val.discard(nullptr);
         ctx.error = std::string("cannot resolve the type '") + type_path + "' of a complex list constructor";
@@ -3039,7 +3048,7 @@ static QoreValue read_expr_complex_buffer_new(AOTExprReadCtx& ctx) {
     }
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
-    const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
+    const QoreTypeInfo* ti = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
     if (!ti) {
         arg_val.discard(nullptr);
         ctx.error = std::string("cannot resolve the type '") + type_path + "' of a complex buffer constructor";
@@ -4409,7 +4418,7 @@ static QoreValue read_expr_instanceof(AOTExprReadCtx& ctx) {
     }
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
-    const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
+    const QoreTypeInfo* ti = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
     if (!ti) {
         operand.discard(nullptr);
         ctx.error = "cannot resolve INSTANCEOF type '" + std::string(type_path)
