@@ -1184,7 +1184,8 @@ aωb\r
     # decoding took time that grew with the square of the number of encoded words or quoted-printable codes
     # (issue #6139): the bytes that the decoders scan are counted (see MimeScanCounter), so that the work for twice as
     # many is checked to be at most twice as large; a decoder that scans or copies the rest of the text for each word
-    # or code does four times as much work
+    # or code does four times as much work.  The counts are added by hand in the decoders: every operation whose cost
+    # grows with the input size must add its size to the count; otherwise a quadratic regression in it goes unseen.
     decodeHeaderWorkTest() {
         checkLinearWork("encoded words", 1000, string sub (int n) { return strmul(" =?UTF-8?Q?=C3=B6?= x", n); },
             string sub (string hdr) { return mime_decode_header(hdr); },
@@ -1218,7 +1219,8 @@ aωb\r
         assertLe(2 * work[0] + work[0] / 50, work[1], name);
     }
 
-    # returns the bytes that the decoders scan (see MimeScanCounter) to run the code with an input of the given size
+    # returns the bytes that the decoders scan (see MimeScanCounter) to run the code with an input of the given size;
+    # counting is process-wide, which is fine for this test, which runs one case at a time
     private int countWork(code make, code run, code check, int n) {
         auto input = make(n);
         MimeScanCounter::start();

@@ -263,7 +263,8 @@ msg.addTO("My Best Friend <you@friend.com>");
 public namespace MailMessage {
 #! @cond nodoc
 # True if the bytes that the parsers of this module scan are counted for tests in the count of Mime::MimeScanCounter
-# (issue #6139; see Message::setScanCounting()); a module variable, which is faster to read than a static class member
+# (issue #6139; see Message::setScanCounting()); a module variable, which is faster to read than a static class member,
+# so that each place that counts only reads it when counting is off
 our *bool scan_counting;
 #! @endcond
 
@@ -584,9 +585,17 @@ m.addHeader("Message-ID: <20090712.123456789@mail.drei.at>");@endcode
 */
 public class Message {
     #! @cond nodoc
-    # internal, for tests: turns on or off counting the bytes that the parsers of this module scan in the count of
-    # Mime::MimeScanCounter, which counts the bytes that the parsers of the Mime module scan (issue #6139)
+    # internal, for tests: turns on or off counting the bytes that the parsers of this module and of the Mime module
+    # scan in Mime::MimeScanCounter::bytes (issue #6139); turning it on resets the count (MimeScanCounter::start()),
+    # and turning it off ends counting for both modules (MimeScanCounter::stop()).  Every operation whose cost grows
+    # with the input size must add its size to the count; otherwise a quadratic regression in it goes unseen.
+    # Counting is process-wide (all threads and Programs), so it is only for a process that runs one test at a time.
     static setScanCounting(bool on) {
+        if (on) {
+            MimeScanCounter::start();
+        } else {
+            MimeScanCounter::stop();
+        }
         scan_counting = on;
     }
 
@@ -739,7 +748,9 @@ public class Message {
         # the number of lines that end with a line break
         int complete = hend == -1 ? lines.size() - 1 : lines.size();
         # the bytes are counted for tests (issue #6139): the view of the message, the search for the end of the
-        # header, the lines split, and below each line converted and matched and the body
+        # header, the lines split, and below each line converted and matched and the body; every operation whose
+        # cost grows with the input size must add its size to the count, otherwise a quadratic regression in it goes
+        # unseen by the tests (see Mime::MimeScanCounter)
         bool count = scan_counting ?? False;
         if (count) {
             MimeScanCounter::bytes += msg.size() + (hend == -1 ? 2 * text.size() : 2 * (hend + 4));
@@ -1394,7 +1405,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     */
     static *string getEmailAddress(string str) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += str.size();
         }
         # an encoded word is text, never part of an address (issue #6066)
@@ -1439,7 +1451,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # comment or a bracket starts or ends (issue #6134)
     private static string removeEncodedWords(string str) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += str.size();
         }
         return EncodedWordSubst.subst(str);
@@ -1449,7 +1462,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # order mark) at its start and end; linear in the length of the string
     private static string trimSpace(string str) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += str.size();
         }
         str = TrimStartSubst.subst(str);
@@ -1470,7 +1484,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # length of the string
     private static string removeComments(string str, bool quotes) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += str.size();
         }
         list<string> c = str.splitChars();
@@ -1533,7 +1548,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # returns the text in quotes, square brackets or braces if the string is in them
     private static *string unwrap(string str) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += str.size();
         }
         if (str.size() < 2) {
@@ -1551,7 +1567,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # without a regular expression, so the time is linear in the length of the string
     private static *string getAngleAddress(string str) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += str.size();
         }
         if (str.substr(-1) != ">") {
@@ -1589,7 +1606,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     */
     static list<string> getEmailAddresses(string str) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += str.size();
         }
         # an encoded word is text, never part of an address, and its text cannot hide a separator
@@ -1626,7 +1644,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # empty string if there is no name; NOTHING if the mailbox is not in this form
     private static *string getDisplayName(string mailbox, string addr) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += mailbox.size() + addr.size();
         }
         *list<*string> m = mailbox =~ x/^\s*(.*?)\s*<([^<>]*)>\s*$/s;
@@ -1643,7 +1662,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # alone is accepted, as in "Me, Myself, and I <me@email.com>", and the name is then quoted in the header.
     private static *string getPhraseText(string phrase) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += phrase.size();
         }
         list<string> words = ();
@@ -1705,7 +1725,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # returns a mailbox in display format: "Name <addr>", with the name as a quoted string if it has specials
     private static string formatMailbox(string name, string addr) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += name.size() + addr.size();
         }
         if (name =~ /[()<>\[\]:;@\\,."]/) {
@@ -1810,7 +1831,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # returns True if the string is an email address (an RFC 5322 addr-spec)
     private static bool isAddrSpec(string str) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += str.size();
         }
         return AddrSpecRx.match(str);
@@ -1833,7 +1855,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # value: a part is split again at most once for each of the four kinds of construct.
     private static *list<string> splitMailboxList(string value, bool groups = False) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += value.size();
         }
         list<string> c = value.splitChars();
@@ -1915,7 +1938,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # character appended at a time, which takes a time that is not linear in its length in some execution modes
     private static string joinChars(list<string> c, int start, int end) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += end - start;
         }
         return start < end ? c[start..end - 1].join("") : "";
@@ -1928,7 +1952,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # linear in its length.
     private static *hash<auto> parseMailbox(string mailbox, bool decode) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += mailbox.size();
         }
         # format characters are trimmed for the address only: they are part of a display name (ex: a directional
@@ -1954,7 +1979,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # returns the mailboxes of an address header value, or NOTHING if it is not a list of mailboxes
     private static *list<hash<auto>> parseMailboxList(string value, bool decode) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += value.size();
         }
         *list<string> parts = Message::splitMailboxList(value);
@@ -1988,7 +2014,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     private static string doAddressHeader(string hdr, string val, *string raw, string eol, bool encode,
             bool sender = False) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += val.size() + (raw ?? "").size();
         }
         if (!encode) {
@@ -2040,7 +2067,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # printable ASCII, and the address
     private static string formatHeaderMailbox(*string name, string addr, *bool angle, string eol) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += (name ?? "").size() + addr.size();
         }
         if (!name.val()) {
@@ -2055,7 +2083,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # returns the length of the first line of a string, and the length of its last line
     private static list<int> getLineLengths(string str, string eol) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += str.size();
         }
         int first = str.find(eol);
@@ -2068,7 +2097,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # longer than MaxHeaderLineLen characters (RFC 5322 section 2.2.3)
     private static string foldMailboxes(list<string> mailboxes, string eol, int start) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += mailboxes.join("").size();
         }
         string rv = "";
@@ -2099,7 +2129,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # they are decoded (RFC 2047 section 6.2).  The time is linear in the length of the value.
     private static string encodeAddressText(string src, bool decode, string eol, int start) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += src.size();
         }
         list<string> c = src.splitChars();
@@ -2264,7 +2295,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # rest is text
     private static addAddressWord(reference<list<hash<auto>>> words, reference<string> word, bool decode) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += word.size();
         }
         if (!word.val()) {
@@ -2288,7 +2320,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # is encoded; an encoded word of a parsed header is decoded to be encoded again with the text beside it
     private static addAddressText(reference<list<hash<auto>>> words, string text, bool decode) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += text.size();
         }
         if (!text.val()) {
@@ -2444,7 +2477,8 @@ msg.addBCC(untrusted_name, "j@x.com");
     # quotes; the address must be an addr-spec
     private static string makeMailbox(string name, string address, string err) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += name.size() + address.size();
         }
         string addr = Message::trimSpace(address);
@@ -2545,7 +2579,8 @@ msg.addBCC(untrusted_name, "j@x.com");
     # them (RFC 5321 section 4.1.2: "a"@x.com is a@x.com)
     private static string getAddressKey(string addr) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += addr.size();
         }
         int i = addr.substr(-1) == "]" ? addr.rfind("@[") : addr.rfind("@");
@@ -2658,7 +2693,8 @@ msg.addBCC(untrusted_name, "j@x.com");
     */
     static hash parseHeader(string hdr, bool decode = True) {
         if (scan_counting) {
-            # the bytes scanned and copied are counted for tests (issue #6139)
+            # the bytes scanned and copied are counted for tests (issue #6139); every operation here whose cost grows
+            # with the input size must add its size (see Mime::MimeScanCounter)
             MimeScanCounter::bytes += 3 * hdr.size();
         }
         trim hdr;
@@ -2879,7 +2915,8 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
     */
     static string doHeaderValue(string hdr, string val, string eol = "\r\n", bool encode = True) {
         if (scan_counting) {
-            # the bytes scanned are counted for tests (issue #6139)
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
             MimeScanCounter::bytes += val.size();
         }
         check_line_text(hdr, "message header name", "HEADER-ERROR");
