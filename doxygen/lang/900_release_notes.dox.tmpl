@@ -2498,6 +2498,9 @@
     - \c peek() of input streams returned bytes 0x80 - 0xff as negative values
     - converting a string to an encoding that needs more bytes took time quadratic in its length
     - binary module metadata returned through \c QoreModuleInfo::info is released when the module is destroyed
+    - a @ref sql_cop_funcs "column operator" in the join columns of a SqlUtil @ref sql_jop_funcs "join function"
+      raised \c RUNTIME-TYPE-ERROR; it is applied to the joined table's columns (see @ref join_column_operators)
+      (<a href="https://github.com/qoretechnologies/qore/issues/738">issue 738</a>)
     - TLS was unusable when the OpenSSL configuration file could not be processed (see @ref openssl_config)
     - fixed an exception rethrown by an \c on_error handler being lost when another \c on_error handler of the same
       block ran after it, so that the function returned normally

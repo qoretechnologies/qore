@@ -6045,10 +6045,21 @@ string sql = table.getSelectSql(sh, \args);
                 HashIterator i(jh.jcols);
                 while (i.next()) {
                     string key = i.getKey();
-                    string value = i.getValue();
+                    auto value = i.getValue();
                     if (!jt.columns.hasKey(key))
                         throw "SELECT-ERROR", sprintf("%s: cannot join on unknown column %y.%y; known columns: %y",
                             getDesc(), jt.getSqlName(), key, jt.columns.keys());
+                    # issue #738: a column operator applied to columns of the joined table
+                    if (value.typeCode() == NT_HASH) {
+                        jel += sprintf("%s.%s = %s", jtn, jt.getColumnSqlName(key),
+                            getJoinColumnOperatorIntern(\info, t, an, key, value));
+                        continue;
+                    }
+                    if (value.typeCode() != NT_STRING) {
+                        throw "SELECT-ERROR", sprintf("%s: join clause error; the join column for column %y.%y must "
+                            "be a column name of %y or a column operator hash; got type %y instead", getDesc(),
+                            jt.getSqlName(), key, t.getSqlName(), value.type());
+                    }
                     if (!t.describe().hasKey(value))
                         throw "SELECT-ERROR", sprintf("%s: cannot join on unknown column %y.%y; known columns: %y",
                             getDesc(), t.getSqlName(), value, t.columns.keys());
@@ -6438,6 +6449,35 @@ string sql = table.getSelectSql(sh, \args);
         return getPartitionReadSqlNameImpl(qh.partition);
     }
 
+    #! Returns the SQL of a column operator given as the join column of a column in a join
+    /** The columns of the operator that are given without a table alias are columns of the joined table
+
+        @param info the query information
+        @param t the joined table
+        @param an the alias of the joined table in SQL, or its name if it has no alias
+        @param key the column of the other table that the operator's value is compared with
+        @param cop the column operator description hash
+
+        @return the SQL of the operator
+
+        @throw SELECT-ERROR the operator gives a column alias, which a join condition cannot use
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getJoinColumnOperatorIntern(reference<hash<QueryInfo>> info, AbstractTable t, string an,
+            string key, hash<auto> cop) {
+        hash<QueryInfo> cinfo = info;
+        cinfo.table = t;
+        cinfo.column_prefix = an;
+        string sql = t.doColumnOperatorIntern(\cinfo, cop);
+        if (cinfo.pseudo_column_map != info.pseudo_column_map) {
+            throw "SELECT-ERROR", sprintf("%s: cannot use column operator %y with a column alias in the join column "
+                "for column %y", getDesc(), cop.cop, key);
+        }
+        info.args = cinfo.args;
+        return sql;
+    }
+
     private string getColumnExpressionIntern(reference<hash<QueryInfo>> info, auto cvc) {
         switch (cvc.typeCode()) {
             case NT_HASH:
@@ -6576,7 +6616,8 @@ string sql = table.getSelectSql(sh, \args);
                     "%y", getDesc(), column_name, keys info.subquery_column_map);
             }
         } else {
-            table_prefix_sql = getSqlName();
+            # issue #738: the columns of a column operator in a join column are given with the joined table's alias
+            table_prefix_sql = info.column_prefix ?? getSqlName();
             if (column_name == "*") {
                 use_prefix = asteriskRequiresPrefix();
             } else if (!columns.hasKey(column_name) && !info.pseudo_column_map{column_name}) {
