@@ -29,6 +29,7 @@
 #include <qore/intern/typed_hash_decl_private.h>
 
 #include <algorithm>
+#include <optional>
 #include <bit>
 #include <cstdlib>
 #include <cstring>
@@ -8667,6 +8668,154 @@ private:
     }
 };
 
+//! The forward dataflow of the in-place mutation analyses: the candidate locals that hold a value nothing else holds
+/** A must analysis (meet: intersection) over the blocks that run, including those that run only through exception
+    edges (handlers and the code after them up to the join after the try statement), so that the join knows what a
+    handler did to each local (issue #6334).  The transfer function records the state around each instruction that
+    has exception targets with record_exception(): the entry state of a handler is the meet of the states before and
+    after every such instruction that throws to it, as an exception can leave an instruction before or after its
+    effect on the locals.  The entry block starts with nothing fresh.
+*/
+class QoreIRFreshLocalDataflow {
+public:
+    DLLLOCAL QoreIRFreshLocalDataflow(const QoreIRControlFlowGraph& cfg, size_t candidate_count)
+            : cfg(cfg), candidate_count(candidate_count),
+            fresh_in(cfg.blocks.size(), QoreIRLocalBitSet(candidate_count, true)),
+            fresh_out(cfg.blocks.size(), QoreIRLocalBitSet(candidate_count, true)),
+            handler_in(cfg.blocks.size(), QoreIRLocalBitSet(candidate_count, true)),
+            handler_seen(cfg.blocks.size(), 0), visited(cfg.blocks.size(), 0), queued(cfg.blocks.size(), 0) {
+    }
+
+    //! returns true if the instruction has an exception target, whose handler entry state it then must record
+    DLLLOCAL static bool hasExceptionTarget(const QoreIRInstruction& inst) {
+        if (inst.exception_target) {
+            return true;
+        }
+        const auto* throw_inst = qore_ir_inst_cast<const QoreIRThrowInstruction*>(&inst);
+        return throw_inst && throw_inst->exception_target;
+    }
+
+    //! records the state before and after an instruction with exception targets for its handlers
+    DLLLOCAL void recordException(const QoreIRInstruction& inst, const QoreIRLocalBitSet& before,
+            const QoreIRLocalBitSet& after) {
+        QoreIRLocalBitSet meet = before;
+        meet.intersect(after);
+        auto record = [&](const QoreIRBasicBlock* target) {
+            if (!target) {
+                return;
+            }
+            auto it = cfg.block_ids.find(target);
+            if (it == cfg.block_ids.end()) {
+                return;
+            }
+            size_t handler = it->second;
+            QoreIRLocalBitSet next = handler_in[handler];
+            next.intersect(meet);
+            if (handler_seen[handler] && next == handler_in[handler]) {
+                return;
+            }
+            handler_seen[handler] = 1;
+            handler_in[handler] = std::move(next);
+            enqueue(handler);
+        };
+        record(inst.exception_target);
+        if (const auto* throw_inst = qore_ir_inst_cast<const QoreIRThrowInstruction*>(&inst)) {
+            record(throw_inst->exception_target);
+        }
+    }
+
+    //! runs the dataflow to its fixed point; returns false if cancelled
+    /** @param transfer called as transfer(block_id, input, *this) and returns the state at the end of the block or
+        nothing if cancelled; it must call recordException() for each instruction with exception targets
+    */
+    template <typename Transfer>
+    DLLLOCAL bool solve(Transfer&& transfer, size_t& check_count, const char* operation) {
+        for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+            if (qore_ir_analysis_cancelled(check_count, operation)) {
+                return false;
+            }
+            if (cfg.reachable[block_id]) {
+                enqueue(block_id);
+            }
+        }
+        while (!worklist.empty()) {
+            if (qore_ir_analysis_cancelled(check_count, operation)) {
+                return false;
+            }
+            size_t block_id = worklist.back();
+            worklist.pop_back();
+            queued[block_id] = 0;
+            QoreIRLocalBitSet input(candidate_count, false);
+            if (block_id) {
+                bool first = true;
+                if (cfg.exception_entry[block_id]) {
+                    // nothing fresh until the instructions that throw to the handler have been seen
+                    if (handler_seen[block_id]) {
+                        input = handler_in[block_id];
+                    }
+                    first = false;
+                }
+                for (size_t predecessor : cfg.predecessors[block_id]) {
+                    if (qore_ir_analysis_cancelled(check_count, operation)) {
+                        return false;
+                    }
+                    // a predecessor that never runs contributes nothing
+                    if (!cfg.reachable[predecessor] && !cfg.exception_only[predecessor]) {
+                        continue;
+                    }
+                    if (first) {
+                        input = fresh_out[predecessor];
+                        first = false;
+                        continue;
+                    }
+                    input.intersect(fresh_out[predecessor]);
+                }
+            }
+            fresh_in[block_id] = input;
+            std::optional<QoreIRLocalBitSet> output = transfer(block_id, std::move(input), *this);
+            if (!output) {
+                return false;
+            }
+            if (visited[block_id] && *output == fresh_out[block_id]) {
+                continue;
+            }
+            visited[block_id] = 1;
+            fresh_out[block_id] = std::move(*output);
+            for (size_t successor : cfg.successors[block_id]) {
+                if (qore_ir_analysis_cancelled(check_count, operation)) {
+                    return false;
+                }
+                enqueue(successor);
+            }
+        }
+        return true;
+    }
+
+    //! the state on entry to a block after solve()
+    DLLLOCAL const QoreIRLocalBitSet& getIn(size_t block_id) const {
+        return fresh_in[block_id];
+    }
+
+private:
+    const QoreIRControlFlowGraph& cfg;
+    size_t candidate_count;
+    std::vector<QoreIRLocalBitSet> fresh_in;
+    std::vector<QoreIRLocalBitSet> fresh_out;
+    //! the meet of the states recorded for each handler entry
+    std::vector<QoreIRLocalBitSet> handler_in;
+    std::vector<uint8_t> handler_seen;
+    std::vector<uint8_t> visited;
+    std::vector<uint8_t> queued;
+    std::vector<size_t> worklist;
+
+    DLLLOCAL void enqueue(size_t block_id) {
+        if (!queued[block_id]) {
+            queued[block_id] = 1;
+            worklist.push_back(block_id);
+        }
+    }
+};
+
 static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
         const QoreIRControlFlowGraph& cfg, const QoreIRScalarUses& uses,
         size_t& check_count,
@@ -8860,8 +9009,14 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
     using FreshLocalSet = QoreIRLocalBitSet;
     bool cancelled = false;
     auto transfer_block = [&](size_t block_id, FreshLocalSet state, bool mark,
-            size_t& changed) -> FreshLocalSet {
+            size_t& changed, QoreIRFreshLocalDataflow* flow) -> FreshLocalSet {
+        FreshLocalSet before;
         for (const auto& inst_ptr : cfg.blocks[block_id]->instructions) {
+            // the state before an instruction that can throw to a handler, for the handler's entry state
+            const bool records_exception = flow && QoreIRFreshLocalDataflow::hasExceptionTarget(*inst_ptr);
+            if (records_exception) {
+                before = state;
+            }
             if (qore_ir_analysis_cancelled(check_count, "IR local list push escape analysis")) {
                 cancelled = true;
                 return state;
@@ -8940,88 +9095,34 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
                     }
                 }
             }
+            if (records_exception) {
+                flow->recordException(*inst_ptr, before, state);
+            }
         }
         return state;
     };
 
-    const FreshLocalSet all_fresh(candidate_index.size(), true);
-    std::vector<FreshLocalSet> fresh_in(cfg.blocks.size(), all_fresh);
-    std::vector<FreshLocalSet> fresh_out(cfg.blocks.size(), all_fresh);
-    std::vector<size_t> worklist;
-    std::vector<uint8_t> queued(cfg.blocks.size(), 0);
-    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
-        if (qore_ir_analysis_cancelled(check_count, "IR local list push dataflow")) {
-            return 0;
-        }
-        if (cfg.reachable[block_id]) {
-            worklist.push_back(block_id);
-            queued[block_id] = 1;
-        }
-    }
+    QoreIRFreshLocalDataflow dataflow(cfg, candidate_index.size());
     size_t ignored_changed = 0;
-    while (!worklist.empty()) {
-        if (qore_ir_analysis_cancelled(check_count, "IR local list push dataflow")) {
-            return 0;
-        }
-        size_t block_id = worklist.back();
-        worklist.pop_back();
-        queued[block_id] = 0;
-        // no reachable predecessor leaves nothing fresh on entry to the block; nor does a handler entry, which an
-        // exception enters from anywhere in the blocks that it handles, or a predecessor that runs only through
-        // exception edges (the end of a catch block), whose state this dataflow does not compute (issue #6334)
-        FreshLocalSet input(candidate_index.size(), false);
-        if (block_id && !cfg.exception_entry[block_id]) {
-            bool first = true;
-            bool exception_only_predecessor = false;
-            for (size_t predecessor : cfg.predecessors[block_id]) {
-                if (qore_ir_analysis_cancelled(check_count, "IR local list push dataflow")) {
-                    return 0;
+    if (!dataflow.solve([&](size_t block_id, FreshLocalSet input, QoreIRFreshLocalDataflow& flow)
+            -> std::optional<FreshLocalSet> {
+                FreshLocalSet output = transfer_block(block_id, std::move(input), false, ignored_changed, &flow);
+                if (cancelled) {
+                    return std::nullopt;
                 }
-                if (!cfg.reachable[predecessor]) {
-                    if (cfg.exception_only[predecessor]) {
-                        exception_only_predecessor = true;
-                        break;
-                    }
-                    continue;
-                }
-                if (first) {
-                    input = fresh_out[predecessor];
-                    first = false;
-                    continue;
-                }
-                input.intersect(fresh_out[predecessor]);
-            }
-            if (exception_only_predecessor) {
-                input = FreshLocalSet(candidate_index.size(), false);
-            }
-        }
-        fresh_in[block_id] = input;
-        FreshLocalSet output = transfer_block(block_id, input, false, ignored_changed);
-        if (cancelled) {
-            return 0;
-        }
-        if (output == fresh_out[block_id]) {
-            continue;
-        }
-        fresh_out[block_id] = std::move(output);
-        for (size_t successor : cfg.successors[block_id]) {
-            if (qore_ir_analysis_cancelled(check_count, "IR local list push dataflow")) {
-                return 0;
-            }
-            if (!queued[successor]) {
-                queued[successor] = 1;
-                worklist.push_back(successor);
-            }
-        }
+                return output;
+            }, check_count, "IR local list push dataflow")) {
+        return 0;
     }
 
+    // only the blocks that the graph without exception edges reaches are marked
     size_t changed = 0;
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
         if (qore_ir_analysis_cancelled(check_count, "IR local list push escape analysis")) {
             return changed;
         }
         if (cfg.reachable[block_id]) {
-            transfer_block(block_id, fresh_in[block_id], true, changed);
+            transfer_block(block_id, dataflow.getIn(block_id), true, changed, nullptr);
             if (cancelled) {
                 return changed;
             }
@@ -9168,8 +9269,14 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
     using FreshLocalSet = QoreIRLocalBitSet;
     bool cancelled = false;
     auto transfer_block = [&](size_t block_id, FreshLocalSet state, bool mark,
-            size_t& changed) -> FreshLocalSet {
+            size_t& changed, QoreIRFreshLocalDataflow* flow) -> FreshLocalSet {
+        FreshLocalSet before;
         for (const auto& inst_ptr : cfg.blocks[block_id]->instructions) {
+            // the state before an instruction that can throw to a handler, for the handler's entry state
+            const bool records_exception = flow && QoreIRFreshLocalDataflow::hasExceptionTarget(*inst_ptr);
+            if (records_exception) {
+                before = state;
+            }
             if (qore_ir_analysis_cancelled(check_count,
                     "IR in-place string append escape analysis")) {
                 cancelled = true;
@@ -9260,94 +9367,34 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                     }
                 }
             }
+            if (records_exception) {
+                flow->recordException(*inst_ptr, before, state);
+            }
         }
         return state;
     };
 
-    const FreshLocalSet all_fresh(candidate_index.size(), true);
-    std::vector<FreshLocalSet> fresh_in(cfg.blocks.size(), all_fresh);
-    std::vector<FreshLocalSet> fresh_out(cfg.blocks.size(), all_fresh);
-    std::vector<size_t> worklist;
-    std::vector<uint8_t> queued(cfg.blocks.size(), 0);
-    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
-        if (qore_ir_analysis_cancelled(check_count,
-                "IR in-place string append dataflow")) {
-            return 0;
-        }
-        if (cfg.reachable[block_id]) {
-            worklist.push_back(block_id);
-            queued[block_id] = 1;
-        }
-    }
+    QoreIRFreshLocalDataflow dataflow(cfg, candidate_index.size());
     size_t ignored_changed = 0;
-    while (!worklist.empty()) {
-        if (qore_ir_analysis_cancelled(check_count,
-                "IR in-place string append dataflow")) {
-            return 0;
-        }
-        size_t block_id = worklist.back();
-        worklist.pop_back();
-        queued[block_id] = 0;
-        // no reachable predecessor leaves nothing fresh on entry to the block; nor does a handler entry, which an
-        // exception enters from anywhere in the blocks that it handles, or a predecessor that runs only through
-        // exception edges (the end of a catch block), whose state this dataflow does not compute (issue #6334)
-        FreshLocalSet input(candidate_index.size(), false);
-        if (block_id && !cfg.exception_entry[block_id]) {
-            bool first = true;
-            bool exception_only_predecessor = false;
-            for (size_t predecessor : cfg.predecessors[block_id]) {
-                if (qore_ir_analysis_cancelled(check_count,
-                        "IR in-place string append dataflow")) {
-                    return 0;
+    if (!dataflow.solve([&](size_t block_id, FreshLocalSet input, QoreIRFreshLocalDataflow& flow)
+            -> std::optional<FreshLocalSet> {
+                FreshLocalSet output = transfer_block(block_id, std::move(input), false, ignored_changed, &flow);
+                if (cancelled) {
+                    return std::nullopt;
                 }
-                if (!cfg.reachable[predecessor]) {
-                    if (cfg.exception_only[predecessor]) {
-                        exception_only_predecessor = true;
-                        break;
-                    }
-                    continue;
-                }
-                if (first) {
-                    input = fresh_out[predecessor];
-                    first = false;
-                    continue;
-                }
-                input.intersect(fresh_out[predecessor]);
-            }
-            if (exception_only_predecessor) {
-                input = FreshLocalSet(candidate_index.size(), false);
-            }
-        }
-        fresh_in[block_id] = input;
-        FreshLocalSet output =
-            transfer_block(block_id, input, false, ignored_changed);
-        if (cancelled) {
-            return 0;
-        }
-        if (output == fresh_out[block_id]) {
-            continue;
-        }
-        fresh_out[block_id] = std::move(output);
-        for (size_t successor : cfg.successors[block_id]) {
-            if (qore_ir_analysis_cancelled(check_count,
-                    "IR in-place string append dataflow")) {
-                return 0;
-            }
-            if (!queued[successor]) {
-                queued[successor] = 1;
-                worklist.push_back(successor);
-            }
-        }
+                return output;
+            }, check_count, "IR in-place string append dataflow")) {
+        return 0;
     }
 
+    // only the blocks that the graph without exception edges reaches are marked
     size_t changed = 0;
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
-        if (qore_ir_analysis_cancelled(check_count,
-                "IR in-place string append escape analysis")) {
+        if (qore_ir_analysis_cancelled(check_count, "IR in-place string append escape analysis")) {
             return changed;
         }
         if (cfg.reachable[block_id]) {
-            transfer_block(block_id, fresh_in[block_id], true, changed);
+            transfer_block(block_id, dataflow.getIn(block_id), true, changed, nullptr);
             if (cancelled) {
                 return changed;
             }

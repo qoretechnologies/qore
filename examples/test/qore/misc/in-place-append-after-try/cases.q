@@ -234,6 +234,36 @@ string sub catchChangesType(bool thr) {
     return x.typeCode() + ":" + x.type();
 }
 
+# the catch block assigns the shared value on one path only
+string sub catchAssignsConditionally(string t, bool thr, bool assign) {
+    string s = "abc";
+    try {
+        if (thr) {
+            throw "X";
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        if (assign) {
+            s = t;
+        }
+    }
+    s += "k";
+    return s;
+}
+
+# two throwing calls: the first with the shared value, the second with a fresh one
+string sub twoThrowPoints(string t, bool first, bool second) {
+    string s = "abc";
+    try {
+        s = t;
+        thrower(first);
+        s = "fresh";
+        thrower(second);
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    s += "p";
+    return s;
+}
+
 # the appends that stay in place: no try statement, and a fresh value after one
 string sub plainBuilder(int n) {
     string s = "";
@@ -258,6 +288,37 @@ string sub freshAfterTry(string t, bool thr, int n) {
         s += "ab";
     }
     return r + "/" + s.size();
+}
+
+# appends before and after a try statement whose catch block leaves the local alone stay in place
+string sub appendAroundTry(int n) {
+    string s = "";
+    int x = 0;
+    for (int i = 0; i < n; ++i) {
+        s += "a";
+        try {
+            x += thrower(i == 3);
+        } catch (hash<ExceptionInfo> ex) {
+            x = -1;
+        }
+        s += "b";
+    }
+    return s + "/" + x;
+}
+
+list<int> sub pushAroundTry(int n) {
+    list<int> l = ();
+    int x = 0;
+    for (int i = 0; i < n; ++i) {
+        push l, i;
+        try {
+            x += thrower(i == 3);
+        } catch (hash<ExceptionInfo> ex) {
+            x = -1;
+        }
+        push l, x;
+    }
+    return l;
 }
 
 list<int> sub plainListBuilder(int n) {
@@ -285,6 +346,13 @@ foreach bool thr in ((True, False)) {
     o = lsrc(); printf("listCatchAssign|%y => %y | %y\n", thr, listCatchAssign(o, thr), o);
     o = lsrc(); printf("listPushInCatch|%y => %y | %y\n", thr, listPushInCatch(o, thr), o);
     printf("catchChangesType|%y => %y\n", thr, catchChangesType(thr));
+    t = src(); printf("catchAssignsConditionally|%y|True => %y | %y\n", thr, catchAssignsConditionally(t, thr, True), t);
+    t = src(); printf("catchAssignsConditionally|%y|False => %y | %y\n", thr, catchAssignsConditionally(t, thr, False),
+        t);
+    t = src(); printf("twoThrowPoints|%y|first => %y | %y\n", thr, twoThrowPoints(t, thr, False), t);
+    t = src(); printf("twoThrowPoints|%y|second => %y | %y\n", thr, twoThrowPoints(t, False, thr), t);
 }
+printf("appendAroundTry => %y\n", appendAroundTry(6));
+printf("pushAroundTry => %y\n", pushAroundTry(6));
 printf("plainBuilder => %d\n", plainBuilder(1000).size());
 printf("plainListBuilder => %d\n", plainListBuilder(1000).size());

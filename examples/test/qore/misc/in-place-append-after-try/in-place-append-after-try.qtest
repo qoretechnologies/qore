@@ -23,8 +23,8 @@
 
     cases.q runs each case with a value that the caller still holds and prints the result and the caller's value; the
     AST interpreter's output is the expected result, which every other execution mode and qcc-compiled executables at
-    -O0 and -O3 must give.  The IR optimization statistics show that the appends that need no proof across a handler
-    stay in place.
+    -O0 and -O3 must give.  The IR optimization statistics show that the appends stay in place where the handlers
+    leave the local alone.
 */
 class InPlaceAppendAfterTryTest inherits QUnit::Test {
     public {
@@ -47,25 +47,34 @@ class InPlaceAppendAfterTryTest inherits QUnit::Test {
             "catchAssign|False => \"defx\" | \"TU\"",
             "throwBetweenAssignments|False => \"freshn\" | \"TU\"",
             "listCatchAssign|False => [9] | [1, 2]",
+            "catchAssignsConditionally|True|True => \"TUk\" | \"TU\"",
+            "catchAssignsConditionally|True|False => \"abck\" | \"TU\"",
+            "twoThrowPoints|True|first => \"TUp\" | \"TU\"",
+            "twoThrowPoints|True|second => \"freshp\" | \"TU\"",
+            "appendAroundTry => \"abababababab/-1\"",
             "plainBuilder => 2000",
             "plainListBuilder => 1000",
         );
 
         #! the number of lines that cases.q prints
-        const LineCount = 30;
+        const LineCount = 40;
 
-        #! the functions whose appends must stay in place: (function, statistic)
+        #! the functions whose appends must stay in place: (function, statistic, count)
         const InPlace = (
-            ("plainBuilder", "inplace-string"),
-            ("freshAfterTry", "inplace-string"),
-            ("plainListBuilder", "inplace-push"),
+            ("plainBuilder", "inplace-string", 1),
+            ("freshAfterTry", "inplace-string", 1),
+            ("appendAroundTry", "inplace-string", 2),
+            ("plainListBuilder", "inplace-push", 1),
+            ("pushAroundTry", "inplace-push", 2),
         );
 
         #! the functions whose appends after a try statement must not be in place: (function, statistic)
         const NotInPlace = (
             ("catchAssign", "inplace-string"),
+            ("catchAssignsConditionally", "inplace-string"),
             ("rethrowFromCatch", "inplace-string"),
             ("throwBetweenAssignments", "inplace-string"),
+            ("twoThrowPoints", "inplace-string"),
             ("listCatchAssign", "inplace-push"),
             ("listPushInCatch", "inplace-push"),
         );
@@ -86,7 +95,7 @@ class InPlaceAppendAfterTryTest inherits QUnit::Test {
 
         addTestCase("every execution mode gives the AST result", \testModes());
         addTestCase("compiled executables give the AST result", \testExecutables());
-        addTestCase("the appends that need no proof across a handler stay in place", \testInPlace());
+        addTestCase("the appends stay in place where the handlers leave the local alone", \testInPlace());
 
         set_return_value(main());
     }
@@ -119,8 +128,8 @@ class InPlaceAppendAfterTryTest inherits QUnit::Test {
     testInPlace() {
         string out = backquote(sprintf("QORE_IR_THRESHOLD=1 QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
             "%s -b --exec-mode=ir %s 2>&1", libqore_dir, libqore_dir, qore_bin, cases));
-        foreach list<string> row in (InPlace) {
-            assertEq(1, getStat(out, row[0], row[1]), sprintf("%s: %s", row[0], row[1]));
+        foreach list<auto> row in (InPlace) {
+            assertEq(row[2], getStat(out, row[0], row[1]), sprintf("%s: %s", row[0], row[1]));
         }
         foreach list<string> row in (NotInPlace) {
             assertEq(0, getStat(out, row[0], row[1]), sprintf("%s: %s", row[0], row[1]));

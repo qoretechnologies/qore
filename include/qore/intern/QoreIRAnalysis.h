@@ -76,9 +76,10 @@ struct QoreIRControlFlowGraph {
     std::vector<uint8_t> exception_entry;
     //! 1 for each block that runs only through exception edges: not in \a reachable (always 0 with exception edges)
     /** A forward dataflow over a graph without exception edges skips the blocks that are not reachable, so it never
-        computes the state at the end of one of these blocks; a join that one of them flows into (the block after a
-        try statement, which the end of its catch block flows into) must assume nothing from it (issue #6334),
-        while a predecessor that does not run at all can be ignored.
+        computes the state at the end of one of these blocks; at a join that one of them flows into (the block after
+        a try statement, which the end of its catch block flows into) it must either compute that state, as the
+        in-place mutation analyses do from the states at the instructions that throw to the handler, or assume
+        nothing from it (issue #6334), while a predecessor that does not run at all can be ignored.
     */
     std::vector<uint8_t> exception_only;
     bool cancelled = false;
