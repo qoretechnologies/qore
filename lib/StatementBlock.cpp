@@ -1217,7 +1217,7 @@ int TopLevelStatementBlock::execIR(QoreIRFunction* ir_func, bool use_jit, const 
             if (!set) {
                 return;
             }
-            swap_runtime_parse_options(po, old_stmt, old_loc, old_po);
+            swap_toplevel_code_parse_options(po, old_stmt, old_loc, old_po);
             rc = &rc_get_tls_ref();
             old_rc_po = rc->getParseOptions();
             rc->setParseOptions(po);
@@ -1228,7 +1228,7 @@ int TopLevelStatementBlock::execIR(QoreIRFunction* ir_func, bool use_jit, const 
                 return;
             }
             rc->setParseOptions(old_rc_po);
-            update_runtime_statement_location(old_stmt, old_loc, old_po);
+            restore_toplevel_code_parse_options(old_stmt, old_loc, old_po);
         }
     } code_po(cached_toplevel_ir_po_set && ir_func == cached_toplevel_ir, cached_toplevel_ir_po);
     if (qore_program_private::get(*pgm)->ir_dump) {
