@@ -129,12 +129,19 @@ private:
    bool in_parentheses;
    //! true if this is a QoreCastOperatorNode (see qore_get_cast_operator_node())
    bool cast_operator = false;
+   //! true if this is a QoreDotEvalOperatorNode (see qore_get_dot_eval_operator_node())
+   bool dot_eval_operator = false;
 protected:
    bool ref_rv;
 
    //! Marks the node as a QoreCastOperatorNode; called only by its constructor
    DLLLOCAL void setCastOperator() {
       cast_operator = true;
+   }
+
+   //! Marks the node as a QoreDotEvalOperatorNode; called only by its constructor
+   DLLLOCAL void setDotEvalOperator() {
+      dot_eval_operator = true;
    }
 
    DLLLOCAL virtual ~QoreOperatorNode() {}
@@ -167,6 +174,11 @@ public:
    //! Returns true if this is a QoreCastOperatorNode
    DLLLOCAL bool isCastOperator() const {
        return cast_operator;
+   }
+
+   //! Returns true if this is a QoreDotEvalOperatorNode
+   DLLLOCAL bool isDotEvalOperator() const {
+       return dot_eval_operator;
    }
 
    //! Returns true if the operator's return value is used

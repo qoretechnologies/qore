@@ -8492,6 +8492,35 @@ static QORE_INTERN_NOINLINE void raise_abstract_variant_call(ExceptionSink* xsin
         f->getClassName(), f->getName(), mv->getSignature()->getSignatureText());
 }
 
+void qore_raise_deleted_method_call_after_args(QoreObject* self, const QoreMethod& m,
+        const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t* arg_names,
+        ExceptionSink* xsink) {
+    assert(!m.isStatic());
+    const NormalMethodFunction* f = NMETHF(qore_method_private::get(m)->getFunction());
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreSourceProgramHolder spgm_holder(xsink);
+    {
+        // as NormalMethodFunction::evalMethodTmpArgs(), which the call runs: the variant is resolved with the
+        // arguments, raising the error of the resolution as the AST interpreter does before it enters the method's
+        // code
+        CodeEvaluationHelper ceh(CodeEvaluationHelper::DeletedByArgs(), xsink, rc, f, variant, f->getName(),
+            args, self, qore_class_private::get(*f->getClass()), cctx,
+            qore_get_method_pgm_context(*f->getClass(), spgm_holder), explicit_type_param_instantiation,
+            arg_names);
+        if (*xsink) {
+            return;
+        }
+    }
+    const MethodVariant* mv = METHV_const(variant);
+    if (mv->isAbstract()) {
+        raise_abstract_variant_call(xsink, f, mv);
+        return;
+    }
+    // the error of the method's code, which names the class of the variant (CodeContextHelper)
+    qore_object_private::get(*self)->raiseDeletedCall(qore_class_private::get(*mv->getClass()), f->getName(), xsink);
+}
+
 QoreValue NormalMethodFunction::evalMethod(
         ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, QoreObject* self, const QoreListNode* args,

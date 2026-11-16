@@ -1837,12 +1837,32 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 l.pending_return_try_depth = l.try_depth;
             }
         } pending_return_restore(*this);
+        // the hand-over of a return in a try statement of a handler body (see emitHandlerReturn()) is the state of
+        // this return only: the cleanups of the return can lower an inline handler with a return of its own, whose
+        // lowering would otherwise replace it (#6074); restored on every way out
+        struct HandoverTryRestore {
+            QoreIRLowering& l;
+            bool active;
+            QoreIRValue value;
+            HandoverTryRestore(QoreIRLowering& l) : l(l), active(l.handover_try_active), value(l.handover_try_value) {
+                l.handover_try_active = false;
+            }
+            ~HandoverTryRestore() {
+                l.handover_try_active = active;
+                l.handover_try_value = value;
+            }
+        } handover_try_restore(*this);
         QoreValue expr = ret_stmt->getExpression();
         if (!expr || expr.isNothing()) {
             // a return without a value in a handler replaces the value of the return that the handler runs after with
             // no value, releasing it at once (#5992)
             releaseReplacedReturn(stmt->loc);
             pending_return_restore.set(QoreIRValue());
+            // in a handler run out of line, the return replaces the return value of the function that the handler
+            // runs for with no value (#6074)
+            if (handler_body) {
+                emitHandlerReturn(QoreIRValue(), stmt->loc);
+            }
             // Emit block cleanups for all active scopes before returning.
             // Include lvar cleanup here so object destructors run before the
             // source-level caller resumes.  The function wrapper still pops
@@ -1962,6 +1982,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // at the end of the return statement (#5992)
         releaseReplacedReturn(stmt->loc);
         finish_replaced_release();
+        // in a handler run out of line, the value replaces the return value of the function that the handler runs
+        // for when the statement executes, before the handler's own handlers run, as the AST interpreter's handler
+        // has a reference to it (#6074)
+        if (handler_body) {
+            emitHandlerReturn(lowered, stmt->loc);
+        }
         if (ret_temp_scope) {
             QoreIRInstruction* keep = builder.createDiscardTempsKeep(lowered, stmt->loc);
             if (QoreIRBasicBlock* handler = getCurrentExceptionTarget()) {
@@ -1993,6 +2019,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // its unvisited elements unchanged); the catch blocks that the return leaves are closed in their places
         // among them, so the handlers of the blocks enclosing a catch block run after it is closed (qore#6017)
         pending_return_restore.set(lowered, ret_base);
+        if (handover_try_active) {
+            // the value that the outermost try statement of the handler hands over when it ends (see emitHandlerReturn())
+            handover_try_value = lowered;
+        }
         if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES)) {
             return false;
         }
@@ -5206,11 +5236,41 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
             }
             try_replaced_depth = 0;
         }
+        // a return in a try statement of a handler run out of line leaves the outermost try statement of the handler
+        // here: its value is handed to the function that the handler runs for, as the AST interpreter's try statement
+        // gives it to the enclosing block when it ends, only once the try statement has ended without an exception
+        // (see above, #6074)
+        if (handover_try_active && entry.try_end_depth == 1 && !blockHasTerminator(builder.getBlock())) {
+            // an exception from the try block's end goes to the try statement's catch block; one raised by the
+            // release of the replaced value when the statement has ended does not (the AST interpreter's try
+            // statement gives the value to the enclosing block after it has left its try and catch blocks)
+            builder.createCheckException(entry.loc)->exception_target = getCurrentExceptionTarget();
+            // the IR interpreter takes the exception to the instruction's target; native code to the CheckException's
+            builder.createHandlerReturn(handover_try_value, entry.loc)->exception_target = entry.try_outer_target;
+            builder.createCheckException(entry.loc)->exception_target = entry.try_outer_target;
+            handover_try_active = false;
+        }
     }
     if (unwind_temp_depth != SIZE_MAX && unwind_temp_depth < unwound_temp_depth) {
         builder.createUnwindTemps(unwound_temp_depth, unwind_temp_depth, unwind_loc);
     }
     return true;
+}
+
+// documented in QoreIRLowering.h
+void QoreIRLowering::emitHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc) {
+    if (!try_depth) {
+        // the release of a replaced value can raise an exception (a destructor), which a CheckException after the
+        // hand-over takes to its target
+        // the IR interpreter takes the exception to the instruction's target; native code to the CheckException's
+        builder.createHandlerReturn(value, loc)->exception_target = getCurrentExceptionTarget();
+        builder.createCheckException(loc)->exception_target = getCurrentExceptionTarget();
+        return;
+    }
+    // in a try statement of the handler: the value is handed over when the outermost one ends (see
+    // emitBlockCleanups())
+    handover_try_active = true;
+    handover_try_value = value;
 }
 
 bool QoreIRLowering::shouldRunHandler(const InlineHandler& handler, bool is_error) {
@@ -10139,40 +10199,67 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
     return result;
 }
 
-//! Returns true if a hash subscript of this container can raise an invalid hashdecl member error at runtime
-/** the load-compute-store fast paths for a pre-increment or pre-decrement read the member before storing it, so
-    they report an invalid member as a failed read, while an assignment (as the AST interpreter performs for the
-    whole operation) reports it as an invalid assignment target.  A container declared with a value type can never
-    hold a hashdecl hash, and a member named by a constant key in a declared hashdecl is checked when parsing, so
-    those cases keep the fast path
-*/
-static bool qore_ir_hash_subscript_may_raise_invalid_member(const VarRefNode* container_var, bool const_key) {
-    const QoreTypeInfo* ti = container_var ? container_var->getTypeInfo() : nullptr;
-    // hash<auto> accepts a hashdecl hash unchanged, so only a value type that rejects one rules it out
-    const QoreTypeInfo* value_type = QoreTypeInfo::getUniqueReturnComplexHash(ti);
-    if (value_type && value_type != autoTypeInfo) {
-        return false;
+// documented in QoreIRLowering.h
+QoreIRValue QoreIRLowering::lowerPreIncDec(const QoreValue& expr, const QoreValue& lvexp, bool int_op, bool increment,
+        const QoreProgramLocation* loc, std::string& error) {
+    const char* int_context = increment ? "pre-increment-int" : "pre-decrement-int";
+    QoreIROpcode int_opcode = increment ? QoreIROpcode::AddAssignInt : QoreIROpcode::SubAssignInt;
+    // Typed int pre-increment / pre-decrement on simple VarRef (exclude references — need lvalue write-through)
+    if (int_op) {
+        auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
+        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
+                && !QoreTypeInfo::isReference(var->getTypeInfo())) {
+            // Fused path: emit single IncrementLocalInt (delta +1 or -1) for lvstack and closure-use locals.
+            if (isLocalOrClosureVar(var)) {
+                auto* inst = builder.createIncrementLocalInt(var->ref.id, increment ? 1 : -1, loc);
+                if (parse_context) {
+                    parse_context->markLocalAssignment(var->ref.id, true,
+                        var->getTypeInfo());
+                }
+                return inst->result;
+            }
+            // Fallback: LoadLocal + AddAssignInt / SubAssignInt + StoreLocal, for a variable that no other thread can
+            // change; a global or a local passed by reference takes the lvalue path below, which changes it in one
+            // operation (see isSharedVar())
+            if (!changesThroughLValue(var)) {
+                QoreIRValue loaded = loadVarRef(var, error, int_context, lvexp);
+                if (!loaded.isValid()) {
+                    return QoreIRValue();
+                }
+                QoreIRValue one = builder.createConstInt(1, loc)->result;
+                QoreIRValue result = lowerBinaryOpOrInvoke(int_opcode, expr, loaded, one, loc, error);
+                if (!result.isValid()) {
+                    return QoreIRValue();
+                }
+                if (!storeVarRef(var, result, error, int_context)) {
+                    return QoreIRValue();
+                }
+                return result;
+            }
+        }
     }
-    if (QoreTypeInfo::getUniqueReturnHashDecl(ti)) {
-        return !const_key;
+    // a range is not an lvalue; check_lvalue() rejects it except for remove and delete
+    if (isRangeLValue(lvexp)) {
+        error = "a range cannot be used as an lvalue";
+        return QoreIRValue();
     }
-    return true;
-}
-
-//! Returns true if the values of the hash that the variable holds are integers
-/** The hash key fast path of ++ and -- (emitHashKeyCompoundOp() and emitHashKeyDynamicCompoundOp() with
-    AddAssignInt or SubAssignInt) computes an integer result; the AST operators add 1 to a float or number value and
-    give a float or number, so the fast path is taken only for a hash of integers, and any other value type takes the
-    lvalue path, which applies the AST operators' implementation.
-*/
-static bool qore_ir_hash_values_are_int(const VarRefNode* container_var) {
-    const QoreTypeInfo* value_type = QoreTypeInfo::getUniqueReturnComplexHash(container_var
-        ? container_var->getTypeInfo() : nullptr);
-    if (!value_type || QoreTypeInfo::getReturnEnum(value_type)) {
-        return false;
+    // every other lvalue, including a hash key, takes the lvalue path, which changes the lvalue in one operation;
+    // the fixed-aggregate scalar replacement removes the path of a key of a hash that a local holds (qore#6199)
+    {
+        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
+            lvexp, nullptr, loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign,
+            increment ? LVUnaryOp::PreInc : LVUnaryOp::PreDec);
+        if (path_result.isValid()) {
+            return path_result;
+        }
     }
-    // an or-nothing value type (*int) gives its plain type; any other type is given unchanged
-    return QoreTypeInfo::isType(get_or_nothing_base_type(value_type), NT_INT);
+    // every lvalue that check_lvalue() accepts has a native lvalue path (extractLValuePath()), so this is
+    // reached only if lowering the path failed
+    if (error.empty()) {
+        error = increment ? "unsupported lvalue for native PreIncrement lowering"
+            : "unsupported lvalue for native PreDecrement lowering";
+    }
+    return QoreIRValue();
 }
 
 QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string& error) {
@@ -10186,80 +10273,8 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
         error = "unsupported lvalue for pre-increment IR lowering";
         return QoreIRValue();
     }
-    // Typed int pre-increment on simple VarRef (exclude references — need lvalue write-through)
-    if (dynamic_cast<const QoreIntPreIncrementOperatorNode*>(node)) {
-        auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
-        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
-                && !QoreTypeInfo::isReference(var->getTypeInfo())) {
-            // Fused path: emit single IncrementLocalInt for lvstack and closure-use locals.
-            if (isLocalOrClosureVar(var)) {
-                auto* inst = builder.createIncrementLocalInt(var->ref.id, 1, op->loc);
-                if (parse_context) {
-                    parse_context->markLocalAssignment(var->ref.id, true,
-                        var->getTypeInfo());
-                }
-                return inst->result;
-            }
-            // Fallback: LoadLocal + AddAssignInt + StoreLocal, for a variable that no other thread can change;
-            // a global or a local passed by reference takes the lvalue path below, which changes it in one
-            // operation (see isSharedVar())
-            if (!changesThroughLValue(var)) {
-                QoreIRValue loaded = loadVarRef(var, error, "pre-increment-int", lvexp);
-                if (!loaded.isValid()) {
-                    return QoreIRValue();
-                }
-                QoreIRValue one = builder.createConstInt(1, op->loc)->result;
-                QoreIRValue result = lowerBinaryOpOrInvoke(
-                    QoreIROpcode::AddAssignInt, expr, loaded, one, op->loc, error);
-                if (!result.isValid()) {
-                    return QoreIRValue();
-                }
-                if (!storeVarRef(var, result, error, "pre-increment-int")) {
-                    return QoreIRValue();
-                }
-                return result;
-            }
-        }
-    }
-    // a range is not an lvalue; check_lvalue() rejects it except for remove and delete
-    if (isRangeLValue(lvexp)) {
-        error = "a range cannot be used as an lvalue";
-        return QoreIRValue();
-    }
-    // Fast path: ++h.key for const-key hash subscript → LoadLocal + HashKeyAccess + Add + HashKeyStore
-    {
-        const VarRefNode* container_var = nullptr;
-        std::string key_name;
-        QoreValue key_expr;
-        if (isConstKeyHashSubscript(foreach_element_locals, lvexp, container_var, key_name, key_expr)
-                && qore_ir_hash_values_are_int(container_var)
-                && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, true)) {
-            QoreIRValue one = builder.createConstInt(1, op->loc)->result;
-            return emitHashKeyCompoundOp(container_var, key_name, key_expr,
-                QoreIROpcode::AddAssignInt, one, expr, op->loc, error);
-        }
-        if (isDynamicKeyHashSubscript(foreach_element_locals, lvexp, container_var, key_expr)
-                && qore_ir_hash_values_are_int(container_var)
-                && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, false)) {
-            QoreIRValue one = builder.createConstInt(1, op->loc)->result;
-            return emitHashKeyDynamicCompoundOp(container_var, key_expr,
-                QoreIROpcode::AddAssignInt, one, expr, op->loc, error);
-        }
-    }
-    // Path-based unary for complex lvalues
-    {
-        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            lvexp, nullptr, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::PreInc);
-        if (path_result.isValid()) {
-            return path_result;
-        }
-    }
-    // every lvalue that check_lvalue() accepts has a native lvalue path (extractLValuePath()), so this is
-    // reached only if lowering the path failed
-    if (error.empty()) {
-        error = "unsupported lvalue for native PreIncrement lowering";
-    }
-    return QoreIRValue();
+    return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPreIncrementOperatorNode*>(node) != nullptr, true,
+        op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::string& error) {
@@ -10278,6 +10293,14 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
     if (!lvexp.hasNode()) {
         error = "unsupported lvalue for post-increment IR lowering";
         return QoreIRValue();
+    }
+    // an unused value (an expression statement, the update of a for loop) is the only difference from the
+    // pre-increment: both change the lvalue the same way (LValueHelper::postIncrementBigInt() and
+    // preIncrementBigInt(), and the float and number versions), so it is lowered as the pre-increment, with its fused
+    // paths (qore#6199)
+    if (!base_op->needsReturnValue()) {
+        return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node) != nullptr, true,
+            base_op->loc, error);
     }
     // Typed int post-increment on simple VarRef (exclude references — need lvalue write-through)
     if (dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node)) {
@@ -10312,8 +10335,6 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
         error = "a range cannot be used as an lvalue";
         return QoreIRValue();
     }
-    // Post-inc/dec on hash keys deferred — needs old value which emitHashKeyCompoundOp
-    // doesn't currently expose. The pre-inc/dec case is handled in lowerPreIncrement/Decrement.
     // Path-based unary for complex lvalues
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
@@ -10341,81 +10362,8 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
         error = "unsupported lvalue for pre-decrement IR lowering";
         return QoreIRValue();
     }
-    // Typed int pre-decrement on simple VarRef
-    // Exclude references — need lvalue write-through
-    if (dynamic_cast<const QoreIntPreDecrementOperatorNode*>(node)) {
-        auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
-        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
-                && !QoreTypeInfo::isReference(var->getTypeInfo())) {
-            // Fused path: emit single IncrementLocalInt(delta=-1) for lvstack and closure-use locals.
-            if (isLocalOrClosureVar(var)) {
-                auto* inst = builder.createIncrementLocalInt(var->ref.id, -1, op->loc);
-                if (parse_context) {
-                    parse_context->markLocalAssignment(var->ref.id, true,
-                        var->getTypeInfo());
-                }
-                return inst->result;
-            }
-            // Fallback: LoadLocal + SubAssignInt + StoreLocal, for a variable that no other thread can change;
-            // a global or a local passed by reference takes the lvalue path below, which changes it in one
-            // operation (see isSharedVar())
-            if (!changesThroughLValue(var)) {
-                QoreIRValue loaded = loadVarRef(var, error, "pre-decrement-int", lvexp);
-                if (!loaded.isValid()) {
-                    return QoreIRValue();
-                }
-                QoreIRValue one = builder.createConstInt(1, op->loc)->result;
-                QoreIRValue result = lowerBinaryOpOrInvoke(
-                    QoreIROpcode::SubAssignInt, expr, loaded, one, op->loc, error);
-                if (!result.isValid()) {
-                    return QoreIRValue();
-                }
-                if (!storeVarRef(var, result, error, "pre-decrement-int")) {
-                    return QoreIRValue();
-                }
-                return result;
-            }
-        }
-    }
-    // a range is not an lvalue; check_lvalue() rejects it except for remove and delete
-    if (isRangeLValue(lvexp)) {
-        error = "a range cannot be used as an lvalue";
-        return QoreIRValue();
-    }
-    // Fast path: --h.key for const-key hash subscript → LoadLocal + HashKeyAccess + Sub + HashKeyStore
-    {
-        const VarRefNode* container_var = nullptr;
-        std::string key_name;
-        QoreValue key_expr;
-        if (isConstKeyHashSubscript(foreach_element_locals, lvexp, container_var, key_name, key_expr)
-                && qore_ir_hash_values_are_int(container_var)
-                && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, true)) {
-            QoreIRValue one = builder.createConstInt(1, op->loc)->result;
-            return emitHashKeyCompoundOp(container_var, key_name, key_expr,
-                QoreIROpcode::SubAssignInt, one, expr, op->loc, error);
-        }
-        if (isDynamicKeyHashSubscript(foreach_element_locals, lvexp, container_var, key_expr)
-                && qore_ir_hash_values_are_int(container_var)
-                && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, false)) {
-            QoreIRValue one = builder.createConstInt(1, op->loc)->result;
-            return emitHashKeyDynamicCompoundOp(container_var, key_expr,
-                QoreIROpcode::SubAssignInt, one, expr, op->loc, error);
-        }
-    }
-    // Path-based unary for complex lvalues
-    {
-        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            lvexp, nullptr, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::PreDec);
-        if (path_result.isValid()) {
-            return path_result;
-        }
-    }
-    // every lvalue that check_lvalue() accepts has a native lvalue path (extractLValuePath()), so this is
-    // reached only if lowering the path failed
-    if (error.empty()) {
-        error = "unsupported lvalue for native PreDecrement lowering";
-    }
-    return QoreIRValue();
+    return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPreDecrementOperatorNode*>(node) != nullptr, false,
+        op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::string& error) {
@@ -10434,6 +10382,14 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
     if (!lvexp.hasNode()) {
         error = "unsupported lvalue for post-decrement IR lowering";
         return QoreIRValue();
+    }
+    // an unused value (an expression statement, the update of a for loop) is the only difference from the
+    // pre-decrement: both change the lvalue the same way (LValueHelper::postDecrementBigInt() and
+    // preDecrementBigInt(), and the float and number versions), so it is lowered as the pre-decrement, with its fused
+    // paths (qore#6199)
+    if (!base_op->needsReturnValue()) {
+        return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node) != nullptr,
+            false, base_op->loc, error);
     }
     // Typed int post-decrement on simple VarRef (exclude references — need lvalue write-through)
     if (dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node)) {
@@ -14527,6 +14483,11 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
         std::vector<QoreIRValue> operands{base_val};
         if (!lowerCallArgs(m->getParseArgs(), m->getArgs(), operands, error)) {
             return QoreIRValue();
+        }
+        if (check_after_args) {
+            // arguments with side effects can delete the object: it is checked again after them, as for the other
+            // calls (issue #5824)
+            emitCallTargetCheckAfterArgs(expr, base_val, op->loc);
         }
         return finish_call(lowerExprOpOrInvoke(QoreIROpcode::CallMethod, expr, operands, op->loc, error));
     }

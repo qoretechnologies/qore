@@ -225,6 +225,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   executables
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
         #   under valgrind
+        # - float-int-conversion (#6181): its probes run in child processes that set their own --exec-mode and in qcc
+        #   executables
         # - background-runtime-parse-options (#6208): its checks run in child processes that set their own --exec-mode
         #   and in qcc executables
         # - deferred-callback-runtime-parse-options (#6208): its checks run in child processes that set their own
@@ -238,6 +240,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
                                  "examples/test/qore/classes/explicit-type-param-method-call.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",
+                                 "examples/test/qore/operators/float-int-conversion.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",

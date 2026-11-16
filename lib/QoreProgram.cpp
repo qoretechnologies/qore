@@ -6241,6 +6241,10 @@ QoreExternalProgramContextHelper::~QoreExternalProgramContextHelper() {
     delete priv;
 }
 
+bool qore_program_thread_entry_pending(const QoreProgram* pgm) {
+    return pgm && thread_entry_pending(pgm);
+}
+
 class QoreExternalProgramCallContextHelperPriv : ProgramCallContextHelper {
 public:
     DLLLOCAL QoreExternalProgramCallContextHelperPriv(QoreProgram* pgm) : ProgramCallContextHelper(pgm) {

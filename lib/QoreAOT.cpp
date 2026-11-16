@@ -23529,6 +23529,8 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         fprintf(stderr, "IR-OPT-AOT-LLVM: pruned-noop-decrefs=%zu\n",
             pruned_calls);
     }
+    // the float to int conversions of an x86-64 target, after the optimization passes (issue #6181)
+    QoreIRToLLVM::expandFloatToIntForTarget(module, t);
 
     // Dump IR after optimization if requested
     if (q_env_is_set("QORE_DUMP_IR_AFTER_OPT")) {
