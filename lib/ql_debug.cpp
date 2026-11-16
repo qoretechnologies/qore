@@ -25203,6 +25203,20 @@ static QoreValue f_dbg_fail_next_program_entry(const QoreListNode* params, Runti
 /** Tests that a slice that does not reach the end of its parent is copied when it is taken, and a slice that reaches
     it is a zero-copy view (issue #6239)
 */
+//! Returns the capacity of the buffer that the string owns, or 0 for a view
+/** Tests that a slice in the middle of a string is copied with an exact allocation (issue #6239)
+*/
+static QoreValue f_dbg_string_capacity(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const qore_string_private* p = qore_string_private::get(*get_param_value(params, 0).get<const QoreStringNode>());
+    return p->view_parent ? 0 : static_cast<int64>(p->allocated);
+}
+
+//! Returns the known ASCII prefix of the string (the cache of issue #6138)
+static QoreValue f_dbg_string_ascii_prefix(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_string_private::get(*get_param_value(params, 0).get<const QoreStringNode>())
+        ->getAsciiPrefix());
+}
+
 static QoreValue f_dbg_string_is_view(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreStringNode* str = get_param_value(params, 0).get<const QoreStringNode>();
     return qore_string_private::get(*str)->view_parent != nullptr;
@@ -25395,6 +25409,10 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_string_is_view", f_dbg_string_is_view, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
         stringTypeInfo, QORE_PARAM_NO_ARG, "str");
+    qns.addBuiltinVariant("dbg_string_capacity", f_dbg_string_capacity, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo,
+        1, stringTypeInfo, QORE_PARAM_NO_ARG, "str");
+    qns.addBuiltinVariant("dbg_string_ascii_prefix", f_dbg_string_ascii_prefix, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "str");
     qns.addBuiltinVariant("dbg_set_ascii_prefix_cache", f_dbg_set_ascii_prefix_cache, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "enable");
     qns.addBuiltinVariant("dbg_sandbox_fail_next_budgets", f_dbg_sandbox_fail_next_budgets,
