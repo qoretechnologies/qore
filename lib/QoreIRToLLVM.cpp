@@ -4704,6 +4704,38 @@ static bool qore_finalize_cancelled(int loop, size_t i, const char* what) {
 }
 
 // documented in QoreIRToLLVM.h
+uint32_t QoreIRToLLVM::getReloadChainSlotIndex(llvm::Value* slot) {
+    auto it = reload_chain_slot_index.find(slot);
+    if (it != reload_chain_slot_index.end()) {
+        return it->second;
+    }
+    uint32_t index = static_cast<uint32_t>(reload_chain_slot_allocas.size());
+    assert(index < QORE_RELOAD_CHAIN_NO_SLOT);
+    reload_chain_slot_allocas.push_back(slot);
+    reload_chain_slot_index.emplace(slot, index);
+    return index;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::finalizeReloadChainSlots(llvm::Function* llvm_func) {
+    if (!reload_chain_slots) {
+        return;
+    }
+    llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+    llvm::Instruction* term = qoreGetTerminator(entry);
+    assert(term);
+    llvm::IRBuilder<> ab(term);
+    for (size_t i = 0; i < reload_chain_slot_allocas.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "LLVM reload chain slot table")) {
+            break;
+        }
+        ab.CreateStore(reload_chain_slot_allocas[i], ab.CreateConstGEP1_64(ptr_type, reload_chain_slots, i));
+    }
+    reload_chain_slots->setOperand(0, llvm::ConstantInt::get(i64_type,
+        std::max<size_t>(reload_chain_slot_allocas.size(), 1)));
+}
+
+// documented in QoreIRToLLVM.h
 bool QoreIRToLLVM::finalizeObeEntries(llvm::Function* llvm_func) {
     if (!obe_entries) {
         return true;
@@ -6207,24 +6239,59 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
     // code-generated in minutes.  Above the threshold the identical test and
     // rotation run in the runtime helper instead, which emits one call and no extra
     // block.  Small functions keep the inline form so LLVM can fold it.
+    // A call for each tracked local and a store for each local's valid epoch made the code of each boundary grow with
+    // the tracked locals, so a function had code in the product of its tracked locals and its temp boundaries, and its
+    // code generation took time in more than that (a function with 100 catch blocks that have a local had 20200 such
+    // calls of its 43499, and 21313 of its 41605 stores): the flush of a function over the threshold is one call
+    // with a constant table of the slots that it rotates, clears and marks stale, in the order of the inline form
+    // below (qore#6299)
     const bool use_flush_helpers = (local_reload_trackers.size()
         + local_reload_deferred.size()) >= getReloadChainCallThreshold();
-    llvm::FunctionCallee rotate_helper;
-    llvm::FunctionCallee clear_helper;
     if (use_flush_helpers) {
-        rotate_helper = module.getOrInsertFunction("qore_rt_reload_chain_rotate",
-                llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
-        clear_helper = module.getOrInsertFunction("qore_rt_reload_chain_clear",
-                llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+        // pairs of the indexes of the tracker and of the deferred slot in reload_chain_slots, either one
+        // QORE_RELOAD_CHAIN_NO_SLOT, then the indexes of the valid epochs
+        std::vector<uint32_t> table;
+        table.reserve(2 * (local_reload_trackers.size() + local_reload_deferred.size()) + local_valid_epochs.size());
+        for (auto& [key, tracker_alloca] : local_reload_trackers) {
+            auto deferred_it = local_reload_deferred.find(key);
+            table.push_back(getReloadChainSlotIndex(tracker_alloca));
+            table.push_back(deferred_it == local_reload_deferred.end() ? QORE_RELOAD_CHAIN_NO_SLOT
+                : getReloadChainSlotIndex(deferred_it->second));
+        }
+        for (auto& [key, deferred_alloca] : local_reload_deferred) {
+            if (local_reload_trackers.find(key) != local_reload_trackers.end()) {
+                // rotated with its tracker above
+                continue;
+            }
+            table.push_back(QORE_RELOAD_CHAIN_NO_SLOT);
+            table.push_back(getReloadChainSlotIndex(deferred_alloca));
+        }
+        const uint32_t pairs = static_cast<uint32_t>(table.size() / 2);
+        uint32_t epochs = 0;
+        if (local_reload_epoch) {
+            for (auto& [key, valid_epoch] : local_valid_epochs) {
+                (void)key;
+                table.push_back(getReloadChainSlotIndex(valid_epoch));
+                ++epochs;
+            }
+        }
+        if (!reload_chain_slots) {
+            // the size is that of the slots of the function, once it is lowered (finalizeReloadChainSlots())
+            llvm::BasicBlock& entry = builder->GetInsertBlock()->getParent()->getEntryBlock();
+            llvm::IRBuilder<> ab(&entry, entry.begin());
+            reload_chain_slots = ab.CreateAlloca(ptr_type, llvm::ConstantInt::get(i64_type, 1), "reload_chain_slots");
+        }
+        auto flush_helper = module.getOrInsertFunction("qore_rt_reload_chain_flush",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i32_type, i32_type, ptr_type, ptr_type}, false));
+        llvm::Value* epoch = local_reload_epoch ? static_cast<llvm::Value*>(local_reload_epoch)
+            : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+        builder->CreateCall(flush_helper, {reload_chain_slots, getObeTable(module, table),
+            llvm::ConstantInt::get(i32_type, pairs), llvm::ConstantInt::get(i32_type, epochs), epoch, xsink_arg});
+        return;
     }
 
     auto rotate_or_skip = [&](llvm::Value* tracker_alloca,
             llvm::Value* deferred_alloca) {
-        if (use_flush_helpers) {
-            builder->CreateCall(rotate_helper,
-                    {tracker_alloca, deferred_alloca, xsink_arg});
-            return;
-        }
         llvm::Value* tracker_val = builder->CreateLoad(i64_type, tracker_alloca);
         llvm::Value* is_set = builder->CreateICmpNE(tracker_val, i64_nothing,
                 "tracker_has_value");
@@ -6249,10 +6316,6 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
             // No deferred slot — gate the decref on tracker_val != NOTHING so
             // an empty tracker is a no-op (matches the rotation-path
             // behavior above).
-            if (use_flush_helpers) {
-                builder->CreateCall(clear_helper, {tracker_alloca, xsink_arg});
-                continue;
-            }
             llvm::Value* tracker_val = builder->CreateLoad(i64_type, tracker_alloca);
             llvm::Value* is_set = builder->CreateICmpNE(tracker_val, i64_nothing,
                     "tracker_has_value_noslot");
@@ -6277,10 +6340,6 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
         (void)key;
         if (local_reload_trackers.find(key) != local_reload_trackers.end()) {
             // Already rotated above; skip to avoid double-decref.
-            continue;
-        }
-        if (use_flush_helpers) {
-            builder->CreateCall(clear_helper, {deferred_alloca, xsink_arg});
             continue;
         }
         llvm::Value* deferred_val = builder->CreateLoad(i64_type, deferred_alloca);
@@ -14754,6 +14813,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     obe_entry_keys.clear();
     obe_entry_index.clear();
     obe_tables.clear();
+    reload_chain_slots = nullptr;
+    reload_chain_slot_allocas.clear();
+    reload_chain_slot_index.clear();
     jit_deopt_block = nullptr;
     current_lowering_block_ = nullptr;
     // the implicit arguments and elements that an exception leaving the function restores at each instruction (see
@@ -17214,6 +17276,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // All exits (and therefore every emitInvokeCleanup() call) are emitted.
     finalizeInvokeCleanupArray();
+
+    // the addresses of the slots that the tables of the flushes of the reload chains cover, once all the code of the
+    // function is emitted (qore#6299)
+    finalizeReloadChainSlots(llvm_func);
 
     // Emit llvm.lifetime.start/end annotations for entry-block allocas.
     // Must run after all terminators are in place (we walk ret/resume sites).

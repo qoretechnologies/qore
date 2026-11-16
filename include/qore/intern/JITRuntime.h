@@ -544,6 +544,25 @@ void qore_rt_reload_chain_rotate(uint64_t* tracker, uint64_t* deferred, Exceptio
 //! Clear one local reload-chain slot at a temp boundary (no-op for an empty slot).
 void qore_rt_reload_chain_clear(uint64_t* slot, ExceptionSink* xsink);
 
+//! the index of an absent slot in a table of qore_rt_reload_chain_flush()
+constexpr uint32_t QORE_RELOAD_CHAIN_NO_SLOT = 0xffffffffu;
+
+//! Flushes the reload chains of the locals of a function at a temp boundary (qore#6299)
+/** @param slots the addresses of the tracker, deferred and valid-epoch slots of the function
+    @param table \a pairs pairs of indexes in \a slots, of a tracker and of its deferred slot, either of which can be
+    QORE_RELOAD_CHAIN_NO_SLOT, then \a epochs indexes of valid-epoch slots
+    @param pairs the number of pairs: each is rotated (qore_rt_reload_chain_rotate()), or its slot cleared
+    (qore_rt_reload_chain_clear()) if it has one, in the order of the table
+    @param epochs the number of valid-epoch slots that get the value of \a epoch, which is incremented then, so that
+    the caches of their locals are stale
+    @param epoch the reload epoch of the function, or null if it has none (then \a epochs is 0)
+    @param xsink for the exceptions of the destructors of the values released
+
+    The same as the inline code of a flush of a smaller function, in one call.
+*/
+void qore_rt_reload_chain_flush(uint64_t** slots, const uint32_t* table, int32_t pairs, int32_t epochs,
+        uint64_t* epoch, ExceptionSink* xsink);
+
 //! Clear caller-owned argument cleanup slots after callee ownership has been established.
 void qore_rt_clear_arg_cleanups(uint64_t** arg_cleanups, int32_t count, ExceptionSink* xsink);
 
