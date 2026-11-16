@@ -626,6 +626,27 @@ public:
     DLLLOCAL bool visit(const AbstractQoreNode* container);
     DLLLOCAL bool tracking() const { return state; }
 
+    //! Calls \a f with each object tracked (#6335)
+    /** \a f may scan the objects, which can add to the tracker: the inline objects are read before each call, and the
+        objects of the lazy table are copied first.  The tracker borrows the identities of live objects; the scan needs
+        them as mutable objects.
+    */
+    template <typename F>
+    DLLLOCAL void forEach(F f) const {
+        RObject* a = const_cast<RObject*>(first);
+        RObject* b = const_cast<RObject*>(second);
+        if (state) {
+            std::vector<RObject*> more;
+            collectState(more);
+            if (a) f(a);
+            if (b) f(b);
+            for (RObject* o : more) f(o);
+            return;
+        }
+        if (a) f(a);
+        if (b) f(b);
+    }
+
 private:
     struct ObjectEqual;
     struct State;
@@ -635,6 +656,7 @@ private:
 
     DLLLOCAL void releaseState();
     DLLLOCAL State& getState();
+    DLLLOCAL void collectState(std::vector<RObject*>& out) const;
     DLLLOCAL QoreRemovedValueTracker(const QoreRemovedValueTracker&) = delete;
     DLLLOCAL QoreRemovedValueTracker& operator=(const QoreRemovedValueTracker&) = delete;
 };

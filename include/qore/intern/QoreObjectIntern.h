@@ -205,6 +205,24 @@ public:
 
 class VRMutex;
 
+//! scans the objects in a recursive set that a value removed from an object holds, directly or in its lists and hashes
+/** Called after a write that removed the value from an object in a recursive set, and after the scan of that object,
+    which does not reach them when the removed edge was its only path to them (#6335).
+*/
+DLLLOCAL void qore_scan_removed_value_objects(QoreValue v, RObject* root, ExceptionSink* xsink);
+
+//! Returns true if an object that a write removed from \a root needs a scan of its own after the root's (#6335)
+/** Not if it is in no recursive set, nor if the removed value holds its only reference (it is freed when the value is
+    released), nor if the root's scan reached it (it is in the root's valid set).
+*/
+DLLLOCAL inline bool qore_removed_object_needs_scan(RObject* o, RObject* root) {
+    RSet* rs = o->rset.load(std::memory_order_acquire);
+    if (!rs || o->refs() <= 1) {
+        return false;
+    }
+    return !(root && rs == root->rset.load(std::memory_order_acquire) && rs->active() && !rs->isStale());
+}
+
 class qore_object_private : public RObject {
 public:
     const QoreClass* theclass;

@@ -988,6 +988,16 @@ void QoreRemovedValueTracker::add(const RObject* obj) {
     }
 }
 
+void QoreRemovedValueTracker::collectState(std::vector<RObject*>& out) const {
+    // the objects are alive: the removed values that hold them are released only after the scans (see
+    // ~LValueHelper())
+    for (const RObject* o : state->objects) {
+        if (o) {
+            out.push_back(const_cast<RObject*>(o));
+        }
+    }
+}
+
 bool QoreRemovedValueTracker::contains(const RObject* obj) const {
     return (first && ObjectEqual{}(first, obj))
         || (second && ObjectEqual{}(second, obj))
@@ -1136,6 +1146,8 @@ LValueHelper::~LValueHelper() {
 #ifdef DEBUG
             ++lvalue_scan_count;
 #endif
+            // a removed or replaced edge can be counted in a recursive set only if the root is in one (#6335)
+            bool root_in_set = robj->rset.load(std::memory_order_acquire) != nullptr;
             bool deferred;
             {
                 // the root's set does not count an edge this write added until a scan has followed its edges
@@ -1157,6 +1169,41 @@ LValueHelper::~LValueHelper() {
                     ++lvalue_scan_count;
 #endif
                     RSetHelper rsh(*o, vl.xsink, removed_objects.empty() ? nullptr : &removed_objects);
+                }
+            }
+            // A removed object that is still in a recursive set is scanned too: the scan of the root does not reach
+            // it when the removed edge was the root's only path to it, and its set would keep counting the removed
+            // edge, so that a cycle that it is part of is never collected (#6335).  An object in no recursive set
+            // has no set to repair, so the scan costs nothing for an ordinary removal.
+            if (root_in_set) {
+                if (!removed_objects.empty()) {
+                    removed_objects.forEach([this] (RObject* o) {
+                        if (qore_removed_object_needs_scan(o, robj)) {
+#ifdef DEBUG
+                            ++lvalue_scan_count;
+#endif
+                            RSetHelper rsh(*o, vl.xsink, &removed_objects);
+                        }
+                    });
+                }
+                // the values that an assignment replaced are not tracked as removed; the objects they hold are
+                // scanned the same way
+                for (AbstractQoreNode* n : tvec) {
+                    if (!n) {
+                        continue;
+                    }
+                    // a replaced object, the common case, is tested here; a list or hash is walked
+                    if (n->getType() == NT_OBJECT) {
+                        qore_object_private* o = qore_object_private::get(*static_cast<QoreObject*>(n));
+                        if (qore_removed_object_needs_scan(o, robj)) {
+#ifdef DEBUG
+                            ++lvalue_scan_count;
+#endif
+                            RSetHelper rsh(*o, vl.xsink);
+                        }
+                    } else if (needs_scan(n)) {
+                        qore_scan_removed_value_objects(QoreValue(n), robj, vl.xsink);
+                    }
                 }
             }
         }
