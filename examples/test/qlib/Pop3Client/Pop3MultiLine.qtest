@@ -1,0 +1,321 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - POP3 sessions over loopback sockets, read with the poll pipelines of the client
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a multi-line POP3 response (RETR, TOP, LIST) ends with a line that is only "." (RFC 1939 section 3); it ended at the
+# first ".\r\n", so a message with a line that ends with "." was cut off there (issue #6319), and the "." added
+# before a line that starts with "." was not removed; a message with an 8-bit part in a single-byte charset could not
+# be parsed (issue #114).  A local POP3 server serves the messages of each test case, which are read with the client
+# connected (one session) and not connected (a session for each call).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Mime
+%requires MailMessage
+%requires Pop3Client
+%requires QUnit
+
+%exec-class Pop3MultiLineTest
+
+#! a POP3 server that serves a mailbox of raw messages to one session at a time until a session sends STOP
+class MultiLinePop3Server {
+    private {
+        Socket listener();
+        Counter done(1);
+        hash<string, binary> messages;
+        *string error;
+        const ReadTimeout = 30s;
+    }
+
+    constructor(hash<string, binary> messages) {
+        self.messages = messages;
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        background run();
+    }
+
+    int getPort() {
+        return listener.getPort();
+    }
+
+    string getUrl() {
+        return sprintf("pop3://user:pass@127.0.0.1:%d", getPort());
+    }
+
+    #! ends the server after the session being served, and returns the first error of a session, if any
+    *string stop() {
+        Socket s();
+        s.connectINET("127.0.0.1", getPort());
+        s.send("STOP\r\n");
+        done.waitForZero();
+        s.close();
+        return error;
+    }
+
+    private run() {
+        on_exit done.dec();
+        while (True) {
+            Socket s = listener.accept();
+            bool stop;
+            try {
+                stop = serve(s);
+            } catch (hash<ExceptionInfo> ex) {
+                # a client that is closed without QUIT ends its session
+                if (ex.err != "SOCKET-CLOSED" && !error) {
+                    error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+            }
+            s.close();
+            if (stop) {
+                break;
+            }
+        }
+        listener.close();
+    }
+
+    private string readLine(Socket s) {
+        binary line = binary();
+        while (True) {
+            binary c = s.recvBinary(1, ReadTimeout);
+            if (!c.size()) {
+                throw "SOCKET-CLOSED", "the client closed the connection";
+            }
+            if (c == <0a>) {
+                break;
+            }
+            line += c;
+        }
+        return trim(line.toString());
+    }
+
+    # returns the lines of a message with their line breaks: the header, the empty line after it and the given number
+    # of lines of the body (TOP), or all lines; every line of the messages ends with CRLF
+    private static list<binary> getLines(binary msg, *int body_lines) {
+        list<binary> rv = ();
+        int pos = 0;
+        int body = -1;
+        while (pos < msg.size()) {
+            int i = msg.find(<0d0a>, pos);
+            binary line = msg.substr(pos, i - pos + 2);
+            pos = i + 2;
+            if (exists body_lines && body >= 0 && body++ >= body_lines) {
+                break;
+            }
+            rv += line;
+            if (body < 0 && line == <0d0a>) {
+                body = 0;
+            }
+        }
+        return rv;
+    }
+
+    # returns the multi-line data of the given lines: each line that starts with "." has another "." before it, and
+    # the end line follows them (RFC 1939 section 3)
+    private static binary getData(list<binary> lines) {
+        binary data = binary();
+        foreach binary line in (lines) {
+            if (line.substr(0, 1) == <2e>) {
+                data += <2e>;
+            }
+            data += line;
+        }
+        return data + <2e0d0a>;
+    }
+
+    # serves a session; returns True for the session that stops the server
+    private bool serve(Socket s) {
+        s.send("+OK ready\r\n");
+        while (True) {
+            string cmd = readLine(s);
+            if (cmd == "STOP") {
+                return True;
+            }
+            if (cmd =~ /^(USER|PASS|NOOP|RSET|DELE)( |$)/) {
+                s.send("+OK\r\n");
+            } else if (cmd == "STAT") {
+                int size = 0;
+                map size += $1.size(), messages.iterator();
+                s.send(sprintf("+OK %d %d\r\n", messages.size(), size));
+            } else if (cmd == "LIST") {
+                s.send(binary(sprintf("+OK %d messages\r\n", messages.size()))
+                    + getData(map binary(sprintf("%s %d\r\n", $1.key, $1.value.size())), messages.pairIterator()));
+            } else if (cmd =~ /^RETR /) {
+                string id = cmd.substr(5);
+                s.send(binary(sprintf("+OK %d octets\r\n", messages{id}.size()))
+                    + getData(MultiLinePop3Server::getLines(messages{id})));
+            } else if (cmd =~ /^TOP /) {
+                (string id, softint n) = (cmd =~ x/^TOP (\S+) ([0-9]+)$/);
+                s.send(binary("+OK\r\n") + getData(MultiLinePop3Server::getLines(messages{id}, n)));
+            } else if (cmd == "QUIT") {
+                s.send("+OK bye\r\n");
+                return False;
+            } else {
+                s.send("-ERR unknown command\r\n");
+            }
+        }
+    }
+}
+
+public class Pop3MultiLineTest inherits QUnit::Test {
+    public {
+        # lines that end with ".", that start with "." or "..", a line that is only ".", and an empty line before the
+        # end line
+        const Periods = binary("From: a@example.com\r\nTo: b@example.com\r\nSubject: periods\r\n\r\n"
+            "This line ends with a period.\r\n"
+            ".This line starts with a period\r\n"
+            "..This line starts with two periods.\r\n"
+            ".\r\n"
+            "The line above is a single period...\r\n"
+            "\r\n");
+
+        const PeriodsBody = "This line ends with a period.\r\n"
+            ".This line starts with a period\r\n"
+            "..This line starts with two periods.\r\n"
+            ".\r\n"
+            "The line above is a single period...\r\n"
+            "\r\n";
+
+        # the message of issue #114, shortened: a multipart message whose first part is 8-bit ISO-8859-15 text
+        const Iso8859_15 = binary("From: Dave <dave@example.com>\r\nTo: Users <users@example.com>\r\n"
+            "Subject: Re: Announce\r\nMIME-version: 1.0\r\nContent-type: MULTIPART/MIXED;\r\n BOUNDARY=\"b1\"\r\n\r\n"
+            "  This message is in MIME format.  The first part should be readable text,\r\n"
+            "  while the remaining parts are likely unreadable without MIME-aware tools.\r\n\r\n"
+            "--b1\r\nContent-Type: TEXT/PLAIN; charset=ISO-8859-15\r\nContent-Transfer-Encoding: 8BIT\r\n\r\n"
+            "On Wed, 18 Mar 2015, Lawrence Vel") + <e1> + binary("zquez wrote:\r\n\r\n> costs 5 ") + <a4>
+            + binary(".\r\n"
+            "--b1\r\nContent-Type: text/plain; charset=\"us-ascii\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\n"
+            "footer.\r\n"
+            "--b1--\r\n\r\n");
+
+        const Iso8859_15Body = "On Wed, 18 Mar 2015, Lawrence Velázquez wrote:\r\n\r\n> costs 5 €.";
+
+        # messages without a header, read with TOP: the first line of the data starts with "."
+        const Stuffed = {
+            "1": binary(".first line\r\nsecond line.\r\n"),
+            "2": binary("..first line\r\n"),
+            "3": binary(".\r\nlast line\r\n"),
+            "4": binary(".\r\n"),
+            "5": binary("\r\n"),
+        };
+    }
+
+    constructor() : Test("Pop3MultiLineTest", "1.0", \ARGV) {
+        addTestCase("messages with lines with periods", \periods());
+        addTestCase("message with an 8-bit ISO-8859-15 part", \iso8859_15());
+        addTestCase("byte-stuffed first lines", \stuffed());
+        addTestCase("empty responses", \empty());
+        set_return_value(main());
+    }
+
+    periods() {
+        MultiLinePop3Server server({"1": Periods, "2": Iso8859_15});
+        on_exit assertNothing(server.stop(), "server error");
+
+        foreach bool connected in ((False, True)) {
+            string mode = connected ? "connected" : "not connected";
+            Pop3Client pop3(server.getUrl());
+            on_exit pop3.disconnect();
+            if (connected) {
+                pop3.connect();
+            }
+
+            assertEq({"1": {"size": Periods.size()}, "2": {"size": Iso8859_15.size()}}, pop3.list(), mode + " LIST");
+
+            MailMessage::Message msg = pop3.getMessage("1");
+            assertEq("periods", msg.getSubject(), mode + " RETR subject");
+            assertEq(PeriodsBody, msg.getBody(), mode + " RETR body");
+
+            assertEq(Periods, binary(pop3.top("1", 100)), mode + " TOP whole message");
+            assertEq(Periods.substr(0, Periods.toString().find("\r\n\r\n") + 4), binary(pop3.top("1", 0)),
+                mode + " TOP header");
+            assertEq("From: a@example.com\r\nTo: b@example.com\r\nSubject: periods\r\n\r\n"
+                "This line ends with a period.\r\n.This line starts with a period\r\n", pop3.top("1", 2),
+                mode + " TOP two lines");
+
+            *hash<auto> mail = pop3.getMail();
+            assertEq(("1", "2"), keys mail, mode + " getMail() IDs");
+            assertEq(PeriodsBody, mail."1".msg.getBody(), mode + " getMail() body");
+            checkIso8859_15(mail."2".msg, mode + " getMail()");
+        }
+    }
+
+    iso8859_15() {
+        MultiLinePop3Server server({"1": Iso8859_15});
+        on_exit assertNothing(server.stop(), "server error");
+
+        foreach bool connected in ((False, True)) {
+            string mode = connected ? "connected" : "not connected";
+            Pop3Client pop3(server.getUrl());
+            on_exit pop3.disconnect();
+            if (connected) {
+                pop3.connect();
+            }
+
+            checkIso8859_15(pop3.getMessage("1"), mode + " RETR");
+            assertEq(Iso8859_15, binary(pop3.top("1", 1000)), mode + " TOP");
+        }
+    }
+
+    stuffed() {
+        MultiLinePop3Server server(Stuffed);
+        on_exit assertNothing(server.stop(), "server error");
+
+        foreach bool connected in ((False, True)) {
+            string mode = connected ? "connected" : "not connected";
+            Pop3Client pop3(server.getUrl());
+            on_exit pop3.disconnect();
+            if (connected) {
+                pop3.connect();
+            }
+
+            foreach hash<auto> i in (Stuffed.pairIterator()) {
+                assertEq(i.value, binary(pop3.top(i.key, 100)), sprintf("%s TOP %s", mode, i.key));
+            }
+        }
+    }
+
+    empty() {
+        {
+            MultiLinePop3Server server({"1": binary()});
+            on_exit assertNothing(server.stop(), "server error");
+
+            foreach bool connected in ((False, True)) {
+                string mode = connected ? "connected" : "not connected";
+                Pop3Client pop3(server.getUrl());
+                on_exit pop3.disconnect();
+                if (connected) {
+                    pop3.connect();
+                }
+                assertEq({"1": {"size": 0}}, pop3.list(), mode + " LIST");
+                assertEq("", pop3.top("1", 0), mode + " TOP of an empty message");
+            }
+        }
+
+        MultiLinePop3Server server({});
+        on_exit assertNothing(server.stop(), "server error");
+
+        foreach bool connected in ((False, True)) {
+            string mode = connected ? "connected" : "not connected";
+            Pop3Client pop3(server.getUrl());
+            on_exit pop3.disconnect();
+            if (connected) {
+                pop3.connect();
+            }
+            assertNothing(pop3.list(), mode + " LIST of an empty mailbox");
+            assertNothing(pop3.getMail(), mode + " getMail() of an empty mailbox");
+        }
+    }
+
+    private checkIso8859_15(MailMessage::Message msg, string label) {
+        assertEq("Re: Announce", msg.getSubject(), label + " subject");
+        auto body = msg.getBody();
+        assertEq("ISO-8859-15", get_encoding(body), label + " body encoding");
+        assertEq(Iso8859_15Body, body, label + " body");
+        assertEq(binary("On Wed, 18 Mar 2015, Lawrence Vel") + <e1> + binary("zquez wrote:\r\n\r\n> costs 5 ") + <a4>
+            + binary("."), binary(body), label + " body bytes");
+        assertEq(("footer.",), (map $1.getData(), msg.getParts()), label + " parts");
+    }
+}

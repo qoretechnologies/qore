@@ -134,6 +134,11 @@ msg.addTO("My Best Friend <you@friend.com>");
       UTF-8 no longer makes the parse fail with \c INVALID-ENCODING, and the position given when a header line does
       not end with CRLF is a byte offset in every encoding
       (<a href="https://github.com/qoretechnologies/qore/issues/6139">issue 6139</a>)
+    - A message with an 8-bit part in a single-byte charset (ex: ISO-8859-15), such as one retrieved with the
+      @ref pop3clientintro "Pop3Client" module, is parsed and the part is decoded with its charset; the parse failed
+      with \c INVALID-ENCODING.  The \c boundary parameter of a multipart message and the type of a text part are
+      found in any case (ex: \c "BOUNDARY=", \c "TEXT/PLAIN")
+      (<a href="https://github.com/qoretechnologies/qore/issues/114">issue 114</a>)
     - Enhanced attachment handling:
       - Added RFC 2231 filename encoding for non-ASCII filenames
       - Added RFC 2231 filename decoding for incoming messages
@@ -894,8 +899,9 @@ public class Message {
                 }
             }
 
-            # get message boundary - handle both quoted and unquoted boundaries
-            *list<*string> match = (ct =~ x/boundary=(?:"([^"]+)"|([^\s;]+))/);
+            # get message boundary - handle both quoted and unquoted boundaries; the parameter name is matched in any
+            # case (RFC 2045 section 5.1): a message with "BOUNDARY=" could not be parsed (issue #114)
+            *list<*string> match = (ct =~ x/boundary=(?:"([^"]+)"|([^\s;]+))/i);
             *string boundary = match[0] ?? match[1];
             if (!boundary)
                 throw "MESSAGE-PARSE-ERROR", sprintf("cannot parse MIME Content-Type: %y; could not find message boundary", ct);

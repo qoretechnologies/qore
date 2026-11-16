@@ -130,6 +130,10 @@ if (!h) {
       poll operations) before anything is sent; the password and the token are not shown in the exception
     - Added @ref Pop3Client::Pop3Client::checkCredentials() "Pop3Client::checkCredentials()" and
       @ref Pop3Client::Pop3Client::getAuthCommands() "Pop3Client::getAuthCommands()", used by the poll operations
+    - A multi-line response (\c RETR, \c TOP, \c LIST, \c UIDL, \c CAPA) ends only at a line that is only
+      \c "." (RFC 1939 section 3), and the \c "." that the server adds before each line that starts with \c "." is
+      removed; it was returned as part of the line
+      (<a href="https://github.com/qoretechnologies/qore/issues/6319">issue 6319</a>)
 
     @subsection pop3client_v2_0 Pop3Client 2.0
     - Added a data provider and application actions
@@ -1300,6 +1304,57 @@ pop3.setEventQueue();
     }
 
     #! @cond nodoc
+    # adds the steps that read the data of a multi-line response after its status line (RFC 1939 section 3) to a
+    # pipeline; the bytes read are pushed to the given queue, and getMultiLineData() returns the data.  The data ends
+    # with a line that is only ".", which is the first line of an empty response; it ended at the first ".\r\n",
+    # which also ends every line that ends with "." (issue #6319)
+    static addRecvMultiLineData(PollPipeline pipeline, int queue_id) {
+        # the first byte; "." starts the end line of an empty response or a byte-stuffed line
+        pipeline.addRecvExact(1, False);
+        pipeline.addPushQueue(queue_id);
+        # the context key is never set, so the received bytes are checked
+        pipeline.addCheckContains("pop3_none", ".", "pop3_dot");
+        int dot_branch = pipeline.addBranchOnContextKey("pop3_dot", 0, 0);
+        # the two bytes after a "." at the start: a line break ends an empty response
+        pipeline.addRecvExact(2, False);
+        pipeline.addPushQueue(queue_id);
+        pipeline.addCheckContains("pop3_none", "\r\n", "pop3_crlf");
+        int end_branch = pipeline.addBranchOnContextKey("pop3_crlf", 0, 0);
+        # the rest of the data up to the end line; the line break before the end line is not part of the pattern,
+        # as the receive step does not match a pattern that starts with the byte that broke a partial match: with
+        # "\r\n.\r\n", an end line after an empty line ("\r\n\r\n.\r\n") would not be found
+        int rest = pipeline.addRecvUntilBytes("\n.\r\n", False);
+        pipeline.addPushQueue(queue_id);
+        int end = pipeline.getStepCount();
+        pipeline.setStepTarget(dot_branch, dot_branch + 1, rest);
+        pipeline.setStepTarget(end_branch, end, rest);
+    }
+
+    # returns the data of a multi-line response read by the steps of addRecvMultiLineData() in the given encoding,
+    # without the end line and with the byte-stuffing of lines that start with "." removed (RFC 1939 section 3), or
+    # NOTHING for an empty response
+    static *string getMultiLineData(PollPipeline pipeline, int queue_id, string enc) {
+        binary data = binary();
+        while (exists (auto b = pipeline.getQueueItem(queue_id))) {
+            data += b;
+        }
+        # the bytes are processed in a single-byte view of them
+        string text = binary_to_string(data, "ISO-8859-1");
+        # remove the end line (".\r\n")
+        if (text.substr(-3) == ".\r\n") {
+            splice text, -3;
+        }
+        if (text.empty()) {
+            return;
+        }
+        # a line that starts with "." was sent with another "." before it
+        if (text[0] == ".") {
+            splice text, 0, 1;
+        }
+        text = replace(text, "\n.", "\n");
+        return force_encoding(text, enc);
+    }
+
     private *hash<auto> getMailAsyncIntern() {
         Pop3FetchPollOperation fetch(self);
 
@@ -1872,6 +1927,8 @@ public class Pop3CommandPollOperation inherits Qore::PollPipeline {
         int data_queue_id;
         #! True if this command has a dot-terminated response body
         bool multi_response;
+        #! The character encoding of the response body: the encoding of the socket
+        string data_encoding;
     }
 
     #! Creates a one-shot POP3 command operation
@@ -1885,6 +1942,7 @@ public class Pop3CommandPollOperation inherits Qore::PollPipeline {
     */
     constructor(Pop3Client pop3, string command, bool multi = False) : PollPipeline(new Socket()) {
         check_line_text(command, "POP3 command", "POP3-SERVER-ERROR");
+        data_encoding = get_default_encoding();
         hash<auto> info = pop3.getInfo();
         goal = "command";
         multi_response = multi;
@@ -1951,8 +2009,7 @@ public class Pop3CommandPollOperation inherits Qore::PollPipeline {
         addValidateResponsePrefix("+OK", "POP3-SERVER-ERROR");
 
         if (multi_response) {
-            addRecvUntilBytes(".\r\n");
-            addPushQueue(data_queue_id);
+            Pop3Client::addRecvMultiLineData(self, data_queue_id);
         }
 
         addSend("QUIT\r\n");
@@ -1993,21 +2050,15 @@ public class Pop3CommandPollOperation inherits Qore::PollPipeline {
     }
 
     #! Returns the dot-terminated response body without the terminator
-    /** @return the dot-terminated response body without the terminator, or @ref NOTHING if there is no body
+    /** @return the dot-terminated response body without the terminator line, and without the \c "." that the
+        server adds before each line that starts with \c "." (RFC 1939 section 3), or @ref NOTHING if there is no body
     */
     *string getData() {
         if (!multi_response) {
             return;
         }
 
-        *string body = getQueueItem(data_queue_id);
-        if (!body.val()) {
-            return;
-        }
-        if (body =~ /\.\r\n$/) {
-            body = extract body, 0, body.size() - 3;
-        }
-        return body;
+        return Pop3Client::getMultiLineData(self, data_queue_id, data_encoding);
     }
 
     #! Returns the dot-terminated response body as a non-optional string
@@ -2032,6 +2083,8 @@ public class Pop3ConnectedCommandPollOperation inherits Qore::PollPipeline {
         int data_queue_id;
         #! True if this command has a dot-terminated response body
         bool multi_response;
+        #! The character encoding of the response body: the encoding of the socket
+        string data_encoding;
     }
 
     #! Creates a connected POP3 command operation
@@ -2044,6 +2097,7 @@ public class Pop3ConnectedCommandPollOperation inherits Qore::PollPipeline {
     */
     constructor(Socket sock, string command, bool multi = False) : PollPipeline(sock) {
         check_line_text(command, "POP3 command", "POP3-SERVER-ERROR");
+        data_encoding = sock.getEncoding();
         goal = "connected-command";
         multi_response = multi;
         response_queue_id = addQueue();
@@ -2057,8 +2111,7 @@ public class Pop3ConnectedCommandPollOperation inherits Qore::PollPipeline {
         addValidateResponsePrefix("+OK", "POP3-SERVER-ERROR");
 
         if (multi_response) {
-            addRecvUntilBytes(".\r\n");
-            addPushQueue(data_queue_id);
+            Pop3Client::addRecvMultiLineData(self, data_queue_id);
         }
     }
 
@@ -2095,21 +2148,15 @@ public class Pop3ConnectedCommandPollOperation inherits Qore::PollPipeline {
     }
 
     #! Returns the dot-terminated response body without the terminator
-    /** @return the dot-terminated response body without the terminator, or @ref NOTHING if there is no body
+    /** @return the dot-terminated response body without the terminator line, and without the \c "." that the
+        server adds before each line that starts with \c "." (RFC 1939 section 3), or @ref NOTHING if there is no body
     */
     *string getData() {
         if (!multi_response) {
             return;
         }
 
-        *string body = getQueueItem(data_queue_id);
-        if (!body.val()) {
-            return;
-        }
-        if (body =~ /\.\r\n$/) {
-            body = extract body, 0, body.size() - 3;
-        }
-        return body;
+        return Pop3Client::getMultiLineData(self, data_queue_id, data_encoding);
     }
 
     #! Returns the dot-terminated response body as a non-optional string
@@ -2227,11 +2274,9 @@ public class Pop3StatPollOperation inherits Qore::PollPipeline {
         addSend("LIST\r\n");                                       # 33
         addRecvUntilBytes("\n");                                    # 34 - +OK response line
         addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");      # 35
-        # Dot-terminator: ".\r\n" on its own line. After +OK line consumed,
-        # next data starts at column 0 - safe to match ".\r\n" directly.
-        addRecvUntilBytes(".\r\n");                                # 36 - dot-terminated body
-        addPushQueue(list_queue_id);
-        # Step 38 (past end): pipeline complete
+        # the multi-line body, up to the line that is only "."
+        Pop3Client::addRecvMultiLineData(self, list_queue_id);
+        # past the end: the pipeline is complete
     }
 
     #! Returns the socket for hand-off to a RETR pipeline
@@ -2283,7 +2328,7 @@ public class Pop3StatPollOperation inherits Qore::PollPipeline {
             return message_info;
         }
 
-        *string list_text = getQueueItem(list_queue_id);
+        *string list_text = Pop3Client::getMultiLineData(self, list_queue_id, my_sock.getEncoding());
         if (!list_text.val()) {
             return;
         }
@@ -2315,8 +2360,10 @@ public class Pop3RetrPollOperation inherits Qore::PollPipeline {
         hash<string, string> messages = {};
         #! Current message index (for tracking during pipeline execution)
         list<string> msg_ids;
-        #! Internal queue receiving message bodies as they are read
-        int body_queue_id;
+        #! Internal queues receiving the message bodies as they are read, one for each message ID
+        list<int> body_queue_ids = ();
+        #! The character encoding of the message bodies: the encoding of the socket
+        string data_encoding;
     }
 
     #! Creates the retrieve pipeline
@@ -2332,7 +2379,7 @@ public class Pop3RetrPollOperation inherits Qore::PollPipeline {
         map check_line_text($1, "POP3 message ID", "POP3-FETCH-ERROR"), ids;
         msg_ids = ids;
         goal = "retr";
-        body_queue_id = addQueue();
+        data_encoding = sock.getEncoding();
 
         # Statically unroll RETR per message
         foreach string id in (ids) {
@@ -2341,9 +2388,10 @@ public class Pop3RetrPollOperation inherits Qore::PollPipeline {
             # Read +OK response line
             addRecvUntilBytes("\n");
             addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
-            # Read dot-terminated message body (".\r\n" on its own line)
-            addRecvUntilBytes(".\r\n");
-            addPushQueue(body_queue_id);
+            # Read the message, up to the line that is only "."
+            int queue_id = addQueue();
+            body_queue_ids += queue_id;
+            Pop3Client::addRecvMultiLineData(self, queue_id);
 
             if (do_delete) {
                 addSend(sprintf("DELE %s\r\n", id));
@@ -2380,12 +2428,9 @@ public class Pop3RetrPollOperation inherits Qore::PollPipeline {
         }
 
         foreach string id in (msg_ids) {
-            *string body = getQueueItem(body_queue_id);
+            *string body = Pop3Client::getMultiLineData(self, body_queue_ids[$#], data_encoding);
             if (!body.val()) {
                 continue;
-            }
-            if (body =~ /\.\r\n$/) {
-                body = extract body, 0, body.size() - 3;
             }
             messages{id} = body;
         }
