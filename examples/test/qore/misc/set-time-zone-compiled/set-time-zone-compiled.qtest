@@ -34,7 +34,7 @@ class SetTimeZoneCompiledTest inherits QUnit::Test {
         const Programs = ("region", "offset", "utc", "lock");
 
         #! the fixture programs that use the TzMod module
-        const ModulePrograms = ("usemod", "nlc");
+        const ModulePrograms = ("usemod", "nlc", "mask-add", "mask-strip");
 
         #! the process time zone of the children: none of the programs sets it
         const ProcessTimeZone = "Europe/Prague";
