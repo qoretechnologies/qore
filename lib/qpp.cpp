@@ -1507,11 +1507,17 @@ public:
             spliced_comment = spliced(line);
             return;
         }
-        // a string or character literal continued from the line before
+        // a string or character literal continued from the line before; its first character can be escaped by a
+        // backslash before the one that joined the lines
         if (spliced_literal) {
             char c = spliced_literal;
             spliced_literal = 0;
-            i = skipLiteral(line, 0, c) + 1;
+            size_t start = 0;
+            if (escape_pending) {
+                escape_pending = false;
+                start = 1;
+            }
+            i = skipLiteral(line, start, c) + 1;
         }
         for (; i < line.size(); ++i) {
             char c = line[i];
@@ -1599,29 +1605,50 @@ private:
     bool spliced_comment = false;
     //! the quote of a string or character literal that continues on the next line, if any
     char spliced_literal = 0;
+    //! true if the first character of the continued literal is escaped
+    bool escape_pending = false;
     unsigned if0_depth = 0;
 
-    //! returns true if the line ends with a backslash, which joins the next line to it
-    static bool spliced(const std::string& line) {
+    //! returns the offset of the backslash that joins the next line to the line, or std::string::npos if none
+    /** a backslash followed only by spaces or tabs before the end of the line joins it too, as with GCC and Clang
+    */
+    static size_t splicePos(const std::string& line) {
         size_t e = line.size();
-        while (e && (line[e - 1] == '\n' || line[e - 1] == '\r')) {
+        while (e && (line[e - 1] == '\n' || line[e - 1] == '\r' || line[e - 1] == ' ' || line[e - 1] == '\t')) {
             --e;
         }
-        return e && line[e - 1] == '\\';
+        return e && line[e - 1] == '\\' ? e - 1 : std::string::npos;
+    }
+
+    //! returns true if a backslash at the end of the line joins the next line to it
+    static bool spliced(const std::string& line) {
+        return splicePos(line) != std::string::npos;
     }
 
     //! returns the offset of the quote that ends the literal from \a start, or the size of the line if it does not
     //! end in it; a literal that a backslash at the end of the line continues is continued on the next line
+    /** the lines are joined before the literal is read, so the backslash that joins them is not an escape: one before
+        it escapes the first character of the next line
+    */
     size_t skipLiteral(const std::string& line, size_t start, char quote) {
+        size_t splice = splicePos(line);
+        size_t end = splice == std::string::npos ? line.size() : splice;
         size_t i = start;
-        for (; i < line.size() && line[i] != quote; ++i) {
+        bool escaped = false;
+        for (; i < end && line[i] != quote; ++i) {
             if (line[i] == '\\') {
+                if (i + 1 >= end) {
+                    escaped = true;
+                    i = end;
+                    break;
+                }
                 ++i;
             }
         }
-        if (i >= line.size()) {
-            if (spliced(line)) {
+        if (i >= end) {
+            if (splice != std::string::npos) {
                 spliced_literal = quote;
+                escape_pending = escaped;
             }
             return line.size();
         }

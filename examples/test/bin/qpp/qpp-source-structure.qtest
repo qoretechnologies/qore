@@ -347,6 +347,28 @@ int TestCls::get7() [flags=CONSTANT] {
             assertRegex("TestCls_get7", r.cpp_text, what + ": the method after them is bound");
         }
 
+        # the backslash that joins the lines is not an escape: one before it escapes the first character of the next
+        # line; a backslash followed by spaces joins the lines too (GCC, Clang)
+        foreach list<auto> opts in ((), ("-DFOO",)) {
+            r = runQpp(ClassStart + "
+#ifndef FOO
+static const char* s8 = \"abc\\\\
+\" /* def\";
+// comment \\" + "   " + "
+/* still the comment
+#endif
+//! documented
+/** doc
+*/
+int TestCls::get8() [flags=CONSTANT] {
+    return 1;
+}
+", opts);
+            string what = "an escape before a backslash joining lines" + (opts ? " in skipped code" : "");
+            assertSucceeded(r, what);
+            assertRegex("TestCls_get8", r.cpp_text, what + ": the method after them is bound");
+        }
+
         # a method in a raw string literal is copied as it is
         r = runQpp(ClassStart + "
 static const char* s3 = R\"(
