@@ -1,6 +1,7 @@
 # Reads of members of self without a linear search (#6272)
 
-Status: approved (ba3079e4e3 with the folding tests added). Implementation starts after batch T is assembled.
+Status: approved (ba3079e4e3 with the folding tests added); implemented. The fold is made in
+`runtimeGetMemberContext()`, not in `runtimeGetMemberInfo()`: see "Where the fold is made" below.
 
 ## Problem
 
@@ -131,6 +132,22 @@ As part of A, the second lookup is folded into the first when it cannot give a d
   class's entry for the name is the inherited copy of the lexical class's member, with the same storage (the object's
   main data) and the same access.
 - **Check:** debug builds compute both lookups on every folded read and assert that they agree.
+
+#### Where the fold is made
+
+The approved design folded the second lookup inside `runtimeGetMemberInfo()`. The implementation folds one level up,
+in `runtimeGetMemberContext()`, and folds both lookups, not only the second:
+- **Why:** the read path calls `runtimeGetMemberContext()` only to choose the storage of the member (the object's main
+  data, or the internal data of a class), and with no `private:internal` member in the object's class or in the
+  lexical class (frozen classes only, where the flag is final) the answer is always the main data, so no lookup is
+  needed at all.  `runtimeGetMemberInfo()` itself is left as it was, since writes and the checks of access and type
+  (through the type information of the member) need the `QoreMemberInfo` that it returns, and gain nothing from a
+  fold that only skips the second lookup when the first has already run.
+- **Condition:** the object's class is frozen and has no `private:internal` entry in its map (its own or inherited:
+  `QoreMemberMap::hasInternalEntries()`), and the lexical class is absent, the object's class, or a frozen class with
+  no such entry either.
+- **Check:** debug builds run the full `runtimeGetMemberInfo()` on every folded read and assert that the member it
+  finds, if any, has no class context of its own (`getClassContext(class_ctx)` is null).
 
 The read path has one more redundant lookup: `getReferencedMemberNoMethod()` calls `findAccessorMember()` (for classes
 with accessor members), and `getReferencedMemberNoMethodResolved()` calls it again (`QoreObject.cpp:1488` and `:1502`).

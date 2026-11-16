@@ -1005,7 +1005,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     }
 
     // copy member list
-    for (auto& i : old.members.member_list) {
+    for (auto& i : old.members.getList()) {
         members.addNoCheck(strdup(i.first), i.second ? new QoreMemberInfo(*i.second, this) : nullptr);
     }
 
@@ -1021,6 +1021,10 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         }
         // issue #3368: must add local members to initialization list after parent class members
         addLocalMembersForInit();
+    }
+    // a copy of a class whose members are frozen is complete when it is made (#6272)
+    if (old.members.isFrozen()) {
+        members.freeze();
     }
 }
 #endif
@@ -1173,7 +1177,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     }
 
     // copy member list
-    for (auto& i : old.members.member_list) {
+    for (auto& i : old.members.getList()) {
         members.addNoCheck(strdup(i.first), i.second ? new QoreMemberInfo(*i.second, this) : nullptr);
     }
 
@@ -1189,6 +1193,10 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     }
     // issue #3368: must add local members to initialization list after parent class members
     addLocalMembersForInit();
+    // a copy of a class whose members are frozen is complete when it is made (#6272)
+    if (old.members.isFrozen()) {
+        members.freeze();
+    }
 }
 
 qore_class_private::~qore_class_private() {
@@ -1310,11 +1318,7 @@ void qore_class_private::retireTypeOwner() {
     // what the type checks of the class's types read is kept; see the header
     releaseMethodsAndData(true);
     constlist.reset();
-    for (auto& i : members.member_list) {
-        free(i.first);
-        delete i.second;
-    }
-    members.member_list.clear();
+    members.clearAndFree();
     member_init_list.clear();
     for (auto& i : ahm) {
         delete i.second;
@@ -1334,7 +1338,7 @@ void qore_class_private::retireTypeOwner() {
 }
 
 void qore_class_private::getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
-    for (auto& i : members.member_list) {
+    for (auto& i : members.getList()) {
         if (i.second) {
             qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);
         }
@@ -1652,7 +1656,7 @@ int qore_class_private::initializeIntern() {
 
     if (!members.empty()) {
         // add committed members to signature
-        for (auto& i : members.member_list) {
+        for (auto& i : members.getList()) {
             do_sig(csig, i);
         }
 
@@ -1660,7 +1664,7 @@ int qore_class_private::initializeIntern() {
             SelfLocalVarParseHelper slvph(&selfid);
 
             // add committed members to signature
-            for (auto& i : members.member_list) {
+            for (auto& i : members.getList()) {
                 // check new members for conflicts in base classes
                 if (parseCheckMemberInBaseClasses(i.first, i.second) && !err) {
                     err = -1;
@@ -1766,6 +1770,8 @@ void qore_class_private::finalizeBuiltin(const char* nspath) {
         assert(!xsink);
     }
     generateBuiltinSignature(nspath);
+    // the class is published by the caller: its members are read without a lock from now on (#6272)
+    members.freeze();
 }
 
 void qore_class_private::initializeBuiltin() {
@@ -1805,7 +1811,7 @@ void qore_class_private::generateBuiltinSignature(const char* nspath) {
         do_sig(csig, i);
     }
 
-    for (auto& i : members.member_list) {
+    for (auto& i : members.getList()) {
         do_sig(csig, i);
     }
 
@@ -2351,7 +2357,7 @@ void qore_class_private::parseCommit() {
                     do_sig(csig, i);
                 }
 
-                for (auto& i : members.member_list) {
+                for (auto& i : members.getList()) {
                     do_sig(csig, i);
                 }
             }
@@ -2412,12 +2418,14 @@ void qore_class_private::parseCommit() {
     if (!has_public_memdecl && (scl ? scl->parseHasPublicMembersInHierarchy() : false)) {
         has_public_memdecl = true;
     }
+    // the committed class is visible to running code, which reads its members without a lock (#6272)
+    members.freeze();
 }
 
 void qore_class_private::addLocalMembersForInit() {
     // the list is complete when the local members have been added: getMemberInitCode() looks at it again
     member_init_code.store(-1, std::memory_order_relaxed);
-    for (auto& i : members.member_list) {
+    for (auto& i : members.getList()) {
         // skip imported members, and members held in external storage, which have no value in the object
         if (!i.second->local() || i.second->getAccessors()) {
             continue;
@@ -4520,7 +4528,7 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
 
     // issue #2657: ensure that parent class members are initialized before merging
     qc.members.parseInit(qc.selfid);
-    for (auto& i : qc.members.member_list) {
+    for (auto& i : qc.members.getList()) {
         QoreMemberInfo* mi = members.find(i.first);
         if (mi) {
             // issue #2970: if the member is declared as private:internal in this class
@@ -4755,7 +4763,7 @@ void BCSMList::processMemberInitializationList(const QoreMemberMap& members, mem
 
         //printd(5, "BCSMList::processMemberInitializationList() processing %p '%s'\n", i.first->priv,
         //    i.first->getName());
-        for (auto& mi : i.first->priv->members.member_list) {
+        for (auto& mi : i.first->priv->members.getList()) {
             // skip imported members
             if (!mi.second->local()) {
                 //printd(5, "BCSMList::processMemberInitializationList() %p '%s::%s' NOT LOCAL\n", i.first->priv,
@@ -9621,6 +9629,48 @@ int QoreMemberMap::parseInit(LocalVar& selfid) {
     return err;
 }
 
+#ifdef DEBUG
+std::string QoreMemberMap::dbgCheckIndex() const {
+    const MemberIndex* idx = index.load(std::memory_order_acquire);
+    if (!frozen) {
+        return idx ? "an unfrozen map has an index" : "";
+    }
+    if (member_list.size() >= IndexThreshold && !idx) {
+        return "a frozen map with " + std::to_string(member_list.size()) + " members has no index";
+    }
+    if (member_list.size() < IndexThreshold && idx) {
+        return "a frozen map with " + std::to_string(member_list.size()) + " members has an index";
+    }
+    bool internal = false;
+    for (auto& i : member_list) {
+        if (i.second && (i.second->access == Internal || i.second->access == Inaccessible
+                || i.second->getContextSize())) {
+            internal = true;
+        }
+        if (find(i.first) != i.second) {
+            return std::string("member '") + i.first + "' is not found as it is in the list";
+        }
+    }
+    if (idx && idx->size() != member_list.size()) {
+        return "the index has " + std::to_string(idx->size()) + " entries for " + std::to_string(member_list.size())
+            + " members";
+    }
+    if (internal != has_internal_entries) {
+        return std::string("the internal-member flag is ") + (has_internal_entries ? "set" : "not set")
+            + " but the list says otherwise";
+    }
+    if (find("\x01no such member")) {
+        return "a member that does not exist is found";
+    }
+    return "";
+}
+#endif
+
+QoreMemberInfo* QoreMemberMap::findIndexed(const MemberIndex& idx, const char* name) {
+    MemberIndex::const_iterator i = idx.find(std::string_view(name));
+    return i == idx.end() ? nullptr : i->second;
+}
+
 void QoreMemberMap::moveAllTo(QoreClass* qc, ClassAccess access) {
     // a public member declaration, whatever it declares (or if it declares nothing), means that the class declares
     // its members, so that an undeclared member is refused (INVALID-MEMBER); this does not depend on which of the
@@ -9805,7 +9855,7 @@ const QoreExternalConstant& QoreClassConstantIterator::get() const {
 class qore_class_member_iterator_private : public PrivateMemberIteratorBase<QoreMemberMap, QoreExternalNormalMember> {
 public:
     DLLLOCAL qore_class_member_iterator_private(const qore_class_private& obj)
-            : PrivateMemberIteratorBase<QoreMemberMap, QoreExternalNormalMember>(obj.members.member_list) {
+            : PrivateMemberIteratorBase<QoreMemberMap, QoreExternalNormalMember>(obj.members.getList()) {
     }
 
     DLLLOCAL bool next() {

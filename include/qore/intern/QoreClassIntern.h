@@ -45,6 +45,8 @@
 #include "qore/vector_map"
 #include "qore/vector_set"
 
+#include <string_view>
+#include <unordered_map>
 #include <algorithm>
 #include <atomic>
 #include <cstring>
@@ -1972,28 +1974,200 @@ public:
     }
 };
 
-class QoreMemberMap : public QoreMemberMapBase<QoreMemberInfo> {
+//! The members of a class (#6272)
+/** The members are kept in a list, whose order the AOT serializer, the signatures and reflection rely on.  Once the
+    class's members are frozen (freeze(): when the class is committed, published or copied), find() reads an index by
+    name instead of searching the list; the index is built once from the complete list and never changed afterwards,
+    and it is published with an atomic pointer, so readers that run concurrently with each other need no lock.  The
+    list is changed only through this class: each change asserts in debug builds that the members are not frozen.  A
+    change after the freeze (not expected; a module adding a member to a published class would make one) builds a
+    new index and publishes it; the replaced index is kept until the map is destroyed, so that a reader that loaded it
+    never reads freed memory.  See design/self-member-binding.md.
+*/
+class QoreMemberMap : protected QoreMemberMapBase<QoreMemberInfo> {
 public:
-    using QoreMemberMapBase<QoreMemberInfo>::moveAllTo;
+    typedef QoreMemberMapBase<QoreMemberInfo> base_t;
+    using base_t::member_list_t;
+    using base_t::member_list_element_t;
+    using base_t::iterator;
+    using base_t::const_iterator;
+    using base_t::empty;
+    using base_t::size;
+
+    //! the smallest number of members for which a frozen map builds an index; below it the linear search is cheaper
+    static constexpr size_t IndexThreshold = 8;
+
+    DLLLOCAL QoreMemberMap() = default;
+    DLLLOCAL QoreMemberMap(const QoreMemberMap&) = delete;
+    DLLLOCAL QoreMemberMap& operator=(const QoreMemberMap&) = delete;
+
+    DLLLOCAL ~QoreMemberMap() {
+        delete index.load(std::memory_order_relaxed);
+    }
+
+    //! Returns the members in their order; read-only
+    DLLLOCAL const member_list_t& getList() const {
+        return member_list;
+    }
+
+    //! Returns the member with the given name, or nullptr
+    /** Small, so that it is inlined as the linear search was: the lookup of the index, which is larger, is a call
+        (an inlined hash table lookup made the callers call find() instead, which cost each write of a member of a
+        small class about 20 instructions)
+    */
+    DLLLOCAL QoreMemberInfo* find(const char* name) const {
+        if (const MemberIndex* idx = index.load(std::memory_order_acquire)) {
+            return findIndexed(*idx, name);
+        }
+        return base_t::find(name);
+    }
+
+    DLLLOCAL bool inList(const char* name) const {
+        return (bool)find(name);
+    }
+
+    //! Freezes the members: builds the index once the list is complete (#6272)
+    /** Called when the class is committed (user classes), published (builtin classes) or copied; idempotent.
+    */
+    DLLLOCAL void freeze() {
+        if (frozen) {
+            return;
+        }
+        frozen = true;
+        publishIndex();
+    }
+
+    DLLLOCAL bool isFrozen() const {
+        return frozen;
+    }
+
+    //! Returns true if find() reads an index
+    DLLLOCAL bool isIndexed() const {
+        return index.load(std::memory_order_acquire) != nullptr;
+    }
+
+    //! Returns true if the frozen map has a private:internal member, or an entry for one of a parent class
+    /** Without one, every member of the class is held in the object's main data and is accessible from the class's
+        code, so the storage context of a member is the main data in every class context (#6272); false before the
+        freeze.
+    */
+    DLLLOCAL bool hasInternalEntries() const {
+        return has_internal_entries;
+    }
+
+    using base_t::moveAllTo;
     DLLLOCAL void moveAllTo(QoreClass* qc, ClassAccess access);
 
-    using QoreMemberMapBase<QoreMemberInfo>::addNoCheck;
     DLLLOCAL void addNoCheck(char* name, QoreMemberInfo* info) {
         assert(info->getClass());
-        QoreMemberMapBase<QoreMemberInfo>::addNoCheck(name, info);
+        assertChangeAllowed();
+        base_t::addNoCheck(name, info);
+        afterChange();
+    }
+
+    //! adds a member of a declaration's pending map, whose info has no class yet (see MemberList in the parser)
+    DLLLOCAL void addNoCheck(std::pair<char*, QoreMemberInfo*> pair) {
+        assertChangeAllowed();
+        base_t::addNoCheck(pair.first, pair.second);
+        afterChange();
     }
 
     DLLLOCAL void addInheritedNoCheck(char* name, QoreMemberInfo* info) {
         assert(name);
         assert(info);
         assert(!inList(name));
+        assertChangeAllowed();
         member_list.insert(member_list.begin(), std::make_pair(name, info));
+        afterChange();
+    }
+
+    //! replaces the value of a member; the name, which the index refers to, is kept
+    DLLLOCAL QoreMemberInfo* replace(const char* name, QoreMemberInfo* info) {
+        assertChangeAllowed();
+        QoreMemberInfo* rv = base_t::replace(name, info);
+        afterChange();
+        return rv;
+    }
+
+    //! frees the members and empties the map, when the class is retired (no reference to it is left)
+    DLLLOCAL void clearAndFree() {
+        for (auto& i : member_list) {
+            free(i.first);
+            delete i.second;
+        }
+        member_list.clear();
+        // no reader is left (see qore_class_private::retireTypeOwner()); the index referred to the freed names
+        delete index.exchange(nullptr, std::memory_order_acq_rel);
+        retired_indexes.clear();
+        frozen = false;
+        has_internal_entries = false;
     }
 
     DLLLOCAL int parseInit(LocalVar& selfid);
 
+#ifdef DEBUG
+    //! debug builds: checks the index against the list; returns an error message, or an empty string
+    DLLLOCAL std::string dbgCheckIndex() const;
+
+    //! debug builds: adds a member after the freeze without the assertion, to test the fallback that publishes a new
+    //! index (see afterChange()); returns the number of indexes replaced so far
+    DLLLOCAL size_t dbgLateAdd(char* name, QoreMemberInfo* info) {
+        base_t::addNoCheck(name, info);
+        afterChange();
+        return retired_indexes.size();
+    }
+#endif
+
 private:
+    typedef std::unordered_map<std::string_view, QoreMemberInfo*> MemberIndex;
+
+    //! Returns the member with the given name in the index, or nullptr
+    DLLLOCAL static QoreMemberInfo* findIndexed(const MemberIndex& idx, const char* name);
+
+    //! the index of a frozen map with at least IndexThreshold members, or nullptr
+    std::atomic<const MemberIndex*> index{nullptr};
+    //! indexes replaced by a change after the freeze; kept for readers that loaded them
+    std::vector<std::unique_ptr<const MemberIndex>> retired_indexes;
     bool init = false;
+    //! true once the members are frozen (freeze())
+    bool frozen = false;
+    //! true if the frozen map has an entry of a private:internal member (hasInternalEntries())
+    bool has_internal_entries = false;
+
+    DLLLOCAL void assertChangeAllowed() const {
+        // a frozen class is visible to running code, which reads its members without a lock (#6272)
+        assert(!frozen);
+    }
+
+    DLLLOCAL void afterChange() {
+        if (frozen) {
+            publishIndex();
+        }
+    }
+
+    //! builds an index from the complete list and publishes it, keeping the replaced one
+    DLLLOCAL void publishIndex() {
+        has_internal_entries = false;
+        for (auto& i : member_list) {
+            if (i.second && (i.second->access == Internal || i.second->access == Inaccessible
+                    || i.second->getContextSize())) {
+                has_internal_entries = true;
+                break;
+            }
+        }
+        MemberIndex* idx = nullptr;
+        if (member_list.size() >= IndexThreshold) {
+            idx = new MemberIndex;
+            idx->reserve(member_list.size());
+            for (auto& i : member_list) {
+                idx->emplace(std::string_view(i.first), i.second);
+            }
+        }
+        const MemberIndex* old = index.exchange(idx, std::memory_order_acq_rel);
+        if (old) {
+            retired_indexes.emplace_back(old);
+        }
+    }
 };
 
 class QoreVarMap : public QoreMemberMapBase<QoreVarInfo> {
@@ -3547,6 +3721,19 @@ public:
         @return the class context for the member or nullptr if it should be stored in the standard object data hash
     */
     DLLLOCAL const qore_class_private* runtimeGetMemberContext(const char* mem, const qore_class_private* class_ctx) const {
+        // #6272: when neither this class nor the class context has a private:internal member (also not one of a
+        // parent class), every member is held in the object's main data, whatever the class context: the result is
+        // known without looking the member up
+        if (members.isFrozen() && !members.hasInternalEntries()
+                && (!class_ctx || class_ctx == this
+                    || (class_ctx->members.isFrozen() && !class_ctx->members.hasInternalEntries()))) {
+#ifdef DEBUG
+            // debug builds check that the full resolution agrees
+            const QoreMemberInfo* dbg_info = runtimeGetMemberInfo(mem, class_ctx);
+            assert(!dbg_info || !dbg_info->getClassContext(class_ctx));
+#endif
+            return nullptr;
+        }
         const QoreMemberInfo* info = runtimeGetMemberInfo(mem, class_ctx);
         //printd(5, "qore_class_private::runtimeGetMemberContext() this: %p '%s' mem: '%s' info: %p member class: %p '%s' ctx(%p): %p (size: %d)\n", this, name.c_str(), mem, info, info ? info->getClass() : nullptr, info ? info->getClass()->name.c_str() : "n/a", class_ctx, info ? info->getClassContext(class_ctx) : nullptr, info ? info->getContextSize() : 0);
         return info ? info->getClassContext(class_ctx) : nullptr;
