@@ -6572,7 +6572,13 @@ string sql = table.getSelectSql(sh, \args);
         }
     }
 
-    private string getColumnNameIntern(hash<QueryInfo> info, string column_name) {
+    #! returns the SQL for a column designator
+    /** @param info the query information
+        @param column_name the column designator
+        @param prefer_column if @ref True "True", a designator that is both a column of the table and a column alias
+        of the query names the column, as in SQL; used for where clauses (issue #1747)
+    */
+    private string getColumnNameIntern(hash<QueryInfo> info, string column_name, bool prefer_column = False) {
         # remove any disposable unique prefix
         column_name =~ s/^[0-9]+://;
         # return the name if it's a "technical name" (starts with "_"), as an identifier, so that it cannot change
@@ -6603,7 +6609,7 @@ string sql = table.getSelectSql(sh, \args);
                     "table %y); known columns: %y", getDesc(), table_prefix, column_name, table_prefix,
                     info.join_map{table_prefix}.getSqlName(),
                     keys info.join_map{table_prefix}.describe());
-        } else if (info.pseudo_column_map{column_name}) {
+        } else if (info.pseudo_column_map{column_name} && !(prefer_column && columns.hasKey(column_name))) {
             if (info.pseudo_column_map{column_name}.typeCode() == NT_STRING) {
                 # substitute aliases with their actual definition
                 column_name = info.pseudo_column_map{column_name};
@@ -6762,7 +6768,7 @@ string sql = table.getSelectSql(sh, \args);
         return
             map doWhereExpressionIntern(\info, cprefix
                 ? sprintf("%s.%s", cprefix, getColumnSqlName(regex_subst($1.key, "^[0-9]+:", "")))
-                : getColumnNameIntern(info, $1.key), $1.value, $1.key, cprefix),
+                : getColumnNameIntern(info, $1.key, True), $1.value, $1.key, cprefix),
             cond.pairIterator();
     }
 

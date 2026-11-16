@@ -315,6 +315,10 @@ module SqlUtil {
       drops an index and creates it under the new name in one string, and as the \c sqlite3 driver runs one statement
       at a time, renaming an index on SQLite, as table alignment does for an index that has another name than the
       template's, dropped the index and did not create it again
+    - fixed a @ref where_clauses "where clause" key that is both a column of the table and a column alias of the
+      query (ex: <tt>cop_as(cop_distinct("ddt_number"), "ddt_number")</tt>): it names the column, as in SQL; the
+      alias's definition was used, which gave invalid SQL such as <tt>items.distinct items.ddt_number</tt>
+      (<a href="https://github.com/qoretechnologies/qore/issues/1747">issue 1747</a>)
     - an index is renamed, never dropped and created again under another name: an index that the database cannot
       rename (@ref SqlUtil::AbstractIndex::supportsRename() "AbstractIndex::supportsRename()"), as on SQLite and
       Firebird, with the definition of a template index under another name is taken for the template's index by
@@ -1417,6 +1421,10 @@ return ds.vexec("delete from schema.table where record_type = %v", ("OLD-CUSTOME
 
     The where clause is made up of a hash in the %SqlUtil API; either @ref where_clauses_advanced or
     @ref where_clauses_simple.
+
+    A key of the where clause can name a column of the table or a column alias of the query (made with
+    @ref SqlUtil::cop_as() "cop_as()"), whose definition is then used; a key that is both a column of the table and a
+    column alias names the column, as in SQL.
 
     @subsection where_clauses_advanced Advanced Where Clauses
 
