@@ -4963,6 +4963,27 @@ static void aotMergeOutlinedNativeLocalFlags(const QoreIRFunction& coordinator,
     }
 }
 
+//! Erases the unused declarations of the closure dispatch functions of the AOT body \a owner
+/** Called after outlined helpers were erased because a helper or the coordinator failed to lower: the call sites of
+    the helpers declared the dispatch functions of the closures that they create (named after the coordinator, see
+    QoreIRFunction::getAOTSymbolOwner()) with the ABI that they were lowered with, and the un-outlined retry of the
+    coordinator declares them again with its own (qore#6310).  A declaration that is defined or still called is kept.
+*/
+static void aotEraseUnusedClosureDispatchDecls(llvm::Module& module, const std::string& owner) {
+    const std::string prefix = owner + "_closure_";
+    std::vector<llvm::Function*> unused;
+    for (llvm::Function& f : module) {
+        // not a cancellation point: this only collects pointers on a failure path, bounded by the module's size
+        if (f.isDeclaration() && f.use_empty() && f.getName().starts_with(prefix)
+                && f.getName().contains("dispatch_")) {
+            unused.push_back(&f);
+        }
+    }
+    for (llvm::Function* f : unused) {
+        f->eraseFromParent();
+    }
+}
+
 static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
         llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
         llvm::DIBuilder* di_builder, llvm::DICompileUnit* di_cu, std::string& error) {
@@ -4991,6 +5012,7 @@ static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
                     f->eraseFromParent();
                 }
             }
+            aotEraseUnusedClosureDispatchDecls(module, helper->getAOTSymbolOwner());
             return false;
         }
         if (llvm::Function* f = module.getFunction(helper->name)) {
@@ -17945,23 +17967,28 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
         BatchCalleeReturnKind return_kind, bool guarded = false,
         BatchCalleeReturnKind fast_return_kind = BatchCalleeReturnKind::Boxed,
         const std::vector<BatchCalleeParamKind>& capture_kinds = {},
-        bool guarded_captures = false) {
+        bool guarded_captures = false, std::string* error_reason = nullptr) {
     if (!dispatch || !dispatch->empty()) {
         return true;
     }
+    auto fail = [error_reason](const char* reason) {
+        if (error_reason) {
+            *error_reason = reason;
+        }
+        return false;
+    };
     unsigned param_offset = guarded ? 2 : 0;
     unsigned num_params = static_cast<unsigned>(param_kinds.size());
     unsigned num_captures = static_cast<unsigned>(capture_kinds.size());
     if (dispatch->arg_size() != param_offset + num_params + num_captures + 2) {
-        return false;
+        return fail("the declared dispatch function has another number of arguments");
     }
     if (guarded && return_kind != BatchCalleeReturnKind::Boxed) {
-        return false;
+        return fail("a guarded dispatch function must return a boxed value");
     }
     // the fast body's native result can be boxed for a boxed ABI, but not converted to another native kind
-    if (fast_fn && return_kind != BatchCalleeReturnKind::Boxed
-            && fast_return_kind != BatchCalleeReturnKind::Boxed && fast_return_kind != return_kind) {
-        return false;
+    if (fast_fn && return_kind != BatchCalleeReturnKind::Boxed && fast_return_kind != return_kind) {
+        return fail("the declared result kind differs from the result kind of the closure body");
     }
 
     auto* i64_ty = llvm::Type::getInt64Ty(ctx);
@@ -18301,14 +18328,19 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             && closure_effect->never_returns_nothing;
         BatchCalleeReturnKind dispatch_return_kind = qore_ir_get_fast_entry_return_kind(
             abstract_variant, dispatch_never_returns_nothing);
+        // the reason that a typed dispatch function cannot be defined; empty when its definition was cancelled
+        std::string dispatch_error;
+        auto dispatch_failure = [&dispatch_error]() -> std::string {
+            return dispatch_error.empty() ? std::string("cancelled") : dispatch_error;
+        };
         auto define_guarded_dispatch = [&](llvm::Function* fast_fn) {
             if (!defineAOTClosureNativeDispatch(ctx, module,
                     native_guarded_dispatch, fast_fn, expr_index,
                     dispatch_param_kinds, BatchCalleeReturnKind::Boxed,
-                    true, dispatch_return_kind)) {
+                    true, dispatch_return_kind, {}, false, &dispatch_error)) {
                 setAOTCompileFatal(fatal_error, "closure",
                     native_guarded_dispatch_name,
-                    "typed guarded dispatch lowering", "cancelled");
+                    "typed guarded dispatch lowering", dispatch_failure());
                 return false;
             }
             if (!defineAOTClosureNativeThrowingDispatch(ctx, module,
@@ -18343,7 +18375,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                 native_dispatch, fast_fn, expr_index,
                 dispatch_param_kinds, declared_return_kind, false,
                 dispatch_return_kind, dispatch_capture_kinds,
-                dispatch_guarded_captures);
+                dispatch_guarded_captures, &dispatch_error);
         };
         if (!variant || disable_native_closures) {
             if (!defineAOTClosureDispatch(ctx, module, dispatch, nullptr, 0)) {
@@ -18354,7 +18386,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             if (!define_native_dispatch(nullptr)) {
                 setAOTCompileFatal(fatal_error, "closure",
                     native_dispatch_name, "typed fallback dispatch lowering",
-                    "cancelled");
+                    dispatch_failure());
                 return false;
             }
             if (!defineAOTClosureNativeThrowingDispatch(ctx, module,
@@ -18383,7 +18415,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             if (!define_native_dispatch(nullptr)) {
                 setAOTCompileFatal(fatal_error, "closure",
                     native_dispatch_name, "typed fallback dispatch lowering",
-                    "cancelled");
+                    dispatch_failure());
                 return false;
             }
             if (!defineAOTClosureNativeThrowingDispatch(ctx, module,
@@ -18416,7 +18448,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             if (!define_native_dispatch(nullptr)) {
                 setAOTCompileFatal(fatal_error, "closure",
                     native_dispatch_name, "typed fallback dispatch lowering",
-                    "cancelled");
+                    dispatch_failure());
                 return false;
             }
             if (!defineAOTClosureNativeThrowingDispatch(ctx, module,
@@ -18735,7 +18767,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         if (!define_native_dispatch(direct_fast_fn)) {
             delete ir_func;
             setAOTCompileFatal(fatal_error, "closure", native_dispatch_name,
-                "typed direct dispatch lowering", "cancelled");
+                "typed direct dispatch lowering", dispatch_failure());
             return false;
         }
         if (!defineAOTClosureNativeThrowingDispatch(ctx, module,
@@ -21100,6 +21132,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 f->eraseFromParent();
                             }
                         }
+                        aotEraseUnusedClosureDispatchDecls(module, ir_func->name);
                         fn_outliner.undo();
                         QoreIRToLLVM retry_lowerer(ctx);
                         retry_lowerer.setAOTMode(&slots);
@@ -21574,6 +21607,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                     f->eraseFromParent();
                                 }
                             }
+                            aotEraseUnusedClosureDispatchDecls(module, ir_func->name);
                             fn_outliner.undo();
                             QoreIRToLLVM retry_lowerer(ctx);
                             retry_lowerer.setAOTMode(&slots);

@@ -11,6 +11,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
 
 %exec-class AOTOutlinedClosureTest
 
@@ -29,7 +30,8 @@
     in the first and in the second region, also in a module, and for small functions with forced thresholds whose
     outlined regions create closures without captures that return native values, closures that capture locals of the
     region, several closures stored in locals, closures returned to the caller that share a captured local, and nested
-    closures.  It checks with the IR dump of qcc that the closures are created in the helpers.
+    closures, and for float and bool closures of a helper whose sibling fails to lower, after which the function is
+    lowered un-outlined.  It checks with the IR dump of qcc that the closures are created in the helpers.
 */
 class AOTOutlinedClosureTest inherits QUnit::Test {
     public {
@@ -57,18 +59,17 @@ class AOTOutlinedClosureTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("AOTOutlinedClosureTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
-        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
-            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
-        if (!is_file(qcc_bin)) {
-            qcc_bin = "qcc";
-        }
+        # never the test's own executable when it runs compiled with qcc (TestInterpreter)
+        qore_bin = TestInterpreter::qore_interpreter();
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        # the library of the interpreter: a bare name found in the PATH has no directory of its own
+        string libqore_dir = ENV.QORE_LIBDIR ?? (qore_bin =~ /\// ? dirname(qore_bin) : dirname(qcc_bin));
         lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
         addTestCase("the function of the issue at the default thresholds", \testDefaultThresholds());
         addTestCase("a module's function over the default threshold", \testModule());
         addTestCase("the minimal function of the issue with forced thresholds", \testMinimal());
         addTestCase("captures, several, returned and nested closures in outlined regions", \testForms());
+        addTestCase("float and bool closures of a helper that fails to lower", \testHelperFailure());
         set_return_value(main());
     }
 
@@ -424,5 +425,54 @@ module OutlineClosure {
         assertRegex("\nrv1:.* 2 6 11 22 ", expected, "the returned closures share the captured local");
         checkExecutables(src, expected, FormFunctions, True, ForceEnv, "forms");
         checkExecutables(src, expected, FormFunctions, False, "QORE_AOT_OUTLINE_FN=0", "forms, not outlined");
+    }
+
+    #! Returns a script whose function has float and bool closures without captures in its first outlined region
+    /** The forced thresholds outline \c f into helpers; the closures are in the first one, the second one ends with a
+        closure too
+    */
+    private static string getHelperFailureScript() {
+        return "%modern
+
+list sub f(int n) {
+    list out;
+    out += (float sub () { return 1.5; })();
+    out += (bool sub () { return True; })();
+    out += (int sub () { return 42; })();
+    foreach auto v in (out) {
+    }
+    out += n + 1;
+    out += n + 2;
+    foreach auto v in (out) {
+        out += 0;
+        break;
+    }
+    return out;
+}
+
+printf(\"rv:%y\\n\", f(2));
+";
+    }
+
+    #! The dispatch functions declared by a helper whose sibling fails to lower are declared again for the retry
+    /** When a helper fails to lower, the helpers are erased and the function is lowered un-outlined with the closures'
+        effect summaries: the float and bool closures then have native \c double and \c i1 results, and the
+        declarations that the first helper left with a boxed \c i64 result must not be reused (the module failed
+        verification: "Function return type does not match operand type of return inst")
+    */
+    testHelperFailure() {
+        TmpDir dir("qore-aot-outline-closure-");
+        string src = join_paths(dir.path, "failure.qr");
+        writeFile(src, getHelperFailureScript());
+        string expected = getExpected(src, "^rv:\\[1\\.5, True, 42, 3, 4, 0\\]\n$");
+        foreach string opt in (OptLevels) {
+            string exe = src + opt;
+            string out = compile(src, exe, opt, ForceEnv + " QORE_AOT_DUMP_IR=1 QORE_AOT_TEST_FAIL_LOWERING=_outline_1");
+            assertTrue(outlined(out, "f"), opt + ": f outlined");
+            assertTrue(helperCreatesClosure(getClosureHelpers(out), "f"), opt + ": a helper of f creates a closure");
+            assertRegex("AOT-OUTLINE-FN: helper 'f_[^']*_outline_1' lowering failed", out,
+                opt + ": the second helper fails to lower");
+            assertEq(expected, runExe(exe), "helper failure: qcc " + opt);
+        }
     }
 }

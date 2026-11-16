@@ -31298,6 +31298,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             ? "_closure_native_guarded_dispatch_"
                             : "_closure_native_dispatch_")
                         + std::to_string(slot);
+                    std::string return_kind_value = std::to_string(
+                        static_cast<unsigned>(closure_return_kind));
+                    // one dispatch function serves one closure creation; a declaration left by another call site
+                    // (an outlined helper whose lowering failed, qore#6310) must have the same ABI, or the call and
+                    // the definition would disagree
+                    for (const std::string& existing_name : {dispatch_name, dispatch_name + "_throwing"}) {
+                        llvm::Function* existing = module.getFunction(existing_name);
+                        if (!existing) {
+                            continue;
+                        }
+                        llvm::Attribute existing_kind = existing->getFnAttribute(
+                            "qore.closure.return_kind");
+                        if (existing->getFunctionType() != dispatch_type
+                                || (!guarded_stored_closure && existing_kind.isStringAttribute()
+                                    && existing_kind.getValueAsString() != return_kind_value)) {
+                            error = "internal error: closure dispatch function '" + existing_name
+                                + "' is already declared with another ABI";
+                            return false;
+                        }
+                    }
                     auto dispatch = module.getOrInsertFunction(dispatch_name,
                         dispatch_type);
                     if (!guarded_stored_closure) {
@@ -31305,8 +31325,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         // one; i64 does not tell a native int from a boxed value (qore#6310)
                         if (auto* dispatch_fn = llvm::dyn_cast<llvm::Function>(
                                 dispatch.getCallee())) {
-                            dispatch_fn->addFnAttr("qore.closure.return_kind",
-                                std::to_string(static_cast<unsigned>(closure_return_kind)));
+                            dispatch_fn->addFnAttr("qore.closure.return_kind", return_kind_value);
                         }
                     }
                     if (capture_count) {

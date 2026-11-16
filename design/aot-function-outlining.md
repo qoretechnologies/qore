@@ -85,10 +85,15 @@ This generalizes the existing Phase 1.5 init-expression outliner
    `compileAOTClosureBodiesForOwner()`, which walks the coordinator's
    `CLOSURE_CREATE` slots under the coordinator's symbol.  A helper
    therefore names them after `QoreIRFunction::getAOTSymbolOwner()` (the
-   coordinator's symbol, set in `aot_symbol_owner` when the helper is made;
-   init-expression helpers set it too), never after its own name: a
+   coordinator's symbol, set in `aot_symbol_owner` when the helper is made),
+   never after its own name: a
    helper-named dispatch was never defined, and every executable or module
    with a closure call in an outlined region failed to link (qore#6310).
+   The init-expression outliner sets the owner on its helpers too, which
+   has no effect yet: init functions never get their closure dispatch
+   functions defined (`compileAOTClosureBodiesForOwner()` runs only for
+   compiled functions and methods), so a constant initializer that calls a
+   closure fails to link with or without outlining (qore#6336).
    Helpers are lowered without the batch callee map, so a helper's call
    site may declare a boxed result for a closure whose effect summary gives
    the definition a native int, float or bool result; the call site records
@@ -96,6 +101,14 @@ This generalizes the existing Phase 1.5 init-expression outliner
    definition boxes the native result of the closure body for a boxed
    declaration, instead of returning a native value that the helper would
    read as a boxed one.
+
+   When a helper or the coordinator fails to lower and the function is
+   lowered again un-outlined, the erased helpers' dispatch declarations
+   are erased too (`aotEraseUnusedClosureDispatchDecls()`): the retry,
+   lowered with the batch callee map, declares them with its own ABI
+   (a `double` or `i1` result for a float or bool closure), and a call
+   site whose dispatch function is already declared with another ABI
+   fails the lowering instead of emitting a mismatched call.
 
    Closure creation is allowed in regions on purpose: generated giant
    functions use closures (`map` with a closure, callbacks), and keeping
@@ -276,10 +289,13 @@ the one giant function regardless of the optimization level.
   embedded returns), and deterministic helper naming.
 - `examples/test/ir/AOTOutlinedClosure.qtest` — closures created and
   called in outlined regions (qore#6310): the issue's function at the
-  default thresholds (executables and a module, -O0 and -O3) and small
+  default thresholds (executables and a module, -O0 and -O3), small
   functions with forced thresholds whose regions hold closures with
-  native results and capturing, stored, returned and nested closures; it checks with `QORE_AOT_DUMP_IR` that the
-  helpers create the closures and compares the results with the AST.
+  native results and capturing, stored, returned and nested closures,
+  and float/bool closures in a function whose helper fails to lower
+  (`QORE_AOT_TEST_FAIL_LOWERING`), retried un-outlined; it checks with
+  `QORE_AOT_DUMP_IR` that the helpers create the closures and compares
+  the results with the AST.
 - The full `examples/test/ir/` suite passes both normally and with
   outlining forced onto nearly every function
   (`QORE_AOT_OUTLINE_FN_MIN_INSTS=60`).
