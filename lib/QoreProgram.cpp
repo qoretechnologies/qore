@@ -564,10 +564,10 @@ namespace {
 */
 class ParseWaitEntry {
 public:
-    DLLLOCAL ParseWaitEntry(qore_program_private* pp, int tid) : pp(pp), tid(tid) {
+    ParseWaitEntry(qore_program_private* pp, int tid) : pp(pp), tid(tid) {
     }
 
-    DLLLOCAL ~ParseWaitEntry() {
+    ~ParseWaitEntry() {
         if (added) {
             AutoLocker al(parse_wait_lock);
             removeIntern();
@@ -575,7 +575,7 @@ public:
     }
 
     //! adds the entry; parse_wait_lock is held
-    DLLLOCAL void addIntern() {
+    void addIntern() {
         assert(!added && !parse_waits[tid]);
         parse_waits[tid] = pp;
         ++pp->parse_lock_waiters;
@@ -583,7 +583,7 @@ public:
     }
 
     //! removes the entry if it was added; parse_wait_lock is held
-    DLLLOCAL void removeIntern() {
+    void removeIntern() {
         if (added) {
             assert(parse_waits[tid] == pp);
             parse_waits[tid] = nullptr;
@@ -593,7 +593,7 @@ public:
         }
     }
 
-    DLLLOCAL bool isAdded() const {
+    bool isAdded() const {
         return added;
     }
 

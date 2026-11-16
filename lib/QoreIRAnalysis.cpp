@@ -11638,7 +11638,7 @@ namespace {
 */
 class QoreIRReleaseObjectFacts {
 public:
-    DLLLOCAL explicit QoreIRReleaseObjectFacts(const QoreIRFunction& func) {
+    explicit QoreIRReleaseObjectFacts(const QoreIRFunction& func) {
         // the values decided without the data flow
         for (const auto& block : func.blocks) {
             for (const auto& inst : block->instructions) {
@@ -11706,7 +11706,7 @@ public:
     }
 
     //! true if the value can hold an object
-    DLLLOCAL bool valueMayHoldObject(QoreIRValue value) const {
+    bool valueMayHoldObject(QoreIRValue value) const {
         auto i = fixed_values.find(value.id);
         if (i != fixed_values.end()) {
             return i->second;
@@ -11717,7 +11717,7 @@ public:
     }
 
     //! true if the container that a container instruction builds can hold an object
-    DLLLOCAL bool containerMayHoldObject(const QoreIRInstruction* inst) const {
+    bool containerMayHoldObject(const QoreIRInstruction* inst) const {
         return !inst->result.isValid() || valueMayHoldObject(inst->result);
     }
 
@@ -11730,7 +11730,7 @@ private:
     std::unordered_set<uint32_t> built_values;
 
     //! returns 1 or 0 for a value decided without the data flow, -1 for one of the data flow
-    DLLLOCAL static int fixedState(const QoreIRFunction& func, const QoreIRInstruction* inst) {
+    static int fixedState(const QoreIRFunction& func, const QoreIRInstruction* inst) {
         QoreIROpcode opcode = effectiveOpcode(inst);
         // each of the facts below bounds what the value can hold: one that excludes an object decides it
         if (isScalarOpcode(opcode)) {
@@ -11803,7 +11803,7 @@ private:
 
     //! true for an opcode whose result is an element of its first operand (a list's or a hash's), which holds what the
     //! operand holds
-    DLLLOCAL static bool isElementOpcode(QoreIROpcode opcode) {
+    static bool isElementOpcode(QoreIROpcode opcode) {
         switch (opcode) {
             case QoreIROpcode::ListGetInt:
             case QoreIROpcode::ListGetValue:
@@ -11824,7 +11824,7 @@ private:
 
     //! true for an operator whose result is made of its operands' values (+, -, etc. of any type), which holds what
     //! they hold; the operators of assignments and of code (map, fold, etc.) are not
-    DLLLOCAL static bool isValueOperatorOpcode(QoreIROpcode opcode) {
+    static bool isValueOperatorOpcode(QoreIROpcode opcode) {
         switch (opcode) {
             case QoreIROpcode::AddAny:
             case QoreIROpcode::SubAny:
@@ -11845,7 +11845,7 @@ private:
     }
 
     //! the operation of an instruction: an Invoke's is the one that it calls
-    DLLLOCAL static QoreIROpcode effectiveOpcode(const QoreIRInstruction* inst) {
+    static QoreIROpcode effectiveOpcode(const QoreIRInstruction* inst) {
         if (inst->opcode == QoreIROpcode::Invoke) {
             return static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
         }
@@ -11853,7 +11853,7 @@ private:
     }
 
     //! true for an opcode whose result is an int, a float, a bool, a string or no value
-    DLLLOCAL static bool isScalarOpcode(QoreIROpcode opcode) {
+    static bool isScalarOpcode(QoreIROpcode opcode) {
         switch (opcode) {
             case QoreIROpcode::ConstInt:
             case QoreIROpcode::ConstFloat:
@@ -11959,7 +11959,7 @@ private:
     }
 
     //! marks a value of the data flow as one that can hold an object; returns true if it changed
-    DLLLOCAL bool mark(QoreIRValue value) {
+    bool mark(QoreIRValue value) {
         auto i = flow_values.find(value.id);
         if (i == flow_values.end() || i->second) {
             return false;
@@ -11969,7 +11969,7 @@ private:
     }
 
     //! applies the rules of an instruction; returns true if a value changed
-    DLLLOCAL bool propagate(const QoreIRInstruction* inst) {
+    bool propagate(const QoreIRInstruction* inst) {
         bool changed = false;
         // the result: what its sources hold
         QoreIROpcode opcode = effectiveOpcode(inst);

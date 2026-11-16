@@ -1906,7 +1906,7 @@ struct ParseLockWindowTest {
     std::string a_err;
     int b_rc = -1;
 
-    DLLLOCAL ParseLockWindowTest(bool before_registration) : before_registration(before_registration) {
+    ParseLockWindowTest(bool before_registration) : before_registration(before_registration) {
     }
 
     //! waits up to 10 seconds for a predicate; lck is held
