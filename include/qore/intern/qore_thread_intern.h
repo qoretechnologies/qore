@@ -504,6 +504,8 @@ DLLLOCAL void swap_runtime_location(const QoreProgramLocation*loc, const Abstrac
         const QoreProgramLocation*& old_loc);
 DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc, const QoreParseOptions& po);
 
+DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc);
+
 //! Sets the runtime parse options of the thread for lowered top-level code (TopLevelStatementBlock::execIR())
 /** As swap_runtime_parse_options(), in a function of its own: the per-statement path of the AST interpreter inlines
     update_runtime_statement_location(), and a caller added to the functions of that path changes the compiler's
@@ -515,7 +517,6 @@ DLLLOCAL void swap_toplevel_code_parse_options(const QoreParseOptions& po, const
 //! Restores the runtime statement, location and parse options saved by swap_toplevel_code_parse_options()
 DLLLOCAL void restore_toplevel_code_parse_options(const AbstractStatement* stmt, const QoreProgramLocation* loc,
     const QoreParseOptions& po);
-DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc);
 
 //! Cached runtime location pointers for hot-loop optimization.
 //! Avoids repeated TLS lookups (pthread_getspecific + std::map::find) per instruction.
