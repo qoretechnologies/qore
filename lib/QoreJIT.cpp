@@ -3723,22 +3723,28 @@ void QoreJIT::joinAbandonedCompileThread() {
 
 #ifdef DEBUG
 void QoreJIT::dbgExitIfAbandonedCompileHeld() noexcept {
-    bool held;
+    int held_at;
     try {
         std::lock_guard<std::mutex> lock(bg_queue_mutex);
         // a thread that was let go (dbgFinishAbandonedCompile(), dbgContinueBgCompile()) leaves the hold point
-        held = dbg_bg_held >= 0 && !dbg_bg_hold_release;
+        held_at = dbg_bg_hold_release ? -1 : dbg_bg_held;
     } catch (...) {
         // the state cannot be read: the join is made as without the test hook
         return;
     }
-    if (!held) {
+    if (held_at < 0) {
         return;
     }
+    // the names of the hold points, as dbg_hold_bg_compile() takes them
+    static const char* const hold_point_names[] = {"lowering", "llvm", "commit", "install"};
+    static_assert(sizeof(hold_point_names) / sizeof(hold_point_names[0])
+        == static_cast<size_t>(BgCompileHoldPoint::Install) + 1, "a hold point has no name");
+    const char* point = static_cast<size_t>(held_at) < sizeof(hold_point_names) / sizeof(hold_point_names[0])
+        ? hold_point_names[held_at] : "unknown";
     // the compile stays held, so the join would never return and the process would hang without a sign of why: a
     // process that ends with exit() after qore_cleanup() instead of qore_fork_child_quick_exit() (issue #6296)
-    fprintf(stderr, "QORE-DEBUG: exit() with an abandoned compile held in LLVM: end with qore_fork_child_quick_exit() "
-        "after qore_cleanup()\n");
+    fprintf(stderr, "QORE-DEBUG: exit() with an abandoned compile held at debug hold point \"%s\": end with "
+        "qore_fork_child_quick_exit() after qore_cleanup()\n", point);
     fflush(nullptr);
     _exit(QORE_JIT_DBG_HELD_AT_EXIT_STATUS);
 }
