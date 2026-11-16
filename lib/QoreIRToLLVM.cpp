@@ -3351,12 +3351,18 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
     // the parameters that take their arguments over, whose normal entry takes the value of the runtime variable that
     // the call bound, so that the native cache holds the only reference to a temporary argument and a write releases
     // it, as in the AST interpreter; the fast entry binds them as before (issue #5958, design/param-take-over.md).  A
-    // function that can deoptimize takes none over: the deoptimization runs it again from the runtime variables (no
-    // lowering makes such a function today: a guard has a deopt target only in a try block, where the values that a
-    // guard checks are made by invokes, which end their block, so no guard is made for them)
+    // function that can deoptimize takes none over: the deoptimization runs it again from the runtime variables.  No
+    // lowering makes such a function today (a guard has a deopt target only in a try block, where the values that a
+    // guard checks are made by invokes, which end their block, so no guard is made for them): a debug build asserts
+    // it, so that a lowering that makes one is found; a release build calls the function without the take-over
     std::unordered_set<const void*> take_over_params;
-    if (current_ir_func && !fast_entry_args && !qore_ir_function_may_deopt(*current_ir_func)) {
-        qore_ir_collect_take_over_params(*current_ir_func, &take_over_params);
+    if (current_ir_func && !fast_entry_args && !current_ir_func->param_local_vars.empty()
+            && qore_ir_collect_take_over_params(*current_ir_func, &take_over_params)
+            && qore_ir_function_may_deopt(*current_ir_func)) {
+        printd(0, "QoreIRToLLVM::preCreateLocalAllocas() '%s': a function that can deoptimize has parameters that "
+            "take their arguments over; they are not taken over (issue #5958)\n", current_ir_func->name.c_str());
+        assert(false && "a function with a deopt-target guard has parameters that take their arguments over");
+        take_over_params.clear();
     }
     for (LocalVar* var : function_locals) {
         auto key = reinterpret_cast<const void*>(var);
@@ -16954,7 +16960,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         builder->SetInsertPoint(jit_deopt_block);
         emitIteratorCleanup(module);
         // the function runs again with the parameters' runtime variables: a function that can deoptimize takes no
-        // parameter from its variable (see qore_ir_function_may_deopt(), issue #5958)
+        // parameter from its variable (see take_over_params in preCreateLocalAllocas(), issue #5958)
         assert(taken_param_cleanups.empty());
         emitPreinstantiatedCleanup(module);
         emitInvokeCleanup(module);

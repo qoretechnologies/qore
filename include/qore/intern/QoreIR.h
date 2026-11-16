@@ -4483,9 +4483,10 @@ public:
     */
     bool param_take_over = false;
     //! Whether a parameter of the function takes its argument over, for the IR of the AOT compiler, which does not
-    //! set param_take_over: 0 if not computed yet, 1 if none does, 2 if one does; computed once by the code
-    //! generation of the calls of the function (see qore_ir_fast_entry_refuses_given_args() in QoreIRToLLVM.cpp), in
-    //! the padding after param_take_over
+    //! set param_take_over: 0 if not computed yet, 1 if none does, 2 if one does; computed by the code generation of
+    //! the calls of the function (see qore_ir_fast_entry_refuses_given_args() in QoreIRToLLVM.cpp) and reset to 0 by
+    //! every change of the write inventories that it is computed from (computeIROnlyLocals(), the scalar replacement
+    //! of containers), in the padding after param_take_over
     mutable std::atomic<int8_t> take_over_params_state{0};
 
     // Set of LocalVar* pointers that are already instantiated by the caller

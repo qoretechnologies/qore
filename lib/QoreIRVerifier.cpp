@@ -2190,6 +2190,9 @@ bool QoreIRFunction::collectHandlerLocals(std::unordered_set<const void*>& local
 }
 
 void QoreIRFunction::computeIROnlyLocals() {
+    // the write inventories are recomputed: the take-over analysis cached from them for the AOT IR is computed again
+    // when it is needed (see take_over_params_state)
+    take_over_params_state.store(0, std::memory_order_release);
     // the locals that a reference can reach other than from \var in this function: they are reference-capable
     // (localMayHoldReference()), and those that would otherwise be IR-only keep the reference in their own storage
     // (reference_slot_locals)

@@ -24779,30 +24779,24 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_mod_any_throwing
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 #ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
-//! Releases the reference that the runtime variable of a parameter holds once native code loaded its value
-/** Called by the normal entry of native code for a parameter that takes its argument over and has IR storage (see
-    design/param-take-over.md): the entry's cleanup slot then holds the only reference that the call gave, so that a
-    write to the parameter releases a temporary argument, as in the AST interpreter.  A variable that holds a
-    reference or a static assignment keeps its value
-*/
-static void qore_rt_release_param_var_intern(LocalVar* var, ExceptionSink* xsink) {
-    if (!var || var->closureUse()) {
-        return;
-    }
-    LocalVarValue* lvv = thread_try_find_lvar(var);
-    if (!lvv || lvv->isRef() || lvv->val.static_assignment) {
-        return;
-    }
-    lvv->val.removeValue(false).discard(xsink);
-}
-
 // documented in JITRuntime.h
+/** Called by the normal entry of native code for a parameter that takes its argument over and has IR storage (see
+    design/param-take-over.md): the value is moved out of the runtime variable with one lookup of the variable, so
+    that the entry's cleanup slot holds the only reference that the call gave and a write to the parameter releases a
+    temporary argument, as in the AST interpreter.  A variable that holds a reference, a weak reference, a static
+    assignment or a value that is not a node is read as qore_rt_load_local() reads it and keeps its value
+*/
 extern "C" DLLEXPORT uint64_t qore_rt_take_param(LocalVar* var, ExceptionSink* xsink) {
-    uint64_t rv = qore_rt_load_local(var, xsink);
-    if (!(xsink && *xsink)) {
-        qore_rt_release_param_var_intern(var, xsink);
+    if (var && !var->closureUse()) {
+        LocalVarValue* lvv = thread_try_find_lvar(var);
+        if (lvv && lvv->val.assigned && !lvv->val.static_assignment && lvv->val.type == QV_Node && lvv->val.v.n) {
+            qore_type_t t = lvv->val.v.n->getType();
+            if (t != NT_REFERENCE && t != NT_WEAKREF && t != NT_WEAKREF_HASH && t != NT_WEAKREF_LIST) {
+                return toBits(lvv->val.removeValue(false));
+            }
+        }
     }
-    return rv;
+    return qore_rt_load_local(var, xsink);
 }
 
 // documented in JITRuntime.h
