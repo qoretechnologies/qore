@@ -120,6 +120,8 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
+#include <sched.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -23436,12 +23438,64 @@ void dbg_http1_wait_hangup(int fd) {
 #endif
 }
 
+//! blocks until the receive buffer of \a fd holds at least \a size bytes, or the connection has ended; no timer is
+//! involved
+void dbg_http1_wait_received(int fd, size_t size) {
+    auto received = [fd] () -> size_t {
+        int n = 0;
+        return ::ioctl(fd, FIONREAD, &n) || n < 0 ? 0 : static_cast<size_t>(n);
+    };
+#ifdef DARWIN
+    // the read filter with a low-water mark fires once the receive buffer holds that many bytes, or at the end of the
+    // connection
+    int kq = kqueue();
+    if (kq < 0) {
+        return;
+    }
+    ON_BLOCK_EXIT([kq] () { ::close(kq); });
+    struct kevent kev;
+    EV_SET(&kev, fd, EVFILT_READ, EV_ADD | EV_CLEAR, NOTE_LOWAT, static_cast<intptr_t>(size), nullptr);
+    if (kevent(kq, &kev, 1, nullptr, 0, nullptr) < 0) {
+        return;
+    }
+    while (received() < size) {
+        struct kevent out;
+        int rc = kevent(kq, nullptr, 0, &out, 1, nullptr);
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        if (rc <= 0 || (out.flags & (EV_EOF | EV_ERROR))) {
+            return;
+        }
+    }
+#else
+    // loopback delivers what send() wrote before it returns, so the data is normally there already
+    while (received() < size) {
+        pollfd pfd = {fd, POLLIN, 0};
+        int rc = ::poll(&pfd, 1, -1);
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        if (rc < 0 || (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))) {
+            return;
+        }
+        if (received() < size) {
+            sched_yield();
+        }
+    }
+#endif
+}
+
 //! writes \a response on the peer's descriptor \a pfd and resets the connection, with system calls only
 /** The connection is reset by closing its last descriptor with \c SO_LINGER and a zero timeout; the descriptor
     number is first taken over by a new, unconnected socket (dup2()), so the peer's Socket object keeps a valid
     descriptor, which it closes later without touching the connection or another socket.
+
+    A reset discards the data in the peer's send buffer that has not been sent, so the reset is made once the
+    response is in the receive buffer of the client's descriptor \a fd: loopback delivery is not synchronous with
+    send() on macOS, where a reset made at once could discard the response before it was sent (issue #6320).
 */
-void dbg_http1_answer_and_reset(int pfd, const std::string& response) {
+void dbg_http1_answer_and_reset(int pfd, const std::string& response, int fd) {
     size_t off = 0;
     while (off < response.size()) {
         ssize_t rc = ::send(pfd, response.data() + off, response.size() - off,
@@ -23465,6 +23519,9 @@ void dbg_http1_answer_and_reset(int pfd, const std::string& response) {
             continue;
         }
         break;
+    }
+    if (fd >= 0 && off == response.size()) {
+        dbg_http1_wait_received(fd, response.size());
     }
     struct linger l;
     l.l_onoff = 1;
@@ -23635,7 +23692,7 @@ void dbg_http1_send_hook(QoreDbgHttp1SendEvent event, int fd, const char* err) {
     }
     // the peer answers and resets the connection now, after the receive side found nothing, so the next write fails
     if (pfd >= 0) {
-        dbg_http1_answer_and_reset(pfd, response);
+        dbg_http1_answer_and_reset(pfd, response, fd);
     }
     dbg_http1_wait_hangup(fd);
     dbg_http1_send_failure_dec(c);
@@ -23663,7 +23720,7 @@ void dbg_http1_socket_send_hook(int fd) {
     }
     if (pfd >= 0) {
         // the peer answers and resets the connection before the write is made
-        dbg_http1_answer_and_reset(pfd, response);
+        dbg_http1_answer_and_reset(pfd, response, fd);
     }
     dbg_http1_send_failure_dec(c);
     // without a peer, the test cancels the request, which shuts the connection down
