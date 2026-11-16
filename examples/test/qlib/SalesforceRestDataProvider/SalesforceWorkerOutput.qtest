@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}"
+%requires SalesforceWorkerOutput
+
+%exec-class SalesforceWorkerOutputTest
+
+#! Tests how the Salesforce data provider tests read the output of their workers
+/** The output may only have the worker's results and the warning that the optional child module of
+    SalesforceRestDataProvider was skipped because an external module that it requires is absent
+*/
+public class SalesforceWorkerOutputTest inherits QUnit::Test {
+    public {
+        const Worker = "env-options-worker.qr";
+        const Location = "warning encountered at examples/test/qlib/SalesforceRestDataProvider//" + Worker
+            + ":9 (Qore builtin code)";
+        const ChildFailed = "MODULE-CHILD-FAILED: module 'SalesforceRestDataProvider': child module "
+            "'SalesforcePubSubDataProvider' declared with %try-child-module is present but failed to load and was "
+            "skipped; the module was loaded without it: ";
+        const ModulePath = " is not builtin and no module with this name could be found in the module path: "
+            "/a/qlib:/usr/local/share/qore-modules; found '/usr/lib/qore-modules/grpc-api-2.2.qmod' built for module "
+            "API 2.2: rebuild it for module API 2.3 (while loading user module \"SalesforcePubSubDataProvider\" from "
+            "path \"/usr/local/share/qore-modules/SalesforcePubSubDataProvider\")";
+        const Results = "a-b=1/2\nc=x y\n";
+    }
+
+    constructor() : Test("SalesforceWorkerOutput", "1.0", \ARGV) {
+        addTestCase("results", \results());
+        addTestCase("absent external module of the optional child", \absentExternal());
+        addTestCase("other output", \otherOutput());
+        set_return_value(main());
+    }
+
+    results() {
+        assertEq({"a-b": "1/2", "c": "x y"}, parse_worker_output(Results, Worker));
+        assertEq({"a": "1"}, parse_worker_output("\na=1\n\n", Worker), "empty lines");
+        assertEq({}, parse_worker_output("", Worker), "no output");
+    }
+
+    absentExternal() {
+        foreach string feature in (ExternalChildFeatures) {
+            string warning = Location + "\n" + ChildFailed + "LOAD-MODULE-ERROR: feature '" + feature + "'"
+                + ModulePath;
+            assertEq({"a-b": "1/2", "c": "x y"}, parse_worker_output(Results + warning + "\n", Worker), feature);
+            assertEq({"a-b": "1/2", "c": "x y"}, parse_worker_output(warning + "\n" + Results, Worker),
+                feature + " first");
+        }
+    }
+
+    otherOutput() {
+        string grpc = ChildFailed + "LOAD-MODULE-ERROR: feature 'grpc'" + ModulePath;
+        hash<string, string> cases = {
+            "an unexpected line": "unexpected",
+            "a result in upper case": "A=1",
+            "a module of this tree": Location + "\n" + ChildFailed + "LOAD-MODULE-ERROR: feature 'DataProvider'"
+                + ModulePath,
+            "a feature whose name has an external one as a prefix": Location + "\n" + ChildFailed
+                + "LOAD-MODULE-ERROR: feature 'grpcx'" + ModulePath,
+            "another error of the child": Location + "\n" + ChildFailed
+                + "PARSE-EXCEPTION: syntax error (while loading user module \"SalesforcePubSubDataProvider\")",
+            "another child": Location + "\n" + replace(grpc, "'SalesforcePubSubDataProvider'", "'OtherChild'"),
+            "another parent": Location + "\n" + replace(grpc, "'SalesforceRestDataProvider'", "'OtherParent'"),
+            "a skipped child": Location + "\n" + replace(grpc, "MODULE-CHILD-FAILED", "MODULE-CHILD-SKIPPED"),
+            "the warning without its location": grpc,
+            "the location without the warning": Location,
+            "the location of another script": replace(Location, Worker, "other-worker.qr") + "\n" + grpc,
+            "the location of a script whose name ends in the worker's": replace(Location, "//", "//x") + "\n" + grpc,
+            # the worker's name is matched literally: "." is no regular expression wildcard there
+            "the location of a script whose name matches the worker's as a regular expression":
+                replace(Location, Worker, "env-options-workerXqr") + "\n" + grpc,
+            "another warning at the location": Location + "\nRETURN-VALUE-IGNORED: call to function f()",
+            "the warning twice for one location": Location + "\n" + grpc + "\n" + grpc,
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            assertThrows("UNEXPECTED-WORKER-OUTPUT", \parse_worker_output(), (Results + i.value + "\n", Worker),
+                i.key);
+        }
+    }
+}
