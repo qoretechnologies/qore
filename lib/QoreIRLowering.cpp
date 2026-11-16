@@ -5244,7 +5244,11 @@ const QoreIRLowering::DebugFlowSegment* QoreIRLowering::getScopeFlowPaths(size_t
     const BlockCleanupEntry& entry = cleanup_stack[scope_entry];
     assert(entry.type == BlockCleanupEntry::Scope);
     const QoreProgramLocation* loc = entry.loc;
-    auto [cache, inserted] = scope_exit_flow_paths.try_emplace(entry.scope_id);
+    const uint32_t scope_id = entry.scope_id;
+    auto [cache, inserted] = scope_exit_flow_paths.try_emplace(scope_id);
+    // the element, not the iterator: the lowering of the paths below can add the paths of other scopes, which can
+    // rehash the map
+    DebugFlowSegment& paths = cache->second;
     if (inserted) {
         // the code after the block: the entries of the block and of the blocks in it are left, and so are the temp
         // scopes opened since the scope's
@@ -5257,7 +5261,6 @@ const QoreIRLowering::DebugFlowSegment* QoreIRLowering::getScopeFlowPaths(size_t
             cleanup_stack.insert(cleanup_stack.end(), saved_entries.begin(), saved_entries.end());
             builder.restoreTempScopeState(std::move(temp_state));
         };
-        DebugFlowSegment& paths = cache->second;
         paths.return_path = lowerDebugFlowPath(RC_RETURN, LoopJumpTarget(), loc, error);
         for (int rc : {RC_BREAK, RC_CONTINUE}) {
             if (!paths.return_path) {
@@ -5273,11 +5276,11 @@ const QoreIRLowering::DebugFlowSegment* QoreIRLowering::getScopeFlowPaths(size_t
         }
         restore();
         if (!paths.return_path) {
-            scope_exit_flow_paths.erase(cache);
+            scope_exit_flow_paths.erase(scope_id);
             return nullptr;
         }
     }
-    return &cache->second;
+    return &paths;
 }
 
 void QoreIRLowering::pushFlowTarget(FlowTarget target) {
@@ -6247,28 +6250,33 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
 
 QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEnd(int rc, std::string& error) {
     assert(!inline_handler_flow_stack.empty());
-    InlineHandlerFlow& hf = inline_handler_flow_stack.back();
-    if (!hf.last) {
+    // the entry is read and written by its index: the lowering of the scope's paths below lowers handlers inline,
+    // which pushes entries on inline_handler_flow_stack and can reallocate it
+    const size_t hf_index = inline_handler_flow_stack.size() - 1;
+    if (!inline_handler_flow_stack[hf_index].last) {
         // the exit goes on with the next handler: the code after the handler, which the lowering of the handler
         // continues in (lowerHandlerAtExit()); a block of the normal code
-        if (!hf.join && !(hf.join = createBlock("handler.inline.join"))) {
+        QoreIRBasicBlock*& join = inline_handler_flow_stack[hf_index].join;
+        if (!join && !(join = createBlock("handler.inline.join"))) {
             error = "IR builder failed to create the join block of a handler";
         }
-        return hf.join;
+        return join;
     }
     // the last handler of the exit: the request becomes that of the block, whose scope is left with its handlers run
-    QoreIRBasicBlock*& end = hf.request_end[rc == RC_RETURN ? 0 : (rc == RC_BREAK ? 1 : 2)];
-    if (end) {
+    const size_t end_index = rc == RC_RETURN ? 0 : (rc == RC_BREAK ? 1 : 2);
+    if (QoreIRBasicBlock* end = inline_handler_flow_stack[hf_index].request_end[end_index]) {
         return end;
     }
+    const size_t scope_entry = inline_handler_flow_stack[hf_index].scope_entry;
+    const uint32_t scope_id = inline_handler_flow_stack[hf_index].scope_id;
     // the paths of the scope (getScopeFlowPaths())
-    const DebugFlowSegment* paths = getScopeFlowPaths(hf.scope_entry, error);
+    const DebugFlowSegment* paths = getScopeFlowPaths(scope_entry, error);
     if (!paths) {
         return nullptr;
     }
     QoreIRBasicBlock* scope_path = rc == RC_RETURN ? paths->return_path
         : (rc == RC_BREAK ? paths->break_path : paths->continue_path);
-    end = createBlock("debug.flow.handler.end");
+    QoreIRBasicBlock* end = createBlock("debug.flow.handler.end");
     if (!end) {
         error = "IR builder failed to create the block of a debugger flow request";
         return nullptr;
@@ -6277,9 +6285,10 @@ QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEnd(int rc, std::string& e
     QoreIRBasicBlock* saved_block = builder.getBlock();
     builder.setBlock(end);
     // the handlers still registered in the scope do not run: the last one ran
-    builder.createScopeExit(hf.scope_id, false, nullptr, /*inline_lowered=*/true);
+    builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/true);
     builder.createBranch(scope_path, nullptr);
     builder.setBlock(saved_block);
+    inline_handler_flow_stack[hf_index].request_end[end_index] = end;
     return end;
 }
 
