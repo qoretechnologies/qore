@@ -1260,7 +1260,8 @@ public:
         return assigned && type == QV_Node ? v.n : nullptr;
     }
 
-    DLLLOCAL qore_type_t getType() const {
+    //! (always inlined: it is read on every load of a local variable)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE qore_type_t getType() const {
         if (assigned)
             switch (type) {
                 case QV_Bool: return NT_BOOLEAN;

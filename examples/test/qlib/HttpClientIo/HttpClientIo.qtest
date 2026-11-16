@@ -462,6 +462,18 @@ class HttpClientIoTest inherits QUnit::Test {
             \testH1ConnectionCloseRemovesFromPool());
         addTestCase("H1 proactive idle timeout", \testH1ProactiveIdleTimeout());
         addTestCase("H2 proactive idle timeout", \testH2ProactiveIdleTimeout());
+        addTestCase("the idle timeout leaves a leased connection between the requests of its session",
+            \testIdleTimeoutLeasedConnection());
+        addTestCase("H1 idle timeout leaves a connection with a reserved stream",
+            \testH1IdleTimeoutReservedStream());
+        addTestCase("H2 idle timeout leaves a connection with a reserved stream",
+            \testH2IdleTimeoutReservedStream());
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("H1 idle timeout after a step back of the system clock",
+                \testH1IdleTimeoutClockStepBack());
+            addTestCase("H2 idle timeout after a step back of the system clock",
+                \testH2IdleTimeoutClockStepBack());
+        }
         addTestCase("max_age eviction at checkout", \testMaxAgeEvictionAtCheckout());
         addTestCase("max_age disabled reuses connection",
             \testMaxAgeDisabledReusesConnection());
@@ -2356,11 +2368,12 @@ class HttpClientIoTest inherits QUnit::Test {
     #! remove closed connections from the pool.
     private int waitForPoolToBeEmpty(HttpClientIo::HttpClientConnectionManager mgr,
             timeout max_wait) {
-        date deadline = now_us() + max_wait;
+        # on the monotonic clock, as tests step the system clock (#6150)
+        int deadline = clock_get_monotonic_us() + max_wait * 1000;
         int total_connections;
         while (True) {
             total_connections = mgr.getStats().total_connections;
-            if (!total_connections || now_us() >= deadline) {
+            if (!total_connections || clock_get_monotonic_us() >= deadline) {
                 return total_connections;
             }
             usleep(10ms);
@@ -2446,6 +2459,120 @@ class HttpClientIoTest inherits QUnit::Test {
         response = stream.request("GET", "/simple");
         assertEq(200, response.status_code,
             "H2 request after idle-timeout eviction should create a new connection");
+    }
+
+    #! The idle timeout of a leased connection does not close it between the requests of its session (#6194)
+    /** A lease releases the reservation that acquired its connection, and each request of the session reserves its
+        own: in between, the connection's idle timeout closed it, and the next request of the session failed.
+    */
+    testIdleTimeoutLeasedConnection() {
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "idle_timeout": 500ms,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientConnection conn = mgr.leaseConnection(mHttpUrl);
+        on_exit mgr.releaseConnection(conn);
+        int id = conn.getConnectionId();
+        {
+            mgr.pinConnection(conn);
+            on_exit mgr.unpinConnection();
+            assertEq(200, mgr.acquireStream(mHttpUrl).request("GET", "/simple").status_code);
+        }
+
+        # the session's connection is idle for longer than its idle timeout: neither its operation's idle timeout,
+        # nor a pool scan of another request, nor the manager's idle cleanup closes it
+        usleep(750ms);
+        HttpClientIo::HttpClientStreamHandle other = mgr.acquireStream(mHttpUrl);
+        assertNeq(id, other.getConnection().getConnectionId(), "another request does not take the leased connection");
+        assertEq(200, other.request("GET", "/simple").status_code);
+        assertFalse(conn.isClosed(), "the leased connection is open after a pool scan");
+        mgr.cleanupIdleConnections();
+        assertFalse(conn.isClosed(), "the leased connection is open after the idle cleanup");
+
+        mgr.pinConnection(conn);
+        on_exit mgr.unpinConnection();
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mHttpUrl);
+        assertEq(200, stream.request("POST", "/echo", NOTHING, "test-body-content").status_code,
+            "the session's request is answered");
+        assertEq(id, stream.getConnection().getConnectionId(), "on the leased connection");
+    }
+
+    #! The idle timeout of an H1 connection does not close it under a stream handle that has reserved it (#6184)
+    /** A stream handle reserves a stream of its connection when it is acquired, and submits when it makes its request:
+        the connection's idle timeout, which expires in between, closed the connection when it had no active stream,
+        and the POST then failed (it is not repeated).  The reservations of this manager's connections are counted in
+        the C++ connection, where the timeout sees them.
+    */
+    testH1IdleTimeoutReservedStream() {
+        idleTimeoutReservedStream("h1", mHttpUrl);
+    }
+
+    #! The idle timeout of an H2 connection does not close it under a stream handle that has reserved it (#6184)
+    testH2IdleTimeoutReservedStream() {
+        idleTimeoutReservedStream("h2", mSslUrl);
+    }
+
+    private idleTimeoutReservedStream(string protocol, string url) {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": protocol,
+            "idle_timeout": 500ms,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle s1 = mgr.acquireStream(url);
+        assertEq(200, s1.request("GET", "/simple").status_code);
+        int id = s1.getConnection().getConnectionId();
+
+        # the second handle reserves a stream of the idle connection; the idle timeout then expires before it submits
+        HttpClientIo::HttpClientStreamHandle s2 = mgr.acquireStream(url);
+        assertEq(id, s2.getConnection().getConnectionId(), "the second handle reserved the idle connection");
+        usleep(750ms);
+        hash<auto> response = s2.request("POST", "/echo", NOTHING, "test-body-content");
+        assertEq(200, response.status_code, "the POST is answered on its reserved connection");
+        assertEq(id, s2.getConnection().getConnectionId(), "the POST was sent on its reserved connection");
+    }
+
+    #! A step back of the system clock does not stop the proactive idle timeout of an H1 connection (#6150)
+    /** The idle deadline is measured on the monotonic clock: on the system clock, a step back of an hour after the
+        deadline was armed kept the idle connection open for an hour.  The step is made with dbg_set_realtime_offset()
+        (debug builds).
+    */
+    testH1IdleTimeoutClockStepBack() {
+        idleTimeoutClockStepBack("h1", mHttpUrl);
+    }
+
+    #! A step back of the system clock does not stop the proactive idle timeout of an H2 connection (#6150)
+    /** As testH1IdleTimeoutClockStepBack(); the H2 keepalive PING interval is measured on the same clock.
+    */
+    testH2IdleTimeoutClockStepBack() {
+        idleTimeoutClockStepBack("h2", mSslUrl);
+    }
+
+    private idleTimeoutClockStepBack(string protocol, string url) {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": protocol,
+            "idle_timeout": 500ms,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        assertEq(200, stream.request("GET", "/simple").status_code);
+        assertGe(1, mgr.getStats().total_connections);
+
+        # the idle deadline is armed when the request has ended, before the system clock steps back
+        usleep(100ms);
+        call_function("dbg_set_realtime_offset", -3600 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        assertEq(0, waitForPoolToBeEmpty(mgr, 3s), "the idle connection is closed after its idle timeout");
     }
 
     #! Verifies max_age (born-at TTL) eviction at pool checkout.

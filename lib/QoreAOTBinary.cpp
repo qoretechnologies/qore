@@ -3203,6 +3203,10 @@ QoreAOTStaticMethodRef::QoreAOTStaticMethodRef(const char* encoded) : method_nam
     method_name = method_name_storage.c_str();
 
     const char* payload = first_sep + 1;
+    if (!strcmp(payload, QORE_AOT_ABSTRACT_SELF_CALL_MARKER)) {
+        abstract_self_call = true;
+        return;
+    }
     size_t marker_len = strlen(QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER);
     if (!strncmp(payload, QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER, marker_len)
             && payload[marker_len] == '\n') {
@@ -3237,6 +3241,20 @@ static std::string qore_aot_encode_call_arg_type_signature(const type_vec_t& arg
     }
     rv += ")";
     return rv;
+}
+
+std::string qore_aot_encode_self_method_ref(const SelfFunctionCallNode* call, bool arg_types) {
+    if (call->isAbstractCall()) {
+        // the explicit type arguments of the call follow the marker: QoreAOTStaticMethodRef strips them first
+        std::string rv = qore_aot_encode_static_method_ref(call->getName(), nullptr, nullptr,
+            call->getExplicitTypeParamInstantiation());
+        std::string name(call->getName() ? call->getName() : "");
+        rv.insert(name.size(), std::string("\n") + QORE_AOT_ABSTRACT_SELF_CALL_MARKER);
+        return rv;
+    }
+    const AbstractQoreFunctionVariant* variant = call->getVariant();
+    return qore_aot_encode_static_method_ref(call->getName(), variant,
+        arg_types && !variant ? &call->getParsedArgTypeInfo() : nullptr, call->getExplicitTypeParamInstantiation());
 }
 
 std::string qore_aot_encode_static_method_ref(const char* method_name,
@@ -3484,6 +3502,13 @@ const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char
     }
 
     if (!strchr(path, '<')) {
+        return nullptr;
+    }
+
+    // the type parser does not accept the AOT spellings of type parameters, and its errors would be left pending in
+    // the Program, to be raised when it ends (see QoreAOTTypeResolver::resolveComplexType()); such a path is resolved
+    // by qore_aot_resolve_call_hashdecl_path()
+    if (strstr(path, "typeparam<")) {
         return nullptr;
     }
 
@@ -10564,7 +10589,7 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                 //   `string boundary = MultiPartMessage::getBoundary()`. Serialize
                 //   the class path and method name; the reader rebuilds a
                 //   StaticMethodCallNode bound to the resolved QoreMethod.
-                if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(node)) {
+                if (auto* smcn = qore_get_static_method_call_node(node)) {
                     const QoreListNode* args = smcn->getArgs();
                     bool no_args = !args || args->size() == 0;
                     const QoreMethod* m = smcn->getMethod();
@@ -12952,15 +12977,14 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     }
 
     // SelfFunctionCallNode: method call on self
-    if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (auto* call = qore_get_self_function_call_node(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
-        const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
+        const QoreClass* qc = call->getRecordedClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
         writer.writeStringRef(class_ref.c_str());
-        const AbstractQoreFunctionVariant* variant = call->getVariant();
-        std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
-            variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
+        // with the parse-time abstract flag (issue #5824)
+        std::string method_ref = qore_aot_encode_self_method_ref(call, true);
         // the arguments are written in source order (the order of their evaluation): a named call keeps the
         // positions of their parameters (bound at parse time) or their names (resolved at run time by parameter
         // name) first (read by read_expr_self_method_call())
@@ -12985,7 +13009,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     }
 
     // StaticMethodCallNode: static method call
-    if (auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (auto* call = qore_get_static_method_call_node(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
         if (method) {

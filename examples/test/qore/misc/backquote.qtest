@@ -125,6 +125,8 @@ class BackquoteTest inherits QUnit::Test {
         on_exit unlink(fifo);
 
         SandboxManager sm();
+        # backquote() runs the command with the shell, which the sandbox must allow to be executed
+        sm.addFilesystemAllowedPath("/bin/sh", QSEC_EXECUTE);
         Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
         p.setSandboxManager(sm);
 

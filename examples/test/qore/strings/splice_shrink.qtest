@@ -1,0 +1,169 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# A splice or extract with a replacement that is shorter than the removed range moves only the bytes after the
+# removed range down: the removed range may be much longer than the slack of the string's buffer, and the bytes
+# moved never extend past the end of the string.  The results are checked here in every path (single-byte,
+# multi-byte and stateful encodings); a move that reads past the end of the string is shown by a memory checker
+# (valgrind) when the removed range is longer than the allocation slack, which the long strings here make sure of.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SpliceShrinkTest
+
+class SpliceShrinkTest inherits QUnit::Test {
+    constructor() : Test("SpliceShrinkTest", "1.0", \ARGV) {
+        addTestCase("single-byte encoding", \testSingleByte());
+        addTestCase("UTF-8 with single-byte characters", \testUtf8Ascii());
+        addTestCase("UTF-8 with multi-byte characters", \testUtf8MultiByte());
+        addTestCase("stateful encoding UTF-7", \testUtf7());
+        addTestCase("stateful encoding ISO-2022-JP", \testIso2022Jp());
+        addTestCase("growing and same-size replacements", \testGrowAndSame());
+        set_return_value(main());
+    }
+
+    #! the cases checked for a string of the given length in characters: offset, removed length and replacement
+    private list<hash<auto>> cases(int n) {
+        return (
+            # removed range much longer than the replacement, from the start
+            {"offset": 0, "num": n / 2, "repl": "b"},
+            # removing all but the last character
+            {"offset": 0, "num": n - 1, "repl": "b"},
+            # removing a range in the middle
+            {"offset": n / 4, "num": n / 2, "repl": "xy"},
+            # a range that ends at the end of the string
+            {"offset": n / 2, "num": n / 2, "repl": "z"},
+            # a range that would extend past the end of the string
+            {"offset": n / 2, "num": n * 2, "repl": "z"},
+            # a negative offset from the end
+            {"offset": -(n / 2), "num": n / 4, "repl": "q"},
+            # a removed range one character longer than the replacement
+            {"offset": 1, "num": 3, "repl": "cd"},
+            # a negative length: up to the given number of characters before the end
+            {"offset": n / 4, "num": -(n / 4), "repl": "v"},
+            # the whole string
+            {"offset": 0, "num": n, "repl": "w"},
+        );
+    }
+
+    #! returns the expected result of a splice with a replacement, computed from substrings
+    private static string expected(string str, int offset, int num, string repl) {
+        int len = str.length();
+        if (offset < 0) {
+            offset = len + offset;
+            if (offset < 0) {
+                offset = 0;
+            }
+        } else if (offset > len) {
+            offset = len;
+        }
+        if (num < 0) {
+            num = len + num - offset;
+            if (num < 0) {
+                num = 0;
+            }
+        } else if (num > len - offset) {
+            num = len - offset;
+        }
+        return str.substr(0, offset) + repl + str.substr(offset + num);
+    }
+
+    #! checks every case on a string made of the given unit repeated; strings are compared in the string's encoding
+    private checkAll(string unit, int count, string enc) {
+        string base = strmul(unit, count);
+        if (enc != "UTF-8") {
+            base = convert_encoding(base, enc);
+        }
+        int n = base.length();
+        assertEq(count * unit.length(), n);
+        foreach hash<auto> c in (cases(n)) {
+            string repl = enc == "UTF-8" ? c.repl : convert_encoding(c.repl, enc);
+            string exp = SpliceShrinkTest::expected(base, c.offset, c.num, repl);
+            string label = sprintf("%s offset %d num %d", enc, c.offset, c.num);
+
+            # splice operator
+            string s = base;
+            splice s, c.offset, c.num, repl;
+            assertEq(enc, s.encoding(), label + " splice encoding");
+            assertEq(exp.length(), s.length(), label + " splice length");
+            assertEq(exp.size(), s.size(), label + " splice byte size");
+            assertEq(exp, s, label + " splice result");
+            # the string remains usable after the splice
+            s += "!";
+            assertEq(exp + "!", s, label + " append after splice");
+
+            # extract operator: returns the removed characters
+            s = base;
+            string ex = extract s, c.offset, c.num, repl;
+            assertEq(exp, s, label + " extract result");
+            int off = c.offset < 0 ? n + c.offset : c.offset;
+            assertEq(base.substr(off, c.num), ex, label + " extracted text");
+        }
+    }
+
+    testSingleByte() {
+        # a buffer much longer than its slack: the removed ranges are thousands of bytes
+        checkAll("a", 8192, "ISO-8859-1");
+        checkAll("abcdefgh", 1024, "ISO-8859-1");
+    }
+
+    testUtf8Ascii() {
+        checkAll("a", 8192, "UTF-8");
+        checkAll("abcdefgh", 1024, "UTF-8");
+    }
+
+    testUtf8MultiByte() {
+        # two-, three- and four-byte characters: the removed ranges in bytes differ from those in characters
+        checkAll("é", 4096, "UTF-8");
+        checkAll("a日é😀", 1024, "UTF-8");
+    }
+
+    #! stateful encodings are spliced in UTF-8 and converted back
+    private checkStateful(string enc, string unit) {
+        try {
+            @discard(convert_encoding("a", enc));
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("%s is not supported: %s: %s", enc, ex.err, ex.desc));
+        }
+        checkAll(unit, 1024, enc);
+    }
+
+    testUtf7() {
+        checkStateful("UTF-7", "aé");
+    }
+
+    testIso2022Jp() {
+        checkStateful("ISO-2022-JP", "a日");
+    }
+
+    testGrowAndSame() {
+        # the other branches are unchanged by the shrinking fix; check them on the same long strings
+        foreach string enc in ("ISO-8859-1", "UTF-8") {
+            string base = strmul("ab", 4096);
+            if (enc != "UTF-8") {
+                base = convert_encoding(base, enc);
+            }
+            string repl = strmul("c", 3000);
+            if (enc != "UTF-8") {
+                repl = convert_encoding(repl, enc);
+            }
+            # grow
+            string s = base;
+            splice s, 100, 10, repl;
+            assertEq(SpliceShrinkTest::expected(base, 100, 10, repl), s, enc + " grow");
+            # same size
+            s = base;
+            splice s, 100, 3000, repl;
+            assertEq(SpliceShrinkTest::expected(base, 100, 3000, repl), s, enc + " same size");
+            # no replacement
+            s = base;
+            splice s, 100, 5000;
+            assertEq(base.substr(0, 100) + base.substr(5100), s, enc + " no replacement");
+        }
+    }
+}

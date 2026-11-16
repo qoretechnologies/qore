@@ -99,6 +99,7 @@
 #include "qore/intern/QoreAOTBatchMemory.h"
 #include "qore/intern/FileStreamIo.h"
 #include "qore/intern/qore_enum_decl_private.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -10308,6 +10309,115 @@ static void ut_sandbox_context_inner_program_id(UnitTestCounters& c, QoreProgram
     UT_ASSERT(c, !xsink, "the Program is destroyed");
 }
 
+//! A Program that sandboxed code creates keeps the sandbox of that code: entered alone (no sandboxed Program on the
+//! thread's stack), after QoreProgram::setSandboxManager() gave it a manager and removed it again, and by a foreign
+//! thread of a binary module with QoreExternalProgramContextHelper
+static void ut_sandbox_creator_context(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    QoreProgram* sandboxed = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+    QoreSandboxManager* sm = new QoreSandboxManager;
+    sm->setUncontrolledApiPolicy(false);
+    sandboxed->setSandboxManager(sm);
+    // the Program that the sandboxed code creates
+    QoreProgram* child = nullptr;
+    {
+        ProgramThreadCountContextHelper tch(&xsink, sandboxed, true);
+        UT_ASSERT(c, !xsink, "the sandboxed Program is entered");
+        child = new QoreProgram(sandboxed, QoreParseOptions());
+    }
+    UT_ASSERT(c, qore_program_is_sandboxed(child), "the child is sandboxed");
+    // the uncontrolled-API policy (resolved without combining the managers) and the combined manager both see the
+    // creator's sandbox wherever the child is entered
+    auto check = [&c, sm](const char* label) {
+        UT_ASSERT(c, !qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy),
+            (std::string(label) + ": the creator's sandbox governs policy checks").c_str());
+        UT_ASSERT(c, !qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::All),
+            (std::string(label) + ": the creator's sandbox governs").c_str());
+        qore_program_id_t pgm_id = 0;
+        QoreSandboxManager* found = qore_dbg_find_thread_sandbox_manager_ref(&pgm_id);
+        UT_ASSERT(c, found, (std::string(label) + ": a manager is found").c_str());
+        if (found) {
+            UT_ASSERT(c, found == sm || QoreSandboxComposition::members(found),
+                (std::string(label) + ": the manager is the creator's sandbox or contains it").c_str());
+            if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(found)) {
+                UT_ASSERT(c, std::find(members->begin(), members->end(), sm) != members->end(),
+                    (std::string(label) + ": the composition contains the creator's sandbox").c_str());
+            }
+            found->deref(nullptr);
+        }
+    };
+    {
+        ProgramThreadCountContextHelper tch(&xsink, child, true);
+        UT_ASSERT(c, !xsink, "the child is entered");
+        check("entered alone");
+    }
+    // a manager of its own that allows uncontrolled APIs does not loosen the sandbox, and removing it does not remove
+    // the creator's sandbox
+    {
+        QoreSandboxManager* lax = new QoreSandboxManager;
+        lax->setUncontrolledApiPolicy(true);
+        child->setSandboxManager(lax);
+        lax->deref(nullptr);
+        {
+            ProgramThreadCountContextHelper tch(&xsink, child, true);
+            UT_ASSERT(c, !xsink, "the child is entered with a manager of its own");
+            check("with a lax manager of its own");
+        }
+        QoreSandboxManager* own = qore_program_private::get(*child)->getOwnSandboxManagerRef();
+        UT_ASSERT(c, own == lax, "the manager set is the Program's own manager");
+        if (own) {
+            own->deref(nullptr);
+        }
+        child->setSandboxManager(nullptr);
+        UT_ASSERT(c, !qore_program_private::get(*child)->getOwnSandboxManagerRef(), "the manager is removed");
+        {
+            ProgramThreadCountContextHelper tch(&xsink, child, true);
+            UT_ASSERT(c, !xsink, "the child is entered after its manager was removed");
+            check("after setSandboxManager(nullptr)");
+        }
+    }
+    // a foreign thread of a binary module enters the child with no Qore caller
+    {
+        bool entered = false;
+        bool policy_refused = false;
+        bool all_refused = false;
+        std::thread foreign([&]() {
+            QoreForeignThreadHelper fth;
+            ExceptionSink txsink;
+            QoreExternalProgramContextHelper pch(&txsink, child);
+            if (txsink) {
+                txsink.clear();
+                return;
+            }
+            entered = true;
+            policy_refused = !qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy);
+            all_refused = !qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::All);
+        });
+        foreign.join();
+        UT_ASSERT(c, entered, "the foreign thread enters the child");
+        UT_ASSERT(c, policy_refused, "foreign thread: the creator's sandbox governs policy checks");
+        UT_ASSERT(c, all_refused, "foreign thread: the creator's sandbox governs");
+    }
+    // a Program that trusted code creates has no sandbox
+    {
+        QoreProgram* trusted = new QoreProgram(sandboxed, QoreParseOptions());
+        UT_ASSERT(c, !qore_program_is_sandboxed(trusted), "a Program that trusted code creates is not sandboxed");
+        {
+            ProgramThreadCountContextHelper tch(&xsink, trusted, true);
+            UT_ASSERT(c, !xsink, "the trusted Program is entered");
+            UT_ASSERT(c, qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::All),
+                "no sandbox governs a Program that trusted code creates");
+        }
+        trusted->waitForTerminationAndDeref(&xsink);
+    }
+    sm->deref(nullptr);
+    child->waitForTerminationAndDeref(&xsink);
+    sandboxed->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "the Programs are destroyed");
+}
+
 //! qore#5741: inside a sandbox context continued for another thread, the context's manager and the managers of the
 //! Programs entered in its scope govern together (the continued-context branch of the walk of the thread's sandboxes)
 /** The uncontrolled-API policy is resolved without combining the managers (qore_sandbox_allows_uncontrolled_apis()),
@@ -16506,6 +16616,53 @@ static QoreValue f_dbg_http_client_drain_limit(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Debug-only: sets the max_age (ms) of the connection managers that HTTPClient objects create from now on; 0: none
+/** HTTPClient sets no max_age of its own: this lets a test check the max_age of HttpClientConnectionManagerBase (#6150)
+*/
+static QoreValue f_dbg_http_client_max_age(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t ms = get_param_value(params, 0).getAsBigInt();
+    if (ms < 0 || ms > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_client_max_age(): invalid max_age %lld", (long long)ms);
+        return QoreValue();
+    }
+    QoreHttpClientDrainDebug::get().max_age_ms.store(static_cast<int>(ms), std::memory_order_release);
+    return QoreValue();
+}
+
+//! Debug-only: sets the idle timeout (ms) of the connection managers that HTTPClient objects create from now on; 0: the
+//! default (#6184)
+static QoreValue f_dbg_http_client_idle_timeout(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t ms = get_param_value(params, 0).getAsBigInt();
+    if (ms < 0 || ms > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_client_idle_timeout(): invalid timeout %lld",
+            (long long)ms);
+        return QoreValue();
+    }
+    QoreHttpClientDrainDebug::get().idle_timeout_ms.store(static_cast<int>(ms), std::memory_order_release);
+    return QoreValue();
+}
+
+//! Debug-only: arms (or disarms) the hold of the next request of an HTTPClient after the reservation of its
+//! connection's stream and before its submission (#6165)
+static QoreValue f_dbg_http_client_hold_after_reserve(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreHttpClientDrainDebug::get().armReserveHold(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until a request is held by dbg_http_client_hold_after_reserve(); returns False on timeout
+static QoreValue f_dbg_http_client_wait_held_after_reserve(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return QoreHttpClientDrainDebug::get().waitReserveHeld(get_param_value(params, 0).getAsBigInt());
+}
+
+//! Debug-only: lets the request held by dbg_http_client_hold_after_reserve() submit
+static QoreValue f_dbg_http_client_release_after_reserve(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreHttpClientDrainDebug::get().releaseReserveHold();
+    return QoreValue();
+}
+
 //! Debug-only: sets the number of streaming streams whose buffered data an HTTP/2 client delivers in one pass; 0: the
 //! default
 static QoreValue f_dbg_http2_client_streaming_batch(const QoreListNode* params, RuntimeConfig& rc,
@@ -17538,6 +17695,69 @@ static QoreValue f_dbg_fork_while_handler_held(const QoreListNode* params, Runti
     rv->setKeyValue("status", status, xsink);
     rv->setKeyValue("waited", t.hook_saw_held, xsink);
     return rv.release();
+}
+
+//! Debug-only: creates a child process with fork() while another thread holds the parse options lock of a Program
+/** The other thread holds the lock that serializes the changes of the Program's parse options (issue #6078) until
+    fork() has returned in the parent.  The child runs the code given, which can change the Program's options, and exits
+    with the value it returns (99 if it raised an exception).  The child first checks that it can take the lock and
+    exits with 98 at once if it cannot, so that a child that inherited the lock held fails without waiting for it.
+    DEBUG builds only.
+
+    @return the exit status of the child (-1 if it did not exit normally)
+
+    @throw DBG-FORK-ERROR fork() failed
+*/
+static QoreValue f_dbg_fork_while_parse_options_locked(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 1).get<const ResolvedCallReferenceNode>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    std::recursive_mutex& wlock = qore_program_private::getParseOptionsWriteLock(**pgm);
+    std::mutex m;
+    std::condition_variable cv;
+    bool held = false;
+    bool release = false;
+    std::thread holder([&]() {
+        std::lock_guard<std::recursive_mutex> wl(wlock);
+        std::unique_lock<std::mutex> ul(m);
+        held = true;
+        cv.notify_all();
+        cv.wait(ul, [&release] { return release; });
+    });
+    {
+        std::unique_lock<std::mutex> ul(m);
+        cv.wait(ul, [&held] { return held; });
+    }
+    pid_t pid = fork();
+    if (!pid) {
+        // a lock inherited held would block the code below forever
+        if (!wlock.try_lock()) {
+            _exit(98);
+        }
+        wlock.unlock();
+        ExceptionSink child_xsink;
+        ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+        int status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+        child_xsink.clear();
+        _exit(status);
+    }
+    int fork_errno = errno;
+    {
+        std::lock_guard<std::mutex> lg(m);
+        release = true;
+        cv.notify_all();
+    }
+    holder.join();
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", fork_errno, "fork() failed");
+        return QoreValue();
+    }
+    return ut_wait_child(pid);
 }
 
 //! Debug-only: release the socket private data detached by dbg_detach_async_io_socket(), closing its fd.
@@ -19096,6 +19316,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
+    ut_sandbox_creator_context(c, rc.getProgram());
     ut_datasource_option_commit_window(c);
 #endif
     return make_unit_test_result(c, xsink);
@@ -19494,6 +19715,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
+    ut_sandbox_creator_context(c, rc.getProgram());
     ut_datasource_option_commit_window(c);
 #endif
     ut_event_loop_remove_recycled_fd(c);
@@ -23743,6 +23965,20 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http_client_drain_limit", f_dbg_http_client_drain_limit,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "limit");
+    qns.addBuiltinVariant("dbg_http_client_max_age", f_dbg_http_client_max_age,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "max_age_ms");
+    qns.addBuiltinVariant("dbg_http_client_idle_timeout", f_dbg_http_client_idle_timeout,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "idle_timeout_ms");
+    qns.addBuiltinVariant("dbg_http_client_hold_after_reserve", f_dbg_http_client_hold_after_reserve,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "arm");
+    qns.addBuiltinVariant("dbg_http_client_wait_held_after_reserve", f_dbg_http_client_wait_held_after_reserve,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_http_client_release_after_reserve", f_dbg_http_client_release_after_reserve,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http2_client_streaming_batch", f_dbg_http2_client_streaming_batch,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "batch");
@@ -24169,6 +24405,9 @@ void init_debug_functions(QoreNamespace& qns) {
         hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_fork_while_parse_options_locked", f_dbg_fork_while_parse_options_locked, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", codeTypeInfo,
         QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_ref_set_unique_remove_key", f_dbg_ref_set_unique_remove_key, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, autoTypeInfo, 4, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo,

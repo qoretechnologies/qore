@@ -37,7 +37,15 @@
 @target x86_64-linux-gnu
 
 # IR execution: every call of a function or method from the IR interpreter
-4096 QoreIRInterpreter::execute
+# QoreIRInterpreter::execute: 4160 B with QoreLValue::getType() always inlined (#5824), which makes the IR call paths
+# no slower than before the call target checks; it was 4096 B before.  Measured with recursion-frame-budget.qtest on
+# Alpine (musl, GCC 15.2, x86_64), bytes per level (depth at 8 MB) before -> after:
+#   release: ir function 4963 (1669) -> 5023 (1648), method 5974 (1386) -> 6026 (1372),
+#            static method 4911 (1685) -> 4975 (1663)
+#   debug:   ir function 4940 (1675) -> 5023 (1648), method 6316 (1309) -> 6393 (1293),
+#            static method 4917 (1684) -> 4993 (1657)
+# (1.0-1.6% of the depth; the AST recursions do not change)
+4320 QoreIRInterpreter::execute
 928 tryExecuteInterpreterInlineIRFunction
 880 tryExecuteInterpreterInlineIRStaticMethod
 96 evalAndRef

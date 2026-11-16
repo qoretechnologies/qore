@@ -54,6 +54,7 @@ class FunctionEntry;
 
 class QoreIRFunction;
 struct QoreJITObjectLayout;
+class QoreCallTargetCheckCache;
 class QoreIRBasicBlock;
 class QoreIRInstruction;
 class QoreIRPhiInstruction;
@@ -1593,7 +1594,24 @@ private:
 
     //! Emits the inline test that @a qv is an object that has not been deleted, with the layout of the running
     //! libqore (JIT only; QoreIROpcode::CheckCallTarget, issue #5784)
-    llvm::Value* emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout, llvm::Function* llvm_func);
+    llvm::Value* emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout, llvm::Function* llvm_func,
+        const QoreClass* qc = nullptr, const QoreClass* method_qc = nullptr);
+
+    //! Emits the inline test of the cache of a call site (QoreCallTargetCheckCache::hit()) for code that always runs
+    //! with the class context @a class_ctx (QoreIRFunction::static_call_context): true if @a qv is an object that has
+    //! not been deleted and the cache knows that a lookup by name finds a method for its class (JIT only, issue #5824)
+    /** An entry is made only after a full check found the lookup stable in the Program of the code; the epoch of the
+        entry changes when that can stop being so (a Program or a class is released, module lifetime ends), so the
+        stability is not tested again
+    */
+    llvm::Value* emitCallTargetCacheHitInline(const QoreCallTargetCheckCache* cache,
+        const qore_class_private* class_ctx, llvm::Value* qv, const QoreJITObjectLayout& layout,
+        llvm::Function* llvm_func);
+
+    //! Emits the fast test of QoreIROpcode::CheckCallTarget: true if @a target needs no other check (a method call
+    //! resolved at parse time on an object of its class that has not been deleted; issues #5784, #5824)
+    llvm::Value* emitCallTargetFastTest(const QoreIRExprInstruction* check, uint64_t call_bits, llvm::Value* target,
+        llvm::Module& module, llvm::Function* llvm_func);
 
     // Inline qore_rt_ref - reference count a value if it's a node
     // Returns the value unchanged if not a node, or qore_rt_refself result if node
@@ -1760,11 +1778,56 @@ private:
     // Update specialized runtime catch-scope state around CatchException,
     // CatchCleanup, and Rethrow lowering.
     void emitCatchScopeEnter(llvm::Module& module);
+    //! Closes the catch blocks of the frame that are still open on an exception exit of the frame (#5968)
+    void emitExceptionExitCatchUnwind(llvm::Module& module);
     void emitCatchScopeExit(unsigned count);
 
     // Publish current LLVM local allocas to the runtime local stack before
     // deferred handlers execute through AST/IR and read parent locals.
     void syncLocalsToRuntimeForHandlers(llvm::Module& module);
+
+    //! true if the code that runs pending handlers uses the table-driven helpers (qore#6110)
+    /** The code of each place that runs the pending handlers (see emitOnBlockExitExec()) published every local of the
+        function to the runtime and reloaded it afterwards, inline, so a function with many handlers and many locals
+        had code in the product of the two.  The places of a function over a size (shouldUseObeTables()) call helpers
+        with a table of the locals that they cover instead: the records of the locals are written once in the entry
+        block (obe_entries), and each table is a constant array of record indexes.
+    */
+    bool obe_table_mode = false;
+    //! the array of the records (QoreObeLocal) of the locals that the tables cover, in the entry block
+    llvm::AllocaInst* obe_entries = nullptr;
+    //! the local of each record of obe_entries
+    std::vector<const void*> obe_entry_keys;
+    //! the index of the record of each local
+    std::unordered_map<const void*, uint32_t> obe_entry_index;
+    //! the constant tables that were made, by their content
+    std::map<std::vector<uint32_t>, llvm::GlobalVariable*> obe_tables;
+
+    //! Returns true if the places that run the pending handlers of \a func use the table-driven helpers
+    /** True if the estimated size of the inline code (handlers x 2 x 18 x (locals + 1) instructions) is over
+        QORE_JIT_OBE_TABLE_BUDGET (default 8192; 0 for every function that has handlers)
+    */
+    bool shouldUseObeTables(const QoreIRFunction& func) const;
+    //! Returns the index of the record of the local in obe_entries, adding it if it has none
+    uint32_t getObeEntryIndex(const void* key);
+    //! Returns the constant table with the entries, which is shared by the places that have the same
+    llvm::Value* getObeTable(llvm::Module& module, const std::vector<uint32_t>& entries);
+    //! Creates the reload storage of the local (tracker, deferred slot and valid epoch) as the inline code does
+    void ensureLocalReloadStorage(const void* key, llvm::Function* llvm_func);
+    //! Publishes the locals to the runtime with qore_rt_obe_publish(); returns false, emitting nothing, if a local
+    //! has a native cache (the inline code publishes it)
+    bool publishLocalsViaTable(llvm::Module& module);
+    //! Reloads the locals from the runtime after handlers ran with qore_rt_obe_reload()
+    void reloadLocalsViaTable(llvm::Module& module, llvm::Function* llvm_func, bool honor_reload_exempt);
+    //! Releases the reload storage of the locals with qore_rt_obe_release(); as releaseLocalReloadStorage()
+    std::vector<const void*> releaseLocalReloadStorageViaTable(llvm::Module& module);
+    //! Returns the locals whose reload storage releaseLocalReloadStorage() releases, in the order of its release
+    std::vector<const void*> getReleasedReloadLocals();
+    //! Writes the records of obe_entries in the entry block, once the function is lowered
+    void finalizeObeEntries(llvm::Function* llvm_func);
+    //! Calls the helper \a name with the records and the table
+    llvm::CallInst* emitObeCall(llvm::Module& module, const char* name, const std::vector<uint32_t>& entries,
+        bool with_epoch);
 
     //! Publishes the locals to the runtime local stack before handlers run out of line (see the definition)
     void publishLocalsForHandlers(llvm::Module& module);

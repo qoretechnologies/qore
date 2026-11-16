@@ -834,19 +834,34 @@ QoreValue QoreClassCastOperatorNode::castValue(QoreValue inner, ExceptionSink* x
     return inner.needsRef() ? inner.refSelf() : inner;
 }
 
-static const TypedHashDecl* qore_hashdecl_cast_get_runtime_hashdecl(const QoreHashDeclCastOperatorNode& node,
-        ExceptionSink* xsink) {
-    const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(node.getCastTypeInfo());
-    if (hd || !node.isDynamicHashDeclCast()) {
-        return hd;
+//! Resolves the hashdecl of a cast whose hashdecl has type parameters or was deferred at parse time
+static QORE_INTERN_NOINLINE const TypedHashDecl* qore_hashdecl_cast_resolve_runtime_hashdecl(
+        const QoreHashDeclCastOperatorNode& node, ExceptionSink* xsink) {
+    // a hashdecl with type parameters in generic code, such as HD<U>, is the hashdecl of the running instantiation,
+    // such as HD<int>, as in VarRefNewObjectNode::constructValue() (qore#5720)
+    if (const TypedHashDecl* hd = node.getHashDecl()) {
+        return qore_substitute_hashdecl_type_params(hd);
     }
 
-    hd = qore_aot_resolve_hashdecl_path(getProgram(), node.getDynamicHashDeclName().c_str());
+    const TypedHashDecl* hd = qore_aot_resolve_call_hashdecl_path(getProgram(),
+        node.getDynamicHashDeclName().c_str(), qore_get_current_receiver_type_info());
     if (!hd && xsink) {
         xsink->raiseException("RUNTIME-CAST-ERROR", "cannot resolve hashdecl '%s' for cast",
             node.getDynamicHashDeclName().c_str());
     }
     return hd;
+}
+
+static const TypedHashDecl* qore_hashdecl_cast_get_runtime_hashdecl(const QoreHashDeclCastOperatorNode& node,
+        ExceptionSink* xsink) {
+    if (const TypedHashDecl* hd = node.getConcreteHashDecl()) {
+        return hd;
+    }
+    // a cast to a plain hash
+    if (!node.getHashDecl() && !node.isDynamicHashDeclCast()) {
+        return nullptr;
+    }
+    return qore_hashdecl_cast_resolve_runtime_hashdecl(node, xsink);
 }
 
 // checks if the value matches the expected type
@@ -858,8 +873,10 @@ int QoreHashDeclCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreVal
 
     if (val.getType() != NT_HASH) {
         if (hd || isDynamicHashDeclCast()) {
+            // the hashdecl of the running instantiation in generic code (HD<int> for HD<U>)
+            const TypedHashDecl* name_hd = hd && !concrete_hd ? qore_substitute_hashdecl_type_params(hd) : hd;
             xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from type '%s' to hashdecl '%s'",
-                val.getTypeName(), hd ? hd->getName() : dynamic_hashdecl_name.c_str());
+                val.getTypeName(), name_hd ? name_hd->getName() : dynamic_hashdecl_name.c_str());
         } else {
             xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from type '%s' to 'hash'", val.getTypeName());
         }
@@ -994,14 +1011,17 @@ int QoreComplexHashCastOperatorNode::checkValue(ExceptionSink* xsink, const Qore
 
     if (val.getType() != NT_HASH) {
         xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from type '%s' to '%s'", val.getTypeName(),
-            QoreTypeInfo::getName(typeInfo));
+            QoreTypeInfo::getName(getRuntimeTypeInfo()));
         return -1;
     }
 
-    if (lvalue && (typeInfo != val.getFullTypeInfo())) {
-        xsink->raiseException("RUNTIME-CAST-ERROR", "cannot modify lvalue type from '%s' in assignment with the "
-            "cast<> operator to type '%s'", val.getFullTypeName(), QoreTypeInfo::getName(typeInfo));
-        return -1;
+    if (lvalue) {
+        const QoreTypeInfo* type_info = getRuntimeTypeInfo();
+        if (type_info != val.getFullTypeInfo()) {
+            xsink->raiseException("RUNTIME-CAST-ERROR", "cannot modify lvalue type from '%s' in assignment with the "
+                "cast<> operator to type '%s'", val.getFullTypeName(), QoreTypeInfo::getName(type_info));
+            return -1;
+        }
     }
 
     return 0;
@@ -1017,6 +1037,8 @@ QoreValue QoreComplexHashCastOperatorNode::castValue(QoreValue inner, ExceptionS
 
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexHashCastOperatorNode::evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const {
+    // the type parameters of generic code are substituted with the types of the running instantiation
+    const QoreTypeInfo* type_info = getRuntimeTypeInfo();
     assert(needs_deref);
     ValueEvalOptimizedRefHolder rv(exp, xsink);
     if (*xsink) {
@@ -1043,15 +1065,17 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexHashCastOperatorNode::evalImplInt
     // This is necessary even if types match, because hashdecl values might still have bindings
     // the values are converted to the value type as by an assignment
     if constexpr (Lexical) {
-        return qore_hash_private::newComplexHashFromHash(typeInfo, rv.takeReferencedNode<QoreHashNode>(), xsink,
+        return qore_hash_private::newComplexHashFromHash(type_info, rv.takeReferencedNode<QoreHashNode>(), xsink,
             true, getSemanticPolicy());
     } else {
-        return qore_hash_private::newComplexHashFromHash(typeInfo, rv.takeReferencedNode<QoreHashNode>(), xsink, true);
+        return qore_hash_private::newComplexHashFromHash(type_info, rv.takeReferencedNode<QoreHashNode>(), xsink, true);
     }
 }
 
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexHashCastOperatorNode::castValueImpl(QoreValue inner, ExceptionSink* xsink) const {
+    // the type parameters of generic code are substituted with the types of the running instantiation
+    const QoreTypeInfo* type_info = getRuntimeTypeInfo();
     if (QoreComplexHashCastOperatorNode::checkValue(xsink, inner, false)) {
         return QoreValue();
     }
@@ -1067,10 +1091,11 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexHashCastOperatorNode::castValueIm
     // (this is what evalImpl() does; the previous shortcut skipped necessary work)
     // the values are converted to the value type as by an assignment
     if constexpr (Lexical) {
-        return qore_hash_private::newComplexHashFromHash(typeInfo, inner.get<QoreHashNode>()->hashRefSelf(), xsink,
+        return qore_hash_private::newComplexHashFromHash(type_info, inner.get<QoreHashNode>()->hashRefSelf(), xsink,
             true, getSemanticPolicy());
     } else {
-        return qore_hash_private::newComplexHashFromHash(typeInfo, inner.get<QoreHashNode>()->hashRefSelf(), xsink, true);
+        return qore_hash_private::newComplexHashFromHash(type_info, inner.get<QoreHashNode>()->hashRefSelf(), xsink,
+            true);
     }
 }
 
@@ -1084,7 +1109,7 @@ int QoreComplexListCastOperatorNode::checkValue(ExceptionSink* xsink, const Qore
     // check the value
     if ((!typeInfo || !qore_cast_get_complex_softlist_value_type(typeInfo)) && (val.getType() != NT_LIST)) {
         xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from type '%s' to '%s'", val.getFullTypeName(),
-            typeInfo ? QoreTypeInfo::getName(typeInfo) : "list");
+            typeInfo ? QoreTypeInfo::getName(getRuntimeTypeInfo()) : "list");
         return -1;
     }
 
@@ -1096,9 +1121,10 @@ int QoreComplexListCastOperatorNode::checkValue(ExceptionSink* xsink, const Qore
                 return -1;
             }
         } else {
-            if (typeInfo != val.getFullTypeInfo()) {
+            const QoreTypeInfo* type_info = getRuntimeTypeInfo();
+            if (type_info != val.getFullTypeInfo()) {
                 xsink->raiseException("RUNTIME-CAST-ERROR", "cannot modify lvalue type from '%s' in assignment with the "
-                    "cast<> operator to type '%s'", val.getFullTypeName(), QoreTypeInfo::getName(typeInfo));
+                    "cast<> operator to type '%s'", val.getFullTypeName(), QoreTypeInfo::getName(type_info));
                 return -1;
             }
         }
@@ -1117,6 +1143,8 @@ QoreValue QoreComplexListCastOperatorNode::castValue(QoreValue inner, ExceptionS
 
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const {
+    // the type parameters of generic code are substituted with the types of the running instantiation
+    const QoreTypeInfo* type_info = getRuntimeTypeInfo();
     assert(needs_deref);
     ValueEvalOptimizedRefHolder rv(exp, xsink);
     if (*xsink) {
@@ -1129,7 +1157,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::evalImplInt
         return QoreValue();
     }
 
-    bool is_softlist = qore_cast_get_complex_softlist_value_type(typeInfo);
+    bool is_softlist = qore_cast_get_complex_softlist_value_type(type_info);
 
     // issue #3331: ignore nothing if it's an "or nothing" cast, or if broken-cast is in effect
     if (rv->isNothing()) {
@@ -1139,20 +1167,20 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::evalImplInt
         assert(is_softlist);
         if constexpr (Lexical) {
             QoreValue value = rv.takeReferencedValue();
-            QoreTypeInfo::acceptAssignment(typeInfo, "<cast operator>", value, xsink, getSemanticPolicy());
+            QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink, getSemanticPolicy());
             return *xsink ? QoreValue() : value;
         } else {
-            return qore_cast_coerce_softlist_value(typeInfo, rv.takeReferencedValue(), xsink);
+            return qore_cast_coerce_softlist_value(type_info, rv.takeReferencedValue(), xsink);
         }
     }
 
     if (is_softlist && rv->getType() != NT_LIST) {
         if constexpr (Lexical) {
             QoreValue value = rv.takeReferencedValue();
-            QoreTypeInfo::acceptAssignment(typeInfo, "<cast operator>", value, xsink, getSemanticPolicy());
+            QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink, getSemanticPolicy());
             return *xsink ? QoreValue() : value;
         } else {
-            return qore_cast_coerce_softlist_value(typeInfo, rv.takeReferencedValue(), xsink);
+            return qore_cast_coerce_softlist_value(type_info, rv.takeReferencedValue(), xsink);
         }
     }
 
@@ -1160,8 +1188,8 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::evalImplInt
 
     // check if types are equal
     const QoreTypeInfo* ti = rv->getFullTypeInfo();
-    if ((!typeInfo && (ti == listTypeInfo))
-        || (typeInfo && ti == typeInfo)) {
+    if ((!type_info && (ti == listTypeInfo))
+        || (type_info && ti == type_info)) {
         // the value can be the temporary held above, which the scope that holds it can release before the caller
         // uses the value (the operand of a change to a member is a statement of its own), so it is returned with a
         // reference of its own
@@ -1169,24 +1197,27 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::evalImplInt
     }
 
     // do the runtime cast
-    if (!typeInfo) {
+    if (!type_info) {
         return qore_list_private::getPlainList(rv.takeReferencedNode<QoreListNode>());
     }
 
     if constexpr (Lexical) {
-        return qore_list_private::newComplexListFromValue(typeInfo, rv.takeReferencedValue(), xsink, getSemanticPolicy());
+        return qore_list_private::newComplexListFromValue(type_info, rv.takeReferencedValue(), xsink,
+            getSemanticPolicy());
     } else {
-        return qore_list_private::newComplexListFromValue(typeInfo, rv.takeReferencedValue(), xsink);
+        return qore_list_private::newComplexListFromValue(type_info, rv.takeReferencedValue(), xsink);
     }
 }
 
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::castValueImpl(QoreValue inner, ExceptionSink* xsink) const {
+    // the type parameters of generic code are substituted with the types of the running instantiation
+    const QoreTypeInfo* type_info = getRuntimeTypeInfo();
     if (checkValue(xsink, inner, false)) {
         return QoreValue();
     }
 
-    bool is_softlist = qore_cast_get_complex_softlist_value_type(typeInfo);
+    bool is_softlist = qore_cast_get_complex_softlist_value_type(type_info);
 
     if (inner.isNothing()) {
         if (or_nothing) {
@@ -1195,10 +1226,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::castValueIm
         assert(is_softlist);
         if constexpr (Lexical) {
             QoreValue value = inner;
-            QoreTypeInfo::acceptAssignment(typeInfo, "<cast operator>", value, xsink, getSemanticPolicy());
+            QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink, getSemanticPolicy());
             return *xsink ? QoreValue() : value;
         } else {
-            return qore_cast_coerce_softlist_value(typeInfo, inner, xsink);
+            return qore_cast_coerce_softlist_value(type_info, inner, xsink);
         }
     }
 
@@ -1206,10 +1237,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::castValueIm
         QoreValue ref_inner = inner.needsRef() ? inner.refSelf() : inner;
         if constexpr (Lexical) {
             QoreValue value = ref_inner;
-            QoreTypeInfo::acceptAssignment(typeInfo, "<cast operator>", value, xsink, getSemanticPolicy());
+            QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink, getSemanticPolicy());
             return *xsink ? QoreValue() : value;
         } else {
-            return qore_cast_coerce_softlist_value(typeInfo, ref_inner, xsink);
+            return qore_cast_coerce_softlist_value(type_info, ref_inner, xsink);
         }
     }
 
@@ -1217,21 +1248,21 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::castValueIm
 
     // check if types are equal
     const QoreTypeInfo* ti = inner.getFullTypeInfo();
-    if ((!typeInfo && (ti == listTypeInfo))
-        || (typeInfo && ti == typeInfo)) {
+    if ((!type_info && (ti == listTypeInfo))
+        || (type_info && ti == type_info)) {
         return inner.needsRef() ? inner.refSelf() : inner;
     }
 
     // do the runtime cast
-    if (!typeInfo) {
+    if (!type_info) {
         return qore_list_private::getPlainList(inner.get<QoreListNode>()->listRefSelf());
     }
 
     QoreValue ref_inner = inner.needsRef() ? inner.refSelf() : inner;
     if constexpr (Lexical) {
-        return qore_list_private::newComplexListFromValue(typeInfo, ref_inner, xsink, getSemanticPolicy());
+        return qore_list_private::newComplexListFromValue(type_info, ref_inner, xsink, getSemanticPolicy());
     } else {
-        return qore_list_private::newComplexListFromValue(typeInfo, ref_inner, xsink);
+        return qore_list_private::newComplexListFromValue(type_info, ref_inner, xsink);
     }
 }
 

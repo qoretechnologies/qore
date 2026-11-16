@@ -54,8 +54,8 @@ NegotiatingConnectionPollOpPriv::NegotiatingConnectionPollOpPriv(QoreObject* sel
       target_host(std::move(target_host)), target_port(target_port),
       owner_conn(owner_conn) {
     // sock and connect_op refs are transferred from the caller.
-    int us;
-    submit_time_us = q_epoch_us(us) * 1000000LL + us;
+    // on the monotonic clock, as the elapsed times logged from it are intervals (#6150)
+    submit_time_us = q_get_monotonic_us();
     ASYNC_IO_TRACE("negotiate-create target='%s:%d' priv=%p\n",
         this->target_host.c_str(), this->target_port, (void*)this);
     qore_async_io_log(QORE_LOG_LEVEL_DEBUG,
@@ -126,9 +126,7 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::continuePoll(ExceptionSink* xsink
 }
 
 QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* xsink) {
-    int us;
-    int64_t now_us = q_epoch_us(us) * 1000000LL + us;
-    int64_t elapsed_us = now_us - submit_time_us;
+    int64_t elapsed_us = q_get_monotonic_us() - submit_time_us;
     ASYNC_IO_TRACE("handleConnecting begin target='%s:%d' priv=%p elapsed_us=%lld\n",
         target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
 
@@ -276,8 +274,7 @@ void NegotiatingConnectionPollOpPriv::setError(const char* err, const char* desc
         return;  // preserve the first error
     }
 
-    int us;
-    int64_t elapsed_us = (q_epoch_us(us) * 1000000LL + us) - submit_time_us;
+    int64_t elapsed_us = q_get_monotonic_us() - submit_time_us;
     ASYNC_IO_TRACE("negotiate-setError err='%s' desc='%s' target='%s:%d' priv=%p elapsed_us=%lld\n",
         err, desc, target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
     qore_async_io_log(QORE_LOG_LEVEL_DEBUG,
@@ -305,8 +302,7 @@ void NegotiatingConnectionPollOpPriv::setError(const char* err, const char* desc
 }
 
 void NegotiatingConnectionPollOpPriv::abort(ExceptionSink* xsink) {
-    int us;
-    int64_t elapsed_us = (q_epoch_us(us) * 1000000LL + us) - submit_time_us;
+    int64_t elapsed_us = q_get_monotonic_us() - submit_time_us;
     ASYNC_IO_TRACE("negotiate-abort target='%s:%d' priv=%p elapsed_us=%lld\n",
         target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
     qore_async_io_log(QORE_LOG_LEVEL_DEBUG,

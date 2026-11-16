@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+# the creators of the independent Programs tested can lift the restrictions of their children
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class IndependentRestrictionsSandboxedTest
+
+#! Tests the independent Programs of code that may lift the restrictions of its children
+/** Such code creates an independent Program with the options it gives, unless it is sandboxed: a Program governed
+    by a sandbox cannot create an independent Program that is free of its restrictions (design/locked-parse-options.md);
+    the creators without %no-child-restrictions are tested in independent-restrictions.qtest
+*/
+class IndependentRestrictionsSandboxedTest inherits QUnit::Test {
+    public {
+        #! runs in the creator: creates an independent Program with the options given and tries to remove
+        #! PO_NO_EXTERNAL_PROCESS from it
+        const Probe = "%modern
+hash<string, auto> sub probe(int opts) {
+    Program p(opts, True);
+    hash<string, auto!> rv = {
+        \"taken\": p.getFullParseOptions().hasAll(PO_NO_EXTERNAL_PROCESS),
+        \"injection\": p.getFullParseOptions().hasAll(PO_ALLOW_INJECTION),
+        \"reparse\": p.getFullParseOptions().hasAll(PO_ALLOW_REPARSE),
+    };
+    try {
+        p.disableParseOptions(PO_NO_EXTERNAL_PROCESS);
+        rv.disable = \"allowed\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv.disable = ex.err;
+    }
+    try {
+        p.parse(\"auto sub f() { return backquote('echo escaped'); }\", \"use\");
+        rv.use = \"parsed\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv.use = ex.err;
+    }
+    return rv;
+}
+";
+    }
+
+    constructor() : QUnit::Test("IndependentRestrictionsSandboxedTest", "1.0", \ARGV) {
+        addTestCase("code that may lift restrictions creates an independent Program with the options it gives",
+            \notSandboxed());
+        addTestCase("sandboxed code that may lift restrictions cannot create an independent Program without them",
+            \sandboxed());
+        addTestCase("sandboxed code without restrictions cannot give an independent Program more freedom",
+            \sandboxedUnrestricted());
+        addTestCase("the children of an independent Program of sandboxed code inherit its restrictions",
+            \sandboxedGrandchildren());
+        set_return_value(main());
+    }
+
+    #! a creator with %no-child-restrictions that is not sandboxed: its independent Program has the options given
+    notSandboxed() {
+        Program creator(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_EXTERNAL_PROCESS);
+        assertTrue(creator.getFullParseOptions().hasAll(PO_NO_CHILD_PO_RESTRICTIONS), "the creator can lift them");
+        creator.parse(Probe, "probe");
+        assertEq({
+            "taken": False,
+            "injection": True,
+            "reparse": False,
+            "disable": "allowed",
+            "use": "parsed",
+        }, creator.callFunction("probe", PO_NEW_STYLE | PO_ALLOW_INJECTION),
+            "the independent Program has the options given");
+    }
+
+    #! a sandboxed creator with %no-child-restrictions: its independent Program takes and keeps its restrictions
+    sandboxed() {
+        Program creator(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_EXTERNAL_PROCESS);
+        creator.setSandboxManager(SandboxManager::createLockdown());
+        creator.parse(Probe, "probe");
+        assertEq({
+            "taken": True,
+            "injection": False,
+            "reparse": False,
+            "disable": "OPTIONS-LOCKED",
+            "use": "PARSE-EXCEPTION",
+        }, creator.callFunction("probe", PO_NEW_STYLE | PO_ALLOW_INJECTION),
+            "the independent Program of the sandboxed creator takes and keeps its restriction");
+    }
+
+    #! a sandboxed creator without parse restrictions: the positive options it does not have are removed
+    sandboxedUnrestricted() {
+        Program creator(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        creator.setSandboxManager(SandboxManager::createLockdown());
+        creator.parse(Probe, "probe");
+        hash<string, auto> rv = creator.callFunction("probe", PO_NEW_STYLE | PO_ALLOW_INJECTION | PO_ALLOW_REPARSE);
+        assertFalse(rv.taken, "the creator has no restriction to take");
+        assertFalse(rv.injection, "the positive option that the creator does not have is removed");
+        assertTrue(rv.reparse, "PO_ALLOW_REPARSE is kept");
+    }
+
+    #! the independent Program of a sandboxed creator with %no-child-restrictions does not get it, so that its own
+    #! children inherit the restrictions
+    sandboxedGrandchildren() {
+        Program creator(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_EXTERNAL_PROCESS);
+        creator.setSandboxManager(SandboxManager::createLockdown());
+        creator.parse("hash<string, auto> sub run() {
+    Program ip(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+    ip.parse(\"hash<string, bool> sub run() {
+    Program g(PO_NEW_STYLE);
+    return {'taken': g.getFullParseOptions().hasAll(PO_NO_EXTERNAL_PROCESS)};
+}\", \"ip\");
+    return {
+        \"ncr\": ip.getFullParseOptions().hasAll(PO_NO_CHILD_PO_RESTRICTIONS),
+        \"child\": ip.callFunction(\"run\"),
+    };
+}", "creator");
+        assertEq({"ncr": False, "child": {"taken": True}}, creator.callFunction("run"),
+            "the independent Program cannot lift the restrictions of its children");
+    }
+}
