@@ -67,7 +67,7 @@ cannot deadlock with a thread that keeps to the order.
 | 500 | thread list (`thread_list.lck`) | ACQUIRE | condition waker, stack lock |
 | 510 | condition waker (`cond_waker.lck`) | ACQUIRE | — |
 | 520 | stack lock (`stack_lck`) | ACQUIRE | — (only `pthread_create()`) |
-| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT pending constants, the AOT regex cache, the registry of the native fast entries of AOT modules, the content hashes of the sources of linked AOT modules, the DBI object registry, the sandbox watchdog's deadline map, the set of Programs left allocated at exit (`left_programs`), the count of thread data of debug builds (`tpd_live_count`), the insertion into the value sets of the parse options of Programs (`qore_parse_options_values_mutex`, held only while a value is inserted: a Program's options lock is held across checks and parses and cannot be acquired before `fork()`), and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
+| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT pending constants, the AOT regex cache, the registry of the native fast entries of AOT modules, the content hashes of the sources of linked AOT modules, the DBI object registry, the sandbox watchdog's deadline map, the stripe locks of the containers that record the threads of Programs (`program_thread_containers`, held only while one of them is changed, under the Program's lock: a Program's own locks are held across waits and cannot be acquired before `fork()`), the set of Programs left allocated at exit (`left_programs`), the count of thread data of debug builds (`tpd_live_count`), the insertion into the value sets of the parse options of Programs (`qore_parse_options_values_mutex`, held only while a value is inserted: a Program's options lock is held across checks and parses and cannot be acquired before `fork()`), and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
 | 1100 | LLVM target initialization (`qore_llvm_initialize_targets()`): held while LLVM registers its targets, once per process | ACQUIRE | — |
 | 1500 | environment (`SystemEnvironment`) | ACQUIRE | debug output, allocation tracking |
 | 1900 | debug output (`printd()`) | ACQUIRE | allocation tracking |
@@ -78,9 +78,11 @@ leaf, and every lock that reads the environment while held (there are hundreds o
 that creates processes or calls libraries that read the environment holds another lock, which the handlers do not
 acquire (see "The environment" below).
 
-The striped leaf lock arrays (the 64 constant value locks and the 64 opaque target shard locks) are acquired like
-other leaf locks, except with ThreadSanitizer: its deadlock detector handles at most 128 locks held by one thread,
-which the stripes alone would reach, so TSan builds only initialize them again in the child (`QFLM_STRIPED`).
+The striped leaf lock arrays (the 64 constant value locks, the 64 opaque target shard locks and the 64 stripe locks
+of the Programs' thread containers) are acquired like other leaf locks, except with ThreadSanitizer: its deadlock
+detector handles at most 128 locks held by one thread, which the stripes alone would exceed, so TSan builds only
+initialize them again in the child (`QFLM_STRIPED`).  The child handler of the Programs' thread container stripes
+releases the locks that the forking thread acquired before `fork()`, and initializes them again in TSan builds.
 
 ### Rules
 
@@ -253,7 +255,10 @@ Besides the locks:
   that the end of the child's Programs and `qore_cleanup()` do not wait for threads that do not exist.
 - **Programs**: each Program's locks are initialized again, its thread counts keep only the forking thread, and
   parse ownership held by another thread is released; the thread data locks of the other threads that are
-  registered with a Program family are initialized again.
+  registered with a Program family are initialized again.  The containers that record a Program's threads (the
+  thread counts, the threads admitted during a commit, the deferred releases, the threads' data in the Program and
+  the thread-local data registry of a family) are changed under the stripe locks that `fork()` waits for, so the
+  child gets them consistent, although the Program's own locks are only initialized again.
 - **Signal manager**: after a `fork()` other than Qore's (which stops the signal thread before and restarts it
   after), the signal thread does not exist in the child; its state is cleared, and the next signal handler starts a
   new one. A block set by another thread's Qore `fork()` is lifted.

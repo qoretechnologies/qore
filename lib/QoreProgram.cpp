@@ -801,7 +801,9 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     ext_copy_count = getOwnExtDataCopies();
     ext_copy_waiting = 0;
     ext_copy_cond.reinitAfterFork();
-    // the thread counts keep only the forking thread
+    // the thread counts keep only the forking thread; the containers of the Program's threads are consistent here, as
+    // fork() waited for every change of them in progress (see qore_program_private_base::thread_container_shards),
+    // and they are changed without the stripe lock, as only this thread exists
     unsigned own = 0;
     ptid_map_t::iterator i = tidmap.find(tid);
     if (i != tidmap.end()) {
@@ -913,7 +915,55 @@ public:
 };
 
 QoreProgramRegistryForkHandler program_registry_fork_handler;
+
+//! the fork handler of the stripe locks of the Programs' thread containers, which are leaf locks never held together
+//! (see qore_program_private_base::thread_container_shards and QoreForkHandlers.h)
+/** Registered after the Program registry's handler, so that its child handler runs before the registry's, which
+    makes the Programs consistent in the child (fixupAllAfterFork())
+*/
+class ProgramThreadContainersForkHandler : public QoreForkHandler {
+public:
+    static constexpr unsigned count = 1u << qore_program_private_base::ThreadContainerShardBits;
+
+    ProgramThreadContainersForkHandler() : QoreForkHandler(QFLR_LEAF, "program_thread_containers") {
+    }
+
+    void prepare() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (auto& shard : qore_program_private_base::thread_container_shards) {
+                shard.lock.lock();
+            }
+        }
+    }
+
+    void parent() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (unsigned i = count; i; --i) {
+                qore_program_private_base::thread_container_shards[i - 1].lock.unlock();
+            }
+        }
+    }
+
+    void child() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            // acquired by this thread in prepare(): plain mutexes, which this thread releases in the child
+            for (unsigned i = count; i; --i) {
+                qore_program_private_base::thread_container_shards[i - 1].lock.unlock();
+            }
+            return;
+        }
+        // not acquired before fork(): a lock can be held by a thread that does not exist in the child
+        for (auto& shard : qore_program_private_base::thread_container_shards) {
+            new (&shard.lock) std::mutex();
+        }
+    }
+};
+
+ProgramThreadContainersForkHandler program_thread_containers_fork_handler;
 }
+
+qore_program_private_base::ThreadContainerShard
+    qore_program_private_base::thread_container_shards[1u << ThreadContainerShardBits];
 
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options)
@@ -952,6 +1002,8 @@ void qore_program_private::markSandboxedParse() {
 
 #ifdef DEBUG
 std::atomic<qore_program_private_base::dbg_teardown_hook_t> qore_program_private_base::dbg_teardown_hook{nullptr};
+std::atomic<qore_program_private_base::dbg_thread_container_hook_t>
+    qore_program_private_base::dbg_thread_container_hook{nullptr};
 #endif
 
 namespace {
@@ -2276,7 +2328,7 @@ int qore_program_private::beginParse(ExceptionSink* xsink, ParseStartGuard& guar
         }
         // the threads that code of an earlier parse or of a debugger evaluation started are not this parse's
         // (issue #6243)
-        parse_tids.clear();
+        clearParseTidsIntern();
     }
 #ifdef DEBUG
     if (qore_dbg_parse_start_gate(pgm, xsink)) {
@@ -2341,7 +2393,7 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     }
     {
         AutoLocker al(plock);
-        parse_tids.clear();
+        clearParseTidsIntern();
     }
 }
 
@@ -2533,7 +2585,10 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // now clear the original map
         {
             AutoLocker al(tlock);
-            pgm_data_map.clear();
+            {
+                std::lock_guard<std::mutex> cl(threadContainerLock());
+                pgm_data_map.clear();
+            }
             tclear = 0;
 
             if (twaiting)
@@ -2759,7 +2814,7 @@ int qore_program_private::internParseCommit(bool standard_parse) {
                 DLLLOCAL ~CommitEntryRestrictionHelper() {
                     AutoLocker al(pp.plock);
                     pp.commit_entry_restricted = false;
-                    pp.parse_tids.clear();
+                    pp.clearParseTidsIntern();
                 }
             private:
                 qore_program_private& pp;
@@ -4813,6 +4868,7 @@ void qore_program_private_base::joinThreadDataFamily(QoreProgram* p_pgm) {
         AutoLocker al(root->tld_lock);
         member = !root->tld_final;
         if (member) {
+            std::lock_guard<std::mutex> cl(root->threadContainerLock());
             root->tld_members.insert(pgm->priv);
         }
     }
@@ -4827,6 +4883,7 @@ void qore_program_private_base::leaveThreadDataFamily() {
     tld_parent_root = nullptr;
     {
         AutoLocker al(root->tld_lock);
+        std::lock_guard<std::mutex> cl(root->threadContainerLock());
         root->tld_members.erase(pgm->priv);
     }
     root->depDeref();
@@ -4878,6 +4935,7 @@ void qore_program_private::freeFamilyThreadData(bool final, ExceptionSink* xsink
                     for (qore_program_private* member : tld_members) {
                         member->tld_root.store(member, std::memory_order_release);
                     }
+                    std::lock_guard<std::mutex> cl(threadContainerLock());
                     tld_members.clear();
                 }
                 break;
@@ -4889,6 +4947,7 @@ void qore_program_private::freeFamilyThreadData(bool final, ExceptionSink* xsink
                 tpd->ref();
                 threads.push_back(tpd);
             }
+            std::lock_guard<std::mutex> cl(threadContainerLock());
             tld_registry.clear();
         }
         for (ThreadProgramData* tpd : threads) {
