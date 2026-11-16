@@ -4063,6 +4063,16 @@ public:
     //! coordinator block returning the helper's result value through the
     //! coordinator's own epilogue (see design/aot-function-outlining.md).
     QoreIRBasicBlock* return_target = nullptr;
+
+    //! Transient (never serialized): the locals of the coordinator that the
+    //! outlined function-body helper also references (its shared locals; empty
+    //! for an init-expression helper)
+    /** The coordinator releases its own references to their values before the
+        call and reloads them after it, so that a value that the helper
+        replaces is released at its assignment in the helper (qore#6300; see
+        QoreIRToLLVM::recordHelperSite())
+    */
+    std::vector<const LocalVar*> shared_locals;
 };
 
 //! Returns the instruction as the given instruction class pointer type if it is one, otherwise nullptr

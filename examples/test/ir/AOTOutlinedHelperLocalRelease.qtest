@@ -1,0 +1,347 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in children that set their own execution modes, qcc executables and modules
+# test-platform: macos - the AOT code generation of the calls of outlined function-body helpers
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class AOTOutlinedHelperLocalReleaseTest
+
+#! The value that an outlined helper replaces in a local of its coordinator is released at the assignment (qore#6300)
+/** qcc outlines regions of a large function (over \c QORE_AOT_OUTLINE_FN_MIN_INSTS IR instructions, 3000 by default,
+    or \c QORE_AOT_OUTLINE_FN_MIN_BLOCKS blocks) into helpers that assign the locals that they share with the
+    coordinator on the runtime local stack.  The reload storage of the coordinator (the reload tracker and the
+    deferred slot of a local, and the entry owner of a parameter) kept a reference to the value of a shared local across
+    the call of a helper, so the value that the helper replaced was released only when the coordinator next reloaded
+    the local: its destructor ran late.  The coordinator releases that storage before the call now, and reloads the
+    locals after it.
+
+    This test checks the results and the order of the destructors against the AST in the ir, jit and tiered modes and
+    in executables and modules made by qcc at -O0 and -O3: for the function of the issue (catch blocks with locals and
+    a handler) at the default thresholds, just under and just over the threshold of its size, and for a small function
+    with forced thresholds that reassigns locals, a parameter and the list of a \c foreach in the helpers, also in
+    helpers called in the body of the \c foreach.
+*/
+class AOTOutlinedHelperLocalReleaseTest inherits QUnit::Test {
+    public {
+        #! the catch blocks of a function over the default threshold (the issue's function had 40; 34 reached it)
+        const Over = 60;
+        #! the catch blocks of a function under the default threshold
+        const Under = 8;
+
+        #! the environment that outlines the small function
+        const ForceEnv = "QORE_AOT_OUTLINE_FN_MIN_INSTS=20 QORE_AOT_OUTLINE_FN_MIN_BLOCKS=1 "
+            "QORE_AOT_OUTLINE_FN_TARGET_INSTS=20";
+
+        #! the execution modes compared with the AST
+        const Modes = ("ir", "jit", "tiered");
+        #! the qcc optimization levels
+        const OptLevels = ("-O0", "-O3");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        #! the library path of the qcc compiles and of the executables
+        string lib_env;
+    }
+
+    constructor() : QUnit::Test("AOTOutlinedHelperLocalReleaseTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        addTestCase("the function of the issue at the default thresholds", \testDefaultThresholds());
+        addTestCase("just under and just over the threshold of the function's size", \testBoundary());
+        addTestCase("a module's function over the default threshold", \testModule());
+        addTestCase("locals, a parameter and a foreach list reassigned in the helpers", \testForced());
+        set_return_value(main());
+    }
+
+    #! Returns the code of the namespace with the function of the issue with \a n catch blocks
+    /** @param n the catch blocks
+        @param pub the prefix of the declarations that a module exports
+    */
+    private static string getIssueCode(int n, string pub) {
+        string code = sprintf("%snamespace OutlineRelease {
+our string log;
+
+%sclass D {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { log += \"~\" + n; }
+    string get() { return n; }
+}
+
+int sub may_throw(int i) { if (i < 0) { throw \"NEG\", \"negative\"; } return i + 1; }
+
+string sub big(int n) {
+    int r = 0;
+    D keep = new D(\"k\");
+", pub, pub);
+        for (int i = 0; i < n; ++i) {
+            code += sprintf("    try {
+        r += may_throw(n - %d);
+        keep = new D(\"t%d\");
+    } catch (hash<ExceptionInfo> ex) {
+        int l%d = r + %d;
+        D d%d = new D(\"c%d\");
+        on_exit { r += l%d; log += \"x%d\"; }
+        r += d%d.get().size();
+    }
+", i % 7 == 3 ? 1000 : 0, i, i, i, i, i, i, i, i);
+        }
+        code += sprintf("    return sprintf(\"%%d:%%s\", r, keep.get());
+}
+
+%sstring sub run() {
+    string out;
+    for (int c = 0; c < 3; ++c) {
+        log = \"\";
+        string v = big(c);
+        out += sprintf(\"rv%%d:%%s %%s\\n\", c, v, log);
+    }
+    return out;
+}
+}
+", pub);
+        return code;
+    }
+
+    #! Returns the script with the function of the issue with \a n catch blocks
+    private static string getIssueScript(int n) {
+        return "%modern\n\n" + getIssueCode(n, "") + "\nprint(OutlineRelease::run());\n";
+    }
+
+    #! Returns a small script with a function that reassigns a local in two try blocks, a parameter and a foreach
+    #! list, and one that reassigns a local and the list of a foreach in its body
+    private static string getForcedScript() {
+        return "%modern
+
+string log;
+
+class D {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { log += \"~\" + n; }
+    string get() { return n; }
+}
+
+string sub seq(D p, int n) {
+    D keep = new D(\"k\");
+    log += \"a\";
+    try {
+        keep = new D(\"t0\");
+        p = new D(\"p0\");
+        log += \"b\";
+    } catch (hash<ExceptionInfo> ex) {
+        log += \"c\";
+    }
+    log += \"d\" + p.get();
+    try {
+        keep = new D(\"t1\");
+        if (n > 1) {
+            throw \"X\";
+        }
+        p = new D(\"p1\");
+        log += \"e\";
+    } catch (hash<ExceptionInfo> ex) {
+        log += \"f\";
+    }
+    log += \"g\";
+    list<D> l = (new D(\"l0\"), new D(\"l1\"));
+    foreach D x in (l) {
+        log += \"h\" + x.get();
+        l = (new D(\"m\" + $#), new D(\"n\" + $#));
+        log += \"i\";
+    }
+    log += \"j\" + l[0].get();
+    return keep.get() + p.get();
+}
+
+string sub loopy(int n) {
+    list<D> l = (new D(\"l0\"), new D(\"l1\"), new D(\"l2\"));
+    D keep = new D(\"k\");
+    int i = 0;
+    foreach D x in (l) {
+        log += \"h\" + x.get();
+        log += \"a\" + keep.get();
+        keep = new D(\"t\" + i);
+        log += \"b\";
+        l = (new D(\"m\" + i), new D(\"n\" + i));
+        log += \"c\" + l[0].get();
+        if (n > 1) {
+            log += \"d\";
+        }
+        log += \"e\" + x.get();
+        ++i;
+    }
+    log += \"j\" + l[0].get();
+    l = ();
+    log += \"z\";
+    return keep.get();
+}
+
+for (int c = 0; c < 3; ++c) {
+    log = \"\";
+    {
+        D q = new D(\"q\" + c);
+        string v = seq(q, c);
+        log += \"r\";
+        v += \" \" + loopy(c);
+        printf(\"rv%d:%s %s\\n\", c, v, log);
+    }
+}
+";
+    }
+
+    #! Writes \a code to \a path
+    private static writeFile(string path, string code) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(code);
+        f.close();
+    }
+
+    #! Returns the output of the script \a path in \a mode
+    private string runMode(string path, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s", qore_bin, mode, path));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        return r.stdout;
+    }
+
+    #! Returns the reference output of the script \a path (the AST's), checking that it has three result lines
+    private string getExpected(string path) {
+        string expected = runMode(path, "ast");
+        assertRegex("^rv0:.*\nrv1:.*\nrv2:.*\n$", expected, "the AST prints the three result lines");
+        return expected;
+    }
+
+    #! Compiles \a src with qcc to \a out with the options \a opts in the environment \a env
+    /** @return the output of qcc
+    */
+    private string compile(string src, string out, string opts, string env) {
+        int rc;
+        string output = backquote(sprintf("%s QORE_AOT_DEBUG=1 %s %s %s -o %s %s 2>&1", lib_env, env, qcc_bin, opts,
+            out, src), \rc);
+        assertEq(0, rc, sprintf("qcc %s %s: exit status (output: %s)", opts, src, output.substr(-2000)));
+        return output;
+    }
+
+    #! Returns True if the qcc output \a out says that the function \a name was outlined
+    private static bool outlined(string out, string name) {
+        return out.regex(sprintf("AOT-OUTLINE-FN: '%s' outlined [1-9][0-9]* regions", name));
+    }
+
+    #! Returns the output of the executable \a exe
+    private string runExe(string exe) {
+        int rc;
+        # -b must be the first argument of a compiled program
+        string out = backquote(sprintf("%s %s -b", lib_env, exe), \rc);
+        assertEq(0, rc, sprintf("%s: exit status (output: %y)", exe, out));
+        return out;
+    }
+
+    #! Checks that the executables made from \a src at each optimization level print \a expected
+    /** @param outline True if the functions \a names must be outlined, False if they must not be
+    */
+    private checkExecutables(string src, string expected, softlist<string> names, bool outline, string env,
+            string what) {
+        foreach string opt in (OptLevels) {
+            string exe = src + opt;
+            string out = compile(src, exe, opt, env);
+            foreach string name in (names) {
+                assertEq(outline, outlined(out, name), sprintf("%s %s: %s outlined", what, opt, name));
+            }
+            assertEq(expected, runExe(exe), sprintf("%s: qcc %s", what, opt));
+        }
+    }
+
+    testDefaultThresholds() {
+        TmpDir dir("qore-aot-outline-release-");
+        foreach int n in ((Under, Over)) {
+            string src = join_paths(dir.path, sprintf("issue%d.qr", n));
+            writeFile(src, getIssueScript(n));
+            string expected = getExpected(src);
+            foreach string mode in (Modes) {
+                assertEq(expected, runMode(src, mode), sprintf("%d catch blocks: %s", n, mode));
+            }
+            checkExecutables(src, expected, "OutlineRelease::big", n == Over, "", sprintf("%d catch blocks", n));
+        }
+    }
+
+    testBoundary() {
+        TmpDir dir("qore-aot-outline-release-");
+        string src = join_paths(dir.path, "boundary.qr");
+        writeFile(src, getIssueScript(Over));
+        string expected = getExpected(src);
+        # the size of the function that the thresholds are compared with
+        string out = compile(src, join_paths(dir.path, "size"), "-O0", "QORE_AOT_OUTLINE_FN_MIN_INSTS=1");
+        *list<auto> m = out.regexExtract("AOT-OUTLINE-FN: 'OutlineRelease::big' over the thresholds "
+            "\\(blocks=([0-9]+) insts=([0-9]+)\\)");
+        assertEq(2, m.size(), "the outliner gives the size of the function");
+        int blocks = m[0].toInt();
+        int insts = m[1].toInt();
+        assertGt(0, insts, "the function has IR instructions");
+        # just under: the function is one instruction and one block short of the thresholds, and is not outlined
+        checkExecutables(src, expected, "OutlineRelease::big", False, sprintf("QORE_AOT_OUTLINE_FN_MIN_INSTS=%d "
+            "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=%d", insts + 1, blocks + 1), "just under");
+        # just over: the function reaches the instruction threshold, and is outlined
+        checkExecutables(src, expected, "OutlineRelease::big", True, sprintf("QORE_AOT_OUTLINE_FN_MIN_INSTS=%d "
+            "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=%d", insts, blocks + 1), "just over");
+    }
+
+    testModule() {
+        TmpDir dir("qore-aot-outline-release-");
+        string script = join_paths(dir.path, "issue.qr");
+        writeFile(script, getIssueScript(Over));
+        string expected = getExpected(script);
+        string src = join_paths(dir.path, "OutlineRelease.qm");
+        writeFile(src, "%modern
+
+module OutlineRelease {
+    version = \"1.0\";
+    desc = \"the release of the values of locals that an outlined helper replaces\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+" + getIssueCode(Over, "public "));
+        string prog = join_paths(dir.path, "probe.qr");
+        writeFile(prog, sprintf("%%modern\n%%append-module-path %s/mods\n%%requires OutlineRelease\n"
+            "print(OutlineRelease::run());\n", dir.path));
+        mkdir(join_paths(dir.path, "mods"));
+        string qmod = join_paths(dir.path, "mods", "OutlineRelease.qmod");
+        foreach string opt in (OptLevels) {
+            string out = compile(src, qmod, opt + " --module", "");
+            assertTrue(outlined(out, "OutlineRelease::big"), sprintf("module %s: big outlined", opt));
+            assertEq(expected, runMode(prog, "ast"), "module qcc " + opt);
+            unlink(qmod);
+        }
+    }
+
+    testForced() {
+        TmpDir dir("qore-aot-outline-release-");
+        string src = join_paths(dir.path, "forced.qr");
+        writeFile(src, getForcedScript());
+        string expected = getExpected(src);
+        foreach string mode in (Modes) {
+            assertEq(expected, runMode(src, mode), "forced: " + mode);
+        }
+        checkExecutables(src, expected, ("seq", "loopy"), True, ForceEnv, "forced");
+        # the same without outlining
+        checkExecutables(src, expected, ("seq", "loopy"), False, "QORE_AOT_OUTLINE_FN=0", "not outlined");
+    }
+}

@@ -140,7 +140,14 @@ This generalizes the existing Phase 1.5 init-expression outliner
    existing non-IR-only machinery. Locals confined to a single piece
    keep full alloca optimization within it. Helpers mark crossing
    locals pre-instantiated (the coordinator or the caller instantiated
-   them).
+   them).  The coordinator's `CallAOTHelper` carries the helper's shared
+   locals (transient `shared_locals`): the coordinator releases its
+   reload storage of them (reload tracker, deferred slot, entry owner)
+   right before the call and reloads them right after it, as around a
+   call that runs handlers out of line (`finalizeHandlerSites()`).
+   Otherwise that storage kept the value that the helper replaced in a
+   shared local alive until the coordinator next reloaded the local, and
+   its destructor ran late (qore#6300).
 8. **Self-recursive fast entry.** When the outliner fires, the
    Approach-B fast entry is skipped: fast-entry mode passes params as
    LLVM arguments (not TLS), which helpers cannot see, and a

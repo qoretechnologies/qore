@@ -4423,6 +4423,11 @@ public:
                     && func->blocks.size() < tun.min_fn_blocks) {
                 return false;
             }
+            if (dbg) {
+                // the size that the thresholds are compared with, before the splits below
+                fprintf(stderr, "AOT-OUTLINE-FN: '%s' over the thresholds (blocks=%zu insts=%zu)\n",
+                    func->getDisplayName().c_str(), func->blocks.size(), total_insts);
+            }
         }
         fn = func;
 
@@ -4820,6 +4825,9 @@ private:
         std::unique_ptr<QoreIRBasicBlock> return_block_owned;
         {
             auto call = std::make_unique<QoreIRCallAOTHelperInstruction>(helper_name);
+            // the coordinator releases its references to the values of the locals that the helper can assign
+            // before the call (qore#6300)
+            call->shared_locals = region.shared_locals;
             call->result = fn->createValue();
             if (call->result.id > fn->max_value_id) {
                 fn->max_value_id = call->result.id;
