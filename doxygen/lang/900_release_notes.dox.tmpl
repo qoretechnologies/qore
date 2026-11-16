@@ -2774,6 +2774,10 @@
       @ref Qore::get_local_vars() "get_local_vars()" and @ref Qore::set_local_var_value() "set_local_var_value()"
       from the calls it makes or from a debugger's callbacks in the same thread
       (<a href="https://github.com/qoretechnologies/qore/issues/5871">issue 5871</a>)
+    - fixed a @ref where_clauses "where clause" key of @ref sqlutilintro "SqlUtil" that is both a column of the table
+      and a column alias of the query, which gave the alias's definition in the SQL (ex:
+      <tt>items.distinct items.ddt_number is not null</tt>): the column is used, as in SQL
+      (<a href="https://github.com/qoretechnologies/qore/issues/1747">issue 1747</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
