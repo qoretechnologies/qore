@@ -119,6 +119,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <poll.h>
 #include <sched.h>
 #include <sys/ioctl.h>
@@ -17021,50 +17022,95 @@ static int64 dbg_unacknowledged_bytes(int fd) {
 #endif
 }
 
+//! returns the receive window that the peer last advertised for \a fd, in bytes, or -1 if the system does not tell
+/** \c TCP_CONNECTION_INFO on macOS, \c TCP_INFO on Linux (5.4 or later)
+*/
+static int64 dbg_peer_window(int fd) {
+#if defined(DARWIN) && defined(TCP_CONNECTION_INFO)
+    struct tcp_connection_info ti;
+    socklen_t len = sizeof ti;
+    return getsockopt(fd, IPPROTO_TCP, TCP_CONNECTION_INFO, &ti, &len) ? -1 : static_cast<int64>(ti.tcpi_snd_wnd);
+#elif defined(__linux__) && defined(TCP_INFO)
+    // tcpi_snd_wnd of the kernel's struct tcp_info (linux/tcp.h, since Linux 5.4) is at byte offset 228; the C
+    // library's struct can be older, so the field is read from the kernel's layout, which does not change, if the
+    // kernel filled it in
+    static constexpr size_t SndWndOffset = 228;
+    unsigned char buf[512];
+    socklen_t len = sizeof buf;
+    if (getsockopt(fd, IPPROTO_TCP, TCP_INFO, buf, &len) || len < SndWndOffset + sizeof(uint32_t)) {
+        return -1;
+    }
+    uint32_t wnd;
+    memcpy(&wnd, buf + SndWndOffset, sizeof wnd);
+    return wnd;
+#else
+    return -1;
+#endif
+}
+
 //! blocks until the peer has acknowledged everything written on \a fd, or the connection has ended; no timer is
 //! involved
 /** A reset (\c SO_LINGER 0) discards the data in the send buffer that has not been sent; on macOS a small write made
     while an earlier one is unacknowledged is held back (Nagle), and loopback delivery is not synchronous with send(),
     so a reset made at once discards the end of what was written (as for issue #6320).  The peer acknowledges data
-    when it arrives, whether its program reads it or not, so this only waits if more was written than the peer's
-    receive buffer takes.
+    when it arrives, whether its program reads it or not, as far as its receive window, which only its program's
+    reads open further: when more is left than the window that the peer advertised takes, it could only arrive once
+    the peer's program reads, so the wait ends with the number of bytes left.  This is checked each time the data
+    left changes (for each acknowledgement), so the wait never blocks on data that cannot arrive.
+
+    @param wnd set to the window that the peer advertised when the wait ended without everything acknowledged
+
+    @return 0 if everything written was acknowledged (or the connection ended), otherwise the number of bytes left,
+    more than the peer's window takes
 */
-static void dbg_wait_send_buffer_empty(int fd) {
+static int64 dbg_wait_send_buffer_empty(int fd, int64& wnd) {
+    // returns true if more is left than the peer's window takes
+    auto beyond_window = [fd, &wnd] (int64 left) -> bool {
+        wnd = dbg_peer_window(fd);
+        return wnd >= 0 && left > wnd;
+    };
 #ifdef DARWIN
     // the write filter fires for each change of the send buffer's space, as the peer acknowledges data
     int kq = kqueue();
     if (kq < 0) {
-        return;
+        return 0;
     }
     ON_BLOCK_EXIT([kq] () { ::close(kq); });
     struct kevent kev;
     EV_SET(&kev, fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, nullptr);
     if (kevent(kq, &kev, 1, nullptr, 0, nullptr) < 0) {
-        return;
+        return 0;
     }
-    while (dbg_unacknowledged_bytes(fd) > 0) {
+    while (int64 left = dbg_unacknowledged_bytes(fd)) {
+        if (beyond_window(left)) {
+            return left;
+        }
         struct kevent out;
         int rc = kevent(kq, nullptr, 0, &out, 1, nullptr);
         if (rc < 0 && errno == EINTR) {
             continue;
         }
         if (rc <= 0 || (out.flags & (EV_EOF | EV_ERROR))) {
-            return;
+            return 0;
         }
     }
 #else
     // loopback acknowledges data as it is delivered, before send() returns, so this normally does not wait
-    while (dbg_unacknowledged_bytes(fd) > 0) {
+    while (int64 left = dbg_unacknowledged_bytes(fd)) {
+        if (beyond_window(left)) {
+            return left;
+        }
         pollfd pfd = {fd, POLLOUT, 0};
         if (::poll(&pfd, 1, -1) < 0 && errno != EINTR) {
-            return;
+            return 0;
         }
         if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
-            return;
+            return 0;
         }
         sched_yield();
     }
 #endif
+    return 0;
 }
 
 //! Debug-only: closes a socket so that its connection is reset at once, once what was written on it has arrived
@@ -17073,6 +17119,9 @@ static void dbg_wait_send_buffer_empty(int fd) {
     reset a connection deterministically.  The close is made once the peer has acknowledged all the data written on
     the socket (see dbg_wait_send_buffer_empty()), so that the reset does not discard the end of an answer still in
     the send buffer.  DEBUG builds only.
+
+    @throw DBG-RESET-SOCKET-ERROR more data written on the socket is left unacknowledged than the peer's receive window
+    takes, so it could only arrive once the peer's program reads; the socket is not closed
 */
 static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
@@ -17089,7 +17138,13 @@ static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& r
     }
     int fd = sock->getPollableDescriptor();
     if (fd >= 0) {
-        dbg_wait_send_buffer_empty(fd);
+        int64 wnd = -1;
+        if (int64 left = dbg_wait_send_buffer_empty(fd, wnd)) {
+            xsink->raiseException("DBG-RESET-SOCKET-ERROR", "dbg_reset_socket(): " QLLD " bytes written on the "
+                "socket are not acknowledged, more than the peer's receive window of " QLLD " bytes takes: they can "
+                "only arrive once the peer's program reads; the connection is not reset", left, wnd);
+            return QoreValue();
+        }
     }
     sock->dbgResetOnClose();
     sock->close();

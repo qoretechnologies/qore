@@ -1,0 +1,71 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the peer's receive window as macOS and Linux report it for loopback TCP connections
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DbgResetSocketFullWindowTest
+
+#! dbg_reset_socket() raises an error instead of waiting forever when what was written cannot arrive
+/** dbg_reset_socket() resets a connection once the peer has acknowledged everything written on it; when more is left
+    than the peer's receive window takes (its receive buffer is full and its program does not read), the data could
+    only arrive once the peer's program reads, so it raises \c DBG-RESET-SOCKET-ERROR and leaves the socket open.
+    Debug builds only.
+*/
+class DbgResetSocketFullWindowTest inherits QUnit::Test {
+    constructor() : Test("DbgResetSocketFullWindowTest", "1.0") {
+        addTestCase("a reset with data that cannot arrive raises an error", \fullWindowTest());
+        set_return_value(main());
+    }
+
+    fullWindowTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_reset_socket() is only in debug builds of the library");
+        }
+        Socket listener();
+        on_exit listener.close();
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        string target = sprintf("127.0.0.1:%d", listener.getSocketInfo(False).port);
+
+        # a small answer arrives at once: the reset is made, and the client reads the answer
+        {
+            Socket client();
+            on_exit client.close();
+            client.connect(target, 5s);
+            Socket peer = listener.accept(5s);
+            on_exit peer.close();
+            peer.send("answer");
+            call_function("dbg_reset_socket", peer);
+            assertFalse(peer.isOpen(), "the socket is closed by the reset");
+            assertEq("answer", client.recv(6, 5s));
+        }
+
+        Socket client();
+        on_exit client.close();
+        client.connect(target, 5s);
+        Socket peer = listener.accept(5s);
+        on_exit peer.close();
+
+        # the peer writes, without blocking, more than the client's receive buffer and its own send buffer take: a
+        # non-blocking send writes until the socket would block, and then returns the poll information; once two
+        # calls in a row have returned it, the buffers are full, as the client does not read
+        AbstractPollOperation op = peer.startPollSend(binary(strmul("x", 256 * 1024 * 1024)));
+        int would_block = 0;
+        while (would_block < 2) {
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (!info) {
+                testSkip("the buffers took the whole write");
+            }
+            ++would_block;
+        }
+
+        assertThrows("DBG-RESET-SOCKET-ERROR", "more than the peer's receive window", \call_function(),
+            ("dbg_reset_socket", peer));
+        assertTrue(peer.isOpen(), "the socket is not closed");
+    }
+}
