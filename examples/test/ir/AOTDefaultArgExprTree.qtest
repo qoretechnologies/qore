@@ -143,18 +143,23 @@ public class S {
     public {
         static int a;
         static int b;
+        static hash<auto> h = {};
+        static S o;
+        int m;
     }
 }
 
-public int sub flist(auto d = ((S::a, S::b) = (getDelay().durationSeconds(), 2))) {
-    return S::a + S::b + d.size();
+# a static variable, a hash member and an object member as lvalues
+public int sub flist(auto d = ((S::a, S::b, S::h.c, S::o.m) = (getDelay().durationSeconds(), 2, 3, 4))) {
+    return S::a + S::b + S::h.c + S::o.m + d.size();
 }
 
 public string sub verify() {
+    S::o = new S();
     C c();
     string rv = sprintf(\"%d\", fdefault());
     if (c.mdefault() != fdefault() || fnested() != fdefault() || fbig() != 4611686018427387911
-            || fbitnot() != -61 || fcmp() != 1 || flist() != 64) {
+            || fbitnot() != -61 || fcmp() != 1 || flist() != 73) {
         rv = sprintf(\"%d %d %d %d %d %d %d\", fdefault(), c.mdefault(), fnested(), fbig(), fbitnot(), fcmp(),
             flist());
     }

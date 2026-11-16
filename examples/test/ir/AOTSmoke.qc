@@ -10567,7 +10567,11 @@ int sub refprobe2(int i) {
     r2 = i + 1;
     reference<auto> r3 = \\h.(cast<string>(i <=> 2));
     r3 = i + 2;
-    return h.(cast<string>(+i)) + h.(cast<string>(~i)) + h.(cast<string>(i <=> 2));
+    int a;
+    int b;
+    reference<auto> r4 = \\h.(cast<string>(((a, b) = (i, 2)).size() + 100));
+    r4 = a + b;
+    return h.(cast<string>(+i)) + h.(cast<string>(~i)) + h.(cast<string>(i <=> 2)) + h.\"102\";
 }
 
 printf(\"%d %d\\n\", refprobe(3), refprobe2(3));
@@ -10598,6 +10602,8 @@ printf(\"%d %d\\n\", refprobe(3), refprobe2(3));
             "qcc dump reports binary-not expression kind from the slot registry: " + dump_out);
         assertTrue(dump_out.regex("LOG_CMP\\s+\\(131\\)"),
             "qcc dump reports comparison expression kind from the slot registry: " + dump_out);
+        assertTrue(dump_out.regex("LIST_ASSIGN\\s+\\(132\\)"),
+            "qcc dump reports list assignment expression kind from the slot registry: " + dump_out);
     }
 
     testQccDumpCompoundSlotExprKinds() {

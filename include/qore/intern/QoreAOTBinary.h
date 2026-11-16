@@ -567,10 +567,10 @@ constexpr uint16_t QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION = 38;
 constexpr uint16_t QORE_AOT_HANDLER_RETURN_VERSION = 39;
 //! First format version with native unary plus, binary not, comparison and list assignment expressions (see v40
 //! above).
-constexpr uint16_t QORE_AOT_NATIVE_UNARY_PLUS_VERSION = 40;
+constexpr uint16_t QORE_AOT_NATIVE_MISC_OPS_VERSION = 40;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_NATIVE_UNARY_PLUS_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_NATIVE_MISC_OPS_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
