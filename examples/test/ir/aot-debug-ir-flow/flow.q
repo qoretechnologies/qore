@@ -72,6 +72,80 @@ auto sub mixed(int n) {
     return total;
 }
 
+# a loop body that the AOT compiler outlines with the thresholds of AOTDebugIRFlow.qtest
+auto sub outlined(int n) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        total += 10;                                ### outlined_first
+        total += 2;
+        if (total % 3 == 1) { push log, "o0"; }
+        total += 3;
+        if (total % 4 == 1) { push log, "o1"; }
+        total += 4;
+        if (total % 5 == 1) { push log, "o2"; }
+        total += 5;
+        if (total % 6 == 1) { push log, "o3"; }
+        total += 6;
+        if (total % 7 == 1) { push log, "o4"; }
+        total += 7;
+        if (total % 8 == 1) { push log, "o5"; }
+        total += 8;
+        if (total % 9 == 1) { push log, "o6"; }
+        total += 9;
+        if (total % 10 == 1) { push log, "o7"; }
+        total += 10;
+        if (total % 11 == 1) { push log, "o8"; }
+        total += 11;
+        if (total % 12 == 1) { push log, "o9"; }
+        total += 12;
+        if (total % 13 == 1) { push log, "o10"; }
+        total += 13;
+        if (total % 14 == 1) { push log, "o11"; }
+        total += 14;
+        if (total % 15 == 1) { push log, "o12"; }
+        total += 15;
+        if (total % 16 == 1) { push log, "o13"; }
+        total += 1;                                 ### outlined_last
+    }
+    return total;
+}
+
+# the return facts of callees that the native code of their callers can rely on: the code of each callee returns a
+# value, while the path of a debugger's return request does not
+auto sub facts_string(int i) {
+    string s = "abc" + i;                           ### facts_string_first
+    return s + "d";
+}
+
+string sub facts_typed_callee(int i) {
+    string s = "abc" + i;                           ### facts_typed_first
+    return s + "d";
+}
+
+int sub facts_take(string s) {
+    return s.size();
+}
+
+auto sub facts_argument(int n) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        try {
+            total += facts_take(facts_string(i));
+        } catch (hash<ExceptionInfo> ex) {
+            push log, ex.err;
+        }
+    }
+    return total;
+}
+
+auto sub facts_typed(int n) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        total += facts_typed_callee(i).size();
+    }
+    return total;
+}
+
 const Flows = {"return": DebugFlowReturn, "break": DebugFlowBreak, "continue": DebugFlowContinue};
 FlowDebugger dbg(Flows{ARGV[1]}, ARGV[2].toInt(), ARGV[3].toInt());
 ProgramControl pc = ProgramControl::getProgram();
@@ -89,4 +163,4 @@ background sub () {
 }();
 done.waitForZero();
 # the steps of the functions; the top-level code of AOT code is native code without step events
-printf("RESULT:%s LOG:%y STEPS:%y\n", result, log, select dbg.steps, $1 > 38 && $1 < 75);
+printf("RESULT:%s LOG:%y STEPS:%y\n", result, log, select dbg.steps, $1 > 38 && $1 < 149);

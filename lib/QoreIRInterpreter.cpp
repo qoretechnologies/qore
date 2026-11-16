@@ -16697,6 +16697,8 @@ load_local_done:
                 // CallAOTHelper is emitted only by the AOT init-expression
                 // outlining pass (Phase 1.5).  The IR interpreter should
                 // never encounter it — outlined IR is LLVM-lowered only.
+                // it would take no debugger's flow requests (#6201)
+                assert(false);
                 if (xsink) {
                     xsink->raiseException("IR-INTERPRETER-ERROR",
                             "unexpected CallAOTHelper in interpreter path "

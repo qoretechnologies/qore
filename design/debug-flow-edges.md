@@ -555,6 +555,27 @@ the frame's exits) is gone.
   NOTHING, unless its declared return type requires a value: its path then raises the error of a missing return
   value, as the AST interpreter does.  A call replaced by a summary runs no code of the callee, so no request can be
   made in it.
-- **Native size of the paths.**  The return of a path shares the return tail and releases only the temporaries of the
-  temp scopes still open, so that the code of the paths grows with the function; only the outermost path resets the
-  budget of the handlers lowered inline (`DebugFlowPathLowering`), so that nested paths are bounded.
+- **Size of the paths.**  Every step event has paths, so their code must grow with the function, not with the
+  product of its statements and anything else:
+  - the return paths share the release of the locals of the blocks at the bottom of the cleanup stack (the Lvars and
+    CatchVar entries, typically the function block) and the return (`QoreIRLowering::debug_flow_return_tails`, block
+    flag `debug_flow_return_tail`, transient): each path branches to that block after the cleanups of its own blocks;
+    in native code the branch releases the path's temporaries and iterators, and the shared ReturnNothing none.
+    Before, each path uninstantiated every local of the function, and each UninstantiateLocal of a local released
+    all of its coercion cleanup allocas (DeferredLocalRelease), so `exception-edge-code-size` (a local assigned in
+    every case of a switch) and `JITLargeFunctionBlocks` (many locals, many statements) grew quadratically;
+  - the paths of the step events of a handler body lowered inline are shared per segment, as those of other code
+    (`InlineHandlerFlow::segment`), and the handler bodies that the paths of a function lower inline have a budget of
+    their own (`QORE_IR_PATH_INLINE_HANDLER_BUDGET`, past which they run out of line): each path lowers the handlers
+    that it runs inline when they can return, whose step events have paths of their own, so nested handlers that
+    return (`CatchExitHandlerOrder` b5) grew exponentially (2.8 million LLVM instructions for b5);
+  - the release of a temp scope of the code by a path (DiscardTemps of a scope whose mark was open before the run of
+    path blocks) changes no lowering state of the code, and the marks and the SSA cleanups are restored after each run
+    of path blocks; a path's UninstantiateLocal leaves the cleanup allocas of a block-scoped local for the code's own
+    exit of the block;
+  - only the outermost path resets the budget of the handlers lowered inline (`DebugFlowPathLowering`).
+- **AOT outlining.**  Outlined code is AOT native code only, which takes no requests, so the outliner sets the paths
+  aside while it outlines a function and puts them back with `undo()` (design/aot-function-outlining.md, decision 11);
+  the debug IR, and format v41, are unchanged.
+- **IR interpreter handlers.**  A debugger attached in a call that then raises an exception gets the events of the
+  handlers that the exception runs in the caller (pre-existing: `debug_active` was stale on the exception path).

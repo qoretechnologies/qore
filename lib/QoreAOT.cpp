@@ -3497,6 +3497,10 @@ static bool outlineInitExpression(QoreIRFunction* outer,
 
 struct AOTFnOutlineTunables {
     bool enabled;
+    //! false with QORE_AOT_OUTLINE_FN=analyze: the functions that may be outlined are optimized as for outlining,
+    //! but none is transformed, which the tests use to compare the debug IR of outlined code with that of the same
+    //! code not outlined (#6201)
+    bool transform;
     size_t min_fn_insts;        //!< trigger: function total IR instruction count
     size_t min_fn_blocks;       //!< trigger: function IR block count
     size_t target_region_insts; //!< greedy target instruction count per helper
@@ -3509,6 +3513,7 @@ static const AOTFnOutlineTunables& aotFnOutlineTunables() {
         QoreEnvironmentValue s_holder("QORE_AOT_OUTLINE_FN");
         const char* s = s_holder.c_str();
         t.enabled = !s || !*s || strcmp(s, "0") != 0;
+        t.transform = !s || strcmp(s, "analyze") != 0;
         auto env_size = [](const char* name, size_t dflt) -> size_t {
             QoreEnvironmentValue v_holder(name);
             const char* v = v_holder.c_str();
@@ -4420,7 +4425,7 @@ public:
     bool run(QoreIRFunction* func, bool emit_debug = true) {
         const bool dbg = emit_debug && q_env_is_set("QORE_AOT_DEBUG");
         const AOTFnOutlineTunables& tun = aotFnOutlineTunables();
-        if (!tun.enabled) {
+        if (!tun.enabled || !tun.transform) {
             return false;
         }
         {
@@ -4441,6 +4446,18 @@ public:
             }
         }
         fn = func;
+        // the largest value id of the function, which the values that the transform creates raise, is restored by
+        // undo(), whose function is serialized as it was (#6201); the ids of those values are not given again
+        saved_max_value_id = fn->max_value_id;
+        saved_value_facts = fn->value_facts.size();
+#ifndef NDEBUG
+        original_shape = shapeOf(*fn);
+#endif
+
+        // AOT native code takes no debugger's flow requests: it makes no step events, and its lowering drops the
+        // paths (#6201); the outlined code is native code only, as undo() restores the function before its debug IR
+        // is serialized, so the paths are set aside while the function is outlined and lowered
+        detachDebugFlowPaths();
 
         // Split large blocks at statement-end markers first: region cuts can
         // only sit on block boundaries, and sequences of `if` statements
@@ -4595,6 +4612,13 @@ public:
         }
         undo_records.clear();
         undoSplits();
+        reattachDebugFlowPaths();
+        fn->max_value_id = saved_max_value_id;
+        if (fn->value_facts.size() > saved_value_facts) {
+            fn->value_facts.resize(saved_value_facts);
+        }
+        // the debug IR serialized after this is that of the function as it was (#6201)
+        assert(shapeOf(*fn) == original_shape);
         fn = nullptr;
     }
 
@@ -4624,6 +4648,165 @@ private:
     QoreIRFunction* fn = nullptr;
     std::vector<UndoRecord> undo_records;
     std::vector<SplitRecord> split_records;
+
+    //! The paths of the debugger's flow requests set aside while the function is outlined (#6201)
+    struct DetachedDebugFlow {
+        //! the blocks of the paths with their positions in the function, in increasing order
+        std::vector<std::pair<size_t, std::unique_ptr<QoreIRBasicBlock>>> blocks;
+        //! the paths of the step events and ScopeExit instructions of the code
+        std::vector<std::pair<std::unique_ptr<QoreIRDebugFlowTargets>*, std::unique_ptr<QoreIRDebugFlowTargets>>>
+            targets;
+        //! the incomings of the Phis of the code from the paths, with their positions, in increasing order per Phi
+        std::vector<std::tuple<QoreIRPhiInstruction*, size_t, QoreIRPhiIncoming>> incomings;
+        //! the storage of the block list that reattachDebugFlowPaths() puts back, allocated in advance, so that it
+        //! cannot fail (it runs in undo(), also from the destructor)
+        std::vector<std::unique_ptr<QoreIRBasicBlock>> all;
+    };
+    DetachedDebugFlow detached_debug_flow;
+    //! the largest value id of the function and the size of its value facts before the transform
+    uint32_t saved_max_value_id = 0;
+    size_t saved_value_facts = 0;
+
+#ifndef NDEBUG
+    //! the structure of the function before it was outlined, which undo() restores exactly
+    std::vector<const void*> original_shape;
+#endif
+
+    //! Returns the structure of \a f: its blocks and their instructions in order, the targets of their branches, the
+    //! paths of their debugger's flow requests and the incomings of their Phis
+    static std::vector<const void*> shapeOf(QoreIRFunction& f) {
+        std::vector<const void*> shape;
+        shape.push_back(reinterpret_cast<const void*>(static_cast<uintptr_t>(f.max_value_id)));
+        for (auto& b : f.blocks) {
+            shape.push_back(b.get());
+            shape.push_back(reinterpret_cast<const void*>(static_cast<uintptr_t>(b->debug_flow)));
+            for (auto& inst_ptr : b->instructions) {
+                QoreIRInstruction* inst = inst_ptr.get();
+                shape.push_back(inst);
+                if (!inst) {
+                    continue;
+                }
+                // also the paths of the debugger's flow requests
+                aotOutlineForEachBlockTarget(inst, [&](QoreIRBasicBlock*& target) {
+                    shape.push_back(target);
+                });
+                if (const std::unique_ptr<QoreIRDebugFlowTargets>* owner = debugFlowTargetsOwner(inst)) {
+                    shape.push_back(owner->get());
+                }
+                if (auto* phi = qore_ir_inst_cast<QoreIRPhiInstruction*>(inst)) {
+                    for (const QoreIRPhiIncoming& incoming : phi->incoming) {
+                        shape.push_back(reinterpret_cast<const void*>(static_cast<uintptr_t>(incoming.value.id)));
+                    }
+                }
+            }
+        }
+        return shape;
+    }
+
+    //! Returns the paths of the flow requests of \a inst as owned by it, or nullptr
+    static std::unique_ptr<QoreIRDebugFlowTargets>* debugFlowTargetsOwner(QoreIRInstruction* inst) {
+        switch (inst->opcode) {
+            case QoreIROpcode::DebugStatement:
+            case QoreIROpcode::DebugBlock:
+                if (!QoreIRDebugStatementInstruction::isInstClass(inst->inst_class)) {
+                    return nullptr;
+                }
+                return &static_cast<QoreIRDebugStatementInstruction*>(inst)->flow;
+            case QoreIROpcode::ScopeExit:
+                return &static_cast<QoreIRScopeExitInstruction*>(inst)->flow;
+            default:
+                return nullptr;
+        }
+    }
+
+    //! Sets aside the paths of the debugger's flow requests: the function is then the code that AOT native code lowers
+    /** Exactly reversed by reattachDebugFlowPaths(); no allocation fails half way without the function restored, as
+        each step first reserves what it records
+    */
+    void detachDebugFlowPaths() {
+        assert(detached_debug_flow.blocks.empty() && detached_debug_flow.targets.empty()
+            && detached_debug_flow.incomings.empty());
+        size_t paths = 0;
+        for (const auto& b : fn->blocks) {
+            if (b->debug_flow) {
+                ++paths;
+            }
+        }
+        if (!paths) {
+            return;
+        }
+        detached_debug_flow.blocks.reserve(paths);
+        for (auto& b : fn->blocks) {
+            if (b->debug_flow) {
+                continue;
+            }
+            for (auto& inst_ptr : b->instructions) {
+                if (!inst_ptr) {
+                    continue;
+                }
+                if (std::unique_ptr<QoreIRDebugFlowTargets>* owner = debugFlowTargetsOwner(inst_ptr.get())) {
+                    if (*owner) {
+                        detached_debug_flow.targets.emplace_back(owner, nullptr);
+                        detached_debug_flow.targets.back().second = std::move(*owner);
+                    }
+                } else if (auto* phi = qore_ir_inst_cast<QoreIRPhiInstruction*>(inst_ptr.get())) {
+                    for (size_t i = 0; i < phi->incoming.size(); ++i) {
+                        if (phi->incoming[i].block && phi->incoming[i].block->debug_flow) {
+                            detached_debug_flow.incomings.emplace_back(phi, i, phi->incoming[i]);
+                        }
+                    }
+                }
+            }
+        }
+        // the incomings are removed from the last, so that the positions recorded stay those of the original
+        for (size_t k = detached_debug_flow.incomings.size(); k-- > 0;) {
+            auto& [phi, i, incoming] = detached_debug_flow.incomings[k];
+            phi->incoming.erase(phi->incoming.begin() + i);
+        }
+        std::vector<std::unique_ptr<QoreIRBasicBlock>> code;
+        code.reserve(fn->blocks.size() - paths);
+        detached_debug_flow.all.reserve(fn->blocks.size());
+        for (size_t i = 0; i < fn->blocks.size(); ++i) {
+            if (fn->blocks[i]->debug_flow) {
+                detached_debug_flow.blocks.emplace_back(i, std::move(fn->blocks[i]));
+            } else {
+                code.push_back(std::move(fn->blocks[i]));
+            }
+        }
+        fn->blocks = std::move(code);
+    }
+
+    //! Puts back the paths that detachDebugFlowPaths() set aside, in their places
+    void reattachDebugFlowPaths() {
+        if (!detached_debug_flow.blocks.empty()) {
+            // reserved by detachDebugFlowPaths(): undo() restored the code's blocks as they were
+            std::vector<std::unique_ptr<QoreIRBasicBlock>>& all = detached_debug_flow.all;
+            assert(all.empty() && all.capacity() >= fn->blocks.size() + detached_debug_flow.blocks.size());
+            size_t code = 0;
+            for (auto& [pos, block] : detached_debug_flow.blocks) {
+                while (all.size() < pos) {
+                    assert(code < fn->blocks.size());
+                    all.push_back(std::move(fn->blocks[code++]));
+                }
+                all.push_back(std::move(block));
+            }
+            while (code < fn->blocks.size()) {
+                all.push_back(std::move(fn->blocks[code++]));
+            }
+            fn->blocks.swap(all);
+            std::vector<std::unique_ptr<QoreIRBasicBlock>>().swap(all);
+        }
+        // the incomings go back into the storage that their removal left
+        for (auto& [phi, i, incoming] : detached_debug_flow.incomings) {
+            phi->incoming.insert(phi->incoming.begin() + i, incoming);
+        }
+        for (auto& [owner, targets] : detached_debug_flow.targets) {
+            *owner = std::move(targets);
+        }
+        detached_debug_flow.blocks.clear();
+        detached_debug_flow.targets.clear();
+        detached_debug_flow.incomings.clear();
+    }
     size_t split_counter = 0;
 
     //! True when an instruction ends a statement/cleanup cluster — the only

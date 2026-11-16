@@ -1432,19 +1432,40 @@ public:
     //! Write a source-path reference; ordinary string values must use writeStringRef().
     /** @param path physical source path */
     void writeSourcePath(const char* path) {
+        noteStringRef();
         writeU32(addSourcePath(path));
     }
 
     //! Write a string reference (adds to pool, writes offset)
     void writeStringRef(const char* str) {
         uint32_t offset = strings.add(str);
+        noteStringRef();
         writeU32(offset);
     }
 
     //! Write a string reference with explicit length
     void writeStringRef(const char* str, size_t len) {
         uint32_t offset = strings.add(str, len);
+        noteStringRef();
         writeU32(offset);
+    }
+
+    //! The positions of the string references written while set (see noteStringRef()), or nullptr
+    /** The offset of a string in the pool depends on the strings written before it, so a digest of a payload takes
+        the strings of its references instead (QORE_AOT_DEBUG_IR_DIGEST, #6201)
+    */
+    std::vector<uint32_t>* string_ref_positions = nullptr;
+
+    //! Records the position of the string reference written next, if string_ref_positions is set
+    void noteStringRef() {
+        if (string_ref_positions) {
+            string_ref_positions->push_back(position());
+        }
+    }
+
+    //! Returns the string at an offset of the pool, or nullptr
+    const char* getPoolString(uint32_t offset) const {
+        return strings.get(offset);
     }
 
     //! Write a QoreValue (serializes constant value)
