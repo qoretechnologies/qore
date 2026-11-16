@@ -1647,6 +1647,11 @@ protected:
     //! signaled when ext_copy_count becomes 0 while ext_copy_waiting is set
     QoreCondition ext_copy_cond;
 
+    //! returns the number of copies of the external data of this Program that the current thread is making
+    /** The child of a fork() keeps only these in ext_copy_count (see qore_program_private::fixupAfterFork())
+    */
+    DLLLOCAL unsigned getOwnExtDataCopies() const;
+
     // objects captured from languages without deterministic garbage collection (e.g. jni, python);
     // each is held with a strong reference and released when this program is torn down, so the
     // captured objects' destructors run while the program is still valid (ptid == tid).  This makes

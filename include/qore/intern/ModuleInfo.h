@@ -379,6 +379,11 @@ public:
         po_mask |= mask;
     }
 
+    //! initializes the lock of the parse option mask again in the child of fork(), where its holder may not exist
+    DLLLOCAL void reinitParseOptionMaskLockAfterFork() {
+        new (&po_mask_lock) std::mutex();
+    }
+
     //! returns the Program of a user module (source or AOT), or nullptr for a binary module
     DLLLOCAL virtual QoreProgram* getModuleProgram() const {
         return nullptr;

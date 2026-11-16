@@ -1529,6 +1529,10 @@ void ThreadEntry::abandonAfterFork() {
     wake_busy = false;
     waiting_fd.store(-1, std::memory_order_relaxed);
     wake_reg_depth = 0;
+#ifdef DEBUG
+    // the thread's wait does not go on in the child, where its TID can be given to another thread
+    dbg_in_wait.store(false);
+#endif
     // the descriptors are the child's own copies
     closeCancelWakeup();
     status = QTS_AVAIL;
@@ -1944,6 +1948,8 @@ struct ThreadProgramDataLiveCount {
     std::mutex m;
     std::condition_variable cond;
     int64 count = 0;
+    //! a leaf lock, taken whenever thread data is created or destroyed, also in the child of fork()
+    QoreForkStdMutex fork_handler{m, QFLR_LEAF, "tpd_live_count", QFLM_ACQUIRE, {&cond}};
 };
 
 ThreadProgramDataLiveCount& tpd_live_count() {
@@ -1951,6 +1957,10 @@ ThreadProgramDataLiveCount& tpd_live_count() {
     static ThreadProgramDataLiveCount* c = new ThreadProgramDataLiveCount;
     return *c;
 }
+
+// created during static initialization, so that its fork handler is not registered while another registered lock is
+// held (see design/fork-handlers.md)
+[[maybe_unused]] ThreadProgramDataLiveCount& tpd_live_count_init = tpd_live_count();
 }
 
 void ThreadProgramData::dbgLiveCountChanged(int64 delta) {
@@ -9412,6 +9422,11 @@ void QoreThreadList::forkChild(int tid) {
     // the joiners of the parent do not exist in the child, and one of them may have held join_lck
     join_lck.reinitAfterFork();
     join_cond.reinitAfterFork();
+#ifdef DEBUG
+    // a thread of the parent may have held the lock of dbgNoteWait(), which every cancellable wait takes
+    dbg_wait_lck.reinitAfterFork();
+    dbg_wait_cond.reinitAfterFork();
+#endif
 }
 
 int qore_fork_get_tid() {

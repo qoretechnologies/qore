@@ -794,6 +794,13 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     // that it protects is changed only at parse time and when code is freed, as the other data of the Program that
     // its locks protect, which fork() handles alike (see design/fork-handlers.md)
     new (&user_variant_lock) std::mutex();
+    // a leaf lock held briefly by the changes and checks of the parse options; a thread of the parent can have held it
+    new (&po_mutex) std::mutex();
+    // the copies of the external data made by the parent's other threads do not go on in the child, and its waiters
+    // do not exist there
+    ext_copy_count = getOwnExtDataCopies();
+    ext_copy_waiting = 0;
+    ext_copy_cond.reinitAfterFork();
     // the thread counts keep only the forking thread
     unsigned own = 0;
     ptid_map_t::iterator i = tidmap.find(tid);
@@ -2168,12 +2175,29 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
 // see InheritAllUserCodeHelper
 thread_local bool q_inherit_all_user_code = false;
 
-#ifdef DEBUG
 namespace {
-// the Program whose external data the current thread copies in copyExternalData(), if any
-thread_local const qore_program_private_base* ext_data_copy_parent = nullptr;
+//! a copy of the external data of a Program made by the current thread in copyExternalData()
+/** The frames of a thread form a stack, as a copy() can create a Program itself, which copies the data of its own
+    parent.  The child of a fork() counts the copies of its forking thread with them: the copies of the parent's other
+    threads do not go on in the child (see qore_program_private::fixupAfterFork()).
+*/
+struct ExtDataCopyFrame {
+    const qore_program_private_base* parent;
+    ExtDataCopyFrame* prev;
+};
+
+thread_local ExtDataCopyFrame* ext_data_copy_frames = nullptr;
 }
-#endif
+
+unsigned qore_program_private_base::getOwnExtDataCopies() const {
+    unsigned rc = 0;
+    for (const ExtDataCopyFrame* f = ext_data_copy_frames; f; f = f->prev) {
+        if (f->parent == this) {
+            ++rc;
+        }
+    }
+    return rc;
+}
 
 void qore_program_private_base::copyExternalData() {
     if (!ext_parent) {
@@ -2204,14 +2228,13 @@ void qore_program_private_base::copyExternalData() {
             parent->ext_copy_cond.broadcast();
         }
     });
-#ifdef DEBUG
-    // a copy() can create a Program itself, which copies the data of its own parent
-    const qore_program_private_base* old_copy_parent = ext_data_copy_parent;
-    ext_data_copy_parent = parent;
-    ON_BLOCK_EXIT([old_copy_parent] () {
-        ext_data_copy_parent = old_copy_parent;
+    // a copy() can create a Program itself, which copies the data of its own parent; the frame is removed before the
+    // count is decremented
+    ExtDataCopyFrame frame = {parent, ext_data_copy_frames};
+    ext_data_copy_frames = &frame;
+    ON_BLOCK_EXIT([&frame] () {
+        ext_data_copy_frames = frame.prev;
     });
-#endif
 
     for (auto& i : parent_data) {
         // External data whose state belongs to the parent alone returns nullptr rather than a copy (the AOT
@@ -2322,6 +2345,8 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
 //! the Programs that are left allocated at the end of the process; never destroyed, so they stay reachable
 static std::set<QoreProgram*>* left_programs = nullptr;
 static std::mutex* left_programs_lock = new std::mutex;
+// a leaf lock: its holders only change or read the set
+static QoreForkStdMutex left_programs_fork_handler(*left_programs_lock, QFLR_LEAF, "left_programs");
 
 void qore_program_private::leaveAllocated() {
     std::lock_guard<std::mutex> al(*left_programs_lock);
@@ -5367,7 +5392,7 @@ AbstractQoreProgramExternalData* QoreProgram::getExternalData(const char* owner)
 
 AbstractQoreProgramExternalData* QoreProgram::removeExternalData(const char* owner) {
     // the removal waits until the copies of the data are made, so a copy() must not remove the data it copies
-    assert(ext_data_copy_parent != priv);
+    assert(!ext_data_copy_frames || ext_data_copy_frames->parent != priv);
     return priv->removeExternalData(owner);
 }
 
