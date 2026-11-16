@@ -227,10 +227,13 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   under valgrind
         # - float-int-conversion (#6181): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - AOTModuleInitException (#6217): its checks run in child processes of the interpreter and of qcc
+        #   executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
+                                 "examples/test/ir/AOTModuleInitException.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/classes/deleted-program-types.qtest",
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
