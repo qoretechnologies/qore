@@ -47,7 +47,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
     public {
         #! the requests and the result, the values logged and the step events of the AST interpreter
         /** - \c function: the function of StepFlowTarget.q called
-            - \c flow: the flow that the debugger requests
+            - \c flow: the flow that the debugger requests, or \c none for none
             - \c tag: the tag of the line of the statement or block of the request
             - \c hit: the request is made at the hit-th step event of the statement or block
             - \c block: the request is made at the step event of the block that starts on the line, not of the
@@ -388,6 +388,13 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "log": ("\"abcd\"", "\"abcd\"", "null", "\"abcd\"", "\"abcd\""),
                 "steps": (451, 508, 509, 510, "b511", 511),
             },
+            # no request: a debugger attached in a call that raises an exception gets the events of the handlers that
+            # the exception runs in the caller (#6201)
+            {"function": "attach_throw_caller", "flow": "none", "tag": "attach_throw_first", "hit": 1, "block": False,
+                "result": "ATTACH-THROW: ",
+                "log": (),
+                "steps": (556, 557, "b558", 558, "b564", 564),
+            },
         );
     }
 
@@ -405,6 +412,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
         addTestCase("a continue at a step event", \testContinue());
         addTestCase("a request in a handler and the requests of a return", \testHandler());
         addTestCase("a return in a callee whose return facts its native caller relies on", \testReturnFacts());
+        addTestCase("the events of the handlers run by an exception after a debugger attached", \testNoRequest());
         set_return_value(main());
     }
 
@@ -499,6 +507,14 @@ class DebuggerStepFlowTest inherits QUnit::Test {
     testHandler() {
         foreach hash<auto> c in (Cases) {
             if (c.handler) {
+                checkCase(c);
+            }
+        }
+    }
+
+    testNoRequest() {
+        foreach hash<auto> c in (Cases) {
+            if (c.flow == "none") {
                 checkCase(c);
             }
         }

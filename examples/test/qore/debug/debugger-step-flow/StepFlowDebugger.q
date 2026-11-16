@@ -8,7 +8,7 @@
 # its loop, while it runs: as native code with JIT and tiered execution, with the IR interpreter with IR execution and
 # with the AST interpreter with AST execution; the debugger steps, and requests a flow at a step event
 #
-# usage: StepFlowDebugger.q <target file> <function> <return|break|continue> <line> <hit> [block|-]
+# usage: StepFlowDebugger.q <target file> <function> <return|break|continue|none> <line> <hit> [block|-]
 #            [<return|break|continue> <line> <hit>]
 # - the flow is requested at the <hit>th step event of the statement on <line>, or with "block", of the block that
 #   starts on <line>; a second request can follow, at the <hit>th step event of a statement after the first request
@@ -81,6 +81,8 @@ const Flows = {
     "return": DebugFlowReturn,
     "break": DebugFlowBreak,
     "continue": DebugFlowContinue,
+    # no request: the steps only
+    "none": 0,
 };
 
 StepFlowDebugger dbg(Flows{ARGV[2]}, ARGV[3].toInt(), ARGV[4].toInt(), ARGV[5] == "block");

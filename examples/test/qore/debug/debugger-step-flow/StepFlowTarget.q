@@ -545,3 +545,26 @@ auto sub facts_projection(int n, code attach, code detach, code log) {
     }
     return l;
 }
+
+# a debugger attached in a call that then raises an exception: the handlers that the exception runs in the caller get
+# their step events, as with the AST interpreter (#6201)
+our int attach_throw_calls = 0;
+string sub attach_throw_callee(bool a, code attach) {
+    if (a) {
+        attach();
+    }
+    string s = "abc";                               ### attach_throw_first
+    if (a && ++attach_throw_calls > 1) {
+        throw "ATTACH-THROW";
+    }
+    return s + "d";
+}
+
+auto sub attach_throw_caller(int n, code attach, code detach, code log) {
+    on_exit detach();
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        total += attach_throw_callee(i == 2, attach).size();
+    }
+    return total;
+}
