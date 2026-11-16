@@ -12,12 +12,12 @@
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 
-%include compound-assignment-ast-parity.qc
+%include CompoundAssignmentAstParity.qc
 
-%exec-class CompoundAssignmentAstParityShiftTest
+%exec-class CompoundAssignmentAstParityPart18
 
-#! Checks \c <<= and \c >>= in every execution mode against the AST interpreter; see CompoundAssignmentAstParityBase
-class CompoundAssignmentAstParityShiftTest inherits CompoundAssignmentAstParityBase {
-    constructor() : CompoundAssignmentAstParityBase("CompoundAssignmentAstParityShift", ("<<=", ">>=")) {
+#! runs part 18 of 28 of the cases of CompoundAssignmentAstParityBase: %= |=: the jit mode
+class CompoundAssignmentAstParityPart18 inherits CompoundAssignmentAstParityBase {
+    constructor() : CompoundAssignmentAstParityBase("CompoundAssignmentAstParityPart18", 18) {
     }
 }

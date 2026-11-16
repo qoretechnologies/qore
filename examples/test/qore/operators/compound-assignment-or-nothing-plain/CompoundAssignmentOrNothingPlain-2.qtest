@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include CompoundAssignmentOrNothingPlain.qc
+
+%exec-class CompoundAssignmentOrNothingPlainPart2
+
+#! runs part 2 of 4 of the cases of CompoundAssignmentOrNothingPlainBase: the jit mode
+class CompoundAssignmentOrNothingPlainPart2 inherits CompoundAssignmentOrNothingPlainBase {
+    constructor() : CompoundAssignmentOrNothingPlainBase("CompoundAssignmentOrNothingPlainPart2", 2) {
+    }
+}
