@@ -709,8 +709,9 @@ public:
 QoreProgramRegistryForkHandler program_registry_fork_handler;
 }
 
-qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm)
-        : qore_program_private_base(n_pgm, n_parse_options, p_pgm) {
+qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
+        QoreProgram* p_pgm, const QoreParseOptions* p_parse_options)
+        : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
@@ -1873,7 +1874,8 @@ void qore_program_private_base::addCreatorChain(const QoreProgram& creator) {
     }
 }
 
-void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options) {
+void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options,
+        const QoreParseOptions* p_parse_options) {
     //printd(5, "qore_program_private_base::setParent() this: %p parent: %p (parent lvl: %p) this: %p (this pgm: %p) "
     //    "parent po: %lld new po: %lld parent no_child_po_restrictions: %d\n", this, p_pgm,
     //    p_pgm->priv->sb.getLVList(), this, pgm, p_pgm->priv->pwo.parse_options, n_parse_options,
@@ -1883,8 +1885,9 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
 
     setCreatorChain(*p_pgm);
 
-    // the parent's options are read once, so that the test and the steps below use the same value (issue #6078)
-    QoreParseOptions p_po = p_pgm->priv->pwo.parse_options;
+    // the parent's options are read once, so that the test and the steps below use the same value (issue #6078); the
+    // creator's checks read them already, and the child inherits that value, not one that changed meanwhile (#6176)
+    QoreParseOptions p_po = p_parse_options ? *p_parse_options : p_pgm->priv->pwo.parse_options.load();
     // if children inherit restrictions, then set all child restrictions
     if (!(p_po & PO_NO_CHILD_PO_RESTRICTIONS)) {
         // lock child parse options
@@ -3993,8 +3996,9 @@ QoreProgram::QoreProgram(const QoreParseOptions& po) : priv(new qore_program_pri
 QoreProgram::QoreProgram(int64 po) : QoreProgram(QoreParseOptions(po)) {
 }
 
-QoreProgram::QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec, const char* ecn)
-        : priv(new qore_program_private(this, po, pgm)) {
+QoreProgram::QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec, const char* ecn,
+        const QoreParseOptions* parent_po)
+        : priv(new qore_program_private(this, po, pgm, parent_po)) {
     printd(QPP_DBG_LVL, "QoreProgram::QoreProgram(), this: %p, pgm: %p, priv: %p, pgmid: " QLLD "\n", this, pgm, priv,
         (int64)priv->getProgramId());
     priv->exec_class = ec;
@@ -4463,16 +4467,17 @@ bool qore_check_modern_parse_options(const QoreParseOptions& po, std::string& er
     return false;
 }
 
-int qore_program_private_base::checkNewProgramModernOptions(const QoreProgram* parent, const QoreParseOptions& po,
-        ExceptionSink* xsink, const char* what) {
-    // a child Program has its parent's options too, unless the parent allows other options for its children
+QoreParseOptions qore_program_private_base::readParseOptions(const QoreProgram& p) {
+    return p.priv->pwo.parse_options;
+}
+
+int qore_program_private_base::checkNewProgramModernOptions(const QoreProgram* parent,
+        const QoreParseOptions& parent_po, const QoreParseOptions& po, ExceptionSink* xsink, const char* what) {
+    // a child Program has its parent's options too, unless the parent allows other options for its children; the
+    // caller read the parent's options once and creates the child with the same value (issues #6078, #6176)
     QoreParseOptions inherited;
-    if (parent) {
-        // the parent's options are read once, so that the test and the value checked are the same (issue #6078)
-        QoreParseOptions parent_po = parent->priv->pwo.parse_options;
-        if (!(parent_po & PO_NO_CHILD_PO_RESTRICTIONS)) {
-            inherited = parent_po;
-        }
+    if (parent && !(parent_po & PO_NO_CHILD_PO_RESTRICTIONS)) {
+        inherited = parent_po;
     }
     if (!isModern(inherited | po)) {
         return 0;
