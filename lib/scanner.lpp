@@ -81,7 +81,8 @@ static const QoreProgramLocation* get_loc(YYLTYPE* yylloc) {
 // Capture token context, not the options in effect when bison eventually reduces a statement: lookahead may
 // already have consumed a restoring directive, and an expression may contain several option changes.
 static void set_native_token_info(YYLTYPE* loc, QoreParseState* state) {
-    const QoreParseOptions& po = qore_program_private::getParseOptions(*getProgram());
+    // the options in effect for the parse, with the scoped options of the parsing thread (issue #6207)
+    const QoreParseOptions po = qore_program_private::getViewParseOptions(*getProgram());
     loc->semantic_policy = state->semantic_policy = LexicalSemanticPolicy(po);
     loc->has_semantic_policy = true;
     // %modern options never include a compatibility option (qore#5682; asserted where they are applied); the check
@@ -1107,7 +1108,7 @@ static bool is_identifier(const char *str) {
 static void parse_set_parse_options_intern(YYLTYPE* yylloc, QoreParseState* state, const char* text,
         const QoreParseOptions& po) {
     bool was_modern = qore_parse_options_support_ir(getProgram()->getParseOptions());
-    if (!qore_program_private::get(*getProgram())->parseSetParseOptions(get_loc(yylloc), po)) {
+    if (!qore_program_private::get(*getProgram())->parseSetParseOptions(get_loc(yylloc), po, true)) {
         record_native_directive(yylloc, state, text, was_modern);
     }
 }
@@ -1115,7 +1116,7 @@ static void parse_set_parse_options_intern(YYLTYPE* yylloc, QoreParseState* stat
 static void parse_disable_parse_options_intern(YYLTYPE* yylloc, QoreParseState* state, const char* text,
         const QoreParseOptions& po) {
     bool was_modern = qore_parse_options_support_ir(getProgram()->getParseOptions());
-    if (!qore_program_private::get(*getProgram())->parseDisableParseOptions(get_loc(yylloc), po)) {
+    if (!qore_program_private::get(*getProgram())->parseDisableParseOptions(get_loc(yylloc), po, true)) {
         record_native_directive(yylloc, state, text, was_modern);
     }
 }

@@ -12842,7 +12842,8 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         ? uvb->getBodyLocals()  // AOT: use all_body_locals via getBodyLocals()
         : (has_ir ? uvb->getASTVisibleBodyLocals()  // IR: use filtered list
                   : empty_body_locals);            // AST-only: nothing to pre-inst here
-    QoreParseOptions po = uvb->getParseOptions(runtime_pgm->getParseOptions());
+    // the Program's own options: a call takes them at run time, not the scoped options of a parse (#6207)
+    QoreParseOptions po = uvb->getParseOptions(qore_program_private::getParseOptions(*runtime_pgm));
     if (!skip_body_locals) {
         for (LocalVar* lv : body_locals) {
             // Closure-use vars must not be pre-instantiated here: doing so creates
@@ -19780,7 +19781,8 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
     // marks every body local IR-only.
     bool skip_body_locals = false;
     const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
-    QoreParseOptions po = uvb->getParseOptions(uvb->pgm->getParseOptions());
+    // the Program's own options: a call takes them at run time, not the scoped options of a parse (#6207)
+    QoreParseOptions po = uvb->getParseOptions(qore_program_private::getParseOptions(*uvb->pgm));
     if (!skip_body_locals) {
         for (LocalVar* lv : body_locals) {
             if (lv->closureUse()) {

@@ -403,10 +403,6 @@ typedef vector_map_t<ThreadProgramData*, ThreadLocalProgramData*> pgm_data_map_t
 typedef vector_map_t<std::string, QoreValue> dmap_t;
 //typedef std::map<std::string, QoreValue> dmap_t;
 
-// map for pushed parse options
-typedef vector_map_t<const char*, QoreParseOptions> ppo_t;
-//typedef std::map<const char*, QoreParseOptions, ltstr> ppo_t;
-
 class AbstractQoreZoneInfo;
 
 class ltpgm {
@@ -438,6 +434,11 @@ class qore_program_private;
 #ifdef DEBUG
 //! Throws a C++ exception from a parse of the Program armed by dbg_parse_with_cxx_exception() (debug builds, tests)
 DLLLOCAL void qore_dbg_parse_throw_point(const QoreProgram* pgm);
+//! Called by the parsing thread when scoped options of the given kind are in effect (debug builds, tests); see
+//! dbg_arm_parse_scope_gate()
+DLLLOCAL void qore_dbg_parse_scope_begin(QoreProgram* pgm, const char* kind);
+//! Called by the parsing thread when scoped options of the given kind have ended (debug builds, tests)
+DLLLOCAL void qore_dbg_parse_scope_end(QoreProgram* pgm, const char* kind);
 #endif
 
 #ifdef DEBUG
@@ -702,6 +703,15 @@ public:
     //! it (lockCreatorRestrictions()), those it was created with, or that it had when it was locked; disabling one is
     //! refused (checkDisableParseOptions()); protected by po_mutex
     QoreParseOptions locked_restrictions;
+
+    //! the compatibility options that %modern does not allow that were in effect when the options were locked with
+    //! QoreProgram::lockOptions(); %modern does not reset them (issue #6382); protected by po_mutex
+    QoreParseOptions locked_compat;
+
+    //! the compatibility options that %modern does not allow that parse directives set for the whole Program and that
+    //! are still in effect; %modern does not reset them (getModernResetOptions(), issue #6382); changed and read with
+    //! the write lock of the options held
+    QoreParseOptions directive_compat;
 
     //! serializes the changes of the parse options that are checked against the lock (po_locked and
     //! locked_restrictions) with the changes of the lock, so that a check and the change that it allows are one step;
@@ -1172,9 +1182,6 @@ public:
 
     std::vector<source_parse_function_import_t> source_parse_function_imports;
 
-    // pushed parse option map
-    ppo_t ppo;
-
     // thread initialization user code
     ResolvedCallReferenceNode* thr_init = nullptr;
     //! the run-time parse options of the code that set thr_init, which it runs with (qore#6208); protected by tlock
@@ -1353,7 +1360,11 @@ public:
             const char* what, ExceptionSink* xsink);
 
     //! Raises the parse exception for a parse directive that %modern does not allow; see getModernConflict()
-    DLLLOCAL int parseCheckModernConflict(const QoreProgramLocation* loc, const QoreParseOptions& po, bool set);
+    /** @param reset the compatibility options that %modern resets with the directive (see
+        qore_program_private::getModernResetOptions()); they are no conflict
+    */
+    DLLLOCAL int parseCheckModernConflict(const QoreProgramLocation* loc, const QoreParseOptions& po, bool set,
+            const QoreParseOptions& reset = QoreParseOptions());
 
     //! Raises an exception if the options of a new Program request a compatibility option that %modern does not allow
     /** The Program has %modern from the options given or from its parent (issue #5682)
@@ -1381,7 +1392,7 @@ public:
     */
     DLLLOCAL void applyParseOptionImplications() {
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
-        pwo.parse_options = withImplications(pwo.parse_options);
+        pwo.parse_options = withImplications(pwo.parse_options.loadShared());
     }
 
     //! Returns the options given with the options that they imply
@@ -1403,8 +1414,10 @@ public:
         return rv;
     }
 
+    //! returns true if the Program's own options support the compiled execution modes, which its execution mode
+    //! follows (not the scoped options of a part of a parse)
     DLLLOCAL bool hasModernParseOptions() const {
-        return qore_parse_options_support_ir(pwo.parse_options);
+        return qore_parse_options_support_ir(pwo.parse_options.loadShared());
     }
 
     DLLLOCAL void applyDefaultExecMode() {
@@ -1507,6 +1520,8 @@ public:
     DLLLOCAL void replaceParseOptionsIntern(const QoreParseOptions& po) {
         // the execution mode follows the options; another change must not come between them
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
+        // the options are the API's from now on
+        directive_compat = QoreParseOptions();
         pwo.parse_options = withImplications(po);
         syncExecModeWithParseOptions();
     }
@@ -1578,10 +1593,12 @@ public:
     //! \a restrictions, which restrictForCreator() returned, cannot be disabled
     DLLLOCAL static void lockCreatorRestrictions(QoreProgram& pgm, const QoreParseOptions& restrictions);
 
-    DLLLOCAL void setParseOptionsIntern(const QoreParseOptions& po) {
+    //! sets \a po in the Program's own options, without the compatibility options \a reset that %modern resets
+    DLLLOCAL void setParseOptionsIntern(const QoreParseOptions& po,
+            const QoreParseOptions& reset = QoreParseOptions()) {
         // the execution mode follows the options; another change must not come between them
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
-        pwo.parse_options = withImplications(pwo.parse_options | po);
+        pwo.parse_options = withImplications((pwo.parse_options.loadShared() & ~reset) | po);
         syncExecModeWithParseOptions();
     }
 
@@ -2892,9 +2909,46 @@ public:
 
     DLLLOCAL void internParseRollback(ExceptionSink* xsink);
 
+    //! Ends the scoped options of the Program that a parse leaves in effect in the parsing thread (issue #6207)
+    /** The frames of a parse are unlinked when their scope ends: a file with %push-parse-options at its end
+        (endParsing()), a module header when it is closed; a parse that ends with an error or a C++ exception before,
+        leaves them linked, and they are unlinked here, when the parse that linked them ends, as their owners can
+        outlive the Program.  A frame linked by an enclosing parse of the Program is left as it is.
+    */
+    class ParseOverlayScope {
+    public:
+        DLLLOCAL ParseOverlayScope(qore_program_private& pp) : pp(pp), serial(q_parse_overlay_next_serial()),
+                pushed_ends(q_parse_overlay_pushed_ends()) {
+        }
+
+        DLLLOCAL ~ParseOverlayScope() {
+            q_parse_overlay_unlink_since(&pp.pwo.parse_options, serial);
+            // the restrictions locked by a file with %push-parse-options are kept after it: also if the file ended
+            // before (endParsing()), in case its merge failed
+            if (q_parse_overlay_pushed_ends() != pushed_ends) {
+                try {
+                    pp.keepLockedRestrictions();
+                } catch (...) {
+                }
+            }
+        }
+
+        ParseOverlayScope(const ParseOverlayScope&) = delete;
+        ParseOverlayScope& operator=(const ParseOverlayScope&) = delete;
+
+    private:
+        qore_program_private& pp;
+        //! the serial of the first frame of the parse
+        uint64_t serial;
+        //! the number of files with %push-parse-options that the thread had ended when the parse began
+        uint64_t pushed_ends;
+    };
+
     // call must push the current program on the stack and pop it afterwards
     DLLLOCAL int internParsePending(ExceptionSink* xsink, const char* code, const char* label,
             const char* orig_src = nullptr, int offset = 0, bool standard_parse = true) {
+        // the scoped options of the parse end with it in any case
+        ParseOverlayScope pos(*this);
         // the Program is being parsed: no thread can enter it (incThreadCount()); a parse with beginParse() has set it
         // already
         if (!parsing_in_progress) {
@@ -2974,7 +3028,7 @@ public:
 
     DLLLOCAL void startParsing(ExceptionSink* xsink, ExceptionSink* wS, int wm) {
         warnSink = wS;
-        pwo.warn_mask = wm;
+        pwo.setWarnMask(wm);
         parseSink = xsink;
 
         // structured diagnostics are scoped to a single parse action
@@ -3310,11 +3364,13 @@ public:
             yyset_in(fp, lexer);
             // yyparse() will call endParsing() and restore old pgm position
             {
+                // the scoped options of the parse end with it in any case
+                ParseOverlayScope pos(*this);
                 LexicalParsePolicyHelper semantic_scope(&state.semantic_policy);
                 yyparse(lexer);
+                // the parser returns before the end of the input if its stack is exhausted
+                qore_scanner_end_input(lexer);
             }
-            // the parser returns before the end of the input if its stack is exhausted
-            qore_scanner_end_input(lexer);
 
             // finalize parsing, back out or commit all changes
             internParseCommit();
@@ -3598,10 +3654,11 @@ public:
         {
             // the check and the change are atomic
             std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
-            if (checkModernSourceDefault(pwo.parse_options, filename, xsink)) {
+            QoreParseOptions current = pwo.parse_options.loadShared();
+            if (checkModernSourceDefault(current, filename, xsink)) {
                 return -1;
             }
-            pwo.parse_options = withImplications(pwo.parse_options | PO_MODERN);
+            pwo.parse_options = withImplications(current | PO_MODERN);
             syncExecModeWithParseOptions();
         }
         pgm->setWarningMask(QP_WARN_ALL);
@@ -3946,7 +4003,8 @@ public:
     DLLLOCAL void disableParseOptionsIntern(const QoreParseOptions& po) {
         // the execution mode follows the options; another change must not come between them
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
-        pwo.parse_options = withImplications(pwo.parse_options & ~po);
+        directive_compat &= ~po;
+        pwo.parse_options = withImplications(pwo.parse_options.loadShared() & ~po);
         syncExecModeWithParseOptions();
     }
 
@@ -3961,10 +4019,13 @@ public:
             xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
             return -1;
         }
-        if (checkModernConflict(pwo.parse_options, po, true, "Program::setParseOptions()", xsink)) {
+        // a change for the whole Program is checked against the Program's own options, not against the scoped
+        // options of a parse in progress, which it does not change (issue #6207)
+        QoreParseOptions current = pwo.parse_options.loadShared();
+        if (checkModernConflict(current, po, true, "Program::setParseOptions()", xsink)) {
             return -1;
         }
-        if ((po & PO_ALLOW_REPARSE) && !(pwo.parse_options & PO_ALLOW_REPARSE)
+        if ((po & PO_ALLOW_REPARSE) && !(current & PO_ALLOW_REPARSE)
                 && checkReparseOptionChange("Program::setParseOptions()", xsink)) {
             return -1;
         }
@@ -4002,10 +4063,12 @@ public:
             xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
             return -1;
         }
-        if (checkModernConflict(pwo.parse_options, po, false, "Program::disableParseOptions()", xsink)) {
+        // checked against the Program's own options, as setParseOptions()
+        QoreParseOptions current = pwo.parse_options.loadShared();
+        if (checkModernConflict(current, po, false, "Program::disableParseOptions()", xsink)) {
             return -1;
         }
-        if ((po & PO_ALLOW_REPARSE) && (pwo.parse_options & PO_ALLOW_REPARSE)
+        if ((po & PO_ALLOW_REPARSE) && (current & PO_ALLOW_REPARSE)
                 && checkReparseOptionChange("Program::disableParseOptions()", xsink)) {
             return -1;
         }
@@ -4054,13 +4117,15 @@ public:
         {
             // the write lock before po_mutex (see po_mutex)
             std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
-            if (static_cast<bool>(po & PO_ALLOW_REPARSE) != static_cast<bool>(pwo.parse_options & PO_ALLOW_REPARSE)
+            // the options that the replacement replaces are the Program's own (issue #6207)
+            QoreParseOptions current = pwo.parse_options.loadShared();
+            if (static_cast<bool>(po & PO_ALLOW_REPARSE) != static_cast<bool>(current & PO_ALLOW_REPARSE)
                     && checkReparseOptionChange("Program::replaceParseOptions()", xsink)) {
                 return -1;
             }
             std::lock_guard<std::mutex> po_guard(po_mutex);
-            refused = po_locked && (checkDisableParseOptions(pwo.parse_options & ~po)
-                || checkSetParseOptions(po & ~pwo.parse_options));
+            refused = po_locked && (checkDisableParseOptions(current & ~po)
+                || checkSetParseOptions(po & ~current));
             if (!refused) {
                 //printd(5, "qore_program_private::replaceParseOptions() this: %p pgm: %p replacing po: %lld with po: %lld\n", this, pgm, pwo.parse_options, po);
                 replaceParseOptionsIntern(po);
@@ -4073,42 +4138,100 @@ public:
         return 0;
     }
 
-    DLLLOCAL int parseSetParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
-        // the checks and the change are atomic: the write lock of the options is held throughout (#6078), and
-        // po_mutex only inside it (isLocked(), changeIfNotLocked()), so that no exception is raised under po_mutex
-        std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
-        // as setParseOptions(); the parse errors are raised without po_mutex, as raising one takes other locks
-        if (isLocked(po, true)) {
-            parse_error(*loc, "parse options have been locked on this program object");
-            return -1;
+    //! a parse directive, or native code during a parse (QoreProgram::parseSetParseOptions()), sets options
+    /** In a file with %push-parse-options and in a module header, the change is made in the scoped options of the
+        file or header, which end with it, and which only the parsing thread sees (issue #6207); otherwise it changes
+        the Program's own options.  The checks are made against the options in effect for the parse.
+
+        @param directive true for a parse directive of the code: a %modern directive resets the compatibility options
+        that the host application set through the API, and the compatibility options that a directive sets are the
+        code's own (issue #6382); native code changes the options as the API does
+    */
+    DLLLOCAL int parseSetParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po,
+            bool directive = false) {
+        return parseChangeParseOptions(loc, po, true, directive);
+    }
+
+    //! a parse directive, or native code during a parse, disables options; see parseSetParseOptions()
+    DLLLOCAL int parseDisableParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po,
+            bool directive = false) {
+        return parseChangeParseOptions(loc, po, false, directive);
+    }
+
+    DLLLOCAL int parseChangeParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po, bool set,
+            bool directive) {
+        // the scoped options that the directive changes, if any
+        ParseOptionsOverlayFrame* frame = q_parse_overlay_find_delta(&pwo.parse_options);
+        {
+            // the checks and the change are atomic: the write lock of the options is held throughout (#6078), and
+            // po_mutex only inside it (isLocked(), changeIfNotLocked()), so that no exception is raised under
+            // po_mutex
+            std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
+            // as setParseOptions() / disableParseOptions(); the parse errors are raised without po_mutex, as raising
+            // one takes other locks
+            if (isLocked(po, set)) {
+                parse_error(*loc, "parse options have been locked on this program object");
+                return -1;
+            }
+            // %modern resets the compatibility options that the host application set through the API (issue #6382)
+            QoreParseOptions reset = set && directive ? getModernResetOptions(po, frame) : QoreParseOptions();
+            if (parseCheckModernConflict(loc, po, set, reset)) {
+                return -1;
+            }
+            if (changeIfNotLocked(po, set, frame, reset, directive)) {
+                parse_error(*loc, "parse options have been locked on this program object");
+                return -1;
+            }
         }
-        if (parseCheckModernConflict(loc, po, true)) {
-            return -1;
+#ifdef DEBUG
+        if (frame && frame->kind == ParseOptionsOverlayFrame::PUSHED_FILE) {
+            qore_dbg_parse_scope_begin(pgm, "push");
+        } else if (!frame) {
+            // a directive has changed the Program's own options
+            qore_dbg_parse_scope_begin(pgm, "directive");
         }
-        if (changeIfNotLocked(po, true)) {
-            parse_error(*loc, "parse options have been locked on this program object");
-            return -1;
-        }
+#endif
         return 0;
     }
 
-    DLLLOCAL int parseDisableParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
-        // the checks and the change are atomic: the write lock of the options is held throughout (#6078), and
-        // po_mutex only inside it (isLocked(), changeIfNotLocked()), so that no exception is raised under po_mutex
-        std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
-        // as disableParseOptions(); the parse errors are raised without po_mutex, as raising one takes other locks
-        if (isLocked(po, false)) {
-            parse_error(*loc, "parse options have been locked on this program object");
-            return -1;
+    //! returns the compatibility options that a parse directive that sets \a po resets (issue #6382)
+    /** A compatibility option that %modern does not allow and that the host application set through the API (when the
+        Program was created, with Program::setParseOptions() from any thread before or during the parse, on the
+        command line) is a default for legacy code: a %modern directive resets it, so that the code has the
+        semantics of %modern.  An option that a parse directive set and that is still in effect is the code's own, and
+        so is an option that was in effect when the options were locked (QoreProgram::lockOptions()): %modern is
+        refused then (parseCheckModernConflict()), as it is with a directive that sets a compatibility option itself.
+        The write lock of the options must be held.
+
+        @param po the options that the directive sets
+        @param frame the scoped options that the directive changes, if any
+
+        @return the options to reset, or no options if none can or must be reset
+    */
+    DLLLOCAL QoreParseOptions getModernResetOptions(const QoreParseOptions& po,
+            const ParseOptionsOverlayFrame* frame) {
+        // only %modern itself resets them: a directive that completes %modern with options that the host application
+        // set is refused, as the code did not ask for %modern
+        if (!isModern(po) || (po & modernIncompatibleOptions())) {
+            return QoreParseOptions();
         }
-        if (parseCheckModernConflict(loc, po, false)) {
-            return -1;
+        QoreParseOptions current = pwo.parse_options.load();
+        QoreParseOptions conflict = current & modernIncompatibleOptions();
+        if (!conflict) {
+            return QoreParseOptions();
         }
-        if (changeIfNotLocked(po, false)) {
-            parse_error(*loc, "parse options have been locked on this program object");
-            return -1;
+        QoreParseOptions own = directive_compat;
+        if (frame) {
+            own |= frame->directive_compat;
         }
-        return 0;
+        if (conflict & own) {
+            return QoreParseOptions();
+        }
+        std::lock_guard<std::mutex> po_guard(po_mutex);
+        if ((conflict & locked_compat) || checkDisableParseOptions(conflict)) {
+            return QoreParseOptions();
+        }
+        return conflict;
     }
 
     //! returns true if setting (\a set) or disabling \a po is refused by the lock of the parse options
@@ -4120,16 +4243,35 @@ public:
     //! sets (\a set) or disables \a po unless the lock of the parse options refuses it; returns true if refused
     /** The check is made again with the change, as the options may have been locked since isLocked(); po_mutex is
         held only here, and nothing done under it takes another lock
+
+        @param frame the scoped options of the current thread that the change is made in (a file with
+        %push-parse-options or a module header), or nullptr to change the Program's own options
+        @param reset the compatibility options that %modern resets with the change (see getModernResetOptions())
+        @param directive true if a parse directive makes the change
     */
-    DLLLOCAL bool changeIfNotLocked(const QoreParseOptions& po, bool set) {
+    DLLLOCAL bool changeIfNotLocked(const QoreParseOptions& po, bool set, ParseOptionsOverlayFrame* frame = nullptr,
+            const QoreParseOptions& reset = QoreParseOptions(), bool directive = false) {
         // the write lock before po_mutex (see po_mutex); the callers hold it already
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
         std::lock_guard<std::mutex> po_guard(po_mutex);
         if (set ? checkSetParseOptions(po) : checkDisableParseOptions(po)) {
             return true;
         }
+        if (frame) {
+            QoreParseOptions before = frame->view(pwo.parse_options.loadShared());
+            frame->applyChange(before, withImplications(set ? ((before & ~reset) | po) : (before & ~po)), po, set);
+            if (!set) {
+                frame->directive_compat &= ~po;
+            } else if (directive) {
+                frame->directive_compat |= po & modernIncompatibleOptions();
+            }
+            return false;
+        }
         if (set) {
-            setParseOptionsIntern(po);
+            setParseOptionsIntern(po, reset);
+            if (directive) {
+                directive_compat |= po & modernIncompatibleOptions();
+            }
         } else {
             disableParseOptionsIntern(po);
         }
@@ -4498,17 +4640,18 @@ public:
         from it (in a .q file or a Program of its own); %old-style before the directive would save the legacy options
         and leave the rest of the including file without %modern, so the error does not suggest it.
     */
-    DLLLOCAL void pushParseOptions(const QoreProgramLocation* loc, const char* pf) {
+    DLLLOCAL void pushParseOptions(const QoreProgramLocation* loc, ParseOptionsOverlayFrame& frame) {
         // ignore %push-parse-options used multiple times in the same file
-        ppo_t::iterator i = ppo.lower_bound(pf);
-        if (i != ppo.end() && !strcmp(pf, i->first))
+        if (frame.isLinked()) {
             return;
-        if (isModern(pwo.parse_options)) {
+        }
+        QoreParseOptions current = pwo.parse_options.load();
+        if (isModern(current)) {
             QoreStringNode* desc = new QoreStringNode("%push-parse-options cannot be used while %modern is in "
                 "effect: it is a legacy directive, and %modern guarantees a consistent set of parse options");
             // %modern is complete only with the restrictions that a module parse option mask added to the Program of
             // the module: the error names them, as the user did not write %modern (as parseCheckModernConflict())
-            if (module_mask_added && !isModern(pwo.parse_options & ~module_mask_added)) {
+            if (module_mask_added && !isModern(current & ~module_mask_added)) {
                 desc->concat("; %modern is complete only with ");
                 describeParseOptions(module_mask_added, *desc);
                 desc->concat(", which the module parse option mask adds (see set_module_parse_option_mask() and "
@@ -4522,32 +4665,82 @@ public:
             makeParseException(pgm, *loc, "PARSE-OPTION-ERROR", desc);
             return;
         }
-        ppo.insert(i, ppo_t::value_type(pf, pwo.parse_options));
-        //printd(5, "qore_program_private::pushParseOptions() this: %p %p '%s' saving %lld\n", this, pf, pf, pwo.parse_options);
+        // the options that the file's directives set are its own, until it ends (see endPushedFile())
+        linkDeltaFrame(frame);
     }
 
-    DLLLOCAL void restoreParseOptions(const char* pf) {
-        ppo_t::iterator i = ppo.find(pf);
-        if (i != ppo.end()) {
-            //printd(5, "qore_program_private::restoreParseOptions() this: %p %p '%s' restoring %lld\n", this, pf, pf, pwo.parse_options);
-            // the write lock is taken before po_mutex (see po_mutex)
-            std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
-            {
-                std::lock_guard<std::mutex> po_guard(po_mutex);
-                // the snapshot predates the changes made by the file, but not necessarily the lock: the Program may
-                // have been locked (Program::lockOptions(), %lock-options) since, with restrictions that the file set,
-                // which it keeps, and without positive options that the snapshot has, which a locked Program cannot
-                // get back
-                QoreParseOptions restored = i->second;
-                if (po_locked) {
-                    restored &= pwo.parse_options | ~QoreParseOptions::POSITIVE_OPTIONS;
-                }
-                pwo.parse_options = restored | (locked_restrictions & ~lockedMayDisable());
-            }
-            // the options restored may not support an inherited execution mode that the ones of the file did
-            syncExecModeWithParseOptions();
-            ppo.erase(i);
+    //! the file with %push-parse-options whose scoped options are \a frame ends: its options end with it
+    /** @return true if the file had pushed its options: the caller then calls keepLockedRestrictions() once its parse
+        state is consistent
+    */
+    DLLLOCAL bool endPushedFile(ParseOptionsOverlayFrame& frame) {
+        if (!frame.isLinked()) {
+            return false;
         }
+        frame.unlink();
+#ifdef DEBUG
+        qore_dbg_parse_scope_end(pgm, "push");
+#endif
+        return true;
+    }
+
+    //! keeps the restrictions locked by %lock-options in a file with %push-parse-options after the file
+    /** A Program locked by the file keeps the restrictions that it had then, which may be the file's own: they are
+        added to the Program's own options when it is locked (QoreProgram::lockOptions()) and again when the file ends,
+        in case they were changed for the whole Program meanwhile.  The positive options that the file disabled come
+        back, as the file's other options end.
+    */
+    DLLLOCAL void keepLockedRestrictions() {
+        if (!po_locked) {
+            return;
+        }
+        // the write lock is taken before po_mutex (see po_mutex)
+        std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
+        std::lock_guard<std::mutex> po_guard(po_mutex);
+        keepLockedRestrictionsIntern();
+    }
+
+    //! adds the locked restrictions to the Program's own options; the write lock and po_mutex must be held
+    DLLLOCAL void keepLockedRestrictionsIntern() {
+        QoreParseOptions keep = locked_restrictions & ~lockedMayDisable();
+        QoreParseOptions current = pwo.parse_options.loadShared();
+        if ((current & keep) != keep) {
+            // a change for the whole Program; the thread can still have scoped options of an enclosing file
+            SharedParseOptionsWrite spw;
+            pwo.parse_options = current | keep;
+        }
+    }
+
+    //! links a frame that changes the Program's own options for a file with %push-parse-options or a module header
+    /** It starts with the changes of the enclosing such frame of the thread, if any, as the code of the frame has the
+        options of the code that encloses it.
+    */
+    DLLLOCAL void linkDeltaFrame(ParseOptionsOverlayFrame& frame) {
+        assert(frame.kind != ParseOptionsOverlayFrame::STATEMENT);
+        ParseOptionsOverlayFrame* enclosing = q_parse_overlay_find_delta(&pwo.parse_options);
+        if (enclosing) {
+            frame.add = enclosing->add;
+            frame.remove = enclosing->remove;
+            frame.directive_compat = enclosing->directive_compat;
+        } else {
+            frame.add = QoreParseOptions();
+            frame.remove = QoreParseOptions();
+            frame.directive_compat = QoreParseOptions();
+        }
+        frame.base = pwo.parse_options.loadShared();
+        frame.link(pwo.parse_options);
+    }
+
+    //! links the frame of a module header, which adds the header's restrictions; returns the restrictions added
+    /** The restrictions that the code before the header has already are not the header's own.
+    */
+    DLLLOCAL QoreParseOptions linkModuleHeaderFrame(ParseOptionsOverlayFrame& frame, const QoreParseOptions& header_po) {
+        assert(frame.kind == ParseOptionsOverlayFrame::MODULE_HEADER);
+        QoreParseOptions added = header_po & ~pwo.parse_options.load();
+        linkDeltaFrame(frame);
+        frame.add |= added;
+        frame.remove &= ~added;
+        return added;
     }
 
     DLLLOCAL void addParseException(ExceptionSink& xsink, const QoreProgramLocation* loc) {
@@ -5144,8 +5337,30 @@ public:
 
     //! returns the parse options of the Program, as QoreProgram::getParseOptions() does, without a call into the
     //! library's exported interface
+    /** These are the Program's own options, which a call that enters the Program runs with, also while a thread
+        parses code in it with scoped options of its own (issue #6207)
+    */
     DLLLOCAL static QoreParseOptions getParseOptions(const QoreProgram& pgm) {
+        return pgm.priv->pwo.parse_options.loadShared();
+    }
+
+    //! returns the parse options in effect for the current thread: its scoped options of the Program, if any
+    /** Read inline by the scanner for each token
+    */
+    DLLLOCAL static QoreParseOptions getViewParseOptions(const QoreProgram& pgm) {
         return pgm.priv->pwo.parse_options.load();
+    }
+
+    //! returns the Program's own parse options, without the scoped options of a parse in the current thread
+    /** For a change of the options of the whole Program that is computed from them (issue #6207)
+    */
+    DLLLOCAL static QoreParseOptions getSharedParseOptions(const QoreProgram& pgm) {
+        return pgm.priv->pwo.parse_options.loadShared();
+    }
+
+    //! returns true if the current thread has scoped options of the Program in effect (issue #6207)
+    DLLLOCAL static bool hasParseOverlay(const QoreProgram& pgm) {
+        return pgm.priv->pwo.parse_options.hasOverlays() && q_parse_overlay_find(&pgm.priv->pwo.parse_options);
     }
 
     //! returns true if the Program's constructor has run to completion
@@ -5259,22 +5474,26 @@ public:
         only to that file.  The module loader and qcc both use it, so a module gets the same warnings either way.
     */
     DLLLOCAL static int getModuleFileWarningMask(const QoreProgram* pgm) {
-        return pgm->priv->pwo.warn_mask;
+        return pgm->priv->pwo.getWarnMask();
     }
 
-    DLLLOCAL static bool setSaveParseWarnOptions(const QoreProgram* pgm, const ParseWarnOptions &new_opts,
-            ParseWarnOptions &old_opts) {
-        std::lock_guard<std::recursive_mutex> lg(pgm->priv->pwo.parse_options.writeLock());
-        if (pgm->priv->pwo == new_opts) {
+    //! gives the current thread the options and warning mask of a statement while it is initialized (issue #6207)
+    /** Links \a frame with the statement's options if they are not the ones in effect already; they are the thread's
+        own, which no other thread sees, and end when the frame is unlinked.  Takes no lock and allocates nothing.
+
+        @return true if the frame was linked
+    */
+    DLLLOCAL static bool linkStatementFrame(const QoreProgram* pgm, const ParseWarnOptions& opts,
+            ParseOptionsOverlayFrame& frame) {
+        assert(frame.kind == ParseOptionsOverlayFrame::STATEMENT);
+        ProgramParseWarnOptions& pwo = pgm->priv->pwo;
+        if (pwo.get() == opts) {
             return false;
         }
-        old_opts = pgm->priv->pwo.get();
-        pgm->priv->pwo.set(new_opts);
+        frame.po = opts.parse_options;
+        frame.warn_mask = opts.warn_mask;
+        frame.link(pwo.parse_options);
         return true;
-    }
-
-    DLLLOCAL static void setParseWarnOptions(const QoreProgram* pgm, const ParseWarnOptions &new_opts) {
-        pgm->priv->pwo.set(new_opts);
     }
 
     DLLLOCAL static bool setThreadVarData(QoreProgram* pgm, ThreadProgramData* td, ThreadLocalProgramData* &tlpd,
@@ -5606,7 +5825,9 @@ public:
 
     DLLLOCAL static QoreParseOptions forceReplaceParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
         std::lock_guard<std::recursive_mutex> lg(pgm.priv->pwo.parse_options.writeLock());
-        QoreParseOptions rv = pgm.priv->pwo.parse_options;
+        QoreParseOptions rv = pgm.priv->pwo.parse_options.loadShared();
+        // the options that a directive set and that the replacement keeps are still the code's own (issue #6382)
+        pgm.priv->directive_compat &= po;
         pgm.priv->pwo.parse_options = withImplications(po);
         pgm.priv->syncExecModeWithParseOptions();
         return rv;
@@ -5616,7 +5837,7 @@ public:
     /** @note must be called by the thread that holds the parse lock of the Program
     */
     DLLLOCAL static int getParseWarningMask(const QoreProgram& pgm) {
-        return pgm.priv->warnSink ? pgm.priv->pwo.warn_mask.load(std::memory_order_relaxed) : 0;
+        return pgm.priv->warnSink ? pgm.priv->pwo.getWarnMask() : 0;
     }
 
     //! Returns the warning sink of the parse action in progress in the Program if it has warnings enabled and a
@@ -5631,7 +5852,7 @@ public:
     */
     DLLLOCAL static ExceptionSink* getSeparateParseWarningSink(const QoreProgram& pgm) {
         const qore_program_private* p = pgm.priv;
-        if (!p->warnSink || !p->pwo.warn_mask || p->warnSink == p->parseSink) {
+        if (!p->warnSink || !p->pwo.getWarnMask() || p->warnSink == p->parseSink) {
             return nullptr;
         }
         return p->warnSink;
@@ -5665,7 +5886,7 @@ public:
         //printd(5, "QP::mPW(code: %d, warn: '%s', fmt: '%s') priv->pwo.warn_mask: %d priv->warnSink: %p %s\n", code,
         //    warn, fmt, priv->pwo.warn_mask, priv->warnSink,
         //    priv->warnSink && (code & priv->pwo.warn_mask) ? "OK" : "SKIPPED");
-        if (!pgm || !pgm->priv->warnSink || !(code & pgm->priv->pwo.warn_mask)) {
+        if (!pgm || !pgm->priv->warnSink || !(code & pgm->priv->pwo.getWarnMask())) {
             return;
         }
 
@@ -5690,7 +5911,7 @@ public:
         //printd(5, "QoreProgram::makeParseWarning(code: %d, warn: '%s', desc: '%s') priv->pwo.warn_mask: %d "
         //    "priv->warnSink: %p %s\n", code, warn, desc->c_str(), priv->pwo.warn_mask, priv->warnSink,
         //    priv->warnSink && (code & priv->pwo.warn_mask) ? "OK" : "SKIPPED");
-        if (!pgm || !pgm->priv->warnSink || !(code & pgm->priv->pwo.warn_mask)) {
+        if (!pgm || !pgm->priv->warnSink || !(code & pgm->priv->pwo.getWarnMask())) {
             desc->deref();
             return;
         }
@@ -5705,7 +5926,7 @@ public:
     //! Raises a parse warning and attaches structured metadata when diagnostic collection is enabled
     DLLLOCAL static void makeParseWarning(QoreProgram* pgm, const QoreProgramLocation& loc, int code,
             const char* warn, QoreStringNode* desc, const QoreDiagnosticMetadata& metadata) {
-        if (!pgm || !pgm->priv->warnSink || !(code & pgm->priv->pwo.warn_mask)) {
+        if (!pgm || !pgm->priv->warnSink || !(code & pgm->priv->pwo.getWarnMask())) {
             desc->deref();
             return;
         }
@@ -6371,18 +6592,35 @@ DLLLOCAL QORE_INTERN_ALWAYS_INLINE void qore_set_user_call_runtime_po_override(
     qore_set_user_call_runtime_po_override_slow(helper, exec_pgm, uvb, caller_po, caller_pgm);
 }
 
-class ParseWarnHelper : public ParseWarnOptions {
-protected:
-   bool restore;
+//! Gives the current thread the parse options and warning mask of a statement while it is initialized
+/** They are the parsing thread's own (a ParseOptionsOverlayFrame::STATEMENT frame): other threads see the Program's own
+    options meanwhile, and nothing is restored when they end (issue #6207).
+*/
+class ParseWarnHelper {
 public:
-   DLLLOCAL ParseWarnHelper(const ParseWarnOptions &new_opts) {
-      QoreProgram* pgm = getProgram();
-      restore = pgm ? qore_program_private::setSaveParseWarnOptions(pgm, new_opts, *this) : false;
-   }
-   DLLLOCAL ~ParseWarnHelper() {
-      if (restore)
-         qore_program_private::setParseWarnOptions(getProgram(), *this);
-   }
+    DLLLOCAL ParseWarnHelper(const ParseWarnOptions& new_opts) : pgm(getProgram()) {
+        if (pgm && qore_program_private::linkStatementFrame(pgm, new_opts, frame)) {
+#ifdef DEBUG
+            qore_dbg_parse_scope_begin(pgm, "statement");
+#endif
+        }
+    }
+
+    DLLLOCAL ~ParseWarnHelper() {
+        if (frame.isLinked()) {
+            frame.unlink();
+#ifdef DEBUG
+            qore_dbg_parse_scope_end(pgm, "statement");
+#endif
+        }
+    }
+
+    ParseWarnHelper(const ParseWarnHelper&) = delete;
+    ParseWarnHelper& operator=(const ParseWarnHelper&) = delete;
+
+private:
+    QoreProgram* pgm;
+    ParseOptionsOverlayFrame frame{ParseOptionsOverlayFrame::STATEMENT};
 };
 
 typedef std::map<QoreProgram*, qore_program_private*> qore_program_map_t;

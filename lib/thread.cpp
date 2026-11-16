@@ -410,12 +410,108 @@ public:
     void* parseState;
     ParseConditionalStack* pcs;
     ProgramParseContext* next;
+    //! the scoped options of the file that this context was saved for, if it has %push-parse-options (issue #6207)
+    /** Linked by %push-parse-options and unlinked when the file ends (endParsing()), or by
+        qore_program_private::ParseOverlayScope if the parse ends before
+    */
+    ParseOptionsOverlayFrame push_frame{ParseOptionsOverlayFrame::PUSHED_FILE};
 
     DLLLOCAL ProgramParseContext(const char* fname, const char* source, int offset, void* ps,
             ParseConditionalStack* ppcs, ProgramParseContext* n) : file(fname), source(source), offset(offset),
             parseState(ps), pcs(ppcs), next(n) {
     }
 };
+
+namespace {
+//! the innermost scoped parse option frame of the thread (see ParseOptionsOverlayFrame)
+constinit thread_local ParseOptionsOverlayFrame* q_parse_overlay_head = nullptr;
+//! the serial of the next frame that the thread links
+constinit thread_local uint64_t q_parse_overlay_serial = 0;
+//! the number of PUSHED_FILE frames that the thread has unlinked
+constinit thread_local uint64_t q_parse_overlay_pushed_end_count = 0;
+}
+
+#ifdef DEBUG
+constinit thread_local int q_shared_parse_options_write = 0;
+#endif
+
+void ParseOptionsOverlayFrame::link(const SyncParseOptions& options) noexcept {
+    assert(!key);
+    key = &options;
+    prev = q_parse_overlay_head;
+    serial = q_parse_overlay_serial++;
+    q_parse_overlay_head = this;
+    options.overlays.fetch_add(1, std::memory_order_relaxed);
+}
+
+void ParseOptionsOverlayFrame::unlink() noexcept {
+    if (!key) {
+        return;
+    }
+    // frames are unlinked by the thread that linked them, not always in the reverse order (a module header's frame)
+    [[maybe_unused]] bool found = false;
+    for (ParseOptionsOverlayFrame** p = &q_parse_overlay_head; *p; p = &(*p)->prev) {
+        if (*p == this) {
+            *p = prev;
+            found = true;
+            break;
+        }
+    }
+    assert(found);
+    if (kind == PUSHED_FILE) {
+        ++q_parse_overlay_pushed_end_count;
+    }
+    key->overlays.fetch_sub(1, std::memory_order_relaxed);
+    key = nullptr;
+    prev = nullptr;
+}
+
+ParseOptionsOverlayFrame* q_parse_overlay_find(const SyncParseOptions* key) {
+    for (ParseOptionsOverlayFrame* f = q_parse_overlay_head; f; f = f->prev) {
+        if (f->key == key) {
+            return f;
+        }
+    }
+    return nullptr;
+}
+
+ParseOptionsOverlayFrame* q_parse_overlay_find_delta(const SyncParseOptions* key) {
+    for (ParseOptionsOverlayFrame* f = q_parse_overlay_head; f; f = f->prev) {
+        if (f->key == key && f->kind != ParseOptionsOverlayFrame::STATEMENT) {
+            return f;
+        }
+    }
+    return nullptr;
+}
+
+uint64_t q_parse_overlay_next_serial() {
+    return q_parse_overlay_serial;
+}
+
+void q_parse_overlay_unlink_since(const SyncParseOptions* key, uint64_t serial) {
+    ParseOptionsOverlayFrame* f = q_parse_overlay_head;
+    while (f) {
+        ParseOptionsOverlayFrame* prev = f->prev;
+        if (f->key == key && f->serial >= serial) {
+            f->unlink();
+        }
+        f = prev;
+    }
+}
+
+uint64_t q_parse_overlay_pushed_ends() {
+    return q_parse_overlay_pushed_end_count;
+}
+
+unsigned q_parse_overlay_count(const SyncParseOptions* key) {
+    unsigned rv = 0;
+    for (ParseOptionsOverlayFrame* f = q_parse_overlay_head; f; f = f->prev) {
+        if (f->key == key) {
+            ++rv;
+        }
+    }
+    return rv;
+}
 
 // for detecting circular references at runtime
 typedef std::set<const lvalue_ref*> ref_set_t;
@@ -3294,7 +3390,9 @@ bool parse_cond_test(const QoreProgramLocation* loc) {
 
 void push_parse_options(const QoreProgramLocation* loc) {
     ThreadData* td = thread_data.get();
-    qore_program_private::get(*td->current_pgm)->pushParseOptions(loc, td->parse_file);
+    // the context saved when the current file began is the file's
+    assert(td->plStack);
+    qore_program_private::get(*td->current_pgm)->pushParseOptions(loc, td->plStack->push_frame);
 }
 
 // called when a StatementBlock has "on_exit" blocks
@@ -3339,7 +3437,11 @@ void beginParsing(const char* file, void* ps, const char* src, int offset) {
 void* endParsing(bool report_open_blocks) {
     ThreadData* td = thread_data.get();
     //printd(5, "endParsing() td: %p restoreParseOptions pgm: %p parse_file: %p '%s' src: %s:%d\n", td, td->current_pgm, td->parse_loc.getFile(), td->parse_loc.getFile(), td->parse_loc.getSource() ? td->parse_loc.getSource() : "(null)", td->parse_loc.offset);
-    qore_program_private::get(*td->current_pgm)->restoreParseOptions(td->parse_file);
+    // the options of a file with %push-parse-options end with it; the restrictions that it locked are kept once the
+    // parse state has been restored below
+    assert(td->plStack);
+    qore_program_private* pp = qore_program_private::get(*td->current_pgm);
+    bool pushed = pp->endPushedFile(td->plStack->push_frame);
 
     void* rv = td->parseState;
 
@@ -3359,6 +3461,11 @@ void* endParsing(bool report_open_blocks) {
     td->pcs              = td->plStack->pcs;
     delete td->plStack;
     td->plStack = pl;
+
+    if (pushed) {
+        // if this fails, the parse state is consistent, and qore_program_private::ParseOverlayScope tries again
+        pp->keepLockedRestrictions();
+    }
 
     return rv;
 }

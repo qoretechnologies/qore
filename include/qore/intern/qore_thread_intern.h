@@ -234,12 +234,6 @@ public:
         return nullptr;
     }
 
-protected:
-    //! the restrictions that the module's \c domains key removed from its Program (see setDomains())
-    int64 dom_removed = QDOM_DEFAULT;
-
-public:
-
     //! Records a child module declared with %try-child-module in this module
     /** @param loc the location of the directive
         @param spec the module specification (feature name with an optional version constraint)

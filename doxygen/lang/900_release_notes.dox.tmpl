@@ -610,10 +610,10 @@
     set; see @ref modern "%modern".
 
     @par Compatibility Parse Options Refused Under \%modern
-    Parse directives and options that change the meaning of code, such as @ref no-negative-offsets "%no-negative-offsets" and
-    the \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect, nor can
-    @ref modern "%modern" be set while one of them is in effect; legacy code that needs them is parsed without
-    @ref modern "%modern" (see @ref modern_option_consistency).
+    Options that change the meaning of code, such as @ref no-negative-offsets "%no-negative-offsets" and the
+    \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect, nor with it in the same code; a
+    \c %%modern directive resets one that the application set through the API as a default for legacy code (see
+    @ref modern_option_consistency).
 
     @par Unassigned Local Variable Values Rejected Under \%modern
     @ref modern "%modern" implies @ref strict-parse-errors "%strict-parse-errors", so a local variable that cannot
@@ -2023,6 +2023,10 @@
     - the initializer of a \c private:internal member writes its own member when a class two or more levels below
       declares a member with the same name again (or inherits one from two base classes); it wrote the other member,
       and the methods of its class saw it unset (see @ref private_members; issue #6393)
+    - the parse options that a parse gives only part of its code (a module header, a file with
+      @ref push-parse-options "%push-parse-options", code parsed before a directive) are no longer visible to other
+      threads, and changes to the Program's options made meanwhile are kept; @ref lock-options "%lock-options" in a
+      file with %push-parse-options keeps its restrictions after the file (issues #6175, #6207)
     - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
       threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
     - a range of the @ref list_element_operator "[] operator" (ex: <tt>x[-9..1]</tt>) gives only elements of its
