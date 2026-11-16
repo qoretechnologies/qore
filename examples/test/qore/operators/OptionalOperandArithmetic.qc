@@ -1,19 +1,8 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: children - its checks run in child processes that set their own execution modes
-# test-platform: macos - AOT code generation of arithmetic on operands of an or-nothing type
-
 # Copyright 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
-
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires ../../ExecModeHarness.qm
-
-%exec-class OptionalOperandArithmeticTest
+# the cases of the OptionalOperandArithmetic-<n>.qtest tests (qore#6226): each runs one part of them, so that each takes
+# a short time, and together they run every case (see addPartCase())
 
 #! arithmetic on operands of an or-nothing type (*int, *float) gives the result of the operator for NOTHING (qore#5889)
 /** The AOT compiler specialized an operator whose operands were of an or-nothing type to native arithmetic, which
@@ -24,9 +13,19 @@
     (\c binary.q and \c compound.q are generated; \c issue.q is the program of the issue).
 
     The programs are in \c optional-operand-arithmetic/.
+
+    The cases are in five parts (see addPartCase()), OptionalOperandArithmetic-<n>.qtest, so that each runs for a short
+    time (the JIT runs of \c binary.q and \c compound.q take 15 s and 11 s and the qcc compiles 1-5 s each in a debug
+    build; the whole test took 50 s alone and 260 s when the machine was busy, qore#6226): part 1 checks the AST
+    interpreter's output, the IR and tiered execution of every program, and the JIT run and the qcc executables of
+    \c issue.q; parts 2 and 3 the JIT run and the qcc executables of \c binary.q, and parts 4 and 5 those of
+    \c compound.q.
 */
-class OptionalOperandArithmeticTest inherits QUnit::Test {
+class OptionalOperandArithmeticBase inherits QUnit::Test {
     private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+
         string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         string dir = get_script_dir() + "/optional-operand-arithmetic";
 
@@ -34,11 +33,36 @@ class OptionalOperandArithmeticTest inherits QUnit::Test {
         const Programs = ("issue", "binary", "compound");
     }
 
-    constructor() : QUnit::Test("OptionalOperandArithmeticTest", "1.0", \ARGV) {
-        addTestCase("the AST interpreter prints the expected output", \testAst());
-        addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
-        addTestCase("qcc executables print the output of the AST", \testCompiled());
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
+        addPartCase(1, "the AST interpreter prints the expected output", \testAst());
+        addPartCase(1, "the parts run every program in every mode", \testPartsCoverEverything());
+        addPartCase(1, "IR and tiered execution of every program print the output of the AST", \testModes(),
+            (Programs, ("ir", "tiered")));
+        addPartCase(1, "JIT execution of issue prints the output of the AST", \testModes(), (("issue",), ("jit",)));
+        addPartCase(1, "qcc executables of issue print the output of the AST", \testCompiled(),
+            (("issue",), ("0", "3")));
+        addPartCase(2, "JIT execution of binary prints the output of the AST", \testModes(),
+            (("binary",), ("jit",)));
+        addPartCase(3, "qcc executables of binary print the output of the AST", \testCompiled(),
+            (("binary",), ("0", "3")));
+        addPartCase(4, "JIT execution of compound prints the output of the AST", \testModes(),
+            (("compound",), ("jit",)));
+        addPartCase(5, "qcc executables of compound print the output of the AST", \testCompiled(),
+            (("compound",), ("0", "3")));
         set_return_value(main());
+    }
+
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
+    }
+
+    #! checks that the programs and the modes that the parts run are the ones of the test (a new one needs a part)
+    testPartsCoverEverything() {
+        assertEq(("issue", "binary", "compound"), Programs, "the programs that the parts run");
+        assertEq(("ast", "ir", "jit", "tiered"), Modes, "the modes that the parts run");
     }
 
     private string expected(string name) {
@@ -58,22 +82,22 @@ class OptionalOperandArithmeticTest inherits QUnit::Test {
         }
     }
 
-    testModes() {
-        foreach string name in (Programs) {
-            foreach string mode in (Modes) {
+    testModes(list<string> programs, list<string> modes) {
+        foreach string name in (programs) {
+            foreach string mode in (modes) {
                 assertEq(expected(name), run(name, mode), name + " " + mode);
             }
         }
     }
 
-    testCompiled() {
+    testCompiled(list<string> programs, list<string> opts) {
         string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
         if (!is_file(qcc_bin)) {
             qcc_bin = "qcc";
         }
         TmpDir tmp("qore-optional-operand-arithmetic-");
-        foreach string name in (Programs) {
-            foreach string opt in (("0", "3")) {
+        foreach string name in (programs) {
+            foreach string opt in (opts) {
                 string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
                 int rc;
                 string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, name), \rc);
