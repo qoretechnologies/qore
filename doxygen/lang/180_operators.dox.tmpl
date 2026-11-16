@@ -237,6 +237,7 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     If the index value is neither a list nor an integer it is converted to an integer. If the index is an integer and out of range, @ref nothing is returned.
     If the index is a list and completely out of range, empty list/string/binary is returned. A single integer index on a string returns a @ref char value; string ranges and list indexes return strings.
     With @ref negative-offsets "%negative-offsets" (implied by @ref modern "%modern"), negative list, string, binary, and buffer indexes and range endpoints are interpreted from the end of the value, so \c value[-1] is the last element and \c value[-2..] is the last two elements.
+    A range is resolved against the elements of the value (the characters of a string, also when they are multi-byte characters) and gives only elements of the value, from the start to the end, or in reverse order when the start is after the end: its bounds are limited to the first and last elements, a range that has no element of the value gives an empty value of the same type, and so does every range of an empty value.
     Note that this operator is not supported with multiple values and/or ranges between the square brackets on the left-hand side of an assignment expression.
 
     @par Syntax

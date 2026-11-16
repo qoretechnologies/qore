@@ -444,8 +444,9 @@ bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq
     switch (seq_type) {
         case NT_LIST:   seq_size = seq.get<const QoreListNode>()->size(); break;
         case NT_STRING: {
+            // the elements of a string are its characters, which the range is resolved against
             QoreStringValueHelper str(seq);
-            seq_size = str->size();
+            seq_size = str->length();
             break;
         }
         case NT_BINARY: seq_size = seq.get<const BinaryNode>()->size(); break;
@@ -466,6 +467,12 @@ bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq
     }
 
     if ((no_start && stop < 0) || (no_stop && start >= seq_size)) {
+        return false;
+    }
+
+    // an empty sequence has no elements to clamp the bounds to, so its effective range is always empty; a list with
+    // %broken-list-range is the exception, as there the range of a list is not limited to its elements
+    if (!seq_size && (!broken_list_range || seq_type != NT_LIST)) {
         return false;
     }
 
