@@ -503,7 +503,20 @@ DLLLOCAL void swap_runtime_parse_options(const QoreParseOptions& po, const Abstr
 DLLLOCAL void swap_runtime_location(const QoreProgramLocation*loc, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc);
 DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc, const QoreParseOptions& po);
+
 DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc);
+
+//! Sets the runtime parse options of the thread for lowered top-level code (TopLevelStatementBlock::execIR())
+/** As swap_runtime_parse_options(), in a function of its own: the per-statement path of the AST interpreter inlines
+    update_runtime_statement_location(), and a caller added to the functions of that path changes the compiler's
+    inlining decisions for it; restored with restore_toplevel_code_parse_options()
+*/
+DLLLOCAL void swap_toplevel_code_parse_options(const QoreParseOptions& po, const AbstractStatement*& old_stmt,
+    const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
+
+//! Restores the runtime statement, location and parse options saved by swap_toplevel_code_parse_options()
+DLLLOCAL void restore_toplevel_code_parse_options(const AbstractStatement* stmt, const QoreProgramLocation* loc,
+    const QoreParseOptions& po);
 
 //! Cached runtime location pointers for hot-loop optimization.
 //! Avoids repeated TLS lookups (pthread_getspecific + std::map::find) per instruction.
@@ -955,6 +968,28 @@ DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);
 */
 DLLLOCAL bool parse_check_restriction(const QoreParseOptions& o);
 DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
+
+//! Returns true: the code that runs as compiled code (IR, JIT, AOT) always has negative offsets
+/** Only %modern code is compiled (IR lowering and AOT refuse code with legacy tokens), %modern implies
+    PO_NEGATIVE_OFFSETS and refuses %no-negative-offsets, a module parse option mask cannot strip it, and compiled code
+    runs with its own parse options, also when legacy code calls it; so where compiled code checks the option it
+    always holds, and the run-time lookup is not made.  A debug build asserts it, so that a change that breaks the
+    guarantee fails in the debug tests (compatibility options refused under %modern: qore#5682)
+*/
+static inline bool qore_compiled_code_negative_offsets() {
+    assert(runtime_check_parse_option(PO_NEGATIVE_OFFSETS));
+    return true;
+}
+
+//! Returns true: the code that runs as compiled code (IR, JIT, AOT) always has strict arguments
+/** %modern implies PO_STRICT_ARGS; code after %loose-args is not %modern and is not compiled, and compiled code runs
+    with its own parse options, also when legacy %loose-args code calls it (see
+    qore_compiled_code_negative_offsets()).  A debug build asserts it
+*/
+static inline bool qore_compiled_code_strict_args() {
+    assert(runtime_check_parse_option(PO_STRICT_ARGS));
+    return true;
+}
 
 //! Sets the runtime parse options to those of AOT-compiled code while the code is loaded
 /** When code is parsed from source, the parser binds calls to their variants and checks each builtin variant's
