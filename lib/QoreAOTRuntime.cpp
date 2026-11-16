@@ -3914,7 +3914,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (ref3 && *ref3) {
                     QoreAOTTypeResolver type_resolver(pgm);
                     std::string type_error;
-                    object_type_info = type_resolver.resolve(ref3, type_error);
+                    // a type parameter of the generic function that the code is in (B<U> b() in sub f<U>()) is resolved as that
+                    // function's, so that the call's type arguments replace it (qore#6261)
+                    object_type_info = type_resolver.resolveForSignature(ref3, type_error,
+                        qore_aot_get_type_param_owner());
                     if (!object_type_info || !type_error.empty()) {
                         std::string msg = "cannot resolve new-object type path '";
                         msg += ref3;

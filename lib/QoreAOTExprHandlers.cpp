@@ -1270,7 +1270,10 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
         if (object_type_path && *object_type_path) {
             QoreAOTTypeResolver type_resolver(ctx.pgm);
             std::string type_error;
-            object_type_info = type_resolver.resolve(object_type_path, type_error);
+            // a type parameter of the generic function that the code is in (B<U> b() in sub f<U>()) is resolved as that
+            // function's, so that the call's type arguments replace it (qore#6261)
+            object_type_info = type_resolver.resolveForSignature(object_type_path, type_error,
+                qore_aot_get_type_param_owner());
             if (!object_type_info || !type_error.empty()) {
                 ctx.error = "cannot resolve new-object type path '";
                 ctx.error += object_type_path;
@@ -2653,7 +2656,10 @@ static QoreValue read_expr_scoped_new_object(AOTExprReadCtx& ctx) {
         if (object_type_path && *object_type_path) {
             QoreAOTTypeResolver type_resolver(ctx.pgm);
             std::string type_error;
-            object_type_info = type_resolver.resolve(object_type_path, type_error);
+            // a type parameter of the generic function that the code is in (B<U> b() in sub f<U>()) is resolved as that
+            // function's, so that the call's type arguments replace it (qore#6261)
+            object_type_info = type_resolver.resolveForSignature(object_type_path, type_error,
+                qore_aot_get_type_param_owner());
             if (!object_type_info || !type_error.empty()) {
                 ctx.error = "cannot resolve scoped-new-object type path '";
                 ctx.error += object_type_path;

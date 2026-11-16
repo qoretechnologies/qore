@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - AOT code generation and loading of generic functions that construct objects of generic classes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class GenericFunctionLocalObjectTypeTest
+
+#! Regression test for issue #6261: generic functions that construct objects of generic classes with their own type
+#! parameters as type arguments in qcc programs
+/** A generic function or method constructs an object of a generic class with its type parameter as the type argument
+    (`B<U> b(l)` or `new B<U>(l)` in `sub f<U>(list<U> l)`).  qcc compiles the function once, for every type argument,
+    so the object type is read back from the AOT image with the type parameter, which the call's type arguments
+    replace.  The AOT loader resolved the type parameter of the function without the function's signature, so it was
+    not the function's own and the call's type arguments did not replace it: the compiled program raised
+    MISSING-TYPE-ARGUMENTS.
+
+    local-object.q constructs such objects in functions, methods, static methods and closures and prints their type
+    arguments; its output must be the one in local-object.expected in every execution mode, on the IR tier and in
+    programs compiled with qcc -O0 and -O3.
+*/
+class GenericFunctionLocalObjectTypeTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string fixture = get_script_dir() + "/local-object.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/local-object.expected");
+    }
+
+    constructor() : QUnit::Test("generic class objects constructed in generic functions with their type parameters",
+            "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/generic-function-local-object-type";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}
