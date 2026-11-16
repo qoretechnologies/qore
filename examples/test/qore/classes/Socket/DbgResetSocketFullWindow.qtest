@@ -51,6 +51,12 @@ class DbgResetSocketFullWindowTest inherits QUnit::Test {
         Socket peer = listener.accept(5s);
         on_exit peer.close();
 
+        # without the peer's receive window, which the system's headers or kernel may not give, dbg_reset_socket()
+        # cannot tell data that cannot arrive, and waits for it
+        if (call_function("dbg_tcp_peer_window", peer) < 0) {
+            testSkip("the system does not give the receive window that the peer of a TCP socket advertised");
+        }
+
         # the peer writes, without blocking, more than the client's receive buffer and its own send buffer take: a
         # non-blocking send writes until the socket would block, and then returns the poll information; once two
         # calls in a row have returned it, the buffers are full, as the client does not read

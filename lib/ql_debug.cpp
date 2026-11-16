@@ -116,6 +116,7 @@
 #include <arpa/inet.h>
 #include <cerrno>
 #include <cstdlib>
+#include <cstddef>
 #include <cstring>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -17023,26 +17024,32 @@ static int64 dbg_unacknowledged_bytes(int fd) {
 }
 
 //! returns the receive window that the peer last advertised for \a fd, in bytes, or -1 if the system does not tell
-/** \c TCP_CONNECTION_INFO on macOS, \c TCP_INFO on Linux (5.4 or later)
+/** The window that the other end of the connection (the client of a test's peer) advertised, as this end sees it:
+    \c tcpi_snd_wnd, the window that this end may send into, of \c struct \c tcp_connection_info (macOS,
+    \c TCP_CONNECTION_INFO) or \c struct \c tcp_info (Linux 5.4 or later, \c TCP_INFO), when the system's headers have
+    the member (a build-time check: \c HAVE_TCP_CONNECTION_INFO_TCPI_SND_WND, \c HAVE_TCP_INFO_TCPI_SND_WND).
+    \c tcpi_rcv_wnd would be this end's own advertised window, which says nothing about whether the other end can
+    take what this end has written.  Without the member, or when the kernel does not fill it in, the window is
+    unknown, and dbg_wait_send_buffer_empty() waits as it did before it checked the window.
 */
 static int64 dbg_peer_window(int fd) {
-#if defined(DARWIN) && defined(TCP_CONNECTION_INFO)
+#if defined(HAVE_TCP_CONNECTION_INFO_TCPI_SND_WND) && defined(TCP_CONNECTION_INFO)
     struct tcp_connection_info ti;
     socklen_t len = sizeof ti;
-    return getsockopt(fd, IPPROTO_TCP, TCP_CONNECTION_INFO, &ti, &len) ? -1 : static_cast<int64>(ti.tcpi_snd_wnd);
-#elif defined(__linux__) && defined(TCP_INFO)
-    // tcpi_snd_wnd of the kernel's struct tcp_info (linux/tcp.h, since Linux 5.4) is at byte offset 228; the C
-    // library's struct can be older, so the field is read from the kernel's layout, which does not change, if the
-    // kernel filled it in
-    static constexpr size_t SndWndOffset = 228;
-    unsigned char buf[512];
-    socklen_t len = sizeof buf;
-    if (getsockopt(fd, IPPROTO_TCP, TCP_INFO, buf, &len) || len < SndWndOffset + sizeof(uint32_t)) {
+    if (getsockopt(fd, IPPROTO_TCP, TCP_CONNECTION_INFO, &ti, &len)
+            || len < offsetof(struct tcp_connection_info, tcpi_snd_wnd) + sizeof ti.tcpi_snd_wnd) {
         return -1;
     }
-    uint32_t wnd;
-    memcpy(&wnd, buf + SndWndOffset, sizeof wnd);
-    return wnd;
+    return ti.tcpi_snd_wnd;
+#elif defined(HAVE_TCP_INFO_TCPI_SND_WND) && defined(TCP_INFO)
+    struct tcp_info ti;
+    socklen_t len = sizeof ti;
+    // a kernel older than the headers fills in less: the member is used only if the kernel filled it in
+    if (getsockopt(fd, IPPROTO_TCP, TCP_INFO, &ti, &len)
+            || len < offsetof(struct tcp_info, tcpi_snd_wnd) + sizeof ti.tcpi_snd_wnd) {
+        return -1;
+    }
+    return ti.tcpi_snd_wnd;
 #else
     return -1;
 #endif
@@ -17111,6 +17118,21 @@ static int64 dbg_wait_send_buffer_empty(int fd, int64& wnd) {
     }
 #endif
     return 0;
+}
+
+//! Debug-only: returns the receive window that the peer of a TCP socket last advertised, or -1 if the system does
+//! not tell (see dbg_peer_window()); without it, dbg_reset_socket() cannot tell data that cannot arrive
+static QoreValue f_dbg_tcp_peer_window(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreSocketObject> sock(obj
+        ? reinterpret_cast<QoreSocketObject*>(const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET,
+            xsink))
+        : nullptr, xsink);
+    if (*xsink || !sock) {
+        return -1;
+    }
+    int fd = sock->getPollableDescriptor();
+    return fd < 0 ? -1 : dbg_peer_window(fd);
 }
 
 //! Debug-only: closes a socket so that its connection is reset at once, once what was written on it has arrived
@@ -25290,6 +25312,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_reset_socket", f_dbg_reset_socket, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_tcp_peer_window", f_dbg_tcp_peer_window, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_force_ssl_error_ssl", f_dbg_force_ssl_error_ssl, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_ssl_close_notify_count", f_dbg_ssl_close_notify_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
