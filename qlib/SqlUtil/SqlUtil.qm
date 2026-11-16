@@ -312,6 +312,12 @@ module SqlUtil {
       query (ex: <tt>cop_as(cop_distinct("ddt_number"), "ddt_number")</tt>): it names the column, as in SQL; the
       alias's definition was used, which gave invalid SQL such as <tt>items.distinct items.ddt_number</tt>
       (<a href="https://github.com/qoretechnologies/qore/issues/1747">issue 1747</a>)
+    - fixed a column alias of a distinct column (ex: <tt>cop_as(cop_distinct("ddt_number"), "dn")</tt>) in the
+      @ref select_option_orderby "orderby" option, which gave <tt>order by distinct ddt_number</tt>: it is ordered
+      by its name, and in a @ref where_clauses "where clause" or the @ref select_option_groupby "groupby"
+      option, which gave <tt>where distinct ddt_number ...</tt>: it stands for the column
+      (<a href="https://github.com/qoretechnologies/qore/issues/6331">issue 6331</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6332">issue 6332</a>)
     - an index is renamed, never dropped and created again under another name: an index that the database cannot
       rename (@ref SqlUtil::AbstractIndex::supportsRename() "AbstractIndex::supportsRename()"), as on SQLite and
       Firebird, with the definition of a template index under another name is taken for the template's index by
@@ -985,6 +991,8 @@ hash<auto> sh = {
     - a simple string with a column name preceded by a \c "-" sign; ex: \c "-name", meaning that that column should be sorted in descending order
     - a string giving a table or table alias and a column name in dot notation (for use with @ref select_option_join "joins"); ex: \c "q.name"
     - a positive integer giving the column number for the ordering
+    - a column alias of the query (made with @ref SqlUtil::cop_as() "cop_as()"), whose definition is used, except
+      for an alias of a distinct column (@ref SqlUtil::cop_distinct() "cop_distinct()"), which is given by its name
     - a hash with the following keys:
       - \c "column" (required): a column name (string) or a column operator hash (e.g. from @ref cop_coalesce())
       - \c "desc" (optional, bool): if @ref True "True", sort this column in descending order
@@ -1397,7 +1405,9 @@ return ds.vexec("delete from schema.table where record_type = %v", ("OLD-CUSTOME
 
     A key of the where clause can name a column of the table or a column alias of the query (made with
     @ref SqlUtil::cop_as() "cop_as()"), whose definition is then used; a key that is both a column of the table and a
-    column alias names the column, as in SQL.
+    column alias names the column, as in SQL.  An alias of a distinct column (@ref SqlUtil::cop_distinct()
+    "cop_distinct()") stands for the column, as \c distinct applies to the select list; this also applies to the
+    @ref select_option_groupby "groupby" option.
 
     @subsection where_clauses_advanced Advanced Where Clauses
 

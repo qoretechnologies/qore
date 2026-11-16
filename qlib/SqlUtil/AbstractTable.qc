@@ -6367,6 +6367,12 @@ string sql = table.getSelectSql(sh, \args);
         return getGroupOrderByListIntern(info, "orderby", coll);
     }
 
+    #! returns True if the name is a column alias of a distinct column (ex: <tt>cop_as(cop_distinct("x"), "y")</tt>)
+    private static bool isDistinctAliasIntern(hash<QueryInfo> info, string name) {
+        auto def = info.pseudo_column_map{name};
+        return def.typeCode() == NT_STRING && def =~ /^distinct\s+/i;
+    }
+
     private list<auto> getGroupOrderByListIntern(hash<QueryInfo> info, string key, list<auto> coll) {
         list<auto> ce = ();
 
@@ -6391,10 +6397,15 @@ string sql = table.getSelectSql(sh, \args);
         foreach auto cv in (info.query_hash{key}) {
             switch (cv.typeCode()) {
                 case NT_STRING: {
-                    if (cv.toInt() == cv)
+                    if (cv.toInt() == cv) {
                         do_int(cv.toInt());
-                    else
+                    } else if (key == "orderby" && isDistinctAliasIntern(info, cv)) {
+                        # issue #6331: a select-list alias of a distinct column is ordered by its name, which every
+                        # database accepts in "order by"; its definition is not an expression
+                        ce += getAliasSqlName(cv);
+                    } else {
                         ce += getColumnNameIntern(info, cv);
+                    }
                     break;
                 }
 
@@ -6573,6 +6584,12 @@ string sql = table.getSelectSql(sh, \args);
             if (info.pseudo_column_map{column_name}.typeCode() == NT_STRING) {
                 # substitute aliases with their actual definition
                 column_name = info.pseudo_column_map{column_name};
+                # issue #6332: DISTINCT applies to the select list, so where an alias of a distinct column is used
+                # in an expression (a where clause or group by), it stands for the column, which already has its
+                # table prefix in a join
+                if (column_name =~ /^distinct\s+/i) {
+                    return regex_subst(column_name, "^distinct\\s+", "", RE_Caseless);
+                }
             }
             # issue #4214: use table prefixes in a join for pseudocolumns
             return use_prefix ? sprintf("%s.%s", getSqlName(), column_name) : column_name;
