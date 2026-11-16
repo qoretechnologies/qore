@@ -11907,7 +11907,7 @@ private:
 //! true for an instruction that a pending exception cannot leave the frame from or be observed by, between the check
 //! of a release and an instruction that checks the sink with the same handler: a constant, scalar arithmetic or
 //! comparison, or the release of a temporary, whose own exception the same check takes (qore#6072)
-static bool qore_ir_release_check_transparent(const QoreIRInstruction* inst) {
+static bool qore_ir_release_check_transparent(const QoreIRInstruction* inst, const QoreIRBasicBlock* handler) {
     switch (inst->opcode) {
         case QoreIROpcode::ConstInt:
         case QoreIROpcode::ConstFloat:
@@ -11927,8 +11927,10 @@ static bool qore_ir_release_check_transparent(const QoreIRInstruction* inst) {
         case QoreIROpcode::GtInt:
         case QoreIROpcode::GeInt:
         case QoreIROpcode::ListSize:
-        case QoreIROpcode::ReleaseOwnedTemp:
             return true;
+        // the release of a fused pipeline's stage input (a second operand) checks the sink with its own handler
+        case QoreIROpcode::ReleaseOwnedTemp:
+            return inst->operands.size() < 2 || inst->exception_target == handler;
         default:
             return false;
     }
@@ -12036,7 +12038,7 @@ size_t qore_ir_prune_release_checks(QoreIRFunction& func) {
                             covered = true;
                             break;
                         }
-                        if (!qore_ir_release_check_transparent(insts[j].get())) {
+                        if (!qore_ir_release_check_transparent(insts[j].get(), inst->exception_target)) {
                             break;
                         }
                     }
@@ -12066,7 +12068,7 @@ size_t qore_ir_prune_release_checks(QoreIRFunction& func) {
                             keep = false;
                             break;
                         }
-                        if (!qore_ir_release_check_transparent(insts[j].get())) {
+                        if (!qore_ir_release_check_transparent(insts[j].get(), inst->exception_target)) {
                             break;
                         }
                     }
