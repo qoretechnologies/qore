@@ -1,0 +1,10 @@
+auto, a name of the code: "hcm(null, \"x\")"
+auto, both names: "hcm(\"m\", \"o\")"
+auto, positional: "hcm(\"x\", \"y\")"
+auto, the pseudo-method's name: RUNTIME-OVERLOAD-ERROR
+auto, default: "f(\"v\", 1)"
+auto, mixed: "f(\"v\", 3)"
+code: "cm(null, \"x\")"
+*code: "1-2"
+not code, named: True
+not code, positional: False

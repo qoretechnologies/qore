@@ -3006,6 +3006,10 @@
       @ref Qore::get_local_vars() "get_local_vars()" and @ref Qore::set_local_var_value() "set_local_var_value()"
       from the calls it makes or from a debugger's callbacks in the same thread
       (<a href="https://github.com/qoretechnologies/qore/issues/5871">issue 5871</a>)
+    - a call of a method that a class does not have, of the name of a member whose type can hold code (\c auto, no
+      type, or a code type), is no longer checked at parse time against the pseudo-method of objects of the same name,
+      which refused a call that the member's code accepts; the member's code is called at run time, and a named call
+      binds its names to the code's parameters (see @ref function_named_arguments; issue #6361)
     - in the C++ API, \c QoreString::replace() clamps an offset past the end of the string to its end instead of
       accessing memory outside the string, and \c QoreString::concat() with a position and a length takes only that
       many characters in a single-byte encoding instead of the rest of the string (issue #6238)
