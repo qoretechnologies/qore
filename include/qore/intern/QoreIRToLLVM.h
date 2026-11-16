@@ -64,6 +64,8 @@ struct AOTSlotMap;
 struct QorePluginLLVMCodegenInfo;
 //! The finalization loops of the lowering of a function that a cancellation interrupts, which refuses the function
 enum QoreFinalizeLoop : int {
+    //! QoreIRToLLVM::finalizeReloadChainSlots()
+    QFL_RELOAD_CHAIN_SLOTS = 1,
     //! QoreIRToLLVM::finalizeObeEntries()
     QFL_HANDLER_LOCAL_TABLE = 2,
 };
@@ -1172,7 +1174,7 @@ private:
     uint32_t getReloadChainSlotIndex(llvm::Value* slot);
     //! Writes the addresses of the slots of reload_chain_slots in the entry block, once the function is lowered
     /** @return false if it was cancelled (qore_check_cancel()), leaving slots unwritten: the function must then be
-        refused
+        refused (qore#6299)
     */
     bool finalizeReloadChainSlots(llvm::Function* llvm_func);
 

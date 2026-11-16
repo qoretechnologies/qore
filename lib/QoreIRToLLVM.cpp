@@ -4726,7 +4726,7 @@ bool QoreIRToLLVM::finalizeReloadChainSlots(llvm::Function* llvm_func) {
     assert(term);
     llvm::IRBuilder<> ab(term);
     for (size_t i = 0; i < reload_chain_slot_allocas.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "LLVM reload chain slot table")) {
+        if (qore_finalize_cancelled(QFL_RELOAD_CHAIN_SLOTS, i, "LLVM reload chain slot table")) {
             // the flushes read every slot of the array: a function with a slot left unwritten is refused
             return false;
         }

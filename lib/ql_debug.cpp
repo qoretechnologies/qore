@@ -20451,10 +20451,10 @@ static bool dbg_get_bg_compile_hold_point(const QoreStringNode* point, QoreJIT::
 }
 
 //! makes the next check of a finalization loop of the native lowering report a cancellation at the given entry
-/** The lowering of the function then fails, and the function is not compiled.  The loop is \c "handler-local-table"
-    (QoreIRToLLVM::finalizeObeEntries()); the hook is cleared when it fires, or with a negative index.  It is
-    process-wide: it fires in whichever lowering first reaches that loop at that index, on any thread, which can be that
-    of a callee of the batch of another function.
+/** The lowering of the function then fails, and the function is not compiled.  The loops are \c "reload-chain-slots"
+    (QoreIRToLLVM::finalizeReloadChainSlots()) and \c "handler-local-table" (QoreIRToLLVM::finalizeObeEntries()); the
+    hook is cleared when it fires, or with a negative index.  It is process-wide: it fires in whichever lowering first
+    reaches that loop at that index, on any thread, which can be that of a callee of the batch of another function.
 
     @throw DBG-ARGUMENT-ERROR the loop is unknown
 */
@@ -20462,7 +20462,9 @@ static QoreValue f_dbg_force_finalize_cancel(const QoreListNode* params, Runtime
     const QoreStringNode* loop = get_param_value(params, 0).get<const QoreStringNode>();
     int64_t index = get_param_value(params, 1).getAsBigInt();
     int which;
-    if (!strcmp(loop->c_str(), "handler-local-table")) {
+    if (!strcmp(loop->c_str(), "reload-chain-slots")) {
+        which = QFL_RELOAD_CHAIN_SLOTS;
+    } else if (!strcmp(loop->c_str(), "handler-local-table")) {
         which = QFL_HANDLER_LOCAL_TABLE;
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "unknown finalization loop '%s'", loop->c_str());
