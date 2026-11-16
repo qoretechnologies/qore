@@ -163,8 +163,15 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
     The summary of the plain formats gives the number of test cases run and how many of them succeeded, failed an
     assertion, ended with an unexpected exception (errors) or were skipped, for example:
     @verbatim
+Failed test cases:
+  FAILURE: fails: 2026-01-12 10:15:42.36: Assertion "the result" failure at test.qtest:23 [MyTest::fails()]
+  ERROR: errors: 2026-01-12 10:15:42.37: Unexpected exception: SOME-ERROR at test.qtest:27 (Qore)
 Ran 4 test cases, 1 succeeded, 1 failed, 1 error, 1 skipped (2 assertions, 1 succeeded)
     @endverbatim
+
+    When test cases failed or ended with an error, the summary lists them before its last line, with the failed
+    assertion or the exception and where it was raised, as their reports can be far apart in the output of a test
+    that prints other output.
 
     The junit format prints the JUnit XML report as read by Jenkins and GitLab: a \c testsuites element with one
     \c testsuite element for the test, both with the \c tests, \c failures, \c errors, \c skipped and \c time
@@ -239,6 +246,9 @@ Ran 4 test cases, 1 succeeded, 1 failed, 1 error, 1 skipped (2 assertions, 1 suc
     - the junit report has the standard layout (see @ref unittestformats): a \c testsuite element in the
       \c testsuites element, with the \c failures, \c errors, \c skipped and \c time attributes, and
       \c failure, \c error and \c skipped elements in the \c testcase elements
+    - the summary of the plain formats lists the test cases that failed or ended with an error, with the failed
+      assertion or the exception and where it was raised (see @ref unittestformats;
+      <a href="https://github.com/qoretechnologies/qore/issues/3134">issue 3134</a>)
 
     @section qunit_v0_4_3 Version 0.4.3
     - added constructors for use with languages that don't support lvalue references (ex: %Python)
@@ -1200,6 +1210,16 @@ public class TestReporter {
             assert_str += sprintf(", %d skipped", num_asserts_skip);
         assert_str += ")";
         int cnt = testCount();
+        # the failures and errors are listed again after the run, as their reports can be far apart in the output
+        if (failed || err) {
+            print("Failed test cases:\n");
+            foreach hash<auto> result in (m_results) {
+                if (result.result == TEST_FAILURE || result.result == TEST_ERROR) {
+                    printf("  %s: %s: %s%s\n", RESULT_TYPE_DESCRIPTION{result.result}.desc,
+                        result.testcase.getName(), result.error ?? "", result.pos ? " at " + result.pos : "");
+                }
+            }
+        }
         printf("Ran %d test case%s%s%s\n", cnt, cnt == 1 ? "" : "s", counts, assert_str);
     }
 
