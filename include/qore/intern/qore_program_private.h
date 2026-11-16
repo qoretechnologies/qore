@@ -713,6 +713,22 @@ public:
     //! true while the commit of a parse initializes constants; read by other threads (findHashDecl(), findEnum())
     std::atomic<bool> parse_commit_in_progress{false};
 
+    //! the threads that code run by a parse or its commit started while it was in progress; protected by plock
+    /** They can enter the Program while it is committed (refusedByCommit()); cleared when a parse starts
+        (beginParse()), when the commit ends and when a parse is rolled back, and a thread is removed when it leaves the
+        Program (decThreadCount()), so that its TID cannot be admitted for another thread (issue #6243)
+    */
+    std::set<int> parse_tids;
+
+    //! true while a parse is committed, after parsing_in_progress has been cleared (issue #6243)
+    /** The code that the commit runs enters the Program, so parsing_in_progress is cleared before it runs; while
+        this is set, only the thread that holds the parse lock (the committing thread) and the threads that code run
+        by the parse or the commit started (parse_tids) can enter it (see incThreadCount()); other threads cannot enter
+        the Program and run its code concurrently with the commit.  Written under plock and read under it by
+        incThreadCount().
+    */
+    std::atomic<bool> commit_entry_restricted{false};
+
     //! Set once the program cleanup callbacks have been run for this Program
     /** There are two teardown entry points - waitForTerminationAndClear() and clearNamespaceData()
         - and the callbacks must run exactly once per Program from whichever gets there first.
@@ -2079,6 +2095,11 @@ public:
 
         assert(thread_count);
         ++tidmap[tid];
+        // a thread that code run by a parse or its commit starts can enter the Program while it is committed
+        // (refusedByCommit())
+        if (parsing_in_progress || commit_entry_restricted) {
+            parse_tids.insert(tid);
+        }
         return cancel_new_threads;
     }
 
@@ -2296,6 +2317,37 @@ public:
         return 0;
     }
 
+    //! Raises PROGRAM-ERROR if the current thread cannot initialize a deferred closure of the Program now (#6243)
+    /** A closure of a constant expression whose initialization is deferred is initialized by the commit of the parse
+        (initDeferredCode()) or, if code run by the parse or its commit runs it earlier, on demand by the thread that
+        runs it: the committing thread or a thread that such code started (parse_tids), as for the entry into the
+        Program (refusedByCommit()); another thread cannot initialize it while the Program is parsed or committed, as
+        it would do so outside of the parse, in its own context
+    */
+    DLLLOCAL int checkDeferredClosureInit(ExceptionSink* xsink) {
+        int tid = q_gettid();
+        AutoLocker al(plock);
+        // the same threads as the entry into the Program (incThreadCount())
+        if ((parsing_in_progress && parse_tid != tid) || refusedByCommit(tid)) {
+            if (xsink) {
+                xsink->raiseException("PROGRAM-ERROR", "the Program accessed is currently undergoing parsing and "
+                    "cannot be accessed at runtime");
+            }
+            return -1;
+        }
+        return 0;
+    }
+
+    //! Returns true if a commit refuses the thread to enter the Program; plock must be held (issue #6243)
+    /** While a parse is committed, the committing thread (which holds the parse lock) can enter the Program, as the
+        code that the commit runs does, and so can the threads that code run by the parse or the commit started
+        (parse_tids), whose calls through other Programs come back to it; a thread counted in the Program without
+        running its code (enterWithoutContext()) cannot
+    */
+    DLLLOCAL bool refusedByCommit(int tid) const {
+        return commit_entry_restricted && parse_tid != tid && parse_tids.find(tid) == parse_tids.end();
+    }
+
     // returns 0 for OK, -1 for error; the exceptions are not raised without \a xsink
     DLLLOCAL int incThreadCount(ExceptionSink* xsink) {
         return incThreadCount(q_gettid(), xsink);
@@ -2316,8 +2368,10 @@ public:
             return -1;
         }
         // a thread is refused while code is parsed in the Program: it is not counted and runs none of its code (its
-        // entry handlers either; see ProgramThreadCountContextHelper::set()); without an exception sink as well
-        if (parsing_in_progress) {
+        // entry handlers either; see ProgramThreadCountContextHelper::set()); without an exception sink as well.  A
+        // commit is part of the parse: while it runs, only the committing thread, which holds the parse lock, and the
+        // threads that code run by the parse or the commit started can enter it (refusedByCommit(), issue #6243)
+        if (parsing_in_progress || refusedByCommit(tid)) {
             if (xsink) {
                 xsink->raiseException("PROGRAM-ERROR", "the Program accessed is currently undergoing parsing and "
                     "cannot be accessed at runtime");
@@ -2350,7 +2404,8 @@ public:
             throw QoreStandardException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
                 "therefore cannot be accessed at runtime");
         }
-        if (parsing_in_progress) {
+        // a commit is part of the parse: see incThreadCount(int, ExceptionSink*) (issue #6243)
+        if (parsing_in_progress || refusedByCommit(tid)) {
             throw QoreStandardException("PROGRAM-ERROR", "the Program accessed is currently undergoing parsing and "
                 "cannot be accessed at runtime");
         }
@@ -2387,6 +2442,8 @@ public:
         if (!--i->second) {
             tidmap.erase(i);
             foreign_tids.erase(tid);
+            // the thread ends or leaves the Program: its TID can be given to another thread
+            parse_tids.erase(tid);
             // a thread that still holds the parse lock releases its deferred references when it releases the lock
             if (parse_tid != tid) {
                 derefs = takeDeferredDerefs(tid, clear);
@@ -6489,6 +6546,14 @@ DLLLOCAL void qore_run_exit_hooks(QoreProgram* pgm);
 DLLLOCAL bool qore_exit_hooks_started();
 
 #ifdef DEBUG
+//! Stops the commit of a parse of the Program armed with dbg_arm_parse_commit_gate() (debug builds, for tests)
+/** Called by qore_program_private::internParseCommit() once the commit has started and other threads cannot enter the
+    Program (\a point 0; see qore_program_private::refusedByCommit()), and once the new code has been merged into the
+    Program and before the deferred initialization of its closures (\a point 1): the thread waits until
+    dbg_release_parse_commit_gate() releases it, so that a test can try to enter the Program meanwhile (issue #6243).
+*/
+DLLLOCAL void qore_dbg_parse_commit_gate(const QoreProgram* pgm, int point);
+
 //! Stops a parse of the Program armed with dbg_arm_parse_start_gate() after it has started (debug builds, for tests)
 /** Called by qore_program_private::beginParse() once the parse is marked as in progress: the thread waits until
     dbg_release_parse_start_gate() releases it, so that a test can try to enter the Program meanwhile (issue #6206).
