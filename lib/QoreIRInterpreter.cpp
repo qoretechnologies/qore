@@ -2508,6 +2508,18 @@ static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, Excep
     return stored;
 }
 
+//! Returns the line given, which the compiler cannot evaluate a test of before the code that calls this function
+/** An empty asm statement that "changes" the value: the compiler does not move a volatile asm statement out of the
+    branch that it is in, so a test of the value it returns is made in that branch (see the line test in execute()).
+    It emits no instruction.
+*/
+static QORE_INTERN_ALWAYS_INLINE int32_t qore_ir_opaque_line(int32_t line) {
+#if defined(__GNUC__) || defined(__clang__)
+    __asm__ __volatile__("" : "+r"(line));
+#endif
+    return line;
+}
+
 static ClosureVarValue* resolve_closure_var_value(const LocalVar* var) {
     if (!var) {
         return nullptr;
@@ -11082,16 +11094,21 @@ next_instruction:
         // the line usually does not change from one instruction to the next: that test comes first, as GCC otherwise
         // may order the two tests either way, and the sign test first costs two more instructions per instruction
         // executed (8-20 per iteration of the benchmark loops); no branch hint, as the line changes often enough that
-        // moving the update out of line costs more
-        if (inst->cached_start_line != last_ephemeral_line && inst->cached_start_line >= 0) {
-            // Update runtime_loc for exception/callstack reporting via cached pointers; while a debugger is attached,
-            // the current statement is set by the DebugStatement instruction of each statement and kept, so that the
-            // call stack gives the statement of each frame (QoreThreadList::getCallStackHash())
-            if (!debug_active) {
-                *rl_cache.stmt_ptr = nullptr;
+        // moving the update out of line costs more.  Neither writing the test first nor nesting the sign test keeps
+        // the order: the two tests have no side effects, so the compiler may evaluate them in either order, and GCC
+        // swapped them when the rest of this function grew.  The sign test therefore reads the line through
+        // qore_ir_opaque_line(), which the compiler cannot evaluate before the first test
+        if (inst->cached_start_line != last_ephemeral_line) {
+            if (qore_ir_opaque_line(inst->cached_start_line) >= 0) {
+                // Update runtime_loc for exception/callstack reporting via cached pointers; while a debugger is
+                // attached, the current statement is set by the DebugStatement instruction of each statement and kept,
+                // so that the call stack gives the statement of each frame (QoreThreadList::getCallStackHash())
+                if (!debug_active) {
+                    *rl_cache.stmt_ptr = nullptr;
+                }
+                *rl_cache.loc_ptr = inst->loc;
+                last_ephemeral_line = inst->cached_start_line;
             }
-            *rl_cache.loc_ptr = inst->loc;
-            last_ephemeral_line = inst->cached_start_line;
         }
         // Log instruction execution for diagnostics (zero-cost path when disabled)
         if (ir_verbose_enabled && func.name.find("monitor") != std::string::npos) {
