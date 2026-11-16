@@ -824,6 +824,12 @@
     members; 2.2.1 evaluated it with that code's variable (issue #6268).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Strict Number Parsing
+    @ref parse_int(string, string, bool) "parse_int()", @ref parse_float(string, string, bool) "parse_float()" and
+    @ref parse_number(string, string, bool) "parse_number()" take a \a strict argument that raises
+    \c PARSE-NUMBER-ERROR unless the string is the number and nothing else (see @ref strict_number_parsing;
+    <a href="https://github.com/qoretechnologies/qore/issues/305">issue 305</a>).
+
     @par Module Commands Know the Restrictions of the Code That Issues Them
     A binary module's command handler gets the effective restrictions of the issuing code, not those of the target
     %Program, from the new \c QoreModuleCommandContext (module API 2.3; see @ref qore_modules), also for
