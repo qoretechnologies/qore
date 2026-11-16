@@ -4811,6 +4811,23 @@ std::shared_ptr<const QoreTypeInfo> qore_make_initializer_filter(const QoreTypeI
     return std::make_shared<QoreInitializerFilterTypeInfo>(type_info, policy, instance_member);
 }
 
+bool QoreTypeSpec::acceptsEnumDecl(const QoreEnumDecl* ed) const {
+    assert(typespec == QTS_ENUM);
+    return ed == u.ed || qore_enum_decl_private::get(*ed)->parseEqual(*qore_enum_decl_private::get(*u.ed));
+}
+
+//! returns true if the type has an enum type that accepts the enum value \a n (qore#6277)
+static bool qore_type_info_has_enum_spec_for(const QoreTypeInfo& typeInfo, const QoreValue& n) {
+    assert(n.isEnum());
+    const QoreEnumDecl* ed = n.getEnumMember()->getEnumDecl();
+    for (auto& t : typeInfo.getAcceptSpecs()) {
+        if (t.spec.getTypeSpec() == QTS_ENUM && t.spec.acceptsEnumDecl(ed)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 template <typename FilterPolicy>
 bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const QoreAcceptSpec& accept,
         const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
@@ -5088,6 +5105,13 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 // type (qore#6277)
                 if (n.isEnum() && u.t != NT_ALL
                     && strcmp(arg_type, "key") && strcmp(arg_type, "member")) {
+                    // a union with an enum type of the value's enum keeps the value: this type does not accept it,
+                    // and the enum type does (union<int, E> takes an E value as an E value, wherever E is in the
+                    // union, also in an optional type; qore#6277); checked only for an enum value, so that the
+                    // acceptance of other values does not change
+                    if (typeInfo.getAcceptSpecs().size() > 1 && qore_type_info_has_enum_spec_for(typeInfo, n)) {
+                        break;
+                    }
                     QoreValue base_val = n.getEnumMember()->getValue();
                     base_val.ref();
                     n.discard(xsink);
@@ -5107,13 +5131,8 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
 
         case QTS_ENUM: {
             // Accept TAG_ENUM values from same enum declaration
-            if (n.isEnum()) {
-                const QoreEnumMember* member = n.getEnumMember();
-                if (member->getEnumDecl() == u.ed
-                    || qore_enum_decl_private::get(*member->getEnumDecl())->parseEqual(
-                        *qore_enum_decl_private::get(*u.ed))) {
-                    ok = true;
-                }
+            if (n.isEnum() && acceptsEnumDecl(n.getEnumMember()->getEnumDecl())) {
+                ok = true;
             }
             break;
         }
@@ -8227,18 +8246,6 @@ void QoreTypeInfo::acceptInputParam(const QoreTypeInfo* ti, int param_num, const
 template <typename FilterPolicy>
 void QoreTypeInfo::acceptInputInternImpl(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
         const char* param_name, QoreValue& n, LValueHelper* lvhelper, q_lvalue_vts_e vts, FilterPolicy policy) const {
-    // a value of an enum is accepted by an enum type of a union before any other type, which would take its base value
-    // (union<int, E> accepts an E value as an E value), also in an optional type (qore#6277)
-    if (n.isEnum() && getAcceptSpecs().size() > 1) {
-        for (auto& t : getAcceptSpecs()) {
-            if (t.spec.getTypeSpec() == QTS_ENUM
-                    && t.spec.acceptInputImpl(xsink, *this, t, arg_type, obj, param_num, param_name, n, lvhelper,
-                        policy)) {
-                return;
-            }
-        }
-    }
-
     // CRITICAL FIX Phase 2: Prioritize complex hash/list handlers for optional types
     // For optional types (return_vec.size() > 1), we need to ensure complex hash/list
     // handlers are tried BEFORE hashdecl handlers to prevent incorrect routing.
