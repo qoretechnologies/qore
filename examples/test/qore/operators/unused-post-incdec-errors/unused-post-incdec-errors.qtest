@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 
@@ -42,7 +43,7 @@ class UnusedPostIncDecErrorsTest inherits QUnit::Test {
     }
 
     private {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string fixture = get_script_dir() + "/UnusedPostIncDecErrors.q";
         string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/UnusedPostIncDecErrors.expected");
         string no_copy_fixture = get_script_dir() + "/UnusedPostNoCopy.q";
