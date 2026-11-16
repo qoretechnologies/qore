@@ -1989,6 +1989,9 @@
       it slept with \c nanosleep() (2) slept its whole time again instead of the time that was left (issue #6364)
     - an out-of-line method definition in a namespace block whose class is in a nested namespace
       (<tt>int I::C::m() {}</tt> in \c NS for \c NS::I::C) finds its class (see
+    - an out-of-line method definition in a namespace block resolves its class path relative to that namespace
+      (<tt>int I::C::m() {}</tt> in \c NS for \c NS::I::C), and a path that names no such class, which release builds
+      used to resolve by ignoring its first part, is now an error (see
       @ref outofline_methods_in_namespaces "out-of-line methods in namespaces"; issue #6340)
     - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
       threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
