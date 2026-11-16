@@ -944,10 +944,19 @@ static inline bool qore_parse_infer_candidate_type_args(const AbstractQoreFuncti
     higher parse score, has the higher score at run time for every value of the arguments' types: it is committed at
     parse time instead of resolving the call at run time.  An argument without a value is handled by
     QoreFunction::parseOtherVariantMayMatch().
+
+    That holds only if the chosen variant can take the call at run time at all: with more arguments than it has
+    parameters, and no use of extra arguments, a call in a Program with strict arguments is an error for it (see
+    QoreFunction::runtimeFindVariant()), so the call selects a variant that takes extra arguments instead, such as the
+    variant of a Java method that takes its variable arguments as separate arguments (module jni), whose parameters
+    have no types.  The Program of the call is not known at parse time: such a call is resolved at run time.
 */
 static bool qore_untyped_variant_cannot_win(const AbstractQoreFunctionVariant* chosen, bool variant_untyped,
-        int variant_pmatch, int pmatch, int max_pscore, int score) {
-    return chosen && variant_untyped && variant_pmatch == pmatch && max_pscore < score;
+        int variant_pmatch, int pmatch, int max_pscore, int score, unsigned num_args) {
+    if (!chosen || !variant_untyped || variant_pmatch != pmatch || max_pscore >= score) {
+        return false;
+    }
+    return num_args <= chosen->getSignature()->numParams() || (chosen->getFlags() & QCF_USES_EXTRA_ARGS);
 }
 
 static bool qore_infer_signature_type_args_runtime(const AbstractQoreFunctionVariant* variant,
@@ -5353,7 +5362,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 best_binding = std::move(cb);
             } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)
                     && !qore_untyped_variant_cannot_win(variant, variant_untyped, variant_pmatch, pmatch, max_pscore,
-                        score)) {
+                        score, 0)) {
                 if (variant_soft_match && variant) {
                     has_possible_match = true;
                 } else {
@@ -5859,7 +5868,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
                     }
                 } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)
                         && !qore_untyped_variant_cannot_win(variant, variant_untyped, variant_pmatch, pmatch,
-                            max_pscore, score)) {
+                            max_pscore, score, num_args)) {
                     if (variant_soft_match && variant) {
                         has_possible_match = true;
                     } else {
@@ -6758,7 +6767,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     }
                 } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)
                         && !qore_untyped_variant_cannot_win(variant, variant_untyped, variant_pmatch, pmatch,
-                            max_pscore, score)) {
+                            max_pscore, score, num_args)) {
                     if (variant_soft_match && variant) {
                         // soft-match variant (union type partial match) cannot override a
                         // definitively-selected variant — the definitive variant handles ALL
