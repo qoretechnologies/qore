@@ -175,5 +175,18 @@ ast, ir, jit, tiered, tiered with thresholds 1 (tlow), qcc -O0 and -O3.
   variable, which R never makes for a parameter that the frame does not read: `takeOverRuntimeStackParams()` +123),
   -346 in tiered and tlow, -327 in jit and qcc (one lookup instead of a load and a second lookup); `b_retmp` (the
   giving form) the same.  The other rows are unchanged from the previous measurement.  Whether the caller gave the
-  frame a temporary is not known in the frame without that lookup, so the IR cost of a parameter that is written
-  before it is read stays: the decision is prof's.
+  frame a temporary is not known in the frame without that lookup.
+- Decision (prof, 2026-11-16): the IR cost is accepted (option a): about +125 instructions per call in IR mode only,
+  for a parameter that takes its argument over, is IR-only, is written before it is read (or never read) and is
+  bound from the runtime stack (no direct parameters, e.g. a default argument); jit, qcc and tiered are cheaper than
+  on R for the same rows (-327..-348).  The alternative, a bit with which a giving caller tells the frame that it
+  gave a temporary (option c), cannot leave the path of a call that gives nothing exactly as on R: the AST
+  interpreter's call (`UserVariantBase::eval()`, `setupCall()`, `evalTiered()`) gives its evaluated arguments to
+  the parameters and is the same code as the IR interpreter's call that gives nothing (`evalFunction()`), so the
+  bit would be a store on that shared path (top-level code, which tiered execution runs on the AST tier, gives
+  temporaries to IR callees: `ParamReassignRelease.qr`'s round loop); and the frame would need a test of the bit
+  where it has none (`execute()` has no branch on the path of a frame bound from the runtime stack that the bit
+  could share: a sentinel `IRDirectParams` costs the frames with direct parameters and no arguments a jump).
+- Standard call and map rows against R (spinster, same build): `f_four`, `m_four`, `s_four`, `cl_int`, `map_cb` are
+  0 or cheaper in every mode (ir -14..-105, tiered/tlow -9..-105, jit 0..-4, qcc 0; `cl_int` qcc -O0 +8.6 is libc
+  only, +8.4).
