@@ -116,9 +116,11 @@
 #include <arpa/inet.h>
 #include <cerrno>
 #include <cstdlib>
+#include <cstddef>
 #include <cstring>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <poll.h>
 #include <sched.h>
 #include <sys/ioctl.h>
@@ -17015,56 +17017,198 @@ static int64 dbg_unacknowledged_bytes(int fd) {
     return getsockopt(fd, SOL_SOCKET, SO_NWRITE, &n, &len) || n < 0 ? 0 : n;
 #elif defined(TIOCOUTQ)
     int n = 0;
-    return ::ioctl(fd, TIOCOUTQ, &n) || n < 0 ? 0 : n;
+    if (::ioctl(fd, TIOCOUTQ, &n) || n <= 0) {
+        return 0;
+    }
+#if defined(__linux__) && defined(TCP_INFO)
+    // the count is the difference of the sequence numbers, which includes the FIN of a socket shut down for writing:
+    // it is not data, and a peer whose window is 0 can take it (Linux 6.10 or later accepts a bare FIN then)
+    struct tcp_info ti;
+    socklen_t len = sizeof ti;
+    if (!getsockopt(fd, IPPROTO_TCP, TCP_INFO, &ti, &len)
+            && (ti.tcpi_state == TCP_FIN_WAIT1 || ti.tcpi_state == TCP_CLOSING || ti.tcpi_state == TCP_LAST_ACK)) {
+        --n;
+    }
+#endif
+    return n;
 #else
     return 0;
 #endif
 }
 
-//! blocks until the peer has acknowledged everything written on \a fd, or the connection has ended; no timer is
-//! involved
+//! returns the receive window that the peer last advertised for \a fd, in bytes, or -1 if the system does not tell
+/** The window that the other end of the connection (the client of a test's peer) advertised, as this end sees it:
+    \c tcpi_snd_wnd, the window that this end may send into, of \c struct \c tcp_connection_info (macOS,
+    \c TCP_CONNECTION_INFO) or \c struct \c tcp_info (Linux 5.4 or later, \c TCP_INFO), when the system's headers have
+    the member (a build-time check: \c HAVE_TCP_CONNECTION_INFO_TCPI_SND_WND, \c HAVE_TCP_INFO_TCPI_SND_WND).
+    \c tcpi_rcv_wnd would be this end's own advertised window, which says nothing about whether the other end can
+    take what this end has written.  Without the member, or when the kernel does not fill it in, the window is
+    unknown, and dbg_wait_send_buffer_empty() waits as it did before it checked the window.
+*/
+static int64 dbg_peer_window(int fd) {
+#if defined(HAVE_TCP_CONNECTION_INFO_TCPI_SND_WND) && defined(TCP_CONNECTION_INFO)
+    struct tcp_connection_info ti;
+    socklen_t len = sizeof ti;
+    if (getsockopt(fd, IPPROTO_TCP, TCP_CONNECTION_INFO, &ti, &len)
+            || len < offsetof(struct tcp_connection_info, tcpi_snd_wnd) + sizeof ti.tcpi_snd_wnd) {
+        return -1;
+    }
+    return ti.tcpi_snd_wnd;
+#elif defined(HAVE_TCP_INFO_TCPI_SND_WND) && defined(TCP_INFO)
+    struct tcp_info ti;
+    socklen_t len = sizeof ti;
+    // a kernel older than the headers fills in less: the member is used only if the kernel filled it in
+    if (getsockopt(fd, IPPROTO_TCP, TCP_INFO, &ti, &len)
+            || len < offsetof(struct tcp_info, tcpi_snd_wnd) + sizeof ti.tcpi_snd_wnd) {
+        return -1;
+    }
+    return ti.tcpi_snd_wnd;
+#else
+    return -1;
+#endif
+}
+
+//! the most milliseconds that dbg_wait_send_buffer_empty() waits before it looks at the connection again
+/** It paces the checks only: an acknowledgement that frees room in the send buffer ends the wait at once, and the
+    outcome does not depend on the interval; the state of a connection whose window closed without freeing room (a
+    window update or the answer to a window probe) is only seen by looking again
+*/
+static constexpr int DbgAckCheckMs = 10;
+
+//! returns true if the TCP connection of \a fd is closed: reset by the peer, or fully closed
+/** The count of bytes not acknowledged (the difference of the sequence numbers that \c TIOCOUTQ and \c SO_NWRITE
+    give) is not cleared when a reset discards the send buffer, so it stays above 0 once the connection is closed:
+    nothing left can then arrive, and the wait is over.  On macOS, a connection whose state cannot be read (the stack
+    dropped it) is closed too.  False if the system does not tell.
+*/
+static bool dbg_tcp_closed(int fd) {
+#if defined(DARWIN) && defined(TCP_CONNECTION_INFO)
+    struct tcp_connection_info ti;
+    socklen_t len = sizeof ti;
+    // the option fails for a connection that the stack dropped (ECONNRESET, for example), which is closed as well;
+    // TCPS_CLOSED is 0 (netinet/tcp_fsm.h)
+    return getsockopt(fd, IPPROTO_TCP, TCP_CONNECTION_INFO, &ti, &len) || !ti.tcpi_state;
+#elif defined(__linux__) && defined(TCP_INFO)
+    struct tcp_info ti;
+    socklen_t len = sizeof ti;
+    return !getsockopt(fd, IPPROTO_TCP, TCP_INFO, &ti, &len) && ti.tcpi_state == TCP_CLOSE;
+#else
+    return false;
+#endif
+}
+
+//! returns the bytes left unacknowledged on \a fd and the window that the peer advertised, from consistent readings
+/** The two values are read with two calls: an acknowledgement between them could pair a count with a window that
+    already took it into account, so they are read until the count is the same before and after the window.
+
+    @param wnd set to the window, or -1 if it is unknown
+*/
+static int64 dbg_unacknowledged_and_window(int fd, int64& wnd) {
+    int64 left = dbg_unacknowledged_bytes(fd);
+    while (true) {
+        wnd = dbg_peer_window(fd);
+        int64 again = dbg_unacknowledged_bytes(fd);
+        if (again == left) {
+            return left;
+        }
+        left = again;
+    }
+}
+
+//! blocks until the peer has acknowledged everything written on \a fd, or the peer's receive window is closed
 /** A reset (\c SO_LINGER 0) discards the data in the send buffer that has not been sent; on macOS a small write made
     while an earlier one is unacknowledged is held back (Nagle), and loopback delivery is not synchronous with send(),
-    so a reset made at once discards the end of what was written (as for issue #6320).  The peer acknowledges data
-    when it arrives, whether its program reads it or not, so this only waits if more was written than the peer's
-    receive buffer takes.
+    so a reset made at once discards the end of what was written (as for issue #6320).
+
+    The peer acknowledges data as it arrives, whether its program reads it or not, as far as its receive window.  The
+    window can open further without a read (macOS grows the receive buffer as data arrives, Linux grows the window
+    within the buffer, and a peer that does not read can acknowledge late, so the window last seen can be stale), so
+    data beyond the window last seen can still arrive, and the wait goes on for it.  Only a window of 0 with data left
+    unacknowledged means that nothing more can arrive until the peer's program reads: the wait then ends with the
+    number of bytes left.  With the window unknown (see dbg_peer_window()), the wait goes on until everything is
+    acknowledged.
+
+    The wait wakes up for each acknowledgement that frees room in the send buffer, and looks at the connection again
+    after at most \c DbgAckCheckMs milliseconds otherwise.  Once the connection reports its end (a shutdown of the
+    socket, or the peer's FIN), it is looked at every \c DbgAckCheckMs milliseconds until everything is acknowledged
+    or the window is 0: the data written before a shutdown is still sent, and a reset discards it.
+
+    The descriptor is used without the socket's lock: the socket must not be closed by another thread meanwhile.
+
+    @param wnd set to the window that the peer advertised when the wait ended without everything acknowledged
+
+    @return 0 if everything written was acknowledged (or the connection was reset, which discards it), otherwise the
+    number of bytes left when the peer's window was 0
 */
-static void dbg_wait_send_buffer_empty(int fd) {
+static int64 dbg_wait_send_buffer_empty(int fd, int64& wnd) {
+    bool ended = false;
 #ifdef DARWIN
     // the write filter fires for each change of the send buffer's space, as the peer acknowledges data
     int kq = kqueue();
     if (kq < 0) {
-        return;
+        return 0;
     }
     ON_BLOCK_EXIT([kq] () { ::close(kq); });
     struct kevent kev;
     EV_SET(&kev, fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, nullptr);
     if (kevent(kq, &kev, 1, nullptr, 0, nullptr) < 0) {
-        return;
-    }
-    while (dbg_unacknowledged_bytes(fd) > 0) {
-        struct kevent out;
-        int rc = kevent(kq, nullptr, 0, &out, 1, nullptr);
-        if (rc < 0 && errno == EINTR) {
-            continue;
-        }
-        if (rc <= 0 || (out.flags & (EV_EOF | EV_ERROR))) {
-            return;
-        }
-    }
-#else
-    // loopback acknowledges data as it is delivered, before send() returns, so this normally does not wait
-    while (dbg_unacknowledged_bytes(fd) > 0) {
-        pollfd pfd = {fd, POLLOUT, 0};
-        if (::poll(&pfd, 1, -1) < 0 && errno != EINTR) {
-            return;
-        }
-        if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
-            return;
-        }
-        sched_yield();
+        ended = true;
     }
 #endif
+    while (int64 left = dbg_unacknowledged_and_window(fd, wnd)) {
+        // a closed connection (reset by the peer) discarded what was left
+        if (dbg_tcp_closed(fd)) {
+            return 0;
+        }
+        if (!wnd) {
+            return left;
+        }
+        if (ended) {
+            // the descriptor reports its end at once: only the interval paces the checks
+            ::poll(nullptr, 0, DbgAckCheckMs);
+            continue;
+        }
+#ifdef DARWIN
+        struct timespec ts = {0, DbgAckCheckMs * 1000000L};
+        struct kevent out;
+        int rc = kevent(kq, nullptr, 0, &out, 1, &ts);
+        if (rc < 0 && errno != EINTR) {
+            ended = true;
+        } else if (rc > 0 && (out.flags & (EV_EOF | EV_ERROR))) {
+            ended = true;
+        }
+#else
+        // POLLOUT is level-triggered: with room in the send buffer it is reported at once, so it is only waited for
+        // when the buffer is full, where an acknowledgement frees room; otherwise only the interval paces the checks
+        pollfd pfd = {fd, 0, 0};
+        if (::poll(&pfd, 1, 0) >= 0 && !(pfd.revents & (POLLHUP | POLLERR | POLLNVAL))) {
+            pollfd out = {fd, POLLOUT, 0};
+            if (::poll(&out, 1, 0) == 0) {
+                ::poll(&out, 1, DbgAckCheckMs);
+            } else {
+                ::poll(nullptr, 0, DbgAckCheckMs);
+            }
+        } else {
+            ended = true;
+        }
+#endif
+    }
+    return 0;
+}
+
+//! Debug-only: returns the receive window that the peer of a TCP socket last advertised, or -1 if the system does
+//! not tell (see dbg_peer_window()); without it, dbg_reset_socket() cannot tell data that cannot arrive
+static QoreValue f_dbg_tcp_peer_window(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreSocketObject> sock(obj
+        ? reinterpret_cast<QoreSocketObject*>(const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET,
+            xsink))
+        : nullptr, xsink);
+    if (*xsink || !sock) {
+        return -1;
+    }
+    int fd = sock->getPollableDescriptor();
+    return fd < 0 ? -1 : dbg_peer_window(fd);
 }
 
 //! Debug-only: closes a socket so that its connection is reset at once, once what was written on it has arrived
@@ -17072,7 +17216,10 @@ static void dbg_wait_send_buffer_empty(int fd) {
     makes first, which on macOS discards unread data and ends the connection with a FIN.  Tests use it to have a peer
     reset a connection deterministically.  The close is made once the peer has acknowledged all the data written on
     the socket (see dbg_wait_send_buffer_empty()), so that the reset does not discard the end of an answer still in
-    the send buffer.  DEBUG builds only.
+    the send buffer.  The socket must not be closed by another thread while the function runs.  DEBUG builds only.
+
+    @throw DBG-RESET-SOCKET-ERROR the peer's receive window is 0 while data written on the socket is left
+    unacknowledged: it can only arrive once the peer's program reads; the socket is not closed
 */
 static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
@@ -17089,7 +17236,13 @@ static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& r
     }
     int fd = sock->getPollableDescriptor();
     if (fd >= 0) {
-        dbg_wait_send_buffer_empty(fd);
+        int64 wnd = -1;
+        if (int64 left = dbg_wait_send_buffer_empty(fd, wnd)) {
+            xsink->raiseException("DBG-RESET-SOCKET-ERROR", "dbg_reset_socket(): " QLLD " bytes written on the "
+                "socket are not acknowledged, and the peer's receive window is 0: they can only arrive once the "
+                "peer's program reads; the connection is not reset", left);
+            return QoreValue();
+        }
     }
     sock->dbgResetOnClose();
     sock->close();
@@ -25548,6 +25701,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_reset_socket", f_dbg_reset_socket, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_tcp_peer_window", f_dbg_tcp_peer_window, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_force_ssl_error_ssl", f_dbg_force_ssl_error_ssl, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_ssl_close_notify_count", f_dbg_ssl_close_notify_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

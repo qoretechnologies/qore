@@ -1560,6 +1560,14 @@ HAVE_USELOCALE)
 include(CheckIncludeFiles)
 check_include_files("sys/types.h;sys/socket.h;net/if_dl.h" HAVE_NET_IF_DL_H)
 
+# the debug hook dbg_reset_socket() reads the receive window that the peer of a TCP socket last advertised: the
+# tcpi_snd_wnd member of struct tcp_info (Linux) or of struct tcp_connection_info (macOS)
+include(CheckStructHasMember)
+check_struct_has_member("struct tcp_info" tcpi_snd_wnd "sys/types.h;sys/socket.h;netinet/in.h;netinet/tcp.h"
+    HAVE_TCP_INFO_TCPI_SND_WND LANGUAGE CXX)
+check_struct_has_member("struct tcp_connection_info" tcpi_snd_wnd
+    "sys/types.h;sys/socket.h;netinet/in.h;netinet/tcp.h" HAVE_TCP_CONNECTION_INFO_TCPI_SND_WND LANGUAGE CXX)
+
 qore_search_libs(LIBQORE_LIBS setsockopt socket)
 qore_search_libs(LIBQORE_LIBS gethostbyname nsl)
 qore_search_libs(LIBQORE_LIBS clock_gettime rt)
