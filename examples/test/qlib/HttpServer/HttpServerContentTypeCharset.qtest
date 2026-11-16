@@ -30,6 +30,8 @@ class ContentTypeHandler inherits AbstractHttpRequestHandler {
             "orig-content-type": hdr."_qore_orig_content_type",
             "charset": cx."header-info".charset,
             "body-content-type": cx."header-info"."body-content-type",
+            "accept-charset": cx."header-info"."accept-charset",
+            "response-encoding": cx."response-encoding",
             # the decoded text, in UTF-8 for the comparison
             "body": body.typeCode() == NT_STRING ? convert_encoding(body, "UTF-8") : body,
         };
@@ -51,12 +53,16 @@ class HttpServerContentTypeCharsetTest inherits QUnit::Test {
         const Requests = (
             {
                 "content-type": "text/plain;charset=ISO-8859-2",
+                # the first character set accepted is the response encoding (qore#6333)
+                "accept-charset": "iso-8859-2;q=0.9, utf-8;q=0.5",
                 "body": "latin2",
                 "expected": {
                     "content-type": "text/plain",
                     "orig-content-type": "text/plain;charset=ISO-8859-2",
                     "charset": "ISO-8859-2",
                     "body-content-type": "text/plain",
+                    "accept-charset": "iso-8859-2",
+                    "response-encoding": "iso-8859-2",
                     "body": Text,
                 },
             },
@@ -69,6 +75,8 @@ class HttpServerContentTypeCharsetTest inherits QUnit::Test {
                     "orig-content-type": ";charset=utf-8",
                     "charset": "utf-8",
                     "body-content-type": NOTHING,
+                    "accept-charset": "utf8",
+                    "response-encoding": "utf8",
                     "body": "{\"a\":1}",
                 },
             },
@@ -82,6 +90,8 @@ class HttpServerContentTypeCharsetTest inherits QUnit::Test {
                     "orig-content-type": "application/json",
                     "charset": "UTF-8",
                     "body-content-type": "application/json",
+                    "accept-charset": "utf8",
+                    "response-encoding": "utf8",
                     "body": "{\"a\":1}",
                 },
             },
@@ -114,6 +124,14 @@ class HttpServerContentTypeCharsetTest inherits QUnit::Test {
         # a value in another encoding is read in UTF-8
         assertEq(<HttpContentTypeInfo>{"charset": "utf-8", "body_content_type": "text/plain"},
             get_http_content_type_info(convert_encoding("text/plain;charset=utf-8", "UTF-16LE")));
+        # the response encoding: UTF-8 if any character set or UTF-8 is accepted, else the first character set
+        assertEq("utf8", get_http_accept_charset());
+        assertEq("utf8", get_http_accept_charset(""));
+        assertEq("utf8", get_http_accept_charset("*"));
+        assertEq("utf8", get_http_accept_charset("utf-8"));
+        assertEq("utf8", get_http_accept_charset("iso-8859-2,utf-8"));
+        assertEq("iso-8859-2", get_http_accept_charset("iso-8859-2;q=0.9, utf-8;q=0.5"));
+        assertEq("windows-1250", get_http_accept_charset(" windows-1250 , iso-8859-2"));
         # only a charset parameter: no media type is left
         hash<HttpContentTypeInfo> info = get_http_content_type_info(";charset=utf-8");
         assertEq("utf-8", info.charset);
@@ -182,7 +200,11 @@ class HttpServerContentTypeCharsetTest inherits QUnit::Test {
             binary body = req.body == "latin2"
                 ? convert_encoding(Text, "ISO-8859-2").toBinary()
                 : binary("{\"a\":1}");
-            hash<auto> rv = hc.send(body, "POST", "/ct", {"Content-Type": req."content-type"});
+            hash<auto> hdr = {"Content-Type": req."content-type"};
+            if (req."accept-charset") {
+                hdr."Accept-Charset" = req."accept-charset";
+            }
+            hash<auto> rv = hc.send(body, "POST", "/ct", hdr);
             assertEq(200, rv.status_code, sprintf("%s %s: the request succeeded", proto, req."content-type"));
             assertEq(req.expected, handler.seen, sprintf("%s %s: what the handler sees", proto, req."content-type"));
         }

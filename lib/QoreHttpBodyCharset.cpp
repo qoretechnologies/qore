@@ -566,3 +566,60 @@ QoreHttpContentTypeInfo qore_get_http_content_type_info(const char* content_type
     }
     return rv;
 }
+
+std::string qore_get_http_accept_charset(const char* t) {
+    assert(t);
+    // see if we have "*" or utf8 or utf-8, in which case set it
+    // otherwise set the first charset in the list
+    const char* a = t;
+    const char* div = nullptr;
+    bool utf8 = false;
+    bool ok = true;
+    while (*a) {
+        if (ok) {
+            if (*a == '*') {
+                utf8 = true;
+                break;
+            }
+            ok = false;
+            if (*a == 'u' || *a == 'U') {
+                ++a;
+                if (*a == 't' || *a == 'T') {
+                    ++a;
+                    if (*a == 'f' || *a == 'F') {
+                        ++a;
+                        if (*a == '-') {
+                            ++a;
+                        }
+                        if (*a == '8') {
+                            utf8 = true;
+                            break;
+                        }
+                    }
+                }
+                continue;
+            }
+        } else if (*a == ',') {
+            if (!div) {
+                div = a;
+            }
+            ok = true;
+        } else if (*a == ';') {
+            if (!div) {
+                div = a;
+            }
+        }
+        ++a;
+    }
+    if (utf8) {
+        return "utf8";
+    }
+    QoreString ac;
+    if (div) {
+        ac.concat(t, div - t);
+    } else {
+        ac.concat(t);
+    }
+    ac.trim();
+    return std::string(ac.c_str(), ac.size());
+}

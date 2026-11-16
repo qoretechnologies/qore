@@ -157,6 +157,15 @@ struct QoreHttpContentTypeInfo {
 DLLLOCAL QoreHttpContentTypeInfo qore_get_http_content_type_info(const char* content_type,
         const QoreEncoding* assumed);
 
+//! Returns the response encoding that an HTTP server reports for the Accept-Charset of a request
+/** As Socket::readHTTPHeader() reports it in its info hash (\c "accept-charset"): \c "utf8" if any character set
+    or UTF-8 is accepted, else the first character set of the field value; empty if none is found, which the server
+    reports as \c "utf8" (qore#6333)
+
+    @param value the \c Accept-Charset field value
+*/
+DLLLOCAL std::string qore_get_http_accept_charset(const char* value);
+
 //! the type of the value of get_http_content_type_info()
 DLLLOCAL extern const TypedHashDecl* hashdeclHttpContentTypeInfo;
 

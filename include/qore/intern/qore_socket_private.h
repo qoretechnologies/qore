@@ -4390,65 +4390,13 @@ public:
     }
 
     DLLLOCAL bool do_accept_charset(char* t, QoreHashNode& info) {
-        bool acceptcharset = false;
-
-        // see if we have "*" or utf8 or utf-8, in which case set it
-        // otherwise set the first charset in the list
-        char* a = t;
-        char* div = 0;
-        bool utf8 = false;
-        bool ok = true;
-        while (*a) {
-            if (ok) {
-                if (*a == '*') {
-                    utf8 = true;
-                    break;
-                }
-                ok = false;
-                if (*a == 'u' || *a == 'U') {
-                    ++a;
-                    if (*a == 't' || *a == 'T') {
-                        ++a;
-                        if (*a == 'f' || *a == 'F') {
-                            ++a;
-                            if (*a == '-')
-                                ++a;
-                            if (*a == '8') {
-                                utf8 = true;
-                                break;
-                            }
-                        }
-                    }
-                    continue;
-                }
-            } else if (*a == ',') {
-                if (!div)
-                    div = a;
-                ok = true;
-            } else if (*a == ';') {
-                if (!div)
-                    div = a;
-            }
-
-            ++a;
+        // the rule that the HTTP/2 and HTTP/3 servers apply too (qore_get_http_accept_charset(), qore#6333)
+        std::string ac = qore_get_http_accept_charset(t);
+        if (ac.empty()) {
+            return false;
         }
-        if (utf8) {
-            info.setKeyValue("accept-charset", new QoreStringNode("utf8"), 0);
-            acceptcharset = true;
-        } else {
-            SimpleRefHolder<QoreStringNode> ac(new QoreStringNode);
-            if (div)
-                ac->concat(t, div - t);
-            else
-                ac->concat(t);
-            ac->trim();
-            if (!ac->empty()) {
-                info.setKeyValue("accept-charset", ac.release(), 0);
-                acceptcharset = true;
-            }
-        }
-
-        return acceptcharset;
+        info.setKeyValue("accept-charset", new QoreStringNode(ac.c_str(), ac.size(), QCS_DEFAULT), 0);
+        return true;
     }
 
     // returns true if the connection should be closed, false if not

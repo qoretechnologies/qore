@@ -909,9 +909,11 @@
       @ref Qore::decode_http_body() "decode_http_body()" apply the rules that all HTTP clients and servers use to
       find the encoding of a text body, including RFC 9110 parsing of the \c charset parameter
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
-    - new @ref Qore::get_http_content_type_info() "get_http_content_type_info()" returns the character set and the
-      media type that an HTTP server reports for the \c Content-Type of a request, the same for every HTTP version
-      (<a href="https://github.com/qoretechnologies/qore/issues/6318">issue 6318</a>)
+    - new @ref Qore::get_http_content_type_info() "get_http_content_type_info()" and
+      @ref Qore::get_http_accept_charset() "get_http_accept_charset()" return the character set, the media type and
+      the response encoding that an HTTP server reports for a request, the same for every HTTP version
+      (<a href="https://github.com/qoretechnologies/qore/issues/6318">issue 6318</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6333">issue 6333</a>)
     - new @ref Qore::Socket::getQuicSSLCipherName() "Socket::getQuicSSLCipherName()" and
       @ref Qore::Socket::getQuicSSLCipherVersion() "Socket::getQuicSSLCipherVersion()" for HTTP/3 QUIC sessions
     - new @ref Qore::Socket::shutdownWrite() "Socket::shutdownWrite()" shuts down the sending side of a connection

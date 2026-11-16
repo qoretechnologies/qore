@@ -1757,6 +1757,39 @@ hash<HttpContentTypeInfo> get_http_content_type_info(string content_type, string
     return rv.release();
 }
 
+//! Returns the response encoding that an HTTP server reports for the Accept-Charset of a request
+/** An HTTP server reports it in the header information of a request (the \c "accept-charset" key of the info hash
+    of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()", and of \c cx."header-info" in an
+    @ref HttpServer::HttpServer "HttpServer" request handler, which uses it as \c cx."response-encoding") for every
+    HTTP version: \c "utf8" if any character set (\c "*") or UTF-8 is accepted, else the first character set of the
+    field value, and \c "utf8" if there is none (RFC 2616 section 14.2: any character set is acceptable then)
+
+    @param accept_charset the \c Accept-Charset header value, if any
+
+    @return the response encoding of the request
+
+    @par Example:
+    @code{.py}
+string enc = get_http_accept_charset("iso-8859-2;q=0.9");
+# enc: "iso-8859-2"
+    @endcode
+
+    @since %Qore 3.0
+*/
+string get_http_accept_charset(*string accept_charset) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (!accept_charset) {
+        return new QoreStringNode("utf8");
+    }
+    // the rule reads the bytes of the field value, which the servers have in UTF-8 or ASCII
+    TempEncodingHelper ac(accept_charset, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string rv = qore_get_http_accept_charset(ac->c_str());
+    // according to RFC 2616 section 14.2, any character set is acceptable without one; UTF-8 is used
+    return rv.empty() ? new QoreStringNode("utf8") : new QoreStringNode(rv.c_str(), rv.size(), QCS_DEFAULT);
+}
+
 //! Returns the URL string passed without any password information
 /** @param url the URL to process
 
