@@ -86,9 +86,13 @@ const ConstOne = 1;
         addTestCase("statements are not methods", \testStatementsNotMethods());
         addTestCase("doc comments in a block comment are copied", \testDocCommentInBlockComment());
         addTestCase("error line of a last line without a newline", \testLastLineWithoutNewline());
+        addTestCase("valid C++ signatures are copied", \testValidCppSignatures());
+        addTestCase("comments and '#if 0' in directive lines", \testDirectiveComments());
+        addTestCase("group end in a comment", \testGroupEndInComment());
         addTestCase("every error is reported in one run", \testAllErrorsReported());
         addTestCase("constants have their own line markers", \testConstantLineMarkers());
         addTestCase("group text has the line of its first line", \testGroupTextLineMarkers());
+        addTestCase("group text after a namespace line", \testGroupNamespaceLineMarkers());
         addTestCase("verbosity options", \testVerbosity());
         addTestCase("invalid verbosity levels fail", \testInvalidVerbosity());
         addTestCase("help text describes -v", \testHelp());
@@ -512,6 +516,115 @@ int t_old(int a) {
         assertRegex("structtest\\.qpp:6: '\\*int TestCls::last\\(\\) \\{'", r.out, "the error has the line of the method");
     }
 
+    testValidCppSignatures() {
+        # methods of a C++ class with the name of the class, which C++ accepts
+        hash<auto> r = runQpp(ClassStart + "
+std::vector<int>::iterator TestCls::begin() {
+}
+vector<int>::iterator TestCls::end() {
+}
+Ref<Foo>::type TestCls::get() const {
+}
+bool TestCls::check(int softint) {
+}
+bool TestCls::check2(int x) { // like softstring
+}
+int TestCls::f(int a) // (a) [see note]
+{
+}
+int TestCls::g(const char* s = \"*string x(\") {
+}
+");
+        assertSucceeded(r, "methods of a C++ class");
+        assertRegex("vector<int>::iterator TestCls::end\\(\\) \\{", r.cpp_text);
+        assertRegex("bool TestCls::check\\(int softint\\) \\{", r.cpp_text);
+
+        # C++ code in a group
+        r = runQpp(FuncGroupStart + "static int helper(int softint) {
+}
+int t_helper(int a) /* softint */ {
+}
+DECLARE(softint)
+int v = get(a,
+*get_ptr(a,
+    b));
+" + Function + GroupEnd);
+        assertSucceeded(r, "C++ code in a group");
+        assertRegex("static int helper\\(int softint\\) \\{", r.cpp_text);
+        assertRegex("DECLARE\\(softint\\)", r.cpp_text);
+    }
+
+    testDirectiveComments() {
+        # a comment that starts in a directive line
+        hash<auto> r = runQpp(ClassStart + "
+#define X 1 /* start
+int TestCls::x() [flags=CONSTANT] {
+*/
+");
+        assertSucceeded(r, "a comment started in a directive line");
+
+        # a comment that ends in a directive line: the class after it is processed
+        r = runQpp("/* comment
+#include <x.h> */
+" + ClassStart + "
+//! a method
+/**
+ */
+int TestCls::get() {
+    return 1;
+}
+");
+        assertSucceeded(r, "a comment ended in a directive line");
+        assertRegex("addMethod\\(\"get\"", r.cpp_text, "the method is bound");
+
+        # '#if 0' with a comment, '#elif' and nested conditionals
+        r = runQpp(ClassStart + "
+#if 0 // disabled
+int TestCls::a() [flags=CONSTANT] {
+#if defined(X)
+int TestCls::b() [flags=CONSTANT] {
+#else
+int TestCls::c() [flags=CONSTANT] {
+#endif
+#elif defined(Y)
+int TestCls::d() [flags=CONSTANT] {
+#endif
+");
+        assertFailed(r, "'#elif' of '#if 0' is compiled");
+        assertRegex("'int TestCls::d\\(\\) \\[flags=CONSTANT\\] \\{'", r.out, "the method after '#elif' is reported");
+        assertNRegex("TestCls::[abc]\\(", r.out, "the methods in '#if 0' are not reported");
+
+        r = runQpp(ClassStart + "
+#if 0 // disabled
+int TestCls::a() [flags=CONSTANT] {
+#if defined(X)
+int TestCls::b() [flags=CONSTANT] {
+#else
+int TestCls::c() [flags=CONSTANT] {
+#endif
+#endif
+");
+        assertSucceeded(r, "nested conditionals in '#if 0'");
+
+        # a digit separator is not a character literal
+        r = runQpp(ClassStart + "
+static int big = 1'000'000; /*
+int TestCls::x() [flags=CONSTANT] {
+*/
+");
+        assertSucceeded(r, "a digit separator before a comment");
+    }
+
+    testGroupEndInComment() {
+        # the end of a group ends it in a comment too, as before
+        hash<auto> r = runQpp(FuncGroupStart + Function + "/* the end
+///@}
+*/
+");
+        assertSucceeded(r, "group end in a comment");
+        assertRegex("addBuiltinVariant\\(\"t_func\"", r.cpp_text, "the function is bound");
+    }
+
     testAllErrorsReported() {
         hash<auto> r = runQpp("//! a constant
 /**
@@ -622,30 +735,66 @@ const ConstThree = qore_runtime((bool)1, (bool)0);
         assertEq(1, found, "the runtime constant is bound");
     }
 
+    testGroupNamespaceLineMarkers() {
+        # a namespace line in a group ends the text before it
+        string source = FuncGroupStart + "// comment A
+namespace Qore::Foo;
+static int x = 1;
+" + Function + GroupEnd;
+        hash<auto> r = runQpp(source);
+        assertSucceeded(r, "group with a namespace line");
+        list<string> src_lines = source.split("\n");
+        list<string> cpp_lines = r.cpp_text.split("\n");
+        int found = 0;
+        for (int i = 1; i < cpp_lines.size(); ++i) {
+            if (cpp_lines[i] !~ /^static int x = 1;/) {
+                continue;
+            }
+            ++found;
+            int m = i - 1;
+            while (m >= 0 && cpp_lines[m] !~ /^# [0-9]+ "/) {
+                --m;
+            }
+            assertTrue(m >= 0, "the text is preceded by a line marker");
+            *list<*string> loc = (cpp_lines[m] =~ x/^# ([0-9]+) "(.*)"$/);
+            assertEq("static int x = 1;", src_lines[loc[0].toInt() - 1 + (i - m - 1)],
+                "the marker gives the line of the text");
+        }
+        assertEq(1, found, "the text is written once");
+    }
+
     testVerbosity() {
-        # LL_DEBUG (4) logs every source line read ("<line>: <text>"); the default level (2) logs the files written
+        # LL_DEBUG (4) logs every source line read ("<line>: <text>"); LL_DETAIL (3) logs the classes parsed; the
+        # default level (2) logs the files written
         string debug_line = "DEBUG: 2: /\\*\\* @defgroup";
+        string detail_line = "parsing Qore class 'TestCls'";
         string info_line = "creating cpp file";
         hash<string, hash<auto>> cases = {
-            "": {"debug": False, "info": True},
-            "-v": {"debug": False, "info": True},
-            "-vv": {"debug": True, "info": True},
-            "-v -v": {"debug": True, "info": True},
-            "-v4": {"debug": True, "info": True},
-            "--verbose=4": {"debug": True, "info": True},
-            "--verbose": {"debug": False, "info": True},
-            "-v0": {"debug": False, "info": False},
-            "--verbose=0": {"debug": False, "info": False},
-            "-v -v -v -v": {"debug": True, "info": True},
+            "": {"debug": False, "detail": False, "info": True},
+            "-v": {"debug": False, "detail": True, "info": True},
+            "-vv": {"debug": True, "detail": True, "info": True},
+            "-v -v": {"debug": True, "detail": True, "info": True},
+            "-v3": {"debug": False, "detail": True, "info": True},
+            "-v4": {"debug": True, "detail": True, "info": True},
+            "--verbose=4": {"debug": True, "detail": True, "info": True},
+            "--verbose": {"debug": False, "detail": True, "info": True},
+            "-v0": {"debug": False, "detail": False, "info": False},
+            "--verbose=0": {"debug": False, "detail": False, "info": False},
+            "-v -v -v -v": {"debug": True, "detail": True, "info": True},
         };
         foreach hash<auto> c in (cases.pairIterator()) {
-            hash<auto> r = runQpp(Valid, c.key ? (c.key,) : NOTHING);
+            hash<auto> r = runQpp(Valid + ClassStart, c.key ? (c.key,) : NOTHING);
             # issue #1686: "-v" took the next argument (--output=...) as its level and dropped it
             assertSucceeded(r, sprintf("%y", c.key));
             if (c.value.debug) {
                 assertRegex(debug_line, r.out, sprintf("%y logs at the debug level", c.key));
             } else {
                 assertNRegex(debug_line, r.out, sprintf("%y does not log at the debug level", c.key));
+            }
+            if (c.value.detail) {
+                assertRegex(detail_line, r.out, sprintf("%y logs at the detail level", c.key));
+            } else {
+                assertNRegex(detail_line, r.out, sprintf("%y does not log at the detail level", c.key));
             }
             if (c.value.info) {
                 assertRegex(info_line, r.out, sprintf("%y logs at the info level", c.key));
@@ -656,6 +805,12 @@ const ConstThree = qore_runtime((bool)1, (bool)0);
     }
 
     testInvalidVerbosity() {
+        # a level after a space is an input file
+        {
+            hash<auto> r = runQpp(Valid, ("-v", "3"));
+            assertFailed(r, "-v 3");
+            assertRegex("\\b3: No such file or directory", r.out);
+        }
         # "-vv..." is the short option only, and the long option's level is not empty
         foreach string opt in ("-vx", "-v9", "-v-1", "--verbose=x", "--verbose=5", "-v3x", "-vvx", "--verbose=",
                 "--verbose=vv") {

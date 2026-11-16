@@ -1040,6 +1040,8 @@ public:
     }
 };
 
+static std::string qpp_strip_comments_and_literals(const std::string& line);
+
 //! returns true if the line starts with an identifier, or with an or-nothing type ('*' and an identifier)
 static bool qpp_line_starts_with_identifier(const std::string& line) {
     size_t i = (!line.empty() && line[0] == '*') ? 1 : 0;
@@ -1076,7 +1078,9 @@ static size_t qpp_identifier_start(const std::string& line, size_t end) {
 /** A constant ("const ..."), or the first line of a function signature: an optional return type and a name followed
     by '(' at the start of the line, with no ';' (a statement) and no '=' before the '(' (issues #219, #1686)
 */
-static bool qpp_line_is_qore_declaration(const std::string& line) {
+static bool qpp_line_is_qore_declaration(const std::string& orig_line) {
+    std::string line = qpp_strip_comments_and_literals(orig_line);
+    trim(line);
     if (!line.compare(0, 6, "const ")) {
         return true;
     }
@@ -1111,7 +1115,12 @@ static bool qpp_line_is_qore_declaration(const std::string& line) {
 /** The class can be a pseudo-class (\c "<list>"), and the return type can contain "::"; a line with a ';' is a
     statement (issue #1686)
 */
-static std::string qpp_line_method_class(const std::string& line) {
+static std::string qpp_line_method_class(const std::string& orig_line) {
+    if (!qpp_line_starts_with_identifier(orig_line)) {
+        return std::string();
+    }
+    std::string line = qpp_strip_comments_and_literals(orig_line);
+    trim_end(line);
     if (!qpp_line_starts_with_identifier(line) || qpp_line_starts_with_statement_keyword(line)
             || line.find(';') != std::string::npos) {
         return std::string();
@@ -1152,45 +1161,161 @@ static std::string qpp_line_method_class(const std::string& line) {
     return std::string(line, start, colons - start);
 }
 
+//! returns the line with its comments, string literals and character literals replaced by spaces
+/** a comment that starts in the line ends at its end; a digit separator ("1'000") is not a character literal
+*/
+static std::string qpp_strip_comments_and_literals(const std::string& line) {
+    std::string rv = line;
+    for (size_t i = 0; i < rv.size(); ++i) {
+        char c = rv[i];
+        if (c == '/' && i + 1 < rv.size() && (rv[i + 1] == '/' || rv[i + 1] == '*')) {
+            size_t e;
+            if (rv[i + 1] == '/') {
+                e = rv.size();
+            } else {
+                e = rv.find("*/", i + 2);
+                e = e == std::string::npos ? rv.size() : e + 2;
+            }
+            for (size_t j = i; j < e; ++j) {
+                if (rv[j] != '\n') {
+                    rv[j] = ' ';
+                }
+            }
+            i = e - 1;
+            continue;
+        }
+        if (c == '"' || (c == '\'' && !(i && isalnum(static_cast<unsigned char>(rv[i - 1]))))) {
+            size_t j = i + 1;
+            for (; j < rv.size() && rv[j] != c; ++j) {
+                if (rv[j] == '\\') {
+                    ++j;
+                }
+            }
+            for (size_t k = i; k <= j && k < rv.size(); ++k) {
+                if (rv[k] != '\n') {
+                    rv[k] = ' ';
+                }
+            }
+            i = j;
+        }
+    }
+    return rv;
+}
+
+//! returns true if the character can be part of an identifier
+static bool qpp_idchar(char c) {
+    return isalnum(static_cast<unsigned char>(c)) || c == '_';
+}
+
 //! returns true if a signature line has syntax that only qpp accepts, so that it cannot be C++ code
 /** A line of C++ code that qpp copies can be a definition of a C++ function or of a method of a C++ class that has the
     name of a class of the file (the class of its private data, for example), so a declaration that qpp did not
-    process is recognized by what C++ does not accept (issue #1686): a pseudo-class (\c "<list>::"), attributes after
-    the parameters (\c "[flags=...]"), an or-nothing return type (\c "*string"), or a type that only %Qore has
+    process is recognized by what C++ does not accept (issue #1686): a pseudo-class before the method name
+    (\c "<list>::size("), attributes after the parameters (\c "[flags=...]"), an or-nothing return type
+    (\c "*string name("), no value (\c "nothing name("), or a type that only %Qore has in a type position
+    (\c "softint a"); comments and literals are not checked
 */
-static bool qpp_line_has_qpp_only_syntax(const std::string& line) {
-    // an or-nothing return type, or no value
-    if ((!line.empty() && line[0] == '*') || (!line.compare(0, 8, "nothing ") || !line.compare(0, 8, "nothing\t"))) {
-        return true;
-    }
+static bool qpp_line_has_qpp_only_syntax(const std::string& orig_line) {
+    std::string line = qpp_strip_comments_and_literals(orig_line);
+    trim(line);
     size_t paren = line.find('(');
     if (paren == std::string::npos) {
         return false;
     }
-    // a pseudo-class
-    size_t colons = line.find("::");
-    if (colons != std::string::npos && colons < paren && colons && line[colons - 1] == '>'
-            && line.rfind('<', colons) != std::string::npos) {
-        return true;
+    // the name before '('
+    size_t name_end = paren;
+    while (name_end > 0 && isspace(static_cast<unsigned char>(line[name_end - 1]))) {
+        --name_end;
+    }
+    size_t name_start = name_end;
+    while (name_start > 0 && qpp_idchar(line[name_start - 1])) {
+        --name_start;
+    }
+    if (name_start == name_end) {
+        return false;
+    }
+    // an or-nothing return type or no value: "*type name(" or "nothing name(", where the type is the first word
+    if (line[0] == '*' || !line.compare(0, 8, "nothing ") || !line.compare(0, 8, "nothing\t")) {
+        size_t i = line[0] == '*' ? 1 : 7;
+        if (line[0] == '*') {
+            if (i >= line.size() || !(isalpha(static_cast<unsigned char>(line[i])) || line[i] == '_')) {
+                return false;
+            }
+            while (i < line.size() && (qpp_idchar(line[i]) || line[i] == ':')) {
+                ++i;
+            }
+            // type arguments
+            if (i < line.size() && line[i] == '<') {
+                int depth = 0;
+                for (; i < line.size(); ++i) {
+                    if (line[i] == '<') {
+                        ++depth;
+                    } else if (line[i] == '>' && !--depth) {
+                        ++i;
+                        break;
+                    }
+                }
+            }
+        }
+        // whitespace, then the name (possibly with its class) and '('
+        if (i < name_start && i < line.size() && isspace(static_cast<unsigned char>(line[i]))) {
+            size_t j = line.find_first_not_of(" \t", i);
+            if (j != std::string::npos && j <= name_start
+                    && line.find_first_of("(),;=", j) == paren) {
+                return true;
+            }
+        }
+    }
+    // a pseudo-class before the method name: "<name>::method(", where the '<' starts a word
+    if (name_start >= 2 && !line.compare(name_start - 2, 2, "::") && name_start >= 3
+            && line[name_start - 3] == '>') {
+        size_t lt = line.rfind('<', name_start - 3);
+        if (lt != std::string::npos && (!lt || isspace(static_cast<unsigned char>(line[lt - 1]))
+                || line[lt - 1] == '*' || line[lt - 1] == '&')) {
+            bool word = lt + 1 < name_start - 3;
+            for (size_t k = lt + 1; k < name_start - 3; ++k) {
+                if (!qpp_idchar(line[k])) {
+                    word = false;
+                    break;
+                }
+            }
+            if (word) {
+                return true;
+            }
+        }
     }
     // attributes after the parameters: ") [" or ")["
     size_t close = line.rfind(')');
     if (close != std::string::npos && close > paren) {
         size_t i = line.find_first_not_of(" \t", close + 1);
-        if (i != std::string::npos && line[i] == '[') {
+        if (i != std::string::npos && line[i] == '[' && (i + 1 >= line.size() || line[i + 1] != '[')) {
             return true;
         }
     }
-    // a type that only Qore has, as a word
+    // a type that only Qore has, in a type position: the word followed by a name
     static const char* qore_types[] = {"softint", "softstring", "softbool", "softfloat", "softnumber", "softdate",
         "softlist", "softbinary"};
     for (const char* t : qore_types) {
         size_t len = strlen(t);
         for (size_t i = line.find(t); i != std::string::npos; i = line.find(t, i + 1)) {
-            bool start_ok = !i || !(isalnum(static_cast<unsigned char>(line[i - 1])) || line[i - 1] == '_');
-            bool end_ok = i + len >= line.size()
-                || !(isalnum(static_cast<unsigned char>(line[i + len])) || line[i + len] == '_');
-            if (start_ok && end_ok) {
+            if ((i && qpp_idchar(line[i - 1])) || (i + len < line.size() && qpp_idchar(line[i + len]))) {
+                continue;
+            }
+            // type arguments
+            size_t j = i + len;
+            if (j < line.size() && line[j] == '<') {
+                int depth = 0;
+                for (; j < line.size(); ++j) {
+                    if (line[j] == '<') {
+                        ++depth;
+                    } else if (line[j] == '>' && !--depth) {
+                        ++j;
+                        break;
+                    }
+                }
+            }
+            size_t k = line.find_first_not_of(" \t", j);
+            if (k != j && k != std::string::npos && (isalpha(static_cast<unsigned char>(line[k])) || line[k] == '_')) {
                 return true;
             }
         }
@@ -1245,7 +1370,8 @@ public:
                 }
                 continue;
             }
-            if (c == '"' || c == '\'') {
+            // a literal; not a digit separator ("1'000")
+            if (c == '"' || (c == '\'' && !(i && isalnum(static_cast<unsigned char>(line[i - 1]))))) {
                 // skip the literal
                 for (++i; i < line.size() && line[i] != c; ++i) {
                     if (line[i] == '\\') {
@@ -1259,9 +1385,13 @@ public:
     //! updates the state with a preprocessor directive that qpp copies into the C++ code
     void directive(const std::string& line) {
         if (in_block_comment) {
+            // a comment can end in the directive line
+            text(line);
             return;
         }
-        std::string d = line.substr(1);
+        // without its comments; a comment that starts in it is tracked
+        std::string d = qpp_strip_comments_and_literals(line).substr(1);
+        text(line);
         trim(d);
         if (if0_depth) {
             if (!d.compare(0, 2, "if")) {
@@ -4865,13 +4995,17 @@ protected:
 
     bool valid;
     const char* fileName;
+    //! the line of the first line of the text being read (issue #2290)
     unsigned startLineNumber;
+    //! the line in the name of the group's unit test: the line after the last text of the group
+    unsigned unitLineNumber;
     unsigned& lineNumber;
     PreprocessorState& ppState; // preprocessor state for #ifdef handling
 
     void checkBuf(std::string& buf) {
         if (!buf.empty()) {
             tlist.push_back(new TextGroupElement(buf, startLineNumber, fileName));
+            unitLineNumber = lineNumber;
             buf.clear();
         }
     }
@@ -5018,7 +5152,7 @@ protected:
 
 public:
     Group(std::string& buf, FILE* fp, const char* fn, unsigned& ln, PreprocessorState& pps)
-            : valid(true), fileName(fn), startLineNumber(ln), lineNumber(ln), ppState(pps) {
+            : valid(true), fileName(fn), startLineNumber(ln), unitLineNumber(ln), lineNumber(ln), ppState(pps) {
         // the state of the C++ code copied (issue #1686)
         QppCopiedCodeState copied;
         doc = buf;
@@ -5044,6 +5178,8 @@ public:
                     if (was_empty && !buf.empty()) {
                         startLineNumber = read_line_number(line, lineNumber);
                     }
+                    // a comment can start or end in the directive line (issue #1686)
+                    copied.text(line);
                     continue;
                 }
                 // Not a recognized/tracked directive - add to buf and continue
@@ -5059,14 +5195,17 @@ public:
                 continue;
             }
 
-            // issue #1686: text in a block comment or an '#if 0' block is copied as it is
-            if (copied.inactive()) {
+            // issue #1686: text in a block comment or an '#if 0' block is copied as it is; the end of the group ends
+            // it there too
+            if (copied.inactive() && line.find("@}") == std::string::npos) {
                 copied.text(line);
                 addText(buf, line);
                 continue;
             }
 
             if (!line.compare(0, 10, "namespace ")) {
+                // the text before has its lines (issue #2290)
+                checkBuf(buf);
                 size_t p = line.find(';');
                 if (p == std::string::npos) {
                     error("%s:%d: cannot find ';' in namespace declaration\n", fileName, lineNumber);
@@ -5207,7 +5346,7 @@ public:
         std::string mock_filename = fileName;
         std::replace(mock_filename.begin(), mock_filename.end(), '.', '_');
 
-        std::string v = "test_" + mock_filename + "_" + std::to_string(startLineNumber);
+        std::string v = "test_" + mock_filename + "_" + std::to_string(unitLineNumber);
         ret.push_back(v);
 
         return ret;
@@ -5215,7 +5354,7 @@ public:
 
     int serializeUnitTest(FILE* fp) const {
         //fprintf(fp, "# Group::serializeUnitTest\n");
-        fprintf(fp, "    # %s: %d\n", fileName, startLineNumber);
+        fprintf(fp, "    # %s: %d\n", fileName, unitLineNumber);
 
         if (fmap.empty())
             return 0;
@@ -8378,6 +8517,8 @@ protected:
             // Handle preprocessor directives
             if (!str.empty() && str[0] == '#') {
                 if (ppState.handleDirective(str, read_line_number(str, lineNumber), buf)) {
+                    // a comment can start or end in the directive line (issue #1686)
+                    copied.text(str);
                     continue;
                 }
                 // Not a recognized/tracked directive - add to buf and continue
