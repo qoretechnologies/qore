@@ -6561,7 +6561,13 @@ string sql = table.getSelectSql(sh, \args);
             # an alias is quoted when required, in the case given, as it names the key of the result
             switch (arg.typeCode()) {
                 case NT_STRING: arg = getAliasSqlName(arg); break;
-                case NT_HASH: arg.as = getAliasSqlName(arg.as); break;
+                case NT_HASH: {
+                    # issue #2847: the alias is optional (ex: cop_seq() without one in insertFromSelect())
+                    if (exists arg.as) {
+                        arg.as = getAliasSqlName(arg.as);
+                    }
+                    break;
+                }
             }
             return cmd.code(cve, arg, \info.pseudo_column_map);
         } else if (cmd.withcolumn) {

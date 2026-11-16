@@ -2574,6 +2574,10 @@
       bytes, and @ref Qore::strmul() "strmul()" keeps the encoding of its string
     - @ref Qore::gzip() "gzip()" and @ref Qore::bzip2() "bzip2()" raise their documented errors for invalid negative
       levels
+    - SqlUtil's @ref SqlUtil::cop_seq() "cop_seq()" without an alias, and a @ref SqlUtil::Table "Table" given to an
+      AbstractTable method through a Table (ex: the source of \c insertFromSelect()), raised
+      \c RUNTIME-OVERLOAD-ERROR (see @ref sqlutilv3_11_0) (<a href="https://github.com/qoretechnologies/qore/issues/2847">issue
+      2847</a>, <a href="https://github.com/qoretechnologies/qore/issues/6321">issue 6321</a>)
     - fixed \c QoreString::concat() of a string's first characters overrunning buffers and \c QoreString::compareSoft()
       for prefixes and empty strings in the C++ API
     - fixed data races when a Program parsed classes that other threads used, such as the classes of a binary module
