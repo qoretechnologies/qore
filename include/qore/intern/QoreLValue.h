@@ -374,7 +374,7 @@ public:
         }
         switch (type) {
             case QV_Float: {
-                int64 i = (int64)v.f;
+                int64 i = q_float_to_int64(v.f);
                 v.i = i;
                 type = QV_Int;
                 return nullptr;
@@ -822,7 +822,7 @@ public:
                 assigned = true;
             switch (type) {
                 case QV_Bool: v.b = (bool)f; return 0;
-                case QV_Int: v.i = (int64)f; return 0;
+                case QV_Int: v.i = q_float_to_int64(f); return 0;
                 case QV_Float: v.f = f; return 0;
                 default: assert(false);
                 // no break
@@ -997,7 +997,7 @@ public:
         if (fixed_type) {
             switch (type) {
                 case QV_Bool: v.b = (bool)n; return;
-                case QV_Int: v.i = (int64)n; return;
+                case QV_Int: v.i = q_float_to_int64(n); return;
                 case QV_Float: v.f = n; return;
                 default: assert(false);
                 // no break
@@ -1229,7 +1229,7 @@ public:
             switch (type) {
                 case QV_Bool: return (int64)v.b;
                 case QV_Int: return v.i;
-                case QV_Float: return (int64)v.f;
+                case QV_Float: return q_float_to_int64(v.f);
                 case QV_Enum: return QoreValue::makeEnumBorrowed(v.em).getAsBigInt();
                 case QV_Value: return getInlineValue().getAsBigInt();
                 case QV_Node: return v.n ? v.n->getAsBigInt() : 0;

@@ -33,6 +33,8 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/qore_program_private.h"
 
+#include <mutex>
+
 static LocalVar* qore_closure_vlist_self(const LVarSet* vlist) {
     if (!vlist) {
         return nullptr;
@@ -295,6 +297,10 @@ const char* QoreClosureParseNode::getTypeName() const {
 QoreValue QoreClosureParseNode::exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args) const {
     if (is_deferred.load(std::memory_order_acquire)) {
+        // only the thread that parses or commits the Program initializes it while it does (issue #6243)
+        if (pgm && qore_program_private::get(*pgm)->checkDeferredClosureInit(xsink)) {
+            return QoreValue();
+        }
         // A closure inside a constant expression has its parse-init deferred (deferCodeInitialization() in
         // parseInitImpl()) so that recursive constant values are available when it is initialized (#4903).  The
         // deferred set is normally flushed by qore_program_private::initDeferredCode() at the end of parse-commit,
@@ -320,6 +326,10 @@ QoreValue QoreClosureParseNode::execNamed(const QoreClosureBase& closure_base, Q
         const QoreListNode* args, const name_vec_t& arg_names, QoreObject* self, const qore_class_private* class_ctx,
         ExceptionSink* xsink) const {
     // a deferred closure is initialized as for a call with positional arguments (see exec())
+    if (is_deferred.load(std::memory_order_acquire) && pgm
+            && qore_program_private::get(*pgm)->checkDeferredClosureInit(xsink)) {
+        return QoreValue();
+    }
     if (is_deferred.load(std::memory_order_acquire)
             && const_cast<QoreClosureParseNode*>(this)->parseInitDeferred()) {
         xsink->raiseException("CLOSURE-INITIALIZATION-ERROR", "the closure used in this constant expression could "

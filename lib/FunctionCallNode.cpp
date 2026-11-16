@@ -516,6 +516,12 @@ QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execByNameImpl(Lexic
     if (tmp_args && strcmp(c_str, "copy")) {
         // Dynamic dispatch with pre-evaluated args: look up the method on the actual class
         // and use evalTmpArgs to preserve ReferenceNode values
+        // an object that has been deleted raises the error of qore_class_private::evalMethod(), which names the class
+        // of the object, before the method is looked up (issue #6168)
+        if (!o->isValid()) {
+            qore_raise_deleted_method_call(xsink, o, c_str, nullptr, nullptr, nullptr);
+            return QoreValue();
+        }
         const qore_class_private* priv = qore_class_private::get(*o->getClass());
         const QoreMethod* w = priv->getMethodForEval(c_str, o->getProgram(), ctx, xsink);
         if (*xsink) {

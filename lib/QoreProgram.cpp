@@ -2004,6 +2004,31 @@ void qore_program_private_base::copyExternalData() {
     }
 }
 
+int qore_program_private::beginParse(ExceptionSink* xsink, ParseStartGuard& guard, bool nested) {
+    {
+        // PO_ALLOW_REPARSE is read and the mark set with the write lock of the options held, which the changes of the
+        // options hold as well (see checkReparseOptionChange()); the write lock before plock
+        std::lock_guard<std::recursive_mutex> wl(pwo.parse_options.writeLock());
+        AutoLocker al(plock);
+        if (!nested && checkParseIntern(xsink)) {
+            return -1;
+        }
+        // set in the same critical section as the check that no thread runs the Program's code, so that no thread
+        // enters it between them; a Program without PO_ALLOW_REPARSE makes no such check, and sets the flag when its
+        // code is parsed, as before
+        if ((pwo.parse_options & PO_ALLOW_REPARSE) && !parsing_in_progress) {
+            parsing_in_progress = true;
+            guard.began = true;
+        }
+    }
+#ifdef DEBUG
+    if (qore_dbg_parse_start_gate(pgm, xsink)) {
+        return -1;
+    }
+#endif
+    return 0;
+}
+
 void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     bool atomic_rollback = static_cast<bool>(pwo.parse_options & PO_ALLOW_REPARSE);
     // delete pending changes to namespaces: only what the failed parse added is removed, also without
@@ -6246,6 +6271,10 @@ QoreExternalProgramContextHelper::QoreExternalProgramContextHelper(ExceptionSink
 
 QoreExternalProgramContextHelper::~QoreExternalProgramContextHelper() {
     delete priv;
+}
+
+bool qore_program_thread_entry_pending(const QoreProgram* pgm) {
+    return pgm && thread_entry_pending(pgm);
 }
 
 class QoreExternalProgramCallContextHelperPriv : ProgramCallContextHelper {

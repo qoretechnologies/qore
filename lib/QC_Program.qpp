@@ -2596,6 +2596,7 @@ pgm.setParseOptions(PO_NO_THREADS | PO_NO_GUI);
     @endcode
 
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
+    @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
     @throw PROGRAM-OPTION-ERROR invalid parse options used
 
     @see Program::disableParseOptions() for a reciprocal method that disables parse options; also see Program::replaceParseOptions()
@@ -2620,6 +2621,7 @@ pgm.setParseOptions(opts);
     @endcode
 
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
+    @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
 
     @since %Qore 3.0
     @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
@@ -2673,6 +2675,7 @@ pgm.disableParseOptions(PO_NO_THREADS | PO_NO_GUI);
     @endcode
 
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
+    @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
     @throw PROGRAM-OPTION-ERROR invalid parse options used
 
     @see Program::setParseOptions() for a reciprocal method that enables parse options; also see Program::replaceParseOptions()
@@ -2697,6 +2700,7 @@ pgm.disableParseOptions(opts);
     @endcode
 
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
+    @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
 
     @since %Qore 3.0
     @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
@@ -2724,6 +2728,7 @@ pgm.replaceParseOptions(PO_NO_THREADS | PO_NO_GUI);
     @throw OPTION-ERROR The calling Program does not have the @ref PO_NO_CHILD_PO_RESTRICTIONS option set, and therefore cannot call Program::replaceParseOptions()
     @throw OPTIONS-LOCKED the parse options are locked, and the replacement would remove a restriction locked in or
     add an option that gives more freedom
+    @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
 
     @see Program::setParseOptions() and Program::disableParseOptions().
      @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
@@ -3730,7 +3735,8 @@ pgm.setThreadEntryHandler(
     If \a on_enter raises an exception, the thread does not run the Program's code: the call that entered the
     Program raises the exception instead, and no \a on_exit runs for that entry (a thread started in the Program
     ends without running its code).  An exception raised by \a on_exit is raised after any exception that was already
-    propagating; the Program has been left in any case.
+    propagating; the Program has been left in any case.  If \a on_exit cannot be run because no memory can be
+    allocated, the exit raises \c THREAD-ENTRY-HANDLER-ERROR in the same way.
 
     @par Restrictions
     This method requires both @ref Qore::Program::setThreadInit() "setThreadInit()"'s functional domain (@ref
