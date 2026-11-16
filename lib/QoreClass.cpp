@@ -1383,6 +1383,7 @@ int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
     if (hierarchy_initialized) {
         return 0;
     }
+    QORE_CLASS_HIERARCHY_STEP();
     if (scl->initializeHierarchy(cls, qcp_set)) {
         initialized = true;
         return -1;
@@ -2954,6 +2955,7 @@ const QoreVarInfo* BCNode::parseFindVar(const char* name, const qore_class_priva
 }
 
 const QoreClass* BCNode::findInHierarchy(const qore_class_private& qc) {
+   QORE_CLASS_HIERARCHY_STEP();
    // sclass can be 0 if the class could not be found during parse initialization
    return sclass ? sclass->priv->findInHierarchy(qc) : nullptr;
 }
@@ -3110,6 +3112,7 @@ void BCNode::execConstructors(LexicalSemanticPolicy policy, QoreObject* o, BCEAL
 }
 
 int BCNode::addBaseClassesToSubclass(QoreClass* child, bool is_virtual) {
+    QORE_CLASS_HIERARCHY_STEP();
     // issue #2318 must check for duplicate base classes here
     // sclass may be 0 in case of a parse exception
     if (!sclass) {
@@ -3441,6 +3444,7 @@ void BCList::parseAddAncestors(QoreMethod* m) {
     //printd(5, "BCList::parseAddAncestors(%p %s) this: %p size: %d\n", m, name, this, size());
 
     for (auto& i : *this) {
+        QORE_CLASS_HIERARCHY_STEP();
         // if there was a parse error finding the base class, then skip
         QoreClass* qc = (*i).sclass;
         if (!qc)
@@ -3515,6 +3519,7 @@ const QoreClass* BCList::findInHierarchy(const qore_class_private& qc) {
     // each path to it (issue #6106)
     if (smlComplete()) {
         for (auto& i : sml) {
+            QORE_CLASS_HIERARCHY_STEP();
             if (i.first->priv->equal(qc)) {
                 return i.first;
             }
@@ -4335,6 +4340,7 @@ const QoreMethod* qore_class_private::parseResolveSelfMethod(const QoreProgramLo
 
 // finds a non-static method in the class hierarchy at parse time, optionally initializes classes
 const QoreMethod* qore_class_private::parseFindNormalMethodIntern(const char* mname, const qore_class_private* class_ctx) {
+    QORE_CLASS_HIERARCHY_STEP();
     initialize();
     const QoreMethod* m = parseFindLocalMethod(mname);
     if (m && doParseMethodAccess(m, class_ctx)) {
@@ -4687,6 +4693,7 @@ void BCSMList::processMemberInitializationList(const QoreMemberMap& members, mem
         const QoreMemberMap& bmembers = i.first->priv->members;
         for (QoreMemberMap::const_iterator mii = bmembers.endOfFront(), mie = bmembers.member_list.end(); mii != mie;
                 ++mii) {
+            QORE_CLASS_HIERARCHY_STEP();
             const QoreMemberMap::member_list_element_t& mi = *mii;
             // skip imported members
             if (!mi.second->local()) {
@@ -4798,6 +4805,7 @@ int BCSMList::add(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
         return -1;
     }
 
+    QORE_CLASS_HIERARCHY_STEP();
     // see if class already exists in list
     if (useIndex()) {
         // the list is only scanned when it has another class with the ID of thisclass, to find out if it is a
@@ -4812,6 +4820,7 @@ int BCSMList::add(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
     }
     class_list_t::const_iterator i = begin();
     while (i != end()) {
+        QORE_CLASS_HIERARCHY_STEP();
         if (i->first->getID() == qc->getID())
             return 0;
         if (i->first->getID() == thisclass->getID()) {
@@ -4889,6 +4898,10 @@ const QoreClass* BCSMList::getClass(qore_classid_t cid) const {
     }
     return nullptr;
 }
+
+#ifdef DEBUG
+std::atomic<int64> qore_class_hierarchy_steps{0};
+#endif
 
 void BCSMList::resolveCopy() {
     // the index refers to the classes replaced here
@@ -6420,6 +6433,7 @@ void collect_final_methods(const qore_class_private& qc, bool is_static,
 // returns the first method of the given name found depth-first in the parent classes, as calls are resolved
 const MethodFunctionBase* find_first_parent_method(const qore_class_private& qc, const std::string& name,
         bool is_static) {
+    QORE_CLASS_HIERARCHY_STEP();
     if (!qc.scl) {
         return nullptr;
     }
