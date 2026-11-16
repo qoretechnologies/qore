@@ -224,6 +224,11 @@ DLLLOCAL void qore_dbg_socket_cancel_conversion();
 typedef void (*qore_dbg_socket_send_hook_t)(int fd);
 DLLLOCAL extern std::atomic<qore_dbg_socket_send_hook_t> qore_dbg_socket_send_hook;
 
+//! called by SocketRecvUntilBytesPollState::doRecv() after SSL_read() reported SSL_ERROR_WANT_READ, before the
+//! descriptor is polled; \a fd is the socket's descriptor; set by dbg_hold_tls_read_until_hangup() (#6315)
+typedef void (*qore_dbg_tls_read_want_hook_t)(int fd);
+DLLLOCAL extern std::atomic<qore_dbg_tls_read_want_hook_t> qore_dbg_tls_read_want_hook;
+
 //! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection, after the close hook and
 //! before it releases the reference that it holds while running the hook; returns true if the hook released a
 //! reference of its own, in which case qore_dbg_conn_close_released() is called once setClosed() has released its

@@ -10644,6 +10644,13 @@ int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
                 if (++loop >= max_nonblock_ops) {
                     return SOCK_POLLIN;
                 }
+#ifdef DEBUG
+                // tests hold the read here, after SSL_read() found no record, until the peer has sent its data and
+                // reset or closed the connection (#6315)
+                if (qore_dbg_tls_read_want_hook_t hook = qore_dbg_tls_read_want_hook.load()) {
+                    hook(io_use.getDescriptor());
+                }
+#endif
                 short revents;
                 int prc = qore_socket_poll_fd_revents_now(io_use.getDescriptor(), POLLIN | POLLERR | POLLHUP, revents,
                     "SOCKET-RECV-ERROR", "socket", xsink);
@@ -10653,7 +10660,10 @@ int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
                 if (!prc || !(revents & (POLLIN | POLLERR | POLLHUP))) {
                     return SOCK_POLLIN;
                 }
-                if (revents & (POLLERR | POLLHUP)) {
+                // data that arrived with the peer's reset or close is still in the receive buffer: SSL_read() reads
+                // it, and reports the end of the connection only once nothing is left (#6315); without POLLIN, the
+                // connection ended with nothing to read
+                if (!(revents & POLLIN)) {
                     return 0;
                 }
                 continue;

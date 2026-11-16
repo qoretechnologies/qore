@@ -22187,6 +22187,7 @@ static QoreValue f_dbg_release_http1_connection_close(const QoreListNode* params
 
 std::atomic<qore_dbg_http1_send_hook_t> qore_dbg_http1_send_hook{nullptr};
 std::atomic<qore_dbg_socket_send_hook_t> qore_dbg_socket_send_hook{nullptr};
+std::atomic<qore_dbg_tls_read_want_hook_t> qore_dbg_tls_read_want_hook{nullptr};
 std::atomic<int64_t> qore_dbg_ssl_close_notify_count{0};
 std::atomic<int64_t> qore_dbg_sync_release_taken{0};
 std::atomic<int64_t> qore_dbg_sync_release_refused{0};
@@ -23037,6 +23038,58 @@ static QoreValue f_dbg_hold_http1_socket_send(const QoreListNode* params, Runtim
     if (!*xsink) {
         qore_dbg_socket_send_hook.store(dbg_http1_socket_send_hook);
     }
+    return QoreValue();
+}
+
+//! the state of dbg_hold_tls_read_until_hangup(); protected by its mutex
+static struct {
+    std::mutex m;
+    int port = 0;
+    Counter* reached = nullptr;
+} dbg_tls_read_want;
+
+//! holds a TLS read of the socket connected to the armed port until its connection is reset or closed (#6315)
+static void dbg_tls_read_want_hook(int fd) {
+    Counter* c;
+    {
+        std::lock_guard<std::mutex> l(dbg_tls_read_want.m);
+        if (!dbg_tls_read_want.reached || fd < 0 || dbg_http1_peer_port(fd) != dbg_tls_read_want.port) {
+            return;
+        }
+        c = dbg_tls_read_want.reached;
+        dbg_tls_read_want.reached = nullptr;
+        qore_dbg_tls_read_want_hook.store(nullptr);
+    }
+    dbg_http1_send_failure_dec(c);
+    dbg_http1_wait_hangup(fd);
+}
+
+//! holds the next TLS read of a header (Socket::recvUntilBytes()) of a socket connected to the given port, once
+//! SSL_read() has found no record, until the connection is reset or closed
+/** The test's peer then sends its data and resets or closes the connection; the read continues once the end of the
+    connection has arrived, so the data and the end are both in the receive buffer when it polls (#6315).
+
+    @param port the port of the peer of the socket whose read is held
+    @param reached decremented when the read is held
+
+    @throw DBG-ARGUMENT-ERROR the hook is already armed
+*/
+static QoreValue f_dbg_hold_tls_read_until_hangup(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int port = (int)get_param_value(params, 0).getAsBigInt();
+    Counter* c = get_counter_arg(params, 1, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> l(dbg_tls_read_want.m);
+    if (dbg_tls_read_want.reached) {
+        c->deref(xsink);
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_hold_tls_read_until_hangup() is already armed");
+        return QoreValue();
+    }
+    dbg_tls_read_want.port = port;
+    dbg_tls_read_want.reached = c;
+    qore_dbg_tls_read_want_hook.store(dbg_tls_read_want_hook);
     return QoreValue();
 }
 
@@ -24251,6 +24304,9 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo, 4, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "reached", QC_SOCKET->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "response");
+    qns.addBuiltinVariant("dbg_hold_tls_read_until_hangup", f_dbg_hold_tls_read_until_hangup, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(),
+        QORE_PARAM_NO_ARG, "reached");
     qns.addBuiltinVariant("dbg_http1_send_failure_result", f_dbg_http1_send_failure_result, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 0);
     qns.addBuiltinVariant("dbg_release_http1_connection_on_close", f_dbg_release_http1_connection_on_close,
