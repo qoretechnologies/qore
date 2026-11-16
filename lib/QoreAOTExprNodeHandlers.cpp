@@ -876,7 +876,10 @@ static QoreValue read_node_EN_SQUARE_BRKT(AOTExprNodeReadCtx& ctx) {
     if (num_children >= 2) {
         right = ctx.recurse(ctx);
     }
-    return QoreValue(new QoreSquareBracketsOperatorNode(&loc_builtin, left, right));
+    // compiled code is %modern: its operator has negative offsets (qore#6294)
+    QoreSquareBracketsOperatorNode* node = new QoreSquareBracketsOperatorNode(&loc_builtin, left, right);
+    node->setCompiledCodeOptions();
+    return QoreValue(node);
 }
 
 // ============================================================================

@@ -254,12 +254,15 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   --exec-mode, in qcc executables and in a qcc-compiled module
         # - asyncio_callback_exception_stderr (#6275): its checks run in child processes without an execution mode,
         #   whose standard output and error output it reads
+        # - AOTMemberInitNegativeOffsets (#6294): its checks run in child processes of the interpreter and of qcc
+        #   executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/ir/AOTDumpInfoFindCallRef.qtest",
                                  "examples/test/ir/AOTModuleInitException.qtest",
+                                 "examples/test/ir/AOTMemberInitNegativeOffsets.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/classes/deleted-program-types.qtest",
                                  "examples/test/qore/classes/method-reference-per-class.qtest",

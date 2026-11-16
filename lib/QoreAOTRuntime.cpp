@@ -5149,8 +5149,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                     right.discard(nullptr);
                     has_unsupported = true;
                 } else {
-                    ctx->exprs[i] = toBitsNB(QoreValue(
-                        new QoreSquareBracketsOperatorNode(&loc_builtin, left, right)));
+                    // compiled code is %modern: its operator has negative offsets (qore#6294)
+                    QoreSquareBracketsOperatorNode* node = new QoreSquareBracketsOperatorNode(&loc_builtin, left,
+                        right);
+                    node->setCompiledCodeOptions();
+                    ctx->exprs[i] = toBitsNB(QoreValue(node));
                 }
                 continue;
             }
