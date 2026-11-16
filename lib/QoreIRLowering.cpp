@@ -10339,9 +10339,9 @@ QoreIRValue QoreIRLowering::lowerPreIncDec(const QoreValue& expr, const QoreValu
     // the fixed-aggregate scalar replacement removes the path of a key of a hash that a local holds (qore#6199)
     {
         // an unused post operator changes the lvalue as the pre operator does, but its error names the post operator,
-        // as the AST interpreter's does: it takes the post operation where the lvalue's type can raise the error, and
-        // the pre operation where it cannot, which does not copy the old value of a number lvalue
-        // the post operation's old value is unused: ref_rv = false, so that the old value of a number is not copied
+        // as the AST interpreter's does: it takes the post operation where the lvalue's type can raise the error, with
+        // ref_rv = false, as its old value is unused and so the old value of a number is not copied, and the pre
+        // operation where the type cannot raise it
         LVUnaryOp unary_op = increment ? LVUnaryOp::PreInc : LVUnaryOp::PreDec;
         bool ref_rv = true;
         if (post && qore_ir_incdec_may_name_operator(qore_ir_incdec_lvalue_type(lvexp))) {

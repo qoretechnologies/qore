@@ -600,6 +600,10 @@ DLLLOCAL int64 q_get_lvalue_removal_probe_count();
 DLLLOCAL void q_record_lvalue_removal_probe();
 //! returns the number of lazy removal-tracker states allocated in this thread
 DLLLOCAL int64 q_get_lvalue_removal_allocation_count();
+//! returns the number of old values of number lvalues copied by post-increments and post-decrements in this thread
+/** for tests; see dbg_get_number_old_value_copy_count()
+*/
+DLLLOCAL int64 q_get_number_old_value_copy_count();
 #endif
 
 //! Identities held by a removal until its recursive-reference scan completes

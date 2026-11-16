@@ -22,6 +22,11 @@
     container gives them a type that is not numeric, with number, int, float and untyped lvalues as controls.  Its
     output must be the one in UnusedPostIncDecErrors.expected, which the AST interpreter prints, in every execution
     mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
+
+    UnusedPostNoCopy.q checks that such an operation on a number in an untyped lvalue (a local, a member, also named
+    without "self.") copies no old value, which it does not use, with the count of copies that debug
+    builds keep (dbg_get_number_old_value_copy_count()); a used old value is copied, as a control.  It is skipped in
+    other builds.
 */
 class UnusedPostIncDecErrorsTest inherits QUnit::Test {
     public {
@@ -30,12 +35,17 @@ class UnusedPostIncDecErrorsTest inherits QUnit::Test {
 
         #! the number of checks whose lvalue accepts the result (the controls)
         const NoErrorCount = 18;
+
+        #! the output of UnusedPostNoCopy.q: the number of old values copied by the operations of each check
+        const NoCopyExpected = "local-unused 0\nmember-unused 0\nbare-self-member-unused 0\nself-member-unused 0\n"
+            "local-used 20\n";
     }
 
     private {
         string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         string fixture = get_script_dir() + "/UnusedPostIncDecErrors.q";
         string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/UnusedPostIncDecErrors.expected");
+        string no_copy_fixture = get_script_dir() + "/UnusedPostNoCopy.q";
     }
 
     constructor() : QUnit::Test("unused post-increment and post-decrement errors", "1.0", \ARGV) {
@@ -51,6 +61,25 @@ class UnusedPostIncDecErrorsTest inherits QUnit::Test {
         });
         addTestCase("qcc -O0", sub () { checkQcc(0); });
         addTestCase("qcc -O3", sub () { checkQcc(3); });
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("no old value copied, execution mode " + mode, sub () {
+                skipWithoutDebugging();
+                checkNoCopy(ExecModeHarness::run(command(execution_mode, no_copy_fixture)));
+            });
+        }
+        addTestCase("no old value copied, IR tier", sub () {
+            skipWithoutDebugging();
+            checkNoCopy(ExecModeHarness::run_ir_tier(command("tiered", no_copy_fixture)));
+        });
+        addTestCase("no old value copied, qcc -O0", sub () {
+            skipWithoutDebugging();
+            checkNoCopy(runQcc(0, no_copy_fixture));
+        });
+        addTestCase("no old value copied, qcc -O3", sub () {
+            skipWithoutDebugging();
+            checkNoCopy(runQcc(3, no_copy_fixture));
+        });
 
         set_return_value(main());
     }
@@ -78,18 +107,37 @@ class UnusedPostIncDecErrorsTest inherits QUnit::Test {
         assertEq(CheckCount - NoErrorCount, errors);
     }
 
-    private string command(string mode) {
-        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    private string command(string mode, *string script) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode,
+            shellQuote(script ?? fixture));
     }
 
     private checkQcc(int opt) {
+        assertEq(expected, runQcc(opt, fixture));
+    }
+
+    #! compiles the script with qcc and returns the output of the program
+    private string runQcc(int opt, string script) {
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
         string program = dir + "/unused-post-incdec-errors";
         string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(getQcc()), opt, shellQuote(program),
-            shellQuote(fixture)));
+            shellQuote(script)));
         assertTrue(is_file(program), "the fixture compiled: " + output);
-        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+        return backquote(shellQuote(program) + " 2>&1");
+    }
+
+    #! skips a check of UnusedPostNoCopy.q in a build without debugging, which has no count of copies; the library
+    #! that the children use is the one of this process
+    private skipWithoutDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the count of copies needs a debug build");
+        }
+    }
+
+    #! checks the output of UnusedPostNoCopy.q
+    private checkNoCopy(string out) {
+        assertEq(NoCopyExpected, out);
     }
 
     private string getQcc() {

@@ -866,6 +866,8 @@ static thread_local int64 lvalue_scan_count = 0;
 static thread_local int64 lvalue_removal_visit_count = 0;
 static thread_local int64 lvalue_removal_probe_count = 0;
 static thread_local int64 lvalue_removal_allocation_count = 0;
+//! the number of old values of number lvalues copied by post-increments and post-decrements in the current thread
+static thread_local int64 number_old_value_copy_count = 0;
 
 int64 q_get_lvalue_scan_count() {
     return lvalue_scan_count;
@@ -881,6 +883,10 @@ int64 q_get_lvalue_removal_probe_count() {
 
 int64 q_get_lvalue_removal_allocation_count() {
     return lvalue_removal_allocation_count;
+}
+
+int64 q_get_number_old_value_copy_count() {
+    return number_old_value_copy_count;
 }
 
 void q_record_lvalue_removal_probe() {
@@ -3807,6 +3813,9 @@ QoreNumberNode* LValueHelper::postIncrementNumber(bool ref_rv, const char* desc)
         QoreNumberNode* nn = new QoreNumberNode(getValue());
         SimpleRefHolder<QoreNumberNode> n(nn);
         SimpleRefHolder<QoreNumberNode> rv(ref_rv ? new QoreNumberNode(*nn) : nullptr);
+#ifdef DEBUG
+        number_old_value_copy_count += ref_rv;
+#endif
         qore_number_private::inc(*nn);
         if (storeNumberResult(n.release(), desc)) {
             // the lvalue's type refused the result: no old value is returned
@@ -3818,6 +3827,9 @@ QoreNumberNode* LValueHelper::postIncrementNumber(bool ref_rv, const char* desc)
     if (!n)
         return nullptr;
     QoreNumberNode* rv = ref_rv ? new QoreNumberNode(*n) : 0;
+#ifdef DEBUG
+    number_old_value_copy_count += ref_rv;
+#endif
     qore_number_private::inc(*n);
     return rv;
 }
@@ -3827,6 +3839,9 @@ QoreNumberNode* LValueHelper::postDecrementNumber(bool ref_rv, const char* desc)
         QoreNumberNode* nn = new QoreNumberNode(getValue());
         SimpleRefHolder<QoreNumberNode> n(nn);
         SimpleRefHolder<QoreNumberNode> rv(ref_rv ? new QoreNumberNode(*nn) : nullptr);
+#ifdef DEBUG
+        number_old_value_copy_count += ref_rv;
+#endif
         qore_number_private::dec(*nn);
         if (storeNumberResult(n.release(), desc)) {
             // the lvalue's type refused the result: no old value is returned
@@ -3838,6 +3853,9 @@ QoreNumberNode* LValueHelper::postDecrementNumber(bool ref_rv, const char* desc)
     if (!n)
         return nullptr;
     QoreNumberNode* rv = ref_rv ? new QoreNumberNode(*n) : 0;
+#ifdef DEBUG
+    number_old_value_copy_count += ref_rv;
+#endif
     qore_number_private::dec(*n);
     return rv;
 }
