@@ -285,7 +285,12 @@ QoreValue QoreSquareBracketsRangeOperatorNode::slice(const QoreValue& seq_value,
         case NT_BUFFER: {
             const QoreBufferNode* b = seq->get<const QoreBufferNode>();
             if (empty) {
-                return new QoreBufferNode(b->getElementType(), b->hasNullableElements());
+                // an empty slice keeps the decimal precision and scale of a buffer<decimal128> (qore#6263); the
+                // constructor without them, which allocates no storage, is cheaper for the other element types
+                return b->getElementType() == QoreBufferElementType::Decimal128
+                    ? new QoreBufferNode(b->getElementType(), b->hasNullableElements(), 0, b->getDecimalPrecision(),
+                        b->getDecimalScale())
+                    : new QoreBufferNode(b->getElementType(), b->hasNullableElements());
             }
             return b->sliceRange(static_cast<size_t>(start), static_cast<size_t>(stop), xsink);
         }
