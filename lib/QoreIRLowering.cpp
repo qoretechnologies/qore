@@ -9437,6 +9437,8 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     QoreIROpcode opcode = QoreIROpcode::AddAssignAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
+    // whether the right operand of a string append is a string with a value
+    bool string_operand = false;
     if (force_int
         || (isIntConstant(op->getLeft()) && isIntConstant(right_expr))
         || (getAnalysis(op->getLeft(), left_analysis)
@@ -9452,16 +9454,31 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         opcode = QoreIROpcode::AddAssignFloat;
     } else if (!q_env_is_set("QORE_DISABLE_IR_STRING_APPEND_COW")
             && isLocalNonClosureVar(left_var)
-            && left_var->getTypeInfo() == stringTypeInfo
-            && getAnalysis(right_expr, right_analysis)
+            && left_var->getTypeInfo() == stringTypeInfo) {
+        // a value of any type is appended to a string local as the AST interpreter appends it: NOTHING and NULL
+        // leave the string unchanged and a value of another type is appended as its string (doPlusEqualsOnLValue());
+        // the append helpers do the same, so that the string is appended to in place when the local holds the only
+        // reference to it, whatever the operand (issue #6266: a generic += copied the string for every append of a
+        // variable, a call's value or a list element, which made a loop of appends quadratic)
+        opcode = QoreIROpcode::AppendStringCow;
+        string_operand = getAnalysis(right_expr, right_analysis)
             && right_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
             && right_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
-            && QoreTypeInfo::isType(selectAnalysisType(right_analysis), NT_STRING)) {
-        opcode = QoreIROpcode::AppendStringCow;
+            && QoreTypeInfo::isType(selectAnalysisType(right_analysis), NT_STRING);
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
     if (!result.isValid()) {
         return QoreIRValue();
+    }
+    if (string_operand) {
+        // the append that lowerBinaryOpOrInvoke() made last in the current block; an invoke is never made in place
+        QoreIRBasicBlock* block = builder.getBlock();
+        if (block && !block->instructions.empty()) {
+            QoreIRInstruction* append = block->instructions.back().get();
+            if (append->opcode == QoreIROpcode::AppendStringCow && append->result.id == result.id) {
+                append->string_append_string_operand = true;
+            }
+        }
     }
     if (!storeVarRef(left_var, result, error, "plus-equals", &right_expr)) {
         return QoreIRValue();

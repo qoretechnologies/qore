@@ -1572,6 +1572,9 @@ public:
     bool list_push_local_cow = false;  // Transient: paired local push can run CoW after compiler refs are cleared
     bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
     bool string_append_local_cow = false;  // Transient: instruction belongs to a paired local append with alias guard
+    // Transient: AppendStringCow whose right operand the lowering proved to be a string with a value; only such an
+    // append can be marked in place, as qore_rt_string_append_in_place() requires a string (issue #6266)
+    bool string_append_string_operand = false;
     // Transient: LoadLocal directly followed by the CheckCallTarget of its value: the interpreter makes the check in
     // the load and steps over it (qore_ir_fuse_call_target_checks(); issue #5784)
     QoreIRFusedCallTargetCheck fused_call_target_check = QoreIRFusedCallTargetCheck::None;

@@ -11038,11 +11038,30 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_add_typed(uint64_t left, uint64_t r
     return toBits(QoreValue(result));
 }
 
+//! Appends a value that is not a string to a string local as its string (issue #6266)
+/** The value is converted to the string that doPlusEqualsOnLValue() appends for it (its string representation, in the
+    same encoding), made once as a string node (QoreStringNodeValueHelper), and the string is appended by \a append, a
+    call of a string append helper with the string as its right operand; a value that is not a string is never the
+    string appended to, so the helper's alias check is unaffected
+*/
+template <typename Append>
+static __attribute__((noinline)) uint64_t qore_rt_string_append_converted(QoreValue right, ExceptionSink* xsink,
+        Append append) {
+    ReferenceHolder<QoreStringNode> right_node(QoreStringNodeValueHelper(right).getReferencedValue(), xsink);
+    return append(toBits(QoreValue(*right_node)));
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
         uint64_t left_bits, uint64_t right_bits, ExceptionSink* xsink) {
     QoreValue left = fromBits(left_bits);
     QoreValue right = fromBits(right_bits);
     if (left.isNullOrNothing()) {
+        // a value of another type than string is appended as its string
+        if (!right.isNullOrNothing() && right.getType() != NT_STRING) {
+            return qore_rt_string_append_converted(right, xsink, [left_bits, xsink](uint64_t converted) {
+                return qore_rt_string_append_cow(left_bits, converted, xsink);
+            });
+        }
         return toBits(right.refSelf());
     }
     if (left.getType() != NT_STRING) {
@@ -11053,7 +11072,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
         return toBits(left.refSelf());
     }
     if (right.getType() != NT_STRING) {
-        return toBits(QoreValue());
+        // a value of another type is appended as its string, as doPlusEqualsOnLValue() appends it
+        return qore_rt_string_append_converted(right, xsink, [left_bits, xsink](uint64_t converted) {
+            return qore_rt_string_append_cow(left_bits, converted, xsink);
+        });
     }
 
     QoreStringValueHelper right_string(right);
@@ -11086,6 +11108,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
     QoreValue left = fromBits(left_bits);
     QoreValue right = fromBits(right_bits);
     if (left.isNullOrNothing()) {
+        // a value of another type than string is appended as its string
+        if (!right.isNullOrNothing() && right.getType() != NT_STRING) {
+            return qore_rt_string_append_converted(right, xsink, [owner, cache, xsink](uint64_t converted) {
+                return qore_rt_string_append_local_cow(owner, cache, converted, xsink);
+            });
+        }
         uint64_t result_bits = toBits(right.refSelf());
         *owner = result_bits;
         *cache = result_bits;
@@ -11099,7 +11127,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
         return left_bits;
     }
     if (right.getType() != NT_STRING) {
-        return toBits(QoreValue());
+        // a value of another type is appended as its string, as doPlusEqualsOnLValue() appends it
+        return qore_rt_string_append_converted(right, xsink, [owner, cache, xsink](uint64_t converted) {
+            return qore_rt_string_append_local_cow(owner, cache, converted, xsink);
+        });
     }
 
     QoreStringValueHelper right_string(right);

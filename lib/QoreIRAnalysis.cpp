@@ -9153,8 +9153,11 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                     func.getValueFacts(inst.operands[0]);
                 auto fresh_candidate = local ? candidate_index.find(local)
                     : candidate_index.end();
+                // qore_rt_string_append_in_place() appends only a string: an operand that can be NOTHING or a
+                // value of another type takes the guarded copy-on-write append, which also appends in place to a
+                // string that the local alone holds (issue #6266)
                 if (mark && !inst.string_append_in_place && store
-                        && local_cow
+                        && local_cow && inst.string_append_string_operand
                         && fresh_candidate != candidate_index.end()
                         && state.test(fresh_candidate->second) && facts
                         && facts->assigned_state == QoreIRAssignedState::Assigned
