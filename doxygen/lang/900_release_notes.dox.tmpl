@@ -710,8 +710,8 @@
 
     @par Minus-Equals With a Date Operand on an Integer Lvalue
     <tt>-=</tt> with a date operand on an integer lvalue assigns the date result of <tt>x - d</tt>, which an \c int
-    lvalue refuses with \c RUNTIME-TYPE-ERROR, instead of subtracting the date's integer value; see
-    @ref minus_equals_operator.
+    lvalue refuses (a parse error for an operand of type \c date, \c RUNTIME-TYPE-ERROR otherwise), instead of
+    subtracting the date's integer value; see @ref minus_equals_operator.
 
     @par Indexing a String Gives a char
     <tt>s[i]</tt> on a string returns a @ref char "char" instead of a one-character string; it converts to a string
@@ -778,8 +778,13 @@
     The @ref multiplication_operator "* operator" and \c *= with a @ref relative_dates "relative date" and a number
     give a relative date with each of its components multiplied (ex: <tt>months(1) * 2</tt> is 2 months; a float
     factor carries fractions as \c date("P...") does); they gave an int, and \c *= assigned it.  An \c int,
-    \c float or \c number lvalue multiplied by a date with \c *= raises an exception at run time, as it cannot hold
-    the result (issue #6109).
+    \c float or \c number lvalue multiplied by a date with \c *= cannot hold the result: a parse error for an
+    operand of type \c date, an exception at run time otherwise (issue #6109).
+
+    @par Compound Assignments That Can Never Store Their Result Are Parse Errors
+    A compound assignment whose result the lvalue's declared type can never hold, such as <tt>d /= 2</tt> on a
+    \c date lvalue, is a \c PARSE-TYPE-ERROR in every mode, as an assignment of the result is, where it raised an
+    exception when it ran (see @ref compound_assignment_parse_checks "parse-time checks"; issue #6103).
 
     @par Calls Through Method References on Deleted Objects Name the Method
     The \c OBJECT-ALREADY-DELETED exception of a call through a method call reference on a deleted object names the

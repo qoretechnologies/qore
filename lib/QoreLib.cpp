@@ -4015,6 +4015,16 @@ int check_self_assignment(const QoreProgramLocation* loc, QoreValue n, LocalVar*
     return 0;
 }
 
+//! returns true if an assignment of a value of the given type to an lvalue of the given type may succeed
+/** the value is assigned to the target of a reference lvalue (ex: a member declared \c reference<int>)
+*/
+static bool lvalue_parse_accepts(const QoreTypeInfo* typeInfo, const QoreTypeInfo* valueTypeInfo) {
+    if (QoreTypeInfo::isReference(typeInfo)) {
+        typeInfo = QoreTypeInfo::getReferenceTarget(typeInfo);
+    }
+    return QoreTypeInfo::parseAccepts(typeInfo, valueTypeInfo) != QTI_NOT_EQUAL;
+}
+
 int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
     // make sure the lvalue can be assigned an integer value
     // raise a parse exception only if parse exceptions are not suppressed
@@ -4168,6 +4178,24 @@ int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& type
         return -1;
     }
     return 0;
+}
+
+int check_lvalue_accepts_result(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo, const char* name,
+        std::initializer_list<const QoreTypeInfo*> results, const char* value_desc) {
+    // the lvalue's type is checked as for an assignment of each result type: a soft type converts the value (ex: a
+    // softint lvalue accepts a date), and a type that may accept it (ex: auto, a union) is checked at runtime
+    for (const QoreTypeInfo* result : results) {
+        if (lvalue_parse_accepts(typeInfo, result)) {
+            return 0;
+        }
+    }
+    // raise a parse exception only if parse exceptions are not suppressed
+    if (getProgram()->getParseExceptionSink()) {
+        QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will assign it "
+            "%s", QoreTypeInfo::getName(typeInfo), name, value_desc);
+        qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
+    }
+    return -1;
 }
 
 int check_lvalue_int_float_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {

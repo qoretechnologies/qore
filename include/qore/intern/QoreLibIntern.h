@@ -1157,6 +1157,19 @@ DLLLOCAL int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo
 DLLLOCAL int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_int_float_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
+//! makes sure an lvalue can be assigned the result of a compound assignment operator, else raises a parse exception
+//! and returns -1
+/** The result is one of the types given; the lvalue's type is checked as for an assignment of each of them, so the
+    error is raised only if the lvalue's type can accept none of them: the result can never be stored (qore#6103)
+
+    @param loc the location of the operator
+    @param typeInfo the declared type of the lvalue
+    @param name the operator (ex: \c "*=")
+    @param results the types that the result can have
+    @param value_desc the description of the result in the error (ex: \c "a date value")
+*/
+DLLLOCAL int check_lvalue_accepts_result(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo,
+        const char* name, std::initializer_list<const QoreTypeInfo*> results, const char* value_desc);
 // makes sure the lvalue can be assigned a string value, else raises a parse exception and returns -1
 DLLLOCAL int check_lvalue_string(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 

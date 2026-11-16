@@ -93,7 +93,7 @@ int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext&
     if (parse_init_value(right, parse_context) && !err) {
         err = -1;
     }
-    //const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
+    const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
 
     // Dereference reference types before type checking so that
     // reference<hash<...>> etc. are recognized correctly
@@ -115,8 +115,23 @@ int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext&
         ? kind
         : get_minus_equals_lvalue_kind(plain_ti, plain_check_ti);
 
-    if (check_kind == minus_equals_lvalue_e::INT && check_lvalue_int(loc, ti, "-=") && !err) {
-        err = -1;
+    if (check_kind == minus_equals_lvalue_e::INT) {
+        if (check_lvalue_int(loc, ti, "-=")) {
+            if (!err) {
+                err = -1;
+            }
+        } else if (qore_is_int_lvalue_type(plain_check_ti)) {
+            // an lvalue of an int type is assigned the result of x - d for a date operand, a date
+            // (qore_int_lvalue_minus_date()), which its type must accept (qore#6103)
+            const QoreTypeInfo* rti = rightTypeInfo;
+            if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(rti)) {
+                rti = src;
+            }
+            if (QoreTypeInfo::isType(rti, NT_DATE)
+                    && check_lvalue_accepts_result(loc, ti, "-=", {dateTypeInfo}, "a date value") && !err) {
+                err = -1;
+            }
+        }
     }
 
     if (kind == minus_equals_lvalue_e::INT) {

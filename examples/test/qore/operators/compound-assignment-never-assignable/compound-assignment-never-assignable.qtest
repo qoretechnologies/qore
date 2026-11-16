@@ -1,0 +1,284 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - the parse checks and the runtime twins use Programs of the test's own process
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CompoundAssignmentNeverAssignableTest
+
+#! Tests that a compound assignment whose result the lvalue's declared type can never hold is a parse error (qore#6103)
+/** - \c *= with an operand of type \c date assigns a date (qore#6109) to an lvalue that is not a date
+    - \c -= with an operand of type \c date on an \c int or \c *int lvalue assigns <tt>x - d</tt>, a date
+    - \c /= on a \c date or \c *date lvalue assigns an integer, float or number value, never a date
+    - \c /= and \c *= on a union lvalue that accepts none of their results
+
+    Each was accepted at parse time and raised \c RUNTIME-TYPE-ERROR whenever it ran; it is a \c PARSE-TYPE-ERROR in
+    every execution mode, in qcc and with every set of parse options (not only with \c %modern), as the other
+    lvalue type errors of the compound assignment operators are.  An lvalue type that accepts or converts the result
+    (\c auto, \c softint, a union with \c date), and an operand whose type is not known or may have no value, keep the
+    runtime check.  The runtime twin of each refused case, with the operand's type hidden from the parser, shows that
+    the case always failed at run time.
+*/
+class CompoundAssignmentNeverAssignableTest inherits QUnit::Test {
+    public {
+        #! the declarations the snippets use
+        const Prelude = "auto sub id(auto v) { return v; } hashdecl H { int v = 1; } our int gi = 1; ";
+
+        #! refused statements: code, expected error description, runtime twin with the operand's type hidden (or
+        #! NOTHING if there is none: the lvalue's type refuses the result whatever the operand, as for /= on a date
+        #! lvalue, whose result is never a date), and the declarations the statement needs, if any
+        const Refused = (
+            ("int i = 1; i *= 2h;", "lvalue has type 'int', but the *= operator will assign it a date value",
+                "int i = 1; i *= id(2h);"),
+            ("int i = 1; date d = 2h; i *= d;", "lvalue has type 'int', but the *= operator will assign it a date "
+                "value", "int i = 1; auto d = id(2h); i *= d;"),
+            ("*int i; i *= 2h;", "lvalue has type '*int', but the *= operator will assign it a date value",
+                "*int i; i *= id(2h);"),
+            ("float f = 1.0; f *= 2h;", "lvalue has type 'float', but the *= operator will assign it a date value",
+                "float f = 1.0; f *= id(2h);"),
+            ("number n = 1n; n *= 2h;", "lvalue has type 'number', but the *= operator will assign it a date "
+                "value", "number n = 1n; n *= id(2h);"),
+            ("string s = \"a\"; s *= 2h;", "lvalue has type 'string', but the *= operator will assign it a date "
+                "value", NOTHING),
+            ("union<int, string> u = 1; u *= 2h;", "but the *= operator will assign it a date value",
+                "union<int, string> u = 1; u *= id(2h);"),
+            # the member has type *int in %modern code, as the key may not exist
+            ("hash<string, int> h = {\"a\": 1}; h.a *= 2h;", "int', but the *= operator will assign it a date value",
+                "hash<string, int> h = {\"a\": 1}; h.a *= id(2h);"),
+            ("int i = 1; i -= 1h;", "lvalue has type 'int', but the -= operator will assign it a date value",
+                "int i = 1; i -= id(1h);"),
+            ("*int i; date d = 2024-01-01T00:00:00Z; i -= d;", "lvalue has type '*int', but the -= operator will "
+                "assign it a date value", "*int i; i -= id(2024-01-01T00:00:00Z);"),
+            ("date d = 1h; d /= 2;", "lvalue has type 'date', but the /= operator will assign it an integer value",
+                NOTHING),
+            ("date d = 1h; d /= 2.0;", "lvalue has type 'date', but the /= operator will assign it a float value",
+                NOTHING),
+            ("date d = 1h; d /= 2n;", "lvalue has type 'date', but the /= operator will assign it a number value",
+                NOTHING),
+            ("*date d; d /= 2;", "lvalue has type '*date', but the /= operator will assign it an integer value",
+                NOTHING),
+            ("date d = 1h; d /= id(2);", "lvalue has type 'date', but the /= operator will assign it an integer, "
+                "float, or number value", NOTHING),
+            ("date d = 1h; d /= 1h;", "lvalue has type 'date', but the /= operator will assign it an integer value",
+                NOTHING),
+            ("binary b = <01>; b /= 1h;", "lvalue has type 'binary', but the /= operator will assign it an integer "
+                "value", NOTHING),
+            ("union<date, string> u = 1h; u /= 2;", "but the /= operator will assign it an integer, float, or number "
+                "value", NOTHING),
+            ("union<string, bool> u = \"a\"; u *= 2;", "but the *= operator will assign it an integer, float, number, "
+                "or date value", NOTHING),
+            ("int i = 1; i *= now();", "lvalue has type 'int', but the *= operator will assign it a date value",
+                "int i = 1; i *= id(now());"),
+            ("list<int> l = (1,); l[0] *= 2h;", "int', but the *= operator will assign it a date value",
+                "list<int> l = (1,); l[0] *= id(2h);"),
+            ("hash<H> h(); h.v -= 2h;", "int', but the -= operator will assign it a date value",
+                "hash<H> h(); h.v -= id(2h);"),
+            ("X x(); x.m();", "lvalue has type 'int', but the *= operator will assign it a date value", NOTHING,
+                "class X { public { int v = 1; } m() { v *= 2h; } } "),
+            ("int i = 1; g(\\i);", "but the -= operator will assign it a date value", NOTHING,
+                "sub g(reference<int> r) { r -= 2h; } "),
+            ("RefC c(); c.m();", "but the *= operator will assign it a date value", NOTHING,
+                "class RefC { public { reference<int> r; } constructor() { r = \\gi; } m() { r *= 2h; } } "),
+            ("gi *= 2h;", "lvalue has type 'int', but the *= operator will assign it a date value", "gi *= id(2h);"),
+            # refused before qore#6103 already: the plain type string refuses the integer that -= assigns
+            ("*string s; s -= 1;", "lvalue has type '*string', but the -= operator will assign it an integer value",
+                NOTHING),
+        );
+
+        #! statements that stay valid: the lvalue's type accepts or converts the result, or may accept it
+        const Valid = (
+            "int i = 3; i *= 2;",
+            "float f = 1.5; f *= 2;",
+            "date d = 1h; d *= 2;",
+            "auto a; a *= 2h;",
+            "any a = id(1); a *= 2h;",
+            "softint i = 2; i *= 1h;",
+            "softfloat f = 2.0; f *= 1h;",
+            "softnumber n = 2n; n *= 1h;",
+            "softstring s = \"2\"; s *= 1h;",
+            "softbool b = True; b *= 1h;",
+            "timeout t = 2; t *= 1h;",
+            "union<date, string> u = 1h; u *= 2;",
+            "union<int, string> u = 1; u /= 2;",
+            "union<int, date> u = 2; u *= 1h;",
+            "*union<int, date> u; u *= 1h;",
+            "softint i = 10; i -= 1h;",
+            "timeout t = 5000; t -= 1s;",
+            "int i = 3; *date d = id(NOTHING); i *= d; i -= d;",
+            "int i = 3; i *= id(1h);",
+            "int i = 3; i -= id(1h);",
+            "int i = 7200; i /= 1h;",
+            "softdate d = 1h; d /= 2;",
+            "auto d = id(1h); d /= 2;",
+            "date d = 1h; d += 1; d -= 1; d *= 2.5;",
+            "int i = 1; i += 1h;",
+        );
+
+        #! the output expected from the worker
+        const Expected = (
+            "int *= int: 6 integer",
+            "float *= int: 3.0 float",
+            "date *= int: <time: 2 hours> date",
+            "auto *= date: <time: 0 seconds> date",
+            "any *= date: <time: 2 hours> date",
+            "softint *= date: 7200 integer",
+            "softstring *= date: \"00000000020000\" string",
+            "timeout *= date: 2000 integer",
+            "union<int, date> *= date: <time: 2 hours> date",
+            "*union<int, date> *= date: <time: 0 seconds> date",
+            "int *= *date: 0 integer",
+            "int *= auto date: RUNTIME-TYPE-ERROR",
+            "softint -= date: -3590 integer",
+            "timeout -= date: 4000 integer",
+            "int -= *date: 3 integer",
+            "int -= int: 2 integer",
+            "int /= date: 2 integer",
+            "any /= int: 3600 integer",
+            "softdate /= int: \"date\" string",
+            "auto date /= int: 1800 integer",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("CompoundAssignmentNeverAssignable", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "compound-assignment-never-assignable-worker.q";
+
+        addTestCase("refused at parse time", \testRefused());
+        addTestCase("valid at parse time", \testValid());
+        addTestCase("refused in every execution mode and qcc", \testMainProgram());
+        addTestCase("valid cases in each execution mode", \testExecModes());
+        addTestCase("valid cases in a compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    #! each refused statement is a parse error, and its runtime twin always fails at run time
+    testRefused() {
+        foreach list<auto> c in (Refused) {
+            foreach int po in ((PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS), PO_NEW_STYLE) {
+                *hash<ExceptionInfo> ex = parse((c[3] ?? "") + sprintf("sub f() { %s }", c[0]), po);
+                assertEq("PARSE-TYPE-ERROR", ex.err, c[0]);
+                assertTrue((ex.desc ?? "").find(c[1]) >= 0, c[0] + ": " + (ex.desc ?? ""));
+            }
+            if (c[2]) {
+                assertEq("RUNTIME-TYPE-ERROR", runTwin(c[2]), c[2]);
+            }
+        }
+    }
+
+    #! the valid statements parse
+    testValid() {
+        foreach string code in (Valid) {
+            *hash<ExceptionInfo> ex = parse(sprintf("sub f() { %s }", code));
+            assertEq(NOTHING, ex ? ex.err + ": " + ex.desc : NOTHING, code);
+        }
+        # the result is assigned to the target of a reference lvalue
+        string code = "our int rt = 1; our any ra; class RefC { public { reference<int> r; reference ur; } "
+            "constructor() { r = \\rt; ur = \\ra; } int m() { r += 20; r *= 2; r -= 1; r |= 16; ur *= 2h; "
+            "return rt; } } int sub f() { rt = 1; RefC c(); return c.m(); }";
+        *hash<ExceptionInfo> ex = parse(code);
+        assertEq(NOTHING, ex ? ex.err + ": " + ex.desc : NOTHING, code);
+        assertEq(57, runCode(code));
+    }
+
+    #! refused statements are parse errors of the main program in every execution mode and in qcc, with %modern and
+    #! in an old-style program
+    testMainProgram() {
+        TmpDir tmp("qore-never-assignable-");
+        list<auto> files = ();
+        foreach list<auto> c in (Refused) {
+            push files, (sprintf("case%d", $#), "%modern\n" + Prelude + (c[3] ?? "") + c[0]
+                + "\nprintf(\"ran\\n\");\n", c[1]);
+        }
+        # an old-style program (no parse options): the error does not depend on %modern
+        push files, ("old-style-mul", "my int $i = 1;\n$i *= 2h;\nprintf(\"ran\\n\");\n",
+            "lvalue has type 'int', but the *= operator will assign it a date value");
+        push files, ("old-style-div", "my date $d = 1h;\n$d /= 2;\nprintf(\"ran\\n\");\n",
+            "lvalue has type 'date', but the /= operator will assign it an integer value");
+        foreach list<auto> c in (files) {
+            string file = tmp.path + DirSep + c[0] + ".q";
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(c[1]);
+            f.close();
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                    "--exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, file),
+                    ExecModeHarness::NativeCheck::None);
+                assertTrue(out =~ /PARSE-TYPE-ERROR/, mode + ": " + c[0] + ": " + out);
+                assertTrue(out.find(c[2]) >= 0, mode + ": " + c[0] + ": " + out);
+                assertFalse(out =~ /^ran$/m, mode + ": " + c[0] + ": " + out);
+            }
+            string exe = tmp.path + DirSep + c[0];
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
+            assertFalse(is_file(exe), "qcc: " + c[0] + ": " + out);
+            assertTrue(out =~ /PARSE-TYPE-ERROR/, "qcc: " + c[0] + ": " + out);
+            assertTrue(out.find(c[2]) >= 0, "qcc: " + c[0] + ": " + out);
+        }
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                "--exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, worker)));
+        }
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-never-assignable-exe-");
+        string exe = tmp.path + DirSep + "neverassignable";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)));
+    }
+
+    #! returns the parse error of the code given
+    private *hash<ExceptionInfo> parse(string code, int po = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS) {
+        Program p(po);
+        try {
+            p.parse(Prelude + code, "never-assignable");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    #! parses the code given and returns the value of its function f()
+    private auto runCode(string code) {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.parse(Prelude + code, "never-assignable-run");
+        return p.callFunction("f");
+    }
+
+    #! runs the code given and returns the error it raises, if any
+    private *string runTwin(string code) {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.parse(Prelude + sprintf("sub f() { %s }", code), "never-assignable-twin");
+        try {
+            p.callFunction("f");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Expected, lines, label + ": " + out);
+    }
+}
