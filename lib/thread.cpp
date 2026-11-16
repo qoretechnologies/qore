@@ -134,6 +134,40 @@
 #define IA64_64
 #endif
 
+#ifdef DEBUG
+//! The state of the debug hold of a finishing background thread (issue #6405); never freed, so that it outlives the
+//! static objects that exit() destroys
+struct QoreDbgFinishHold {
+    std::mutex m;
+    std::condition_variable cv;
+    //! the time the next finishing thread is held, if positive
+    int hold_ms = 0;
+    //! a thread is held
+    bool held = false;
+    //! the held thread is to continue
+    bool released = false;
+};
+static QoreDbgFinishHold* dbg_finish_hold = new QoreDbgFinishHold;
+
+//! Releases a held finishing thread when the static objects of this file are destroyed (issue #6405)
+/** Declared before thread_counter, so that it is destroyed after it: a thread that exit() left finishing then uses
+    the destroyed counter, as it did when exit() ran the static destructors under it.  It waits a moment for the
+    released thread, which aborts the process on the destroyed counter's lock in a debug build.
+*/
+struct QoreDbgFinishHoldReleaser {
+    ~QoreDbgFinishHoldReleaser() {
+        std::unique_lock<std::mutex> l(dbg_finish_hold->m);
+        if (!dbg_finish_hold->held) {
+            return;
+        }
+        dbg_finish_hold->released = true;
+        dbg_finish_hold->cv.notify_all();
+        dbg_finish_hold->cv.wait_for(l, std::chrono::seconds(5), [] () { return !dbg_finish_hold->held; });
+    }
+};
+static QoreDbgFinishHoldReleaser dbg_finish_hold_releaser;
+#endif
+
 // global background thread counter
 QoreCounter thread_counter;
 
@@ -7166,6 +7200,19 @@ QoreException* catch_get_exception() {
     return td->catchException;
 }
 
+//! Waits for the background threads that have released their TID and are finishing; returns -1 if they do not finish
+/** A background thread releases its TID (thread_list.deleteDataRelease()) before it runs the thread cleanup functions
+    and leaves thread_counter, so thread_list does not count it then; exit() must not run the static destructors
+    under it, or it uses the destroyed thread_counter (issue #6405).  Such a thread runs no Qore code any more, so it
+    finishes at once, unless a module's thread cleanup function blocks: the wait is bounded, and the process then
+    ends with _Exit().  The calling thread's own share of thread_counter (a background thread that calls exit()) is
+    not waited for.
+*/
+static int qore_exit_wait_finishing_threads() {
+    // a condition wait on thread_counter, which wakes it when a thread leaves it
+    return thread_counter.waitForCountAtMost(qore_thread_counter_share, 10 * 1000) ? -1 : 0;
+}
+
 void qore_exit_process(int rc) {
     qore_exiting.store(true, std::memory_order_relaxed);
 
@@ -7182,6 +7229,7 @@ void qore_exit_process(int rc) {
         && q_gettid() > 0
 #endif
         && !tp_thread_counter.getCount()
+        && !qore_exit_wait_finishing_threads()
     ) {
 #ifdef HAVE_SIGNAL_HANDLING
         // TID 0 is not included in the application-thread count. Its signal wait can wake during
@@ -7217,6 +7265,35 @@ void qore_exit_process(int rc) {
     // in multithreaded programs; call _Exit() instead
     _Exit(rc);
 }
+
+#ifdef DEBUG
+void qore_dbg_hold_next_thread_finish(int ms) {
+    std::lock_guard<std::mutex> l(dbg_finish_hold->m);
+    dbg_finish_hold->hold_ms = ms;
+    dbg_finish_hold->released = false;
+}
+
+bool qore_dbg_wait_thread_finish_held(int timeout_ms) {
+    std::unique_lock<std::mutex> l(dbg_finish_hold->m);
+    return dbg_finish_hold->cv.wait_for(l, std::chrono::milliseconds(timeout_ms),
+        [] () { return dbg_finish_hold->held; });
+}
+
+//! Holds a background thread that has released its TID, before it leaves thread_counter, if a hold is armed
+static void qore_dbg_hold_thread_finish() {
+    std::unique_lock<std::mutex> l(dbg_finish_hold->m);
+    int ms = dbg_finish_hold->hold_ms;
+    if (ms <= 0) {
+        return;
+    }
+    dbg_finish_hold->hold_ms = 0;
+    dbg_finish_hold->held = true;
+    dbg_finish_hold->cv.notify_all();
+    dbg_finish_hold->cv.wait_for(l, std::chrono::milliseconds(ms), [] () { return dbg_finish_hold->released; });
+    dbg_finish_hold->held = false;
+    dbg_finish_hold->cv.notify_all();
+}
+#endif
 
 // sets up the signal thread entry in the thread list
 int get_signal_thread_entry() {
@@ -7957,6 +8034,10 @@ namespace {
         }
 
         thread_cleanup.run();
+#ifdef DEBUG
+        // the thread has released its TID and is not counted by thread_list any more (issue #6405)
+        qore_dbg_hold_thread_finish();
+#endif
         // NOTE: do not call OPENSSL_thread_stop() here — returning from the
         // thread function triggers TLS destructors automatically (see above).
         qore_thread_counter_share = 0;
