@@ -207,6 +207,9 @@ class EnumStringInPlaceBase inherits QUnit::Test {
         #! the groups of control checks, whose lvalues the operations change
         const Controls = ("string-in", "auto-in", "auto-short-in", "auto-hash-in");
 
+        #! the execution modes that each part runs: together every mode of ExecModeHarness::ExecModes
+        const PartModes = (("ast", "ir", "jit"), ("tiered",));
+
         #! the number of checks the worker makes
         const CheckCount = 963;
     }
@@ -245,8 +248,8 @@ class EnumStringInPlaceBase inherits QUnit::Test {
         op_regex = "^(.+)-(" + (map $1.op, Ops).join("|") + ")$";
 
         # the jit and tiered runs compile every function natively and take the most time
-        addPartCase(1, "execution modes ast, ir and jit", \testExecModes(), (("ast", "ir", "jit"),));
-        addPartCase(2, "execution mode tiered", \testExecModes(), (("tiered",),));
+        addPartCase(1, "execution modes ast, ir and jit", \testExecModes(), (PartModes[0],));
+        addPartCase(2, "execution mode tiered", \testExecModes(), (PartModes[1],));
         addPartCase(2, "IR tier", \testIrTier());
         addPartCase(2, "compiled program", \testCompiledProgram());
 
@@ -263,8 +266,8 @@ class EnumStringInPlaceBase inherits QUnit::Test {
     #! runs the worker in the given execution modes; the parts together run it in every mode of
     #! ExecModeHarness::ExecModes
     testExecModes(list<string> modes) {
+        assertEq(sort(ExecModeHarness::ExecModes), sort(PartModes[0] + PartModes[1]), "the parts run every mode");
         foreach string mode in (modes) {
-            assertTrue(inlist(mode, ExecModeHarness::ExecModes), "execution mode " + mode);
             checkWorkerOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b "
                 "--enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, getWorker())));
         }
