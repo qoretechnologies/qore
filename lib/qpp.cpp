@@ -1492,6 +1492,11 @@ public:
         return in_block_comment || !raw_close.empty() || if0_depth;
     }
 
+    //! returns true if the next line is in a block comment or a raw string literal: a '#' there is not a directive
+    bool inText() const {
+        return in_block_comment || !raw_close.empty();
+    }
+
     //! updates the state with a line of C++ code
     void text(const std::string& line) {
         for (size_t i = 0; i < line.size(); ++i) {
@@ -1561,10 +1566,10 @@ public:
             }
             return;
         }
-        if (!d.compare(0, 2, "if") && d.size() > 2 && isspace(static_cast<unsigned char>(d[2]))) {
-            // "#if 0" and "#if false", also in parentheses
+        if (!d.compare(0, 2, "if") && d.size() > 2 && (isspace(static_cast<unsigned char>(d[2])) || d[2] == '(')) {
+            // "#if 0" and "#if false", also in parentheses ("#if(0)")
             std::string cond;
-            for (char c : d.substr(3)) {
+            for (char c : d.substr(2)) {
                 if (!isspace(static_cast<unsigned char>(c)) && c != '(' && c != ')') {
                     cond += c;
                 }
@@ -5337,8 +5342,8 @@ public:
                 return;
             }
 
-            // Handle preprocessor directives
-            if (!line.empty() && line[0] == '#') {
+            // Handle preprocessor directives; a line in a block comment or a raw string literal is not one
+            if (!line.empty() && line[0] == '#' && !copied.inText()) {
                 bool was_empty = buf.empty();
                 if (ppState.handleDirective(line, read_line_number(line, lineNumber), buf)) {
                     if (was_empty && !buf.empty()) {
@@ -8680,8 +8685,8 @@ protected:
             if (str.empty())
                 break;
 
-            // Handle preprocessor directives
-            if (!str.empty() && str[0] == '#') {
+            // Handle preprocessor directives; a line in a block comment or a raw string literal is not one
+            if (!str.empty() && str[0] == '#' && !copied.inText()) {
                 if (ppState.handleDirective(str, read_line_number(str, lineNumber), buf)) {
                     // a comment can start or end in the directive line (issue #1686)
                     copied.text(str);

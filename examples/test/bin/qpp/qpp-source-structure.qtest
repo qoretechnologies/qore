@@ -286,6 +286,27 @@ int TestCls::get2() [flags=CONSTANT] {
         assertSucceeded(r, "a raw string literal over lines");
         assertRegex("TestCls_get2", r.cpp_text, "the method after the raw string literal over lines is bound");
 
+        # a '#' line in a raw string literal or a block comment is not a directive
+        r = runQpp(ClassStart + "
+#ifdef FOO
+static const char* s5 = R\"(
+#endif
+#else
+)\";
+/*
+#endif
+*/
+#endif
+//! documented
+/** doc
+*/
+int TestCls::get5() [flags=CONSTANT] {
+    return 1;
+}
+");
+        assertSucceeded(r, "directive lines in a raw string literal and a block comment");
+        assertRegex("TestCls_get5", r.cpp_text, "the method after them is bound");
+
         # a method in a raw string literal is copied as it is
         r = runQpp(ClassStart + "
 static const char* s3 = R\"(
@@ -556,9 +577,9 @@ int t_disabled(int a) {
             "the disabled method is copied");
 
         # "#if (0)" and "#if false" are disabled code too
-        foreach string cond in ("(0)", "false", "( false )") {
+        foreach string cond in (" (0)", " false", " ( false )", "(0)", "(false)") {
             r = runQpp(ClassStart + "
-#if " + cond + "
+#if" + cond + "
 int TestCls::disabled() [flags=CONSTANT] {
 }
 #endif
