@@ -183,8 +183,10 @@ QoreValue QoreExtractOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
         return QoreValue();
     }
 
-    // no exception can occur here
-    val.ensureUnique();
+    // a string enum lvalue refuses the plain string that the operation leaves (qore#6195)
+    if (val.ensureUnique("<extract operator>")) {
+        return QoreValue();
+    }
 
     size_t offset = (size_t)eoffset->getAsBigInt();
 

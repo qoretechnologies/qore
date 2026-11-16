@@ -56,9 +56,12 @@ QoreValue QoreChompOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
     if (vtype != NT_LIST && vtype != NT_STRING && vtype != NT_HASH)
         return QoreValue();
 
-    // note that no exception can happen here
-    val.ensureUnique();
-    assert(!*xsink);
+    // a string enum lvalue, and a container whose type refuses a plain string in the place of an enum element, refuse
+    // the plain strings that the operation leaves (qore#6195)
+    if ((vtype != NT_STRING && qore_check_in_place_container_strings(val.getValue(), "<chomp operator>", xsink))
+            || val.ensureUnique("<chomp operator>")) {
+        return QoreValue();
+    }
 
     if (vtype == NT_STRING)
         return val.getValue().get<QoreStringNode>()->chomp();

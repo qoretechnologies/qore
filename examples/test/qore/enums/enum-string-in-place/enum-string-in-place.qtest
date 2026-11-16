@@ -16,10 +16,16 @@
 
 #! Tests the operations that modify a string in place on string enum lvalues
 /** A string enum lvalue holds only the members of its enum, and the value that an operation leaves after modifying the
-    lvalue's string in place is a plain string, which the enum type refuses: the regex substitution (=~ s///) and
-    transliteration (=~ tr///) operators raise RUNTIME-TYPE-ERROR and leave the lvalue unchanged.  The AST interpreter
-    asserted that the assignment of the new string could not fail (qore#6196), and native code took a reference to the
-    string that the refused assignment had released.
+    lvalue's string in place is a plain string, which the enum type refuses: +=, splice, extract, trim, chomp, remove
+    and delete of characters, the regex substitution (=~ s///) and transliteration (=~ tr///) operators raise
+    RUNTIME-TYPE-ERROR and leave the lvalue unchanged, in every execution mode.  The AST interpreter asserted that the
+    assignment of the string made by a regex substitution or a transliteration could not fail, and native code took
+    a reference to the string that the refused assignment had released (qore#6196); the other operations replaced
+    the enum value with a plain string, which the lvalue then held (qore#6195).  remove and delete of a single
+    character only read it, and leaves the lvalue unchanged without an error; += on a string enum lvalue with no value gave it the
+    enum's first member before appending to it, and now leaves it without a value.  trim and chomp of a list or a
+    hash whose element type (or the type of a hashdecl member) is a string enum raise the error before they change any
+    element.
 
     The worker (enum-string-in-place-worker.qr, made by a generator from the operations and lvalue kinds) applies each
     operation to string enum lvalues with a short member value (held inline) and a long one, of each kind: a local, a
@@ -36,12 +42,168 @@ class EnumStringInPlaceTest inherits QUnit::Test {
     public {
         #! the operations, longest name first, and the description in their errors
         const Ops = (
+            ("op": "rm-range-rv", "desc": "<remove operator>"),
+            ("op": "del-range", "desc": "<delete operator>"),
+            ("op": "del-list", "desc": "<delete operator>"),
+            ("op": "rm-range", "desc": "<remove operator>"),
+            ("op": "rm-list", "desc": "<remove operator>"),
+            ("op": "pe-int", "desc": "<+= operator>"),
+            ("op": "sp-len", "desc": "<splice operator>"),
+            ("op": "sp-rep", "desc": "<splice operator>"),
+            ("op": "ex-rep", "desc": "<extract operator>"),
             ("op": "rs-rv", "desc": "<=~ s/// operator>"),
             ("op": "tl-rv", "desc": "<=~ tr/// operator>"),
+            ("op": "pe-rv", "desc": "<+= operator>"),
+            ("op": "ex-rv", "desc": "<extract operator>"),
+            ("op": "tr-rv", "desc": "<trim operator>"),
+            ("op": "ch-rv", "desc": "<chomp operator>"),
+            ("op": "rm-rv", "desc": "<remove operator>"),
             ("op": "rsg", "desc": "<=~ s/// operator>"),
             ("op": "rs", "desc": "<=~ s/// operator>"),
             ("op": "tl", "desc": "<=~ tr/// operator>"),
+            ("op": "pe", "desc": "<+= operator>"),
+            ("op": "sp", "desc": "<splice operator>"),
+            ("op": "ex", "desc": "<extract operator>"),
+            ("op": "tr", "desc": "<trim operator>"),
+            ("op": "ch", "desc": "<chomp operator>"),
+            ("op": "rm", "desc": "<remove operator>"),
+            ("op": "del", "desc": "<delete operator>"),
         );
+
+        #! the operations that only read the lvalue: they raise no error and leave it unchanged
+        const ReadOnlyOps = ("rm", "del", "rm-rv");
+
+        #! the character that "rm-rv" removes from the members (an operation that only reads it)
+        const RemovedChar = {
+            "ess": "string \"a\"",
+            "esl": "string \"a\"",
+        };
+
+        #! the results of the operations on lvalues with no value, which leave them without one
+        const NoValueResults = {
+            "pe": "RUNTIME-TYPE-ERROR|<+= operator> expects type '%senum<ESL>', "
+                + "but got type 'string' instead|nothing null",
+            "sp": "EXTRACT-ERROR|first (lvalue) argument to the extract operator is not a list, string, "
+                + "or binary object|nothing null",
+            "rm-range": "ILLEGAL-EXPRESSION|Index range can be applied only to lists, strings, binaries, "
+                + "and buffers|nothing null",
+            "none": "none|nothing null",
+        };
+
+        #! the result of each trim and chomp of a container
+        const ContainerResults = {
+            "cont-hash-tr": "RUNTIME-TYPE-ERROR|<trim operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|hash<string, "
+                + "enum<ESL>> {a: \" a long string value that is not stored inline\\n\", "
+                + "b: \" a long string value that is not stored inline\\n\"} [enum<ESL>, enum<ESL>]",
+            "cont-hash-ch": "RUNTIME-TYPE-ERROR|<chomp operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|hash<string, "
+                + "enum<ESL>> {a: \" a long string value that is not stored inline\\n\", "
+                + "b: \" a long string value that is not stored inline\\n\"} [enum<ESL>, enum<ESL>]",
+            "cont-hash-tr-rv": "RUNTIME-TYPE-ERROR|<trim operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|hash<string, "
+                + "enum<ESL>> {a: \" a long string value that is not stored inline\\n\", "
+                + "b: \" a long string value that is not stored inline\\n\"} [enum<ESL>, enum<ESL>]|"
+                + "nothing null",
+            "cont-hash-ch-rv": "RUNTIME-TYPE-ERROR|<chomp operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|hash<string, "
+                + "enum<ESL>> {a: \" a long string value that is not stored inline\\n\", "
+                + "b: \" a long string value that is not stored inline\\n\"} [enum<ESL>, enum<ESL>]|"
+                + "nothing null",
+            "cont-hash-short-tr": "RUNTIME-TYPE-ERROR|<trim operator> expects type 'enum<ESS>', "
+                + "but got type 'string' instead|hash<string, enum<ESS>> {a: \" a\\n\"} [enum<ESS>]",
+            "cont-hash-short-ch": "RUNTIME-TYPE-ERROR|<chomp operator> expects type 'enum<ESS>', "
+                + "but got type 'string' instead|hash<string, enum<ESS>> {a: \" a\\n\"} [enum<ESS>]",
+            "cont-hash-short-tr-rv": "RUNTIME-TYPE-ERROR|<trim operator> expects type 'enum<ESS>', "
+                + "but got type 'string' instead|hash<string, enum<ESS>> {a: \" a\\n\"} [enum<ESS>]|"
+                + "nothing null",
+            "cont-hash-short-ch-rv": "RUNTIME-TYPE-ERROR|<chomp operator> expects type 'enum<ESS>', "
+                + "but got type 'string' instead|hash<string, enum<ESS>> {a: \" a\\n\"} [enum<ESS>]|"
+                + "nothing null",
+            "cont-list-tr": "RUNTIME-TYPE-ERROR|<trim operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|"
+                + "list<enum<ESL>> [\" a long string value that is not stored inline\\n\", "
+                + "\" a long string value that is not stored inline\\n\"] [enum<ESL>, enum<ESL>]",
+            "cont-list-ch": "RUNTIME-TYPE-ERROR|<chomp operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|"
+                + "list<enum<ESL>> [\" a long string value that is not stored inline\\n\", "
+                + "\" a long string value that is not stored inline\\n\"] [enum<ESL>, enum<ESL>]",
+            "cont-list-tr-rv": "RUNTIME-TYPE-ERROR|<trim operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|"
+                + "list<enum<ESL>> [\" a long string value that is not stored inline\\n\", "
+                + "\" a long string value that is not stored inline\\n\"] [enum<ESL>, enum<ESL>]|nothing null",
+            "cont-list-ch-rv": "RUNTIME-TYPE-ERROR|<chomp operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|"
+                + "list<enum<ESL>> [\" a long string value that is not stored inline\\n\", "
+                + "\" a long string value that is not stored inline\\n\"] [enum<ESL>, enum<ESL>]|nothing null",
+            "cont-list-short-tr": "RUNTIME-TYPE-ERROR|<trim operator> expects type 'enum<ESS>', "
+                + "but got type 'string' instead|list<enum<ESS>> [\" a\\n\"] [enum<ESS>]",
+            "cont-list-short-ch": "RUNTIME-TYPE-ERROR|<chomp operator> expects type 'enum<ESS>', "
+                + "but got type 'string' instead|list<enum<ESS>> [\" a\\n\"] [enum<ESS>]",
+            "cont-list-short-tr-rv": "RUNTIME-TYPE-ERROR|<trim operator> expects type 'enum<ESS>', "
+                + "but got type 'string' instead|list<enum<ESS>> [\" a\\n\"] [enum<ESS>]|nothing null",
+            "cont-list-short-ch-rv": "RUNTIME-TYPE-ERROR|<chomp operator> expects type 'enum<ESS>', "
+                + "but got type 'string' instead|list<enum<ESS>> [\" a\\n\"] [enum<ESS>]|nothing null",
+            "cont-list-or-nothing-tr": "RUNTIME-TYPE-ERROR|<trim operator> expects type '*enum<ESL>', "
+                + "but got type 'string' instead|list<*enum<ESL>> [null, "
+                + "\" a long string value that is not stored inline\\n\"] [nothing, enum<ESL>]",
+            "cont-list-or-nothing-ch": "RUNTIME-TYPE-ERROR|<chomp operator> expects type '*enum<ESL>', "
+                + "but got type 'string' instead|list<*enum<ESL>> [null, "
+                + "\" a long string value that is not stored inline\\n\"] [nothing, enum<ESL>]",
+            "cont-list-or-nothing-tr-rv": "RUNTIME-TYPE-ERROR|<trim operator> expects type '*enum<ESL>', "
+                + "but got type 'string' instead|list<*enum<ESL>> [null, "
+                + "\" a long string value that is not stored inline\\n\"] [nothing, enum<ESL>]|nothing null",
+            "cont-list-or-nothing-ch-rv": "RUNTIME-TYPE-ERROR|<chomp operator> expects type '*enum<ESL>', "
+                + "but got type 'string' instead|list<*enum<ESL>> [null, "
+                + "\" a long string value that is not stored inline\\n\"] [nothing, enum<ESL>]|nothing null",
+            "cont-hashdecl-tr": "RUNTIME-TYPE-ERROR|<trim operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|hash<MixedHash> {s: \" s \", "
+                + "e: \" a long string value that is not stored inline\\n\"} [string, enum<ESL>]",
+            "cont-hashdecl-ch": "RUNTIME-TYPE-ERROR|<chomp operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|hash<MixedHash> {s: \" s \", "
+                + "e: \" a long string value that is not stored inline\\n\"} [string, enum<ESL>]",
+            "cont-hashdecl-tr-rv": "RUNTIME-TYPE-ERROR|<trim operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|hash<MixedHash> {s: \" s \", "
+                + "e: \" a long string value that is not stored inline\\n\"} [string, enum<ESL>]|nothing null",
+            "cont-hashdecl-ch-rv": "RUNTIME-TYPE-ERROR|<chomp operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|hash<MixedHash> {s: \" s \", "
+                + "e: \" a long string value that is not stored inline\\n\"} [string, enum<ESL>]|nothing null",
+            "cont-member-hash-tr": "RUNTIME-TYPE-ERROR|<trim operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|hash<string, "
+                + "enum<ESL>> {a: \" a long string value that is not stored inline\\n\"} [enum<ESL>]",
+            "cont-member-hash-ch": "RUNTIME-TYPE-ERROR|<chomp operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|hash<string, "
+                + "enum<ESL>> {a: \" a long string value that is not stored inline\\n\"} [enum<ESL>]",
+            "cont-member-hash-tr-rv": "RUNTIME-TYPE-ERROR|<trim operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|hash<string, "
+                + "enum<ESL>> {a: \" a long string value that is not stored inline\\n\"} [enum<ESL>]|"
+                + "nothing null",
+            "cont-member-hash-ch-rv": "RUNTIME-TYPE-ERROR|<chomp operator> expects type 'enum<ESL>', "
+                + "but got type 'string' instead|hash<string, "
+                + "enum<ESL>> {a: \" a long string value that is not stored inline\\n\"} [enum<ESL>]|"
+                + "nothing null",
+            "cont-auto-hash-tr": "none|"
+                + "hash<auto> {a: \"a long string value that is not stored inline\", s: \"s\"} [string, "
+                + "string]",
+            "cont-auto-hash-ch": "none|hash<auto> {a: \" a long string value that is not stored inline\", "
+                + "s: \" s \"} [string, string]",
+            "cont-auto-hash-tr-rv": "none|"
+                + "hash<auto> {a: \"a long string value that is not stored inline\", s: \"s\"} [string, "
+                + "string]|hash<auto> {a: \"a long string value that is not stored inline\", s: \"s\"}",
+            "cont-auto-hash-ch-rv": "none|hash<auto> {a: \" a long string value that is not stored inline\", "
+                + "s: \" s \"} [string, string]|integer 1",
+            "cont-auto-list-tr": "none|list<auto> [\"a long string value that is not stored inline\", \"s\"] [string, "
+                + "string]",
+            "cont-auto-list-ch": "none|"
+                + "list<auto> [\" a long string value that is not stored inline\", \" s \"] [string, "
+                + "string]",
+            "cont-auto-list-tr-rv": "none|"
+                + "list<auto> [\"a long string value that is not stored inline\", \"s\"] [string, "
+                + "string]|list<auto> [\"a long string value that is not stored inline\", \"s\"]",
+            "cont-auto-list-ch-rv": "none|"
+                + "list<auto> [\" a long string value that is not stored inline\", \" s \"] [string, "
+                + "string]|integer 1",
+        };
 
         #! the members of the enums of the lvalues as the worker prints them
         const Members = {
@@ -56,7 +218,7 @@ class EnumStringInPlaceTest inherits QUnit::Test {
         const Controls = ("string-in", "auto-in", "auto-short-in", "auto-hash-in");
 
         #! the number of checks the worker makes
-        const CheckCount = 174;
+        const CheckCount = 963;
     }
 
     private {
@@ -149,11 +311,16 @@ class EnumStringInPlaceTest inherits QUnit::Test {
             op_desc{op}, prefix.upr());
     }
 
-    #! checks a result of the AST interpreter: every operation on a string enum lvalue raises the error and leaves it
-    #! unchanged, an lvalue with no value is left without one, and the operations change the control lvalues
+    #! checks a result of the AST interpreter: every operation on a string enum lvalue that would change it raises the
+    #! error and leaves it unchanged, an lvalue with no value is left without one, and the operations change the
+    #! control lvalues
     private checkAstResult(string name, string result) {
         if (name == "es-members") {
             assertEq(MemberValues, result, "ast: " + name);
+            return;
+        }
+        if (name =~ /^cont-/) {
+            assertEq(ContainerResults{name}, result, "ast: " + name);
             return;
         }
         *list<*string> parts = regex_extract(name, op_regex);
@@ -162,8 +329,9 @@ class EnumStringInPlaceTest inherits QUnit::Test {
         string op = parts[1];
         string rv_tail = op =~ /-rv$/ ? "|nothing null" : "";
         if (inlist(group, Controls)) {
-            assertRegex("^none\\|string \"", result, "ast: " + name);
-            if (rv_tail) {
+            # an operation that only reads the lvalue leaves the enum value of an untyped lvalue
+            assertRegex(inlist(op, ReadOnlyOps) ? "^none\\|" : "^none\\|string \"", result, "ast: " + name);
+            if (rv_tail && op != "rm-rv" && op != "rm-range-rv" && op != "ex-rv" && op != "ch-rv") {
                 # the value of the operation is the new value of the lvalue
                 list<string> l = result.split("|");
                 assertEq(l[1], l[2], "ast: value of " + name);
@@ -171,16 +339,26 @@ class EnumStringInPlaceTest inherits QUnit::Test {
             return;
         }
         if (group =~ /^eslnv-/) {
-            # an operation on no value does nothing
-            assertEq("none|nothing null" + rv_tail, result, "ast: " + name);
+            assertEq(getNoValueResult(group, op), result, "ast: " + name);
             return;
         }
         *list<*string> eparts = (group =~ x/^(ess|esl)-(.+)$/);
         assertTrue(exists eparts, "ast: kind of " + name);
         string prefix = eparts[0];
         string kind = eparts[1];
-        string error = getError(op, prefix);
         string member = Members{prefix};
+        if (inlist(op, ReadOnlyOps)) {
+            string tail = op == "rm-rv" ? "|" + RemovedChar{prefix} : "";
+            if (kind == "local-out") {
+                assertEq("none", result, "ast: " + name);
+            } else if (kind == "local-loop") {
+                assertEq(sprintf("none|%s (caught 0)", member), result, "ast: " + name);
+            } else {
+                assertEq(sprintf("none|%s%s", member, tail), result, "ast: " + name);
+            }
+            return;
+        }
+        string error = getError(op, prefix);
         if (kind == "local-out") {
             assertEq(error, result, "ast: " + name);
         } else if (kind == "local-loop") {
@@ -188,6 +366,24 @@ class EnumStringInPlaceTest inherits QUnit::Test {
         } else {
             assertEq(sprintf("%s|%s%s", error, member, rv_tail), result, "ast: " + name);
         }
+    }
+
+    #! returns the result of an operation on an ESL lvalue with no value
+    private string getNoValueResult(string group, string op) {
+        string rv_tail = op =~ /-rv$/ ? "|nothing null" : "";
+        string base = op =~ /-rv$/ ? op.substr(0, -3) : op;
+        if (base == "pe" || base == "pe-int") {
+            # the type of an or-nothing lvalue: "*ESL" locals and members, and the hash<string, *ESL> element
+            string ornothing = group =~ /-or-nothing-|^eslnv-hash-/ ? "*" : "";
+            return sprintf(NoValueResults.pe, ornothing) + rv_tail;
+        }
+        if (base =~ /^(sp|ex)/) {
+            return NoValueResults.sp + rv_tail;
+        }
+        if (base == "rm-range" || base == "del-range") {
+            return NoValueResults."rm-range" + rv_tail;
+        }
+        return NoValueResults.none + rv_tail;
     }
 
     #! parses the "name=result" lines printed by the worker; any other output fails

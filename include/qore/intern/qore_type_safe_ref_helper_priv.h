@@ -55,7 +55,11 @@ struct qore_type_safe_ref_helper_priv_t {
     DLLLOCAL AbstractQoreNode* getUnique(ExceptionSink *xsink) {
         // the caller can change the value in place without this helper knowing
         lvalue.disableRemovalScanSkip();
-        lvalue.ensureUnique();
+        // the caller modifies the value in place, which leaves a plain value of the base type of an enum value: an
+        // enum lvalue refuses it (qore#6195)
+        if (lvalue.ensureUnique("<reference>")) {
+            return nullptr;
+        }
         assert(!lvalue.getNodeValue() || (lvalue.getNodeValue()->reference_count() == 1));
         return lvalue.getNodeValue();
     }
