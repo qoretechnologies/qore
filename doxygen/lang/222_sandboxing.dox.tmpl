@@ -306,7 +306,8 @@ authenticate();
       well, together with the sandbox of the code that calls it.  This is the whole %Program's code: a %Program of the host that sandboxed code commits code in is governed
       by that sandbox from then on, its earlier code included, so a host gives sandboxed code a %Program that it may
       add code to only for the sandbox's own use.  A parse that is refused or rolled back, and an
-      @ref Qore::Expression "Expression" (which is governed through its object and cannot define code), add no code
+      @ref Qore::Expression "Expression" (which is governed through its object and cannot define code: an expression
+      that tries to is refused, and the code pending in the %Program is rolled back with it), add no code
       and give the %Program no sandbox.  A manager that code a sandbox governs gives a %Program with
       @ref Qore::Program::setSandboxManager() "Program::setSandboxManager()" (also through trusted code that it calls)
       adds to the sandbox of the code that calls the %Program, as the sandbox that a %Program keeps does, instead of

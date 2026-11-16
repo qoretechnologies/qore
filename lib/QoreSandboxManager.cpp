@@ -1691,9 +1691,12 @@ QoreSandboxManager* QoreSandboxManager::createWebSafe() {
 //------------------------------------------------------------------------------
 
 void qore_program_private::getSandboxManagerRefs(QoreSandboxManager*& own, QoreSandboxManager*& creator,
-        bool policy) {
+        bool policy, bool* own_additive) {
     own = nullptr;
     creator = nullptr;
+    if (own_additive) {
+        *own_additive = false;
+    }
     // Almost every program has no manager, and this runs at every cancellation point of every thread running in
     // the program, so that is decided without sm_lock.  A manager set concurrently is found by the next lookup,
     // exactly as if this one had taken the lock just before it was set.
@@ -1705,11 +1708,42 @@ void qore_program_private::getSandboxManagerRefs(QoreSandboxManager*& own, QoreS
     QoreSandboxManager* sm = sandbox_manager.load(std::memory_order_relaxed);
     if (sm && sm->optRef()) {
         own = sm;
+        if (own_additive) {
+            *own_additive = own_manager_additive.load(std::memory_order_relaxed);
+        }
     }
     sm = (policy ? creator_policy_manager : creator_sandbox_manager).load(std::memory_order_relaxed);
     if (sm && sm->optRef()) {
         creator = sm;
     }
+}
+
+int qore_program_private::setOwnSandboxManager(QoreSandboxManager* sm, bool additive, bool no_replace) {
+    QoreSandboxManager* old;
+    {
+        AutoLocker al(sm_lock);
+        QoreSandboxManager* cur = sandbox_manager.load(std::memory_order_relaxed);
+        if (no_replace && cur && cur != sm) {
+            return -1;
+        }
+        if (sm) {
+            // referenced before it is published: a lookup that finds it without the lock must find it alive
+            sm->ref();
+            // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
+            sandboxed.store(true, std::memory_order_release);
+        }
+        own_manager_additive.store(sm && additive, std::memory_order_release);
+        old = sandbox_manager.exchange(sm, std::memory_order_acq_rel);
+        // after the manager is published: a thread that finds the new generation finds the manager (see
+        // ProgramThreadCountContextHelper::sandboxChainClear())
+        if (sm) {
+            qore_sandbox_manager_generation.fetch_add(1, std::memory_order_seq_cst);
+        }
+    }
+    if (old) {
+        old->deref(nullptr);
+    }
+    return 0;
 }
 
 QoreSandboxManager* qore_program_private::getOwnSandboxManagerRef() {
@@ -2078,8 +2112,11 @@ bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Purpose pur
 }
 
 QoreSandboxManagerHelper::QoreSandboxManagerHelper(QoreProgram* pgm) {
+    // the Program's own manager: a binary module that installs it as the manager of another Program (which then
+    // governs that Program's code alone) must not install the sandbox that the Program keeps of the code that created
+    // it, which only adds to the sandbox of its callers (see qore_program_private::creator_sandbox_manager)
     if (pgm) {
-        ptr = qore_program_private::get(*pgm)->getSandboxManagerRef();
+        ptr = qore_program_private::get(*pgm)->getOwnSandboxManagerRef();
     } else {
         ptr = nullptr;
     }

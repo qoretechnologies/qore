@@ -181,6 +181,33 @@ sub export_net_to(Program h) {
     #! arrives, so it is far longer than the time an interrupt takes even under valgrind
     const SpinBoundMs = 300000;
 
+    #! the code of the sandboxed Program of cancelScope(): a thread that waits until it is cancelled
+    const CancelSource = "%modern
+our Qore::Thread::Queue started();
+our Qore::Thread::Queue done();
+int sub start_worker() {
+    return background sub () {
+        started.push(True);
+        try {
+            Qore::Thread::Counter c(1);
+            c.waitForZero();
+            done.push(\"not cancelled\");
+        } catch (hash<ExceptionInfo> ex) {
+            done.push(ex.err);
+        }
+    }();
+}
+Program sub mk() {
+    Program c(PO_MODERN);
+    c.parse(\"%modern
+auto sub do_cancel(int tid) { return Qore::cancel_thread(tid); }\", \"child\");
+    return c;
+}
+auto sub cancel_via(Program c, int tid) { return c.callFunction(\"do_cancel\", tid); }
+sub wait_started() { started.get(); }
+string sub wait_done() { return done.get(); }
+";
+
     #! what code governed by the sandbox gets
     const Governed = {
         "fs": "FILESYSTEM-ACCESS-DENIED",
@@ -210,6 +237,7 @@ sub export_net_to(Program h) {
         addTestCase("a stricter caller of a Program that a laxer sandbox created", \stricterCaller());
         addTestCase("an expression cannot define code", \expressionDefinitions());
         addTestCase("a manager that sandboxed code gives a Program", \managerGivenBySandbox());
+        addTestCase("the cancellation scope of a Program that sandboxed code created", \cancelScope());
         set_return_value(main());
     }
 
@@ -582,6 +610,22 @@ sub export_net_to(Program h) {
         t3.parse(ProbeSource, "trusted");
         setter(t3, lax);
         assertEq("read:secret", t3.callFunction("probe", DeniedFile).fs);
+    }
+
+    cancelScope() {
+        # code of a Program that sandboxed code created cancels a thread of the sandbox: the scope of the cancellation is
+        # the sandbox, whose thread it is, as for the sandbox's own code
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        Program p(PO_MODERN);
+        p.setSandboxManager(sm);
+        p.parse(CancelSource, "sandboxed");
+        p.run();
+        Program child = p.callFunction("mk");
+        int tid = p.callFunction("start_worker");
+        p.callFunction("wait_started");
+        assertTrue(p.callFunction("cancel_via", child, tid));
+        assertEq("THREAD-CANCELLED", p.callFunction("wait_done"));
     }
 
     #! calls the reference in a thread that trusted code starts and returns its result

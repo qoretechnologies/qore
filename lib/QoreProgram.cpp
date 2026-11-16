@@ -5721,25 +5721,8 @@ bool QoreProgram::checkAllowDebugging(ExceptionSink* xsink) {
 }
 
 void QoreProgram::setSandboxManager(QoreSandboxManager* sm) {
-    QoreSandboxManager* old;
-    {
-        AutoLocker al(priv->sm_lock);
-        if (sm) {
-            // referenced before it is published: a lookup that finds it without the lock must find it alive
-            sm->ref();
-            // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
-            priv->sandboxed.store(true, std::memory_order_release);
-        }
-        old = priv->sandbox_manager.exchange(sm, std::memory_order_acq_rel);
-        // after the manager is published: a thread that finds the new generation finds the manager (see
-        // ProgramThreadCountContextHelper::sandboxChainClear())
-        if (sm) {
-            qore_sandbox_manager_generation.fetch_add(1, std::memory_order_seq_cst);
-        }
-    }
-    if (old) {
-        old->deref(nullptr);
-    }
+    // the C++ API sets a manager that governs the Program's code alone (see qore_program_private::own_manager_additive)
+    priv->setOwnSandboxManager(sm, false, false);
 }
 
 const AbstractQoreFunctionVariant* QoreProgram::runtimeFindCall(const char* name, const QoreListNode* params, ExceptionSink* xsink) const {

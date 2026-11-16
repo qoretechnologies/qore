@@ -1093,12 +1093,11 @@ public:
 
     //! true if \c sandbox_manager adds to the sandbox of the Program's callers instead of governing its code alone
     /** Set when code that a sandbox governs sets the manager with Program::setSandboxManager() (see
-        qore_program_private::setSandboxManager()): the walk of the thread's sandbox stack visits the manager and goes
-        on to the callers, as for \c creator_sandbox_manager, so that the manager never governs the calling code's own
-        calls into the Program alone.  A manager that trusted code that no sandbox governs sets (and one set with the C++
-        API) governs the Program's code alone, as before.  An additive manager is never laxer than the same manager
-        governing alone, so the flag is set before an additive manager is published and cleared after an authoritative
-        one is.
+        setOwnSandboxManager()): the walk of the thread's sandbox stack visits the manager and goes on to the callers,
+        as for \c creator_sandbox_manager, so that the manager never governs the calling code's own calls into the
+        Program alone.  A manager that trusted code that no sandbox governs sets (and one set with the C++ API) governs
+        the Program's code alone, as before.  Written with \c sandbox_manager under \c sm_lock, and read with it
+        (getSandboxManagerRefs()).
     */
     std::atomic<bool> own_manager_additive{false};
 
@@ -2002,28 +2001,27 @@ public:
 
     //! Returns references to the Program's own sandbox manager and to the sandbox of the code that created it
     /** Allocates nothing; the caller must call deref() on each pointer returned that is not nullptr.  The managers
-        govern the Program's code together (see \c creator_sandbox_manager).
+        govern the Program's code together (see \c creator_sandbox_manager).  If \a own_additive is not nullptr, it is
+        set to \c own_manager_additive as it was when \a own was read (under the same lock).
     */
-    DLLLOCAL void getSandboxManagerRefs(QoreSandboxManager*& own, QoreSandboxManager*& creator, bool policy = false);
+    DLLLOCAL void getSandboxManagerRefs(QoreSandboxManager*& own, QoreSandboxManager*& creator, bool policy = false,
+            bool* own_additive = nullptr);
 
     //! Returns a ref'd pointer to the sandbox manager set with QoreProgram::setSandboxManager(), or nullptr
     DLLLOCAL QoreSandboxManager* getOwnSandboxManagerRef();
 
     //! Sets the Program's own sandbox manager for Program::setSandboxManager()
-    /** @param pgm the Program
-        @param sm the manager, or nullptr
+    /** The manager and \c own_manager_additive are changed together under \c sm_lock, after the check that code that
+        is not trusted does not replace a manager, so that concurrent setters cannot combine one setter's manager with
+        another one's flag.
+
+        @param sm the manager (borrowed), or nullptr
         @param additive true if the manager adds to the sandbox of the Program's callers (see \c own_manager_additive)
+        @param no_replace true if a manager other than \a sm that the Program already has must not be replaced
+
+        @return 0 for OK, -1 if the Program has another manager and \a no_replace is true (nothing is changed)
     */
-    DLLLOCAL static void setSandboxManager(QoreProgram& pgm, QoreSandboxManager* sm, bool additive) {
-        qore_program_private* pp = pgm.priv;
-        if (additive) {
-            pp->own_manager_additive.store(true, std::memory_order_release);
-            pgm.setSandboxManager(sm);
-        } else {
-            pgm.setSandboxManager(sm);
-            pp->own_manager_additive.store(false, std::memory_order_release);
-        }
-    }
+    DLLLOCAL int setOwnSandboxManager(QoreSandboxManager* sm, bool additive, bool no_replace);
 
     //! Returns true if the Program has a sandbox manager of its own or the sandbox of the code that created it
     /** Reads the pointers without the lock, for the checks made on every entry into the Program

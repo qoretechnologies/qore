@@ -2952,21 +2952,20 @@ nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sandbox_ma
    // by replacing its manager with a laxer one; giving a manager to a Program that has none only adds restrictions
    // (issue #5659).  A composition of the old and new managers is not stored instead: the old manager would no
    // longer be the one that its owner's limits, interrupt requests and configuration changes act on
-   if (qore_calling_code_is_untrusted()) {
-       // the sandbox of the code that created the Program is not replaced (see Program::getSandboxManager()), so
-       // giving the Program a manager of its own only adds restrictions to it
-       ReferenceHolder<QoreSandboxManager> current(qore_program_private::get(*p)->getOwnSandboxManagerRef(), nullptr);
-       if (current && *current != *sandbox_manager) {
-           return xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code, or code whose functional domains "
-               "are restricted, cannot replace the sandbox manager of a Program");
-       }
-   }
+   // (the sandbox of the code that created the Program is not replaced either, see Program::getSandboxManager(), so
+   // giving the Program a manager of its own only adds restrictions to it); the check and the change are made under
+   // the Program's sandbox lock, so that concurrent setters cannot interleave
+   //
    // a manager that code a sandbox governs sets (also trusted code that sandboxed code calls) adds to the sandbox of
    // the Program's callers instead of governing the Program's code alone: a Program's own manager otherwise ends the
    // lookup of the sandbox, so a laxer manager given to a Program that sandboxed code holds would govern that code's
    // own calls into it (see qore_program_private::own_manager_additive)
-   // setSandboxManager() takes its own strong reference; ReferenceHolder from QPP macro handles the arg ref
-   qore_program_private::setSandboxManager(*p, *sandbox_manager, qore_caller_is_sandboxed());
+   // the Program takes its own strong reference; ReferenceHolder from QPP macro handles the arg ref
+   if (qore_program_private::get(*p)->setOwnSandboxManager(*sandbox_manager, qore_caller_is_sandboxed(),
+           qore_calling_code_is_untrusted())) {
+       return xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code, or code whose functional domains "
+           "are restricted, cannot replace the sandbox manager of a Program");
+   }
 }
 
 //! Returns the sandbox manager set on this %Program, if any

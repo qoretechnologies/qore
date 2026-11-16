@@ -5197,7 +5197,19 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
     // system-policy capability keeps a sandbox but no policy manager, and a policy check must not cache that the chain
     // has none for the lookups that follow
     bool visited_any = false;
-    auto try_pgm = [pgm_id, policy, &visit, &visited_any](QoreProgram* p, bool& rv) -> bool {
+    // the innermost Program that contributes a manager without ending the walk; reported when no Program's manager
+    // governs alone and nothing else sets the ID (a Program-ID report is used to scope cancel_thread())
+    qore_program_id_t contrib_id = 0;
+    struct ContribReport {
+        qore_program_id_t* pgm_id;
+        const qore_program_id_t& contrib_id;
+        ~ContribReport() {
+            if (pgm_id && !*pgm_id && contrib_id) {
+                *pgm_id = contrib_id;
+            }
+        }
+    } report_contrib{pgm_id, contrib_id};
+    auto try_pgm = [pgm_id, policy, &visit, &visited_any, &contrib_id](QoreProgram* p, bool& rv) -> bool {
         if (!p) {
             return false;
         }
@@ -5207,22 +5219,30 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
         }
         QoreSandboxManager* own_ptr;
         QoreSandboxManager* creator_ptr;
-        pp->getSandboxManagerRefs(own_ptr, creator_ptr, policy);
+        bool own_additive;
+        pp->getSandboxManagerRefs(own_ptr, creator_ptr, policy, &own_additive);
         ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
         ReferenceHolder<QoreSandboxManager> creator(creator_ptr, nullptr);
         if (!own && !creator) {
             return false;
         }
-        // the innermost Program that contributes a manager is reported
-        if (pgm_id && !*pgm_id) {
-            *pgm_id = p->getProgramId();
+        // a manager that code a sandbox governs set adds to the sandbox of the callers, as a kept sandbox does; only a
+        // manager that governs alone ends the walk
+        const bool ends = own && !own_additive;
+        // the Program whose manager governs alone is reported, as before; otherwise the innermost Program that
+        // contributes a manager (see report_contrib)
+        if (pgm_id) {
+            if (ends) {
+                *pgm_id = p->getProgramId();
+            } else if (!contrib_id) {
+                contrib_id = p->getProgramId();
+            }
         }
         if ((own && !visit(*own)) || (creator && !visit(*creator))) {
             rv = false;
             return true;
         }
-        // a manager that code a sandbox governs set adds to the sandbox of the callers, as a kept sandbox does
-        if (own && !pp->own_manager_additive.load(std::memory_order_acquire)) {
+        if (ends) {
             rv = true;
             return true;
         }
@@ -5286,7 +5306,7 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
         // borrowed from the context, which outlives the walk
         QoreSandboxManager* sm = policy ? ctx->policy_manager : ctx->manager;
         if (sm) {
-            if (pgm_id && !policy) {
+            if (pgm_id && !policy && !*pgm_id) {
                 *pgm_id = ctx->pgm_id;
             }
             return visit(sm);
