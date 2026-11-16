@@ -87,6 +87,12 @@ extern bool threads_initialized;
 
 ParseOptionMaps pomaps;
 
+// the insertions into the value sets of the parse options are not under way when fork() copies the process
+// (issue #6177; see SyncParseOptions)
+std::mutex qore_parse_options_values_mutex;
+static QoreForkStdMutex parse_options_values_fork_handler(qore_parse_options_values_mutex, QFLR_LEAF,
+    "parse_options_values");
+
 // Optional callback invoked before program data is cleared (issue #4816)
 // Can be used by modules to perform cleanup before namespace data is freed
 // More than one module needs this notification, so it is a list; a single slot meant whichever
