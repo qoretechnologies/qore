@@ -30,9 +30,40 @@
     @anchor parse_nesting_limit
     @par Nesting Limit
     The parser supports up to 1000 nested syntax elements, counting each operator in an expression, and raises a
-    \c PARSE-EXCEPTION for code that is nested more deeply, or more deeply than the stack of the parsing thread allows;
-    for example, an expression that adds more than about 1000 terms with \c + is rejected.  Lists, hashes, argument
-    lists, statement lists and adjacent string literals are not nested by their length, so they are not limited.
+    \c PARSE-EXCEPTION for code that is nested more deeply; for example, an expression that adds more than about 1000
+    terms with \c + is rejected.  Lists, hashes, argument lists, statement lists and adjacent string literals are not
+    nested by their length, so they are not limited.
+
+    Code that is nested more deeply than the stack of the parsing thread allows, including modules that load each
+    other or a long chain of classes or hashdecls that inherit each other, raises a \c PARSE-STACK-LIMIT-EXCEEDED parse
+    exception.  This error depends on the thread that parses the code and not on the code, so a module that cannot be
+    parsed for this reason is not handled as a module that is not available: the error is the parse error of the code
+    that loads it, also with @ref try-module "%try-module", and the error of
+    @ref Qore::load_module() "load_module()".
+
+    A module load at run time (@ref Qore::load_module() "load_module()" or
+    @ref Qore::Program::loadModule() "Program::loadModule()", for example) raises the same error when the stack of
+    the thread is nearly used up (when less than the parse stack reserve of 64KB remains above the thread's stack
+    limit), also for a module that is already loaded in the process: making a loaded module available in another
+    @ref Qore::Program "Program" still runs code that uses the stack, as it merges the module's namespaces into the
+    Program, can run the module's initialization, and loads its optional child modules
+    (@ref try-child-module "%try-child-module") that were not loaded yet.  A request that needs nothing to be loaded
+    succeeds with any stack: one for a module that the Program already has, or for the \c qore feature (a version
+    check).
+
+    The code that runs while a module is loaded, such as the initializers of its constants, can also exceed the stack
+    of the thread at run time (\c STACK-LIMIT-EXCEEDED).  This error is handled as the parse error above only in a
+    thread whose total stack size is smaller than the default thread stack size (see
+    get_default_thread_stack_size()).  In the primary thread, and in a thread whose total stack size is at least the
+    default size, it is handled as any other error of a module that cannot be loaded, on the assumption that a
+    stack that large is enough for a correct module, so that the module has a bug, such as a recursion without end:
+    @ref try-module "%try-module" parses its fallback code, and an optional child module
+    (@ref try-child-module "%try-child-module") fails with a \c MODULE-CHILD-FAILED warning.
+
+    The rule compares the total size of the thread's stack with the default size, not the stack that remains when the
+    module is loaded, so a correct module can still be handled as one that cannot be loaded: in a thread with the
+    default stack size whose caller has already used most of it, after set_default_thread_stack_size() reduced the
+    default size, or in a primary thread whose stack is small (\c ulimit \c -s).
 
     <hr>
     @section static_method_calls Static Method Calls

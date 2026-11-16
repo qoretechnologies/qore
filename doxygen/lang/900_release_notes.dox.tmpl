@@ -2541,8 +2541,10 @@
     - fixed data races when a Program parsed classes that other threads used, such as the classes of a binary module
       loaded with @ref Qore::load_module() "load_module()" or of a module that other threads ran
     - deeply nested values and code no longer exhaust the stack: closure chains and nested code are released
-      iteratively, and evaluating, serializing, comparing and formatting deeply nested expressions and data raise
-      \c STACK-LIMIT-EXCEEDED
+      iteratively, evaluating, serializing, comparing and formatting deeply nested expressions and data raise
+      \c STACK-LIMIT-EXCEEDED, and parsing them raises \c PARSE-STACK-LIMIT-EXCEEDED, which
+      @ref try-module "%try-module" does not handle as a missing module, nor a \c STACK-LIMIT-EXCEEDED of a module's
+      initialization in a thread with less than the default stack size (see @ref parse_nesting_limit)
     - a thread faulting with \c SIGBUS, \c SIGILL, \c SIGFPE or \c SIGTRAP hung instead of terminating the process
     - UTC offsets such as \c "+01:00" were refused as a DBI driver's \c timezone option
     - fixed @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" connection

@@ -772,6 +772,8 @@ public:
         Commit,
         //! in the installing phase, before the result is published to the variants
         Install,
+        //! the number of hold points: not a hold point; it stays last (the sizes of the tables indexed by a hold point)
+        Count,
     };
 
     //! Returns the process-wide JIT
@@ -845,6 +847,19 @@ public:
         destroyed before the handler, so a process should end with qore_fork_child_quick_exit() instead.
     */
     void joinAbandonedCompileThread();
+
+#ifdef DEBUG
+    //! The exit status of a process that joinAbandonedCompileThread() ends because a test hook holds the compile
+    static constexpr int QORE_JIT_DBG_HELD_AT_EXIT_STATUS = 86;
+
+    //! Test hook: ends the process if the abandoned compile is held at a debug hold point that nothing releases
+    /** joinAbandonedCompileThread() would then wait forever: the process writes the reason to \c stderr, flushes the
+        standard I/O streams and ends with \c _exit() and QORE_JIT_DBG_HELD_AT_EXIT_STATUS.  A process ends this way
+        when it calls \c exit() after qore_cleanup() instead of qore_fork_child_quick_exit() while a test holds a
+        compile in LLVM (issue #6296), so that a test of that path fails at once instead of hanging.
+    */
+    void dbgExitIfAbandonedCompileHeld() noexcept;
+#endif
 
     //! Releases the LLVM execution engine, its code and the caches (see shutdown())
     void releaseEngine();
@@ -1393,7 +1408,7 @@ private:
     //! by bg_queue_mutex
     DbgFinishAbandoned dbg_finish_abandoned = DbgFinishAbandoned::None;
     //! for each hold point, the function whose compile stops there, all if empty; protected by bg_queue_mutex
-    std::string dbg_bg_hold_func[static_cast<int>(BgCompileHoldPoint::Install) + 1];
+    std::string dbg_bg_hold_func[static_cast<int>(BgCompileHoldPoint::Count)];
     //! the name of the in-progress compile's root function up to the "@"; protected by bg_queue_mutex
     std::string dbg_bg_in_progress_func;
 
