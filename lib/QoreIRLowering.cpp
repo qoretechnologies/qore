@@ -11691,9 +11691,8 @@ bool QoreIRLowering::listSelectorSeqAlwaysApplies(const QoreValue& expr) const {
 QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOperatorNode* op, QoreIRValue seq,
         const std::vector<QoreValue>& selectors, std::string& error) {
     assert(!selectors.empty());
-    // %no-string-index-char is refused under %modern, so lowered code always has string index chars
-    assert(op->hasStringIndexChar());
-    const int64_t string_index_char = static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar);
+    const int64_t string_index_char = op->hasStringIndexChar()
+        ? static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar) : 0;
 
     // a sequence that is always a list, a string or a binary object gets the selectors applied by the step that makes
     // the result; for any other sequence a Begin step makes the empty result first, or NOTHING if no selector applies
@@ -12150,11 +12149,15 @@ bool QoreIRLowering::getLazySelectorSource(const QoreValue& expr, LazySelectorSo
 }
 
 int64_t QoreIRLowering::selectorIteratorFlags(const LazySelectorSource& src) {
-    // string index chars and negative offsets, as the AST interpreter's iterator resolves its indices with them:
-    // %no-string-index-char and %no-negative-offsets are refused under %modern, so lowered code always has both
-    assert(src.op->hasStringIndexChar() && src.op->hasNegativeOffsets());
-    return static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar)
-        | static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
+    int64_t flags = 0;
+    if (src.op->hasStringIndexChar()) {
+        flags |= static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar);
+    }
+    // the negative offsets of the operator, as the AST interpreter's iterator resolves its indices with them
+    if (src.op->hasNegativeOffsets()) {
+        flags |= static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
+    }
+    return flags;
 }
 
 QoreIRValue QoreIRLowering::lowerSourceIterator(const QoreValue& expr, const LazySelectorSource& src, bool iterate,
@@ -12206,10 +12209,12 @@ bool QoreIRLowering::getForeachSource(const QoreValue& list, ForeachSourceOperat
         src.kind = QoreIRIteratorSourceKind::Indexes;
         src.operand = op->getLeft();
         src.first = op->getRight();
-        // %no-string-index-char and %no-negative-offsets are refused under %modern
-        assert(op->hasStringIndexChar() && op->hasNegativeOffsets());
-        src.flags |= static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar)
-            | static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
+        if (op->hasStringIndexChar()) {
+            src.flags |= static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar);
+        }
+        if (op->hasNegativeOffsets()) {
+            src.flags |= static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
+        }
     } else {
         return false;
     }

@@ -7289,10 +7289,8 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         inv->expr.getInternalNode())) {
                     QoreValue lhs_val = getIRValue(values, inv->operands[0]);
                     QoreValue rhs_val = getIRValue(values, inv->operands[1]);
-                    // %no-string-index-char and %no-negative-offsets are refused under %modern
-                    assert(sq->hasStringIndexChar() && sq->hasNegativeOffsets());
                     QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(
-                        lhs_val, rhs_val, true, true, true, xsink);
+                        lhs_val, rhs_val, true, sq->hasStringIndexChar(), sq->hasNegativeOffsets(), xsink);
                     if (lhs_val.getType() == NT_LIST && !(xsink && *xsink)) {
                         evaluateOwnedListElement(out, xsink);
                     }
@@ -13684,7 +13682,7 @@ load_local_done:
                         // start of the entry array, corrupting the heap.  Same semantics as
                         // qore_rt_list_index_store_cow() (JIT) and qore_rt_list_index_store_cow_aot() (AOT).
                         if (index < 0 && !(xsink && *xsink)) {
-                            if (qore_compiled_code_negative_offsets()) {
+                            if (runtime_check_parse_option(PO_NEGATIVE_OFFSETS)) {
                                 index += static_cast<int64_t>(l->size());
                             }
                             if (index < 0) {
@@ -17982,16 +17980,13 @@ load_local_done:
                 }
                 QoreValue left_val = getIRValue(values, inst->operands[0]);
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
-                // %no-string-index-char is refused under %modern, so compiled code always has string index chars
-                const int32_t string_index_char = 1;
-#ifdef DEBUG
+                int32_t string_index_char = 1;
                 if (inst->opcode == QoreIROpcode::ListIndexDynamic && expr_inst->expr.hasNode()) {
                     if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                             expr_inst->expr.getInternalNode())) {
-                        assert(sq->hasStringIndexChar());
+                        string_index_char = sq->hasStringIndexChar() ? 1 : 0;
                     }
                 }
-#endif
                 if (inst->opcode == QoreIROpcode::ListIndexDynamic
                         && !expr_inst->list_selector_kinds.empty()) {
                     std::vector<uint64_t> selector_bits;
@@ -18026,7 +18021,7 @@ load_local_done:
                 QoreValue right_val = getIRValue(values, inst->operands[1]);
                 QoreValue res = inst->opcode == QoreIROpcode::ListIndexDynamic
                     ? QoreSquareBracketsOperatorNode::doSquareBrackets(left_val, right_val, true,
-                        string_index_char != 0, qore_compiled_code_negative_offsets(), xsink)
+                        string_index_char != 0, runtime_check_parse_option(PO_NEGATIVE_OFFSETS), xsink)
                     : QoreIRInterpreter::evalBinary(inst->opcode, left_val, right_val, xsink);
                 if (inst->opcode == QoreIROpcode::ListIndexDynamic && left_val.getType() == NT_LIST
                         && !(xsink && *xsink)) {
@@ -18868,7 +18863,7 @@ load_local_done:
                             case LVUnaryOp::Shift: {
                                 if (lvh.getType() != NT_LIST) {
                                     // matches QoreShiftOperatorNode::evalImpl()
-                                    if (lvh.getType() != NT_NOTHING && qore_compiled_code_strict_args()) {
+                                    if (lvh.getType() != NT_NOTHING && runtime_check_parse_option(PO_STRICT_ARGS)) {
                                         xsink->raiseException("SHIFT-ERROR", "the lvalue argument to shift is type "
                                             "\"%s\"; expecting \"list\"", lvh.getTypeName());
                                     }
@@ -18884,7 +18879,7 @@ load_local_done:
                             case LVUnaryOp::Pop: {
                                 if (lvh.getType() != NT_LIST) {
                                     // matches QorePopOperatorNode::evalImpl()
-                                    if (lvh.getType() != NT_NOTHING && qore_compiled_code_strict_args()) {
+                                    if (lvh.getType() != NT_NOTHING && runtime_check_parse_option(PO_STRICT_ARGS)) {
                                         xsink->raiseException("POP-ERROR", "the lvalue argument to pop is type "
                                             "\"%s\"; expecting \"list\"", lvh.getTypeName());
                                     }
@@ -19104,7 +19099,7 @@ load_local_done:
                                 }
                                 if (lvh.getType() != NT_LIST) {
                                     if (path_inst->binary_mut_op == LVBinaryMutOp::Unshift
-                                            || qore_compiled_code_strict_args()) {
+                                            || runtime_check_parse_option(PO_STRICT_ARGS)) {
                                         xsink->raiseException(
                                             path_inst->binary_mut_op == LVBinaryMutOp::Push
                                                 ? "PUSH-ERROR" : "UNSHIFT-ERROR",
@@ -19807,10 +19802,8 @@ load_local_done:
                             call_expr.getInternalNode())) {
                         QoreValue lhs_val = getIRValue(values, inst->operands[0]);
                         QoreValue rhs_val = getIRValue(values, inst->operands[1]);
-                        // %no-string-index-char and %no-negative-offsets are refused under %modern
-                        assert(sq->hasStringIndexChar() && sq->hasNegativeOffsets());
                         res = QoreSquareBracketsOperatorNode::doSquareBrackets(
-                            lhs_val, rhs_val, true, true, true, xsink);
+                            lhs_val, rhs_val, true, sq->hasStringIndexChar(), sq->hasNegativeOffsets(), xsink);
                         if (lhs_val.getType() == NT_LIST && !(xsink && *xsink)) {
                             evaluateOwnedListElement(res, xsink);
                         }
@@ -22650,7 +22643,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (bt == NT_LIST || bt == NT_STRING || bt == NT_BINARY || bt == NT_BUFFER
                     || right.getType() == NT_LIST) {
                 QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, true,
-                    qore_compiled_code_negative_offsets(), xsink);
+                    runtime_check_parse_option(PO_NEGATIVE_OFFSETS), xsink);
                 if (bt == NT_LIST && !(xsink && *xsink)) {
                     evaluateOwnedListElement(out, xsink);
                 }

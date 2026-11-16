@@ -37854,16 +37854,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
                 if (inst->opcode == QoreIROpcode::ListIndexDynamic) {
                     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
-                    // %no-string-index-char is refused under %modern, so compiled code always has string index chars
-                    const int32_t string_index_char = 1;
-#ifdef DEBUG
+                    int32_t string_index_char = 1;
                     if (expr_inst->expr.hasNode()) {
                         if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                                 expr_inst->expr.getInternalNode())) {
-                            assert(sq->hasStringIndexChar());
+                            string_index_char = sq->hasStringIndexChar() ? 1 : 0;
                         }
                     }
-#endif
                     if (!expr_inst->list_selector_kinds.empty()) {
                         int num_selectors = static_cast<int>(inst->operands.size()) - 1;
                         llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
@@ -37905,17 +37902,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!rhs) { return false; }
                 llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
                 if (inst->opcode == QoreIROpcode::ListIndexDynamic) {
-                    // %no-string-index-char is refused under %modern, so compiled code always has string index chars
-                    const int32_t string_index_char = 1;
-#ifdef DEBUG
                     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
+                    int32_t string_index_char = 1;
                     if (expr_inst->expr.hasNode()) {
                         if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                                 expr_inst->expr.getInternalNode())) {
-                            assert(sq->hasStringIndexChar());
+                            string_index_char = sq->hasStringIndexChar() ? 1 : 0;
                         }
                     }
-#endif
                     auto helper = module.getOrInsertFunction("qore_rt_list_index_dynamic",
                         llvm::FunctionType::get(i64_type, {i64_type, i64_type, i32_type, ptr_type}, false));
                     llvm::Value* result = builder->CreateCall(helper,
@@ -38667,9 +38661,7 @@ bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::M
     if (idx_val->getType() != i64_type) {
         return false;  // Can't determine index type
     }
-    // %no-string-index-char is refused under %modern, so compiled code always has string index chars
-    assert(sq_brackets->hasStringIndexChar());
-    llvm::Value* string_index_char = llvm::ConstantInt::get(i32_type, 1);
+    llvm::Value* string_index_char = llvm::ConstantInt::get(i32_type, sq_brackets->hasStringIndexChar() ? 1 : 0);
     auto helper = module.getOrInsertFunction(
         "qore_rt_list_index_access_compat",
         llvm::FunctionType::get(i64_type,
