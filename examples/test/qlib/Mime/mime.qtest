@@ -105,6 +105,7 @@ aωb\r
         addTestCase("NUL characters in parsed names", \parsedNameNulTest());
         addTestCase("encoded word decoding work (issue #6139)", \decodeHeaderWorkTest());
         addTestCase("quoted-printable decoding work (issue #6139)", \decodeQpWorkTest());
+        addTestCase("raw 8-bit part header lines (issue #6326)", \partHeader8bitTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -1203,6 +1204,27 @@ aωb\r
         checkLinearWork("quoted-printable text", 1000, string sub (int n) { return strmul("a=3Db_=\r\n", n); },
             string sub (string str) { return mime_decode_quoted_printable(str, "UTF-8"); },
             sub (string str, int n) { assertEq(strmul("a=b ", n), str); });
+    }
+
+    # a part header with raw 8-bit lines that are not valid UTF-8 is read in the charset that the part declares, and
+    # the work grows linearly with its size (issue #6326)
+    partHeader8bitTest() {
+        checkLinearWork("raw latin-1 part header lines", 1000,
+            binary sub (int n) {
+                binary b = binary("--b\r\nContent-Type: text/plain; charset=ISO-8859-1\r\n");
+                map b += binary("X-H: caf") + <e9> + binary("\r\n"), xrange(n);
+                return b + binary("\r\nbody\r\n--b--\r\n");
+            },
+            hash<MessageInfo> sub (binary body) { return MultiPartMessage::parseBody("b", body); },
+            sub (hash<MessageInfo> h, int n) {
+                assertEq(n, h.part[0].hdr."x-h".size());
+                assertEq("café", h.part[0].hdr."x-h"[0]);
+                assertEq("body", h.part[0].body);
+            });
+        # the bytes of a part header line are read as UTF-8 if they are valid UTF-8
+        hash<MessageInfo> h = MultiPartMessage::parseBody("b", binary("--b\r\nContent-Type: text/plain; "
+            "charset=ISO-8859-1\r\nX-A: café\r\nX-B: caf") + <e9> + binary("\r\n\r\nbody\r\n--b--\r\n"));
+        assertEq({"content-type": "text/plain; charset=ISO-8859-1", "x-a": "café", "x-b": "café"}, h.part[0].hdr);
     }
 
     # checks that the bytes that the decoders scan (see MimeScanCounter) for an input twice the size are at most

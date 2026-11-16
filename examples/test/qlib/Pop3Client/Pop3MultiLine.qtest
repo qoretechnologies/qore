@@ -7,8 +7,9 @@
 # a multi-line POP3 response (RETR, TOP, LIST) ends with a line that is only "." (RFC 1939 section 3); it ended at the
 # first ".\r\n", so a message with a line that ends with "." was cut off there (issue #6319), and the "." added
 # before a line that starts with "." was not removed; a message with an 8-bit part in a single-byte charset could not
-# be parsed (issue #114).  A local POP3 server serves the messages of each test case, which are read with the client
-# connected (one session) and not connected (a session for each call).
+# be parsed (issue #114), nor could a message with a raw 8-bit header line that is not valid UTF-8 (issue #6326).  A
+# local POP3 server serves the messages of each test case, which are read with the client connected (one session) and
+# not connected (a session for each call).
 
 %modern
 
@@ -192,6 +193,17 @@ public class Pop3MultiLineTest inherits QUnit::Test {
 
         const Iso8859_15Body = "On Wed, 18 Mar 2015, Lawrence Velázquez wrote:\r\n\r\n> costs 5 €.";
 
+        # messages with raw 8-bit header lines (not in RFC 2047 encoded words), in Latin-1 and in UTF-8 (issue #6326)
+        const RawHeaders = {
+            "1": binary("From: J") + <e9> + binary("r") + <f4> + binary("me <jerome@example.com>\r\n"
+                "To: b@example.com\r\nSubject: caf") + <e9> + binary("\r\nX-Other: na") + <ef>
+                + binary("ve\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=ISO-8859-1\r\n"
+                "Content-Transfer-Encoding: 8bit\r\n\r\nth") + <e9> + binary("\r\n"),
+            "2": binary("From: Jérôme <jerome@example.com>\r\nTo: b@example.com\r\nSubject: café\r\n"
+                "X-Other: naïve\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n"
+                "Content-Transfer-Encoding: 8bit\r\n\r\nthé\r\n"),
+        };
+
         # messages without a header, read with TOP: the first line of the data starts with "."
         const Stuffed = {
             "1": binary(".first line\r\nsecond line.\r\n"),
@@ -207,6 +219,7 @@ public class Pop3MultiLineTest inherits QUnit::Test {
         addTestCase("message with an 8-bit ISO-8859-15 part", \iso8859_15());
         addTestCase("byte-stuffed first lines", \stuffed());
         addTestCase("empty responses", \empty());
+        addTestCase("raw 8-bit header lines (issue #6326)", \rawHeaders());
         set_return_value(main());
     }
 
@@ -306,6 +319,30 @@ public class Pop3MultiLineTest inherits QUnit::Test {
             }
             assertNothing(pop3.list(), mode + " LIST of an empty mailbox");
             assertNothing(pop3.getMail(), mode + " getMail() of an empty mailbox");
+        }
+    }
+
+    rawHeaders() {
+        MultiLinePop3Server server(RawHeaders);
+        on_exit assertNothing(server.stop(), "server error");
+
+        foreach bool connected in ((False, True)) {
+            string mode = connected ? "connected" : "not connected";
+            Pop3Client pop3(server.getUrl());
+            on_exit pop3.disconnect();
+            if (connected) {
+                pop3.connect();
+            }
+
+            foreach string id in (("1", "2")) {
+                string label = sprintf("%s RETR %s", mode, id);
+                MailMessage::Message msg = pop3.getMessage(id);
+                assertEq("café", msg.getSubject(), label + " subject");
+                assertEq("Jérôme <jerome@example.com>", msg.getSender(), label + " sender");
+                assertEq("jerome@example.com", msg.getFrom(), label + " from");
+                assertEq("naïve", msg.getHeaders()."X-Other", label + " header");
+                assertEq("thé\r\n", msg.getBody(), label + " body");
+            }
         }
     }
 

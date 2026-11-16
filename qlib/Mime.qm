@@ -110,6 +110,11 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
 
 
     @section mime_1_9 v1.9
+    - added @ref Mime::mime_get_header_text() "mime_get_header_text()" and
+      @ref Mime::mime_get_header_block_charset() "mime_get_header_block_charset()";
+      @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" reads a raw 8-bit part header line
+      that is not valid in the default encoding as UTF-8 or in a single-byte charset; the parse failed with
+      \c INVALID-ENCODING (<a href="https://github.com/qoretechnologies/qore/issues/6326">issue 6326</a>)
     - <b>changes that can affect backwards compatibility</b>: @ref Mime::MimeTypeYaml "MimeTypeYaml" is the RFC 9512
       type \c "application/yaml"; it was \c "text/x-yaml", which peers of %Qore releases before 3.0 require (see
       @ref qore_3_0_0_compatibility "Changes That Can Affect Backwards-Compatibility")
@@ -1461,7 +1466,95 @@ public namespace Mime {
     *string sub mime_get_charset(*string ct) {
         return (ct =~ x/charset="?([^";\s]+)"?/i)[0];
     }
+
+    # returns True if the name is that of a character encoding with one byte per character
+    bool sub mime_is_single_byte_charset(string enc) {
+        string name = enc.upr();
+        name =~ s/[^A-Z0-9]//g;
+        return name =~ /^(USASCII|ASCII|ISO8859|LATIN|WINDOWS125|CP125|KOI8|KOI7|WINDOWS874|CP874)/;
+    }
+
+    # returns the bytes as text in the given encoding if they are valid in it, otherwise nothing
+    *string sub mime_get_valid_text(binary b, string enc) {
+        string str = binary_to_string(b, enc);
+        try {
+            # the conversion checks the bytes
+            string utf8 = convert_encoding(str, enc == "UTF-8" ? "UTF-16LE" : "UTF-8");
+            return enc == "UTF-8" ? str : utf8;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "ENCODING-CONVERSION-ERROR" && ex.err != "INVALID-ENCODING") {
+                rethrow;
+            }
+        }
+    }
     #! @endcond
+
+    #! Returns the charset parameter of the Content-Type field in a block of header lines, if any
+    /** @param hdr the header lines, separated by \c "\r\n"; the Content-Type field can be folded
+
+        @return the value of the charset parameter of the first Content-Type field (the field name and the parameter
+        name are matched in any case), or @ref nothing if there is none
+
+        @since %Mime 1.9
+    */
+    public *string sub mime_get_header_block_charset(string hdr) {
+        if (scan_counting) {
+            MimeScanCounter::bytes += hdr.size();
+        }
+        return (hdr =~ x/(?:^|\r\n)content-type:(?:[^\r\n]|\r\n[ \t])*?charset\s*=\s*"?([^";\s]+)/i)[0];
+    }
+
+    #! Returns the text of a raw header line, given as bytes, that can contain 8-bit characters
+    /** Header fields should be ASCII (RFC 5322) and give other characters in encoded words (RFC 2047), but UTF-8
+        header text is allowed (RFC 6532), and mailers write header text in other charsets as well; the bytes are read
+        as the first of the following that can read them:
+        - \a encoding, if it is a multi-byte encoding other than UTF-8 (ex: \c "SHIFT_JIS"): the encoding of the
+          text that the bytes were taken from
+        - UTF-8
+        - \a charset, if it is a single-byte charset (ex: \c "ISO-8859-15"): the charset declared by the message or
+          the part
+        - \a encoding, if it is a single-byte encoding
+        - Windows-1252, then ISO-8859-1, which can read any bytes, so that no exception is raised and no byte is lost
+
+        @param hdr the bytes of the header line
+        @param charset the charset declared by the \c Content-Type of the message or the part, if any
+        @param encoding the encoding of the text that the header was taken from, if any
+
+        @return the text of the header line; ASCII bytes are returned in \a encoding (or the
+        @ref default_encoding "default encoding"), text read as UTF-8 or a single-byte charset in UTF-8, and text read
+        in a multi-byte \a encoding in that encoding
+
+        @since %Mime 1.9
+    */
+    public string sub mime_get_header_text(binary hdr, *string charset, *string encoding) {
+        if (scan_counting) {
+            # each candidate encoding converts the bytes once
+            MimeScanCounter::bytes += 4 * hdr.size();
+        }
+        string ascii = binary_to_string(hdr, "ISO-8859-1");
+        if (ascii.isDataAscii()) {
+            return force_encoding(ascii, encoding ?? get_default_encoding());
+        }
+        if (encoding && encoding != "UTF-8" && !mime_is_single_byte_charset(encoding)) {
+            *string str = mime_get_valid_text(hdr, encoding);
+            if (exists str) {
+                return binary_to_string(hdr, encoding);
+            }
+        }
+        *string str = mime_get_valid_text(hdr, "UTF-8");
+        if (exists str) {
+            return str;
+        }
+        foreach *string enc in ((charset, encoding)) {
+            if (enc && mime_is_single_byte_charset(enc)) {
+                str = mime_get_valid_text(hdr, enc);
+                if (exists str) {
+                    return str;
+                }
+            }
+        }
+        return mime_get_valid_text(hdr, "WINDOWS-1252") ?? convert_encoding(ascii, "UTF-8");
+    }
 
     #! decodes data according to the given encoding
     /** @param mime_data the data to decode
@@ -2337,11 +2430,26 @@ hash: (2 members)
                         "boundary", pnum, ranges.size());
                 }
 
-                # get header string
+                # get the header lines; a line with 8-bit bytes that are not valid in the default encoding (ex: a
+                # Latin-1 file name) is read as UTF-8 or in a single-byte charset, preferably the one that the
+                # Content-Type of the part declares; the parse failed with INVALID-ENCODING (issue #6326)
                 string phdr = pstr.substr(0, i).toString();
+                list<string> pl;
+                if (phdr.isDataAscii()) {
+                    pl = phdr.split("\r\n");
+                } else {
+                    string view = force_encoding(phdr, "ISO-8859-1");
+                    if (scan_counting) {
+                        # the lines split, and the Content-Type searched
+                        MimeScanCounter::bytes += 3 * view.size();
+                    }
+                    *string charset = mime_get_header_block_charset(view);
+                    string denc = get_default_encoding();
+                    pl = map mime_get_header_text(binary($1), charset, denc), view.split(force_encoding("\r\n",
+                        "ISO-8859-1"));
+                }
                 # parse header
                 hash<auto> h;
-                list<string> pl = phdr.split("\r\n");
                 for (int k = 0; k < pl.size(); ++k) {
                     string phl = pl[k];
                     (*string hdr, *string val) = (phl =~ x/([^:]+):\s*(.*)$/);

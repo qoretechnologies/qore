@@ -1431,6 +1431,9 @@
       - a message with an 8-bit part in a single-byte charset (ex: ISO-8859-15) is parsed and the part is decoded
         with its charset; the parse failed with \c INVALID-ENCODING
         (<a href="https://github.com/qoretechnologies/qore/issues/114">issue 114</a>)
+      - a message with a raw 8-bit header line that is not valid in the encoding of the message text (ex: a Latin-1
+        \c Subject read as UTF-8) is parsed; the parse failed with \c INVALID-ENCODING
+        (<a href="https://github.com/qoretechnologies/qore/issues/6326">issue 6326</a>)
       - see @ref mailmessage_v1_5_1 for all changes
 
     - @ref mapperintro "Mapper" module
