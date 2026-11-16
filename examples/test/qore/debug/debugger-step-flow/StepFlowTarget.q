@@ -568,3 +568,30 @@ auto sub attach_throw_caller(int n, code attach, code detach, code log) {
     }
     return total;
 }
+
+# the return facts of an immediately called closure, which the native code of a JIT caller relies on (#6201): the
+# check of an argument of a callee's fast entry whose parameter rejects no value is left out when the closure never
+# returns no value; the closure's path of a return request returns no value
+int sub facts_take_int(int v) {
+    return v + 1;
+}
+
+auto sub facts_closure_caller(int n, code attach, code detach, code log) {
+    on_exit detach();
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        code c = auto sub () {
+            if (i == 2) {
+                attach();
+            }
+            int v = 40;                             ### facts_closure_first
+            return v + 2;
+        };
+        try {
+            total += facts_take_int(c());
+        } catch (hash<ExceptionInfo> ex) {
+            log(ex.err);
+        }
+    }
+    return total;
+}

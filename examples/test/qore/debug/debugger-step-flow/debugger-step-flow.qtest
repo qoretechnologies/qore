@@ -388,6 +388,15 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "log": ("\"abcd\"", "\"abcd\"", "null", "\"abcd\"", "\"abcd\""),
                 "steps": (451, 508, 509, 510, "b511", 511),
             },
+            # an immediately called closure, whose return facts let the native code of the caller leave out the check
+            # of the argument of a callee's fast entry (#6201)
+            {"function": "facts_closure_caller", "flow": "return", "tag": "facts_closure_first", "hit": 1,
+                "block": False, "facts": True, "calls": True,
+                "result": "172",
+                "log": ("RUNTIME-OVERLOAD-ERROR",),
+                "steps": (587, "b593", 593, "b583", 583, 590, "b591", 591, "b584", 584, 587, 588, "b576", 576, "b583",
+                    583, 590, "b591", 591, "b584", 584, 587, 588, "b576", 576, 596, "b580", 580),
+            },
             # no request: a debugger attached in a call that raises an exception gets the events of the handlers that
             # the exception runs in the caller (#6201)
             {"function": "attach_throw_caller", "flow": "none", "tag": "attach_throw_first", "hit": 1, "block": False,
