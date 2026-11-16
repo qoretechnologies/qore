@@ -1206,6 +1206,36 @@ def open_regular(name, dir_fd=None):
     return fd
 
 
+def open_or_create(name, dir_fd, flags, mode=0o666):
+    """Opens the file @p name of the directory @p dir_fd, which is created if it does not exist: O_CREAT without
+    O_EXCL, for the lock files that several jobs open at once
+
+    macOS's openat() with O_CREAT and without O_EXCL fails with ENOENT in a process that loses the race to create a
+    file that does not exist yet, while the directory and, by then, the file exist (qore#6234; open() with a path and
+    Linux's openat() do not): two prunes started at once on a cache without prune.lock, or two jobs storing or reading
+    the same entry, fail.  O_CREAT | O_EXCL is reliable there: one job creates the file, every other one gets EEXIST and
+    opens the file that exists.  That two-step open is what the kernel does for O_CREAT: when the file is removed
+    between them (an entry's lock file is removed with the entry), it is created again; each further pass of the loop
+    means that another job created and removed the file meanwhile, so it never waits for time to pass.
+
+    @param flags the flags of the open without O_CREAT and O_EXCL; O_NOFOLLOW is always added, so a link in the
+    place of the file raises OSError
+    """
+    # O_EXCL never follows a link, so a dangling one gives EEXIST; the open after it must not follow it either, or it
+    # gives ENOENT and the loop never ends (and a link is never what a lock file of the cache may be, see Cache)
+    flags |= os.O_NOFOLLOW
+    while True:
+        try:
+            return os.open(name, flags | os.O_CREAT | os.O_EXCL, mode, dir_fd=dir_fd)
+        except FileExistsError:
+            pass
+        try:
+            return os.open(name, flags, dir_fd=dir_fd)
+        except FileNotFoundError:
+            # removed after it was found: created again
+            continue
+
+
 def read_fd(fd, limit=None):
     chunks = []
     total = 0
@@ -1503,7 +1533,7 @@ class Cache:
                 self.make_dirs("objects")
                 dfd = self.open_dir("objects")
                 try:
-                    return os.open(key + ".lock", os.O_RDWR | os.O_CREAT | flags, 0o666, dir_fd=dfd)
+                    return open_or_create(key + ".lock", dfd, os.O_RDWR | flags)
                 finally:
                     os.close(dfd)
             except (OSError, CacheError):
@@ -2346,7 +2376,7 @@ def cmd_prune(args):
     cache.make_dirs()
     dfd = cache.open_dir()
     try:
-        lock_fd = os.open("prune.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | O_CLOEXEC, 0o666, dir_fd=dfd)
+        lock_fd = open_or_create("prune.lock", dfd, os.O_RDWR | os.O_NOFOLLOW | O_CLOEXEC)
     finally:
         os.close(dfd)
     try:
