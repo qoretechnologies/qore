@@ -52,6 +52,9 @@ private:
             parse_context.typeInfo = nothingTypeInfo;
             return 0;
         }
+        // a context statement or find expression whose expressions read it is an observer of the implicit element
+        // at run time (qore#6341)
+        ++parse_context.implicit_element_reads;
         parse_context.typeInfo = bigIntTypeInfo;
         return 0;
     }

@@ -43,6 +43,10 @@ public:
     };
 
     QoreValue exp, where, find_exp;
+    //! True if the expressions, which run as AST at run time, contain an implicit index (\c $#) that reads an
+    //! operator's or foreach statement's index (qore#6341); conservative: also set for a \c $# of an operator in
+    //! these expressions
+    bool reads_implicit_element = false;
 
     DLLLOCAL FindNode(const QoreProgramLocation* loc, QoreValue expr, QoreValue FindNode_expr, QoreValue w,
             Mode mode = Legacy);
