@@ -97,6 +97,20 @@ public class HttpClientPollOperation inherits AbstractPollOperation<auto> {
         connection_ref = conn;
     }
 
+    #! Releases the reference to the owning connection, once the connection is closed (#6286)
+    /** The connection holds this operation and the operation holds the connection; the cycle is broken here, so that
+        neither outlives the connection's close and keeps the Program of the module alive.  A completion delivered
+        after the close finds no connection, which a closed connection does not need.
+
+        @since HttpClientIo 1.0
+    */
+    clearConnection() {
+        # an assignment, not "remove": the assignment invalidates the recursive-reference set that the connection and
+        # this operation form, while a removal of the member leaves it stale, so that the operation, which the
+        # connection still references, is collected as if the cycle still stood
+        connection_ref = NOTHING;
+    }
+
     #! Called when the poll operation completes
     /** Dispatches to the connection's handleCompletion() for deterministic
         result delivery (no closures on the worker thread).

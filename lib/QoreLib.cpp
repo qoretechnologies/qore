@@ -579,12 +579,31 @@ bool qore_has_debug() {
 #endif
 }
 
-int parse_check_stack(const QoreProgramLocation* loc) {
-    if (!q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
-        return 0;
-    }
-    parse_error(loc ? *loc : loc_builtin, "the code is nested too deeply to be parsed within the stack of this thread");
+int parse_raise_stack_error(const QoreProgramLocation* loc) {
+    parseException(loc ? *loc : loc_builtin, QORE_PARSE_STACK_ERR, new QoreStringNode(QORE_PARSE_STACK_DESC));
     return -1;
+}
+
+const QoreException* qore_find_thread_stack_error(const ExceptionSink& xsink) {
+    // a run-time stack error depends on the thread only in a thread whose total stack size is smaller than the default
+    // thread stack size; with at least that much stack, the code that exceeded it is assumed to have a bug
+    bool small_stack = q_thread_stack_smaller_than_default();
+    for (const QoreException* e = qore_es_private::get(xsink)->head; e; e = e->next) {
+        // the error code can be an inline short string, which has no QoreStringNode
+        QoreStringDataHelper err(e->err);
+        if (!err) {
+            continue;
+        }
+        if (!strcmp(err.c_str(), QORE_PARSE_STACK_ERR)
+                || (small_stack && !strcmp(err.c_str(), "STACK-LIMIT-EXCEEDED"))) {
+            return e;
+        }
+    }
+    return nullptr;
+}
+
+bool qore_has_thread_stack_error(const ExceptionSink& xsink) {
+    return qore_find_thread_stack_error(xsink) != nullptr;
 }
 
 #ifndef NDEBUG
@@ -632,6 +651,29 @@ private:
 };
 }
 
+//! Raises the parse error for an expression that parse_init_value() cannot initialize in the thread's stack
+/** The node is not parse-initialized, so it must not stay where the code containing it continues its own parse
+    initialization: that code would use it as an initialized expression (the values of a hash that has no value types,
+    a variable reference that is not resolved; issue #6047).  The parse has failed, and the expression is replaced
+    with NOTHING of no known type.
+
+    Out of line, so that it does not add to the code of parse_init_value() on its path for every expression
+
+    @return -1
+*/
+static QORE_INTERN_NOINLINE int parse_init_value_stack_exceeded(AbstractQoreNode* n, QoreValue& val,
+        QoreParseContext& parse_context) {
+    const ParseNode* pn = dynamic_cast<const ParseNode*>(n);
+    int rc = parse_raise_stack_error(pn ? pn->loc : nullptr);
+    {
+        ParseExceptionSink xsink;
+        val.discard(*xsink);
+        val = QoreValue();
+    }
+    parse_context.typeInfo = nullptr;
+    return rc;
+}
+
 int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
     parse_context.analysis.clear();
     if (val.hasNode()) {
@@ -639,8 +681,7 @@ int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
         //printd(5, "parse_init_value() n: %p '%s'\n", n, get_type_name(n));
         // parse initialization recurses with the nesting of the code: it stops while enough stack remains
         if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
-            const ParseNode* pn = dynamic_cast<const ParseNode*>(n);
-            return parse_check_stack(pn ? pn->loc : nullptr);
+            return parse_init_value_stack_exceeded(n, val, parse_context);
         }
         // every nested expression is parse-initialized here, one level deeper than the expression containing it, so
         // flagging the nodes at every QORE_EVAL_STACK_CHECK_INTERVAL'th level makes the evaluation of any chain of
@@ -4015,6 +4056,16 @@ int check_self_assignment(const QoreProgramLocation* loc, QoreValue n, LocalVar*
     return 0;
 }
 
+//! returns true if an assignment of a value of the given type to an lvalue of the given type may succeed
+/** the value is assigned to the target of a reference lvalue (ex: a member declared \c reference<int>)
+*/
+static bool lvalue_parse_accepts(const QoreTypeInfo* typeInfo, const QoreTypeInfo* valueTypeInfo) {
+    if (QoreTypeInfo::isReference(typeInfo)) {
+        typeInfo = QoreTypeInfo::getReferenceTarget(typeInfo);
+    }
+    return QoreTypeInfo::parseAccepts(typeInfo, valueTypeInfo) != QTI_NOT_EQUAL;
+}
+
 int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
     // make sure the lvalue can be assigned an integer value
     // raise a parse exception only if parse exceptions are not suppressed
@@ -4168,6 +4219,24 @@ int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& type
         return -1;
     }
     return 0;
+}
+
+int check_lvalue_accepts_result(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo, const char* name,
+        std::initializer_list<const QoreTypeInfo*> results, const char* value_desc) {
+    // the lvalue's type is checked as for an assignment of each result type: a soft type converts the value (ex: a
+    // softint lvalue accepts a date), and a type that may accept it (ex: auto, a union) is checked at runtime
+    for (const QoreTypeInfo* result : results) {
+        if (lvalue_parse_accepts(typeInfo, result)) {
+            return 0;
+        }
+    }
+    // raise a parse exception only if parse exceptions are not suppressed
+    if (getProgram()->getParseExceptionSink()) {
+        QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will assign it "
+            "%s", QoreTypeInfo::getName(typeInfo), name, value_desc);
+        qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
+    }
+    return -1;
 }
 
 int check_lvalue_int_float_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {

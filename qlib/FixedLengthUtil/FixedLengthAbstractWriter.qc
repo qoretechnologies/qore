@@ -90,7 +90,8 @@ public class FixedLengthAbstractWriter inherits FixedLengthBase {
         @return the line in the output encoding (the \c "encoding" option, or the default encoding), each field the
         length of its specification in bytes of that encoding
 
-        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field
+        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field, or a string value of an
+        \c "int", \c "float" or \c "number" field is not a number of its type
         @throw FIXED-LENGTH-UTIL-CHARACTER-SPLIT the bytes of the field left after the value cannot be filled with whole
         padding characters in the output encoding (ex: an odd field length in UTF-16)
         @throw RECORD-TRANSITION-ERROR a record transition error occurred; an invalid record sequence was given in the input data
@@ -114,9 +115,35 @@ public class FixedLengthAbstractWriter inherits FixedLengthBase {
             auto value = line.record{field} ?? fh.default;  # default value from specification
             # format output
             switch (fh.type) {
+                case "int": {
+                    switch (value.typeCode()) {
+                        case NT_STRING:
+                            # a string is written as given, so it must be an integer in the field's number format
+                            checkNumericInput(field, fh.type, value, fh.format ?? m_opts.number_format);
+                            break;
+                        case NT_FLOAT:
+                        case NT_NUMBER:
+                            if (value != int(value)) {
+                                throw "FIELD-INPUT-ERROR", sprintf("invalid int value %y for field %y: not an integer",
+                                    value, field);
+                            }
+                            # written without decimals, so that it is read back in any number format
+                            value = string(int(value));
+                            break;
+                        default:
+                            value = string(value);
+                            break;
+                    }
+                    break;
+                }
                 case "float":
                 case "number": {
                     *string fmt = fh.format ?? m_opts.number_format;
+                    # a string is either written as given or converted to a number to format it, so it must be a
+                    # plain number
+                    if (value.typeCode() == NT_STRING) {
+                        checkNumericInput(field, fh.type, value);
+                    }
                     if (fmt)
                         value = format_number(fmt, value);
                     else if (value.typeCode() != NT_STRING)
@@ -200,6 +227,23 @@ public class FixedLengthAbstractWriter inherits FixedLengthBase {
         return result;
     }
 
+    #! Throws \c FIELD-INPUT-ERROR if the string value of a numeric field is not a number of the field's type
+    /** @param field the name of the field
+        @param type the field type: \c "int", \c "float" or \c "number"
+        @param value the string value of the field
+        @param fmt the number format the value is in, if any
+
+        @throw FIELD-INPUT-ERROR the value is not a number of the field's type
+
+        @since FixedLengthUtil 1.7
+    */
+    private static checkNumericInput(string field, string type, string value, *string fmt) {
+        if (!isNumericValue(type, value, fmt)) {
+            throw "FIELD-INPUT-ERROR", sprintf("invalid %s value %y for field %y%s", type, value, field,
+                fmt ? sprintf(" with number format %y", fmt) : "");
+        }
+    }
+
     #! A verification function to be called for each line. This method can be overridden to achieve a begin-to-end validation of the whole input file.
     /**
         @param from Type of previous line being processed
@@ -216,7 +260,8 @@ public class FixedLengthAbstractWriter inherits FixedLengthBase {
  type argument)
 
         @throw INVALID-RECORD record name (\a type key in the record hash) not recognized
-        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field
+        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field, or a string value of an
+        \c "int", \c "float" or \c "number" field is not a number of its type
         @throw RECORD-TRANSITION-ERROR a record transition error occurred; an invalid record sequence was given in the input data
     */
     abstract write(hash<auto> line);
@@ -227,7 +272,8 @@ public class FixedLengthAbstractWriter inherits FixedLengthBase {
         - \c "record": a hash giving the input record to be rendered (with keys as defined in the @ref fixedlengthspecrecordhash for the record identified by the \a type argument)
 
         @throw INVALID-RECORD record name (\a type key in the record hash) not recognized
-        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field
+        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field, or a string value of an
+        \c "int", \c "float" or \c "number" field is not a number of its type
         @throw RECORD-TRANSITION-ERROR a record transition error occurred; an invalid record sequence was given in the input data
     */
     abstract write(list<auto> lines);
@@ -238,7 +284,8 @@ public class FixedLengthAbstractWriter inherits FixedLengthBase {
         - \c "record": a hash giving the input record to be rendered (with keys as defined in the @ref fixedlengthspecrecordhash for the record identified by the \a type argument)
 
         @throw INVALID-RECORD record name (\a type key in the record hash) not recognized
-        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field
+        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field, or a string value of an
+        \c "int", \c "float" or \c "number" field is not a number of its type
         @throw RECORD-TRANSITION-ERROR a record transition error occurred; an invalid record sequence was given in the input data
     */
     abstract write(Qore::AbstractIterator lines);

@@ -188,7 +188,19 @@ This generalizes the existing Phase 1.5 init-expression outliner
    pathological functions pay the (small) helper-call overhead.
    `QORE_AOT_OUTLINE_FN=0` disables the pass;
    `QORE_AOT_OUTLINE_FN_MIN_INSTS=<n>` lowers the trigger for tests.
-   `QORE_AOT_DEBUG` prints region/helper diagnostics.
+   `QORE_AOT_DEBUG` prints region/helper diagnostics.  The trigger
+   compares the function's IR before the block-split pre-pass with
+   `QORE_AOT_OUTLINE_FN_MIN_INSTS` (default 3000 instructions) and
+   `QORE_AOT_OUTLINE_FN_MIN_BLOCKS` (default 500 blocks); a function
+   that reaches either is outlined if a region qualifies.  With
+   `QORE_AOT_DEBUG`, a function that reaches a threshold prints the size
+   compared, exactly as
+   `AOT-OUTLINE-FN: '<fn>' over the thresholds (blocks=N insts=M)`
+   (`<fn>` is the function's display name, such as `NS::fn` or
+   `Class::method`); the later `analyzing` line gives the size after the
+   splits.  `examples/test/ir/AOTOutlinedHelperLocalRelease.qtest` parses
+   the `over the thresholds` line to test just under and just over the
+   threshold, so a change of its form must update the test.
 7. **Crossing locals demoted from IR-only.** A local referenced by more
    than one piece (coordinator or any helper) must not live in private
    LLVM allocas per piece. Such locals are removed from
@@ -197,7 +209,14 @@ This generalizes the existing Phase 1.5 init-expression outliner
    existing non-IR-only machinery. Locals confined to a single piece
    keep full alloca optimization within it. Helpers mark crossing
    locals pre-instantiated (the coordinator or the caller instantiated
-   them).
+   them).  The coordinator's `CallAOTHelper` carries the helper's shared
+   locals (transient `shared_locals`): the coordinator releases its
+   reload storage of them (reload tracker, deferred slot, entry owner)
+   right before the call and reloads them right after it, as around a
+   call that runs handlers out of line (`finalizeHandlerSites()`).
+   Otherwise that storage kept the value that the helper replaced in a
+   shared local alive until the coordinator next reloaded the local, and
+   its destructor ran late (qore#6300).
 8. **Self-recursive fast entry.** When the outliner fires, the
    Approach-B fast entry is skipped: fast-entry mode passes params as
    LLVM arguments (not TLS), which helpers cannot see, and a

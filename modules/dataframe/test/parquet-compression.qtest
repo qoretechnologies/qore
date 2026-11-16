@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# test-platform: macos - Parquet page compression with the codec libraries that Arrow/Parquet use on macOS
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires dataframe
+%exec-class ParquetCompressionTest
+
+#! Tests every compression value that DataFrame::writeParquet() documents (qore#6209)
+class ParquetCompressionTest inherits QUnit::Test {
+    public {
+        #! the compression values that the documentation of ParquetWriteOptions lists
+        const DocumentedCompression = ("none", "snappy", "gzip", "brotli", "zstd", "lz4", "lz4_raw");
+
+        #! the aliases that writeParquet() also accepts
+        const CompressionAliases = ("uncompressed", "gz", "br", "LZ4", "LZ4_RAW", "lz4-raw");
+
+        #! names that are not Parquet codecs: LZ4 frame format, which Parquet does not support
+        const UnsupportedCompression = ("lz4_frame", "lz4-frame", "lzo", "bz2", "unknown");
+
+        const Rows = 1000;
+    }
+
+    constructor() : Test("ParquetCompressionTest", "1.0", \ARGV) {
+        addTestCase("documented compression round trip", \documentedTest());
+        addTestCase("compression aliases round trip", \aliasTest());
+        addTestCase("unsupported compression", \unsupportedTest());
+        addTestCase("LZ4 with Hadoop framing", \lz4HadoopTest());
+        set_return_value(main());
+    }
+
+    documentedTest() {
+        TmpDir tmp("parquet-compression");
+        int uncompressed_size = roundTrip(tmp.path, "none");
+        foreach string codec in (DocumentedCompression) {
+            int size = roundTrip(tmp.path, codec);
+            if (codec != "none") {
+                # the columns repeat their values, so every codec makes the file smaller
+                assertLt(uncompressed_size, size, sprintf("%y compresses the pages", codec));
+            }
+        }
+    }
+
+    aliasTest() {
+        TmpDir tmp("parquet-compression-aliases");
+        map roundTrip(tmp.path, $1), CompressionAliases;
+    }
+
+    unsupportedTest() {
+        TmpDir tmp("parquet-compression-unsupported");
+        string path = tmp.path + DirSep + "bad.parquet";
+        DataFrame::DataFrame frame = makeFrame();
+        foreach string codec in (UnsupportedCompression) {
+            assertThrows("DATAFRAME-IO-ERROR",
+                "^unsupported Parquet compression '" + codec + "'; expected one of: none, snappy, gzip, brotli, "
+                "zstd, lz4, lz4_raw$",
+                \frame.writeParquet(), (path, <DataFrame::ParquetWriteOptions>{"compression": codec}),
+                sprintf("%y is rejected", codec));
+            assertFalse(is_file(path), sprintf("%y writes no file", codec));
+        }
+    }
+
+    #! reads a file whose pages use the deprecated Parquet LZ4 codec (data/gen-lz4-hadoop-fixture.cpp)
+    lz4HadoopTest() {
+        DataFrame::DataFrame frame = DataFrame::DataFrame::readParquet(get_script_dir() + DirSep + "data" + DirSep
+            + "lz4_hadoop.parquet");
+        assertEq(("id", "name", "v"), frame.columnNames());
+        list<int> ids = range(100);
+        assertEq(ids, frame.getColumn("id"));
+        assertEq((map "name-" + ($1 % 10), ids), frame.getColumn("name"));
+        assertEq((map $1 * 0.5, ids), frame.getColumn("v"));
+    }
+
+    #! writes the frame with the given compression, checks that it reads back unchanged, and returns the file size
+    private int roundTrip(string dir, string codec) {
+        string path = dir + DirSep + sprintf("%s.parquet", codec);
+        DataFrame::DataFrame frame = makeFrame();
+        frame.writeParquet(path, <DataFrame::ParquetWriteOptions>{
+            "compression": codec,
+            "use_dictionary": False,
+            "use_threads": False,
+        });
+        DataFrame::DataFrame read = DataFrame::DataFrame::readParquet(path);
+        assertEq(frame.columnNames(), read.columnNames(), sprintf("%y: columns", codec));
+        assertEq(Rows, read.numRows(), sprintf("%y: rows", codec));
+        foreach string col in (frame.columnNames()) {
+            assertEq(frame.getColumn(col), read.getColumn(col), sprintf("%y: column %y", codec, col));
+        }
+        return hstat(path).size;
+    }
+
+    private DataFrame::DataFrame makeFrame() {
+        list<int> ids = range(Rows);
+        return new DataFrame::DataFrame({
+            "id": ids,
+            "name": (map ($1 % 13) ? "name-" + ($1 % 10) : NOTHING, ids),
+            "v": (map $1 * 0.25, ids),
+            "flag": (map ($1 % 3) == 0, ids),
+        });
+    }
+}

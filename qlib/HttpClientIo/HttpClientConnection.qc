@@ -616,6 +616,9 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     close(*timeout close_timeout) {
         log(LoggerLevel::DEBUG, "closing connection");
         closeImpl(close_timeout);
+        # the connection and its poll operation reference each other: the cycle is broken once the connection is
+        # closed, or neither is ever released (#6286)
+        getPollOperation().clearConnection();
     }
 
     #! Marks (or unmarks) the connection as exclusively leased for a persistent session

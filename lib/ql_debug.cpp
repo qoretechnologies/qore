@@ -96,6 +96,7 @@
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreJIT.h"
+#include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBatchMemory.h"
 #include "qore/intern/FileStreamIo.h"
@@ -12291,6 +12292,14 @@ static void ut_http1_connection_timeout(UnitTestCounters& c) {
 // dispatch path: a registered manager receives onConnectionClosed exactly
 // once; after setManager(nullptr) it receives nothing.
 
+//! gives back the stream slot and the reference of a connection returned by an acquire method of the manager
+static void ut_release_acquired(HttpClientConnectionManagerBase* mgr, HttpClientConnectionBase* conn) {
+    mgr->releaseConnection(conn);
+    ExceptionSink rel_xsink;
+    conn->deref(&rel_xsink);
+    rel_xsink.clear();
+}
+
 class UtCountingManager : public HttpClientConnectionManagerBase {
 public:
     DLLLOCAL UtCountingManager(const HttpClientConnectionManagerBase::Options& opts,
@@ -12441,7 +12450,7 @@ public:
 
     //! Pools a connection under the key a real checkout for this origin uses.
     /** addPooled() above uses a fixed key, which is enough for tests that reach
-        into the pool directly; a test that goes through acquireConnection()
+        into the pool directly; a test that goes through acquireConnectionRef()
         needs the key that poolKey() derives from the origin.
     */
     DLLLOCAL void addPooledForOrigin(HttpClientConnectionBase* conn, const char* host,
@@ -12723,7 +12732,7 @@ static void ut_manager_new_connection_notified_after_reservation(UnitTestCounter
         xsink.clear();
         return;
     }
-    HttpClientConnectionBase* conn = mgr->acquireConnectionAsync("http", "unit-test.invalid", 80, &xsink);
+    HttpClientConnectionBase* conn = mgr->acquireConnectionAsyncRef("http", "unit-test.invalid", 80, &xsink);
     UT_ASSERT_EQ(c, 1, mgr->created.load(), "one connection was created");
     UT_ASSERT(c, !conn, "no connection is returned for a connection whose close notification has run");
     UT_ASSERT(c, xsink.isException(), "the creator gets an error");
@@ -13665,7 +13674,7 @@ static void ut_wait_for_connect_failure(HttpClientConnectionBase* conn) {
 }
 
 // A non-blocking connect can fail before the manager adds the new connection to its pool and reserves its first stream:
-// the reservation is refused on the closed connection.  acquireConnectionAsync() reported that as
+// the reservation is refused on the closed connection.  acquireConnectionAsyncRef() reported that as
 // "HTTPCLIENT-CAPACITY-ERROR: freshly-created connection unexpectedly at capacity", which hid the error of the connect,
 // and left the closed connection in the pool.  The caller gets the error of the connection, and the pool does not
 // keep it.
@@ -13688,7 +13697,7 @@ static void ut_manager_new_connection_closed_before_reservation(UnitTestCounters
     }
     ut_new_connection_hook_calls = 0;
     qore_http_manager_new_connection_hook = ut_wait_for_connect_failure;
-    HttpClientConnectionBase* conn = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+    HttpClientConnectionBase* conn = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
     qore_http_manager_new_connection_hook = nullptr;
     UT_ASSERT_EQ(c, 1, ut_new_connection_hook_calls.load(), "the connect failed before the reservation");
     UT_ASSERT(c, !conn, "no connection is returned for a connection whose connect failed");
@@ -13902,7 +13911,7 @@ static void ut_manager_closed_new_connection_detached(UnitTestCounters& c) {
         HttpClientConnectionBase* conn;
         {
             UtNewConnectionHookHolder new_hook(ut_wait_for_connect_failure);
-            conn = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+            conn = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
         }
         UT_ASSERT(c, !conn, "no connection is returned for a connection whose connect failed");
         UT_ASSERT(c, xsink.isException(), "the failed connect raises an error");
@@ -13952,7 +13961,7 @@ static void ut_manager_evicted_closed_connection_detached(UnitTestCounters& c) {
         if (reached) {
             // the checkout evicts the closed connection; the new connection it makes is refused
             UtNewConnectionHookHolder new_hook(ut_wait_for_connect_failure);
-            HttpClientConnectionBase* acquired = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+            HttpClientConnectionBase* acquired = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
             UT_ASSERT(c, !acquired, "the checkout gets no connection");
             xsink.clear();
             UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "the closed connection is evicted");
@@ -13994,7 +14003,7 @@ static void ut_manager_notified_closed_connection_detached(UnitTestCounters& c) 
     UT_ASSERT_EQ(c, 1, mgr->getNotifications(), "the closed connection notifies its manager");
     {
         UtNewConnectionHookHolder new_hook(ut_wait_for_connect_failure);
-        HttpClientConnectionBase* acquired = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+        HttpClientConnectionBase* acquired = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
         UT_ASSERT(c, !acquired, "the checkout gets no connection");
         xsink.clear();
     }
@@ -14044,7 +14053,7 @@ static void ut_manager_shutdown_new_connection_detached(UnitTestCounters& c) {
     HttpClientConnectionBase* acquired;
     {
         UtNewConnectionHookHolder new_hook(ut_shut_down_manager_on_new_connection);
-        acquired = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+        acquired = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
     }
     ut_shutdown_manager = nullptr;
     ReferenceHolder<HttpClientConnectionBase> kept(ut_shutdown_new_connection, &xsink);
@@ -14458,17 +14467,17 @@ static void ut_manager_pool_sandbox(UnitTestCounters& c) {
         UT_ASSERT(c, !xsink.isException(), (label + "manager construction succeeds").c_str());
 
         // code without a sandbox opens the connection
-        HttpClientConnectionBase* conn = mgr->acquireConnection("http", "127.0.0.1", port, &xsink);
+        HttpClientConnectionBase* conn = mgr->acquireConnectionRef("http", "127.0.0.1", port, &xsink);
         UT_ASSERT(c, conn && !xsink.isException(), (label + "the connection is opened").c_str());
         if (!conn) {
             xsink.clear();
             return;
         }
-        mgr->releaseConnection(conn);
+        ut_release_acquired(*mgr, conn);
 
         // a sandbox that denies the destination does not get the connection, and cannot open another one
         ut_with_sandbox(*deny, [&]() {
-            HttpClientConnectionBase* r = mgr->acquireConnection("http", "127.0.0.1", port, &xsink);
+            HttpClientConnectionBase* r = mgr->acquireConnectionRef("http", "127.0.0.1", port, &xsink);
             UT_ASSERT(c, !r, (label + "a sandbox that denies the destination gets no connection").c_str());
             if (xsink.isException()) {
                 QoreStringValueHelper desc(xsink.getExceptionDesc());
@@ -14478,18 +14487,18 @@ static void ut_manager_pool_sandbox(UnitTestCounters& c) {
             UT_ASSERT(c, ut_take_exception(xsink, "NETWORK-ACCESS-DENIED"),
                 (label + "the sandbox's denial is raised").c_str());
             if (r) {
-                mgr->releaseConnection(r);
+                ut_release_acquired(*mgr, r);
             }
         });
         UT_ASSERT_EQ(c, 1, mgr->getConnectionCount("127.0.0.1", port), (label + "no other connection was opened").c_str());
 
         // a sandbox that allows it gets the pooled connection
         ut_with_sandbox(*allow, [&]() {
-            HttpClientConnectionBase* r = mgr->acquireConnection("http", "127.0.0.1", port, &xsink);
+            HttpClientConnectionBase* r = mgr->acquireConnectionRef("http", "127.0.0.1", port, &xsink);
             UT_ASSERT(c, r == conn && !xsink.isException(), (label + "a sandbox that allows it reuses the connection").c_str());
             xsink.clear();
             if (r) {
-                mgr->releaseConnection(r);
+                ut_release_acquired(*mgr, r);
             }
         });
         UT_ASSERT_EQ(c, 1, mgr->getConnectionCount("127.0.0.1", port), (label + "the connection was reused").c_str());
@@ -15085,11 +15094,11 @@ static void ut_manager_close_all(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "closeAll succeeds");
     UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "pool empty after closeAll");
 
-    // Subsequent acquireConnection raises HTTPCLIENT-SHUTDOWN
-    HttpClientConnectionBase* dead_conn = mgr->acquireConnection(
+    // Subsequent acquireConnectionRef raises HTTPCLIENT-SHUTDOWN
+    HttpClientConnectionBase* dead_conn = mgr->acquireConnectionRef(
         "http", "127.0.0.1", server_port, &xsink);
-    UT_ASSERT(c, !dead_conn, "acquireConnection returns nullptr after closeAll");
-    UT_ASSERT(c, xsink.isException(), "acquireConnection raises after closeAll");
+    UT_ASSERT(c, !dead_conn, "acquireConnectionRef returns nullptr after closeAll");
+    UT_ASSERT(c, xsink.isException(), "acquireConnectionRef raises after closeAll");
     QoreStringValueHelper err(xsink.getExceptionErr());
     UT_ASSERT(c, err && !strcmp(err->c_str(), "HTTPCLIENT-SHUTDOWN"),
         "exception code is HTTPCLIENT-SHUTDOWN");
@@ -15632,7 +15641,7 @@ static void ut_manager_negotiate_plaintext_uses_h1(UnitTestCounters& c) {
     // only failure here is the connection itself -- port 1 is refused.  Rejecting the target up
     // front with HTTPCLIENT-NEGOTIATE-SSL-REQUIRED would mean the transport was decided by the
     // client's protocol instead of by the request target.
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "http", "127.0.0.1", 1, &xsink);
     UT_ASSERT(c, !conn, "NEGOTIATE + plain HTTP to a refused port returns nullptr");
     UT_ASSERT(c, xsink.isException(),
@@ -15664,7 +15673,7 @@ static void ut_manager_negotiate_refused_port(UnitTestCounters& c) {
 
     // https scheme triggers the NEGOTIATE path.  Connect fails at TCP
     // (refused); the error propagates out of the negotiation helper.
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "https", "127.0.0.1", dead_port, &xsink);
     UT_ASSERT(c, !conn, "NEGOTIATE + refused port returns nullptr");
     UT_ASSERT(c, xsink.isException(),
@@ -15797,7 +15806,7 @@ static void ut_manager_h2_dispatch(UnitTestCounters& c) {
         return;
     }
 
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "http", "127.0.0.1", dead_port, &xsink);
     UT_ASSERT(c, !conn, "acquireConnection on refused port returns nullptr");
     UT_ASSERT(c, xsink.isException(),
@@ -15857,7 +15866,7 @@ static void ut_manager_h3_dispatch(UnitTestCounters& c) {
 
     // H3 requires HTTPS scheme — but we're just testing the manager
     // dispatch path (no PROTOCOL-NOT-IMPLEMENTED anymore)
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "https", "127.0.0.1", dead_port, &xsink);
     UT_ASSERT(c, !conn, "acquireConnection fails on refused port");
     UT_ASSERT(c, xsink.isException(),
@@ -15950,7 +15959,7 @@ static void ut_manager_proxy_h1_connect(UnitTestCounters& c) {
 
     // HTTPS through proxy: should attempt the connect (not raise
     // HTTPCLIENT-PROXY-ERROR anymore)
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "https", "target.example.com", 443, &xsink);
     UT_ASSERT(c, !conn, "acquireConnection(https via proxy) returns nullptr (connect refused)");
     UT_ASSERT(c, xsink.isException(),
@@ -15961,7 +15970,7 @@ static void ut_manager_proxy_h1_connect(UnitTestCounters& c) {
     xsink.clear();
 
     // Plain HTTP through proxy: also should attempt connect
-    conn = mgr->acquireConnection("http", "target.example.com", 80, &xsink);
+    conn = mgr->acquireConnectionRef("http", "target.example.com", 80, &xsink);
     UT_ASSERT(c, !conn, "acquireConnection(http via proxy) returns nullptr");
     UT_ASSERT(c, xsink.isException(),
         "acquireConnection(http via proxy) raises exception");
@@ -15984,7 +15993,7 @@ static void ut_manager_proxy_h3_rejected(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "manager(H3+proxy) construction succeeds");
     if (xsink) { xsink.clear(); return; }
 
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "https", "target.example.com", 443, &xsink);
     UT_ASSERT(c, !conn, "H3+proxy acquireConnection returns nullptr");
     UT_ASSERT(c, xsink.isException(), "H3+proxy raises exception");
@@ -20957,6 +20966,30 @@ static bool dbg_get_bg_compile_hold_point(const QoreStringNode* point, QoreJIT::
     return true;
 }
 
+//! makes the next check of a finalization loop of the native lowering report a cancellation at the given entry
+/** The lowering of the function then fails, and the function is not compiled.  The loops are \c "reload-chain-slots"
+    (QoreIRToLLVM::finalizeReloadChainSlots()) and \c "handler-local-table" (QoreIRToLLVM::finalizeObeEntries()); the
+    hook is cleared when it fires, or with a negative index.  It is process-wide: it fires in whichever lowering first
+    reaches that loop at that index, on any thread, which can be that of a callee of the batch of another function.
+
+    @throw DBG-ARGUMENT-ERROR the loop is unknown
+*/
+static QoreValue f_dbg_force_finalize_cancel(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* loop = get_param_value(params, 0).get<const QoreStringNode>();
+    int64_t index = get_param_value(params, 1).getAsBigInt();
+    int which;
+    if (!strcmp(loop->c_str(), "reload-chain-slots")) {
+        which = QFL_RELOAD_CHAIN_SLOTS;
+    } else if (!strcmp(loop->c_str(), "handler-local-table")) {
+        which = QFL_HANDLER_LOCAL_TABLE;
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "unknown finalization loop '%s'", loop->c_str());
+        return QoreValue();
+    }
+    qore_dbg_force_finalize_cancel(index < 0 ? 0 : which, index);
+    return QoreValue();
+}
+
 //! stops the next background JIT compile at the given point (\c "lowering", \c "llvm", \c "commit" or \c "install")
 /** The compile thread holds the compile lock while it is stopped, as a compile that takes a long time does.  If a
     function name is given, only the compile of that function (the root function of the batch) stops.
@@ -20972,30 +21005,6 @@ static QoreValue f_dbg_hold_bg_compile(const QoreListNode* params, RuntimeConfig
     if (!QoreJIT::instance().dbgHoldBgCompile(point, func ? func->c_str() : "")) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "a background compile hold is armed at this point already");
     }
-    return QoreValue();
-}
-
-//! lets a held background compile that the end of the process abandons end before the process does (qore#5842)
-/** Without this, a compile held at the end of the process stays held, and the process ends with \c _exit().  With
-    \c "shutdown", the compile is let go when it is abandoned, and QoreJIT::shutdown() waits for it, so that it
-    releases the JIT; with \c "exit", it is let go at the end of the process, which waits for it and releases the JIT
-    then (QoreJIT::exitQuickly()).
-
-    @throw DBG-ARGUMENT-ERROR the point is neither \c "shutdown" nor \c "exit"
-*/
-static QoreValue f_dbg_finish_abandoned_bg_compile(const QoreListNode* params, RuntimeConfig& rc,
-        ExceptionSink* xsink) {
-    const QoreStringNode* where = get_param_value(params, 0).get<const QoreStringNode>();
-    QoreJIT::DbgFinishAbandoned w;
-    if (where && *where == "shutdown") {
-        w = QoreJIT::DbgFinishAbandoned::Shutdown;
-    } else if (where && *where == "exit") {
-        w = QoreJIT::DbgFinishAbandoned::Exit;
-    } else {
-        xsink->raiseException("DBG-ARGUMENT-ERROR", "the point must be \"shutdown\" or \"exit\"");
-        return QoreValue();
-    }
-    QoreJIT::instance().dbgFinishAbandonedCompile(w);
     return QoreValue();
 }
 
@@ -22695,6 +22704,7 @@ static QoreValue f_dbg_release_http1_connection_close(const QoreListNode* params
 
 std::atomic<qore_dbg_http1_send_hook_t> qore_dbg_http1_send_hook{nullptr};
 std::atomic<qore_dbg_socket_send_hook_t> qore_dbg_socket_send_hook{nullptr};
+std::atomic<qore_dbg_tls_read_want_hook_t> qore_dbg_tls_read_want_hook{nullptr};
 std::atomic<int64_t> qore_dbg_ssl_close_notify_count{0};
 std::atomic<int64_t> qore_dbg_sync_release_taken{0};
 std::atomic<int64_t> qore_dbg_sync_release_refused{0};
@@ -23236,7 +23246,7 @@ struct DbgHttpHold {
     Counter* release = nullptr;
 };
 std::mutex dbg_http_hold_m;
-DbgHttpHold dbg_http_holds[2];
+DbgHttpHold dbg_http_holds[static_cast<int>(QoreDbgHttpHoldPoint::Count)];
 }
 
 void qore_dbg_http_hold(QoreDbgHttpHoldPoint point) {
@@ -23260,10 +23270,22 @@ void qore_dbg_http_hold(QoreDbgHttpHoldPoint point) {
     xsink.clear();
 }
 
+bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point) {
+    std::lock_guard<std::mutex> l(dbg_http_hold_m);
+    return dbg_http_holds[static_cast<int>(point)].reached != nullptr;
+}
+
 //! holds the next HTTP client thread that reaches the given point until \a release reaches zero (one-shot)
 /** @param point \c "submit": HTTPClient::startPollSendRecv() has checked out its connection and is about to submit
     the request; \c "close": an HTTP/1 or HTTP/2 client connection that is being closed has been invalidated (new
-    calls on it are refused) and is not closed yet
+    calls on it are refused) and is not closed yet; \c "submit-failed": the submit of a request on a ready connection
+    raised an exception, which is about to be classified; \c "finalize": HTTPClient::startPollSendRecv() found an
+    ALPN-negotiating connection ready and is about to hand it over to a concrete connection (while it is armed, the
+    request waits for its connection to be ready first); \c "takeover": the hand-over of an ALPN-negotiating connection
+    checked the connection and holds its method guard; \c "drain-wait": the close of an HTTP client connection has to
+    wait for a call in flight (with a release Counter of 0, it only reports it); \c "swap": a negotiating connection was
+    handed over, and the connection manager is about to replace it in its pool with the connection that took it over;
+    \c "acquired": the connection manager found a connection in its pool for a request and released the pool lock
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
 
@@ -23276,6 +23298,18 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::Submit);
     } else if (!strcmp(name->c_str(), "close")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::CloseAfterInvalidate);
+    } else if (!strcmp(name->c_str(), "submit-failed")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::SubmitFailed);
+    } else if (!strcmp(name->c_str(), "finalize")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Finalize);
+    } else if (!strcmp(name->c_str(), "takeover")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Takeover);
+    } else if (!strcmp(name->c_str(), "drain-wait")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::DrainWait);
+    } else if (!strcmp(name->c_str(), "swap")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Swap);
+    } else if (!strcmp(name->c_str(), "acquired")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Acquired);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
@@ -23545,6 +23579,58 @@ static QoreValue f_dbg_hold_http1_socket_send(const QoreListNode* params, Runtim
     if (!*xsink) {
         qore_dbg_socket_send_hook.store(dbg_http1_socket_send_hook);
     }
+    return QoreValue();
+}
+
+//! the state of dbg_hold_tls_read_until_hangup(); protected by its mutex
+static struct {
+    std::mutex m;
+    int port = 0;
+    Counter* reached = nullptr;
+} dbg_tls_read_want;
+
+//! holds a TLS read of the socket connected to the armed port until its connection is reset or closed (#6315)
+static void dbg_tls_read_want_hook(int fd) {
+    Counter* c;
+    {
+        std::lock_guard<std::mutex> l(dbg_tls_read_want.m);
+        if (!dbg_tls_read_want.reached || fd < 0 || dbg_http1_peer_port(fd) != dbg_tls_read_want.port) {
+            return;
+        }
+        c = dbg_tls_read_want.reached;
+        dbg_tls_read_want.reached = nullptr;
+        qore_dbg_tls_read_want_hook.store(nullptr);
+    }
+    dbg_http1_send_failure_dec(c);
+    dbg_http1_wait_hangup(fd);
+}
+
+//! holds the next TLS read of a header (Socket::recvUntilBytes()) of a socket connected to the given port, once
+//! SSL_read() has found no record, until the connection is reset or closed
+/** The test's peer then sends its data and resets or closes the connection; the read continues once the end of the
+    connection has arrived, so the data and the end are both in the receive buffer when it polls (#6315).
+
+    @param port the port of the peer of the socket whose read is held
+    @param reached decremented when the read is held
+
+    @throw DBG-ARGUMENT-ERROR the hook is already armed
+*/
+static QoreValue f_dbg_hold_tls_read_until_hangup(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int port = (int)get_param_value(params, 0).getAsBigInt();
+    Counter* c = get_counter_arg(params, 1, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> l(dbg_tls_read_want.m);
+    if (dbg_tls_read_want.reached) {
+        c->deref(xsink);
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_hold_tls_read_until_hangup() is already armed");
+        return QoreValue();
+    }
+    dbg_tls_read_want.port = port;
+    dbg_tls_read_want.reached = c;
+    qore_dbg_tls_read_want_hook.store(dbg_tls_read_want_hook);
     return QoreValue();
 }
 
@@ -24557,8 +24643,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_get_bg_compile_refused_count", f_dbg_get_bg_compile_refused_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
-    qns.addBuiltinVariant("dbg_finish_abandoned_bg_compile", f_dbg_finish_abandoned_bg_compile, QCF_NO_FLAGS,
-        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "where");
+    qns.addBuiltinVariant("dbg_force_finalize_cancel", f_dbg_force_finalize_cancel, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "loop", bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");
     qns.addBuiltinVariant("dbg_hold_bg_compile", f_dbg_hold_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG,
         "func");
@@ -24781,6 +24867,9 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo, 4, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "reached", QC_SOCKET->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "response");
+    qns.addBuiltinVariant("dbg_hold_tls_read_until_hangup", f_dbg_hold_tls_read_until_hangup, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(),
+        QORE_PARAM_NO_ARG, "reached");
     qns.addBuiltinVariant("dbg_http1_send_failure_result", f_dbg_http1_send_failure_result, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 0);
     qns.addBuiltinVariant("dbg_release_http1_connection_on_close", f_dbg_release_http1_connection_on_close,
