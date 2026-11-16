@@ -20,7 +20,10 @@
     the options that turn off string index characters, so compiled code no longer looks the options up; a debug build
     asserts that they hold.  The same expressions give the same values in every execution mode, in the main thread and
     in the threads that run code for it: a background thread, a thread pool task, and the timer and task workers of the
-    AsyncIoController, which run code with the options of the code that started it or registered it (qore#6208).
+    AsyncIoController, which run code with the options of the code that started it or registered it (qore#6208), and in
+    top-level code, which runs as lowered code with the options of its statements, also when those of the Program
+    differ (a file with %push-parse-options): the IR and JIT modes ran it with those of the Program (a range with
+    negative offsets gave [], pop accepted a non-list and remove refused a negative index).
 */
 class CompiledModernInvariantsTest inherits QUnit::Test {
     public {
@@ -60,6 +63,38 @@ printf(\"main: %s\\n\", main_val);
 foreach hash<auto> h in ({\"background\": bg, \"pool\": pool, \"timer\": timer, \"task\": task}.pairIterator()) {
     printf(\"%s: %s\\n\", h.key, h.value == main_val ? \"same\" : h.value);
 }
+
+# top-level code: it runs as lowered code in the compiled execution modes, with the options of its statements
+list<int> tl = (1, 2, 3);
+string tl_pop;
+auto not_a_list = 1;
+try {
+    pop not_a_list;
+    tl_pop = \"accepted\";
+} catch (hash<ExceptionInfo> ex) {
+    tl_pop = ex.err;
+}
+list<auto> tx = (1, 2, 3);
+splice tx, -1, 1;
+remove tx[-1];
+printf(\"top-level: %y\\n\", (tl[-1], tl[-2..-1], tl_pop, tx));
+
+# the top-level code of a child Program whose file has its own options (%push-parse-options): the options of the
+# Program end with the file, and its code runs with those of its statements; a child Program takes the execution mode
+# that it is given, not the one of the command line
+Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+p.parsePending(\"%push-parse-options\\n%modern\\nlist<int> l = (1, 2, 3); string popped; int i = 1;
+try { pop i; popped = \\\"accepted\\\"; } catch (hash<ExceptionInfo> ex) { popped = ex.err; }
+list<auto> x = (1, 2, 3); splice x, -1, 1; remove x[-1];
+printf(\\\"child top-level: %y\\\\n\\\", (l[-1], l[-2..-1], popped, x));\", \"child\");
+p.parseCommit();
+switch (ARGV[0]) {
+    case \"ast\": p.setExecMode(EM_AST); break;
+    case \"ir\": p.setExecMode(EM_IR); break;
+    case \"jit\": p.setExecMode(EM_JIT); break;
+    case \"tiered\": p.setExecMode(EM_TIERED); break;
+}
+p.run();
 ";
 
         #! the output: negative offsets on lists, strings and binaries, a range with negative offsets, a string index
@@ -69,6 +104,8 @@ background: same
 pool: same
 timer: same
 task: same
+top-level: [3, [2, 3], \"POP-ERROR\", [1, null]]
+child top-level: [3, [2, 3], \"POP-ERROR\", [1, null]]
 ";
     }
 
@@ -91,8 +128,8 @@ task: same
         f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
         f.write(Script);
         foreach string mode in (ExecModeHarness::ExecModes) {
-            string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
-                libqore_dir, libqore_dir, qore_bin, mode, script));
+            string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s %s",
+                libqore_dir, libqore_dir, qore_bin, mode, script, mode));
             assertEq(Expected, output, "execution mode " + mode);
         }
     }
