@@ -342,6 +342,15 @@ softstring MyNamespace::MyClass::myMethod(softint i) {
 }
     @endcode
 
+    @anchor outofline_methods_in_namespaces
+    An out-of-line method definition in a @ref qore_namespaces "namespace" block names its class relative to that
+    namespace, as do the scoped functions and constants declared in it: in
+    <tt>namespace NS { namespace I { class C {} } int I::C::m() { return 1; } }</tt>, \c I::C is \c NS::I::C.  The
+    class path is resolved in the namespaces and classes declared before the method in the same block, and it cannot
+    be anchored at the root namespace (<tt>::NS::I::C</tt>).  A class path that starts with the name of the enclosing
+    namespace (<tt>int NS::I::C::m() { return 1; }</tt> in \c NS) is also accepted when it does not name a class
+    relative to the namespace.
+
     @note Because method definitions are allowed out-of-line, this means that builtin classes may be extended with new user methods, however user constructor, destructor, and copy methods cannot be added to builtin classes; to customize the behavior of these methods for builtin classes, subclass the class instead.\n\n
     When parse option @ref allow-bare-refs "%allow-bare-refs" or @ref new-style "%new-style" is enabled, no \c "$" or \c "$." prefixes can be used with variable or method or member names.
     A bare name in a method then refers to the first of: a local variable of the method (or of a closure in it), a
