@@ -77,7 +77,8 @@ msg.addTO("My Best Friend <you@friend.com>");
 
     @subsection mailmessage_v1_5_1 MailMessage 1.5.1
     - The multipart boundary of a message (@ref MailMessage::Message::mpboundary "Message::mpboundary") is random,
-      and another one is used when a part of the message contains it; it was made from the current time, so the
+      and another one is used (and set in the member) when a part of the message contains it; it is also the
+      boundary of a message with alternative parts and no attachments; it was made from the current time, so the
       messages created in the same second had the same boundary
       (<a href="https://github.com/qoretechnologies/qore/issues/6307">issue 6307</a>)
     - Added the @ref MailMessage::ContentEncoding "ContentEncoding" enum for content transfer encodings; the
@@ -649,8 +650,10 @@ public class Message {
 
     public {
         #! the boundary of the multipart message: 144 random bits from @ref Qore::get_random_bytes()
-        /** when a part of the message contains it, the message is serialized with another random boundary (see
-            @ref Mime::MultiPartMessage "MultiPartMessage")
+        /** it is the boundary of the top-level multipart part of a serialized message (a message with attachments or
+            alternative parts); when a part of the message contains it, the message is serialized with another random
+            boundary (see @ref Mime::MultiPartMessage "MultiPartMessage"), and this member is set to it, so that it
+            is always the boundary of the last serialized message
         */
         string mpboundary = make_base64_string(get_random_bytes(18));
     }
@@ -1251,12 +1254,15 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         string ct = getBodyContentTypeIntern() ?? MimeTypeText;
         string benc = bodyEncoding == ContentEncoding::None ? Message::getRawTransferEncoding(body) : bodyEncoding;
 
+        # the top-level multipart is written with mpboundary, which is then set to the boundary that is written, as
+        # MultiPartMessage replaces a boundary that occurs in a part
         *MultiPartAlternativeMessage mpa;
         if (parts) {
-            mpa = new MultiPartAlternativeMessage();
+            mpa = attachments ? new MultiPartAlternativeMessage() : new MultiPartAlternativeMessage(mpboundary);
             mpa.addEncodePart(body, benc, ct);
             map $1.add(mpa), parts;
             if (!attachments) {
+                mpboundary = mpa.getBoundary();
                 hash<MessageInfo> mi = mpa.getMsgAndHeaders();
                 return MultiPartMessage::serializeHeaders({"MIME-Version": "1.0"} + mi.hdr) + mi.body;
             }
@@ -1278,6 +1284,7 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
 
         # add attachments
         map $1.add(mpm), attachments;
+        mpboundary = mpm.getBoundary();
         return mpm.serialize();
     }
     #! @endcond

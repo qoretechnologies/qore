@@ -2232,7 +2232,44 @@ lorem ipsum\r
         assertEq(replace(m3.getBody(), "\r\n", "\n"), replace(p.getBody(), "\r\n", "\n"));
         assertEq(("three.txt",), (map $1.getName(), p.getAttachments()));
 
+        # mpboundary is the boundary written when it is replaced because a part contains it, with attachments
+        Message m4(Sender, Subject);
+        m4.addTO(To);
+        m4.mpboundary = "fixed-boundary";
+        m4.setBody("text\r\n--fixed-boundary\r\nsplit", ContentEncoding::QuotedPrintable);
+        m4.attach("four.txt", MimeTypeText, "attachment four");
+        checkWrittenBoundary(m4, "fixed-boundary", "mixed");
+
+        # and with alternative parts and no attachments
+        string raw = "From: " + Sender + "\r\nTo: " + To + "\r\nSubject: alt\r\nMIME-Version: 1.0\r\n"
+            "Content-Type: multipart/alternative; boundary=\"b1\"\r\n\r\n"
+            "--b1\r\nContent-Type: text/plain\r\n\r\ntext\r\n--fixed-boundary\r\nsplit\r\n"
+            "--b1\r\nContent-Type: text/html\r\n\r\n<p>html</p>\r\n--b1--\r\n";
+        Message m5(raw);
+        m5.mpboundary = "fixed-boundary";
+        checkWrittenBoundary(m5, "fixed-boundary", "alternative");
+        # a boundary that does not occur in the parts is kept and written
+        m5.mpboundary = "other-boundary";
+        checkWrittenBoundary(m5, NOTHING, "alternative");
+        assertEq("other-boundary", m5.mpboundary);
+
         # messages created at the same time have different boundaries
         assertNeq((new Message(Sender, Subject)).mpboundary, (new Message(Sender, Subject)).mpboundary);
+    }
+
+    # serializes the message and checks that Message::mpboundary is the boundary of its Content-Type header and of
+    # its delimiter lines
+    private checkWrittenBoundary(Message msg, *string replaced, string type) {
+        string str = msg.serialize();
+        if (replaced) {
+            assertNeq(replaced, msg.mpboundary);
+        }
+        *string ct_boundary = (str =~ x/\r\nContent-Type: multipart\/([a-z]+); boundary="([^"]+)"\r\n/)[1];
+        assertEq(type, (str =~ x/\r\nContent-Type: multipart\/([a-z]+);/)[0]);
+        assertEq(msg.mpboundary, ct_boundary);
+        assertGt(0, str.find("\r\n--" + msg.mpboundary + "\r\n"));
+        assertGt(0, str.find("\r\n--" + msg.mpboundary + "--"));
+        hash<MessageInfo> mh = MultiPartMessage::parseBody(msg.mpboundary, str);
+        assertEq(2, mh.part.size());
     }
 }
