@@ -485,7 +485,9 @@ examples/test/ir/ir-local-slot-reads.qtest	1.0	1.0	-	0.0	1.0	-	-	0.0	0.0	0.0
 examples/test/ir/ir-mode-no-native/ir-mode-no-native.qtest	0.0	1.0	-	-	-	-	-	-	0.0	1.0
 examples/test/ir/jit-code-release/JitCodeRelease.qtest	25.0	29.0	-	-	-	0.0	-	-	26.0	24.0
 examples/test/ir/jit-cross-program-summary/jit-cross-program-summary.qtest	0.0	0.0	-	-	-	-	-	-	0.0	1.0
-examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit.qtest	0.0	1.0	-	-	-	0.0	-	-	0.0	0.0
+examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-1.qtest	0.0	1.0	-	-	-	0.0	-	-	0.0	0.0
+examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-2.qtest	0.0	1.0	-	-	-	0.0	-	-	0.0	0.0
+examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-3.qtest	0.0	1.0	-	-	-	0.0	-	-	0.0	0.0
 examples/test/ir/loop-jump-temp-scope/loop-jump-temp-scope.qtest	2.0	1.0	-	1.0	1.0	-	-	0.0	1.0	1.0
 examples/test/ir/loop-local-uninstantiate/loop-local-uninstantiate.qtest	1.0	0.0	-	0.0	2.0	-	-	1.0	1.0	1.0
 examples/test/ir/lvalue-assign-ownership/lvalue-assign-ownership.qtest	2.0	4.0	-	-	-	-	-	-	2.0	5.0
