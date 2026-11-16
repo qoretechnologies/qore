@@ -366,6 +366,7 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         assertEq(0, submitted.waitForZero(HangGuard), "startPollSendRecv() returned");
         assertNothing(start_ex, sprintf("startPollSendRecv() raised no exception (%s: %s)", start_ex.err ?? "-",
             start_ex.desc ?? "-"));
+        assertTrue(exists spop, "startPollSendRecv() returned a poll operation");
         if (spop) {
             hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
             # reported as the poll operations report a disconnect
@@ -445,6 +446,7 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         close_release.dec();
         assertEq(0, closed.waitForZero(HangGuard), "the close completed");
 
+        assertTrue(exists spop, "startPollSendRecv() returned a poll operation");
         if (spop) {
             hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
             # reported as the poll operations report a disconnect, through the deferred error of the submit
