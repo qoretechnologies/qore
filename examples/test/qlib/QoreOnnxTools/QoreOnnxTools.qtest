@@ -25,8 +25,9 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
 %requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../QoreBuildTree.qm
 %requires FsUtil
 %requires QoreOnnxTools
 %requires ml
@@ -441,29 +442,19 @@ class QoreOnnxToolsTest inherits QUnit::Test {
 
     private static string makeCliCommand(list<string> args) {
         string root = get_script_dir() + "/../../../..";
-        string qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string cli = root + "/bin/qore-onnx";
-        # qore-onnx requires reflection (and pulls in other binary modules
-        # transitively); list every build/modules/<name> dir so CI runners
-        # that don't have these installed system-wide can still load them.
-        string module_path = join(PathSep, (
-            root + "/qlib",
-            root + "/build/qlib-qmod",
-            root + "/build/modules/astparser",
-            root + "/build/modules/dataframe",
-            root + "/build/modules/i18n",
-            root + "/build/modules/krb5",
-            root + "/build/modules/linenoise",
-            root + "/build/modules/logger_bin",
-            root + "/build/modules/ml",
-            root + "/build/modules/mongodb",
-            root + "/build/modules/ocr",
-            root + "/build/modules/protobuf",
-            root + "/build/modules/reflection",
-            root + "/build/modules/sshutil",
-            root + "/build/modules/tokenizer",
-            root + "/build/modules/yaml",
-        ));
+        # qore-onnx requires reflection (and pulls in other binary modules transitively): list the AOT modules and
+        # every binary module directory of the build of the qore that runs this test, so CI runners that don't have
+        # these installed system-wide can still load them, and a build other than build/ loads its own modules
+        # (an installed qore has no build directory)
+        *string build_dir = QoreBuildTree::build_dir();
+        list<string> dirs = (root + "/qlib",);
+        if (build_dir) {
+            dirs += build_dir + "/qlib-qmod";
+            dirs += map $1, glob(build_dir + "/modules/*"), is_dir($1);
+        }
+        string module_path = join(PathSep, dirs);
         # Append the parent's QORE_MODULE_DIR for alternate build directories
         # and external modules. Util.qmod requires the bundled YAML module
         # when restoring its compiled calls to parse_yaml().

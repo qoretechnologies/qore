@@ -662,6 +662,13 @@ static hash<auto> AsyncIoController::getInfo() {
     @note an \c HttpServer sets its logger here while it runs and gives back the logger it replaced when it stops,
     unless the logger has been replaced since
 
+    @note an exception raised by the code of a timer (@ref addTimer(), @ref addTimerDelay()), by the timer callback
+    (@ref setTimerCallback()) or by a callback of an operation that the controller runs (a completion, frame or stream
+    callback, for example) is logged by this logger at the error level, or else by the async I/O logger
+    (@ref Qore::set_async_io_logger() "set_async_io_logger()"); without a logger, it is reported as an unhandled
+    exception on the standard error output, so that the failure of a callback is never silent.  An exception raised by
+    a task (@ref submitTask()) is always reported as an unhandled exception on the standard error output
+
     @see getLogger()
 
     @since %Qore 3.0
@@ -730,6 +737,10 @@ static *LoggerInterfaceBase AsyncIoController::getLogger() {
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
+    @note an exception that the code of the timer raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
+
     @since %Qore 3.0
 */
 static int AsyncIoController::addTimer(date deadline, auto user_data)
@@ -775,6 +786,10 @@ static int AsyncIoController::addTimer(date deadline, auto user_data)
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
+    @note an exception that the code of the timer raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
+
     @since %Qore 3.0
 */
 static int AsyncIoController::addTimer(date deadline, auto udata, string owner)
@@ -816,6 +831,10 @@ int timer_id = AsyncIoController::addTimerDelay(1s, sub () { checkConnection(); 
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
+    @note an exception that the code of the timer raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
+
     @since %Qore 3.0
 */
 static int AsyncIoController::addTimerDelay(timeout delay, auto user_data)
@@ -855,6 +874,10 @@ int timer_id = AsyncIoController::addTimerDelay(30s, sub () { sendHeartbeat(); }
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
+    @note an exception that the code of the timer raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
+
     @since %Qore 3.0
 */
 static int AsyncIoController::addTimerDelay(timeout delay, auto udata, string owner)
@@ -883,6 +906,18 @@ static int AsyncIoController::addTimerDelay(timeout delay, auto udata, string ow
     module; for any other timer, this method returns @ref False "False", so a restricted caller cannot use module code
     to cancel timers of other applications or of the host; see @ref MODULE_OWNED
 
+    A timer belongs to the application of the call that adds it.  A thread that module code starts while it runs for
+    a restricted caller serves no caller of its own: it keeps the restrictions of the code that started it, but not
+    its application, so the timers that it adds on its own (for work handed to it by a call of another application,
+    for example) belong to no application: no application can cancel them, and the thread itself can cancel only
+    such timers, not those of an application nor those of the host, so it cannot be used to cancel the timers of an
+    application.  Code that does not run module code for a restricted caller (the host, code without restrictions,
+    and a thread that module code starts outside a call for a restricted caller, as in its initialization) can
+    cancel any timer: a module that relays the requests of applications to such a thread lets them cancel each
+    other's timers.  Module code cannot yet give the context of a call to the thread that serves it, so that the work
+    of the thread would belong to the call's application and keep its restrictions; see
+    <a href="https://github.com/qoretechnologies/qore/issues/6245">issue #6245</a>.
+
     @since %Qore 3.0
 */
 static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,THREAD_CONTROL;flags=NAMED_ARGS,MODULE_OWNED] {
@@ -904,6 +939,10 @@ static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,THREAD_CON
 
     @param callback a callback that accepts a @ref TimerEventInfo hash argument, or
         @ref nothing to disable timer event delivery for non-callable \c user_data
+
+    @note an exception that the callback raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
 
     @since %Qore 3.0
 */
@@ -932,6 +971,9 @@ static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,
     allows what the caller may not.  The caller's own code (a closure, or a method that a class of the caller
     overrides) is refused with \c INVALID-FUNCTION-ACCESS, whose description gives the reason, for example <em>the
     callback's Program does not allow thread control (PO_NO_THREAD_CONTROL)</em>; see @ref MODULE_OWNED
+
+    @note an exception that the task raises is reported as an unhandled exception on the standard error output, not
+    to the controller's logger (@ref setLogger())
 
     @since %Qore 3.0
 */

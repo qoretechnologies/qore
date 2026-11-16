@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires Util
 
@@ -40,7 +41,7 @@ class AOTLinkDeploymentTargetTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("AOTLinkDeploymentTargetTest", "1.0") {
-        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         lib_dir = ENV.QORE_LIBDIR ?? dirname(realpath(qore_bin));
         qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
         otool = trim(backquote("command -v otool 2>/dev/null || true"));

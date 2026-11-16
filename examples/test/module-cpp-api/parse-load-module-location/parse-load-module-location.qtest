@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its module loads run in child processes of the qore under test, one for each stack size
+# test-platform: macos - thread stack sizes and the stack check of module loads
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class ParseLoadModuleLocationTest
+
+#! The location of the parse stack error of a module load made while a parse directive loads a module (issue #6047)
+/** A child process parses <tt>%%requires LocA</tt> (or \c LocR) in a thread of each stack size; the module, while it
+    is initialized, loads \c LocB in turn at the end of a recursion, so that at some sizes the nested load has less
+    than the parse stack reserve left while the directive's own load did not:
+    - \c LocA loads it as a binary module does, with ModuleManager::parseLoadModule(), a parse-time load without a
+      location: the error is located at the directive that is loading \c LocA (<tt>location-probe:3</tt>), the
+      nearest load in progress with a location;
+    - \c LocR loads it at run time with Program::loadModule(): the error is located where that load was made, in
+      \c LocR.qm, not at the directive.
+*/
+public class ParseLoadModuleLocationTest inherits QUnit::Test {
+    constructor() : Test("ParseLoadModuleLocationTest", "1.0") {
+        addTestCase("a parse-time load without a location", \parseLoadTest());
+        addTestCase("a run-time load", \runTimeLoadTest());
+        set_return_value(main());
+    }
+
+    #! the depth of the recursion at the end of which the module loads LocB
+    const Depth = 10;
+
+    #! the code that the child process runs: the parse of the directive in a thread of the given stack size
+    const ProbeScript = "%modern
+set_default_thread_stack_size(ARGV[1].toInt() * 1024);
+Queue q();
+background sub () {
+    Program p(PO_NEW_STYLE);
+    try {
+        p.parsePending(\"# probe\\n\\n%requires \" + ARGV[0] + \"\\n\", \"location-probe\");
+        q.push(\"parsed\");
+    } catch (hash<ExceptionInfo> ex) {
+        q.push(sprintf(\"exception: %s:%d: %s: %s\", ex.file, ex.line, ex.err, ex.desc));
+    }
+}();
+printf(\"%s\\n\", q.get());
+";
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(data);
+    }
+
+    #! writes the modules and the probe script into the directory
+    private static writeFiles(string dir) {
+        string header = "%%modern\n%%requires cppapiuser\nmodule %s { version = \"1.0\"; desc = \"test\"; "
+            "author = \"Qore\"; license = \"MIT\"; }\n";
+        writeFile(dir + "/LocA.qm", sprintf(header, "LocA") + sprintf("public namespace LocA {
+public string sub probe(int n) {
+    if (n) {
+        return probe(n - 1);
+    }
+    *string err = cpp_api_parse_load_module(\"LocB\");
+    printf(\"nested: %%s\\n\", err ? replace(err, \"\\n\", \" \") : \"loaded\");
+    return \"\";
+}
+public const X = probe(%d);
+}
+", Depth));
+        writeFile(dir + "/LocR.qm", sprintf(header, "LocR") + sprintf("public namespace LocR {
+public string sub probe(int n) {
+    if (n) {
+        return probe(n - 1);
+    }
+    Program q(PO_NEW_STYLE);
+    try {
+        q.loadModule(\"LocB\");
+        printf(\"nested: loaded\\n\");
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"nested: %%s:%%d: %%s\\n\", ex.file, ex.line, ex.err);
+    }
+    return \"\";
+}
+public const X = probe(%d);
+}
+", Depth));
+        writeFile(dir + "/LocB.qm", "%modern\nmodule LocB { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; "
+            "license = \"MIT\"; }\npublic namespace LocB { public const Y = 1; }\n");
+        writeFile(dir + "/probe.q", ProbeScript);
+    }
+
+    #! runs the probe for the module at each stack size; returns the nested load errors
+    private list<string> runProbes(string module) {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        TmpDir dir("qore-parse-load-location-");
+        writeFiles(dir.path);
+        string qore = TestInterpreter::qore_interpreter();
+        string mdir = dir.path + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        list<string> nested_errors;
+        int loaded;
+        for (int kb = 96; kb <= 640; kb += 8) {
+            int status;
+            string output = backquote(sprintf("QORE_MODULE_DIR=%s %s %s %s %d 2>&1", quote(mdir), quote(qore),
+                quote(dir.path + "/probe.q"), module, kb), \status);
+            string label = sprintf("%s %dK", module, kb);
+            assertEq(0, status, label + ": " + output);
+            *string nested = (output =~ x/nested: ([^\n]*)/)[0];
+            if (nested =~ /PARSE-STACK-LIMIT-EXCEEDED/) {
+                push nested_errors, nested;
+            } else if (nested == "loaded") {
+                ++loaded;
+            }
+        }
+        assertGt(0, loaded, module + ": the nested load succeeds with a large stack");
+        # the nested load runs short of the stack at some size while the directive's own load did not
+        assertGt(0, nested_errors.size(), module + ": the nested load runs short of a small stack");
+        return nested_errors;
+    }
+
+    parseLoadTest() {
+        foreach string err in (runProbes("LocA")) {
+            # the nearest directive with a location: the one loading LocA
+            assertRegex(" location-probe:3: PARSE-STACK-LIMIT-EXCEEDED: ", err);
+        }
+    }
+
+    runTimeLoadTest() {
+        foreach string err in (runProbes("LocR")) {
+            # where the run-time load was made, not at the directive
+            assertRegex("/LocR\\.qm:[0-9]+: PARSE-STACK-LIMIT-EXCEEDED$", err);
+        }
+    }
+}

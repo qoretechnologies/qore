@@ -34,6 +34,7 @@
 
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -62,6 +63,21 @@ class QoreIRPhiInstruction;
 class AbstractQoreFunctionVariant;
 struct AOTSlotMap;
 struct QorePluginLLVMCodegenInfo;
+//! The finalization loops of the lowering of a function that a cancellation interrupts, which refuses the function
+enum QoreFinalizeLoop : int {
+    //! QoreIRToLLVM::finalizeReloadChainSlots()
+    QFL_RELOAD_CHAIN_SLOTS = 1,
+    //! QoreIRToLLVM::finalizeObeEntries()
+    QFL_HANDLER_LOCAL_TABLE = 2,
+};
+
+#ifdef DEBUG
+//! Makes the next check of the finalization loop \a loop (QoreFinalizeLoop) at its entry \a index report a
+//! cancellation, once (debug builds only; dbg_force_finalize_cancel()); process-wide: it fires in whichever lowering
+//! first reaches that loop at that index, on any thread, which can be a callee of the batch of another function
+DLLLOCAL void qore_dbg_force_finalize_cancel(int loop, int64_t index);
+#endif
+
 class QoreIRToLLVM {
 public:
     explicit QoreIRToLLVM(llvm::LLVMContext& context) : ctx(context) {
@@ -582,6 +598,10 @@ private:
     // delay destruction or force copy-on-write.
     std::vector<llvm::AllocaInst*> preinstantiated_entry_cleanup_allocas;
     std::unordered_map<const void*, llvm::AllocaInst*> preinstantiated_entry_cleanup_by_local;
+    //! the parameters that take their arguments over and that the normal entry took from their runtime variables
+    //! (qore_rt_take_param()), with their LocalVar and the cleanup slot that owns the value (issue #5958): a function
+    //! that can deoptimize takes none (the deoptimization exit asserts it)
+    std::vector<std::pair<LocalVar*, llvm::AllocaInst*>> taken_param_cleanups;
 
     // Allocas for fast entry param locals (Approach B).
     // At exit, the current alloca value is loaded and decref'd.  StoreLocal
@@ -1065,6 +1085,12 @@ private:
         @return the value loaded, with a reference for the cache
     */
     llvm::Value* emitLocalCacheLoad(const void* key, llvm::IRBuilder<>& b, llvm::Module& module);
+    //! As emitLocalCacheLoad() for a parameter that takes its argument over: the runtime variable's reference is
+    //! released, so that the value loaded holds the only reference that the call gave (qore_rt_take_param())
+    llvm::Value* emitParamTake(const void* key, llvm::IRBuilder<>& b, llvm::Module& module);
+    //! Returns true if the call \a inst gives the callee the cleanup slot of an argument (buildArgCleanupArray()):
+    //! such a call does not call the fast entry of a callee whose parameter takes its argument over (issue #5958)
+    bool callGivesArgs(const QoreIRInstruction* inst) const;
 
     //! Emits the read of a local with a reference flag: the cached value, or the referenced value if it is a reference
     /** The referenced value is read only when the flag is set (qore_rt_read_reference_local()); it is owned and kept,
@@ -1141,6 +1167,27 @@ private:
     // the statement; at DiscardTemps those temps are dead and the refs can be
     // dropped before the next source statement observes destructor timing.
     void flushLocalReloadStateAtTempBoundary(llvm::Module& module);
+
+    //! The slots of the reload chains that the flushes of a function over getReloadChainCallThreshold() cover
+    /** Each flush rotated or cleared every tracked local with a call of its own (qore_rt_reload_chain_rotate()), so
+        a function had calls in the product of its tracked locals and its temp boundaries, and its code generation
+        took time in more than that (qore#6299).  Such a flush is one call of qore_rt_reload_chain_flush() with a
+        constant table of pairs of indexes in an array of the addresses of the trackers and deferred slots, which is
+        written in the entry block once the function is lowered (finalizeReloadChainSlots()).
+    */
+    llvm::AllocaInst* reload_chain_slots = nullptr;
+    //! the tracker and deferred slots of reload_chain_slots, in the order of their indexes
+    std::vector<llvm::Value*> reload_chain_slot_allocas;
+    //! the index of each slot in reload_chain_slots
+    std::unordered_map<const llvm::Value*, uint32_t> reload_chain_slot_index;
+
+    //! Returns the index of \a slot in reload_chain_slots, adding it if it has none
+    uint32_t getReloadChainSlotIndex(llvm::Value* slot);
+    //! Writes the addresses of the slots of reload_chain_slots in the entry block, once the function is lowered
+    /** @return false if it was cancelled (qore_finalize_cancelled()), leaving slots unwritten: the function must
+        then be refused (qore#6299)
+    */
+    bool finalizeReloadChainSlots(llvm::Function* llvm_func);
 
     // Error return block: used for exception cleanup when outside a try block.
     // When a Call/CallDirect/CallMethodDirect throws outside a try, execution
@@ -1865,11 +1912,18 @@ private:
     //! Reloads the locals from the runtime after handlers ran with qore_rt_obe_reload()
     void reloadLocalsViaTable(llvm::Module& module, llvm::Function* llvm_func, bool honor_reload_exempt);
     //! Releases the reload storage of the locals with qore_rt_obe_release(); as releaseLocalReloadStorage()
-    std::vector<const void*> releaseLocalReloadStorageViaTable(llvm::Module& module);
+    std::vector<const void*> releaseLocalReloadStorageViaTable(llvm::Module& module,
+        const std::unordered_set<const void*>* only = nullptr);
     //! Returns the locals whose reload storage releaseLocalReloadStorage() releases, in the order of its release
-    std::vector<const void*> getReleasedReloadLocals();
+    /** @param only if not null, only these locals (the shared locals of an outlined helper) instead of those that
+        the handlers reference (see releasesReloadStorageForHandlers())
+    */
+    std::vector<const void*> getReleasedReloadLocals(const std::unordered_set<const void*>* only = nullptr);
     //! Writes the records of obe_entries in the entry block, once the function is lowered
-    void finalizeObeEntries(llvm::Function* llvm_func);
+    /** @return false if it was cancelled (qore_finalize_cancelled()), leaving records unwritten: the function must
+        then be refused (qore#6305)
+    */
+    bool finalizeObeEntries(llvm::Function* llvm_func);
     //! Calls the helper \a name with the records and the table
     llvm::CallInst* emitObeCall(llvm::Module& module, const char* name, const std::vector<uint32_t>& entries,
         bool with_epoch);
@@ -1884,18 +1938,40 @@ private:
     */
     void recordHandlerSite(llvm::CallInst* call, bool reload);
 
-    //! Emits the release before and the reload after each call recorded by recordHandlerSite(), once the function is
-    //! lowered and its reload storage is known
+    //! Records the call of an outlined function-body helper, around which finalizeHandlerSites() releases and
+    //! reloads the reload storage of the locals that the helper shares with this function (qore#6300)
+    /** The helper assigns the shared locals on the runtime local stack: a reference that this function's reload
+        storage held to a local's value across the call would keep the value that the helper replaces alive until
+        this function next reloaded the local, so its destructor would run late.
+
+        @param call the call of the helper
+        @param shared_locals the locals of the function that the helper references
+        @param reload_after the instruction after which the released locals are reloaded: the last one of the
+        invalidation of the caches after the call, so that the reloads leave the caches fresh
+    */
+    void recordHelperSite(llvm::CallInst* call, const std::vector<const LocalVar*>& shared_locals,
+        llvm::Instruction* reload_after);
+
+    //! Emits the release before and the reload after each call recorded by recordHandlerSite() or
+    //! recordHelperSite(), once the function is lowered and its reload storage is known
     void finalizeHandlerSites(llvm::Module& module, llvm::Function* llvm_func);
 
     //! Releases the reload trackers and deferred slots of the locals that handlers can assign, last declared first,
     //! at the builder's insertion point, and returns the locals released, last declared first
-    std::vector<const void*> releaseLocalReloadStorage(llvm::Module& module);
+    /** @param only if not null, only these locals (see getReleasedReloadLocals())
+    */
+    std::vector<const void*> releaseLocalReloadStorage(llvm::Module& module,
+        const std::unordered_set<const void*>* only = nullptr);
 
-    //! a call that runs handlers out of line (see recordHandlerSite())
+    //! a call that runs handlers out of line (see recordHandlerSite()) or an outlined helper (see recordHelperSite())
     struct HandlerSite {
         llvm::CallInst* call;
         bool reload;
+        //! for the call of an outlined helper: the locals that it shares with this function, whose storage is
+        //! released (instead of that of the locals that the handlers reference)
+        std::unique_ptr<std::unordered_set<const void*>> shared_locals;
+        //! for the call of an outlined helper: the instruction after which the released locals are reloaded
+        llvm::Instruction* reload_after;
     };
     std::vector<HandlerSite> handler_sites;
 
@@ -2219,8 +2295,14 @@ private:
     // block-entry → dbgSyntheticBlockStep) or DebugStatement (synthetic=false,
     // per-statement → dbgStep) instruction.  Gated by an inline attached-debugger check so
     // non-debug JIT execution pays at most one predictable not-taken branch.  No-op in AOT mode.
+    // \a folded_host is the operation that keeps the step event \a inst (qore_ir_folded_debug_step()), whose
+    // location the runtime location is when the hook runs: the hook then makes the event in the statement's location,
+    // as the hook of a DebugStatement instruction does, and gives the operation its own location back if it starts on
+    // another line.
     void emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_func,
-            const QoreIRInstruction* inst, bool synthetic);
+            const QoreIRInstruction* inst, bool synthetic, const QoreIRInstruction* folded_host = nullptr);
+    //! Stores \a loc as the runtime location of the frame, without the line check of emitRuntimeLocationUpdate()
+    void emitRuntimeLocationStore(const QoreProgramLocation* loc);
 
     // Get or create the per-function JIT deopt block.
     // On guard failure, branches here to set the thread-local deopt flag
@@ -2594,6 +2676,18 @@ private:
     llvm::AllocaInst* getOrCreateLocalValidEpoch(const void* key,
             llvm::Function* llvm_func);
     void markLocalCacheFresh(const void* key, llvm::Function* llvm_func);
+    //! Emits the copy-on-write string append of \a inst (string.append.cow, or the invoke made for it in a try block)
+    /** A paired local append (QoreIRInstruction::string_append_local_cow) of a local that only native code holds
+        appends to the local's string through its storage, and the runtime stack's local is released by the compiler
+        before the append, so that the helper sees the string as unique if no other variable holds it.  The helpers
+        leave the local unchanged if the append raises an exception.
+
+        @param use_in_place the append is marked in place (QoreIRInstruction::string_append_in_place)
+        @param borrowed set to true if the result is the local's own value, which is not released
+        @return the result of the append, or nullptr with \a error set
+    */
+    llvm::Value* emitStringAppendCow(const QoreIRInstruction* inst, llvm::Value* lhs_boxed, llvm::Value* rhs_boxed,
+            bool use_in_place, llvm::Module& module, llvm::Function* llvm_func, bool& borrowed, std::string& error);
     // Marks the cache of a local stale, so that the next ensureLocalCacheFresh() reloads it from the runtime stack
     // on every path (see clearLocalCachedValue())
     void markLocalCacheStale(const void* key, llvm::Function* llvm_func);
@@ -2652,6 +2746,9 @@ private:
     llvm::Value* emitAnyUnaryFastPath(bool is_minus, int opcode,
             const QoreIRInstruction* inst,
             llvm::Value* operand, llvm::Function* llvm_func, llvm::Module& module);
+
+    //! returns true if an operand of the comparison can be a buffer, whose comparison gives a buffer (qore#6160)
+    bool comparisonOperandsMayBeBuffers(const QoreIRInstruction* inst) const;
 
     // Emit inline LLVM fast-path for CmpAny (spaceship operator).
     // Type-checks operands for int+int and float+float, falls back to qore_rt_comparison_op.

@@ -1527,7 +1527,7 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
         if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             evaluated += op->getRight().needsEval() ? 1 : 0;
             c = op->getLeft();
-        } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        } else if (auto* hop = qore_exact_node_cast<QoreHashObjectDereferenceOperatorNode>(node)) {
             evaluated += hop->getRight().needsEval() ? 1 : 0;
             c = hop->getLeft();
         } else if (auto* cop = qore_get_cast_operator_node(node)) {
@@ -1548,7 +1548,7 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
         if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             keys.push_back(op->getRight());
             c = op->getLeft();
-        } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        } else if (auto* hop = qore_exact_node_cast<QoreHashObjectDereferenceOperatorNode>(node)) {
             keys.push_back(hop->getRight());
             c = hop->getLeft();
         } else if (auto* cop = qore_get_cast_operator_node(node)) {
@@ -2349,9 +2349,9 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
         setObjectContext(qore_object_private::get(*obj));
     } else if (ntype == NT_CLASS_VARREF) {
         const AbstractQoreNode* node = n.getInternalNode();
-        const StaticClassVarRefNode* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
+        const StaticClassVarRefNode* static_var = qore_exact_node_cast<StaticClassVarRefNode>(node);
         const DeferredStaticClassMemberRefNode* deferred_static =
-            static_var ? nullptr : dynamic_cast<const DeferredStaticClassMemberRefNode*>(node);
+            static_var ? nullptr : qore_exact_node_cast<DeferredStaticClassMemberRefNode>(node);
         if (!static_var && !deferred_static) {
             vl.xsink->raiseException("REFERENCE-ERROR", "invalid static class variable reference node");
             clearPtr();
@@ -2487,9 +2487,9 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
         setObjectContext(qore_object_private::get(*obj));
     } else if (ntype == NT_CLASS_VARREF) {
         const AbstractQoreNode* node = n.getInternalNode();
-        const StaticClassVarRefNode* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
+        const StaticClassVarRefNode* static_var = qore_exact_node_cast<StaticClassVarRefNode>(node);
         const DeferredStaticClassMemberRefNode* deferred_static =
-            static_var ? nullptr : dynamic_cast<const DeferredStaticClassMemberRefNode*>(node);
+            static_var ? nullptr : qore_exact_node_cast<DeferredStaticClassMemberRefNode>(node);
         if (!static_var && !deferred_static) {
             vl.xsink->raiseException("REFERENCE-ERROR", "invalid static class variable reference node");
             clearPtr();
@@ -4115,11 +4115,11 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
 
     if (t == NT_CLASS_VARREF) {
         AbstractQoreNode* node = lvalue.getInternalNode();
-        if (StaticClassVarRefNode* static_var = dynamic_cast<StaticClassVarRefNode*>(node)) {
+        if (StaticClassVarRefNode* static_var = qore_exact_node_cast<StaticClassVarRefNode>(node)) {
             static_var->remove(*this);
         } else {
             DeferredStaticClassMemberRefNode* deferred_static =
-                dynamic_cast<DeferredStaticClassMemberRefNode*>(node);
+                qore_exact_node_cast<DeferredStaticClassMemberRefNode>(node);
             if (deferred_static) {
                 deferred_static->remove(*this);
             } else {

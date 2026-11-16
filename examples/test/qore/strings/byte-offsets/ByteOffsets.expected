@@ -1,0 +1,9 @@
+ascii ISO-8859-1: 1224 checks, 0 mismatches
+ascii UTF-8: 1224 checks, 0 mismatches
+ascii UTF-16LE: 1656 checks, 0 mismatches
+latin1 ISO-8859-1: 1224 checks, 0 mismatches
+latin1 UTF-8: 1368 checks, 0 mismatches
+latin1 UTF-16LE: 1656 checks, 0 mismatches
+astral UTF-8: 1728 checks, 0 mismatches
+astral UTF-16LE: 1944 checks, 0 mismatches
+PASS

@@ -2658,6 +2658,29 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                 && skip_n_args(nargs);
         }
 
+        case AOTExprKind::CALLREF_CALL_NAMED: {
+            // the CALLREF_CALL layout, then a count and a string ref for each argument name
+            uint8_t nargs = 0;
+            uint8_t nnames = 0;
+            if (!dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                    || !dump_read_u8(p, end, nargs) || !skip_n_args(nargs) || !dump_read_u8(p, end, nnames)) {
+                return false;
+            }
+            for (unsigned i = 0; i < nnames; ++i) {
+                if (!dump_skip_string_ref(reader, p, end)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        case AOTExprKind::FIND:
+            // the find mode, then the expression, the find expression and the where expression
+            return dump_skip_bytes(p, end, 1)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
         case AOTExprKind::RUNTIME_CONST_REF:
         case AOTExprKind::SELF_VARREF:
         case AOTExprKind::LOCAL_VARREF:

@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include HashValueIncrementExecModes.qc
+
+%exec-class HashValueIncrementExecModesPart4
+
+#! runs part 4 of 4 of the cases of HashValueIncrementExecModesBase: the default mode
+class HashValueIncrementExecModesPart4 inherits HashValueIncrementExecModesBase {
+    constructor() : HashValueIncrementExecModesBase("HashValueIncrementExecModesPart4", 4) {
+    }
+}

@@ -136,21 +136,21 @@ lock is held by one (`lockForSyncCompile()`), as it does once the compiler stops
 
 Process exit detaches the work in the LLVM phase in the same way (`QoreJIT::stopBackgroundCompiler()`, called by
 `qore_cleanup()` and `qore_exit_process()`), and does not join the compile thread then (`bg_thread_abandoned`): the
-thread ends when LLVM returns, without touching the JIT again.  `QoreJIT::shutdown()` leaves the LLJIT to the
-operating system then, as its `ExecutionSession` cannot be destroyed under an active compile; the compile thread holds
-the compile lock, so a synchronous compile is refused instead of waiting for it (`lockForSyncCompile()`).
+thread ends when LLVM returns, without touching the JIT again; the compile thread holds the compile lock, so a
+synchronous compile is refused instead of waiting for it (`lockForSyncCompile()`).
 
 `exit()` must not run while the thread is in LLVM: it destroys LLVM's static objects (its `cl::opt` options and pass
-registries, which code generation reads), and the compile crashes in them.  So the process ends with `_exit()`, after
-flushing the standard I/O streams, if the thread still runs at the end: `qore_fork_child_quick_exit()`, which the
-`qore` and `qr` programs, `qore_exit_process()`, the executables compiled with `qcc` and embedding programs call at
-the end, asks `QoreJIT::exitQuickly()`.  If the thread has left its loop (`bg_thread_done`), it is joined there and the
-process exits as usual.  A process that exits without calling it (an embedding program that returns from `main()`)
-waits for the thread in the library's `atexit()` handler (`qore_jit_shutdown_at_exit()`), as before; that protects
-the static objects of LLVM registered before the handler (its global options), but not the function-local statics LLVM
-creates during its first compile, so such a process should call it.  Exit-time handlers (module `atexit()` handlers,
-static destructors, coverage and sanitizer reports) are skipped only when a compile is still running in LLVM at the
-very end of the process.
+registries, which code generation reads), and the compile crashes in them.  So `qore_cleanup()` waits for the thread
+before it returns (`QoreJIT::finishDetachedCompile()`, from `QoreJIT::shutdown()` before the LLJIT is released, or,
+when the library is left to a foreign thread, without releasing it; issue #6296): the detached compile skips the
+optional passes and ends before its code generation (or after the code generation in progress), so the wait is short,
+and a debug build lets a compile held by a test go first.  A program can then return from `main()` after
+`qore_cleanup()`.  A process that ends without `qore_cleanup()` (`qore_exit_process()`) ends with `_exit()`, after
+flushing the standard I/O streams, if the thread still runs at the end (`qore_fork_child_quick_exit()` asks
+`QoreJIT::exitQuickly()`); if the thread has left its loop (`bg_thread_done`), it is joined there and the process exits
+as usual.  A process that exits with neither waits for the thread in the library's `atexit()` handler
+(`qore_jit_shutdown_at_exit()`), which protects the static objects of LLVM registered before the handler (its global
+options), but not the function-local statics LLVM creates during its first compile.
 
 `examples/test/ir/BgCompileTeardownDetach.qtest` tests it with the debug build's holds of the compile thread
 (`dbg_hold_bg_compile()` at the start of the lowering, at the start of the LLVM phase, at its end, or before the

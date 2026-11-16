@@ -1,0 +1,242 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires SqlUtil
+
+# a run on PostgreSQL has its own schema
+%requires ../../qlib/SqlUtil/PgsqlTestIsolation.qm
+%requires ../../TestInterpreter.qm
+
+%exec-class SqlutilDumpTest
+
+#! an object whose create SQL is given (the dump code only calls getCreateSql() / getCreateSqlString())
+class MockObject {
+    private {
+        softlist<string> sql;
+    }
+
+    constructor(softlist<string> sql) {
+        self.sql = sql;
+    }
+
+    softlist<string> getCreateSql(*hash<auto> opt) {
+        return sql;
+    }
+
+    string getCreateSqlString(*hash<auto> opt) {
+        return foldl $1 + "\n" + $2, (map $1 =~ /;$/ ? $1 : $1 + ";", sql);
+    }
+}
+
+#! an Oracle database with synonyms, as the sqlutil dump code sees it; no Oracle server is needed
+class MockOracleDb {
+    public {
+        #! USER_SYNONYMS rows by synonym name as listed (in lower case unless the name needs quotes)
+        hash<string, hash<auto>> synonyms = {
+            "syn_a": {"synonym_name": "SYN_A", "table_owner": "SCOTT", "table_name": "EMP", "db_link": NULL},
+            "Syn B": {"synonym_name": "Syn B", "table_owner": "SCOTT", "table_name": "Emp Table",
+                "db_link": "REMOTE.EXAMPLE.COM"},
+        };
+    }
+
+    string getDriverName() {
+        return "oracle";
+    }
+
+    list<string> features() {
+        return (SqlUtil::DB_SYNONYMS, SqlUtil::DB_TABLES, SqlUtil::DB_VIEWS, SqlUtil::DB_FUNCTIONS,
+            SqlUtil::DB_PROCEDURES, SqlUtil::DB_PACKAGES, SqlUtil::DB_TYPES);
+    }
+
+    ListIterator synonymIterator() {
+        return new ListIterator(keys synonyms);
+    }
+
+    # the create SQL of the objects as OracleSqlUtilBase gives it
+    MockObject getTable(string name) {
+        return new MockObject((
+            "create table orders (\n  id number(14) not null\n)",
+            "alter table orders add constraint pk_orders primary key (id)",
+            "create trigger orders_trg before insert on orders for each row\nbegin\n  :new.id := 1;\nend;\n",
+        ));
+    }
+
+    MockObject getView(string name) {
+        return new MockObject("create view v_orders as select id from orders");
+    }
+
+    MockObject getFunction(string name) {
+        return new MockObject("create or replace function f1 return number as\nbegin\n  return 1;\nend;");
+    }
+
+    MockObject getProcedure(string name) {
+        return new MockObject("create procedure p1 as\nbegin\n  null;\nend;");
+    }
+
+    MockObject getPackage(string name) {
+        return new MockObject((
+            "create or replace package pk1 as\n  procedure p;\nend;",
+            "create or replace package body pk1 as\n  procedure p is begin null; end;\nend;",
+        ));
+    }
+
+    MockObject getType(string name) {
+        return new MockObject("create or replace type t1 as object (a number)");
+    }
+}
+
+#! the same objects on a database that is not Oracle
+class MockOtherDb inherits MockOracleDb {
+    string getDriverName() {
+        return "pgsql";
+    }
+}
+
+#! tests the DDL that bin/sqlutil dumps (--dump=type:name), with the dump code loaded into a Program
+class SqlutilDumpTest inherits QUnit::Test {
+    private {
+        Program p;
+        bool pgsql_isolated;
+    }
+
+    constructor() : QUnit::Test("SqlutilDumpTest", "1.0") {
+        addTestCase("synonyms are dumped from the catalog", \testSynonyms());
+        addTestCase("an unknown synonym raises an error", \testUnknownSynonym());
+        addTestCase("Oracle PL/SQL units end with a \"/\" line", \testOraclePlsql());
+        addTestCase("other databases' statements end with \";\" as before", \testOtherDb());
+        addTestCase("PostgreSQL: sqlutil --dump", \testPgsql());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string script = get_script_dir() + "/../../../../bin/sqlutil";
+        p = new Program(PO_NEW_STYLE);
+        p.define("SqlUtilNoMain", True);
+        p.parsePending(ReadOnlyFile::readTextFile(script), script);
+        # dumps the given objects and returns the lines of output
+        p.parsePending("list<string> sub test_dump(object db, softlist<string> values, *code synonym_info) {
+    # the script's top-level variable for terminal colors, which main() sets
+    color = new TerminalColor(False);
+    list<string> lines = ();
+    new DumpObjects(db, values, {}, synonym_info, sub (string line) { lines += line; });
+    return lines;
+}", "test");
+        p.parseCommit();
+    }
+
+    globalTearDown() {
+        if (pgsql_isolated) {
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    private list<string> dump(object db, softlist<string> values) {
+        MockOracleDb mdb = cast<MockOracleDb>(db);
+        return p.callFunction("test_dump", db, values, *hash<auto> sub (string name) {
+            return mdb.synonyms{name};
+        });
+    }
+
+    testSynonyms() {
+        MockOracleDb db();
+        list<string> out = dump(db, "synonyms:all");
+        assertEq((
+            "-- DDL of synonym syn_a",
+            "create or replace synonym SYN_A for SCOTT.EMP;",
+            "-- DDL of synonym Syn B",
+            "create or replace synonym \"Syn B\" for SCOTT.\"Emp Table\"@REMOTE.EXAMPLE.COM;",
+        ), out);
+        assertEq(out[0..1], dump(db, "synonyms:syn_a"));
+    }
+
+    testUnknownSynonym() {
+        MockOracleDb db();
+        assertThrows("SYNONYMS-ERROR", "synonym nosuch does not exist", \dump(), (db, "synonyms:nosuch"));
+    }
+
+    testOraclePlsql() {
+        MockOracleDb db();
+        assertEq((
+            "-- DDL of table orders",
+            "create table orders (\n  id number(14) not null\n);\n"
+                "alter table orders add constraint pk_orders primary key (id);\n"
+                "create trigger orders_trg before insert on orders for each row\nbegin\n  :new.id := 1;\nend;\n/",
+        ), dump(db, "tables:orders"));
+        assertEq((
+            "-- DDL of view v_orders",
+            "create view v_orders as select id from orders;",
+        ), dump(db, "views:v_orders"));
+        assertEq((
+            "-- DDL of function f1",
+            "create or replace function f1 return number as\nbegin\n  return 1;\nend;\n/",
+        ), dump(db, "functions:f1"));
+        assertEq((
+            "-- DDL of procedure p1",
+            "create procedure p1 as\nbegin\n  null;\nend;\n/",
+        ), dump(db, "procedures:p1"));
+        assertEq((
+            "-- DDL of package pk1",
+            "create or replace package pk1 as\n  procedure p;\nend;\n/\n"
+                "create or replace package body pk1 as\n  procedure p is begin null; end;\nend;\n/",
+        ), dump(db, "packages:pk1"));
+        assertEq((
+            "-- DDL of type t1",
+            "create or replace type t1 as object (a number);\n/",
+        ), dump(db, "types:t1"));
+        # a synonym is a plain SQL statement
+        assertEq("create or replace synonym SYN_A for SCOTT.EMP;", dump(db, "synonyms:syn_a")[1]);
+    }
+
+    testOtherDb() {
+        MockOtherDb db();
+        assertEq((
+            "-- DDL of procedure p1",
+            "create procedure p1 as\nbegin\n  null;\nend;",
+        ), dump(db, "procedures:p1"));
+        assertEq((
+            "-- DDL of view v_orders",
+            "create view v_orders as select id from orders;",
+        ), dump(db, "views:v_orders"));
+    }
+
+    #! runs bin/sqlutil against PostgreSQL in a schema of its own
+    testPgsql() {
+        *string connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!connstr) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        Datasource ds;
+        try {
+            ds = new Datasource(connstr);
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            # the driver's module cannot be loaded or the database cannot be reached, as the other PostgreSQL tests
+            # skip (see PgsqlRunSchema::setup())
+            testSkip(sprintf("cannot use QORE_DB_CONNSTR_PGSQL: %s: %s", ex.err, ex.desc));
+        }
+        if (ds.getDriverName() != "pgsql") {
+            testSkip(sprintf("the connection uses driver %y, not \"pgsql\"", ds.getDriverName()));
+        }
+        # the schema of the run is also the schema of the sqlutil process, which libpq connects with PGOPTIONS
+        PgsqlRunSchema::setup(connstr, "sqlutil-dump");
+        pgsql_isolated = True;
+        ds = new Datasource(connstr);
+        ds.exec("create table sqlutil_dump_t (id int primary key, name varchar(10))");
+        ds.exec("create view sqlutil_dump_v as select id from sqlutil_dump_t");
+        ds.commit();
+        string script = get_script_dir() + "/../../../../bin/sqlutil";
+        string out = backquote(sprintf("%s %s %s -C --dump=tables:sqlutil_dump_t --dump=views:sqlutil_dump_v 2>&1",
+            TestInterpreter::qore_interpreter(), script, connstr));
+        assertRegex("-- DDL of table sqlutil_dump_t\n", out);
+        assertRegex("create table sqlutil_dump_t \\(", out);
+        assertRegex("-- DDL of view sqlutil_dump_v\n", out);
+        # no PL/SQL terminator outside Oracle
+        assertFalse(out =~ /^\/$/m, out);
+        assertTrue(out =~ /;\n$/, out);
+    }
+}

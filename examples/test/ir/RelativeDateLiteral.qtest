@@ -6,6 +6,7 @@
 %no-child-restrictions
 
 %requires QUnit
+%requires ../TestInterpreter.qm
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires FsUtil
 %requires ../ExecModeHarness.qm
@@ -18,7 +19,7 @@ class RelativeDateLiteralTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("RelativeDateLiteralTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
 
         addTestCase("relative date literal fields are preserved", \testRelativeDateLiteralFields());
         addTestCase("AOT qmod relative date literal fields are preserved", \testAotQmodRelativeDateLiteralFields());

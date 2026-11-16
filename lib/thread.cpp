@@ -180,6 +180,8 @@ QoreThreadLock stack_lck;
 size_t qore_thread_stack_size = 0;
 size_t qore_thread_stack_limit = 0;
 
+constinit thread_local std::atomic<size_t> q_thread_stack_limit_tls{0};
+
 // default thread creation attribute
 QorePThreadAttr ta_default;
 
@@ -754,7 +756,10 @@ public:
 
 #ifdef QORE_MANAGE_STACK
     size_t stack_start;
+    //! the stack limit; set with setStackLimit(), which publishes it to the thread's TLS
     size_t stack_limit;
+    //! the thread's q_thread_stack_limit_tls, once bound (see bindStackLimitTls())
+    std::atomic<size_t>* stack_limit_tls = nullptr;
     // this thread's stack size for error reporting
     size_t stack_size;
     // the primary thread only: where its stack starts (the highest address of a stack that grows down) and its full
@@ -1001,6 +1006,12 @@ public:
 #endif
 
     DLLLOCAL ~ThreadData() {
+#ifdef QORE_MANAGE_STACK
+        // the thread has no limit without its data; deleted by the thread itself
+        if (stack_limit_tls) {
+            stack_limit_tls->store(0, std::memory_order_relaxed);
+        }
+#endif
         // the registry keeps no pointer into the map of a thread whose data is deleted
         unregisterThreadLocalVars();
 
@@ -1391,6 +1402,20 @@ public:
     }
 
 #ifdef QORE_MANAGE_STACK
+    //! Sets the stack limit, and the thread's copy of it in its TLS once bound (see q_thread_stack_reserve_exceeded())
+    DLLLOCAL void setStackLimit(size_t limit) {
+        stack_limit = limit;
+        if (stack_limit_tls) {
+            stack_limit_tls->store(limit, std::memory_order_relaxed);
+        }
+    }
+
+    //! Binds the thread's TLS copy of the stack limit; called by the thread itself when its data is set
+    DLLLOCAL void bindStackLimitTls() {
+        stack_limit_tls = &q_thread_stack_limit_tls;
+        stack_limit_tls->store(stack_limit, std::memory_order_relaxed);
+    }
+
     //! Sets the stack limit of the primary thread when another runtime enforces a maximum stack size on it
     /** The limit is derived from the real start of the stack where it could be determined, and keeps the stack guard
         of the primary thread above the end of the stack that the thread can use.
@@ -1410,9 +1435,9 @@ public:
         // a stack no larger than the guard leaves no usable stack; see the constructor
         size_t usable = stack_size > stack_guard ? stack_size - stack_guard : 0;
 #ifdef STACK_DIRECTION_DOWN
-        stack_limit = primary_stack_top - usable;
+        setStackLimit(primary_stack_top - usable);
 #else
-        stack_limit = primary_stack_top + usable;
+        setStackLimit(primary_stack_top + usable);
 #endif
         printd(5, "ThreadData::enforcePrimaryStackSize() max: %lld protected: %lld size: %lld usable: %lld\n",
             (int64)max_size, (int64)protected_size, (int64)size, (int64)usable);
@@ -1454,6 +1479,10 @@ void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool forei
     assert(!::thread_data.get());
     thread_data = new ThreadData(tid, p, foreign, flags);
     ::thread_data.set(thread_data);
+#ifdef QORE_MANAGE_STACK
+    // the inline stack checks of the thread read its limit from its TLS (see q_thread_stack_reserve_exceeded())
+    thread_data->bindStackLimitTls();
+#endif
     // the thread's RuntimeConfig writes the call sites of AST calls directly (QoreRcCallSiteHelper)
     rc_tls_set_call_site_ptr(&thread_data->call_site_loc);
     // the thread's lock-free releases publish in its hazard slot; called on the thread itself, as the thread data is
@@ -1542,6 +1571,7 @@ static constexpr uintptr_t QORE_CANCEL_WAKEUP_IDENT = 1;
 static std::map<int, int> qore_cancel_wakeup_pipe_map;
 #endif
 
+#ifndef __linux__
 static int qore_set_cloexec_nonblock(int fd, bool nonblock) {
     int fdflags = fcntl(fd, F_GETFD);
     if (fdflags < 0 || fcntl(fd, F_SETFD, fdflags | FD_CLOEXEC) < 0) {
@@ -1555,6 +1585,7 @@ static int qore_set_cloexec_nonblock(int fd, bool nonblock) {
     }
     return 0;
 }
+#endif
 
 //! creates a wakeup channel and returns the descriptor to poll, or -1 with errno set; thread_list.lck is held
 static int qore_cancel_wakeup_create() {
@@ -2109,6 +2140,8 @@ public:
     std::vector<QoreObject*> closure_objs;
     //! the sandbox of the starting code, which governs the new thread as its outermost caller, or nullptr
     std::unique_ptr<QoreInheritedSandbox> sandbox;
+    //! the run-time parse options of the starting code, which the new thread runs with (qore#6208)
+    QoreThreadRuntimeParseOptions runtime_po = QoreThreadRuntimeParseOptions::captureForThread();
     //! true if the starting thread runs the module cleanup or work that it handed over; the new thread is then part
     //! of the cleanup (see qore_module_cleanup_delegation())
     bool module_cleanup_delegate = qore_module_cleanup_delegation();
@@ -2508,7 +2541,7 @@ size_t qore_sandbox_tighten_stack(int64 bytes, size_t& saved) {
         return 0;
     }
 #endif
-    td->stack_limit = limit;
+    td->setStackLimit(limit);
     return limit;
 #else
     // no stack guard on this platform; see check_stack()
@@ -2527,23 +2560,19 @@ int64 qore_sandbox_dbg_cpu_used() {
 
 void qore_sandbox_restore_stack(size_t saved) {
 #ifdef QORE_MANAGE_STACK
-    thread_data.get()->stack_limit = saved;
+    thread_data.get()->setStackLimit(saved);
 #endif
 }
 
-bool q_thread_stack_reserve_exceeded(size_t reserve) {
+bool q_thread_stack_smaller_than_default() {
 #ifdef QORE_MANAGE_STACK
     ThreadData* td = thread_data.get();
-    // a thread with no stack guard has no limit (see QTF_NO_STACK_GUARD)
-    if (!td || !td->stack_limit) {
+    // the primary thread's stack is the process's: it counts as enough stack, as does a thread with no stack limit
+    if (!td || td->tid == initial_thread || !td->stack_limit) {
         return false;
     }
-    size_t pos = get_stack_pos();
-#ifdef STACK_DIRECTION_DOWN
-    return pos < td->stack_limit + reserve;
-#else
-    return pos + reserve > td->stack_limit;
-#endif
+    // the size that new threads are created with; set_default_thread_stack_size() can change it
+    return td->stack_size < q_thread_get_stack_size();
 #else
     return false;
 #endif
@@ -2559,13 +2588,10 @@ QoreElidedStackHelper::QoreElidedStackHelper(size_t elided) {
     old_limit = td->stack_limit;
 #ifdef STACK_DIRECTION_DOWN
     // a limit beyond the stack's start makes every check fail, as the recursion would have
-    td->stack_limit = elided > SIZE_MAX - old_limit ? SIZE_MAX : old_limit + elided;
+    td->setStackLimit(elided > SIZE_MAX - old_limit ? SIZE_MAX : old_limit + elided);
 #else
-    td->stack_limit = elided > old_limit ? 0 : old_limit - elided;
     // a limit of zero means no limit: the recursion would have exceeded the limit anywhere
-    if (!td->stack_limit) {
-        td->stack_limit = 1;
-    }
+    td->setStackLimit(elided >= old_limit ? 1 : old_limit - elided);
 #endif
     shifted = true;
 #endif
@@ -2574,7 +2600,7 @@ QoreElidedStackHelper::QoreElidedStackHelper(size_t elided) {
 QoreElidedStackHelper::~QoreElidedStackHelper() {
 #ifdef QORE_MANAGE_STACK
     if (shifted) {
-        thread_data.get()->stack_limit = old_limit;
+        thread_data.get()->setStackLimit(old_limit);
     }
 #endif
 }
@@ -3613,6 +3639,26 @@ void swap_runtime_parse_options(const QoreParseOptions& po, const AbstractStatem
     td->runtime_po = apply_runtime_po_override(td, po);
 }
 
+// the per-statement path of the AST interpreter (AbstractStatement::exec()) inlines update_runtime_statement_location():
+// lowered top-level code switches the options with functions of its own, so that it adds no caller to the functions
+// of that path, which changed the compiler's inlining decisions for it (an extra call per AST statement)
+__attribute__((noinline, cold)) void swap_toplevel_code_parse_options(const QoreParseOptions& po,
+        const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
+    ThreadData* td = thread_data.get();
+    old_stmt = td->runtime_statement;
+    old_loc = td->runtime_loc;
+    old_po = td->runtime_po;
+    td->runtime_po = apply_runtime_po_override(td, po);
+}
+
+__attribute__((noinline, cold)) void restore_toplevel_code_parse_options(const AbstractStatement* stmt,
+        const QoreProgramLocation* loc, const QoreParseOptions& po) {
+    ThreadData* td = thread_data.get();
+    td->runtime_statement = stmt;
+    td->runtime_loc = loc;
+    td->runtime_po = apply_runtime_po_override(td, po);
+}
+
 void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc,
         const QoreParseOptions& po) {
     ThreadData* td = thread_data.get();
@@ -4452,7 +4498,11 @@ int ThreadEntryHandlerFrame::enterHandlers(ThreadData* td, QoreProgram* pgm, Exc
     // handler gets a sink of its own, which also tells whether it failed
     ExceptionSink handler_xsink;
     try {
-        token = run_thread_entry_handler(td, handlers->on_enter, nullptr, handler_xsink);
+        {
+            // the handler runs with the options of the code that set it (qore#6208)
+            QoreThreadRuntimeParseOptionsHelper po_helper(&handlers->po);
+            token = run_thread_entry_handler(td, handlers->on_enter, nullptr, handler_xsink);
+        }
 #ifdef DEBUG
         if (qore_dbg_program_entry_fails(QDPES_ENTRY_HANDLER)) {
             throw std::bad_alloc();
@@ -4548,6 +4598,8 @@ void ThreadEntryHandlerFrame::exitHandlers(ThreadData* td, ExceptionSink* xsink)
             QoreValue entry_value = token;
             token = QoreValue();
             args->push(entry_value, &handler_xsink);
+            // the handler runs with the options of the code that set it (qore#6208)
+            QoreThreadRuntimeParseOptionsHelper po_helper(&handlers->po);
             ValueHolder rv(run_thread_entry_handler(td, handlers->on_exit, *args, handler_xsink), &handler_xsink);
         }
     } catch (...) {
@@ -6587,6 +6639,9 @@ qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* caller_pgm) 
 
 bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id) {
     ThreadData* td = thread_data.get();
+    // module code running for a restricted caller, or for none (application 0): the code of a thread that module
+    // code started, which serves no caller of its own; its timers are untagged, and it can cancel only untagged
+    // timers, so that it cannot be used to cancel the timers of an application (qore#6208)
     if (!td->runtime_po_module_pgm || td->runtime_po_module_pgm != td->current_pgm) {
         return false;
     }
@@ -6753,6 +6808,73 @@ void RuntimeParseOptionsOverrideHelper::restore() {
     td->runtime_po_sandboxed = old_sandboxed;
     td->runtime_po_override_pgm = old_override_pgm;
     td->runtime_po = old_po;
+}
+
+void QoreThreadRuntimeParseOptions::refPrograms() {
+    if (override.module_pgm) {
+        const_cast<QoreProgram*>(override.module_pgm)->depRef();
+    }
+    if (override.override_pgm) {
+        const_cast<QoreProgram*>(override.override_pgm)->depRef();
+    }
+}
+
+void QoreThreadRuntimeParseOptions::derefPrograms() {
+    if (override.module_pgm) {
+        const_cast<QoreProgram*>(override.module_pgm)->depDeref();
+    }
+    if (override.override_pgm) {
+        const_cast<QoreProgram*>(override.override_pgm)->depDeref();
+    }
+}
+
+QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::captureForThread() {
+    QoreThreadRuntimeParseOptions rv = capture();
+    rv.override.app_pgm_id = 0;
+    return rv;
+}
+
+bool QoreThreadRuntimeParseOptions::currentRestrictsNothing() {
+    ThreadData* td = thread_data.get();
+    // the options that grant or deny access: the functional domains and the positive options
+    static const QoreParseOptions access_options = QoreParseOptions(QDOM_ALL) | QoreParseOptions::POSITIVE_OPTIONS;
+    return !(td->runtime_po & access_options)
+        && !td->runtime_po_override_mask
+        && !td->runtime_po_override_value
+        && !td->runtime_po_override_replace
+        && !td->runtime_po_caller_restrictions
+        && !td->runtime_po_module_pgm
+        && !td->runtime_po_app_pgm_id
+        && !td->runtime_po_sandboxed
+        && !td->runtime_po_override_pgm;
+}
+
+QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
+    ThreadData* td = thread_data.get();
+    QoreThreadRuntimeParseOptions rv;
+    rv.po = td->runtime_po;
+    rv.override.mask = td->runtime_po_override_mask;
+    rv.override.value = td->runtime_po_override_value;
+    rv.override.replace = td->runtime_po_override_replace;
+    rv.override.caller_restrictions = td->runtime_po_caller_restrictions;
+    rv.override.module_pgm = td->runtime_po_module_pgm;
+    rv.override.app_pgm_id = td->runtime_po_app_pgm_id;
+    rv.override.sandboxed = td->runtime_po_sandboxed;
+    rv.override.override_pgm = td->runtime_po_override_pgm;
+    rv.refPrograms();
+    return rv;
+}
+
+QoreThreadRuntimeParseOptionsHelper::QoreThreadRuntimeParseOptionsHelper(const QoreThreadRuntimeParseOptions* o) {
+    if (!o) {
+        return;
+    }
+    ThreadData* td = thread_data.get();
+    override_helper.emplace();
+    // saves the override and the options in effect, and sets the override
+    override_helper->set(td, o->override);
+    // the options were computed with the override in the starting thread
+    td->runtime_po = o->po;
 }
 
 bool runtime_module_call_override_in_effect(const QoreProgram* module_pgm) {
@@ -7241,10 +7363,18 @@ struct ThreadArg {
     pthread_t native_id{};
     //! the sandbox of the starting code, which governs the new thread as its outermost caller, or nullptr
     std::unique_ptr<QoreInheritedSandbox> sandbox;
+    //! the run-time parse options of the starting code, which the new thread runs with unless it does not work on
+    //! behalf of the starting code (\ref QTF_NO_SANDBOX_INHERIT), as with the sandbox (qore#6208)
+    QoreThreadRuntimeParseOptions runtime_po;
+    bool inherit_runtime_po;
 
     DLLLOCAL ThreadArg(q_thread_t n_f, void* a, int n_tid, int n_flags = QTF_NONE,
             std::unique_ptr<QoreInheritedSandbox>&& n_sandbox = std::unique_ptr<QoreInheritedSandbox>())
-            : f(n_f), arg(a), tid(n_tid), flags(n_flags), sandbox(std::move(n_sandbox)) {
+            : f(n_f), arg(a), tid(n_tid), flags(n_flags), sandbox(std::move(n_sandbox)),
+                inherit_runtime_po(!(n_flags & QTF_NO_SANDBOX_INHERIT)) {
+        if (inherit_runtime_po) {
+            runtime_po = QoreThreadRuntimeParseOptions::captureForThread();
+        }
     }
 
     DLLLOCAL void run(ExceptionSink* xsink) {
@@ -7447,6 +7577,9 @@ namespace {
             // ThreadArg of an external-lifecycle thread outlives the thread, so it is taken from it here
             std::unique_ptr<QoreInheritedSandbox> sandbox(std::move(ta->sandbox));
             QoreInheritedSandboxHelper sandbox_helper(sandbox ? &sandbox->ctx : nullptr);
+            // the run-time parse options of the starting code also govern everything this thread runs, including
+            // its teardown (qore#6208)
+            QoreThreadRuntimeParseOptionsHelper runtime_po_helper(ta->inherit_runtime_po ? &ta->runtime_po : nullptr);
 
             ExceptionSink xsink;
 
@@ -7488,6 +7621,10 @@ namespace {
                 assert(xsink.isException() || !td->active_exceptions);
 
                 // the thread's data is deleted next
+                runtime_po_helper.reset();
+                // the options' references to Programs are released while the thread's data exists, as releasing the
+                // last one deletes the Program (an external-lifecycle ThreadArg outlives the thread)
+                ta->runtime_po = QoreThreadRuntimeParseOptions();
                 sandbox_helper.reset();
                 sandbox.reset();
 
@@ -7535,6 +7672,14 @@ namespace {
             // taken from btp because btp is deleted before the thread's data
             std::unique_ptr<QoreInheritedSandbox> sandbox(std::move(btp->sandbox));
             QoreInheritedSandboxHelper sandbox_helper(sandbox ? &sandbox->ctx : nullptr);
+            // the thread runs with the run-time parse options of the starting code, including the restrictions that
+            // apply to it, for everything it runs: its Program's thread entry handler and initialization, the
+            // background expression and its teardown (qore#6208)
+            // taken from btp, which is deleted before the thread's data, so that the Programs that the options name
+            // stay referenced while they are installed
+            QoreThreadRuntimeParseOptions thread_po(btp->runtime_po);
+            btp->runtime_po = QoreThreadRuntimeParseOptions();
+            QoreThreadRuntimeParseOptionsHelper runtime_po_helper(&thread_po);
             // a thread that the module cleanup started can enter the Programs of the modules, which the cleanup
             // closes to other threads, for its whole life, including the deletion of its data
             QoreModuleCleanupDelegateHelper cleanup_delegate(btp->module_cleanup_delegate);
@@ -7676,6 +7821,9 @@ namespace {
 
                 // the thread's data is deleted next; the inherited sandbox stops counting the thread here
                 cleanup_delegate.reset();
+                runtime_po_helper.reset();
+                // released while the thread's data exists, as releasing the last reference deletes the Program
+                thread_po = QoreThreadRuntimeParseOptions();
                 sandbox_helper.reset();
                 sandbox.reset();
 

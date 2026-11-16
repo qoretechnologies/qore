@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires FsUtil
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class SignalTest
 
@@ -275,7 +276,7 @@ class SignalTest inherits QUnit::Test {
                 cmd += sprintf("%s='%s' ", var, ENV{var});
             }
         }
-        cmd += sprintf("'%s' '%s' 2>&1", QORE_ARGV[0], script.path);
+        cmd += sprintf("'%s' '%s' 2>&1", TestInterpreter::qore_interpreter(), script.path);
         int rc;
         string out = backquote(cmd, \rc);
         assertEq(0, rc, out);
@@ -303,7 +304,7 @@ class SignalTest inherits QUnit::Test {
                 cmd += sprintf("%s='%s' ", var, ENV{var});
             }
         }
-        cmd += sprintf("'%s' '%s' %d %s %s 2>/dev/null; echo rc=$?", QORE_ARGV[0], script.path, sig, mode, expected);
+        cmd += sprintf("'%s' '%s' %d %s %s 2>/dev/null; echo rc=$?", TestInterpreter::qore_interpreter(), script.path, sig, mode, expected);
         string out = backquote(cmd);
         *list<string> m = (out =~ x/rc=([0-9]+)/);
         return {"out": out, "rc": int(m[0])};
@@ -365,7 +366,7 @@ class SignalTest inherits QUnit::Test {
                 }
             }
             string out = backquote(sprintf("%snohup '%s' '%s' %d never survives 2>/dev/null; echo rc=$?", cmd,
-                QORE_ARGV[0], script.path, SIGHUP));
+                TestInterpreter::qore_interpreter(), script.path, SIGHUP));
             assertRegex("alive\nrc=0\n", out);
         }
 

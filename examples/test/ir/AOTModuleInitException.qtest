@@ -1,0 +1,401 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes of the interpreter and of qcc executables
+# test-platform: macos - qcc executables that initialize the modules they require
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestInterpreter.qm
+
+%exec-class AOTModuleInitExceptionTest
+
+#! A qcc executable fails when the init closure of a module that it requires raises an exception (qore#6217)
+/** The executable ran and exited with status 0, where the interpreter reports the exception and fails: a module whose
+    initialization refuses to complete could still be used.  The program, interpreted and as qcc executables, loads a
+    module whose init closure raises an exception when told to; without it, the program runs.
+*/
+class AOTModuleInitExceptionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+
+        #! a module whose init closure raises an exception when MODINIT_THROW is set
+        const ModuleSource = "%modern
+module ModInitThrow {
+    version = \"1.0\";
+    desc = \"qore#6217: an init closure that raises an exception\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () { ModInitThrow::init_module(); };
+}
+public namespace ModInitThrow {
+    public string sub f() { return \"module ready\"; }
+    public sub init_module() {
+        if (getenv(\"MODINIT_THROW\")) {
+            throw \"MODULE-INIT-REFUSED\", \"the module's initialization refuses to complete\";
+        }
+    }
+}
+";
+
+        #! a program that uses the module, found in the module path when the program runs
+        const ProgramSource = "%modern
+%requires ModInitThrow
+printf(\"%s\\n\", ModInitThrow::f());
+";
+
+        #! a program that uses the module by its path, which qcc compiles into the executable
+        const EmbeddedProgramSource = "%modern
+%requires ./ModInitThrow.qm
+printf(\"%s\\n\", ModInitThrow::f());
+";
+
+        #! a module that requires the module whose init closure raises an exception
+        const UserModuleSource = "%modern
+module ModInitUser {
+    version = \"1.0\";
+    desc = \"qore#6217: a module that requires a module whose initialization fails\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+%requires ModInitThrow
+public namespace ModInitUser {
+    public string sub f() { return ModInitThrow::f(); }
+}
+";
+
+        #! a program that uses the module that requires the failing one
+        const UserProgramSource = "%modern
+%requires ModInitUser
+printf(\"%s\\n\", ModInitUser::f());
+";
+
+        const Programs = {
+            "module path": "prog.q",
+            "module compiled into the executable": "embedded.q",
+        };
+    }
+
+    constructor() : QUnit::Test("AOTModuleInitExceptionTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        # the commands run in other directories (cd <dir> && ...): a relative directory is made absolute
+        if (libqore_dir !~ /^\//) {
+            libqore_dir = getcwd() + "/" + libqore_dir;
+        }
+        qcc_bin = TestInterpreter::qcc_compiler();
+        addTestCase("interpreted program", \interpretedTest());
+        addTestCase("qcc executables", \executableTest());
+        addTestCase("a compiled module (qmod) and a module that requires the failing one", \qmodTest());
+        addTestCase("the init closures that run when one fails, in each mode", \initOrderTest());
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! runs a command; returns its output and its exit status
+    private hash<auto> run(string cmd) {
+        string out = backquote(cmd + " 2>&1; echo \"rc=$?\"");
+        *list<*string> m = (out =~ x/^(.*)rc=([0-9]+)\n$/s);
+        assertTrue(exists m[1], "exit status of: " + cmd);
+        return {"out": m[0] ?? "", "rc": (m[1] ?? "-1").toInt()};
+    }
+
+    private string env(string mod_dir) {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s", libqore_dir,
+            libqore_dir, libqore_dir, mod_dir);
+    }
+
+    interpretedTest() {
+        TmpDir tmp("qore-aot-modinit-");
+        write(tmp.path + "/ModInitThrow.qm", ModuleSource);
+        write(tmp.path + "/prog.q", ProgramSource);
+        write(tmp.path + "/embedded.q", EmbeddedProgramSource);
+        foreach hash<auto> p in (Programs.pairIterator()) {
+            hash<auto> r = run(sprintf("%s %s -b %s/%s", env(tmp.path), qore_bin, tmp.path, p.value));
+            assertEq({"out": "module ready\n", "rc": 0}, r, p.key + ", interpreted, init completes");
+            r = run(sprintf("MODINIT_THROW=1 %s %s -b %s/%s", env(tmp.path), qore_bin, tmp.path, p.value));
+            assertNeq(0, r.rc, p.key + ", interpreted, init raises: exit status");
+            assertRegex("MODULE-INIT-REFUSED", r.out, p.key + ", interpreted, init raises: the exception is reported");
+            assertFalse(r.out =~ /module ready/, p.key + ", interpreted, init raises: the program does not run");
+        }
+    }
+
+    executableTest() {
+        if (!qcc_bin) {
+            testSkip("qcc is unavailable");
+        }
+        TmpDir tmp("qore-aot-modinit-exe-");
+        write(tmp.path + "/ModInitThrow.qm", ModuleSource);
+        write(tmp.path + "/prog.q", ProgramSource);
+        write(tmp.path + "/embedded.q", EmbeddedProgramSource);
+        foreach hash<auto> p in (Programs.pairIterator()) {
+            foreach string opt in (("-O0", "-O3")) {
+                string label = sprintf("%s, %s", p.key, opt);
+                string exe = sprintf("%s/%s%s", tmp.path, p.value, opt);
+                # the module required by its path is compiled into the executable when it is not found in the module
+                # path (where it would be a library module, which the executable loads when it runs)
+                TmpDir no_mods("qore-aot-modinit-nomods-");
+                hash<auto> c = run(sprintf("cd %s && %s %s %s -o %s %s/%s", tmp.path,
+                    env(p.value == "embedded.q" ? no_mods.path : tmp.path), qcc_bin, opt, exe, tmp.path, p.value));
+                assertTrue(is_file(exe), "built the executable " + label + ": " + c.out);
+                hash<auto> r = run(sprintf("%s %s", env(tmp.path), exe));
+                assertEq({"out": "module ready\n", "rc": 0}, r, label + ", init completes");
+                if (p.value == "embedded.q") {
+                    # the module is compiled into the executable: it runs without the module in the module path
+                    TmpDir empty("qore-aot-modinit-empty-");
+                    r = run(sprintf("MODINIT_THROW=1 %s %s", env(empty.path), exe));
+                    assertNeq(0, r.rc, label + ", without the module path, init raises: exit status");
+                    assertRegex("MODULE-INIT-REFUSED", r.out, label + ", without the module path, init raises");
+                }
+                r = run(sprintf("MODINIT_THROW=1 %s %s", env(tmp.path), exe));
+                assertNeq(0, r.rc, label + ", init raises: exit status");
+                assertRegex("MODULE-INIT-REFUSED", r.out, label + ", init raises: the exception is reported");
+                assertFalse(r.out =~ /module ready/, label + ", init raises: the program does not run");
+            }
+        }
+    }
+
+    qmodTest() {
+        if (!qcc_bin) {
+            testSkip("qcc is unavailable");
+        }
+        # the failing module compiled to a qmod, alone in its directory
+        TmpDir src("qore-aot-modinit-src-");
+        write(src.path + "/ModInitThrow.qm", ModuleSource);
+        TmpDir qmod("qore-aot-modinit-qmod-");
+        hash<auto> c = run(sprintf("%s %s -b --compile-module --strip-source --output %s/ModInitThrow.qmod "
+            "%s/ModInitThrow.qm", env(src.path), qore_bin, qmod.path, src.path));
+        if (!is_file(qmod.path + "/ModInitThrow.qmod")) {
+            testSkip("the module could not be compiled (AOT compilation unavailable?): " + c.out);
+        }
+        TmpDir tmp("qore-aot-modinit-qprog-");
+        write(tmp.path + "/prog.q", ProgramSource);
+        # interpreted, and as a qcc executable, with the compiled module
+        hash<auto> r = run(sprintf("MODINIT_THROW=1 %s %s -b %s/prog.q", env(qmod.path), qore_bin, tmp.path));
+        assertNeq(0, r.rc, "qmod, interpreted, init raises: exit status");
+        assertRegex("MODULE-INIT-REFUSED", r.out, "qmod, interpreted, init raises: the exception is reported");
+        string exe = tmp.path + "/prog-qmod";
+        c = run(sprintf("%s %s -O0 -o %s %s/prog.q", env(qmod.path), qcc_bin, exe, tmp.path));
+        assertTrue(is_file(exe), "built the executable with the qmod: " + c.out);
+        r = run(sprintf("%s %s", env(qmod.path), exe));
+        assertEq({"out": "module ready\n", "rc": 0}, r, "qmod executable, init completes");
+        r = run(sprintf("MODINIT_THROW=1 %s %s", env(qmod.path), exe));
+        assertNeq(0, r.rc, "qmod executable, init raises: exit status");
+        assertRegex("MODULE-INIT-REFUSED", r.out, "qmod executable, init raises: the exception is reported");
+        assertFalse(r.out =~ /module ready/, "qmod executable, init raises: the program does not run");
+
+        # a module that requires the failing one: the failing module's exception is reported
+        write(src.path + "/ModInitUser.qm", UserModuleSource);
+        write(tmp.path + "/user.q", UserProgramSource);
+        r = run(sprintf("MODINIT_THROW=1 %s %s -b %s/user.q", env(src.path), qore_bin, tmp.path));
+        assertNeq(0, r.rc, "required by a module, interpreted: exit status");
+        assertRegex("MODULE-INIT-REFUSED", r.out, "required by a module, interpreted: the exception is reported");
+        exe = tmp.path + "/user";
+        c = run(sprintf("%s %s -O0 -o %s %s/user.q", env(src.path), qcc_bin, exe, tmp.path));
+        assertTrue(is_file(exe), "built the executable of the module user: " + c.out);
+        r = run(sprintf("%s %s", env(src.path), exe));
+        assertEq({"out": "module ready\n", "rc": 0}, r, "required by a module, executable, init completes");
+        r = run(sprintf("MODINIT_THROW=1 %s %s", env(src.path), exe));
+        assertNeq(0, r.rc, "required by a module, executable, init raises: exit status");
+        assertRegex("MODULE-INIT-REFUSED", r.out, "required by a module, executable: the exception is reported");
+        assertFalse(r.out =~ /module ready/, "required by a module, executable: the program does not run");
+
+        # a module that requires the failing module compiled to a qmod
+        write(qmod.path + "/ModInitUser.qm", UserModuleSource);
+        r = run(sprintf("MODINIT_THROW=1 %s %s -b %s/user.q", env(qmod.path), qore_bin, tmp.path));
+        assertNeq(0, r.rc, "required by a module, qmod, interpreted: exit status");
+        assertRegex("MODULE-INIT-REFUSED", r.out, "required by a module, qmod, interpreted: the exception is reported");
+        exe = tmp.path + "/user-qmod";
+        c = run(sprintf("%s %s -O0 -o %s %s/user.q", env(qmod.path), qcc_bin, exe, tmp.path));
+        assertTrue(is_file(exe), "built the executable of the module user with the qmod: " + c.out);
+        r = run(sprintf("%s %s", env(qmod.path), exe));
+        assertEq({"out": "module ready\n", "rc": 0}, r, "required by a module, qmod, executable, init completes");
+        r = run(sprintf("MODINIT_THROW=1 %s %s", env(qmod.path), exe));
+        assertNeq(0, r.rc, "required by a module, qmod, executable, init raises: exit status");
+        assertRegex("MODULE-INIT-REFUSED", r.out, "required by a module, qmod, executable: the exception is reported");
+        assertFalse(r.out =~ /module ready/, "required by a module, qmod, executable: the program does not run");
+    }
+
+    #! returns the source of a module whose init closure logs its name; \a body is added to the closure
+    private string orderModuleSource(string name, string requires = "", string body = "") {
+        return sprintf("%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"qore#6217: an init closure that logs that it ran\";
+    author = \"Qore\";
+    license = \"MIT\";
+    domains = \"FILESYSTEM,EXTERNAL_INFO\";
+    init = sub () {
+        File f();
+        f.open2(getenv(\"INIT_LOG\"), O_CREAT | O_WRONLY | O_APPEND);
+        f.write(\"%s\\n\");
+        %s
+    };
+}
+%s
+public namespace %s {
+    public string sub f() { return \"%s\"; }
+}
+", name, name, body, requires, name, name);
+    }
+
+    #! runs a program or executable; returns the init closures that ran, its exit status and its output
+    private hash<auto> runLogged(string tmp_dir, string cmd, bool throw_init) {
+        string log = tmp_dir + "/init.log";
+        if (is_file(log)) {
+            unlink(log);
+        }
+        hash<auto> r = run(sprintf("INIT_LOG=%s %s%s", log, throw_init ? "ORDB_THROW=1 " : "", cmd));
+        r.inits = is_file(log) ? (ReadOnlyFile::readTextFile(log) =~ x/([A-Za-z]+)/g) : ();
+        return r;
+    }
+
+    #! with ModOrdB's init closure raising an exception, the init closures of ModOrdA, ModOrdB and ModOrdC run in
+    #! every mode before the program fails, as in the interpreter, which loads the other modules of the program after a
+    #! module fails (a module that requires the failing one does not initialize)
+    initOrderTest() {
+        TmpDir src("qore-aot-modinit-order-");
+        write(src.path + "/ModOrdA.qm", orderModuleSource("ModOrdA"));
+        write(src.path + "/ModOrdB.qm", orderModuleSource("ModOrdB", "",
+            "if (getenv(\"ORDB_THROW\")) { throw \"MODORDB-INIT-ERROR\", \"refused\"; }"));
+        write(src.path + "/ModOrdC.qm", orderModuleSource("ModOrdC"));
+        write(src.path + "/ModOrdU.qm", orderModuleSource("ModOrdU", "%requires ModOrdB\n%requires ModOrdC"));
+        # the modules required by their path, required by their names, and through a module that requires them
+        write(src.path + "/bypath.q", "%modern\n%requires ./ModOrdA.qm\n%requires ./ModOrdB.qm\n%requires ./ModOrdC.qm\n"
+            "printf(\"main\\n\");\n");
+        write(src.path + "/byname.q", "%modern\n%requires ModOrdA\n%requires ModOrdB\n%requires ModOrdC\n"
+            "printf(\"main\\n\");\n");
+        write(src.path + "/transitive.q", "%modern\n%requires ModOrdA\n%requires ModOrdU\nprintf(\"main\\n\");\n");
+
+        list<string> all = ("ModOrdA", "ModOrdB", "ModOrdC");
+        # mode label -> [module dir, program]
+        hash<string, list<string>> modes = {
+            "interpreted, by path": (src.path, "bypath.q"),
+            "interpreted, by name": (src.path, "byname.q"),
+            "interpreted, through a module": (src.path, "transitive.q"),
+        };
+        foreach hash<auto> m in (modes.pairIterator()) {
+            hash<auto> r = runLogged(src.path, sprintf("%s %s -b %s/%s", env(m.value[0]), qore_bin, src.path,
+                m.value[1]), True);
+            assertEq(all, r.inits, m.key + ": the init closures that ran: " + r.out);
+            assertNeq(0, r.rc, m.key + ": exit status");
+            assertRegex("MODORDB-INIT-ERROR", r.out, m.key + ": the exception is reported");
+            assertFalse(r.out =~ /^main$/m, m.key + ": the program does not run");
+        }
+
+        # the modules compiled to qmods
+        TmpDir qmod("qore-aot-modinit-order-qmod-");
+        bool have_qmods = True;
+        foreach string name in (("ModOrdA", "ModOrdB", "ModOrdC", "ModOrdU")) {
+            # a module is compiled against the compiled modules that it requires
+            run(sprintf("INIT_LOG=%s/compile.log %s %s -b --compile-module --strip-source --output %s/%s.qmod "
+                "%s/%s.qm", qmod.path, env(qmod.path), qore_bin, qmod.path, name, src.path, name));
+            if (!is_file(qmod.path + "/" + name + ".qmod")) {
+                # AOT compilation is available with qcc: the module must compile then
+                if (qcc_bin) {
+                    assertTrue(False, sprintf("compiled module %s", name));
+                }
+                have_qmods = False;
+                break;
+            }
+        }
+        if (have_qmods) {
+            foreach string prog in (("byname.q", "transitive.q")) {
+                string label = "interpreted, qmods, " + prog;
+                hash<auto> r = runLogged(src.path, sprintf("%s %s -b %s/%s", env(qmod.path), qore_bin, src.path,
+                    prog), True);
+                assertEq(all, r.inits, label + ": the init closures that ran");
+                assertNeq(0, r.rc, label + ": exit status");
+                assertRegex("MODORDB-INIT-ERROR", r.out, label + ": the exception is reported");
+                assertFalse(r.out =~ /^main$/m, label + ": the program does not run");
+            }
+        }
+
+        # ModOrdB missing from the module path: the other modules initialize before the program fails, as in the
+        # interpreter, which loads the other modules after a %requires that fails
+        TmpDir nob_src("qore-aot-modinit-order-nob-");
+        TmpDir nob_qmod("qore-aot-modinit-order-nobq-");
+        foreach string name in (("ModOrdA", "ModOrdC")) {
+            write(nob_src.path + "/" + name + ".qm", ReadOnlyFile::readTextFile(src.path + "/" + name + ".qm"));
+            if (have_qmods) {
+                # a compiled module is copied as binary data
+                File f();
+                f.open2(nob_qmod.path + "/" + name + ".qmod", O_WRONLY | O_CREAT | O_TRUNC);
+                f.write(ReadOnlyFile::readBinaryFile(qmod.path + "/" + name + ".qmod"));
+            }
+        }
+        list<string> no_b = ("ModOrdA", "ModOrdC");
+        {
+            hash<auto> r = runLogged(src.path, sprintf("%s %s -b %s/byname.q", env(nob_src.path), qore_bin,
+                src.path), False);
+            assertEq(no_b, r.inits, "interpreted, ModOrdB missing: the init closures that ran: " + r.out);
+            assertNeq(0, r.rc, "interpreted, ModOrdB missing: exit status");
+            assertFalse(r.out =~ /^main$/m, "interpreted, ModOrdB missing: the program does not run");
+        }
+
+        if (!qcc_bin) {
+            return;
+        }
+        TmpDir empty("qore-aot-modinit-order-empty-");
+        # label -> [module dir when compiled, module dir when run, program]
+        hash<string, list<string>> exes = {
+            "executable, modules compiled in": (empty.path, empty.path, "bypath.q"),
+            "executable, modules in the module path": (src.path, src.path, "byname.q"),
+            "executable, through a module in the module path": (src.path, src.path, "transitive.q"),
+        };
+        if (have_qmods) {
+            exes += {
+                "executable, qmods": (qmod.path, qmod.path, "byname.q"),
+                "executable, through a qmod": (qmod.path, qmod.path, "transitive.q"),
+            };
+        }
+        int i = 0;
+        foreach hash<auto> m in (exes.pairIterator()) {
+            string exe = sprintf("%s/order-%d", src.path, ++i);
+            hash<auto> c = run(sprintf("cd %s && INIT_LOG=%s/compile.log %s %s -O0 -o %s %s/%s", src.path, src.path,
+                env(m.value[0]), qcc_bin, exe, src.path, m.value[2]));
+            # assertTrue() returns no value: the file is checked again to skip a mode without an executable
+            assertTrue(is_file(exe), m.key + ": built the executable: " + c.out);
+            if (!is_file(exe)) {
+                continue;
+            }
+            # without the exception, every module initializes and the program runs
+            hash<auto> r = runLogged(src.path, sprintf("%s %s", env(m.value[1]), exe), False);
+            list<string> expected = all;
+            if (m.value[2] == "transitive.q") {
+                expected += "ModOrdU";
+            }
+            assertEq(expected, r.inits, m.key + ", no exception: the init closures that ran");
+            assertEq({"out": "main\n", "rc": 0}, r - "inits", m.key + ", no exception: the program runs");
+            r = runLogged(src.path, sprintf("%s %s", env(m.value[1]), exe), True);
+            assertEq(all, r.inits, m.key + ": the init closures that ran");
+            assertNeq(0, r.rc, m.key + ": exit status");
+            assertRegex("MODORDB-INIT-ERROR", r.out, m.key + ": the exception is reported");
+            assertFalse(r.out =~ /^main$/m, m.key + ": the program does not run");
+
+            # the executables that load the modules from the module path, run without ModOrdB
+            *string nob_dir;
+            if (m.value[2] == "byname.q") {
+                nob_dir = m.value[1] == qmod.path ? nob_qmod.path : nob_src.path;
+            }
+            if (nob_dir) {
+                r = runLogged(src.path, sprintf("%s %s", env(nob_dir), exe), False);
+                assertEq(no_b, r.inits, m.key + ", ModOrdB missing: the init closures that ran: " + r.out);
+                assertNeq(0, r.rc, m.key + ", ModOrdB missing: exit status");
+                assertFalse(r.out =~ /^main$/m, m.key + ", ModOrdB missing: the program does not run");
+            }
+        }
+    }
+}

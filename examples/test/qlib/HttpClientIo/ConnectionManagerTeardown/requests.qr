@@ -1,0 +1,70 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Makes requests with HttpClientConnectionManager objects, deletes the managers and ends; see
+# ConnectionManagerTeardown.qtest.  ARGV[0] selects the case:
+# - "close": the server answers and closes the connection
+# - "keepalive": the server answers and keeps the connection, which the deleted manager closes
+# - "refused": nothing listens on the port
+# - "proxy": the request goes through a proxy that cannot be connected to (issue #6286)
+# ARGV[1] is the protocol option ("auto", "h1" or "h2")
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires HttpClientIo
+
+const Timeout = 30s;
+
+string mode = ARGV[0];
+string protocol = ARGV[1] ?? "auto";
+
+Socket listener();
+listener.bind("127.0.0.1:0");
+listener.listen();
+int port = listener.getSocketInfo().port;
+
+Counter served(1);
+if (mode == "close" || mode == "keepalive") {
+    background sub () {
+        on_exit served.dec();
+        Socket c = listener.accept(Timeout);
+        c.readHTTPHeader(Timeout);
+        c.send(sprintf("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n%s\r\nok",
+            mode == "close" ? "Connection: close\r\n" : ""), Timeout);
+        if (mode == "close") {
+            c.close();
+        } else {
+            # the client closes the kept connection when its manager is deleted
+            try {
+                c.isDataAvailable(Timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                # the close is reported as SOCKET-CLOSED
+            }
+        }
+    }();
+} else {
+    served.dec();
+    listener.close();
+}
+
+hash<auto> opts = {
+    "protocol": protocol,
+    "request_timeout": Timeout,
+    "connect_timeout": Timeout,
+};
+if (mode == "proxy") {
+    opts.proxy_url = sprintf("http://127.0.0.1:%d", port);
+}
+HttpClientIo::HttpClientConnectionManager mgr(cast<hash<HttpClientIo::HttpClientConnectionManagerOptions>>(opts));
+string result;
+try {
+    hash<auto> resp = mgr.request(sprintf("http://127.0.0.1:%d/", mode == "proxy" ? 9 : port), "GET", "/test");
+    result = resp.status_code.toString();
+} catch (hash<ExceptionInfo> ex) {
+    result = ex.err;
+}
+delete mgr;
+served.waitForZero(Timeout);
+printf("%s\n", result);
