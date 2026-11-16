@@ -19,7 +19,7 @@ class AOTSmokeBase inherits QUnit::Test {
     constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
         self.part = part;
 
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         # Determine the directory containing libqore (for compile/link)
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 

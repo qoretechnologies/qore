@@ -15,6 +15,24 @@ ROOT = Path(__file__).resolve().parents[3]
 CMAKE = os.environ.get("CMAKE_EXECUTABLE", "cmake")
 
 
+def extract_archive(bundle, target):
+    """Extract a test-generated archive without letting it write outside target.
+
+    tarfile's extraction filters (Python 3.12, backported to 3.8.17, 3.9.17, 3.10.12 and 3.11.4) do this check;
+    older versions take no filter argument, so the members are checked here before extracting them.
+    """
+    if hasattr(tarfile, "data_filter"):
+        bundle.extractall(target, filter="data")
+        return
+    for member in bundle.getmembers():
+        path = Path(member.name)
+        if path.is_absolute() or ".." in path.parts:
+            raise ValueError(f"archive member {member.name!r} leaves the extraction directory")
+        if not (member.isfile() or member.isdir()):
+            raise ValueError(f"archive member {member.name!r} is not a regular file or directory")
+    bundle.extractall(target)
+
+
 class GitRevisionTest(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="qore-source-revision-")
@@ -96,7 +114,7 @@ class GitRevisionTest(unittest.TestCase):
         archive = subprocess.check_output(["git", "archive", "HEAD"], cwd=source)
         extracted = outer / "archive"
         with tarfile.open(fileobj=io.BytesIO(archive)) as bundle:
-            bundle.extractall(extracted, filter="data")
+            extract_archive(bundle, extracted)
         self.assertIn(expected, (extracted / ".git-archive-revision").read_text())
         output, _ = self.update(extracted, None, True, "-DCMAKE_DISABLE_FIND_PACKAGE_Git=TRUE")
         self.header(output, expected)

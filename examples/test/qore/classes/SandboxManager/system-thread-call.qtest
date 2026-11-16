@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires SystemThreadWorker
 
@@ -174,7 +175,7 @@ class SystemThreadCallTest inherits QUnit::Test {
         string output = dir + "/output.txt";
         string command = sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1",
             get_script_dir() + PathSep + get_script_dir() + "/../../../../../qlib" + PathSep
-                + (ENV.QORE_MODULE_DIR ?? ""), QORE_ARGV[0], script, output);
+                + (ENV.QORE_MODULE_DIR ?? ""), TestInterpreter::qore_interpreter(), script, output);
         int rc = system(command);
         string out = ReadOnlyFile::readTextFile(output);
         return {"rc": rc, "output": out, "lines": (map $1, trim(out).split("\n"), $1 !~ /^\s/)};

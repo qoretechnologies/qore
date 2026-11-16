@@ -139,6 +139,8 @@ int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
         return err;
     }
 
+    // the initializer is code of the hashdecl, whatever code makes the hashdecl parse it (qore#6268)
+    DeclarationParseScopeHelper declaration_scope;
     QoreParseContext parse_context;
     if (parse_init_value(exp, parse_context) && !err) {
         err = -1;
@@ -175,7 +177,38 @@ HashDeclMemberInfo* HashDeclMemberInfo::instantiate(const QoreTypeInfo* receiver
     HashDeclMemberInfo* rv = new HashDeclMemberInfo(*this);
     rv->typeInfo = qore_substitute_type_params_if_needed(typeInfo, receiver_type_info);
     rv->refreshInitializationFilter();
+    // the default value is evaluated with the type of the instantiation as the receiver, which substitutes the type
+    // parameters of the hashdecl in its types (qore#6240)
+    if (exp) {
+        rv->default_receiver_type_info = receiver_type_info;
+    }
     return rv;
+}
+
+namespace {
+//! Sets the receiver for the evaluation of the default value of a hashdecl member
+/** The default value of a member of an instantiation of a generic hashdecl is evaluated with the type of the
+    instantiation as the receiver, so that the type parameters of the hashdecl in its types are its type arguments
+    (qore#6240); for any other member, nothing is changed
+*/
+class HashDeclDefaultReceiverHelper {
+public:
+    HashDeclDefaultReceiverHelper(const HashDeclMemberInfo& mi) : set(mi.getDefaultReceiverTypeInfo()) {
+        if (set) {
+            old = runtime_set_receiver_type_info(mi.getDefaultReceiverTypeInfo());
+        }
+    }
+
+    ~HashDeclDefaultReceiverHelper() {
+        if (set) {
+            runtime_set_receiver_type_info(old);
+        }
+    }
+
+private:
+    const QoreTypeInfo* old = nullptr;
+    bool set;
+};
 }
 
 int typed_hash_decl_private::resolveParseParent() {
@@ -1174,7 +1207,9 @@ QORE_INTERN_ALWAYS_INLINE int typed_hash_decl_private::initHashInternImpl(QoreHa
                 }
             };
             // the initializer is evaluated as a statement of its own: a value that it reads or creates is not a
-            // temporary of the statement that creates the hash (see design/temporary-lifetime.md)
+            // temporary of the statement that creates the hash (see design/temporary-lifetime.md); in an
+            // instantiation of a generic hashdecl, with its type as the receiver (qore#6240)
+            HashDeclDefaultReceiverHelper receiver_helper(*i.second);
             QoreScopedEvalHolder val(i.second->exp, true, sink);
             if (*sink) {
                 describe_local();
@@ -1249,7 +1284,7 @@ int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSin
             if (*xsink) {
                 return -1;
             }
-            QoreValue old = hp->swapKeyValue(i.first, val.release(), nullptr);
+            [[maybe_unused]] QoreValue old = hp->swapKeyValue(i.first, val.release(), nullptr);
             assert(old.isNothing());
             move_member_to_back(i.first);
             continue;
@@ -1259,7 +1294,9 @@ int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSin
             continue;
         }
 
-        // the initializer is evaluated as a statement of its own (see design/temporary-lifetime.md)
+        // the initializer is evaluated as a statement of its own (see design/temporary-lifetime.md); in an
+        // instantiation of a generic hashdecl, with its type as the receiver (qore#6240)
+        HashDeclDefaultReceiverHelper receiver_helper(*i.second);
         QoreScopedEvalHolder default_val(i.second->exp, true, xsink);
         if (*xsink) {
             return -1;
@@ -1270,7 +1307,7 @@ int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSin
             return -1;
         }
 
-        QoreValue old = hp->swapKeyValue(i.first,
+        [[maybe_unused]] QoreValue old = hp->swapKeyValue(i.first,
             default_val.takeReferencedValue(), nullptr);
         assert(old.isNothing());
         move_member_to_back(i.first);

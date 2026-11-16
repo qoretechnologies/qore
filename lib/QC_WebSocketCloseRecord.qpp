@@ -1,0 +1,87 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_WebSocketCloseRecord.qpp WebSocketCloseRecord class definition */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include "qore/intern/WebSocketCloseRecord.h"
+
+//! The read-only record that a close frame was sent on the stream of a WebSocket connection over HTTP/2 or HTTP/3
+/** A WebSocket connection has one close frame, after which no data frame is sent (RFC 6455 section 5.5.1).  The
+    HTTP/2 or HTTP/3 session sets the record when it buffers a close frame on the stream, either the one of the
+    stream's WebSocket frame state (for an error in the peer's frames) or the application's; the stream context of the
+    connection (@ref AsyncSocketIo::AbstractStreamContext::isWebSocketCloseSent() "AbstractStreamContext::isWebSocketCloseSent()")
+    reads it before it sends, so that a data frame is refused with \c WEBSOCKET-CLOSING-ERROR, and a second close
+    frame is not sent, also after the stream or the session has ended.
+
+    Objects of this class are returned by
+    @ref Qore::Socket::getHttp2StreamWebSocketCloseRecord() "Socket::getHttp2StreamWebSocketCloseRecord()" and
+    @ref Qore::Socket::getQuicStreamWebSocketCloseRecord() "Socket::getQuicStreamWebSocketCloseRecord()"; they cannot
+    be created or changed by Qore code, so the guarantee does not depend on the code of a handler.
+
+    @par Sandboxing
+    The class has no functional domain: an object holds one boolean about a stream of a socket that the program
+    already holds, and reveals nothing else (no address, data or state of other streams).  Objects can only be
+    obtained through the methods of @ref Qore::Socket "Socket" above, whose network domain
+    (@ref Qore::PO_NO_NETWORK "PO_NO_NETWORK") keeps them from a program without network access.
+
+    @par Example:
+    @code{.py}
+*WebSocketCloseRecord rec = sock.getHttp2StreamWebSocketCloseRecord(stream_id);
+if (rec && rec.isCloseSent()) {
+    # no data frame may be sent on the stream any more
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+qclass WebSocketCloseRecord [arg=WebSocketCloseRecord* r; ns=Qore; flags=final];
+
+//! Objects of this class cannot be created by Qore code
+/**
+ */
+private WebSocketCloseRecord::constructor() {
+    assert(false);
+}
+
+//! Returns @ref True if a close frame was sent on the stream
+/** The value is read without a lock; once @ref True, it stays @ref True.
+
+    @return @ref True if a close frame was sent on the stream, by the stream's WebSocket frame state or by the
+    application
+
+    @par Example:
+    @code{.py}
+bool closing = rec.isCloseSent();
+    @endcode
+
+    @since %Qore 3.0
+*/
+bool WebSocketCloseRecord::isCloseSent() [flags=CONSTANT] {
+    return r->isCloseSent();
+}

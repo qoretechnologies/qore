@@ -570,7 +570,6 @@ static bool write_expr_self_method_call(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* call = qore_get_self_function_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
-        const QoreMethod* method = call->getMethod();
         const QoreClass* qc = call->getRecordedClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
         ctx.writer.writeStringRef(class_ref.c_str());
@@ -2738,7 +2737,7 @@ static bool write_expr_hashdecl_new(AOTExprWriteCtx& ctx) {
     if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
         if (nhd->hd) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
-            ctx.writer.writeStringRef(nhd->hd->getNamespacePath().c_str());
+            ctx.writer.writeStringRef(qore_aot_encode_expr_hashdecl_path(nhd->hd).c_str());
         } else if (nhd->isDynamicHashDeclConstruct()) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
             ctx.writer.writeStringRef(nhd->getDynamicHashDeclName().c_str());
@@ -2818,8 +2817,10 @@ static QoreValue read_expr_hashdecl_new(AOTExprReadCtx& ctx) {
             }
         }
     }
-    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(ctx.pgm, hashdecl_path);
-    if (!hd) {
+    const TypedHashDecl* hd = qore_aot_decode_expr_hashdecl_path(ctx.pgm, hashdecl_path);
+    // a hashdecl with type parameters that cannot be resolved now is resolved with the instantiation of the call when
+    // the hash is made (qore#6173)
+    if (!hd && !strstr(hashdecl_path, "typeparam<")) {
         if (call_args) {
             call_args->deref(nullptr);
         }
@@ -2838,8 +2839,12 @@ static QoreValue read_expr_hashdecl_new(AOTExprReadCtx& ctx) {
         }
         call_args->deref(nullptr);
     }
-    // the parse's key check is not serialized, so the keys are always checked when the hash is made
-    NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, pln, true);
+    // the parse's key check is not serialized, so the keys are always checked when the hash is made; a hashdecl with
+    // type parameters that cannot be resolved now is resolved by its path when the hash is made, which raises an
+    // exception if it cannot be found then either (qore#6173)
+    NewHashDeclNode* nhd = hd
+        ? new NewHashDeclNode(&loc_builtin, hd, pln, true)
+        : new NewHashDeclNode(&loc_builtin, hashdecl_path, hashTypeInfo, pln);
     return QoreValue(nhd);
 }
 
@@ -3471,7 +3476,7 @@ static bool write_expr_cast_hashdecl(AOTExprWriteCtx& ctx) {
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(hdc->getCastTypeInfo());
         if (hd || hdc->getCastTypeInfo() == hashTypeInfo || hdc->isDynamicHashDeclCast()) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_HASHDECL));
-            ctx.writer.writeStringRef(hd ? hd->getNamespacePath().c_str()
+            ctx.writer.writeStringRef(hd ? qore_aot_encode_expr_hashdecl_path(hd).c_str()
                 : (hdc->isDynamicHashDeclCast() ? hdc->getDynamicHashDeclName().c_str() : "hash"));
             ctx.writer.writeU8(hdc->isOrNothing() ? 1 : 0);
             return write_expr_cast_inner(ctx, hdc->getExp());
@@ -3499,7 +3504,7 @@ static QoreValue read_expr_cast_hashdecl(AOTExprReadCtx& ctx) {
         return QoreValue(new QoreHashDeclCastOperatorNode(&loc_builtin,
             static_cast<const TypedHashDecl*>(nullptr), inner, or_nothing != 0));
     }
-    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(ctx.pgm, hashdecl_path);
+    const TypedHashDecl* hd = qore_aot_decode_expr_hashdecl_path(ctx.pgm, hashdecl_path);
     auto* node = hd
         ? new QoreHashDeclCastOperatorNode(&loc_builtin, hd, inner, or_nothing != 0)
         : new QoreHashDeclCastOperatorNode(&loc_builtin, hashdecl_path, inner, or_nothing != 0);
