@@ -99,6 +99,53 @@ code sub make_capability(code c) {
     return SandboxManager::createTrustedBuildCall(c);
 }
 
+#! shared state that build_alloc() keeps
+our list<string> SharedState;
+
+#! trusted code: builds shared state that it keeps
+sub build_alloc(int n) {
+    list<string> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += sprintf("shared state entry %d with some padding to use memory", i);
+    }
+    SharedState = l;
+}
+
+#! trusted code: uses an object that it is given
+hash<auto> sub build_obj_read(object o) {
+    return o.read();
+}
+
+#! trusted code: asks an object that it is given to create a capability
+string sub build_obj_mk(object o) {
+    return o.mkcap();
+}
+
+#! a class of trusted code; an object that it creates while sandboxed code calls it carries that sandbox
+class Holder {
+    hash<auto> read() {
+        return build_read();
+    }
+
+    auto run(code cap) {
+        return cap(self);
+    }
+
+    string mkcap() {
+        try {
+            code c = SandboxManager::createTrustedBuildCall(\build_read());
+            return "created";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+#! trusted code that sandboxed code calls: the object gets the caller's sandbox as provenance
+Holder sub new_holder() {
+    return new Holder();
+}
+
 class SandboxTrustedBuildTest inherits QUnit::Test {
     private {
         #! the sandboxed Program
@@ -111,6 +158,9 @@ class SandboxTrustedBuildTest inherits QUnit::Test {
         code BuildRead;
         code BuildThread;
         code BuildCalling;
+        code BuildObjRead;
+        code BuildObjMk;
+        code BuildAlloc;
     }
 
     #! the code of the sandboxed Program
@@ -151,6 +201,10 @@ Program sub mk(string src) {
         addTestCase("the build and its threads", \buildAndThreads());
         addTestCase("the caller's callbacks keep their provenance", \callerCallbacks());
         addTestCase("the capability cannot be created by or for sandboxed code", \guards());
+        addTestCase("an object of the caller passed to the build keeps its provenance", \callerObject());
+        addTestCase("the sandbox of the Program that created the capability governs the build", \creatorSandbox());
+        addTestCase("a Program sandboxed by its flag only cannot create the capability", \flagOnlyCreator());
+        addTestCase("the memory that a build keeps is not charged to the caller", \memory());
         set_return_value(main());
     }
 
@@ -166,6 +220,9 @@ Program sub mk(string src) {
         BuildRead = SandboxManager::createTrustedBuildCall(\build_read());
         BuildThread = SandboxManager::createTrustedBuildCall(\build_thread());
         BuildCalling = SandboxManager::createTrustedBuildCall(\build_calling());
+        BuildObjRead = SandboxManager::createTrustedBuildCall(\build_obj_read());
+        BuildObjMk = SandboxManager::createTrustedBuildCall(\build_obj_mk());
+        BuildAlloc = SandboxManager::createTrustedBuildCall(\build_alloc());
 
         manager = new SandboxManager();
         manager.addFilesystemDeniedPath(DeniedFile);
@@ -257,6 +314,81 @@ Program sub mk(string src) {
         # the capability created by trusted code works
         code cap = make_capability(\build_program());
         assertEq(Ungoverned, sandboxed.callFunction("call", cap).callFunction("probe", DeniedFile));
+    }
+
+    callerObject() {
+        # an object that trusted code created while the sandboxed caller called it carries the caller's sandbox
+        Holder h = sandboxed.callFunction("call", \new_holder());
+        assertEq(Governed, h.read());
+        # the object passes itself to a trusted build from its own method: in the build, its methods are still
+        # governed by its provenance, also as the same context as the frame of the method that called the capability
+        assertEq(Governed, h.run(BuildObjRead));
+        assertEq("SANDBOX-CAPABILITY-ERROR", h.run(BuildObjMk));
+    }
+
+    creatorSandbox() {
+        # a capability created by the code of a trusted Program, which the host then gives a sandbox
+        Program creator(PO_MODERN);
+        creator.parse("%modern
+hash<auto> sub read(string path) {
+    try {
+        Qore::ReadOnlyFile f(path);
+        return {\"fs\": \"read:\" + trim(f.read(-1))};
+    } catch (hash<ExceptionInfo> ex) {
+        return {\"fs\": ex.err};
+    }
+}
+code sub mk() {
+    return Qore::SandboxManager::createTrustedBuildCall(\\read());
+}
+", "creator");
+        code cap = creator.callFunction("mk");
+        assertEq(Ungoverned, sandboxed.callFunction("call", cap, DeniedFile));
+        SandboxManager sm();
+        sm.addFilesystemDeniedPath(DeniedFile);
+        sm.setUncontrolledApiPolicy(True);
+        creator.setSandboxManager(sm);
+        # the creator's own sandbox governs its code in the build, as through createSystemPolicyCall()
+        assertEq(Governed, sandboxed.callFunction("call", cap, DeniedFile));
+    }
+
+    flagOnlyCreator() {
+        # a Program whose manager was removed with the C++ API (debug builds only): no sandbox governs its code, but
+        # its code is sandboxed
+        try {
+            call_function("dbg_trusted_build_from_flag_only_program", \build_program());
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                testSkip("dbg_trusted_build_from_flag_only_program() is only available in debug builds");
+            }
+            assertEq("SANDBOX-CAPABILITY-ERROR", ex.err);
+            assertRegex("created by sandboxed code", ex.desc);
+            return;
+        }
+        fail("the capability was created in a Program sandboxed by its flag");
+    }
+
+    memory() {
+        SandboxManager m();
+        m.setUncontrolledApiPolicy(True);
+        m.setMemoryLimit(512 * 1024 * 1024);
+        Program p(PO_MODERN);
+        p.setSandboxManager(m);
+        p.parse(SandboxedSource, "memory");
+        on_exit SharedState = ();
+        # about 30MB of shared state, kept after the build
+        int before = m.getMemoryUsage();
+        p.callFunction("call", BuildAlloc, 200000);
+        assertEq(200000, SharedState.size());
+        int charged = m.getMemoryUsage() - before;
+        assertTrue(charged < 1024 * 1024, sprintf("the shared state is not charged (%d bytes charged)", charged));
+        # a caller with a small memory limit can have it built
+        SharedState = ();
+        m.setMemoryLimit(1024 * 1024);
+        p.callFunction("call", BuildAlloc, 200000);
+        assertEq(200000, SharedState.size());
+        # code that the caller runs itself is charged
+        assertThrows("SANDBOX-MEMORY-LIMIT", \p.callFunction(), ("call", \build_alloc(), 200000));
     }
 
     #! runs spin() of the Program in a thread, requests the sandbox's interrupt once it spins, returns its result

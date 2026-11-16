@@ -1171,8 +1171,9 @@ static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_
     - the threads that it starts inherit no sandbox of the caller, and objects that it creates have no sandbox
       provenance
     - the caller's filesystem and network policy does not apply to the build itself, nor do the caller's interrupt
-      requests while it runs; the call budgets (wall and CPU time, stack, memory) that the caller's thread is in still
-      count it
+      requests while it runs; the time and stack budgets of the caller's call still count it (a caller with a small
+      budget can make the build fail), but the memory that the build allocates is not charged to the caller's call
+    - the sandbox of the %Program that created the capability, if that %Program has one, governs the build
     - objects and callbacks that the caller (or other sandboxed code) created keep their own provenance: what the
       build calls of them is governed by their sandbox
 
@@ -1186,21 +1187,42 @@ static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_
 
     @note
     - create the capability during trusted startup or module initialization, before any tenant code runs, and keep
-      it where tenant code cannot reach it (a private static member); a sandboxed caller that gets the capability can
-      build what the callback builds without its own sandbox
+      it where tenant code cannot reach it: a \c private:internal static member (a \c private member is visible to
+      a sandboxed subclass; see design/module-sandboxing-audit-guide.md); a sandboxed caller that gets the capability
+      can build what the callback builds without its own sandbox.  Creating it at startup is a rule of its use, not
+      checked by the method
     - the callback must build only from trusted metadata (configuration, the host's own sources), and must validate
-      the arguments that it is given: it must never parse code that the caller supplies, or the caller's code would
-      run without its sandbox
+      the arguments that it is given (identifiers that it looks up in that metadata): no data of the caller may
+      become code, or the caller's code would run without its sandbox: no source to parse or expression to evaluate,
+      no module name or path to load, no include, no parse define, no class, function or method name resolved at run
+      time, and no callback or object of the caller stored in what it builds
+    - a build that fails (an exception, a caller's time budget that expires) must not leave partial state that later
+      callers use: build into local variables and publish the result only when it is complete
     - unlike createSystemPolicyCall(), which masks only the policy of the caller for a fixed operation, this capability
       also detaches what the operation creates from the caller's interrupts and limits
 
     @par Example:
     @code{.py}
-# during trusted startup: builds the shared mapper container from the system's metadata
-const BuildMappers = SandboxManager::createTrustedBuildCall(\build_mapper_container());
-# later, for whichever caller needs the container first
-Program sub get_container() {
-    return container ?? (container = BuildMappers());
+class MapperContainers {
+    private:internal {
+        # created when the class's static members are initialized, during trusted startup
+        static code build = SandboxManager::createTrustedBuildCall(\MapperContainers::buildIntern());
+        static hash<string, Program> containers;
+        static Mutex lck();
+    }
+
+    # for whichever caller needs a container first
+    static Program get(string name) {
+        AutoLock al(lck);
+        return containers{name} ?? (containers{name} = build(name));
+    }
+
+    # builds the container from the system's own metadata: the name is only looked up there
+    private:internal static Program buildIntern(string name) {
+        Program p = make_mapper_program(get_mapper_metadata(name));
+        p.setSandboxManager(get_mapper_sandbox(name));
+        return p;
+    }
 }
     @endcode
 

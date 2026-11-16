@@ -281,6 +281,27 @@ struct QoreSandboxChargeRecord {
 //! Makes \a charge the current thread's charge; returns the previous one, whose borrowed bytes are returned to it
 DLLLOCAL QoreSandboxCharge* qore_sb_set_charge(QoreSandboxCharge* charge);
 
+//! Charges the memory that the thread allocates to no account while the object exists
+/** For a trusted build (SandboxManager::createTrustedBuildCall()): what it allocates is shared state of every caller,
+    not memory of the caller's call.  The previous charge, which the call that made it current keeps referenced while
+    the object exists (it is nested in that call), is made current again when the object is destroyed.
+*/
+class QoreSandboxChargeSuspension {
+public:
+    DLLLOCAL QoreSandboxChargeSuspension() : saved(qore_sb_set_charge(nullptr)) {
+    }
+
+    DLLLOCAL ~QoreSandboxChargeSuspension() {
+        qore_sb_set_charge(saved);
+    }
+
+    DLLLOCAL QoreSandboxChargeSuspension(const QoreSandboxChargeSuspension&) = delete;
+    DLLLOCAL QoreSandboxChargeSuspension& operator=(const QoreSandboxChargeSuspension&) = delete;
+
+private:
+    QoreSandboxCharge* saved;
+};
+
 //! Returns the innermost account of the current thread's charge that is over its limit, or nullptr
 /** Returns the thread's borrowed bytes first, so that they do not count against the limit
 */

@@ -84,8 +84,12 @@ runs the callback under a construction barrier, the module initialization barrie
 (`QoreModuleInitSandboxBarrierHelper(QoreTrustedBuildTag)`). Under it nothing of the caller below the barrier is seen:
 `qore_caller_is_sandboxed()` is false, so what the callback creates or commits keeps no sandbox of the caller, threads
 that it starts inherit none, and objects that it creates have no provenance; the provenance of the caller's objects and
-callbacks that it calls applies above the barrier. The caller's call budgets still count the build (they are frames of
-the thread, not found by the walk), its interrupt requests do not reach it. Creating the capability is refused to code
+callbacks that it calls applies above the barrier (a frame of the same context as one below the barrier is applied
+again: `QoreSandboxProvenanceHelper::apply()` does not skip a frame that the barrier hides). The barrier is set before
+the Program that created the capability is entered, so that Program's own sandbox, if it has one, governs the build.
+The time and stack budgets of the caller's call still count the build (they are frames of the thread, not found by the
+walk), the memory that it allocates is not charged to the caller (`QoreSandboxChargeSuspension`), and the caller's
+interrupt requests do not reach it. Creating the capability is refused to code
 that any sandbox governs or that is sandboxed, and for a callback that has provenance, belongs to a sandboxed Program,
 or is a bound callback or a capability; a trusted build capability cannot be registered with
 `createSystemPolicyCall()` either. The managers are released with the own manager when the Program is cleared, or when it is

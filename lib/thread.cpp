@@ -5860,8 +5860,15 @@ void QoreSandboxProvenanceHelper::apply(QoreSandboxContext* captured) {
     }
     context = captured;
     previous = td->sandbox_provenance;
+    // the same context as the innermost frame is not applied again, unless that frame is hidden: by a trusted policy
+    // boundary, or by a module initialization barrier (or a trusted build's construction barrier) set after it, below
+    // which the walk does not look (see visit_thread_provenance()), so that the provenance of an object or callback
+    // used under the barrier still governs it
+    const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
+        || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
     if (previous && previous->getContext() == captured
-            && !(td->trusted_policy_depth && previous == td->trusted_policy_boundary)) {
+            && !(td->trusted_policy_depth && previous == td->trusted_policy_boundary)
+            && !(mib && previous == mib->provenance)) {
         context = nullptr;
         captured->deref();
         return;

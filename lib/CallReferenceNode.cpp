@@ -42,6 +42,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/QoreSandboxMemory.h"
 
 #include <shared_mutex>
 #include <optional>
@@ -2090,15 +2091,18 @@ public:
             if (*xsink) {
                 return QoreValue();
             }
+            // a trusted build's barrier is set before the Program that created the capability is entered: the
+            // sandbox of that Program, if it has one, still governs the build
+            std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
+            std::optional<QoreSandboxChargeSuspension> build_charge;
+            if (enterBuild(build_barrier, build_charge, xsink)) {
+                return QoreValue();
+            }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
             if (*xsink) {
                 return QoreValue();
             }
             QoreSandboxTrustedPolicyHelper privilege;
-            std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
-            if (enterBuild(build_barrier, xsink)) {
-                return QoreValue();
-            }
             return qore_call_ref_invoke_named(callback, *evaluated, arg_names, policy, xsink);
         }
         return qore_call_ref_invoke_named(callback, args, arg_names, policy, xsink);
@@ -2133,15 +2137,18 @@ public:
             if (*xsink) {
                 return QoreValue();
             }
+            // a trusted build's barrier is set before the Program that created the capability is entered: the
+            // sandbox of that Program, if it has one, still governs the build
+            std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
+            std::optional<QoreSandboxChargeSuspension> build_charge;
+            if (enterBuild(build_barrier, build_charge, xsink)) {
+                return QoreValue();
+            }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
             if (*xsink) {
                 return QoreValue();
             }
             QoreSandboxTrustedPolicyHelper privilege;
-            std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
-            if (enterBuild(build_barrier, xsink)) {
-                return QoreValue();
-            }
             return callback->invoke(*evaluated, xsink);
         }
         return callback->invoke(args, xsink);
@@ -2161,15 +2168,18 @@ public:
             if (*xsink) {
                 return QoreValue();
             }
+            // a trusted build's barrier is set before the Program that created the capability is entered: the
+            // sandbox of that Program, if it has one, still governs the build
+            std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
+            std::optional<QoreSandboxChargeSuspension> build_charge;
+            if (enterBuild(build_barrier, build_charge, xsink)) {
+                return QoreValue();
+            }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
             if (*xsink) {
                 return QoreValue();
             }
             QoreSandboxTrustedPolicyHelper privilege;
-            std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
-            if (enterBuild(build_barrier, xsink)) {
-                return QoreValue();
-            }
             return callback->invokeLexical(*evaluated, xsink, policy);
         }
         return callback->invokeLexical(args, xsink, policy);
@@ -2206,7 +2216,8 @@ private:
 
         @return 0 for OK, -1 if the barrier could not be recorded (an out-of-memory exception is raised)
     */
-    int enterBuild(std::optional<QoreModuleInitSandboxBarrierHelper>& barrier, ExceptionSink* xsink) const {
+    int enterBuild(std::optional<QoreModuleInitSandboxBarrierHelper>& barrier,
+            std::optional<QoreSandboxChargeSuspension>& charge, ExceptionSink* xsink) const {
         if (!build) {
             return 0;
         }
@@ -2215,6 +2226,9 @@ private:
             xsink->outOfMemory();
             return -1;
         }
+        // the memory that the build allocates is shared state of every caller, not charged to the caller's call
+        // budget (see design/sandbox-resource-limits.md); the time budgets of the caller's call still count the build
+        charge.emplace();
         return 0;
     }
 };
@@ -2349,6 +2363,11 @@ ResolvedCallReferenceNode* qore_create_trusted_build_call(const ResolvedCallRefe
     bool code_sandboxed;
     int rc = qore_call_reference_code_parse_options(callback, code_po, xsink, &code_sandboxed);
     if (*xsink) {
+        return nullptr;
+    }
+    if (rc < 0) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the Program of the callback of a trusted build capability "
+            "has been deleted");
         return nullptr;
     }
     if (rc > 0 && code_sandboxed) {
