@@ -1,0 +1,128 @@
+hash constant key: enum<EI> 7
+hash assigned key: enum<EI> 8
+hash constant key to int: integer 7
+hash constant key to enum: enum<EI> 7
+hash float: enum<EF> 0.25
+hash string: enum<ES> "y"
+hash number: enum<EN> 2.5
+hash values: ["enum<EI>"] [7]
+map: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+map float: ["enum<EF>", "enum<EF>"] [0.5, 0.25]
+map string: ["enum<ES>", "enum<ES>"] ["x", "y"]
+map number: ["enum<EN>", "enum<EN>"] [1.5, 2.5]
+map with select: ["enum<EI>", "enum<EI>"] [7, 8]
+map with select float: ["enum<EF>"] [0.5]
+map with select string: ["enum<ES>"] ["x"]
+map hash key: ["enum<EI>", "enum<EI>"] [7, 1]
+map hash key float: ["enum<EF>"] [0.5]
+map hash key string: ["enum<ES>"] ["x"]
+map of map: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+map of select: ["enum<EI>", "enum<EI>"] [7, 8]
+select: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+select float: ["enum<EF>"] [0.5]
+select string: ["enum<ES>"] ["y"]
+select number: ["enum<EN>"] [2.5]
+select hash key: ["hash<string, enum<EI>>"] [{a: 7}]
+select of map: ["enum<EI>", "enum<EI>"] [7, 8]
+select != 0: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+select float != 0: ["enum<EF>", "enum<EF>"] [0.5, 0.25]
+select float > 0: ["enum<EF>", "enum<EF>"] [0.5, 0.25]
+map with select toInt(): ["enum<EI>", "enum<EI>"] [7, 8]
+foldl min: enum<EI> 1
+foldl max: enum<EI> 8
+foldr max: enum<EI> 8
+foldl min float: enum<EF> 0.25
+foldr min float: enum<EF> 0.25
+min: enum<EI> 1
+max: enum<EI> 8
+min float: enum<EF> 0.25
+foldl ternary: enum<EI> 8
+return: enum<EI> 7
+return float: enum<EF> 0.25
+local float: enum<EF> 0.25
+loop: enum<EI> 8
+loop float: enum<EF> 0.25
+index: enum<EI> 8
+index float: enum<EF> 0.25
+while float: enum<EF> 0.25
+ternary float function: enum<EF> 0.25
+push: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+push float: ["enum<EF>", "enum<EF>"] [0.5, 0.25]
+capture: enum<EI> 7
+capture float: enum<EF> 0.25
+capture local float: enum<EF> 0.25
+copy: enum<EI> 7
+ternary: enum<EI> 7
+ternary float: enum<EF> 0.25
+list element: enum<EI> 1
+list element float: enum<EF> 0.5
+list store: ["enum<EI>", "enum<EI>", "enum<EI>"] [8, 1, 8]
+list store float: ["enum<EF>", "enum<EF>"] [0.5, 0.5]
+list literal: ["enum<EI>", "enum<EI>"] [7, 1]
+list literal float: ["enum<EF>", "enum<EF>"] [0.25, 0.5]
+hash literal float: {a: "enum<EF>"} {a: 0.25}
+string: enum<ES> "y"
+number: enum<EN> 2.5
+foldl +: integer 16
+foldl *: integer 56
+foldl -: integer -2
+foldl + string: string "xy"
+map + 1: ["integer", "integer", "integer"] [8, 2, 9]
+map * 2: ["integer", "integer", "integer"] [14, 2, 16]
+map * 2 float: ["float", "float"] [1.0, 0.5]
+map hash key + 1: ["integer", "integer"] [8, 2]
+map hash key * 2: ["integer", "integer"] [14, 2]
+map sprintf: ["string", "string", "string"] ["7", "1", "8"]
+join: string "x,y"
++ 1: integer 8
+* 3: integer 21
+float * 2: float 0.5
+== 7: bool True
+< 8: bool True
+to int: integer 7
+to float: float 0.25
+list element + 1: integer 2
+sum in a loop: integer 16
+generic int bound map: ["enum<EI>", "enum<EI>"] [7, 1]
+generic int bound map with select: ["enum<EI>", "enum<EI>"] [7, 1]
+generic int bound select: ["enum<EI>", "enum<EI>"] [7, 1]
+generic int bound foldl max: enum<EI> 7
+generic int bound foldr min: enum<EI> 1
+generic int bound hash key: enum<EI> 7
+generic int bound local: enum<EI> 7
+generic int bound push: ["enum<EI>", "enum<EI>"] [7, 1]
+generic int bound return: enum<EI> 7
+generic enum bound map: ["enum<EI>", "enum<EI>"] [7, 8]
+generic enum bound select: ["enum<EI>", "enum<EI>"] [7, 8]
+generic enum bound foldl max: enum<EI> 8
+generic enum bound hash key: enum<EI> 7
+generic float enum bound map: ["enum<EF>", "enum<EF>"] [0.25, 0.5]
+generic float enum bound select: ["enum<EF>", "enum<EF>"] [0.25, 0.5]
+generic float enum bound foldr min: enum<EF> 0.25
+generic float enum bound hash key: enum<EF> 0.25
+generic float enum bound local: enum<EF> 0.25
+generic float enum bound return: enum<EF> 0.25
+generic int map: ["integer", "integer"] [3, 4]
+generic int select: ["integer", "integer"] [3, 4]
+generic int foldl max: integer 4
+generic int hash key: integer 3
+generic int local: integer 3
+generic function map: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+generic function select: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+generic function select with &&: ["enum<EI>", "enum<EI>"] [7, 1]
+generic function foldl max: enum<EI> 8
+generic function foldr min float: enum<EF> 0.25
+generic function foldl ternary: enum<EI> 8
+generic function foldr of select: enum<EI> 1
+generic function map with select: ["enum<EI>", "enum<EI>"] [7, 8]
+generic function element of map: enum<EI> 7
+generic function hash key: enum<EI> 7
+generic function hash of map: enum<EI> 7
+generic function map hash key: ["enum<EI>", "enum<EI>"] [7, 1]
+generic function return float: enum<EF> 0.25
+generic method map: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+generic static method select: ["enum<EI>", "enum<EI>", "enum<EI>"] [7, 1, 8]
+generic function map int: ["integer", "integer", "integer"] [7, 1, 8]
+generic function select int: ["integer", "integer", "integer"] [7, 1, 8]
+generic function foldl max int: integer 8
+generic function hash key int: integer 3
