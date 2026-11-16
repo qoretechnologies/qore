@@ -14,12 +14,12 @@
 
 %exec-class JITFinalizeCancellationTest
 
-#! A cancellation during the finalization of the lowering of a function refuses the function (qore#6305)
-/** The finalization loops write tables that the native code of the function reads (the records of the locals of the
-    handler helpers): a loop that a cancellation interrupts leaves entries unwritten, so the lowering fails and the
-    function is not compiled.  The debug hook dbg_force_finalize_cancel() makes the check of a loop report a
-    cancellation at an entry; the function must then run on its previous tier with the results of the AST, in jit and
-    tiered mode.
+#! A cancellation during the finalization of the lowering of a function refuses the function (qore#6299, qore#6305)
+/** The finalization loops write tables that the native code of the function reads (the addresses of the slots of the
+    reload chains, the records of the locals of the handler helpers): a loop that a cancellation interrupts leaves
+    entries unwritten, so the lowering fails and the function is not compiled.  The debug hook
+    dbg_force_finalize_cancel() makes the check of a loop report a cancellation at an entry; the function must then
+    run on its previous tier with the results of the AST, in jit and tiered mode.
 */
 class JITFinalizeCancellationTest inherits QUnit::Test {
     private {
@@ -28,6 +28,8 @@ class JITFinalizeCancellationTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("JITFinalizeCancellationTest", "1.0", \ARGV) {
         qore_bin = TestInterpreter::qore_interpreter();
+        addTestCase("a cancelled finalization of the reload chain slots refuses the function", \testLoop(),
+            ("reload-chain-slots", "reload chain slots", ""));
         addTestCase("a cancelled finalization of the handler local table refuses the function", \testLoop(),
             ("handler-local-table", "handler local table", "QORE_JIT_OBE_TABLE_BUDGET=0"));
         addTestCase("a cancelled finalization of a member of a batch refuses the batch", \testBatch());

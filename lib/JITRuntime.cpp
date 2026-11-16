@@ -450,6 +450,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_iterator_cleanup_allocas", reinterpret_cast<void*>(&qore_rt_iterator_cleanup_allocas) },
     { "qore_rt_reload_chain_rotate", reinterpret_cast<void*>(&qore_rt_reload_chain_rotate) },
     { "qore_rt_reload_chain_clear", reinterpret_cast<void*>(&qore_rt_reload_chain_clear) },
+    { "qore_rt_reload_chain_flush", reinterpret_cast<void*>(&qore_rt_reload_chain_flush) },
     { "qore_rt_reload_local_if_stale", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale) },
     { "qore_rt_reload_local_if_stale_aot", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_aot) },
     { "qore_rt_obe_publish", reinterpret_cast<void*>(&qore_rt_obe_publish) },
@@ -1342,6 +1343,35 @@ extern "C" DLLEXPORT void qore_rt_reload_chain_clear(uint64_t* slot, ExceptionSi
     *slot = 0;
     QoreValue v = fromBits(bits);
     v.discard(xsink);
+}
+
+// documented in JITRuntime.h
+extern "C" DLLEXPORT void qore_rt_reload_chain_flush(uint64_t** slots, const uint32_t* table, int32_t pairs,
+        int32_t epochs, uint64_t* epoch, ExceptionSink* xsink) {
+    for (int32_t i = 0; i < pairs; ++i) {
+        const uint32_t tracker = table[2 * i];
+        const uint32_t deferred = table[2 * i + 1];
+        if (tracker == QORE_RELOAD_CHAIN_NO_SLOT) {
+            assert(deferred != QORE_RELOAD_CHAIN_NO_SLOT);
+            qore_rt_reload_chain_clear(slots[deferred], xsink);
+        } else if (deferred == QORE_RELOAD_CHAIN_NO_SLOT) {
+            qore_rt_reload_chain_clear(slots[tracker], xsink);
+        } else {
+            qore_rt_reload_chain_rotate(slots[tracker], slots[deferred], xsink);
+        }
+    }
+    if (!epochs) {
+        return;
+    }
+    assert(epoch);
+    // the caches are valid for the epoch before the boundary, which makes them stale after it, as the inline code
+    // stores the old epoch
+    const uint64_t old_epoch = *epoch;
+    *epoch = old_epoch + 1;
+    const uint32_t* epoch_table = table + 2 * pairs;
+    for (int32_t i = 0; i < epochs; ++i) {
+        *slots[epoch_table[i]] = old_epoch;
+    }
 }
 
 //! Run all cleanup actions (decref all tracked values) and free the array.

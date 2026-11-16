@@ -65,7 +65,8 @@ struct AOTSlotMap;
 struct QorePluginLLVMCodegenInfo;
 //! The finalization loops of the lowering of a function that a cancellation interrupts, which refuses the function
 enum QoreFinalizeLoop : int {
-    // 1 is reserved for the loop of the reload chain slots, which another change adds, so that the numbers stay stable
+    //! QoreIRToLLVM::finalizeReloadChainSlots()
+    QFL_RELOAD_CHAIN_SLOTS = 1,
     //! QoreIRToLLVM::finalizeObeEntries()
     QFL_HANDLER_LOCAL_TABLE = 2,
 };
@@ -1170,6 +1171,27 @@ private:
     // the statement; at DiscardTemps those temps are dead and the refs can be
     // dropped before the next source statement observes destructor timing.
     void flushLocalReloadStateAtTempBoundary(llvm::Module& module);
+
+    //! The slots of the reload chains that the flushes of a function over getReloadChainCallThreshold() cover
+    /** Each flush rotated or cleared every tracked local with a call of its own (qore_rt_reload_chain_rotate()), so
+        a function had calls in the product of its tracked locals and its temp boundaries, and its code generation
+        took time in more than that (qore#6299).  Such a flush is one call of qore_rt_reload_chain_flush() with a
+        constant table of pairs of indexes in an array of the addresses of the trackers and deferred slots, which is
+        written in the entry block once the function is lowered (finalizeReloadChainSlots()).
+    */
+    llvm::AllocaInst* reload_chain_slots = nullptr;
+    //! the tracker and deferred slots of reload_chain_slots, in the order of their indexes
+    std::vector<llvm::Value*> reload_chain_slot_allocas;
+    //! the index of each slot in reload_chain_slots
+    std::unordered_map<const llvm::Value*, uint32_t> reload_chain_slot_index;
+
+    //! Returns the index of \a slot in reload_chain_slots, adding it if it has none
+    uint32_t getReloadChainSlotIndex(llvm::Value* slot);
+    //! Writes the addresses of the slots of reload_chain_slots in the entry block, once the function is lowered
+    /** @return false if it was cancelled (qore_finalize_cancelled()), leaving slots unwritten: the function must
+        then be refused (qore#6299)
+    */
+    bool finalizeReloadChainSlots(llvm::Function* llvm_func);
 
     // Error return block: used for exception cleanup when outside a try block.
     // When a Call/CallDirect/CallMethodDirect throws outside a try, execution

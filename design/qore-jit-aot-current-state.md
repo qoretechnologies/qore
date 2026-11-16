@@ -1006,12 +1006,18 @@ tracked local at *every* temp boundary, so a function paid
 `tracked locals x temp boundaries` basic blocks: the reflection test's
 1621-line `namedCallReflectionTests()` reached 88062 rotations — 95% of its
 184933 basic blocks and 74% of its instructions, before the optimizer ran at
-all — and could not be code-generated in half an hour. Above
+all — and could not be code-generated in half an hour. At or above
 `getReloadChainCallThreshold()` (`QORE_JIT_RELOAD_CHAIN_CALL_THRESHOLD`, default
-32 tracked locals) the same test and rotation run inside
-`qore_rt_reload_chain_rotate()` / `qore_rt_reload_chain_clear()`, which emits one
-call and no extra block. Smaller functions keep the inline form so LLVM can fold
-it away.
+32 trackers and deferred slots together) the same tests, rotations and
+valid-epoch stores run inside `qore_rt_reload_chain_flush()`: one call per
+boundary, with a constant table of the slots in the order of the inline form
+(pairs of tracker and deferred slot, then the valid epochs) over an array of
+their addresses that `finalizeReloadChainSlots()` writes in the entry block
+(qore#6299). A call per tracked local, as the first helper form made, still left
+the code of a function growing with `tracked locals x temp boundaries`. Smaller
+functions keep the inline form so LLVM can fold it away. A cancelled
+finalization of the slot array (or of the handler local table, qore#6305)
+refuses the function: its lowering fails, and it stays on its previous tier.
 
 Together these took that method from an unbounded hang to 29s.
 
