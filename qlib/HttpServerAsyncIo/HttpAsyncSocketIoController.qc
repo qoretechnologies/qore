@@ -5948,7 +5948,8 @@ namespace Priv {
     same \c hdr."content-type", \c cx."header-info" and \c cx."response-encoding" for every HTTP version (qore#6318,
     qore#6333).  For a repeated header, HTTP/2 gives a list, of which the
     last value is used, as for HTTP/1.x, which reads the header lines in turn; HTTP/3 joins the values with \c ", "
-    into one, which is used as it is.
+    into one, which is used as it is, so the result for a repeated header can differ from that of HTTP/1.x (the
+    boundaries of the values are lost).
 
     @param hdr the request headers
 

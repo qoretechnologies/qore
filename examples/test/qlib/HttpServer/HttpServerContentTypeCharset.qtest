@@ -53,7 +53,8 @@ class HttpServerContentTypeCharsetTest inherits QUnit::Test {
         const Requests = (
             {
                 "content-type": "text/plain;charset=ISO-8859-2",
-                # the first character set accepted is the response encoding (qore#6333)
+                # the first element of the value is the response encoding: UTF-8 is seen only at the start of an
+                # element directly after a comma, as for HTTP/1.x (qore#6333)
                 "accept-charset": "iso-8859-2;q=0.9, utf-8;q=0.5",
                 "body": "latin2",
                 "expected": {
@@ -132,6 +133,8 @@ class HttpServerContentTypeCharsetTest inherits QUnit::Test {
         assertEq("utf8", get_http_accept_charset("iso-8859-2,utf-8"));
         assertEq("iso-8859-2", get_http_accept_charset("iso-8859-2;q=0.9, utf-8;q=0.5"));
         assertEq("windows-1250", get_http_accept_charset(" windows-1250 , iso-8859-2"));
+        # leading blanks are skipped, as by the header parser
+        assertEq("utf8", get_http_accept_charset("  utf-8"));
         # only a charset parameter: no media type is left
         hash<HttpContentTypeInfo> info = get_http_content_type_info(";charset=utf-8");
         assertEq("utf-8", info.charset);
