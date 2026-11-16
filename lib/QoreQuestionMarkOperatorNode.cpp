@@ -83,6 +83,9 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
     QoreParseAnalysis right_analysis;
     int err = 0;
     {
+        // the value of the condition is used, whether or not the value of the operator expression is (qore#6143)
+        QoreParseContextFlagHelper fh(parse_context);
+        fh.unsetFlags(PF_RETURN_VALUE_IGNORED | PF_BACKGROUND);
         QoreParseContextAnalysisHelper ah(parse_context);
         err = parse_init_value(e[0], parse_context);
         cond_analysis = parse_context.analysis;

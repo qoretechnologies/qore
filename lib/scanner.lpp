@@ -530,42 +530,70 @@ static int check_reexport(YYLTYPE* yylloc, const char* directive, char*& cn, boo
     return 0;
 }
 
-static DateTimeNode *makeYears(int years) {
-    return new DateTimeNode(years, 0, 0, 0, 0, 0, 0, true);
-}
+// the units of relative date literals
+enum RelativeLiteralUnit {
+    RLU_YEARS,
+    RLU_MONTHS,
+    RLU_DAYS,
+    RLU_HOURS,
+    RLU_MIN,
+    RLU_SEC,
+    RLU_MS,
+    RLU_US,
+};
 
-static DateTimeNode *makeMonths(int months) {
-    return new DateTimeNode(0, months, 0, 0, 0, 0, 0, true);
-}
-
-static DateTimeNode *makeDays(int days) {
-    return new DateTimeNode(0, 0, days, 0, 0, 0, 0, true);
-}
-
-static DateTimeNode *makeHours(int hours) {
-    return new DateTimeNode(0, 0, 0, hours, 0, 0, 0, true);
-}
-
-static DateTimeNode *makeMinutes(int minutes) {
-    return new DateTimeNode(0, 0, 0, 0, minutes, 0, 0, true);
-}
-
-static DateTimeNode* makeSeconds(const char* txt) {
-    long secs = strtol(txt, 0, 10);
-    double us = q_strtod(txt) - secs;
-    if (us) {
-        us *= 1000000.0;
+// returns a relative date literal (ex: 2Y, 90m, 1.5s, 250ms) from its text
+/* A literal whose value or whole hours do not fit the signed 32-bit component of a relative date is a parse error,
+   as are the functions that make a relative date (years(), ... microseconds()), which it gives the same value as;
+   it wrapped to another duration before (qore#6103).  The literal has no sign, so its value is not negative.
+*/
+static DateTimeNode* rel_literal(YYLTYPE* yylloc, const char* txt, RelativeLiteralUnit unit) {
+    errno = 0;
+    int64 v = strtoll(txt, nullptr, 10);
+    bool overflow = errno == ERANGE;
+    // the component that must fit an int, for the error message
+    const char* component;
+    int64 value;
+    switch (unit) {
+        case RLU_YEARS: component = "years"; value = v; break;
+        case RLU_MONTHS: component = "months"; value = v; break;
+        case RLU_DAYS: component = "days"; value = v; break;
+        case RLU_HOURS: component = "hours"; value = v; break;
+        case RLU_MIN: component = "hours"; value = v / 60; break;
+        case RLU_SEC: component = "hours"; value = v / 3600; break;
+        case RLU_MS: component = "hours"; value = v / 3600000; break;
+        case RLU_US: component = "hours"; value = v / 3600000000ll; break;
+        default: assert(false); component = "hours"; value = 0; break;
+    }
+    if (overflow || value > std::numeric_limits<int>::max()) {
+        parse_error(*get_loc(yylloc), "relative date literal '%s' is out of range: its %s must fit a signed 32-bit "
+            "integer (at most %d %s)", txt, component, std::numeric_limits<int>::max(), component);
+        return new DateTimeNode(true);
     }
 
-    return DateTimeNode::makeRelative(0, 0, 0, 0, 0, secs, (int)us);
-}
-
-static DateTimeNode *makeMilliseconds(int ms) {
-    return DateTimeNode::makeRelative(0, 0, 0, 0, 0, ms / 1000, (ms % 1000) * 1000);
-}
-
-static DateTimeNode *makeMicroseconds(int us) {
-    return DateTimeNode::makeRelative(0, 0, 0, 0, 0, 0, us);
+    switch (unit) {
+        case RLU_YEARS: return new DateTimeNode(static_cast<int>(v), 0, 0, 0, 0, 0, 0, true);
+        case RLU_MONTHS: return new DateTimeNode(0, static_cast<int>(v), 0, 0, 0, 0, 0, true);
+        case RLU_DAYS: return new DateTimeNode(0, 0, static_cast<int>(v), 0, 0, 0, 0, true);
+        case RLU_HOURS: return new DateTimeNode(0, 0, 0, static_cast<int>(v), 0, 0, 0, true);
+        // the minutes are split into hours and minutes, as minutes() does
+        case RLU_MIN:
+            return DateTimeNode::makeRelative(0, 0, 0, static_cast<int>(v / 60), static_cast<int>(v % 60));
+        case RLU_SEC: {
+            // the fraction of a second (ex: 1.5s) gives the microseconds
+            double us = q_strtod(txt) - static_cast<double>(v);
+            if (us) {
+                us *= 1000000.0;
+            }
+            return DateTimeNode::makeRelativeFromSeconds(v, static_cast<int>(us), nullptr);
+        }
+        case RLU_MS:
+            return DateTimeNode::makeRelativeFromSeconds(v / 1000, static_cast<int>(v % 1000) * 1000, nullptr);
+        case RLU_US:
+            return DateTimeNode::makeRelativeFromSeconds(v / 1000000, static_cast<int>(v % 1000000), nullptr);
+    }
+    assert(false);
+    return new DateTimeNode(true);
 }
 
 static int64 parse_get_integer(YYLTYPE* yylloc, const char* str) {
@@ -1425,7 +1453,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 ^%no-streaming-operators{WS}*$          parse_set_parse_options(yylloc, QoreParseOptions::NO_STREAMING_OPERATORS);
 ^%broken-auto-cast{WS}*$                parse_set_parse_options(yylloc, QoreParseOptions::BROKEN_AUTO_CAST);
 ^%correct-soft-types{WS}*$              parse_disable_parse_options(yylloc, QoreParseOptions::BROKEN_SOFT_TYPES);
-^%push-parse-options{WS}*$              push_parse_options();
+^%push-parse-options{WS}*$              push_parse_options(get_loc(yylloc));
 ^%append-include-path{WS}*$             { parse_error(*get_loc(yylloc), "missing argument to %%append-include-path"); }
 ^%append-include-path{WS}+              BEGIN(append_path_state);
 <append_path_state>[^\n\r]+             {
@@ -3280,14 +3308,14 @@ cast<\*{WS}*({WORD}::)*{WORD}!?{WS}*(<[a-zA-Z<>:_0-9 \t,\*!=?]*>)?{WS}*> yylval-
 {DIGIT}+"."{DIGIT}+[eE][+-]?{DIGIT}+n   yylval->num = new QoreNumberNode(yytext); return NUMBER;
 0[0-7]+                                 yylval->integer = strtoll(yytext+1, 0, 8); return INTEGER;
 {DIGIT}+                                yylval->integer = parse_get_integer(yylloc, yytext); return INTEGER;
-{DIGIT}+Y                               yylval->datetime = makeYears(strtol(yytext, 0, 10));   return DATETIME;
-{DIGIT}+M                               yylval->datetime = makeMonths(strtol(yytext, 0, 10));  return DATETIME;
-{DIGIT}+D                               yylval->datetime = makeDays(strtol(yytext, 0, 10));    return DATETIME;
-{DIGIT}+h                               yylval->datetime = makeHours(strtol(yytext, 0, 10));   return DATETIME;
-{DIGIT}+ms                              yylval->datetime = makeMilliseconds(strtol(yytext, 0, 10)); return DATETIME;
-{DIGIT}+us                              yylval->datetime = makeMicroseconds(strtol(yytext, 0, 10)); return DATETIME;
-{DIGIT}+m                               yylval->datetime = makeMinutes(strtol(yytext, 0, 10)); return DATETIME;
-{DIGIT}+(\.{DIGIT}+)?s                  yylval->datetime = makeSeconds(yytext); return DATETIME;
+{DIGIT}+Y                               yylval->datetime = rel_literal(yylloc, yytext, RLU_YEARS); return DATETIME;
+{DIGIT}+M                               yylval->datetime = rel_literal(yylloc, yytext, RLU_MONTHS); return DATETIME;
+{DIGIT}+D                               yylval->datetime = rel_literal(yylloc, yytext, RLU_DAYS); return DATETIME;
+{DIGIT}+h                               yylval->datetime = rel_literal(yylloc, yytext, RLU_HOURS); return DATETIME;
+{DIGIT}+ms                              yylval->datetime = rel_literal(yylloc, yytext, RLU_MS); return DATETIME;
+{DIGIT}+us                              yylval->datetime = rel_literal(yylloc, yytext, RLU_US); return DATETIME;
+{DIGIT}+m                               yylval->datetime = rel_literal(yylloc, yytext, RLU_MIN); return DATETIME;
+{DIGIT}+(\.{DIGIT}+)?s                  yylval->datetime = rel_literal(yylloc, yytext, RLU_SEC); return DATETIME;
 {HEX_CONST}                             yylval->integer = strtoll(yytext, 0, 16); return INTEGER;
 {BINARY}                                yylval->binary = parseHex(get_loc(yylloc), yytext + 1, strlen(yytext + 1) - 1); return BINARY;
 \$\.{WORD}                              yylval->string = strdup(yytext + 2); return SELF_REF;

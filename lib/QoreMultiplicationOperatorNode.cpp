@@ -32,6 +32,7 @@
 #include "qore/intern/QoreArithmeticParseType.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreStatementTemps.h"
+#include "qore/intern/qore_date_private.h"
 
 QoreString QoreMultiplicationOperatorNode::multiplication_str("* operator expression");
 
@@ -69,16 +70,7 @@ QoreValue QoreMultiplicationOperatorNode::evalImpl(bool& needs_deref, ExceptionS
 
     // relative date * int/float/number => relative date
     if (lt == NT_DATE || rt == NT_DATE) {
-        const DateTimeNode* dt = lt == NT_DATE ? lh->get<DateTimeNode>() : rh->get<DateTimeNode>();
-        int64 us = dt->getRelativeMicroseconds();
-        if (lt == NT_FLOAT || rt == NT_FLOAT) {
-            double factor = lt == NT_FLOAT ? lh->getAsFloat() : rh->getAsFloat();
-            us = (int64)(us * factor);
-        } else {
-            int64 factor = (lt == NT_INT || lt == NT_CHAR) ? lh->getAsBigInt() : rh->getAsBigInt();
-            us *= factor;
-        }
-        return DateTimeNode::makeRelativeFromSeconds(us / 1000000, (int)(us % 1000000));
+        return qore_date_private::multiply(*lh, *rh, xsink);
     }
 
     if (lt == NT_NUMBER || rt == NT_NUMBER) {

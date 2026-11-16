@@ -25,9 +25,10 @@
     the number conversions and the compound assignment operators to chars and numbers, with typed and untyped
     operands, typed results (parse-time types), constant expressions folded at parse time, multibyte chars and
     list and hash elements; each function is called three times, in every execution mode and as qcc executables
-    compiled with \c -O0 and \c -O3 (see ExecModeOutputTest).  The \c + operator with a char is not tested here: a
-    change pending on the feature/char-plus-concatenation branch makes it add a char as a one-character string, and
-    its tests cover it; \c += on a \c number lvalue, which adds the code point either way, is tested here.
+    compiled with \c -O0 and \c -O3 (see ExecModeOutputTest).  The \c + operator adds a char as a one-character
+    string (CharPlusConcatenation.qtest), and \c += with a char behaves exactly as with the one-character string for
+    every lvalue type (CharPlusEqualsString.qtest), a \c number lvalue included: <tt>n += c'5'</tt> adds 5, as
+    <tt>n += "5"</tt> does, and <tt>n += c'a'</tt> adds 0, which is also checked here.
 */
 class CharNumberArithmeticTest inherits ExecModeOutputTest {
     public {
@@ -83,7 +84,7 @@ string sub lvalues(char c, number n) {
     b *= c;
     number d = n;
     d /= c;
-    # a number lvalue adds the code point, whatever the + operator does with a char
+    # += adds a char as its one-character string to a number lvalue too: "a" converts to 0
     number e = n;
     e += c;
     auto x = c;
@@ -130,7 +131,7 @@ for (int i = 0; i < 3; ++i) {
             "typed 95 194 48.5 | 128510 257024 64256",
             "minmax 1:number a:char 1:number a:char | a:char 98:number a:char 98:number",
             "conv 97:number 97:number",
-            "lvalues 97:number 18818:number 2:number 291:number 18818:number 0.5:number -97:integer",
+            "lvalues 97:number 18818:number 2:number 194:number 18818:number 0.5:number -97:integer",
             "elements 194:number 48.5:number",
             "folded [95.5, 194, 48.5, False, True, 3.5]",
         );

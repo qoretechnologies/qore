@@ -1,0 +1,402 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - its sandbox cases run in Programs of the test's own process; the mode matrix runs in children
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../.."
+%requires FsUtil
+%requires QUnit
+%requires ExecModeHarness
+
+%exec-class SandboxUncontrolledApiRefusalTest
+
+#! Tests the run-time refusal of uncontrolled APIs to code that a sandbox governs (qore#5741)
+/** A call of a builtin of the uncontrolled-API functional domain (QDOM_UNCONTROLLED_API: here the core's
+    SandboxManager::isGoverned(), getGoverningPolicies(), callWithSystemPolicy() and createSystemPolicyCall()) by code
+    that a sandbox governs raises INVALID-FUNCTION-ACCESS unless the sandbox allows uncontrolled APIs
+    (SandboxManager::setUncontrolledApiPolicy()); the sandbox is resolved as for a policy check: a system-policy
+    capability of trusted code is not governed, and the provenance of objects created under a sandbox applies.
+    isGoverned(), getGoverningPolicies() and callWithSystemPolicy() are judged by the Program of the code that calls
+    them: trusted code calls them for its sandboxed callers, while the code of a sandboxed Program is refused them.
+*/
+public class SandboxUncontrolledApiRefusalTest inherits QUnit::Test {
+    public {
+        #! the code of the sandboxed Programs: each function reaches an uncontrolled API in another way; each returns
+        #! the error, or "ok"
+        const Source = "
+string sub direct() {
+    try {
+        SandboxManager::isGoverned();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+nothing sub direct_throw() {
+    SandboxManager::isGoverned();
+}
+
+string sub call_ref() {
+    try {
+        code c = \\SandboxManager::getGoverningPolicies();
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub closure() {
+    try {
+        code c = sub () { SandboxManager::isGoverned(); };
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub runtime_variant() {
+    try {
+        auto f = \"isGoverned\";
+        call_static_method(\"SandboxManager\", f);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub own_barrier() {
+    try {
+        SandboxManager::callWithSystemPolicy(sub () {});
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub own_capability() {
+    try {
+        SandboxManager::createSystemPolicyCall(sub () {});
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+auto sub through(code c) {
+    return c();
+}
+
+# a call reference and a closure created by the sandboxed code, which it hands to other code
+code sub make_ref() {
+    return \\SandboxManager::isGoverned();
+}
+
+code sub make_closure() {
+    return sub () { return SandboxManager::isGoverned(); };
+}
+
+object sub make_probe() {
+    return new Probe();
+}
+
+class Probe {
+    string query() {
+        try {
+            SandboxManager::isGoverned();
+            return \"ok\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+";
+
+        #! the functions of Source that reach an uncontrolled API directly
+        const Calls = ("direct", "call_ref", "closure", "runtime_variant", "own_barrier", "own_capability");
+
+        const Refused = "INVALID-FUNCTION-ACCESS";
+
+        #! the output of the matrix program (sandbox-uncontrolled-api-refusal/refusal-matrix.q)
+        const MatrixExpected = "01 sandboxed, direct:             INVALID-FUNCTION-ACCESS\n"
+            + "02 sandboxed, call reference:     INVALID-FUNCTION-ACCESS\n"
+            + "03 sandboxed, own barrier:        INVALID-FUNCTION-ACCESS\n"
+            + "04 sandboxed, run-time variant:   INVALID-FUNCTION-ACCESS\n"
+            + "05 sandboxed, capability:         INVALID-FUNCTION-ACCESS\n"
+            + "06 sandboxed, thread:             INVALID-FUNCTION-ACCESS\n"
+            + "07 sandboxed reference, here:     INVALID-FUNCTION-ACCESS\n"
+            + "08 here for sandboxed, governed:  True\n"
+            + "09 here for sandboxed, policies:  False\n"
+            + "10 here for sandboxed, barrier:   False\n"
+            + "11 here for sandboxed, capability: INVALID-FUNCTION-ACCESS\n"
+            + "12 trusting sandbox, direct:      True\n"
+            + "13 trusting sandbox, own barrier: 1\n"
+            + "14 no sandbox, direct:            False\n"
+            + "15 no sandbox, capability:        created\n";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string matrix;
+    }
+
+    constructor() : Test("Sandbox uncontrolled API refusal", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        matrix = realpath(get_script_dir() + "/sandbox-uncontrolled-api-refusal/refusal-matrix.q");
+
+        addTestCase("the default sandbox refuses uncontrolled APIs, however the call is made", \refusedTest());
+        addTestCase("the error names the API and the policy", \errorTest());
+        addTestCase("a sandbox that allows uncontrolled APIs does not refuse them", \allowedTest());
+        addTestCase("code that no sandbox governs is not refused", \trustedTest());
+        addTestCase("a system-policy capability of trusted code is not refused", \capabilityTest());
+        addTestCase("an object created under the sandbox is refused also when trusted code calls it",
+            \provenanceTest());
+        addTestCase("a thread that sandboxed code starts is refused", \threadTest());
+        addTestCase("a composition of sandboxes refuses them if any member does", \compositionTest());
+        addTestCase("trusted code calls the sandbox introspection and barrier methods for sandboxed code",
+            \onBehalfTest());
+        addTestCase("closures and call references are judged by the Program that created them",
+            \createdByTest());
+        addTestCase("the refusal holds in every execution mode", \testModes());
+        addTestCase("the refusal holds in qcc executables", \testCompiled());
+        set_return_value(main());
+    }
+
+    #! Returns a Program with Source and a sandbox with the given policy, or with no sandbox
+    private static Program getProgram(*bool allow) {
+        Program p(PO_NEW_STYLE);
+        if (exists allow) {
+            SandboxManager sm();
+            if (allow) {
+                sm.setUncontrolledApiPolicy(True);
+            }
+            p.setSandboxManager(sm);
+        }
+        p.parse(Source, "sandbox-uncontrolled-api-refusal");
+        return p;
+    }
+
+    refusedTest() {
+        Program p = getProgram(False);
+        foreach string call in (Calls) {
+            assertEq(Refused, p.callFunction(call), call);
+        }
+    }
+
+    errorTest() {
+        Program p = getProgram(False);
+        try {
+            p.callFunction("direct_throw");
+            fail("the call was not refused");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(Refused, ex.err);
+            assertRegex("uncontrolled API", ex.desc, "the error says why");
+            assertRegex("isGoverned", ex.desc, "the error names the API");
+            assertRegex("setUncontrolledApiPolicy", ex.desc, "the error names the policy");
+        }
+    }
+
+    allowedTest() {
+        Program p = getProgram(True);
+        foreach string call in (Calls) {
+            # a capability of the sandboxed code is refused by createSystemPolicyCall() itself
+            assertEq(call == "own_capability" ? "SANDBOX-CAPABILITY-ERROR" : "ok", p.callFunction(call), call);
+        }
+    }
+
+    trustedTest() {
+        Program p = getProgram();
+        foreach string call in (Calls) {
+            assertEq("ok", p.callFunction(call), call);
+        }
+    }
+
+    capabilityTest() {
+        # a capability that trusted code made runs under the system policy, also when sandboxed code calls it
+        code cap = SandboxManager::createSystemPolicyCall(bool sub () {
+            return SandboxManager::isGoverned();
+        });
+        assertFalse(getProgram(False).callFunction("through", cap), "the capability runs under the system policy");
+        # a capability that trusted code creates for sandboxed code is refused: createSystemPolicyCall() is judged by
+        # every sandbox that governs the call
+        assertEq(Refused, getProgram(False).callFunction("through", string sub () {
+            try {
+                return SandboxManager::createSystemPolicyCall(sub () {}) ? "ok" : "none";
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err;
+            }
+        }));
+    }
+
+    provenanceTest() {
+        # the Programs live as long as their objects are used
+        Program deny = getProgram(False);
+        object probe = deny.callFunction("make_probe");
+        assertEq(Refused, probe.query(), "called by trusted code");
+        Program allow = getProgram(True);
+        object allow_probe = allow.callFunction("make_probe");
+        assertEq("ok", allow_probe.query(), "an object of a sandbox that allows them");
+    }
+
+    threadTest() {
+        Program p = getProgram(False);
+        Queue q();
+        p.callFunction("through", sub () {
+            background q.push(p.callFunction("direct"));
+        });
+        assertEq(Refused, q.get(), "a thread that the sandboxed code starts inherits the sandbox");
+    }
+
+    compositionTest() {
+        # an object of a trusted class created under one sandbox carries it; run under another, both govern it (the
+        # call stack and the provenance), and an uncontrolled API that is judged by every governing sandbox is
+        # allowed only if both allow it
+        Program deny = getProgram(False);
+        Program deny2 = getProgram(False);
+        Program allow = getProgram(True);
+        Program allow2 = getProgram(True);
+        code make = auto sub () { return new TrustedProbe(); };
+        object deny_probe = deny.callFunction("through", make);
+        object allow_probe = allow2.callFunction("through", make);
+        # the probe is refused createSystemPolicyCall() as an uncontrolled API, or it gets past that check and is
+        # refused by createSystemPolicyCall() itself for the sandboxed caller
+        assertEq(Refused, allow.callFunction("through", auto sub () { return deny_probe.capability(); }),
+            "created under the refusing sandbox, run under a trusting one");
+        assertEq(Refused, deny.callFunction("through", auto sub () { return allow_probe.capability(); }),
+            "created under a trusting sandbox, run under the refusing one");
+        assertEq(Refused, deny2.callFunction("through", auto sub () { return deny_probe.capability(); }),
+            "created under a refusing sandbox, run under another refusing one");
+        assertEq("SANDBOX-CAPABILITY-ERROR",
+            allow.callFunction("through", auto sub () { return allow_probe.capability(); }),
+            "created under a trusting sandbox, run under another trusting one");
+        # with no sandbox on the call stack, the provenance alone decides
+        assertEq(Refused, deny_probe.capability(), "the provenance of the refusing sandbox");
+        assertEq("SANDBOX-CAPABILITY-ERROR", allow_probe.capability(), "the provenance of a trusting sandbox");
+    }
+
+    onBehalfTest() {
+        Program p = getProgram(False);
+        SandboxManager sm = p.getSandboxManager();
+        # trusted code called by the sandboxed code: it is not refused, and it sees the sandbox of its caller
+        assertTrue(p.callFunction("through", \SandboxManager::isGoverned()), "isGoverned(): a call reference of trusted "
+            "code");
+        assertTrue(p.callFunction("through", bool sub () { return SandboxManager::isGoverned(); }),
+            "isGoverned(): a closure of trusted code");
+        list<hash<SandboxConfigInfo>> policies = p.callFunction("through",
+            list<hash<SandboxConfigInfo>> sub () { return SandboxManager::getGoverningPolicies(); });
+        assertEq(1, policies.size(), "getGoverningPolicies(): the caller's sandbox");
+        assertEq(sm.getConfiguration(), policies[0], "getGoverningPolicies(): the caller's sandbox");
+        # the barrier runs its call under the system policy: the caller's sandbox does not govern it; the call is
+        # created by trusted code before the sandboxed code runs (a closure created while serving the sandboxed code
+        # carries its sandbox)
+        code system_call = hash<string, bool> sub () {
+            return {"governed": SandboxManager::isGoverned(), "allowed": SandboxManager::isUncontrolledApiAllowed()};
+        };
+        assertEq({"governed": False, "allowed": True}, p.callFunction("through", auto sub () {
+            return SandboxManager::callWithSystemPolicy(system_call);
+        }), "callWithSystemPolicy(): the system policy");
+        # an object of a trusted class created under the sandbox: trusted code that calls it later
+        object probe = p.callFunction("through", auto sub () { return new TrustedProbe(); });
+        assertTrue(probe.governed(), "the provenance of an object created under the sandbox");
+        # the barrier is established, and the provenance of the object still governs inside it
+        assertTrue(probe.barrierGoverned(), "a barrier of trusted code for an object created under the sandbox");
+        # a thread that the sandboxed code started runs trusted code
+        Queue q();
+        p.callFunction("through", sub () {
+            background q.push(SandboxManager::isGoverned());
+        });
+        assertTrue(q.get(), "a thread that sandboxed code started");
+        # under a sandbox that allows uncontrolled APIs
+        Program a = getProgram(True);
+        assertTrue(a.callFunction("through", \SandboxManager::isGoverned()), "a trusting sandbox");
+    }
+
+    createdByTest() {
+        Program p = getProgram(False);
+        # a call reference and a closure that the sandboxed code created are refused also when trusted code calls them
+        code ref = p.callFunction("make_ref");
+        assertThrows(Refused, "isGoverned", ref);
+        code c = p.callFunction("make_closure");
+        assertThrows(Refused, "isGoverned", c);
+        # a closure that trusted code created is allowed also when the sandboxed code calls it, as a capability is
+        assertTrue(p.callFunction("through", bool sub () { return SandboxManager::isGoverned(); }));
+        # a Program that the sandboxed code creates is sandboxed: its code is refused as well
+        Program parent(PO_NEW_STYLE);
+        SandboxManager sm();
+        parent.setSandboxManager(sm);
+        parent.parse("auto sub child(string src) { Program c(PO_NEW_STYLE); c.parse(src, \"child\"); "
+            "return c.callFunction(\"direct\"); }", "child-maker");
+        assertEq(Refused, parent.callFunction("child", Source), "the child of sandboxed code");
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+    }
+
+    testModes() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "--exec-mode=%s %s", env(), qore_bin, mode, matrix), True);
+            assertEq(0, r.rc, sprintf("%s: exit status: %s", mode, r.out));
+            assertEq(MatrixExpected, r.stdout, sprintf("%s: output", mode));
+        }
+    }
+
+    #! compiles the matrix with qcc at \a opt, returns the output of qcc and sets the exit status
+    private string compile(string exe, string opt, reference<int> rc) {
+        return backquote(sprintf("%s %s -O%s -o %s %s 2>&1", env(), qcc_bin, opt, exe, matrix), \rc);
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-uncontrolled-api-refusal-");
+        string tmp_dir = tmp.path;
+        int rc;
+        string probe_out = compile(tmp_dir + "/matrix-probe", "0", \rc);
+        if (rc || !is_file(tmp_dir + "/matrix-probe")) {
+            testSkip("qcc is not available or cannot compile the matrix: " + probe_out);
+        }
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/matrix.O%s", tmp_dir, opt);
+            string out = compile(exe, opt, \rc);
+            assertEq(0, rc, sprintf("qcc -O%s exit status: %s", opt, out));
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env(), exe), True);
+            assertEq(0, r.rc, sprintf("qcc -O%s: exit status: %s", opt, r.out));
+            assertEq(MatrixExpected, r.stdout, sprintf("qcc -O%s: output", opt));
+        }
+    }
+}
+
+#! A class of trusted code: its objects carry the sandbox that governs the code that creates them
+class TrustedProbe {
+    #! returns the error of an uncontrolled API that every governing sandbox judges, or "ok"
+    string capability() {
+        try {
+            return SandboxManager::createSystemPolicyCall(sub () {}) ? "ok" : "none";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! trusted code: whether a sandbox governs it
+    bool governed() {
+        return SandboxManager::isGoverned();
+    }
+
+    #! trusted code: whether a sandbox governs it inside a barrier that it establishes
+    bool barrierGoverned() {
+        return SandboxManager::callWithSystemPolicy(bool sub () { return SandboxManager::isGoverned(); });
+    }
+}

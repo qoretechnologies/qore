@@ -8,7 +8,7 @@
 
 class DateAddNativeTest inherits QUnit::Test {
     constructor() : Test("DateTime C++ addition", "1.0") {
-        addTestCase("native pointer and reference addition APIs", \nativeAddition());
+        addTestCase("native addition API with and without an exception sink", \nativeAddition());
         addTestCase("elapsed components normalize across zero units", \relativeSigns());
         set_return_value(main());
     }

@@ -757,6 +757,13 @@ void qore_aot_set_module_closure_dep_sink(std::vector<std::string>* sink) {
     aot_module_dep_sink_closure = sink != nullptr;
 }
 
+// thread-local sink for the paths where the modules of failed %try-module directives could be installed (qore#6145)
+static thread_local std::vector<std::string>* aot_optional_candidate_sink = nullptr;
+
+void qore_aot_set_optional_module_candidate_sink(std::vector<std::string>* sink) {
+    aot_optional_candidate_sink = sink;
+}
+
 //! Appends the real path of a module's file to \a files (none for a builtin module), and the files its %include
 //! directives opened if it was loaded from its source
 static void qore_aot_add_module_files(QoreAbstractModule* m, std::vector<std::string>& files) {
@@ -862,13 +869,18 @@ static bool qore_aot_record_module_deps(QoreProgram* pgm,
         }
         // The artifact is compiled without the modules of failed %try-module directives, so the build depends on
         // the files that could provide them: replacing a module that was too old, for example, must rebuild the
-        // artifact.  A module that is installed later is detected when the artifact is loaded; see
-        // QoreAOTModuleFileInfo.
+        // artifact.  A module that is installed later is detected when the artifact is loaded (see
+        // QoreAOTModuleFileInfo), and by the build through the paths where it could be installed (qore#6145).
         for (const std::string& spec : pp->unavailable_try_modules) {
             size_t end = spec.find_first_of(" \t<>=!");
             std::string name = spec.substr(0, end);
             if (!name.empty()) {
                 QMM.getModuleCandidateFiles(name.c_str(), pgm, *aot_module_dep_sink);
+                // and the paths where it could be installed, so that the build rebuilds the artifact then
+                // (qore#6145)
+                if (aot_optional_candidate_sink) {
+                    QMM.getMissingModuleCandidateFiles(name.c_str(), pgm, *aot_optional_candidate_sink);
+                }
             }
         }
     }
@@ -1308,6 +1320,7 @@ QoreAOTContext::QoreAOTContext() {
 }
 
 QoreAOTContext::~QoreAOTContext() {
+    delete concrete_hashdecl_cache.load(std::memory_order_relaxed);
     // Deref all held expression values (we took a ref in buildAOTContext)
     for (int i = 0; i < num_exprs; ++i) {
         QoreValue v;
@@ -1472,7 +1485,8 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             ++entry_i;
             bool callable = info.approach_b_eligible
                 && !info.fast_name.empty();
-            if (!variant || (!info.hasBodyContract()
+            // a function of another module is described by that module's own index
+            if (!variant || info.cross_module || (!info.hasBodyContract()
                     && info.body_contract_dependencies.empty())) {
                 continue;
             }
@@ -2094,7 +2108,8 @@ static bool appendModulePathListSections(QoreAOTBinaryWriter& writer,
             return false;
         }
         const auto& cmd = pp->module_parse_commands[i];
-        commands.push_back(AOTModuleCommand{cmd.module, cmd.command});
+        commands.push_back(AOTModuleCommand{cmd.module, cmd.command, true, cmd.options.getLo(),
+            cmd.options.getHi()});
     }
     serializeModuleCommands(writer, commands, feature_flags);
     // the functional domains the Program's code uses: loading a module checks them against the restrictions of the
@@ -2403,8 +2418,26 @@ static uint32_t getAOTMetadataSectionSize(const std::vector<uint8_t>& metadata,
     return 0;
 }
 
+//! Returns the maximum size of compressed AOT metadata once decompressed
+/** The QORE_AOT_TEST_MAX_METADATA_SIZE environment variable can only lower it, for tests of the fallback to
+    uncompressed metadata
+*/
+static size_t getAOTMaxCompressedMetadataSize() {
+    size_t rv = QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE;
+    QoreEnvironmentValue test_max("QORE_AOT_TEST_MAX_METADATA_SIZE");
+    if (const char* str = test_max.c_str(); str && *str) {
+        char* end = nullptr;
+        unsigned long long val = strtoull(str, &end, 10);
+        if (end && !*end && val < rv) {
+            rv = static_cast<size_t>(val);
+        }
+    }
+    return rv;
+}
+
+//! Compresses AOT metadata as the compression policy wants
 static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool include_source,
-        bool report_metadata) {
+        bool report_metadata, const QoreAOTBinaryWriter& writer) {
     static constexpr uint32_t AOT_HEADER_BYTES = 60;
     static constexpr size_t AOT_HEADER_COMPRESSION_OFFSET = 34;
 
@@ -2420,6 +2453,25 @@ static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool 
                 printf("\n");
             }
         }
+        return;
+    }
+
+    // the reader refuses compressed metadata that is bigger than this once decompressed, whichever compression is
+    // used (the size of all metadata bounds that of each section, of the string pool and of the metadata after the
+    // header), but it has no limit for uncompressed metadata, so such metadata is written uncompressed (qore#6127)
+    if (size_t max_size = getAOTMaxCompressedMetadataSize(); metadata.size() > max_size) {
+        if (report_metadata) {
+            printf(" (uncompressed: too big to compress)\n");
+        }
+        std::string msg = "warning: the AOT metadata is " + std::to_string(metadata.size()) + " bytes, more than the "
+            + std::to_string(max_size) + " bytes that the AOT loader can decompress; it is written uncompressed";
+        // name the function with the most metadata when it accounts for a good part of the metadata
+        if (!writer.largest_func_metadata_name.empty()
+                && writer.largest_func_metadata_size >= metadata.size() / 10) {
+            msg += "; function '" + writer.largest_func_metadata_name + "' has "
+                + std::to_string(writer.largest_func_metadata_size) + " bytes of it (slot map and debug IR)";
+        }
+        fprintf(stderr, "%s\n", msg.c_str());
         return;
     }
 
@@ -5850,12 +5902,12 @@ static const type_vec_t* qore_aot_get_call_parsed_arg_types(const QoreValue& exp
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
     }
-    if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (const auto* call = qore_get_static_method_call_node(node)) {
         parse_args = call->getParseArgs();
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
     }
-    if (const auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_self_function_call_node(node)) {
         parse_args = call->getParseArgs();
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
@@ -5877,10 +5929,10 @@ static const QoreTypeInfo* qore_aot_get_call_receiver_type_info(const QoreValue&
     if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         node = dot->getMethodCall();
     }
-    if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (const auto* call = qore_get_static_method_call_node(node)) {
         return call->getReceiverTypeInfo();
     }
-    if (const auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_self_function_call_node(node)) {
         return call->getReceiverTypeInfo();
     }
     if (const auto* call = dynamic_cast<const MethodCallNode*>(node)) {
@@ -5901,10 +5953,10 @@ static const QoreTypeParamInstantiation* qore_aot_get_call_type_instantiation(
     if (const auto* call = qore_get_function_call_node(node)) {
         return call->getTypeParamInstantiation();
     }
-    if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (const auto* call = qore_get_static_method_call_node(node)) {
         return call->getTypeParamInstantiation();
     }
-    if (const auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_self_function_call_node(node)) {
         return call->getTypeParamInstantiation();
     }
     if (const auto* call = dynamic_cast<const MethodCallNode*>(node)) {
@@ -5990,7 +6042,7 @@ static bool qore_aot_get_direct_call_target(
         const auto* call = qore_get_function_call_node(node);
         variant = call ? call->getVariant() : nullptr;
     } else {
-        const auto* call = dynamic_cast<const StaticMethodCallNode*>(node);
+        const auto* call = qore_get_static_method_call_node(node);
         variant = call ? call->getVariant() : nullptr;
     }
     return variant && expr;
@@ -9679,12 +9731,44 @@ static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
         ? returned_param : -1;
 }
 
+//! returns true if a call of a function that returns its parameter \a param cannot be replaced with the argument
+/** The summary (qore_aot_get_forwarded_return_param()) is made from the declared signature, so a type parameter
+    that the call instantiates as `any` is not seen there: it strips the complex type of a list or hash argument, as
+    `any` does (qore#6059); a type parameter that the call does not resolve is not folded either
+*/
+static bool qore_aot_forwarded_return_call_strips(const AbstractQoreFunctionVariant* callee, const QoreValue& expr,
+        int8_t param) {
+    const UserVariantBase* uvb = callee ? callee->getUserVariantBase() : nullptr;
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    if (!sig || param < 0 || static_cast<unsigned>(param) >= sig->numParams() || !sig->lv[param]) {
+        return true;
+    }
+    const QoreTypeInfo* return_ti = sig->getReturnTypeInfo();
+    const QoreTypeInfo* param_ti = sig->lv[param]->getTypeInfo();
+    if (!qore_type_contains_type_parameter(return_ti) && !qore_type_contains_type_parameter(param_ti)) {
+        return false;
+    }
+    const QoreTypeInfo* receiver_type_info = qore_aot_get_call_receiver_type_info(expr);
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation = qore_aot_get_call_type_instantiation(expr);
+    if (!receiver_type_info && !explicit_type_param_instantiation) {
+        return true;
+    }
+    return_ti = qore_substitute_type_params_if_needed(return_ti, receiver_type_info,
+        explicit_type_param_instantiation);
+    param_ti = qore_substitute_type_params_if_needed(param_ti, receiver_type_info, explicit_type_param_instantiation);
+    return q_type_strips_complex_type(return_ti) || q_type_strips_complex_type(param_ti)
+        || qore_type_contains_type_parameter(return_ti) || qore_type_contains_type_parameter(param_ti);
+}
+
 static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
         const UserSignature& sig) {
+    // a value returned through `any` or a plain `auto!` loses the complex type of a list or hash (qore#6058,
+    // qore#6059), so the call is not replaced with its argument
     if (q_env_is_set("QORE_DISABLE_AOT_GENERIC_RETURN_PARAM_FOLD")
             || !sig.numParams() || sig.numParams() > INT8_MAX
             || func.blocks.size() != 1 || !func.blocks.front()
-            || qore_aot_code_size_exceeds(*func.blocks.front(), 16)) {
+            || qore_aot_code_size_exceeds(*func.blocks.front(), 16)
+            || q_type_strips_complex_type(sig.getReturnTypeInfo())) {
         return -1;
     }
 
@@ -9747,6 +9831,22 @@ static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
                 if (source == value_sources.end()) {
                     return -1;
                 }
+                // the local holds the parameter's value only if the store does not convert it: a local of another
+                // type converts or checks the value (a float local makes a float of an int, an int local raises an
+                // error for a string, a plain list local and an `any` or plain `auto!` local strip the complex type
+                // of a list; qore#6162); a local of the parameter's own type, including a type parameter, holds the
+                // value that the parameter's binding gave it (a type parameter that the call instantiates as `any`
+                // is refused at the call site: qore_aot_forwarded_return_call_strips())
+                auto source_param = func.param_local_vars.find(
+                    static_cast<unsigned>(source->second));
+                if (source_param == func.param_local_vars.end() || !source_param->second) {
+                    return -1;
+                }
+                const QoreTypeInfo* local_ti = store->local->getTypeInfoForLValue();
+                if (local_ti != source_param->second->getTypeInfoForLValue()
+                        || q_type_strips_complex_type(local_ti)) {
+                    return -1;
+                }
                 auto [found, inserted] =
                     local_sources.emplace(store->local, source->second);
                 if (!inserted && found->second != source->second) {
@@ -9800,6 +9900,11 @@ static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
         return -1;
     }
     const LocalVar* returned_local = returned_local_it->second;
+    // a parameter of the type `any` or a plain `auto!` (whose variable has the type `auto`) strips the complex type
+    // of a list or hash argument (qore#6032, qore#6059): the returned value is not the argument
+    if (q_type_strips_complex_type(returned_local->getTypeInfoForLValue())) {
+        return -1;
+    }
     return sig.getReturnTypeInfo() == returned_local->getTypeInfo()
         ? returned_param : -1;
 }
@@ -17607,6 +17712,130 @@ static bool addAOTPreloadedFastEntries(qore_ns_private* ns,
     return true;
 }
 
+//! The fast-entry records of a loaded AOT module by Qore path, or nullptr if the module registered none
+using QoreAOTModuleFastRecords = std::unordered_map<std::string, QoreAOTSymbolIndexRecord>;
+
+static const QoreAOTModuleFastRecords* getAOTModuleFastRecords(const char* mod_name,
+        std::unordered_map<std::string, std::unique_ptr<QoreAOTModuleFastRecords>>& cache) {
+    auto it = cache.find(mod_name);
+    if (it != cache.end()) {
+        return it->second.get();
+    }
+    std::unique_ptr<QoreAOTModuleFastRecords>& records = cache[mod_name];
+    const uint8_t* metadata = nullptr;
+    int32_t metadata_len = 0;
+    // a module loaded from source, or an AOT module built before qore#6035, registered no metadata
+    if (!qore_aot_get_module_metadata(mod_name, metadata, metadata_len)) {
+        return nullptr;
+    }
+    QoreAOTBinaryReader reader;
+    std::string error;
+    QoreAOTSymbolIndex index;
+    if (!reader.open(metadata, static_cast<uint32_t>(metadata_len), error)
+            || !readSymbolIndex(reader, index, error)) {
+        return nullptr;
+    }
+    records.reset(new QoreAOTModuleFastRecords);
+    std::unordered_set<std::string> ambiguous;
+    size_t check_count = 0;
+    for (const QoreAOTSymbolIndexRecord& rec : index.native) {
+        if (++check_count % 100 == 0 && qore_check_cancel(nullptr, "AOT module fast-entry metadata collection")) {
+            records.reset();
+            return nullptr;
+        }
+        if (rec.abi_kind != "qore_fast_v1" || rec.qore_path.empty() || ambiguous.count(rec.qore_path)) {
+            continue;
+        }
+        auto [rec_it, inserted] = records->emplace(rec.qore_path, rec);
+        if (!inserted) {
+            records->erase(rec_it);
+            ambiguous.insert(rec.qore_path);
+        }
+    }
+    return records.get();
+}
+
+//! Adds the native fast entries of the plain functions of other loaded AOT modules (qore#6035)
+/** A call of such a function from the module being compiled then calls its fast entry natively, through the pointer
+    that the module registered at run time (QoreIRToLLVM::emitAotBatchFastEntryOrFallback(), which falls back to the
+    runtime call path when it is not available).  Only the ABI of the fast entry is taken from the module's symbol
+    index: the parameter and return kinds, which arguments it borrows and which it modifies, and whether its return
+    value can be NOTHING; nothing about its body (no summary is inlined and no effect is assumed), as the module is a
+    separate image.  Methods and generic functions keep the runtime call path.
+
+    @return false if the operation was cancelled
+*/
+static bool addAOTCrossModuleFastEntries(qore_ns_private* ns, const char* compile_module,
+        std::unordered_map<std::string, std::unique_ptr<QoreAOTModuleFastRecords>>& cache,
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
+    size_t check_count = 0;
+    for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i) {
+        if (++check_count % 100 == 0 && qore_check_cancel(nullptr, "AOT cross-module fast-entry import")) {
+            return false;
+        }
+        QoreFunction* func = i->second->getFunction();
+        const char* func_module = func ? func->getModuleName() : nullptr;
+        if (!func_module || !*func_module || (compile_module && !strcmp(func_module, compile_module))) {
+            continue;
+        }
+        const QoreAOTModuleFastRecords* records = getAOTModuleFastRecords(func_module, cache);
+        if (!records) {
+            continue;
+        }
+        std::string function_name;
+        ns->getPath(function_name);
+        if (!function_name.empty()) {
+            function_name += "::";
+        }
+        function_name += func->getName();
+        QoreFunctionIterator vit(*func);
+        while (vit.next()) {
+            const AbstractQoreFunctionVariant* variant = vit.getVariant();
+            auto rec_it = records->find(getVariantKey(function_name.c_str(), variant));
+            if (rec_it == records->end() || batch_callees.count(variant)) {
+                continue;
+            }
+            BatchCalleeInfo record_info;
+            bool cancelled = false;
+            if (!loadAOTFastEntryInfo(rec_it->second, record_info, cancelled)) {
+                if (cancelled) {
+                    return false;
+                }
+                continue;
+            }
+            if (!record_info.approach_b_eligible || record_info.fast_name.empty()
+                    || record_info.generic_specialized_fast_entry || record_info.implicit_self_method) {
+                continue;
+            }
+            // the ABI only; every other fact keeps its conservative default
+            BatchCalleeInfo info;
+            info.cross_module = true;
+            info.approach_b_eligible = true;
+            info.fast_name = record_info.fast_name;
+            info.call_ref_path = function_name;
+            info.single_variant_function = func->numVariants() == 1;
+            info.num_params = record_info.num_params;
+            info.param_kinds = record_info.param_kinds;
+            info.param_rejects_nothing = record_info.param_rejects_nothing;
+            info.param_noescape = record_info.param_noescape;
+            info.param_may_modify = record_info.param_may_modify;
+            info.return_kind = record_info.return_kind;
+            info.return_rejects_nothing = record_info.return_rejects_nothing;
+            batch_callees.emplace(variant, std::move(info));
+        }
+    }
+    for (auto& ni : ns->nsl.nsmap) {
+        if (++check_count % 100 == 0 && qore_check_cancel(nullptr, "AOT cross-module fast-entry namespace import")) {
+            return false;
+        }
+        if (ni.second && !addAOTCrossModuleFastEntries(qore_ns_private::get(*ni.second), compile_module, cache,
+                batch_callees)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static std::string qoreAOTClosureDispatchName(const std::string& owner_symbol,
         size_t expr_index) {
     return owner_symbol + "_closure_dispatch_" + std::to_string(expr_index);
@@ -19984,7 +20213,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         && call->operands.size() == found->second.num_params
                         && qore_aot_fast_entry_operands_need_no_binding(
                             callee, *expr, func, call->operands, 0,
-                            static_cast<int>(call->operands.size()));
+                            static_cast<int>(call->operands.size()))
+                        && !qore_aot_forwarded_return_call_strips(callee, *expr,
+                            found->second.forwarded_return_param);
                     if (q_env_is_set("QORE_AOT_DEBUG")
                             && found != aot_batch_callee_map->end()
                             && found->second.forwarded_return_param >= 0) {
@@ -24416,7 +24647,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         }
 
         bool report_metadata = qccReportMetadataSizeStart("compilation metadata", metadata.size());
-        finalizeAOTMetadataCompression(metadata, include_source, report_metadata);
+        finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer);
         generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs,
             compiled_init_funcs);
 
@@ -26069,7 +26300,8 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         const std::vector<uint8_t>& metadata, const char* label,
         const QoreParseOptions& parse_options, const QoreAOTModuleInfo& mod_info,
         const std::vector<AOTCompiledFunc>& compiled_funcs,
-        bool compile_only = false, const std::vector<uint8_t>* static_record = nullptr) {
+        bool compile_only = false, const std::vector<uint8_t>* static_record = nullptr,
+        const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>* fast_entries = nullptr) {
     // the metadata record of a module registered statically (see emitStaticModuleInfoRecord())
     assert(!compile_only || static_record);
     auto* i8_type = llvm::Type::getInt8Ty(ctx);
@@ -26226,6 +26458,54 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
             func_table_init, "qore_aot_mod_funcs");
     }
 
+    // the native fast entries of the module's plain functions, which the code of a module compiled against this one
+    // calls directly (qore#6035); registered with the module's metadata, through which such a module finds their ABI
+    // (QoreAOTFastEntry in include/qore/intern/QoreAOT.h)
+    auto* fast_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, ptr_type});
+    std::vector<llvm::Constant*> fast_table_entries;
+    if (fast_entries) {
+        // in a deterministic order: the table is part of the image
+        std::vector<const BatchCalleeInfo*> infos;
+        infos.reserve(fast_entries->size());
+        size_t check_count = 0;
+        for (const auto& [variant, info] : *fast_entries) {
+            if (++check_count % 100 == 0 && qore_check_cancel(nullptr, "AOT module fast-entry table")) {
+                infos.clear();
+                break;
+            }
+            if (!info.approach_b_eligible || info.preloaded_fast_entry || info.cross_module || info.fast_name.empty()
+                    || info.name.empty() || info.generic_specialized_fast_entry || info.implicit_self_method
+                    || dynamic_cast<const MethodVariantBase*>(variant)) {
+                continue;
+            }
+            infos.push_back(&info);
+        }
+        std::sort(infos.begin(), infos.end(), [](const BatchCalleeInfo* a, const BatchCalleeInfo* b) {
+            return a->fast_name < b->fast_name;
+        });
+        for (const BatchCalleeInfo* info : infos) {
+            llvm::Function* fn = module.getFunction(info->name);
+            llvm::Function* fast_fn = module.getFunction(info->fast_name);
+            if (!fn || !fast_fn || fn->isDeclaration() || fast_fn->isDeclaration()) {
+                continue;
+            }
+            llvm::Constant* sym_str = llvm::ConstantDataArray::getString(ctx, info->fast_name, true);
+            auto* sym_gv = new llvm::GlobalVariable(module, sym_str->getType(), true,
+                llvm::GlobalValue::PrivateLinkage, sym_str, "qore_aot_fastsym_" + info->fast_name);
+            fast_table_entries.push_back(llvm::ConstantStruct::get(fast_entry_type, {fn, fast_fn, sym_gv}));
+        }
+    }
+    llvm::GlobalVariable* fast_table_gv = nullptr;
+    if (!fast_table_entries.empty()) {
+        auto* table_type = llvm::ArrayType::get(fast_entry_type, fast_table_entries.size());
+        fast_table_gv = new llvm::GlobalVariable(module, table_type, true, llvm::GlobalValue::PrivateLinkage,
+            llvm::ConstantArray::get(table_type, fast_table_entries), "qore_aot_mod_fast_entries");
+    }
+    const int num_fast_entries = static_cast<int>(fast_table_entries.size());
+    auto* fast_reg_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i32_type, ptr_type, i32_type},
+        false);
+    auto* fast_unreg_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i32_type}, false);
+
     // Declare qore_aot_module_init_v3: QoreStringNode* (metadata, metadata_len, label, parse_options_lo, parse_options_hi, mod_name, funcs, num_funcs)
     auto* init_ret_type = ptr_type;
     auto* aot_mod_init_type = llvm::FunctionType::get(init_ret_type, {
@@ -26285,6 +26565,21 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
             funcs_ptr,
             builder.getInt32(num_funcs)
         });
+        // a module whose initialization succeeded registers its metadata and fast entries (qore#6035); one that
+        // failed is unloaded without its delete function, so it registers nothing
+        auto* reg_bb = llvm::BasicBlock::Create(ctx, "register_fast_entries", init_impl_fn);
+        auto* ret_bb = llvm::BasicBlock::Create(ctx, "init_done", init_impl_fn);
+        builder.CreateCondBr(builder.CreateIsNull(result), reg_bb, ret_bb);
+        builder.SetInsertPoint(reg_bb);
+        llvm::Value* fast_table_ptr = fast_table_gv
+            ? static_cast<llvm::Value*>(fast_table_gv)
+            : static_cast<llvm::Value*>(llvm::ConstantPointerNull::get(llvm::PointerType::get(ctx, 0)));
+        builder.CreateCall(module.getOrInsertFunction("qore_aot_register_module_fast_entries_v1", fast_reg_type), {
+            name_ptr, meta_ptr, builder.getInt32(static_cast<int>(metadata.size())), fast_table_ptr,
+            builder.getInt32(num_fast_entries),
+        });
+        builder.CreateBr(ret_bb);
+        builder.SetInsertPoint(ret_bb);
         builder.CreateRet(result);
     }
 
@@ -26317,6 +26612,14 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", del_impl_fn);
         llvm::IRBuilder<> builder(entry_bb);
 
+        // the module's metadata and fast entries are unregistered before its image goes away (qore#6035)
+        llvm::Value* del_name_ptr = builder.CreateInBoundsGEP(modname_data->getType(), modname_gv,
+            {builder.getInt64(0), builder.getInt64(0)});
+        llvm::Value* del_fast_table_ptr = fast_table_gv
+            ? static_cast<llvm::Value*>(fast_table_gv)
+            : static_cast<llvm::Value*>(llvm::ConstantPointerNull::get(llvm::PointerType::get(ctx, 0)));
+        builder.CreateCall(module.getOrInsertFunction("qore_aot_unregister_module_fast_entries_v1",
+            fast_unreg_type), {del_name_ptr, del_fast_table_ptr, builder.getInt32(num_fast_entries)});
         builder.CreateCall(aot_mod_del_fn, {});
         builder.CreateRetVoid();
     }
@@ -26705,10 +27008,31 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // namespace block), which were previously missed when only child
     // namespaces were iterated.
     std::string fatal_lowering_error;
+    // the module owns its fast-entry map: it is written to the module's symbol index, so that a module compiled
+    // against this one can call its functions' native fast entries, and to its table of fast entries, through which
+    // such a call finds them at run time (qore#6035)
+    std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo> module_batch_callees;
+    {
+        std::set<std::string> declared_fast_keys;
+        if (!declareAOTBatchFastEntries(root_ns, *qpgm, ctx, *module, module_batch_callees, declared_fast_keys,
+                mod_info.name.c_str(), nullptr, nullptr, nullptr)) {
+            error = "operation cancelled during module AOT fast-entry discovery";
+            return false;
+        }
+        // the functions of the other AOT modules that this one requires, which its code calls natively
+        if (!q_env_is_set("QORE_DISABLE_AOT_CROSS_MODULE_FAST_CALLS")) {
+            std::unordered_map<std::string, std::unique_ptr<QoreAOTModuleFastRecords>> module_records;
+            if (!addAOTCrossModuleFastEntries(root_ns, mod_info.name.c_str(), module_records,
+                    module_batch_callees)) {
+                error = "operation cancelled during module AOT cross-module fast-entry import";
+                return false;
+            }
+        }
+    }
     compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
         total_ir_insts_all, &const_reverse_map, nullptr, mod_info.name.c_str(),
-        nullptr, false, nullptr, nullptr, &fatal_lowering_error);
+        nullptr, false, nullptr, nullptr, &fatal_lowering_error, nullptr, nullptr, &module_batch_callees);
     if (!fatal_lowering_error.empty()) {
         error = fatal_lowering_error;
         return false;
@@ -26834,7 +27158,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             return false;
         }
         if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
-                mod_info.name.c_str())) {
+                mod_info.name.c_str(), nullptr, nullptr, nullptr, &module_batch_callees)) {
             return false;
         }
         if (!compiled_init_funcs.empty()) {
@@ -26857,7 +27181,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         }
 
         bool report_metadata = qccReportMetadataSizeStart("module metadata", metadata.size());
-        finalizeAOTMetadataCompression(metadata, include_source, report_metadata);
+        finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer);
 
         // Add init functions to the function table so they're available at runtime
         for (auto& cif : compiled_init_funcs) {
@@ -26881,8 +27205,11 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         if (compile_only && !buildAOTModuleInfoRecord(mod_info, *qpgm, static_record, error)) {
             return false;
         }
+        // a .qmod registers its fast entries for the modules compiled against it; a statically linked .qo is reached
+        // by symbol instead
         generateModuleABIV2(ctx, *module, metadata, label, qpgm->getParseOptions(),
-            mod_info, compiled_funcs, compile_only, compile_only ? &static_record : nullptr);
+            mod_info, compiled_funcs, compile_only, compile_only ? &static_record : nullptr,
+            compile_only ? nullptr : &module_batch_callees);
         if (!compile_only && !addAOTModuleInfoSection(ctx, *module, mod_info, *qpgm, target_triple,
                 error)) {
             return false;
@@ -27367,7 +27694,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             }
 
             bool report_metadata = qccReportMetadataSizeStart("split module metadata", metadata.size());
-            finalizeAOTMetadataCompression(metadata, include_source, report_metadata);
+            finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer);
 
             // Add init functions to the function table so they're available at runtime
             for (auto& cif : compiled_init_funcs) {
@@ -28747,6 +29074,8 @@ static int applyAOTSourceModernDefault(QoreProgram& pgm, const std::string& cano
     if (!qore_program_private::should_auto_enable_modern(canon.c_str())) {
         return 0;
     }
+    // the check and the change are atomic (issue #6078)
+    std::lock_guard<std::recursive_mutex> lg(qore_program_private::getParseOptionsWriteLock(pgm));
     // %modern cannot be set while a compatibility option that it does not allow is in effect (issue #5682)
     if (qore_program_private::checkModernSourceDefault(pgm.getParseOptions(), canon.c_str(), xsink)) {
         return -1;
@@ -29984,7 +30313,7 @@ bool QoreAOT::compileScriptAggregate(
         }
 
         bool report_metadata = qccReportMetadataSizeStart("script aggregate metadata", metadata.size());
-        finalizeAOTMetadataCompression(metadata, include_source, report_metadata);
+        finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer);
     }
 
     size_t init_func_i = 0;
@@ -31773,7 +32102,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             }
 
             bool report_metadata = qccReportMetadataSizeStart("aggregated metadata", metadata.size());
-            finalizeAOTMetadataCompression(metadata, include_source, report_metadata);
+            finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer);
 
             for (auto& cif : compiled_init_funcs) {
                 AOTCompiledFunc cf;
@@ -32328,7 +32657,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             }
 
             bool report_metadata = qccReportMetadataSizeStart("archive metadata", metadata.size());
-            finalizeAOTMetadataCompression(metadata, include_source, report_metadata);
+            finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer);
 
             for (auto& cif : compiled_init_funcs) {
                 AOTCompiledFunc cf;
@@ -32456,7 +32785,7 @@ static bool qoreAOTDecomposedBackgroundUsesExprSlot(const QoreValue& expr) {
         return false;
     }
     const AbstractQoreNode* inner = bg_op->getExp().getInternalNode();
-    return qore_get_function_call_node(inner) || dynamic_cast<const StaticMethodCallNode*>(inner)
+    return qore_get_function_call_node(inner) || qore_get_static_method_call_node(inner)
         || dynamic_cast<const QoreDotEvalOperatorNode*>(inner) || dynamic_cast<const CallReferenceCallNode*>(inner);
 }
 
@@ -33832,7 +34161,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                         }
                         // Pre-resolve static method or self method call target
                         if (!call) {
-                            const auto* static_call = dynamic_cast<const StaticMethodCallNode*>(
+                            const auto* static_call = qore_get_static_method_call_node(
                                 expr_val.getInternalNode());
                             if (static_call && static_call->getMethod()) {
                                 ctx->call_targets[slot].method = static_call->getMethod();
@@ -33847,7 +34176,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                                     ctx->call_targets[slot].uvb = v->getUserVariantBase();
                                 }
                             } else {
-                                const auto* self_call = dynamic_cast<const SelfFunctionCallNode*>(
+                                const auto* self_call = qore_get_self_function_call_node(
                                     expr_val.getInternalNode());
                                 if (self_call && self_call->getMethod()) {
                                     ctx->call_targets[slot].method = self_call->getMethod();
@@ -34556,7 +34885,7 @@ class ExprTreeSerializer {
         }
 
         // SelfFunctionCallNode: self method call
-        if (auto* sfc = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+        if (auto* sfc = qore_get_self_function_call_node(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_SELF_CALL));
             const QoreMethod* method = sfc->getMethod();
             const QoreClass* qc = method ? method->getClass() : sfc->getClass();
@@ -34564,9 +34893,7 @@ class ExprTreeSerializer {
             // Keep any explicit class prefix.  Qualified self calls are
             // non-virtual; stripping the prefix turns them into virtual self
             // dispatch when the expression tree is deserialized.
-            const AbstractQoreFunctionVariant* variant = sfc->getVariant();
-            std::string method_ref = qore_aot_encode_static_method_ref(sfc->getName(), variant,
-                variant ? nullptr : &sfc->getParsedArgTypeInfo());
+            std::string method_ref = qore_aot_encode_self_method_ref(sfc, true);
             // the arguments are written in source order: a named call keeps the positions of their parameters or
             // their names before the method reference (read by read_node_EN_SELF_CALL())
             method_ref.insert(0, qore_aot_named_call_arg_prefix(sfc));
@@ -34584,7 +34911,7 @@ class ExprTreeSerializer {
         }
 
         // StaticMethodCallNode: static method call
-        if (auto* smc = dynamic_cast<const StaticMethodCallNode*>(node)) {
+        if (auto* smc = qore_get_static_method_call_node(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STATIC_CALL));
             const QoreMethod* method = smc->getMethod();
             if (method) {
@@ -35535,12 +35862,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
 
     // SelfFunctionCallNode: method call on self
-    if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (auto* call = qore_get_self_function_call_node(node)) {
         id.kind = AOTExprKind::SELF_METHOD_CALL;
         const QoreMethod* method = call->getMethod();
         // Preserve the parse-time self-call class.  It can differ from the
         // declaring method class for inherited/self and explicit base calls.
-        const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
+        const QoreClass* qc = call->getRecordedClass();
         if (qc) {
             id.ref1 = qore_aot_encode_class_ref(qc);
         }
@@ -35548,10 +35875,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // (e.g., "AbstractDataField::getExampleValue" stays qualified so that the NamedScope
         // at deserialization has size() > 1, causing evalImpl to use the method pointer directly
         // instead of virtual dispatch — preventing infinite recursion for explicit base class calls)
-        const AbstractQoreFunctionVariant* call_variant = call->getVariant();
-        // with the explicit type arguments of the call (qore#5818)
-        id.ref2 = qore_aot_encode_static_method_ref(call->getName(), call_variant,
-            call_variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
+        id.ref2 = qore_aot_encode_self_method_ref(call, true);
         // a named call resolved at run time by parameter name: the names of its arguments in source order, first (read
         // by resolveExprSlot())
         id.ref2.insert(0, qore_aot_named_call_arg_prefix(call, false));
@@ -35570,7 +35894,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
 
     // StaticMethodCallNode: static method call
-    if (auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (auto* call = qore_get_static_method_call_node(node)) {
         id.kind = AOTExprKind::STATIC_METHOD_CALL;
         const QoreMethod* method = call->getMethod();
         if (method) {
@@ -36378,19 +36702,25 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.kind = AOTExprKind::DOT_EVAL_TARGET;
             bool force_name_dispatch = target && target->fallback_method_name
                 && !target->qc && !target->method;
-            const QoreClass* qc = force_name_dispatch ? nullptr
-                : (target && target->qc ? target->qc : mc->getClass());
             bool is_pseudo = target ? target->pseudo : mc->isPseudo();
+            // a call dispatched by name still records the method resolved at parse time, with the
+            // QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH flag: the check of the call's target before its arguments are
+            // evaluated (QoreIROpcode::CheckCallTarget) uses it as the AST interpreter does (issue #5824), and the call
+            // itself is still dispatched by name
+            bool record_parse_target = force_name_dispatch && !is_pseudo && mc->getClass() && mc->getMethod();
+            const QoreClass* qc = force_name_dispatch ? (record_parse_target ? mc->getClass() : nullptr)
+                : (target && target->qc ? target->qc : mc->getClass());
             // Pseudo-classes are not attached to the namespace tree, so
             // getNamespacePath() can be empty. Serialize their constructor
             // path so the runtime pseudo-class resolver can recover qc/method.
             id.ref1 = qore_aot_encode_class_ref(qc, is_pseudo);
-            const QoreMethod* method = force_name_dispatch ? nullptr
+            const QoreMethod* method = force_name_dispatch ? (record_parse_target ? mc->getMethod() : nullptr)
                 : (target && target->method ? target->method : mc->getMethod());
             const char* fallback_name = target && target->fallback_method_name
                 ? target->fallback_method_name : mc->getName();
             id.ref2 = method ? method->getName() : (fallback_name ? fallback_name : "");
-            const AbstractQoreFunctionVariant* variant = force_name_dispatch ? nullptr
+            const AbstractQoreFunctionVariant* variant = force_name_dispatch
+                ? (record_parse_target ? mc->getVariant() : nullptr)
                 : (target && target->variant ? target->variant : mc->getVariant());
             if (variant) {
                 if (AbstractFunctionSignature* sig = variant->getSignature()) {
@@ -36403,7 +36733,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             }
             // the explicit type arguments of the call (obj.method<T>()): the target has no expression node to hold them
             qore_aot_append_call_type_args(id.ref2, mc->getExplicitTypeParamInstantiation());
-            id.flags = is_pseudo ? 1 : 0;
+            id.flags = (is_pseudo ? QORE_AOT_DOT_EVAL_TARGET_PSEUDO : 0)
+                | (force_name_dispatch ? QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH : 0);
             return id;
         }
     }

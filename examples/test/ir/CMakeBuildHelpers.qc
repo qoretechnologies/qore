@@ -44,6 +44,8 @@ class CMakeBuildHelpersBase inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
             \testExternalQmodsTrackQoreRuntime());
         addPartCase(2, "cyclic source components build as one atomic generation",
             \testCyclicComponentBuilds());
+        addPartCase(2, "a qmod is rebuilt when a module of its %try-module directives is installed",
+            \testQmodOptionalModuleInstalled());
         addPartCase(3, "a group watches what its members read from outside it through one depfile",
             \testGroupExternalInputsDepfile());
         addPartCase(3, "a partial aggregate of a group links the contracts its members baked",
@@ -1051,6 +1053,155 @@ qore_external_user_module(\"qlib/Fixture\" \"\")
         assertRegex("does\\s+not\\s+report\\s+an\\s+AOT\\s+runtime\\s+identity", build);
         assertFalse(build =~ /RC=0/, "the build fails: " + build);
         assertEq(3, compiles(), "no module is compiled with a qcc that reports no identity");
+    }
+
+    #! A qmod compiled without the module of a failed %try-module directive is rebuilt once the module is installed
+    #! where it could be found, and not when another file is added there (qore#6145)
+    testQmodOptionalModuleInstalled() {
+        if (!qore_dir) {
+            testSkip("QoreConfig.cmake is not available for the build under test");
+        }
+        TmpDir tmp("qore-qmod-optional-module-", NOTHING, cmakeTmpBase());
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string tool_dir = tmp.path + "/tools";
+        string module_dir = tmp.path + "/modules";
+        mkdir(src_dir + "/qlib", 0755, True);
+        mkdir(tool_dir);
+        mkdir(module_dir);
+        write(src_dir + "/qlib/OptFixture.qm", "%modern\n"
+            "%try-module OptionalDep6145\n"
+            "%endtry\n"
+            "module OptFixture {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"optional module fixture\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n");
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQmodOptionalModule NONE)
+find_package(Qore REQUIRED)
+qore_external_user_module(\"qlib/OptFixture.qm\" \"\")
+qore_external_user_module(\"qlib/OptParen.qm\" \"\")
+");
+        # the directive with its exception variable right after it, without a space
+        write(src_dir + "/qlib/OptParen.qm", "%modern\n"
+            "%try-module($ex) OptionalDep6145Paren\n"
+            "%endtry\n"
+            "module OptParen {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"optional module fixture\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n");
+        # a qcc that lists the path where the optional module could be installed while it is not there, as qcc does
+        # (<depfile>.optional), and nothing once it is: the module is then available, and compiled in
+        string candidate = module_dir + "/OptionalDep6145.qmod";
+        string log = tool_dir + "/compiles.log";
+        string qcc = tool_dir + "/qcc";
+        write(qcc, sprintf("#!/bin/sh\n"
+            "if [ \"$1\" = --version ]; then\n"
+            "    echo 'qcc (Qore Code Compiler) v1.0'\n"
+            "    echo 'AOT runtime identity: aaaa'\n"
+            "    exit 0\n"
+            "fi\n"
+            "out=\n"
+            "while [ $# -gt 0 ]; do\n"
+            "    case \"$1\" in\n"
+            "        -o) out=$2; shift ;;\n"
+            "        --depfile=*) dep=${1#--depfile=} ;;\n"
+            "    esac\n"
+            "    shift\n"
+            "done\n"
+            "echo compile >> %s\n"
+            "echo qmod > \"$out\"\n"
+            "[ -n \"$dep\" ] && echo \"$out:\" > \"$dep\"\n"
+            "if [ -n \"$dep\" ]; then\n"
+            "    case \"$out\" in\n"
+            "        *OptFixture.qmod)\n"
+            "            if [ -f %s ]; then : > \"$dep.optional\"; else echo %s > \"$dep.optional\"; fi ;;\n"
+            "        *) : > \"$dep.optional\" ;;\n"
+            "    esac\n"
+            "fi\n"
+            "exit 0\n", shellQuote(log), shellQuote(candidate), shellQuote(candidate)));
+        chmod(qcc, 0755);
+
+        string configure = run(sprintf("cmake -S %s -B %s -DQore_DIR=%s -DQORE_QCC_EXECUTABLE=%s "
+            "-DQORE_BUILD_AOT_MODULES=ON", shellQuote(src_dir), shellQuote(build_dir), shellQuote(qore_dir),
+            shellQuote(qcc)));
+        code<int()> compiles = int sub () {
+            return is_file(log) ? (read(log).split("\n").size()) : 0;
+        };
+        string qmod = build_dir + "/qlib-qmod/OptFixture.qmod";
+        string build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertTrue(is_file(qmod), "the fixture qmod is compiled: " + configure + build);
+        # each module is compiled once
+        assertEq(2, compiles());
+        assertTrue(is_file(qmod + ".optional.stamp"), "the module with a %try-module directive has a stamp");
+        assertTrue(is_file(build_dir + "/qlib-qmod/OptParen.qmod.optional.stamp"),
+            "a %try-module($ex) directive is found too");
+
+        # nothing changed: nothing is recompiled
+        run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(2, compiles(), "an unchanged build recompiles nothing");
+
+        # another file in the directory where the module could be installed: nothing is recompiled
+        write(module_dir + "/Unrelated.qmod", "another module\n");
+        write(module_dir + "/notes.txt", "a file\n");
+        run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(2, compiles(), "an unrelated file in the module directory recompiles nothing");
+
+        # the optional module is installed: the qmod is recompiled, once
+        write(candidate, "the optional module\n");
+        build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(3, compiles(), "the installed optional module recompiles the qmod: " + build);
+        run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(3, compiles(), "the build after the recompile recompiles nothing");
+
+        # the module is removed and the qmod is recompiled without it; installing it again recompiles it again
+        unlink(candidate);
+        TestFileTime::set_file_times(now() + 2s, src_dir + "/qlib/OptFixture.qm");
+        run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(4, compiles(), "a changed source recompiles the qmod");
+        TestFileTime::set_file_times(now() + 4s, build_dir + "/qlib-qmod/OptFixture.qmod.d.optional");
+        write(candidate, "the optional module again\n");
+        build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(5, compiles(), "the module installed again recompiles the qmod: " + build);
+
+        # the real qcc lists the paths where a module of a failed %try-module directive could be installed
+        string real_qcc = qore_build_dir + "/qcc";
+        if (!is_executable(real_qcc)) {
+            return;
+        }
+        string probe_dir = tmp.path + "/probe";
+        mkdir(probe_dir);
+        string probe = probe_dir + "/OptProbe.qm";
+        write(probe, "%modern\n"
+            "%try-module OptionalDep6145Probe\n"
+            "%endtry\n"
+            "module OptProbe {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"optional module probe\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n");
+        string out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -m %s --depfile=%s -o %s 2>&1",
+            shellQuote(qore_build_dir), shellQuote(module_dir), shellQuote(real_qcc), shellQuote(probe),
+            shellQuote(probe_dir + "/OptProbe.qmod.d"), shellQuote(probe_dir + "/OptProbe.qmod")));
+        assertTrue(is_file(probe_dir + "/OptProbe.qmod.d.optional"), "qcc writes the candidate list: " + out);
+        list<string> listed = read(probe_dir + "/OptProbe.qmod.d.optional").split("\n");
+        assertTrue(inlist(module_dir + "/OptionalDep6145Probe.qmod", listed),
+            "the candidate paths include the module directory: " + (listed.join(", ")));
+        assertTrue(inlist(module_dir + "/OptionalDep6145Probe.qm", listed),
+            "and the source module: " + (listed.join(", ")));
+        # a module that is available is not listed
+        write(module_dir + "/OptionalDep6145Probe.qm", "%modern\nmodule OptionalDep6145Probe {\n"
+            "    version = \"1.0\";\n    desc = \"d\";\n    author = \"a\";\n    license = \"MIT\";\n}\n");
+        out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -m %s --depfile=%s -o %s 2>&1",
+            shellQuote(qore_build_dir), shellQuote(module_dir), shellQuote(real_qcc), shellQuote(probe),
+            shellQuote(probe_dir + "/OptProbe.qmod.d"), shellQuote(probe_dir + "/OptProbe.qmod")));
+        assertEq("", read(probe_dir + "/OptProbe.qmod.d.optional"), "an available module is not listed: " + out);
     }
 
     testExportedHelpers() {

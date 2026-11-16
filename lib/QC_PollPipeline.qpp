@@ -41,6 +41,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/ql_crypto.h"
+#include "qore/intern/QoreRegex.h"
 #include "qore/WebSocketFrameCodec.h"
 
 /** @cond INTERNAL */
@@ -875,6 +876,83 @@ int PollPipelinePriv::addContextOr(const char* result_key, const char* key_a, co
         bool a = ctx.extra->getKeyValue(ka.c_str()).getAsBool();
         bool b = ctx.extra->getKeyValue(kb.c_str()).getAsBool();
         ctx.extra->setKeyValue(res.c_str(), a || b, xsink);
+    });
+}
+
+int PollPipelinePriv::addRequireContextKey(const char* key, const char* err_code, const char* desc) {
+    std::string k(key);
+    std::string err(err_code);
+    std::string d(desc);
+    return addTransform([k, err, d](Context& ctx, ExceptionSink* xsink) {
+        if (ctx.extra && ctx.extra->getKeyValue(k.c_str()).getAsBool()) {
+            return;
+        }
+        xsink->raiseException(err.c_str(), "%s", d.c_str());
+    });
+}
+
+int PollPipelinePriv::addCheckRegex(const char* source_key, const char* pattern, size_t pattern_len,
+        const char* result_key, ExceptionSink* xsink) {
+    // a value that is not valid UTF-8 (ex: a server reply with a Latin-1 byte) is matched with its invalid byte
+    // sequences never part of a match; without PCRE2_MATCH_INVALID_UTF (PCRE2 before 10.34) it is matched bytewise
+#ifdef PCRE2_MATCH_INVALID_UTF
+    uint32_t opts = PCRE2_UTF | PCRE2_MATCH_INVALID_UTF;
+#else
+    uint32_t opts = 0;
+#endif
+    int errorcode;
+    PCRE2_SIZE eo;
+    pcre2_code* code = pcre2_compile(reinterpret_cast<PCRE2_SPTR8>(pattern), pattern_len, opts, &errorcode, &eo,
+        nullptr);
+    if (!code) {
+        PCRE2_UCHAR buffer[qore_pcre2_errorbuf_size];
+        pcre2_get_error_message(errorcode, buffer, sizeof(buffer));
+        xsink->raiseException("REGEX-COMPILATION-ERROR", "Regular expression compilation failed at %lu ('%s'): %s",
+            static_cast<unsigned long>(eo), pattern, reinterpret_cast<const char*>(buffer));
+        return -1;
+    }
+    std::shared_ptr<pcre2_code> re(code, pcre2_code_free);
+    std::string src(source_key);
+    std::string res(result_key);
+    return addTransform([src, re, res](Context& ctx, ExceptionSink* xsink) {
+        if (!ctx.extra) {
+            ctx.extra = new QoreHashNode(autoTypeInfo);
+        }
+        QoreValue v = ctx.extra->getKeyValue(src.c_str());
+        const char* subject = nullptr;
+        size_t len = 0;
+        // a string in another encoding is matched in UTF-8; a string tagged UTF-8 is matched as it is, even if it
+        // is not valid UTF-8
+        TempEncodingHelper str;
+        if (v.getType() == NT_STRING) {
+            const QoreStringNode* s = v.get<const QoreStringNode>();
+            if (s->getEncoding() == QCS_UTF8) {
+                subject = s->c_str();
+                len = s->size();
+            } else {
+                if (!str.set(s, QCS_UTF8, xsink)) {
+                    return;
+                }
+                subject = str->c_str();
+                len = str->size();
+            }
+        } else if (v.getType() == NT_BINARY) {
+            const BinaryNode* b = v.get<const BinaryNode>();
+            subject = static_cast<const char*>(b->getPtr());
+            len = b->size();
+        }
+        bool found = false;
+        if (subject) {
+            pcre2_match_data* md = pcre2_match_data_create_from_pattern(re.get(), nullptr);
+            ON_BLOCK_EXIT(pcre2_match_data_free, md);
+            int rc = qore_pcre2_match(re.get(), reinterpret_cast<PCRE2_SPTR8>(subject), len, 0, 0, md);
+            if (rc > 0) {
+                found = true;
+            } else if (qore_pcre2_check_match_error(rc, xsink)) {
+                return;
+            }
+        }
+        ctx.extra->setKeyValue(res.c_str(), found, xsink);
     });
 }
 
@@ -2747,6 +2825,68 @@ int PollPipeline::addSelectContextValue(string result_key, string condition_key,
 */
 int PollPipeline::addContextOr(string result_key, string key_a, string key_b) [flags=NAMED_ARGS] {
     return priv->addContextOr(result_key->c_str(), key_a->c_str(), key_b->c_str());
+}
+
+//! Adds a transform step that stores whether a regular expression matches a context value
+/** Sets \c ctx.extra[result_key] to @ref True if the string or binary value of \c ctx.extra[source_key] matches
+    \a pattern, @ref False otherwise (also if the key is missing or has another type).  Unlike addCheckContains(),
+    the match can be anchored and case-sensitive; options can be given in the pattern (ex: \c "(?im)").
+
+    @param source_key the context extra key with the value to match
+    @param pattern the regular expression; it is compiled when the step is added
+    @param result_key the context extra key for the boolean result
+    @return the step index
+
+    A value that is not valid UTF-8 (ex: a binary value, or a server reply with a Latin-1 byte) is matched too: its
+    invalid byte sequences are never part of a match, so a pattern of ASCII characters matches as it would bytewise.
+
+    @throw REGEX-COMPILATION-ERROR the pattern cannot be compiled, or it contains a NUL character
+
+    @par Example:
+    @code{.py}
+# a line of an SMTP EHLO reply that is the SMTPUTF8 keyword, in any case
+pipeline.addCheckRegex("hello_text", "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$", "server_has_smtputf8");
+    @endcode
+
+    @since %Qore 3.0
+*/
+int PollPipeline::addCheckRegex(string source_key, string pattern, string result_key) [flags=NAMED_ARGS] {
+    TempEncodingHelper p(pattern, QCS_UTF8, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // the pattern is not cut at a NUL character
+    if (memchr(p->c_str(), 0, p->size())) {
+        xsink->raiseException("REGEX-COMPILATION-ERROR", "the regular expression contains a NUL character");
+        return QoreValue();
+    }
+    int rv = priv->addCheckRegex(source_key->c_str(), p->c_str(), p->size(), result_key->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return rv;
+}
+
+//! Adds a step that raises an exception if a context extra key is not set to a truthy value
+/** Ends the pipeline with an exception when a condition found by an earlier step does not hold, for example when a
+    server does not advertise a capability that the rest of the pipeline needs (see addCheckContains()).
+
+    @param context_key the context extra key to check
+    @param error_code the exception error code to raise if \c ctx.extra[context_key] is missing or not truthy
+    @param desc the exception description
+    @return the step index
+
+    @par Example:
+    @code{.py}
+# an SMTP client must not send an address with non-ASCII characters to a server that does not support SMTPUTF8
+pipeline.addCheckContains("hello_text", "SMTPUTF8", "server_has_smtputf8");
+pipeline.addRequireContextKey("server_has_smtputf8", "SMTP-SEND-ERROR", "the server does not support SMTPUTF8");
+    @endcode
+
+    @since %Qore 3.0
+*/
+int PollPipeline::addRequireContextKey(string context_key, string error_code, string desc) [flags=NAMED_ARGS] {
+    return priv->addRequireContextKey(context_key->c_str(), error_code->c_str(), desc->c_str());
 }
 
 //! Adds an unconditional jump to a target step (enables loops)

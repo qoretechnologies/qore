@@ -36,6 +36,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/FunctionList.h"
+#include "qore/intern/QoreCallTargetCheckCache.h"
 
 //! returns the interned list of the names of the arguments of a named call resolved at run time by parameter name
 /** each distinct list is kept once for the life of the library (it is part of the code that uses it, as the names
@@ -189,6 +190,15 @@ public:
     DLLLOCAL const QoreTypeParamInstantiation* getTypeParamInstantiation() const {
         return type_param_instantiation.empty() ? nullptr : &type_param_instantiation;
     }
+
+    //! Returns the parse-time return type of a call of the given function (see parseArgsVariant())
+    /** the type parameters of the callee are substituted with the instantiation of the call, or for a call resolved
+        at run time, with its explicit type arguments, their bounds or auto (qore#5896, qore#6151); for a call resolved
+        at run time, whose class context is not known here, the type is the union of the return types of all the
+        variants, accessible to the call or not: the type that parseArgsVariant() gives the call, or a wider one (or
+        nullptr); the type is not kept in the node, as each call made by the IR interpreter copies its node
+    */
+    DLLLOCAL const QoreTypeInfo* getCallReturnTypeInfo(QoreFunction* func) const;
 
     DLLLOCAL const QoreTypeParamInstantiation* getExplicitTypeParamInstantiation() const {
         if (!has_explicit_type_args) {
@@ -575,9 +585,7 @@ protected:
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
-        return variant
-            ? variant->parseGetReturnTypeInfo()
-            : (fe ? fe->getFunction()->parseGetUniqueReturnTypeInfo() : nullptr);
+        return getCallReturnTypeInfo(fe ? fe->getFunction() : nullptr);
     }
 };
 
@@ -663,7 +671,8 @@ DLLLOCAL inline const FunctionCallNode* qore_get_function_call_node(const Abstra
         return nullptr;
     }
     qore_type_t t = n->getType();
-    const FunctionCallNode* rv = (t == NT_FUNCTION_CALL || t == NT_PROGRAM_FUNC_CALL)
+    // a plain function call is the common case: it is tested first
+    const FunctionCallNode* rv = (__builtin_expect(t == NT_FUNCTION_CALL, 1) || t == NT_PROGRAM_FUNC_CALL)
         ? static_cast<const FunctionCallNode*>(n)
         : nullptr;
     assert(rv == dynamic_cast<const FunctionCallNode*>(n));
@@ -711,6 +720,16 @@ public:
     template <bool Lexical>
     DLLLOCAL QoreValue execImpl(LexicalSemanticPolicy policy, QoreObject* o, const char* cstr, const qore_class_private* ctx, ExceptionSink* xsink)
             const;
+    //! calls the method looked up by name in the class of the object, as execImpl() does when the method resolved at
+    //! parse time does not apply (the location of the call must be set)
+    template <bool Lexical>
+    DLLLOCAL QoreValue execByNameImpl(LexicalSemanticPolicy policy, QoreObject* o, const char* cstr,
+            const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const;
+    //! sets the location of the call and calls execByNameImpl() out of line, so that the callers on the hot path of
+    //! calls inline it only once (through execImpl())
+    template <bool Lexical>
+    DLLLOCAL QoreValue execByName(LexicalSemanticPolicy policy, QoreObject* o, const char* cstr,
+            const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const;
     //! Raises the exception that exec() raises for an object that has been deleted before it evaluates the
     //! arguments (issue #5784)
     /** @return -1 if the exception was raised, 0 if the object is valid
@@ -738,6 +757,9 @@ public:
     DLLLOCAL const QoreMethod* getMethod() const {
         return method;
     }
+
+    //! the cache of the check of the call's target before its arguments (issue #5824)
+    QoreCallTargetCheckCache check_cache;
 };
 
 class MethodCallNode : public AbstractMethodCallNode {
@@ -966,6 +988,11 @@ public:
         return is_abstract;
     }
 
+    //! returns the class that an AOT image records for the call, from which it restores the class of the call and its
+    //! class context: the parse-time class, or, for an unqualified call of an abstract method, which has none (issue
+    //! #3070), the class of the call
+    DLLLOCAL const QoreClass* getRecordedClass() const;
+
     //! returns the name of the method without a class qualifier
     DLLLOCAL const char* getMethodName() const {
         return ns.getIdentifier();
@@ -980,6 +1007,17 @@ public:
         that a qualified call names, or of the class of \a obj (or the class of the call if there is no object)
     */
     DLLLOCAL bool backgroundCallIsStatic(const QoreObject* obj) const;
+
+    //! Marks a call to an abstract method, resolved at run time, as parseInitCall() marks it; for a call node rebuilt
+    //! from an AOT image
+    DLLLOCAL void setAbstractCall() {
+        is_abstract = true;
+        // an unqualified call has no parse-time class, so that the method is looked up by name in the class of the
+        // object, with the class context of the call (issue #3070)
+        if (ns.size() == 1) {
+            qc = nullptr;
+        }
+    }
 
 protected:
     NamedScope ns;
@@ -1135,5 +1173,33 @@ public:
         return rv;
     }
 };
+
+//! Returns the node as a SelfFunctionCallNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const SelfFunctionCallNode*>(), from the node type: only SelfFunctionCallNode's
+    constructors give NT_SELF_CALL, and its subclasses keep it (SetSelfFunctionCallNode copies a self call; the
+    lexical variants made by qore_make_function_call() keep the type of their base class).  A dynamic_cast searches
+    the class hierarchy with string comparisons of the type names, which is too slow for the per-call paths.
+*/
+DLLLOCAL inline const SelfFunctionCallNode* qore_get_self_function_call_node(const AbstractQoreNode* n) {
+    const SelfFunctionCallNode* rv = (n && n->getType() == NT_SELF_CALL)
+        ? static_cast<const SelfFunctionCallNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const SelfFunctionCallNode*>(n));
+    return rv;
+}
+
+//! Returns the node as a StaticMethodCallNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const StaticMethodCallNode*>(), from the node type: only StaticMethodCallNode's
+    constructors give NT_STATIC_METHOD_CALL, and its lexical variants made by qore_make_function_call() keep it.  A
+    dynamic_cast searches the class hierarchy with string comparisons of the type names, which is too slow for the
+    per-call paths.
+*/
+DLLLOCAL inline const StaticMethodCallNode* qore_get_static_method_call_node(const AbstractQoreNode* n) {
+    const StaticMethodCallNode* rv = (n && n->getType() == NT_STATIC_METHOD_CALL)
+        ? static_cast<const StaticMethodCallNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const StaticMethodCallNode*>(n));
+    return rv;
+}
 
 #endif

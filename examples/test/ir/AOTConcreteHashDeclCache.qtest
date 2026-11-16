@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - native cache checks and parity checks run in child processes
+# test-platform: macos - native AOT caches, Program teardown, threads and qcc code generation
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class AOTConcreteHashDeclCacheTest
+
+class AOTConcreteHashDeclCacheTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string source = get_script_dir() + "/aot-concrete-hashdecl-cache.q";
+        const Expected = "0:1:RUNTIME-TYPE-ERROR:0:ok\n1:2:RUNTIME-TYPE-ERROR:1:ok\n"
+            + "2:3:RUNTIME-TYPE-ERROR:2:ok\n";
+    }
+
+    constructor() : QUnit::Test("AOT concrete hashdecl cache", "1.0", \ARGV) {
+        addTestCase("native cache lifetime, collisions and concurrent publication", \native());
+        addTestCase("concrete and receiver-dependent paths in every mode", \modes());
+        addTestCase("qcc ordinary and Invoke construction with enabled and disabled caches", \compiled());
+        set_return_value(main());
+    }
+
+    private native() {
+        string binary = ENV.QORE_AOT_CONCRETE_HASHDECL_TEST ?? dirname(qore_bin) + "/qore-aot-concrete-hashdecl-test";
+        if (!is_file(binary)) {
+            testSkip("native concrete hashdecl cache executable is not available");
+            return;
+        }
+        foreach int disabled in ((0, 1)) {
+            auto result = ExecModeHarness::run_command(cacheEnv(disabled) + quote(binary));
+            assertEq(0, result.rc, result.out);
+            assertEq("PASS: concrete hashdecl cache, Program reuse, collisions, errors and concurrent contexts\n",
+                result.stdout);
+        }
+    }
+
+    private modes() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            auto result = ExecModeHarness::run_command(quote(qore_bin) + " -b --enable-debug --exec-mode="
+                + mode + " " + quote(source));
+            assertEq(0, result.rc, result.out);
+            ExecModeHarness::check_native(result);
+            assertEq(Expected, result.stdout, mode);
+        }
+    }
+
+    private compiled() {
+        string qcc = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc)) {
+            testSkip("qcc is not available");
+            return;
+        }
+        TmpDir tmp("qore-concrete-hashdecl-cache-");
+        foreach string opt in (("0", "3")) {
+            string binary = tmp.path + "/cache-O" + opt;
+            auto result = ExecModeHarness::run_command(quote(qcc) + " -O" + opt + " --strip-source -o "
+                + quote(binary) + " " + quote(source));
+            assertEq(0, result.rc, result.out);
+            foreach int disabled in ((0, 1)) {
+                result = ExecModeHarness::run_command(cacheEnv(disabled) + quote(binary) + " -b --enable-debug");
+                assertEq(0, result.rc, result.out);
+                assertEq(Expected, result.stdout, sprintf("-O%s cache disabled %d", opt, disabled));
+            }
+        }
+    }
+
+    private static string cacheEnv(int disabled) {
+        return disabled ? "env QORE_DISABLE_AOT_HASHDECL_FRONT_CACHE=1 "
+            : "env -u QORE_DISABLE_AOT_HASHDECL_FRONT_CACHE ";
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

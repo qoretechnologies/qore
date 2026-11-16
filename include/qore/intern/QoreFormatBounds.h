@@ -116,6 +116,12 @@ private:
 
     DLLLOCAL void scanIntern(const QoreValue val, unsigned depth, unsigned& nodes);
 
+    //! counts the value; returns true if the values in it are to be scanned
+    DLLLOCAL bool scanEnter(const QoreValue val, unsigned depth, unsigned& nodes);
+
+    //! scans the values in a deeply nested container with a work stack instead of recursion (qore#6117)
+    DLLLOCAL void scanWithoutRecursion(const QoreValue val, unsigned depth, unsigned& nodes);
+
     //! returns the number of bytes of output left in the budget; SIZE_MAX if the budget is unlimited
     DLLLOCAL size_t remaining(const QoreString& str) {
         if (!bounds.max_bytes) {

@@ -27,6 +27,9 @@ struct RecordColumnInference {
     bool has_string = false;
     bool has_bool = false;
     bool has_date = false;
+    //! an absolute date and a relative date (qore#6107)
+    bool has_absolute_date = false;
+    bool has_relative_date = false;
     bool has_auto = false;
 };
 
@@ -51,6 +54,11 @@ static void mergeRecordColumnType(RecordColumnInference& inf, QoreValue value) {
             break;
         case NT_DATE:
             inf.has_date = true;
+            if (value.get<const DateTimeNode>()->isRelative()) {
+                inf.has_relative_date = true;
+            } else {
+                inf.has_absolute_date = true;
+            }
             break;
         default:
             inf.has_auto = true;
@@ -76,7 +84,9 @@ static ColumnType finishRecordColumnType(const RecordColumnInference& inf) {
         return ColumnType::BOOL;
     }
     if (inf.has_date && !inf.has_int && !inf.has_float && !inf.has_bool) {
-        return ColumnType::DATE;
+        // absolute and relative dates make a column that holds any value, as a concatenation of the two does
+        // (qore#6107)
+        return inf.has_absolute_date && inf.has_relative_date ? ColumnType::AUTO : ColumnType::DATE;
     }
     if (inf.has_int || inf.has_float || inf.has_bool || inf.has_date) {
         return ColumnType::STRING;
@@ -205,9 +215,14 @@ static void initializeRecordColumnData(ColumnData& data, ColumnType type, int64_
 }
 
 //! stores a value of a record in a cell
-/** @return 0 for success, -1 if an exception was raised
+/** @param date_kind for a date column, the kind of its dates (a DataFrameDateKind value), set by the first date
+    if -1; never 0, the value of a date that cannot be stored, so that such a date is never taken for one of that
+    kind (qore#6107)
+
+    @return 0 for success, -1 if an exception was raised, 1 if a date is not of the kind of the others
 */
-static int storeRecordValue(ColumnData& data, int64_t i, QoreValue value, ExceptionSink* xsink) {
+__attribute__((always_inline)) static inline int storeRecordValue(ColumnData& data, int64_t i, QoreValue value,
+        int& date_kind, ExceptionSink* xsink) {
     if (value.isNullOrNothing()) {
         data.null_mask[i] = 1;
         if (data.type == ColumnType::FLOAT64) {
@@ -230,7 +245,23 @@ static int storeRecordValue(ColumnData& data, int64_t i, QoreValue value, Except
             break;
         case ColumnType::DATE:
             if (value.getType() == NT_DATE) {
-                return dataFrameDateMicros(value.get<const DateTimeNode>(), data.date_data[i], xsink);
+                const DateTimeNode* dt = value.get<const DateTimeNode>();
+                int64 micros;
+                // a date of the kind of the others is stored with one comparison
+                int kind = dt->getEpochMicrosecondsUTCCheckedKind(micros);
+                if (kind == date_kind) {
+                    data.date_data[i] = micros;
+                    return 0;
+                }
+                if (!kind) {
+                    return dataFrameDateOutOfRange(dt, xsink);
+                }
+                if (date_kind >= 0) {
+                    return 1;
+                }
+                date_kind = kind;
+                data.date_data[i] = micros;
+                return 0;
             }
             data.null_mask[i] = 1;
             break;
@@ -791,6 +822,7 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
 
         bool fast_failed = false;
         ExceptionSink fast_xsink;
+        std::vector<int> date_kinds(num_cols, -1);
         for (int64_t i = 0; i < n; ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame from records")) {
                 delete df;
@@ -811,7 +843,9 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
                 }
                 // a value that cannot be stored in the column's cell is stored by the path that infers the type of
                 // every column first, as a later value can make the column one that stores it, or raise its error
-                if (storeRecordValue(*df->columns[c].data, i, value, &fast_xsink)) {
+                // a date that is not of the kind of the others (a duration with absolute dates) makes a column that
+                // holds any value, which the path that infers the type of every column first makes (qore#6107)
+                if (storeRecordValue(*df->columns[c].data, i, value, date_kinds[c], &fast_xsink)) {
                     fast_xsink.clear();
                     fast_failed = true;
                     break;
@@ -823,6 +857,12 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
         }
 
         if (!fast_failed) {
+            // a column of durations has their schema (qore#6107)
+            for (size_t c = 0; c < num_cols; ++c) {
+                if (date_kinds[c] == DFDK_RELATIVE) {
+                    dataFrameSetDurationSchema(*df->columns[c].data);
+                }
+            }
             return df;
         }
         delete df;
@@ -854,6 +894,9 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
     for (size_t c = 0; c < num_cols; ++c) {
         auto data = std::make_shared<ColumnData>();
         initializeRecordColumnData(*data, finishRecordColumnType(inferred[c]), n);
+        if (data->type == ColumnType::DATE && inferred[c].has_relative_date) {
+            dataFrameSetDurationSchema(*data);
+        }
 
         Column col;
         col.name = col_names[c];
@@ -869,7 +912,9 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
         }
         const QoreHashNode* row = rows[i];
         for (size_t c = 0; c < num_cols; ++c) {
-            if (storeRecordValue(*df->columns[c].data, i, row->getKeyValue(col_keys[c]), xsink)) {
+            // the dates of a date column are all of one kind here
+            int date_kind = -1;
+            if (storeRecordValue(*df->columns[c].data, i, row->getKeyValue(col_keys[c]), date_kind, xsink)) {
                 delete df;
                 return nullptr;
             }
@@ -1420,6 +1465,15 @@ QoreListNode* QoreDataFrame::describe(ExceptionSink* xsink) const {
             }
 
             if (!vals.empty()) {
+                // a NaN value cannot be ordered for the minimum, the maximum and the quantiles; it raises
+                // NAN-COMPARE-ERROR, as the <=> operator and sortBy() do, before the values are sorted (qore#6107)
+                if (cd.type == ColumnType::FLOAT64 && std::any_of(vals.begin(), vals.end(), [] (double v) {
+                        return std::isnan(v);
+                    })) {
+                    xsink->raiseException("NAN-COMPARE-ERROR", "DataFrame column '%s' has a NaN value, which cannot "
+                        "be ordered for its minimum, maximum and quantiles", col.name.c_str());
+                    return nullptr;
+                }
                 std::sort(vals.begin(), vals.end());
                 double sum = 0;
                 for (double v : vals) {
@@ -2611,18 +2665,51 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
             }
             dense[c] = same;
         }
-        // the columnar schema of a concatenated date column: the first column's, with the time unit that the cells
-        // hold, microseconds, if the columns have different time units (a column without a schema holds
-        // microseconds), and UTC if they have different time zones, as an export writes the cells in the schema's
-        // time unit and time zone (qore#6097)
+        // the columnar schema of a concatenated column with a schema: the schema that holds the cells of all its
+        // columns, as dataFrameMergeColumnSchema() merges them for melt() and join() (qore#6144): the time unit
+        // "us" if the columns have different time units (a column without a schema holds microseconds) and "UTC" if
+        // they have different time zones, as an export writes the cells in the schema's time unit and time zone
+        // (qore#6097), nullable if a column is, and no native type that does not describe them all; date and
+        // timestamp schemas, which it does not merge, give the timestamp schema, as the key column of a join does,
+        // and other date or duration schemas that it does not merge give the first one with no native type (an
+        // export writes the cells in its time unit and time zone, so it holds them all); other schemas that it does
+        // not merge give no schema, as the first one would not describe all the columns (returns false then)
         auto concatSchema = [](const ColumnData& first, const std::string& name,
-                const std::vector<Snapshot>& snapshots) -> QoreColumnarTypeDescriptor {
+                const std::vector<Snapshot>& snapshots, QoreColumnarTypeDescriptor& rv) -> bool {
+            bool has_schema = first.has_columnar_schema;
             QoreColumnarTypeDescriptor schema = first.columnar_schema;
-            if (first.type != ColumnType::DATE) {
-                return schema;
+            schema.name.clear();
+            bool merged = true;
+            for (const Snapshot& snapshot : snapshots) {
+                auto it = snapshot.col_index.find(name);
+                if (it == snapshot.col_index.end()) {
+                    continue;
+                }
+                const ColumnData& src = *snapshot.columns[it->second].data;
+                if (&src != &first && !dataFrameMergeColumnSchema(has_schema, schema, first, src)) {
+                    merged = false;
+                    break;
+                }
             }
+            if (merged) {
+                if (!has_schema) {
+                    return false;
+                }
+                rv = schema;
+                return true;
+            }
+            if (first.type != ColumnType::DATE) {
+                return false;
+            }
+            // date and timestamp schemas: the first timestamp schema (or the first schema if no column has a
+            // timestamp schema), with the unit and zone of all the columns
+            const QoreColumnarTypeDescriptor* ts = nullptr;
+            bool nullable = false;
             bool other_unit = false;
             bool other_zone = false;
+            std::string unit0;
+            std::string zone0;
+            bool first_src = true;
             for (const Snapshot& snapshot : snapshots) {
                 auto it = snapshot.col_index.find(name);
                 if (it == snapshot.col_index.end()) {
@@ -2632,21 +2719,33 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                 std::string unit = src.has_columnar_schema && !src.columnar_schema.time_unit.empty()
                     ? src.columnar_schema.time_unit : std::string("us");
                 std::string zone = src.has_columnar_schema ? src.columnar_schema.timezone : std::string();
-                std::string first_unit = schema.time_unit.empty() ? std::string("us") : schema.time_unit;
-                if (unit != first_unit) {
-                    other_unit = true;
+                if (first_src) {
+                    unit0 = unit;
+                    zone0 = zone;
+                    first_src = false;
+                } else {
+                    other_unit = other_unit || unit != unit0;
+                    other_zone = other_zone || zone != zone0;
                 }
-                if (zone != schema.timezone) {
-                    other_zone = true;
+                // a column without a schema leaves the nullability alone, as in dataFrameMergeColumnSchema()
+                if (src.has_columnar_schema) {
+                    nullable = nullable || src.columnar_schema.nullable;
+                    if (!ts && src.columnar_schema.kind == QoreColumnarTypeKind::Timestamp) {
+                        ts = &src.columnar_schema;
+                    }
                 }
             }
+            rv = ts ? *ts : first.columnar_schema;
+            rv.name.clear();
+            rv.native_type.clear();
+            rv.nullable = nullable;
             if (other_unit) {
-                schema.time_unit = "us";
+                rv.time_unit = "us";
             }
             if (other_zone) {
-                schema.timezone = "UTC";
+                rv.timezone = "UTC";
             }
-            return schema;
+            return true;
         };
 
         // the columns concatenated as lists of values
@@ -2753,8 +2852,9 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                 if (*xsink) {
                     return nullptr;
                 }
-                if (first.has_columnar_schema) {
-                    preserveColumnarSchema(*col.data, col.name, concatSchema(first, col.name, snapshots));
+                QoreColumnarTypeDescriptor schema;
+                if (first.has_columnar_schema && concatSchema(first, col.name, snapshots, schema)) {
+                    preserveColumnarSchema(*col.data, col.name, schema);
                 }
             } else {
                 // columns of different types make the column that the column hash constructor makes of their
@@ -2779,8 +2879,58 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                         type = ColumnType::AUTO;
                     }
                 }
-                if (!same_types) {
+                // int64 and decimal columns make a decimal column, which holds the ints exactly as numbers, or a
+                // column that holds the exact values with no schema if the decimal would have more than 38 digits;
+                // decimal columns of different schemas make one of the schema that holds them all (qore#6144)
+                std::vector<const ColumnData*> cols;
+                cols.push_back(&first);
+                for (size_t d = 1; d < snapshots.size(); ++d) {
+                    auto it = snapshots[d].col_index.find(col.name);
+                    if (it != snapshots[d].col_index.end()) {
+                        cols.push_back(snapshots[d].columns[it->second].data.get());
+                    }
+                }
+                bool dec_has_schema = false;
+                QoreColumnarTypeDescriptor dec_schema;
+                bool int_decimal = !same_types && dataFrameIntDecimalSchema(cols, dec_has_schema, dec_schema);
+                bool decimals = same_types && type == ColumnType::AUTO && dataFrameIsDecimalColumn(first);
+                if (decimals) {
+                    dec_has_schema = true;
+                    dec_schema = first.columnar_schema;
+                    dec_schema.name.clear();
+                    for (size_t i = 1; i < cols.size(); ++i) {
+                        if (!dataFrameIsDecimalColumn(*cols[i])
+                                || !dataFrameMergeColumnSchema(dec_has_schema, dec_schema, first, *cols[i])) {
+                            dec_has_schema = false;
+                            break;
+                        }
+                    }
+                }
+                if (int_decimal) {
+                    // the ints become numbers in a decimal column
+                    QoreListNode* values = col_values.lists[c];
+                    if (dec_has_schema) {
+                        for (size_t i = 0; i < values->size(); ++i) {
+                            if (i && !(i % 100) && qore_check_cancel(xsink, "concatenating DataFrame decimals")) {
+                                return nullptr;
+                            }
+                            QoreValue v = values->retrieveEntry(i);
+                            if (v.getType() == NT_INT) {
+                                values->setEntry(i, new QoreNumberNode(v.getAsBigInt()), xsink);
+                            }
+                        }
+                    }
+                    col.data = buildColumnData(values, ColumnType::AUTO, xsink);
+                    if (!*xsink && dec_has_schema) {
+                        preserveColumnarSchema(*col.data, col.name, dec_schema);
+                    }
+                } else if (!same_types) {
                     col.data = buildColumnDataAuto(col_values.lists[c], xsink);
+                } else if (decimals) {
+                    col.data = buildColumnData(col_values.lists[c], type, xsink);
+                    if (!*xsink && dec_has_schema) {
+                        preserveColumnarSchema(*col.data, col.name, dec_schema);
+                    }
                 } else {
                     keep_schema = type == ColumnType::DATE && duration;
                     col.data = buildColumnData(col_values.lists[c], type, xsink);
@@ -2788,8 +2938,9 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                 if (*xsink) {
                     return nullptr;
                 }
-                if (keep_schema) {
-                    preserveColumnarSchema(*col.data, col.name, concatSchema(first, col.name, snapshots));
+                QoreColumnarTypeDescriptor schema;
+                if (keep_schema && concatSchema(first, col.name, snapshots, schema)) {
+                    preserveColumnarSchema(*col.data, col.name, schema);
                 }
             }
             result->col_index[col.name] = result->columns.size();
@@ -2914,10 +3065,17 @@ QoreDataFrame* QoreDataFrame::fillna(QoreValue value, ExceptionSink* xsink) cons
                         new_data->bool_data[i] = value.getAsBool() ? 1 : 0;
                         break;
                     case ColumnType::DATE:
-                        // as when a column is built: a value that is not a date leaves the value null
+                        // as when a column is built: a value that is not a date, or a date that is not of the kind
+                        // of the column (a duration in a column of absolute dates or the reverse), leaves the value
+                        // null (qore#6107)
                         if (value.getType() == NT_DATE) {
-                            if (dataFrameDateMicros(value.get<const DateTimeNode>(), new_data->date_data[i],
-                                    xsink)) {
+                            // the kind is checked first, so that a date of the other kind leaves the value null
+                            // even if it is outside the range of a date cell
+                            const DateTimeNode* dt = value.get<const DateTimeNode>();
+                            if (dt->isRelative() != new_data->isDuration()) {
+                                new_data->null_mask[i] = 1;
+                                new_data->date_data[i] = 0;
+                            } else if (dataFrameDateMicros(dt, new_data->date_data[i], xsink)) {
                                 delete df;
                                 return nullptr;
                             }

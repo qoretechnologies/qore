@@ -43,6 +43,7 @@ class QoreIRFunction;
 class AbstractStatement;
 class FunctionEntry;
 class QoreIRBackgroundInstruction;
+class QoreCallTargetCheckCache;
 struct QoreAOTContext;
 class QoreIRLValuePathInstruction;
 class QoreValue;
@@ -147,6 +148,8 @@ double qore_rt_div_float(double left, double right, ExceptionSink* xsink);
 
 //! Convert a QoreValue to int64_t
 int64_t qore_rt_to_int(uint64_t val);
+//! Convert the operand of += on an integer lvalue to int64_t: a char as its one-character string is
+int64_t qore_rt_plus_equals_operand_to_int(uint64_t val);
 
 //! Convert a QoreValue accepted by the timeout type to milliseconds
 int64_t qore_rt_to_timeout(uint64_t val);
@@ -344,23 +347,20 @@ void qore_rt_raise_return_statement_nothing_by_type_path_aot(QoreAOTContext* ctx
 */
 DLLLOCAL int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink);
 
-//! Returns true if the call @a call needs no check of its target @a target: a method call (not a call through a
-//! call reference) on an object that has not been deleted, the common case (QoreIROpcode::CheckCallTarget)
-/** With the inline accessors of the values only; qore_check_call_target() makes the check otherwise.
-*/
-static inline bool qore_call_target_needs_no_check(const QoreValue& call, const QoreValue& target) {
-    if (!target.isPointer() || !call.isPointer()) {
-        return false;
-    }
-    const AbstractQoreNode* target_node = target.getPtr();
-    const AbstractQoreNode* call_node = call.getPtr();
-    return target_node && call_node && target_node->getType() == NT_OBJECT && call_node->getType() != NT_FUNCREFCALL
-        && static_cast<const QoreObject*>(target_node)->isValid();
-}
+//! Raises the exception that a method call @a call raises when its arguments deleted its object @a target
+/** The check made after the arguments of a call that can have side effects (QoreIRExprInstruction::check_after_args):
+    the AST interpreter raises "cannot call <class>::<method>() on an object that has already been deleted" when the
+    method's code is entered (qore_object_private::startCall()), naming the class of the method (issue #5824)
 
-//! The JIT fast test of QoreIROpcode::CheckCallTarget for a call that is not a call through a call reference (known
-//! when the call is compiled): true if the target is an object that has not been deleted
-bool qore_rt_call_target_is_valid_object(uint64_t target_bits);
+    @return -1 if the exception was raised, 0 if not
+*/
+DLLLOCAL int qore_check_call_target_after_args(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink);
+
+//! The JIT fast test of QoreIROpcode::CheckCallTarget for a method call resolved at parse time (known when the call is
+//! compiled): true if the target is an object that has not been deleted, of one of the classes given or of any class
+//! if @a any_class is true (see qore_object_private::isValidOfClass(), issue #5824)
+bool qore_rt_call_target_is_valid_object(uint64_t target_bits, const QoreClass* qc, const QoreClass* method_qc,
+    bool any_class);
 
 //! The layout of the fields that JIT-generated code reads to test that a value is an object that has not been deleted
 /** Taken from the running libqore: JIT code is generated and run in the same process.  AOT code never uses it (the AOT
@@ -376,6 +376,8 @@ struct QoreJITObjectLayout {
     uint32_t priv_offset;
     //! the byte offset of the status (a 32-bit atomic int) in the private data
     uint32_t status_offset;
+    //! the byte offset of the class pointer in the private data
+    uint32_t class_offset;
     //! the status of a deleted object
     int32_t deleted_status;
 };
@@ -387,10 +389,10 @@ struct QoreJITObjectLayout {
 */
 const QoreJITObjectLayout* qore_jit_object_layout();
 
-//! The JIT fast test of QoreIROpcode::CheckCallTarget: qore_call_target_needs_no_check() with NaN-boxed values
-bool qore_rt_call_target_needs_no_check(uint64_t call_bits, uint64_t target_bits);
 
-//! The AOT counterpart of qore_rt_call_target_needs_no_check(), with the call identified by its expression slot
+//! The AOT fast test of QoreIROpcode::CheckCallTarget, with the call identified by its expression slot: true if the
+//! call is a method call resolved at parse time, and its target an object that has not been deleted of the call's class
+//! or of the method's class (issue #5824)
 bool qore_rt_call_target_needs_no_check_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits);
 
 //! The JIT helper of QoreIROpcode::CheckCallTarget: qore_check_call_target() with the NaN-boxed call and target
@@ -398,6 +400,27 @@ void qore_rt_check_call_target(uint64_t call_bits, uint64_t target_bits, Excepti
 
 //! The AOT counterpart of qore_rt_check_call_target(), with the call identified by its expression slot
 void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits, ExceptionSink* xsink);
+
+//! The JIT fast test of a CheckCallTarget of a method looked up by name: true if the cache of the call site knows
+//! that the lookup finds a method for the class of the object @a target_bits, which has not been deleted, from the
+//! current class context (QoreCallTargetCheckCache; issue #5824)
+bool qore_rt_call_target_cache_hit(const QoreCallTargetCheckCache* cache, uint64_t target_bits);
+
+//! true if the cache of a method call site knows that a lookup by name finds a method for the class of the object
+//! @a target, which has not been deleted, from the current class context (QoreCallTargetCheckCache; issue #5824)
+DLLLOCAL bool qore_call_target_cache_hit(const QoreCallTargetCheckCache* cache, const QoreValue& target);
+
+//! qore_call_target_cache_hit() for code that always runs with the class context @a ctx and the current Program
+//! @a pgm (QoreIRFunction::static_call_context), which are not read from the thread
+DLLLOCAL bool qore_call_target_cache_hit_static(const QoreCallTargetCheckCache* cache, const QoreValue& target,
+        const qore_class_private* ctx, const QoreProgram* pgm);
+
+//! The JIT helper of a CheckCallTarget made after the arguments (QoreIRExprInstruction::check_after_args)
+void qore_rt_check_call_target_after_args(uint64_t call_bits, uint64_t target_bits, ExceptionSink* xsink);
+
+//! The AOT counterpart of qore_rt_check_call_target_after_args(), with the call identified by its expression slot
+void qore_rt_check_call_target_after_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits,
+    ExceptionSink* xsink);
 
 //! Returns the current object as a NaN-boxed value (no reference), which native code reads once per function
 uint64_t qore_rt_current_self_bits();
@@ -516,8 +539,8 @@ void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache, uint64_t* tra
 uint8_t qore_rt_value_is_reference(uint64_t value);
 
 //! Returns the argument of an `any` parameter with the complex type of a list or hash stripped (qore#6032)
-/** Takes the reference of \a value and returns a reference: a shared container is copied with a plain type, as
-    QoreTypeInfo::acceptInputParam() does for an `any` parameter; any other value is returned as it is
+/** Takes the reference of \a value and returns a reference: a container with a complex type is copied with a plain
+    one, as QoreTypeInfo::acceptInputParam() does for an `any` parameter; any other value is returned as it is
 */
 uint64_t qore_rt_strip_any_param(uint64_t value);
 
@@ -573,6 +596,10 @@ uint64_t qore_rt_expr_op(int opcode, uint64_t expr_bits, ExceptionSink* xsink);
 
 //! Generic comparison op: delegates to QoreIRInterpreter::evalComparison()
 uint64_t qore_rt_comparison_op(int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink);
+
+//! Plugin comparison (QoreIROpcode::EqPlugin...GePlugin): delegates to QoreIRInterpreter::evalPluginComparison()
+//! (qore#5911)
+uint64_t qore_rt_plugin_comparison_op(int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink);
 
 //! Generic ternary op: delegates to QoreIRInterpreter::evalTernary()
 uint64_t qore_rt_ternary_op(int opcode, uint64_t a, uint64_t b, uint64_t c, ExceptionSink* xsink);
@@ -1677,6 +1704,68 @@ uint64_t qore_rt_load_local_raw_aot(QoreAOTContext* ctx, int32_t idx, ExceptionS
 uint8_t qore_rt_reload_local_if_stale_raw_aot(QoreAOTContext* ctx, int32_t idx, uint64_t* cache,
         uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch, ExceptionSink* xsink);
 
+// --- the table-driven code that runs pending handlers (qore#6110) ---
+
+//! A local of a function with on_block_exit handlers, as the helpers that run its pending handlers see it
+/** Native code fills an array of these in the entry block of the function (a record for each local that a site that
+    runs handlers publishes or reloads), and a site passes the array with a constant table of the indexes of the
+    records that it covers.  Without them, the code of each site grew with the number of locals of the function.  The
+    layout is the one that QoreIRToLLVM writes: the fields are pointers or 32-bit integers at 8-byte offsets.
+*/
+struct QoreObeLocal {
+    //! the variable in JIT code; null in AOT code
+    LocalVar* var;
+    //! the native cache of the local (its alloca)
+    uint64_t* cache;
+    //! the reload tracker of the local, if it has one
+    uint64_t* tracker;
+    //! the value that the cache held before the last reload, if the local has the slot
+    uint64_t* deferred;
+    //! the epoch of the last reload of the cache, if the local has it
+    uint64_t* valid_epoch;
+    //! the reference flag of the local, if it has one
+    uint8_t* ref_flag;
+    //! the value of the entry-time load that the local owns, if it does
+    uint64_t* entry_owner;
+    //! the slot of the local in AOT code
+    int32_t slot;
+    int32_t reserved;
+};
+
+//! the entry of a table of qore_rt_obe_publish() or qore_rt_obe_reload() that has the cache reloaded first/marked fresh
+constexpr uint32_t QORE_OBE_TABLE_FRESH = 0x80000000u;
+//! the mask of the index of the record in an entry of a table
+constexpr uint32_t QORE_OBE_TABLE_INDEX = 0x3fffffffu;
+
+//! Publishes the locals of the table to the runtime local stack before the handlers run (qore#6110)
+/** For each entry: a local with QORE_OBE_TABLE_FRESH is reloaded if its cache is stale
+    (qore_rt_reload_local_if_stale()), then its cache is published (qore_rt_sync_local()), as the inline code of
+    each site does.  \a epoch is the function's reload epoch, \a ctx the AOT context (null in JIT code).
+*/
+void qore_rt_obe_publish(QoreObeLocal* locals, const uint32_t* table, int32_t count, const uint64_t* epoch,
+        QoreAOTContext* ctx, ExceptionSink* xsink);
+
+//! Reloads the locals of the table from the runtime local stack after the handlers ran
+/** As the inline reload of a local (QoreIRToLLVM::reloadLocalFromRuntime()): the cache and the tracker get the value,
+    the deferred slot the tracker's old value, whose old content is released; an entry with QORE_OBE_TABLE_FRESH marks
+    the cache fresh for \a epoch.
+*/
+void qore_rt_obe_reload(QoreObeLocal* locals, const uint32_t* table, int32_t count, const uint64_t* epoch,
+        QoreAOTContext* ctx, ExceptionSink* xsink);
+
+//! Releases the reload storage of the locals of the table before handlers run out of line (qore#5942)
+/** For each entry in the order of the table: the entry-time load that the local owns, its deferred value and its
+    tracker, each set to NOTHING and released
+*/
+void qore_rt_obe_release(QoreObeLocal* locals, const uint32_t* table, int32_t count, ExceptionSink* xsink);
+
+//! Reloads the locals that qore_rt_obe_release() released, after the handlers ran
+/** The value is loaded from the runtime local stack into the cache and into the tracker, or into the entry owner if
+    the local has no tracker, and the cache is marked fresh for an entry with QORE_OBE_TABLE_FRESH.
+*/
+void qore_rt_obe_reload_released(QoreObeLocal* locals, const uint32_t* table, int32_t count, const uint64_t* epoch,
+        QoreAOTContext* ctx, ExceptionSink* xsink);
+
 //! Assign to a local variable via AOT context slot
 void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 void qore_rt_assign_local_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
@@ -1909,6 +1998,36 @@ QoreAOTContext* qore_rt_get_aot_call_target_context(QoreAOTContext* ctx, int32_t
 //! Try to resolve the callee AOT context for a pre-resolved direct call slot.
 //! Returns nullptr without raising when the target does not have cached AOT.
 QoreAOTContext* qore_rt_try_get_aot_call_target_context(QoreAOTContext* ctx, int32_t slot);
+
+//! The size of the buffer in a native frame that holds the state of a call of a function of another module
+constexpr size_t QORE_RT_CROSS_MODULE_CALL_STATE_SIZE = 1024;
+//! The alignment of that buffer
+constexpr size_t QORE_RT_CROSS_MODULE_CALL_STATE_ALIGN = 16;
+
+//! Resolves the native fast entry of a function of another AOT module for a direct call slot (qore#6035)
+/** @param ctx the caller's AOT context
+    @param slot the call slot
+    @param fast_symbol the symbol of the fast entry that the call was compiled for (its ABI contract)
+    @param fast_fn set to the fast entry, or nullptr
+
+    @return the callee's AOT context, with \a fast_fn set, if the call can be made natively; nullptr (without an
+    exception) if the call takes its runtime path: the callee has no registered fast entry with that symbol (a module
+    rebuilt with another ABI or loaded from source), runs in another Program than its own, or is generic
+*/
+QoreAOTContext* qore_rt_try_get_cross_module_fast_entry(QoreAOTContext* ctx, int32_t slot,
+    const char* fast_symbol, const void** fast_fn);
+
+//! Enters the Program of the callee of a native call of another module's function (qore#6035)
+/** Builds the call's state in \a state_buf (QORE_RT_CROSS_MODULE_CALL_STATE_SIZE bytes): the Program that runs the
+    function, its entry, and the runtime parse options of its module's code, as qore_rt_call_direct_aot() sets them;
+    qore_rt_leave_cross_module_call() must be called with the buffer in any case.
+
+    @return 0 if the call can be made, -1 if an exception was raised in \a xsink (the call is then not made)
+*/
+int qore_rt_enter_cross_module_call(QoreAOTContext* ctx, int32_t slot, void* state_buf, ExceptionSink* xsink);
+
+//! Leaves the Program entered by qore_rt_enter_cross_module_call() and destroys the state in \a state_buf
+void qore_rt_leave_cross_module_call(void* state_buf);
 
 //! Returns true when an assigned object is valid and needs no provenance guard.
 //! Used only to guard receiver-independent AOT fast entries; tagged receivers use guarded dispatch.
@@ -2312,6 +2431,13 @@ uint64_t qore_rt_cast_by_type_path_aot(QoreAOTContext* ctx, uint64_t inner_bits,
 uint64_t qore_rt_cast_by_type_path_throwing(uint64_t inner_bits, const char* type_path, int64_t or_nothing,
     ExceptionSink* xsink);
 uint64_t qore_rt_cast_by_type_path_aot_throwing(QoreAOTContext* ctx, uint64_t inner_bits,
+    const char* type_path, int64_t or_nothing, ExceptionSink* xsink);
+
+//! AOT variant for a type path with type parameters (generic code), which are substituted with their types in the
+//! current call; the code generator emits it for such a path, so that other casts make no check for them (qore#5661)
+uint64_t qore_rt_cast_by_generic_type_path_aot(QoreAOTContext* ctx, uint64_t inner_bits, const char* type_path,
+    int64_t or_nothing, ExceptionSink* xsink);
+uint64_t qore_rt_cast_by_generic_type_path_aot_throwing(QoreAOTContext* ctx, uint64_t inner_bits,
     const char* type_path, int64_t or_nothing, ExceptionSink* xsink);
 
 //! Switch case match: calls CaseNode::matches() which unwraps TAG_ENUM before isEqualHard()

@@ -32,3 +32,6 @@ set_target_properties(avrocppapi PROPERTIES
 if (CMAKE_HOST_APPLE)
     target_link_options(avrocppapi PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
 endif()
+
+# remove the files of this module built for another module API (see qore_remove_stale_module_api_files())
+qore_remove_stale_module_api_files(avrocppapi)

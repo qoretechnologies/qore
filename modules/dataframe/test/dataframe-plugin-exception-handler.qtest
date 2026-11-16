@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-plugin-exception-handler.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+# test-exec-mode: children - its probes run in child processes that set their own --exec-mode
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+
+%requires dataframe
+
+%exec-class DataFramePluginExceptionHandlerTest
+
+#! An exception raised by a plugin operation of the dataframe module in a try block is caught by its catch block in
+#! each execution mode (qore#6135)
+class DataFramePluginExceptionHandlerTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        #! plugin operations that raise in try blocks, in a function and at top level
+        const Script = "%modern
+%requires dataframe
+
+string sub column(DataFrame::DataFrame df, string name) {
+    try {
+        list<auto> l = df[name];
+        return sprintf(\"no exception: %y\", l);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub mask(DataFrame::DataFrame df, string name) {
+    int count = 0;
+    try {
+        DataFrame::RowMask m = df.column(name) > 1;
+        ++count;
+        return sprintf(\"no exception: %y\", m.toList());
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s %d\", ex.err, count);
+    }
+}
+
+DataFrame::DataFrame df(({\"id\": 1}, {\"id\": 2}));
+for (int i = 0; i < 3; ++i) {
+    printf(\"%s\\n\", column(df, \"no-such-column\"));
+    printf(\"%s\\n\", column(df, \"id\"));
+    printf(\"%s\\n\", mask(df, \"id\"));
+}
+try {
+    list<auto> l = df[\"no-such-column\"];
+    printf(\"no exception: %y\\n\", l);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"top level: %s\\n\", ex.err);
+}
+";
+    }
+
+    constructor() : QUnit::Test("DataFramePluginExceptionHandlerTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("plugin operation exceptions are caught in each mode", \testExceptionHandler());
+
+        set_return_value(main());
+    }
+
+    testExceptionHandler() {
+        TmpDir tmp("qore-dataframe-plugin-exception-handler-");
+        string src = tmp.path + "/plugin-exception-handler.q";
+        {
+            File f();
+            f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(Script);
+        }
+
+        string expected = "";
+        for (int i = 0; i < 3; ++i) {
+            expected += "DATAFRAME-COLUMN-ERROR\nno exception: [1, 2]\nno exception: [False, True]\n";
+        }
+        expected += "top level: DATAFRAME-COLUMN-ERROR\n";
+
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 "
+                "%s --exec-mode=%s %s 2>&1", libqore_dir, qore_bin, mode, src)), mode);
+        }
+    }
+}

@@ -434,14 +434,137 @@ static int qore_socket_set_raw_error(int rc) {
 #endif
 }
 
-// returns 0 = connected, 1 = still in progress, -1 = error
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+std::atomic<int> qore_dbg_connect_error_after_so_error_read{0};
+std::atomic<int> qore_dbg_connect_first_error_after_so_error_read{0};
+std::atomic<int> qore_dbg_errno_after_connect_close{0};
+
+void qore_socket_dbg_errno_after_connect_close() {
+    int e = qore_dbg_errno_after_connect_close.load(std::memory_order_relaxed);
+    if (e) {
+        errno = e;
+    }
+}
+
+namespace {
+//! The socket state that qore_dbg_connect_error_after_so_error_read models during one check of a connect
+struct QoreSocketDbgConnectFailure {
+    //! the descriptor whose connect fails after its pending error was read as 0
+    int fd;
+    //! the connect's error, pending in SO_ERROR until it is read
+    int err;
+};
+
+//! The connect that fails during the calling thread's check of a connect; fd < 0 if none
+/** Set and cleared within one call of qore_socket_check_connect_ready(), which reads it only in its own thread
+*/
+thread_local QoreSocketDbgConnectFailure qore_socket_dbg_connect_failure = {-1, 0};
+
+//! Ends the connect failure that the hook models when the check of the connect returns
+struct QoreSocketDbgConnectFailureScope {
+    DLLLOCAL ~QoreSocketDbgConnectFailureScope() {
+        qore_socket_dbg_connect_failure = {-1, 0};
+    }
+};
+}
+#endif
+
+//! Reads the pending error of a socket (SO_ERROR), which the read clears
+/** @return 0 if read (in @p val), QORE_SOCKET_ERROR with the error in errno (WSAGetLastError() on Windows) if not
+*/
+static int qore_socket_read_pending_error(int fd, int& val) {
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+    if (qore_socket_dbg_connect_failure.fd >= 0 && qore_socket_dbg_connect_failure.fd == fd) {
+        // the connect's error is pending, as the kernel keeps it, until it is read
+        val = qore_socket_dbg_connect_failure.err;
+        qore_socket_dbg_connect_failure.err = 0;
+        return 0;
+    }
+#endif
+    val = 0;
+    socklen_t lon = sizeof(val);
+    return getsockopt(fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)&val, &lon);
+}
+
+//! Makes the zero-byte send that confirms the connection of a nonblocking connect
+/** @return 0 if sent, -1 with the error in errno (WSAGetLastError() on Windows) if not
+*/
+static int qore_socket_send_connect_probe(int fd) {
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+    if (qore_socket_dbg_connect_failure.fd >= 0 && qore_socket_dbg_connect_failure.fd == fd) {
+        // as on Darwin: the connect's failure has marked the socket unable to send, which the send reports before it
+        // checks the pending error
+        errno = EPIPE;
+        return -1;
+    }
+#endif
+    return ::send(fd, nullptr, 0, 0);
+}
+
+//! Confirms the connection of a nonblocking connect whose pending error (SO_ERROR) was read as 0
+/** Makes a zero-byte send; when the connect failed after its pending error was read, the error the send fails with
+    describes the state of the socket (EPIPE on Darwin), so the connect's own error, which is still pending, is taken
+    from SO_ERROR instead
+
+    @return 0 = connected, 1 = still in progress, -1 = the connect failed: errno (WSAGetLastError() on Windows) is the
+    connect's error
+*/
+static int qore_socket_confirm_connect(int fd) {
+    // Try a zero-byte send to confirm connection.  This is needed on macOS,
+    // where poll() may report writable readiness before connect completion.
+    unsigned loop = 0;
+    while (true) {
+        int rc = qore_socket_send_connect_probe(fd);
+        if (!rc) {
+            return 0;
+        }
+        int e = sock_get_error();
+        if (e == EINPROGRESS || e == EAGAIN || e == ENOTCONN) {
+            return 1;
+        }
+        if (e == EINTR) {
+            // Yield after a bounded number of immediate retries so a signal storm cannot monopolize an async I/O
+            // worker.  A zero-byte send has no partial-progress state, so retrying it is safe on every supported
+            // platform.
+            if (++loop >= max_nonblock_ops) {
+                return 1;
+            }
+            continue;
+        }
+        // The connect can fail after the caller read SO_ERROR as 0 and before this send: the send then reports the
+        // state the failure left the socket in, not why the connect failed (Darwin reports EPIPE for a connection
+        // that was refused or that timed out, as the failure marks the socket unable to send before the send
+        // checks the pending error), while the connect's own error is still pending in SO_ERROR
+        int raw = sock_get_raw_error();
+        // a read that a signal interrupts is made again, a bounded number of times; if it cannot be made, the
+        // send's error is reported
+        for (unsigned rloop = 0; rloop < max_nonblock_ops; ++rloop) {
+            int val;
+            if (qore_socket_read_pending_error(fd, val) != QORE_SOCKET_ERROR) {
+                if (val) {
+                    raw = val;
+                }
+                break;
+            }
+            if (sock_get_error() != EINTR) {
+                break;
+            }
+        }
+        qore_socket_set_raw_error(raw);
+        return -1;
+    }
+}
+
+// returns 0 = connected, 1 = still in progress, -1 = error with the connect's error in errno (WSAGetLastError() on
+// Windows)
 static int qore_socket_check_connect_ready(int fd) {
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+    QoreSocketDbgConnectFailureScope dbg_failure_scope;
+#endif
     unsigned loop = 0;
     int val;
     while (true) {
-        val = 0;
-        socklen_t lon = sizeof(val);
-        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)&val, &lon) != QORE_SOCKET_ERROR) {
+        if (qore_socket_read_pending_error(fd, val) != QORE_SOCKET_ERROR) {
             break;
         }
         int e = sock_get_error();
@@ -464,27 +587,25 @@ static int qore_socket_check_connect_ready(int fd) {
         return -1;
     }
 
-    // Try a zero-byte send to confirm connection.  This is needed on macOS,
-    // where poll() may report writable readiness before connect completion.
-    while (true) {
-        int rc = ::send(fd, nullptr, 0, 0);
-        if (!rc) {
-            return 0;
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+    {
+        // the first check that reads the pending error as 0 takes the first error, if set, and the others the error
+        // of every check
+        int err = 0;
+        if (qore_dbg_connect_first_error_after_so_error_read.load(std::memory_order_relaxed)) {
+            err = qore_dbg_connect_first_error_after_so_error_read.exchange(0, std::memory_order_relaxed);
         }
-        int e = sock_get_error();
-        if (e == EINPROGRESS || e == EAGAIN || e == ENOTCONN) {
-            return 1;
+        if (!err) {
+            err = qore_dbg_connect_error_after_so_error_read.load(std::memory_order_relaxed);
         }
-        if (e == EINTR) {
-            // As above, yield after a bounded number of immediate retries.  A zero-byte send
-            // has no partial-progress state, so retrying it is safe on every supported platform.
-            if (++loop >= max_nonblock_ops) {
-                return 1;
-            }
-            continue;
+        if (err) {
+            // the connect fails now, after its pending error was read as 0
+            qore_socket_dbg_connect_failure = {fd, err};
         }
-        return -1;
     }
+#endif
+
+    return qore_socket_confirm_connect(fd);
 }
 
 static void qore_socket_raise_poll_result_exception(const QoreHashNode* ex, ExceptionSink* xsink) {
@@ -2613,9 +2734,8 @@ private:
     DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events, bool stream_wait = false) {
         int64 poll_timeout_ms = -1;
         if (timeout_ms >= 0) {
-            int us;
-            int64 now_s = q_epoch_us(us);
-            int64 now_ms = now_s * 1000 + us / 1000;
+            // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+            int64 now_ms = q_get_monotonic_us() / 1000;
             if (!wait_deadline_ms) {
                 wait_deadline_ms = now_ms + timeout_ms;
             }
@@ -2665,9 +2785,8 @@ private:
         if (wait_deadline_ms <= 0) {
             return false;
         }
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (now_ms < wait_deadline_ms) {
             return false;
         }
@@ -2905,9 +3024,8 @@ private:
     DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events, bool output_wait = false) {
         int64 poll_timeout_ms = -1;
         if (timeout_ms >= 0) {
-            int us;
-            int64 now_s = q_epoch_us(us);
-            int64 now_ms = now_s * 1000 + us / 1000;
+            // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+            int64 now_ms = q_get_monotonic_us() / 1000;
             if (!wait_deadline_ms) {
                 wait_deadline_ms = now_ms + timeout_ms;
             }
@@ -2957,9 +3075,8 @@ private:
         if (wait_deadline_ms <= 0) {
             return false;
         }
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (now_ms < wait_deadline_ms) {
             return false;
         }
@@ -9095,8 +9212,7 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
 
         rc = startNextConnect(xsink);
         if (rc < 0 && !*xsink) {
-            qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr, host.c_str(),
-                service.c_str());
+            raiseConnectError(xsink);
         }
         if (rc <= 0) {
             if (rc == 0) {
@@ -9143,6 +9259,10 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             continue;
         }
         int rc = checkAttempt(i);
+        if (rc < 0) {
+            // the error is taken before the attempt is given up, which makes system calls of its own
+            last_error = sock_get_raw_error();
+        }
         if (rc == 0) {
             // Connected!
             winning_idx = (int)i;
@@ -9173,6 +9293,9 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             } else {
                 qore_socket_private::closeDescriptor(fd);
             }
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+            qore_socket_dbg_errno_after_connect_close();
+#endif
         }
     }
 
@@ -9226,7 +9349,7 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
 
     if (!any_active) {
         sock->sock = QORE_INVALID_SOCKET;
-        qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr, host.c_str(), service.c_str());
+        raiseConnectError(xsink);
         return -1;
     }
 
@@ -9397,6 +9520,7 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
 
         int fd = create_nonblocking_socket(p.family, p.socktype, p.protocol);
         if (fd == QORE_INVALID_SOCKET) {
+            last_error = sock_get_raw_error();
             ++next_addr_idx;
             continue;
         }
@@ -9434,6 +9558,7 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
 #else
         if (errno != EINPROGRESS && errno != EAGAIN) {
 #endif
+            last_error = sock_get_raw_error();
             // the descriptor was never registered
             qore_owned_descriptor_release(a.owned);
             ++next_addr_idx;
@@ -9455,6 +9580,11 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
     }
 
     return -1; // no more addresses
+}
+
+void SocketConnectInetHappyEyeballsPollState::raiseConnectError(ExceptionSink* xsink) const {
+    qore_socket_error_intern(last_error ? last_error : sock_get_raw_error(), xsink, "SOCKET-CONNECT-ERROR",
+        "error in connect()", nullptr, host.c_str(), service.c_str());
 }
 
 int SocketConnectInetHappyEyeballsPollState::checkAttempt(size_t idx) {
@@ -9618,8 +9748,11 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
                 return -1;
             }
             if (rc) {
+                // the error is taken before the close, which makes system calls of its own
+                int err = sock_get_raw_error();
                 sock->close_and_reset();
-                qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", 0, name.c_str());
+                qore_socket_error_intern(err, xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr,
+                    name.c_str());
                 return -1;
             }
 
@@ -9641,8 +9774,11 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
             }
 
             if (rc < 0) {
+                // the error is taken before the close, which makes system calls of its own
+                int err = sock_get_raw_error();
                 sock->close_and_reset();
-                qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", 0, name.c_str());
+                qore_socket_error_intern(err, xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr,
+                    name.c_str());
                 return -1;
             }
         }
@@ -17531,9 +17667,8 @@ int SocketSendInputStreamPollOperation::initLocked(ExceptionSink* xsink) {
 QoreHashNode* SocketSendInputStreamPollOperation::getPollInfo(ExceptionSink* xsink, int events, bool stream_wait) {
     int64 poll_timeout_ms = -1;
     if (timeout_ms >= 0) {
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (!wait_deadline_ms) {
             wait_deadline_ms = now_ms + timeout_ms;
         }
@@ -17587,9 +17722,8 @@ bool SocketSendInputStreamPollOperation::checkTimeout(ExceptionSink* xsink) {
     if (wait_deadline_ms <= 0) {
         return false;
     }
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     if (now_ms < wait_deadline_ms) {
         return false;
     }
@@ -17830,9 +17964,8 @@ QoreHashNode* SocketSendHttpChunkedInputStreamPollOperation::getPollInfo(Excepti
         bool stream_wait) {
     int64 poll_timeout_ms = -1;
     if (timeout_ms >= 0) {
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (!wait_deadline_ms) {
             wait_deadline_ms = now_ms + timeout_ms;
         }
@@ -17879,9 +18012,8 @@ bool SocketSendHttpChunkedInputStreamPollOperation::checkTimeout(ExceptionSink* 
     if (wait_deadline_ms <= 0) {
         return false;
     }
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     if (now_ms < wait_deadline_ms) {
         return false;
     }
@@ -18129,9 +18261,8 @@ int SocketRecvOutputStreamPollOperation::initLocked(ExceptionSink* xsink) {
 QoreHashNode* SocketRecvOutputStreamPollOperation::getPollInfo(ExceptionSink* xsink, int events, bool output_wait) {
     int64 poll_timeout_ms = -1;
     if (timeout_ms >= 0) {
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (!wait_deadline_ms) {
             wait_deadline_ms = now_ms + timeout_ms;
         }
@@ -18185,9 +18316,8 @@ bool SocketRecvOutputStreamPollOperation::checkTimeout(ExceptionSink* xsink) {
     if (wait_deadline_ms <= 0) {
         return false;
     }
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     if (now_ms < wait_deadline_ms) {
         return false;
     }
@@ -18370,9 +18500,8 @@ SocketWriteOutputStreamPollOperation::SocketWriteOutputStreamPollOperation(Excep
 QoreHashNode* SocketWriteOutputStreamPollOperation::getPollInfo(ExceptionSink* xsink) {
     int64 poll_timeout_ms = -1;
     if (timeout_ms >= 0) {
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (!wait_deadline_ms) {
             wait_deadline_ms = now_ms + timeout_ms;
         }
@@ -18416,9 +18545,8 @@ bool SocketWriteOutputStreamPollOperation::checkTimeout(ExceptionSink* xsink) {
     if (wait_deadline_ms <= 0) {
         return false;
     }
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     if (now_ms < wait_deadline_ms) {
         return false;
     }
@@ -19809,9 +19937,8 @@ SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(Excep
           idle_timeout_ms(idle_timeout_ms), header_output(nullptr) {
     {
         // the idle timeout is given as a deadline; a request answered by a fast route moves it on
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         idle_ttl_ms = idle_timeout_ms > now_ms ? idle_timeout_ms - now_ms : 0;
     }
     AutoLocker al(sock->priv->m);
@@ -19893,9 +20020,8 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
 
         case Phase::Idle: {
             // Check idle timeout
-            int us;
-            int64 now_s = q_epoch_us(us);
-            int64 now_ms = now_s * 1000 + us / 1000;
+            // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+            int64 now_ms = q_get_monotonic_us() / 1000;
             if (idle_timeout_ms > 0 && now_ms > idle_timeout_ms) {
                 phase = Phase::Timeout;
                 sock->priv->clearNonBlock();
@@ -20152,9 +20278,8 @@ int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const st
     }
     phase = Phase::Sending;
     if (idle_ttl_ms > 0) {
-        int us2;
-        int64 now_s = q_epoch_us(us2);
-        idle_timeout_ms = now_s * 1000 + us2 / 1000 + idle_ttl_ms;
+        // on the monotonic clock, as the deadline given to the constructor (#6150)
+        idle_timeout_ms = q_get_monotonic_us() / 1000 + idle_ttl_ms;
     }
     int rc = poll_state->continuePoll(xsink);
     if (*xsink) {
@@ -20532,9 +20657,8 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
 
             case Phase::Idle: {
                 // Check idle timeout
-                int us;
-                int64 now_s = q_epoch_us(us);
-                int64 now_ms = now_s * 1000 + us / 1000;
+                // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+                int64 now_ms = q_get_monotonic_us() / 1000;
                 if (idle_timeout_ms > 0 && now_ms > idle_timeout_ms) {
                     phase = Phase::Timeout;
                     sock->priv->clearNonBlock();

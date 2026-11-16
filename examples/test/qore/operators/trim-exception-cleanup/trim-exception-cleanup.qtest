@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class TrimExceptionCleanupTest
+
+#! Tests that the trim operator releases its result when it raises an exception
+/** The trim operator raises INVALID-ENCODING for a string that is not valid in its encoding.  Native code (JIT and
+    AOT) applies the operator to an lvalue through a runtime helper that had already taken a reference to the string
+    as the operator's result when it saw the exception; it then returned no value and never released the reference,
+    so each such trim leaked the string (for a string shared with another value, as a loop variable shares it with
+    its list, the copy that the operator trims).
+
+    The worker trims a local variable, a hash member, a list element, an object member, a member through "self", a
+    reference and a loop variable, and reports, from the reference counts given by dbg_node_info() (which needs
+    library debugging), how many references to each string the operator left behind, which must be none.  It runs in
+    every execution mode and as a qcc-compiled executable; the AST interpreter is the reference.
+*/
+class TrimExceptionCleanupTest inherits QUnit::Test {
+    public {
+        #! the labels of the lvalues the worker trims, in its output order
+        const Labels = ("local", "hash member", "list element", "object member", "self member", "reference",
+            "foreach variable");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+        #! the reference counts left behind as the worker reports them: "0", or "n/a" without library debugging
+        string expected_refs;
+    }
+
+    constructor() : QUnit::Test("TrimExceptionCleanup", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "trim-exception-cleanup-worker.q";
+        expected_refs = Option::HAVE_LIBRARY_DEBUGGING ? "0" : "n/a";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, worker)));
+        }
+        checkOutput(ExecModeHarness::IRTierName, ExecModeHarness::run_ir_tier(
+            sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=tiered %s", libqore_dir, qore_bin, worker)));
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-trim-exception-cleanup-");
+        string exe = tmp.path + DirSep + "trim";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe)));
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Labels.size(), lines.size(), label + ": one line for each lvalue: " + out);
+        foreach string lvalue in (Labels) {
+            assertEq(sprintf("%s: INVALID-ENCODING %s", lvalue, expected_refs), lines[$#],
+                sprintf("%s: %s: the exception is raised and the string is released", label, lvalue));
+        }
+    }
+}

@@ -131,6 +131,10 @@ DLLLOCAL void concat_target(QoreString& str, const struct sockaddr *addr, const 
 DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
 DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, ExceptionSink* xsink);
 DLLLOCAL int sock_get_raw_error();
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+//! Debug builds: sets errno to qore_dbg_errno_after_connect_close if it is not 0
+DLLLOCAL void qore_socket_dbg_errno_after_connect_close();
+#endif
 
 class QoreSandboxManager;
 class QoreSocketObject;
@@ -1104,6 +1108,11 @@ private:
     bool multi_family = false;
     //! Set whenever an attempt fd is created or closed, or the primary fd is reassigned
     bool fd_set_changed = false;
+    //! The error of the last connection attempt that failed (sock_get_raw_error()), reported when all have failed
+    /** Kept here and not left in errno: an attempt that fails is given up, and the other attempts are checked, before
+        the error is raised, all with system calls of their own
+    */
+    int last_error = 0;
 
     //! Continue asynchronous DNS resolution
     /** Returns 0 when resolved, 1 when polling must continue, -1 on error */
@@ -1115,6 +1124,9 @@ private:
 
     //! Handles resolver completion and initializes Happy Eyeballs address ordering
     DLLLOCAL int finishResolve(ExceptionSink* xsink);
+
+    //! Raises the error of the last connection attempt that failed
+    DLLLOCAL void raiseConnectError(ExceptionSink* xsink) const;
 
     //! Start a non-blocking connect to the next address in sorted_addrs
     /** Returns 0 on immediate connect, 1 on EINPROGRESS, -1 on error */
@@ -2714,6 +2726,10 @@ public:
 #endif
         }
         shared_fd.reset();
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+        // the descriptor is closed now or by its last use
+        qore_socket_dbg_errno_after_connect_close();
+#endif
         sock = QORE_INVALID_SOCKET;
         // Bump fd_generation so any sync I/O helper currently in its
         // poll-wait phase (with outer_lock released) sees the generation
@@ -4875,6 +4891,33 @@ DLLLOCAL extern std::atomic<bool> qore_dbg_connect_no_immediate_check;
     loopback connection has only after connect() has returned (see SocketConnectInetHappyEyeballsPollState::continuePoll())
 */
 DLLLOCAL extern std::atomic<bool> qore_dbg_connect_complete_before_immediate_check;
+
+#ifndef _Q_WINDOWS
+//! Debug builds: if not 0, the connect checked fails with this error after its pending error was read as 0
+/** For the C++ unit tests of the error that a failed connect reports (issue #6119): makes the interleaving of
+    Darwin deterministic on every platform.  The check of a nonblocking connect reads the pending error (SO_ERROR),
+    then confirms the connection with a zero-byte send; when the connect fails between the two, Darwin fails the send
+    with EPIPE, as the failure marks the socket unable to send, while the connect's error is still pending.  With this
+    set, every check of a connect whose pending error is read as 0 behaves so: the send fails with EPIPE and does not
+    reach the system, and the next read of the pending error returns this error, once.  It is process-wide, as a
+    connect is checked in an I/O thread: the C++ unit tests run one after the other, so no other connect sees it.
+*/
+DLLLOCAL extern std::atomic<int> qore_dbg_connect_error_after_so_error_read;
+
+//! Debug builds: if not 0, the first check that qore_dbg_connect_error_after_so_error_read applies to fails with this
+//! error instead, and this is reset to 0
+/** For the C++ unit tests of connects whose attempts fail with different errors (Happy Eyeballs)
+*/
+DLLLOCAL extern std::atomic<int> qore_dbg_connect_first_error_after_so_error_read;
+
+//! Debug builds: if not 0, errno is set to this after a failed connect attempt's descriptor is given up or a socket's
+//! descriptor is closed
+/** For the C++ unit tests of the error that a failed connect reports: models a system call made while the failed
+    attempt is given up or the socket is closed that changes errno, so that an error read from errno after it is not
+    the connect's
+*/
+DLLLOCAL extern std::atomic<int> qore_dbg_errno_after_connect_close;
+#endif
 #endif
 
 #endif

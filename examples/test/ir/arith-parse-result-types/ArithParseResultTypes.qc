@@ -100,7 +100,7 @@ class ArithParseResultTypesBase inherits QUnit::Test {
             "softnumber - float": "[1, 1.5] list<number> number",
             "auto + int": "[2, 3.5, 4, \"41\", <time: 3 seconds>, 2, 1] list<auto> integer",
             "timeout + date": "[2026-01-01 00:00:01.000000 +00:00, 2026-01-01 00:00:02.500000 +00:00] list<date> date",
-            "char + int": "[98, 99] list<int> integer",
+            "char + int": "[\"a1\", \"b1\"] list<string> string",
             # an optional container operand gives its container type, or NOTHING: an optional hashdecl keeps the
             # hashdecl, as its value does at runtime, also as the value returned with a *hash<D> return type
             "*hash<D> - list<string>": "[{x: 2}, null] list<*hash<D>> hash<D>",

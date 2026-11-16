@@ -1,0 +1,132 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! the module whose functions are called natively from another AOT module (qore#6035)
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module XfcProvider {
+    version = "1.0";
+    desc = "qore#6035 cross-module native call test: provider";
+    author = "Qore";
+    license = "MIT";
+}
+
+public namespace XfcProvider {
+    #! native int parameters and return value
+    public int sub addInt(int a, int b) {
+        return a + b;
+    }
+
+    #! native float parameters and return value
+    public float sub mulFloat(float x, float f) {
+        return x * f;
+    }
+
+    #! a parameter with a default value, which takes the runtime call path
+    public float sub scale(float x, float f = 2.5) {
+        return x * f;
+    }
+
+    #! a native bool return value
+    public bool sub isPositive(int i) {
+        return i > 0;
+    }
+
+    #! boxed parameter and return value
+    public string sub label(string enc) {
+        return enc == "utf8" ? "utf-8" : enc;
+    }
+
+    #! a return value that can be NOTHING
+    public *string sub maybe(int i) {
+        return i % 2 ? sprintf("odd-%d", i) : NOTHING;
+    }
+
+    #! a container argument and return value
+    public list<int> sub doubled(list<int> l) {
+        return map $1 * 2, l;
+    }
+
+    #! raises an exception from the provider's code for a negative argument
+    public int sub check(int i) {
+        if (i < 0) {
+            throw "XFC-ERROR", sprintf("negative value %d", i);
+        }
+        return i * 10;
+    }
+
+    #! calls another function of the module, which raises the exception
+    public int sub checkTwice(int i) {
+        return check(i) + check(i + 1);
+    }
+
+    #! overloaded on the parameter type
+    public string sub kind(int i) {
+        return sprintf("int:%d", i);
+    }
+
+    #! overloaded on the parameter type
+    public string sub kind(string s) {
+        return "string:" + s;
+    }
+
+    #! variable arguments
+    public int sub countArgs(...) {
+        return argv.size();
+    }
+
+    #! a reference parameter
+    public sub increment(reference<int> r) {
+        ++r;
+    }
+
+    #! a generic function
+    public T sub identity<T>(T v) {
+        return v;
+    }
+
+    #! uses the file system, which a sandboxed Program can forbid
+    public bool sub rootIsDir() {
+        return is_dir("/");
+    }
+
+    #! stores with a negative offset, which the module's parse options (%modern) allow
+    public list<int> sub setLast(list<int> l) {
+        l[-1] = 9;
+        return l;
+    }
+
+    #! calls back a function of the caller
+    public int sub apply(code f, int i) {
+        return f(i);
+    }
+
+    #! the user functions of the call stack, innermost first
+    public list<string> sub stackNames() {
+        try {
+            throw "XFC-STACK";
+        } catch (hash<ExceptionInfo> ex) {
+            return map $1.function, ex.callstack, $1.type == "user";
+        }
+    }
+}

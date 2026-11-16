@@ -198,9 +198,14 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         return qore_list_private::get(*rh->get<const QoreListNode>())->prependElement(lh.takeReferencedValue(), xsink);
     }
 
-    if (lt == NT_STRING) {
+    // a char is added as a one-character string: the operator concatenates it with the other operand converted to a
+    // string, as for a string; a char added to a string takes the encoding of the string, and a char added to any
+    // other value gives a UTF-8 string
+    if (lt == NT_STRING || (lt == NT_CHAR && rt != NT_STRING)) {
         QoreStringNodeValueHelper lstr(*lh);
-        QoreStringNodeHolder str(new QoreStringNode(**lstr));
+        // a char gives a new string of its own, which is taken; a string is copied
+        QoreStringNodeHolder str(lt == NT_CHAR ? lstr.getReferencedValue() : new QoreStringNode(**lstr));
+        assert(str->is_unique());
 
         if (rt == NT_STRING) {
             QoreStringNodeValueHelper rstr(*rh);
@@ -214,7 +219,7 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         return str.release();
     }
 
-    if (rt == NT_STRING) {
+    if (rt == NT_STRING || rt == NT_CHAR) {
         QoreStringNodeValueHelper r(*rh);
         QoreStringNodeValueHelper strval(*lh, r->getEncoding(), xsink);
         if (*xsink)
@@ -236,8 +241,10 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         int64 ms = lh->getAsBigInt() - (secs * 1000);
         DateTime l;
         // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
-        l.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
-        return rh->get<DateTimeNode>()->add(l);
+        if (l.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000), xsink)) {
+            return QoreValue();
+        }
+        return rh->get<DateTimeNode>()->add(l, xsink);
     }
 
     if (check_date_timeout_variant && lt == NT_DATE && rt == NT_INT) {
@@ -245,14 +252,36 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         int64 ms = rh->getAsBigInt() - (secs * 1000);
         DateTime r;
         // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
-        r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
-        return lh->get<DateTimeNode>()->add(r);
+        if (r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000), xsink)) {
+            return QoreValue();
+        }
+        return lh->get<DateTimeNode>()->add(r, xsink);
     }
 
     if (lt == NT_DATE || rt == NT_DATE) {
-        DateTimeNodeValueHelper l(*lh);
-        DateTimeValueHelper r(*rh);
-        return l->add(*r);
+        // a result out of range raises INVALID-DATE, as does an operand converted to a date out of range (qore#6103)
+        if (lt == NT_DATE) {
+            if (rt == NT_DATE) {
+                return lh->get<const DateTimeNode>()->add(*rh->get<const DateTimeNode>(), xsink);
+            }
+            DateTimeValueHelper r(*rh, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            return lh->get<const DateTimeNode>()->add(**r, xsink);
+        }
+        if (lt != NT_INT && lt != NT_FLOAT) {
+            // other types are converted as before (ex: a hash gives the zero date in the local time zone)
+            DateTimeNodeValueHelper l(*lh);
+            return l->add(*rh->get<const DateTimeNode>(), xsink);
+        }
+        // a number of seconds
+        DateTimeValueHelper l(*lh, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        SimpleRefHolder<DateTimeNode> ln(new DateTimeNode(**l));
+        return ln->add(*rh->get<const DateTimeNode>(), xsink);
     }
 
     if (lt == NT_NUMBER || rt == NT_NUMBER) {
@@ -265,7 +294,7 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         return lh->getAsFloat() + rh->getAsFloat();
     }
 
-    if (lt == NT_INT || rt == NT_INT || lt == NT_CHAR || rt == NT_CHAR) {
+    if (lt == NT_INT || rt == NT_INT) {
         return lh->getAsBigInt() + rh->getAsBigInt();
     }
 
@@ -426,7 +455,9 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     else if (QoreTypeInfo::hasType(leftTypeInfo) && QoreTypeInfo::hasType(rightTypeInfo)
         && !QoreTypeInfo::parseReturns(leftTypeInfo, NT_LIST)
         && !QoreTypeInfo::parseReturns(rightTypeInfo, NT_LIST)) {
-        if (QoreTypeInfo::isType(leftTypeInfo, NT_STRING) || QoreTypeInfo::isType(rightTypeInfo, NT_STRING)) {
+        // a char is added as a one-character string
+        if (QoreTypeInfo::isType(leftTypeInfo, NT_STRING) || QoreTypeInfo::isType(rightTypeInfo, NT_STRING)
+            || QoreTypeInfo::isType(leftTypeInfo, NT_CHAR) || QoreTypeInfo::isType(rightTypeInfo, NT_CHAR)) {
             if (!QoreTypeInfo::canConvertToScalar(leftTypeInfo) || !QoreTypeInfo::canConvertToScalar(rightTypeInfo)) {
                 QoreStringMaker desc("cannot mix %s and %s types with the + operator",
                     QoreTypeInfo::getName(leftTypeInfo), QoreTypeInfo::getName(rightTypeInfo));
@@ -440,8 +471,7 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             returnTypeInfo = numberTypeInfo;
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_FLOAT) || QoreTypeInfo::isType(rightTypeInfo, NT_FLOAT)) {
             returnTypeInfo = floatTypeInfo;
-        } else if (QoreTypeInfo::isType(leftTypeInfo, NT_INT) || QoreTypeInfo::isType(rightTypeInfo, NT_INT)
-            || QoreTypeInfo::isType(leftTypeInfo, NT_CHAR) || QoreTypeInfo::isType(rightTypeInfo, NT_CHAR)) {
+        } else if (QoreTypeInfo::isType(leftTypeInfo, NT_INT) || QoreTypeInfo::isType(rightTypeInfo, NT_INT)) {
             returnTypeInfo = bigIntTypeInfo;
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_HASH)) {
             if (QoreTypeInfo::isType(rightTypeInfo, NT_HASH)

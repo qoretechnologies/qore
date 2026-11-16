@@ -53,6 +53,7 @@
 #include <cerrno>
 #include <cstring>
 #include <ctime>
+#include <vector>
 
 #ifndef WARN_MODULES
 // needed so that the Qore default argument value in sinatures below will match a C++ value
@@ -163,8 +164,12 @@ QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg) {
     return pgm ? pgm : qore_get_call_program_context();
 }
 
-int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
-    switch (v.getType()) {
+// the nesting depth from which q_get_value_byte_size() continues without recursion (qore#6117)
+static constexpr unsigned QORE_VALUE_BYTE_SIZE_RECURSION_LIMIT = 64;
+
+// returns the byte size of a value that is not a list or a hash
+static inline int64 value_byte_size_scalar(qore_type_t type, const QoreValue& v, ExceptionSink* xsink) {
+    switch (type) {
         case NT_NOTHING:
         case NT_NULL:
             return 0;
@@ -183,7 +188,71 @@ int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
             return 64;  // Estimate for DateTime structure
         case NT_NUMBER:
             return 32;  // Estimate for arbitrary precision number
+        case NT_OBJECT:
+            xsink->raiseException("GET-VALUE-BYTE-SIZE-ERROR",
+                "calculating byte size for objects is not currently supported");
+            return 0;
+        default:
+            return 64;  // Default estimate for other complex types
+    }
+}
+
+// returns the byte size of a deeply nested list or hash, with a work list instead of recursion (qore#6117); the
+// total and the error for an object are those of the recursion, but the values are visited in another order, and
+// cancellation is checked every 100 values of the whole walk rather than of each container
+// cold and not inlined: it must not change how the recursive measurement, which measures the values met in practice, is
+// compiled
+__attribute__((cold, noinline)) static int64 value_byte_size_without_recursion(const QoreValue& v,
+        ExceptionSink* xsink) {
+    std::vector<QoreValue> pending;
+    pending.push_back(v);
+    int64 total = 0;
+    int iter = 0;
+    while (!pending.empty()) {
+        QoreValue cur = pending.back();
+        pending.pop_back();
+        qore_type_t type = cur.getType();
+        switch (type) {
+            case NT_LIST: {
+                ConstListIterator li(cur.get<const QoreListNode>());
+                while (li.next()) {
+                    if (++iter % 100 == 0 && qore_check_cancel(xsink, "calculating value byte size")) {
+                        return 0;
+                    }
+                    pending.push_back(li.getValue());
+                }
+                break;
+            }
+            case NT_HASH: {
+                ConstHashIterator hi(cur.get<const QoreHashNode>());
+                while (hi.next()) {
+                    if (++iter % 100 == 0 && qore_check_cancel(xsink, "calculating value byte size")) {
+                        return 0;
+                    }
+                    total += strlen(hi.getKey());
+                    pending.push_back(hi.get());
+                }
+                break;
+            }
+            default:
+                total += value_byte_size_scalar(type, cur, xsink);
+                if (*xsink) {
+                    return 0;
+                }
+                break;
+        }
+    }
+    return total;
+}
+
+static int64 value_byte_size_intern(const QoreValue& v, ExceptionSink* xsink, unsigned depth) {
+    qore_type_t type = v.getType();
+    switch (type) {
         case NT_LIST: {
+            // a deeply nested value is measured without recursion, so that it cannot overflow the stack (qore#6117)
+            if (depth >= QORE_VALUE_BYTE_SIZE_RECURSION_LIMIT) {
+                return value_byte_size_without_recursion(v, xsink);
+            }
             int64 total = 0;
             const QoreListNode* l = v.get<const QoreListNode>();
             ConstListIterator li(l);
@@ -192,7 +261,7 @@ int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
                 if (++iter % 100 == 0 && qore_check_cancel(xsink, "calculating value byte size")) {
                     return 0;
                 }
-                total += q_get_value_byte_size(li.getValue(), xsink);
+                total += value_byte_size_intern(li.getValue(), xsink, depth + 1);
                 if (*xsink) {
                     return 0;
                 }
@@ -200,6 +269,9 @@ int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
             return total;
         }
         case NT_HASH: {
+            if (depth >= QORE_VALUE_BYTE_SIZE_RECURSION_LIMIT) {
+                return value_byte_size_without_recursion(v, xsink);
+            }
             int64 total = 0;
             const QoreHashNode* h = v.get<const QoreHashNode>();
             ConstHashIterator hi(h);
@@ -209,20 +281,20 @@ int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
                     return 0;
                 }
                 total += strlen(hi.getKey());
-                total += q_get_value_byte_size(hi.get(), xsink);
+                total += value_byte_size_intern(hi.get(), xsink, depth + 1);
                 if (*xsink) {
                     return 0;
                 }
             }
             return total;
         }
-        case NT_OBJECT:
-            xsink->raiseException("GET-VALUE-BYTE-SIZE-ERROR",
-                "calculating byte size for objects is not currently supported");
-            return 0;
         default:
-            return 64;  // Default estimate for other complex types
+            return value_byte_size_scalar(type, v, xsink);
     }
+}
+
+int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
+    return value_byte_size_intern(v, xsink, 0);
 }
 
 // signal constants - if they are not defined define them here
@@ -1756,6 +1828,8 @@ string files = backquote("ls", \rc);
     @throw THREAD-CANCELLED the thread was cancelled while running the command; the process is killed
     @throw PROGRAM-INTERRUPTED the Program was interrupted by its @ref Qore::SandboxManager "SandboxManager" while
     running the command; the process group is killed
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "SandboxManager" governing the call does not allow
+    \c /bin/sh, which runs the command, to be executed (see @ref sandbox_fs_shell)
 
     @see
     - system()

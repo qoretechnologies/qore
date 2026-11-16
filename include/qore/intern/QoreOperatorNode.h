@@ -127,8 +127,15 @@ typedef bool (*op_log_func_t)(const QoreValue& l, const QoreValue& r, ExceptionS
 class QoreOperatorNode : public ParseNode {
 private:
    bool in_parentheses;
+   //! true if this is a QoreCastOperatorNode (see qore_get_cast_operator_node())
+   bool cast_operator = false;
 protected:
    bool ref_rv;
+
+   //! Marks the node as a QoreCastOperatorNode; called only by its constructor
+   DLLLOCAL void setCastOperator() {
+      cast_operator = true;
+   }
 
    DLLLOCAL virtual ~QoreOperatorNode() {}
 
@@ -155,6 +162,11 @@ public:
 
    DLLLOCAL bool getInParentheses() const {
        return in_parentheses;
+   }
+
+   //! Returns true if this is a QoreCastOperatorNode
+   DLLLOCAL bool isCastOperator() const {
+       return cast_operator;
    }
 
    //! Returns true if the operator's return value is used
@@ -493,8 +505,30 @@ public:
             : QoreBinaryOperatorNode<>(loc, left, right) {
     }
 
+    //! Returns the result type: that of the plugin operation that the operator resolved at parse time, if any, or int
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
-        return bigIntTypeInfo;
+        return plugin_operation ? plugin_type_info : bigIntTypeInfo;
+    }
+
+protected:
+    //! true if the operator resolved a plugin operation at parse time, whose result type is plugin_type_info
+    /** The IR lowering selects the operations that use the operator's value, such as the plugin subscript
+        operation of a DataFrame subscript whose key is a RowMask expression, by the operator's type (qore#6141)
+    */
+    bool plugin_operation = false;
+    //! the result type of the plugin operation that the operator resolved at parse time
+    const QoreTypeInfo* plugin_type_info = nullptr;
+
+    //! Sets the result type of the plugin operation that the operator resolved at parse time
+    DLLLOCAL void setPluginTypeInfo(const QoreTypeInfo* type_info) {
+        plugin_operation = true;
+        plugin_type_info = type_info;
+    }
+
+    //! Takes the result type of the plugin operation of the operator that this one is a copy of
+    DLLLOCAL void copyPluginTypeInfo(const QoreIntBinaryOperatorNode& old) {
+        plugin_operation = old.plugin_operation;
+        plugin_type_info = old.plugin_type_info;
     }
 };
 

@@ -583,6 +583,11 @@ struct BatchCalleeInfo {
     std::string fast_name;               //!< Fast entry function name (if eligible)
     std::string fast_contract_hash;      //!< Native fast-call ABI/effect contract hash
     bool preloaded_fast_entry = false;   //!< fast_name came from an immutable sibling artifact
+    //! The callee is a function of another AOT module (qore#6035): its fast entry is called through the pointer that
+    //! the module registered (qore_rt_try_get_cross_module_fast_entry(), which falls back to the runtime call path),
+    //! in the module's Program; only the fast-entry ABI is taken from the module's symbol index, never a body
+    //! summary or effect fact, which the module, a separate image, can change without this one being rebuilt
+    bool cross_module = false;
     //! The body contract fields (hash and dependency rows) came from a sibling artifact's symbol index; they
     //! describe that artifact as it was built and are never recomputed from this compilation's state
     bool preloaded_body_contract = false;
@@ -893,8 +898,8 @@ public:
 
     //! Returns the largest estimated size of the code that runs the on_block_exit handlers of a function that is
     //! compiled natively (see QoreIRFunction::getHandlerCostEstimate()), 0 for no limit
-    /** Defaults to 120000 (a function whose catch blocks have a local and a handler gets there at about 56 of them,
-        and takes about ten seconds to compile); QORE_JIT_MAX_HANDLER_COST overrides it (qore#6104)
+    /** Defaults to 120000 (with the table-driven code of QoreIRToLLVM::obe_table_mode, more than 900 handlers reach
+        it); QORE_JIT_MAX_HANDLER_COST overrides it (qore#6104, qore#6110)
     */
     static uint64_t getMaxJITHandlerCost();
 

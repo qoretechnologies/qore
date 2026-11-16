@@ -973,7 +973,7 @@ date seconds(softint seconds) [flags=CONSTANT,NAMED_ARGS] {
     if (check_relative_component("seconds", seconds, "hours", seconds / 3600, xsink)) {
         return QoreValue();
     }
-    return DateTimeNode::makeRelativeFromSeconds(seconds);
+    return DateTimeNode::makeRelativeFromSeconds(seconds, 0, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1751,8 +1751,12 @@ int us = get_duration_seconds(PT2M15S3u); # returns 135
     - get_duration_seconds_f()
     - get_duration_milliseconds()
     - get_duration_microseconds()
+
+    @since %Qore 3.0 the duration of a relative date whose microseconds do not fit a signed 64-bit integer (such as
+    \c years(2147483647)) is computed correctly; it wrapped before
 */
 int get_duration_seconds(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    // the seconds of every date fit an int64 (qore#6103)
     return date_value->getRelativeSeconds();
 }
 
@@ -1776,9 +1780,15 @@ int ms = get_duration_milliseconds(PT2M15S3u); # returns 135000
     - get_duration_seconds_f()
     - get_duration_seconds()
     - get_duration_microseconds()
+
+    @throw INVALID-DATE the duration in milliseconds does not fit a signed 64-bit integer (since %Qore 3.0)
 */
 int get_duration_milliseconds(date date_value) [flags=CONSTANT,NAMED_ARGS] {
-    return date_value->getRelativeMilliseconds();
+    int64 rv;
+    if (qore_relative_time::getPrivate(date_value)->getDuration(rv, 1000, "get_duration_milliseconds()", xsink)) {
+        return QoreValue();
+    }
+    return rv;
 }
 
 //! Returns an integer value representing the the number of microseconds of duration in the value of the date passed (can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date)
@@ -1800,9 +1810,16 @@ int us = get_duration_microseconds(PT2M15S3u); # returns 135000003
     - get_duration_seconds_f()
     - get_duration_seconds()
     - get_duration_milliseconds()
+
+    @throw INVALID-DATE the duration in microseconds does not fit a signed 64-bit integer, as for a relative date of
+    more than about 292000 years (since %Qore 3.0)
 */
 int get_duration_microseconds(date date_value) [flags=CONSTANT,NAMED_ARGS] {
-    return date_value->getRelativeMicroseconds();
+    int64 rv;
+    if (qore_relative_time::getPrivate(date_value)->getDuration(rv, 1, "get_duration_microseconds()", xsink)) {
+        return QoreValue();
+    }
+    return rv;
 }
 
 //! Returns a floating-point value representing the the number of seconds of duration in the value of the date passed (can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date)
@@ -1997,12 +2014,16 @@ date date(string date_string) [flags=CONSTANT,NAMED_ARGS] {
 date d = date(f);
     @endcode
 
+    @throw INVALID-DATE the value is not a finite number, or the whole hours of the value do not fit a signed 32-bit
+    integer (since %Qore 3.0)
+
     @since %Qore 0.8.13 the return value is a @ref relative_dates "relative date/time value" in seconds
+
+    @since %Qore 3.0 \c INVALID-DATE is thrown for a value out of the range of a relative date, which wrapped to
+    another duration before, and for NaN and infinity
  */
 date date(softfloat seconds) [flags=CONSTANT,NAMED_ARGS] {
-    int64 whole_seconds = static_cast<int64>(seconds);
-    return DateTimeNode::makeRelativeFromSeconds(whole_seconds,
-        static_cast<int>((seconds - whole_seconds) * 1000000));
+    return qore_make_relative_date_from_float(seconds, xsink);
 }
 
 //! The argument is assumed to be the number of seconds
@@ -2016,10 +2037,15 @@ date date(softfloat seconds) [flags=CONSTANT,NAMED_ARGS] {
 date d = date(i);
     @endcode
 
+    @throw INVALID-DATE the whole hours of the value do not fit a signed 32-bit integer (since %Qore 3.0)
+
     @since %Qore 0.8.13 the return value is a @ref relative_dates "relative date/time value" in seconds
+
+    @since %Qore 3.0 \c INVALID-DATE is thrown for a value out of the range of a relative date, which wrapped to
+    another duration before
  */
 date date(int seconds) [flags=CONSTANT,NAMED_ARGS] {
-    return DateTimeNode::makeRelativeFromSeconds(seconds);
+    return DateTimeNode::makeRelativeFromSeconds(seconds, 0, xsink);
 }
 
 //! This function just returns 1970-01-01Z

@@ -101,6 +101,7 @@ int QoreBinaryXorOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             err = -1;
         } else if (!plugin_rc) {
             parse_context.typeInfo = plugin_op.signature.return_type;
+            setPluginTypeInfo(parse_context.typeInfo);
             set_binary_xor_analysis_bitwise(parse_context, left_analysis, right_analysis, &plugin_op);
             return err;
         }

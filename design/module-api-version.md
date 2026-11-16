@@ -48,9 +48,14 @@ Adding new exported functions, or new types that old modules do not use, needs n
   - the `QoreStackLocation` ABI (86ee672a22).
   - `QoreModuleInfo::ns`, through which a module registers the namespace that module teardown purges, with
     `QoreNamespace::purge()` (module namespace teardown, merged with this bump).
-
 - 2.2 (Qore 3.0, #5831): appends native callback dispatch entries to `ResolvedCallReferenceNode`; modules built
   for the previous API are refused. See the lexical callback entries below.
+- 2.3 (Qore 3.0): `QoreModuleInfo::cmd_caller_aware` (after `ns`), `QoreModuleCommandRestrictions` and
+  `QoreModuleCommandContext`, through which a module command handler judges the code that issues a command (#5699).
+  The struct grew a field that a module writes in its description function, before the library can check its API, so
+  a 2.3 module loaded by a 2.2 library (whose struct has no such field) would write past it; a 2.3 module that such a
+  library may load sets the field only if `is_module_api_supported(2, 3)` is true.  2.2 libraries were already
+  installed in development images when the field was added, so the API was incremented and 2.2 modules are refused.
 
 ## Guard
 
@@ -83,7 +88,8 @@ in an incrementally built tree, where tools that look for a module file by a pat
 from its output directory (the module's file base name is `$<TARGET_FILE_BASE_NAME>`, which follows
 `LIBRARY_OUTPUT_NAME` and `OUTPUT_NAME`; CMake 3.14, which lacks it, uses `OUTPUT_NAME` or the target name); the
 `QORE_BINARY_MODULE*` macros call it (and so external modules built with the installed
-macros), as do the in-tree modules that set their suffix themselves (dbi_test, the module-cpp-api test modules).
+macros), as do the in-tree modules that set their suffix themselves (dbi_test, the module-cpp-api test modules,
+staticpgm, staticpgmcode and avrocppapi).
 Test: examples/test/cmake/test_stale_module_api_files.py.
 
 ## Packaging

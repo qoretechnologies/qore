@@ -50,6 +50,7 @@
 #include <cstring>
 #include <type_traits>
 #include <vector>
+#include <memory>
 
 #define TRACK_REFS 0
 
@@ -1258,7 +1259,134 @@ bool has_complex_type(const AbstractQoreNode* n) {
     return false;
 }
 
-static QoreHashNode* do_copy_strip(const QoreHashNode* h) {
+//! the nesting depth from which a copy that strips complex types continues without recursion (qore#6117)
+/** The copy of a value nested below this depth uses an explicit work stack instead of the C++ stack, so that a value
+    of any depth can be copied; shallower values are copied recursively, which needs no allocation for the work stack.
+*/
+static constexpr unsigned QORE_COPY_STRIP_RECURSION_LIMIT = 64;
+
+//! returns true if a copy that strips complex types must build a new container for the given value
+static bool copy_strip_needs_container(const AbstractQoreNode* n) {
+    if (!n || !has_complex_type(n)) {
+        return false;
+    }
+    switch (get_node_type(n)) {
+        // issue #2791: do not strip types from a plain list or hash; no complex types can be stored there anyway
+        case NT_LIST:
+            return static_cast<const QoreListNode*>(n)->getTypeInfo() != listTypeInfo;
+        case NT_HASH:
+            return static_cast<const QoreHashNode*>(n)->getTypeInfo() != hashTypeInfo;
+        default:
+            break;
+    }
+    return false;
+}
+
+namespace {
+//! dereferences a node owned by the work stack of a copy that strips complex types
+struct CopyStripNodeDeref {
+    void operator()(AbstractQoreNode* n) const {
+        n->deref(nullptr);
+    }
+};
+
+using CopyStripNodeHolder = std::unique_ptr<AbstractQoreNode, CopyStripNodeDeref>;
+
+//! a container that a copy without recursion is copying: its source, its copy and the position in the source
+class CopyStripFrame {
+public:
+    explicit CopyStripFrame(const AbstractQoreNode* src) {
+        if (get_node_type(src) == NT_LIST) {
+            src_list = static_cast<const QoreListNode*>(src);
+            dst.reset(new QoreListNode);
+        } else {
+            assert(get_node_type(src) == NT_HASH);
+            hash_iter.reset(new ConstHashIterator(static_cast<const QoreHashNode*>(src)));
+            dst.reset(new QoreHashNode);
+        }
+    }
+
+    //! moves to the next element of the source; returns false if there are no more
+    bool next() {
+        if (src_list) {
+            if (list_pos == src_list->size()) {
+                return false;
+            }
+            ++list_pos;
+            return true;
+        }
+        return hash_iter->next();
+    }
+
+    //! returns the current element of the source
+    QoreValue current() const {
+        return src_list ? src_list->retrieveEntry(list_pos - 1) : hash_iter->get();
+    }
+
+    //! adds the copy of the current element of the source to the copy; takes over the reference of the value
+    void add(QoreValue v) {
+        if (src_list) {
+            static_cast<QoreListNode*>(dst.get())->push(v, nullptr);
+        } else {
+            qore_hash_private::get(*static_cast<QoreHashNode*>(dst.get()))->setKeyValueIntern(hash_iter->getKey(), v);
+        }
+    }
+
+    //! returns the copy of the container, which the caller then owns
+    AbstractQoreNode* release() {
+        return dst.release();
+    }
+
+private:
+    const QoreListNode* src_list = nullptr;
+    size_t list_pos = 0;
+    std::unique_ptr<ConstHashIterator> hash_iter;
+    CopyStripNodeHolder dst;
+};
+}
+
+//! copies a value that needs a new container, stripping complex types, without recursion (qore#6117)
+/** each container is added to the copy of the container it is in only once it is complete, as the container that it
+    is added to accounts for what it holds when it is added
+*/
+// cold and not inlined: it must not change how the recursive copy, which copies the values met in practice, is compiled
+__attribute__((cold, noinline)) static AbstractQoreNode* copy_strip_without_recursion(const AbstractQoreNode* n) {
+    assert(copy_strip_needs_container(n));
+    std::vector<CopyStripFrame> stack;
+    stack.emplace_back(n);
+    while (true) {
+        bool descended = false;
+        while (stack.back().next()) {
+            QoreValue v = stack.back().current();
+            if (v.hasNode() && copy_strip_needs_container(v.getInternalNode())) {
+                stack.emplace_back(v.getInternalNode());
+                descended = true;
+                break;
+            }
+            stack.back().add(v.refSelf());
+        }
+        if (descended) {
+            continue;
+        }
+        CopyStripNodeHolder done(stack.back().release());
+        stack.pop_back();
+        if (stack.empty()) {
+            return done.release();
+        }
+        stack.back().add(QoreValue(done.release()));
+    }
+}
+
+static AbstractQoreNode* copy_strip_intern(const AbstractQoreNode* n, unsigned depth);
+
+static QoreValue copy_strip_intern(const QoreValue& n, unsigned depth) {
+    if (!n.hasNode()) {
+        return n.refSelf();
+    }
+    return QoreValue(copy_strip_intern(n.getInternalNode(), depth));
+}
+
+static QoreHashNode* do_copy_strip(const QoreHashNode* h, unsigned depth) {
     // issue #2791: do not strip types from a plain hash; no complex types can be stored there anyway
     if (h->getTypeInfo() == hashTypeInfo) {
         return h->hashRefSelf();
@@ -1267,12 +1395,12 @@ static QoreHashNode* do_copy_strip(const QoreHashNode* h) {
     qore_hash_private* nhp = qore_hash_private::get(**nh);
     ConstHashIterator i(h);
     while (i.next()) {
-        nhp->setKeyValueIntern(i.getKey(), copy_strip_complex_types(i.get()));
+        nhp->setKeyValueIntern(i.getKey(), copy_strip_intern(i.get(), depth + 1));
     }
     return nh.release();
 }
 
-static QoreListNode* do_copy_strip(const QoreListNode* l) {
+static QoreListNode* do_copy_strip(const QoreListNode* l, unsigned depth) {
     // issue #2791: do not strip types from a plain list; no complex types can be stored there anyway
     if (l->getTypeInfo() == listTypeInfo) {
         return l->listRefSelf();
@@ -1280,25 +1408,36 @@ static QoreListNode* do_copy_strip(const QoreListNode* l) {
     ReferenceHolder<QoreListNode> nl(new QoreListNode, nullptr);
     ConstListIterator i(l);
     while (i.next()) {
-        nl->push(copy_strip_complex_types(i.getValue()), nullptr);
+        nl->push(copy_strip_intern(i.getValue(), depth + 1), nullptr);
     }
     return nl.release();
 }
 
-AbstractQoreNode* copy_strip_complex_types(const AbstractQoreNode* n) {
-    if (!n)
+static AbstractQoreNode* copy_strip_intern(const AbstractQoreNode* n, unsigned depth) {
+    if (!n) {
         return nullptr;
-    if (!has_complex_type(n))
+    }
+    if (!has_complex_type(n)) {
         return n->refSelf();
+    }
     switch (get_node_type(n)) {
         case NT_LIST:
-            return do_copy_strip(static_cast<const QoreListNode*>(n));
         case NT_HASH:
-            return do_copy_strip(static_cast<const QoreHashNode*>(n));
+            // a deeply nested value is copied without recursion, so that it cannot overflow the stack (qore#6117)
+            if (depth >= QORE_COPY_STRIP_RECURSION_LIMIT && copy_strip_needs_container(n)) {
+                return copy_strip_without_recursion(n);
+            }
+            return get_node_type(n) == NT_LIST
+                ? static_cast<AbstractQoreNode*>(do_copy_strip(static_cast<const QoreListNode*>(n), depth))
+                : static_cast<AbstractQoreNode*>(do_copy_strip(static_cast<const QoreHashNode*>(n), depth));
         default:
             break;
     }
     return n->refSelf();
+}
+
+AbstractQoreNode* copy_strip_complex_types(const AbstractQoreNode* n) {
+    return copy_strip_intern(n, 0);
 }
 
 DLLLOCAL QoreValue copy_strip_complex_types(const QoreValue& n) {

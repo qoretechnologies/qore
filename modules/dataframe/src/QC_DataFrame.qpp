@@ -805,6 +805,20 @@ static DataFrame DataFrame::fromMatrix(list<auto> matrix, *list<string> column_n
     For non-key columns with the same name in both DataFrames, the right-side
     column is suffixed with "_right".
 
+    Two rows match if their key values are equal and of the same type, as groupBy() groups the values of a column
+    that holds any value: an int and a float, or an int and a string, never match (cast a key column to match
+    values of different types), while an int key column matches the ints of a column that holds any value, and an
+    \c int64 key column the equal numbers of a decimal key column (the key column of a right or outer join of the
+    two is a decimal column, in which an \c int64 column counts as decimal(19, 0) and its ints are numbers, or,
+    beyond 38 digits, a column of the exact values with no schema, which cannot be exported).  A key
+    column of a right or outer join whose left and right key columns differ in type holds any value, with no schema
+    (a decimal and a float key column, for example), and cannot be exported to Arrow or Parquet (toArrowIpc() and
+    writeParquet() raise \c DATAFRAME-IO-ERROR); one whose key columns have the same type gets a schema that holds
+    the keys of both (decimals of different precisions and scales, timestamps of different units or time zones; a
+    date key column, such as a date32[day] column, and a timestamp key column give a timestamp key column),
+    or no schema if there is none: a key column of strings, for example, needs none, but one that holds any value
+    with no schema (decimals whose common schema would have more than 38 digits) cannot be exported.
+
     @return new DataFrame object with joined rows
 
     @par Example:
@@ -820,7 +834,8 @@ static DataFrame DataFrame::fromMatrix(list<auto> matrix, *list<string> column_n
     # Result: order_id, customer_id, amount, name
     @endcode
 
-    @throw DATAFRAME-JOIN-ERROR if join type is invalid or key columns not found
+    @throw DATAFRAME-JOIN-ERROR if join type is invalid or key columns not found, or a key column holds durations in
+    one DataFrame and absolute dates in the other
 
 */
 DataFrame DataFrame::join(DataFrame[QoreDataFrame] other, list<string> on, *string how) [flags=RET_VALUE_ONLY] {
@@ -844,6 +859,22 @@ DataFrame DataFrame::join(DataFrame[QoreDataFrame] other, list<string> on, *stri
     DataFrame means = gdf.agg({"salary": "mean"});
     DataFrame counts = gdf.count();
     @endcode
+
+    Two rows are in one group if their values of each group column are equal: two floats only if they are equal
+    (with \c -0.0 equal to \c 0.0) or both NaN, which make one group; the null values of a column make a group of
+    their own.  In a column that holds any value, a float is grouped by its value as in a \c float64 column; an
+    absolute date by its instant (two dates at the same instant in different time zones make one group); a relative
+    date by its length in microseconds, with a month counted as 31 days and a year as 365 days (so \c 24h and
+    \c 1D make one group, as they do in a column of durations); an arbitrary-precision number by its exact value
+    (the NaN numbers make one group, as the NaN floats do); a
+    binary value by its bytes; a list or a hash by its elements (two lists make one group if their elements are
+    equal in order, and two hashes if they have the same keys with equal values, in any order); an object, a
+    closure or a call reference by its identity, and a weak reference as the object, hash or list that it refers
+    to (a weak reference whose object is deleted makes a group of its own, apart from the null values); an enum
+    member as its value; and any other value by its type and value.  Values of different types make
+    different groups: the int \c 1, the float \c 1.0, the string \c "1" and \c True make four groups.  To group
+    values of different types by a common value, group a typed column, or a column of the values cast to one type
+    (ex: <tt>df.withColumn("k", map $1.toString(), df.getColumn("k"))</tt>).
 
     @throw DATAFRAME-COLUMN-ERROR if a column name is not found
 
@@ -1031,15 +1062,21 @@ DataFrame DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=
 
     A vertical concat takes the columns of the first DataFrame; a DataFrame without one of them gives null values.
     Columns of the same type keep it.  Columns that all have dense storage of the same element type (a \c float32 or
-    \c decimal128 column, or a timestamp column read from Parquet, for example) keep their element type and the
-    columnar schema of the first one, with the time unit \c "us" if their time units differ and the time zone
-    \c "UTC" if their time zones differ, so that an export keeps their values; columns of durations keep the schema
-    of the first one, with the time unit \c "us" if their time units differ; other columns are rebuilt from their
-    values with no columnar schema.  A column of durations (with a duration schema) with a date column of absolute
-    dates holds any value.  Columns of different types make the column that the column hash constructor makes of
-    their values as the columns return them (see @ref dataframeintro): a date column returns its dates in the local
-    time zone, so their string forms in a string column are in local time, and a date column without a duration
-    schema holds absolute dates, so a duration in it becomes the date that far from the epoch.
+    \c decimal128 column, or a timestamp column read from Parquet, for example) keep their element type and a
+    columnar schema that holds the cells of all of them, as melt() and join() merge schemas: the time unit \c "us" if
+    their time units differ and the time zone \c "UTC" if their time zones differ, so that an export keeps their
+    values, and no native type that does not describe them all; a date column (a date32[day] or date64[ms] column)
+    and a timestamp column give the timestamp schema with no native type; columns whose schemas cannot be merged
+    give no schema; columns of durations get their merged schema too (the time unit \c "us" if their time units
+    differ); other columns are rebuilt from their values with no columnar schema.  A column of durations (with a
+    duration schema) with a date column of absolute dates holds any value.  Decimal columns of different precisions
+    and scales make a decimal column with the largest number of integer digits and the largest scale, and \c int64
+    and decimal columns a decimal column in which an \c int64 column counts as decimal(19, 0) and its ints are
+    numbers; a decimal of more than 38 digits makes a column that holds the exact values with no schema, which cannot
+    be exported to Arrow or Parquet.  Other columns of different types make the column that the column hash
+    constructor makes of their values as the columns return them (see @ref dataframeintro): a date column returns
+    its dates in the local time zone, so their string forms in a string column are in local time, and a date column
+    without a duration schema holds absolute dates, so a duration in it becomes the date that far from the epoch.
 
     A DataFrame may be given more than once, and other threads may use the same DataFrames at the same time.
 
@@ -1061,9 +1098,13 @@ static DataFrame DataFrame::concat(list<DataFrame> dataframes, *int axis) [flags
 }
 
 //! Returns a new DataFrame with null values replaced by the given value
-/** @param value the replacement value (converted to each column's type); in a date column, only a date value
-    replaces a null value, and other values leave it null
+/** @param value the replacement value (converted to each column's type); in a date column, only a date of the kind
+    of the column (an absolute date in a column of absolute dates, a relative date in a column of durations) replaces
+    a null value, and other values leave it null
     @return new DataFrame object with nulls filled
+
+    @throw DATAFRAME-DATE-RANGE-ERROR if a date of the kind of a date column with a null value is outside the range
+    of a date cell
 
     @par Example:
     @code{.py}
@@ -1108,6 +1149,9 @@ DataFrame DataFrame::dropna() [flags=RET_VALUE_ONLY] {
     @param count_name optional name of the count column; defaults to \c count
     @return new DataFrame with the value column and count column
 
+    Two values are counted as one if they are equal as groupBy() groups them (in a column that holds any value, by
+    their type and exact value).
+
     @par Example:
     @code{.py}
     DataFrame counts = orders.valueCounts("status", sort_desc: True);
@@ -1132,6 +1176,9 @@ DataFrame DataFrame::valueCounts(string column, bool dropna = True, bool sort_de
 /** @param column the column to inspect
     @param dropna if True (the default), null values are excluded
     @return unique value count
+
+    Two values are counted as one if they are equal as groupBy() groups them (in a column that holds any value, by
+    their type and exact value).
 
     @par Example:
     @code{.py}
@@ -1245,6 +1292,20 @@ static DataFrame DataFrame::fromColumnarResult(auto result) [flags=RET_VALUE_ONL
 
 //! Returns per-column descriptive statistics
 /** @return list of ColumnStats hashes with count, mean, std, min, max, quartiles
+
+    A NaN value of a \c float64 column cannot be ordered for the minimum, the maximum and the quartiles, so it raises
+    \c NAN-COMPARE-ERROR, as with the <=> operator and sortBy(); null values are left out.  To describe a column
+    without its NaN values, select it and drop them first: a NaN is never greater than or equal to \c -\@inf\@,
+    while every other number is (a null value is left out too); filtering the whole DataFrame would drop the rows
+    from its other columns too.
+
+    @par Example:
+    @code{.py}
+    list<hash<ColumnStats>> stats = df.select(("v",)).filter("v", ">=", -@inf@).describe();
+    @endcode
+
+    @throw NAN-COMPARE-ERROR if a float64 column has a NaN value, which cannot be ordered for the minimum, the
+    maximum and the quartiles, as with the <=> operator and sortBy()
 */
 list<hash<ColumnStats>> DataFrame::describe() [flags=RET_VALUE_ONLY] {
     return df->describe(xsink);
@@ -1498,7 +1559,8 @@ static DataFrame DataFrame::fromQuery(object ds, string sql, *list<auto> bind_ar
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the data cannot be parsed as Arrow IPC data, or a struct field name or map key in
-    it has a NUL character, which a hash key cannot hold
+    it has a NUL character, which a hash key cannot hold, or a duration is longer than a Qore duration can be
+    @throw DATAFRAME-DATE-RANGE-ERROR if a timestamp is outside the range of a date cell
 */
 static DataFrame DataFrame::fromArrowIpc(binary data) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = QoreDataFrame::fromArrowIpc(data, xsink);
@@ -1583,7 +1645,9 @@ binary DataFrame::toArrowIpc() [flags=RET_VALUE_ONLY] {
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened or parsed, or a struct
-    field name or map key in it has a NUL character, which a hash key cannot hold
+    field name or map key in it has a NUL character, which a hash key cannot hold, or a duration is longer than a
+    Qore duration can be
+    @throw DATAFRAME-DATE-RANGE-ERROR if a timestamp is outside the range of a date cell
     @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow the file to be read
     @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve the path
 */
@@ -1840,6 +1904,25 @@ DataFrame DataFrame::pivot(string index_col, string columns_col, string values_c
     @param var_name name for the variable column (default "variable")
     @param value_name name for the value column (default "value")
     @return new DataFrame in long format
+
+    The identifier columns keep their types and columnar schemas.  The value column is:
+    - a \c float64 column if every value column is an \c int64 or \c float64 column (with the schema of \c float32
+      value columns, for example, if they all have it);
+    - a decimal column if the value columns are \c int64 and decimal columns: an \c int64 column counts as
+      decimal(19, 0), the schema has the largest number of integer digits and the largest scale, and the ints are
+      numbers; if it would have more than 38 digits, a column that holds the exact values with no schema;
+    - otherwise, if the value columns all have one type, a column of that type with a schema that holds the values
+      of all of them: decimals get the largest number of integer digits and the largest scale, temporal columns the
+      time unit \c "us" if their units differ and the time zone \c "UTC" if their zones differ, and the schema is
+      nullable if a column is;
+    - a column that holds the values of columns that hold any value as they are, with no schema, if their schemas
+      cannot be merged (decimals whose common schema would have more than 38 digits, for example); such a column
+      cannot be exported to Arrow or Parquet (toArrowIpc() and writeParquet() raise \c DATAFRAME-IO-ERROR), as with
+      concat();
+    - otherwise the column that the column hash constructor makes of the values (see @ref dataframeintro), which
+      stores scalar values of different types as their string forms (an int and a string value column make a string
+      column) and holds any value if a value is not a scalar; without rows, the value column of value columns of
+      different types is a string column.
 
     @par Example:
     @code{.py}

@@ -1,0 +1,237 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class CharPlusConcatenationTest
+
+#! The + operator adds a char as a one-character string, in every execution mode
+/** The \c + operator added two chars, or a char and an \c int, \c float or \c number, as code points, so that
+    <tt>s[i] + s[i + 1]</tt> gave an \c int after a single string index began to return a \c char, where it had given
+    a two-character string.  The operator now treats a \c char exactly as a one-character string with every operand,
+    at runtime and in the parse-time type of its result (\c string); \c += on an lvalue that holds a char does the
+    same.  Code-point arithmetic takes <tt>int(c)</tt>.
+
+    The script adds chars to chars, strings of other encodings, the scalar types, \c NOTHING, \c NULL, containers and
+    dates, with typed and untyped operands, in chains, folded at parse time, with \c foldl and in the RTF-style
+    <tt>rtf[i] + rtf[i + 1]</tt>, and applies \c += to lvalues that hold chars and to string, int, list, hash and
+    \c softchar lvalues; each function is called three times, in every execution mode and as qcc executables compiled
+    with \c -O0 and \c -O3 (see ExecModeOutputTest).
+*/
+class CharPlusConcatenationTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+
+class C {
+    public {
+        int x = 1;
+    }
+}
+
+string sub t(auto v) {
+    return sprintf("%y:%s", v, v.fullType());
+}
+
+# typed operands: the parse-time type of the result is string, so it is assigned to string variables
+string sub typed(char a, char b, string s) {
+    string ab = a + b;
+    string as = a + s;
+    string sa = s + a;
+    string chain = a + b + a;
+    string mixed = "<" + a + ">" + b;
+    return sprintf("%s %s %s %s %s", t(ab), t(as), t(sa), t(chain), t(mixed));
+}
+
+string sub typedScalars(char a, int i, float f, number n, bool b) {
+    string ai = a + i;
+    string ia = i + a;
+    string af = a + f;
+    string fa = f + a;
+    string an = a + n;
+    string na = n + a;
+    string ab = a + b;
+    string ba = b + a;
+    return sprintf("%y %y %y %y %y %y %y %y", ai, ia, af, fa, an, na, ab, ba);
+}
+
+string sub orNothing(*char a, *char b) {
+    return t(a + b);
+}
+
+# untyped operands: the same results
+string sub untyped(auto a, auto b) {
+    return t(a + b);
+}
+
+# the char takes the encoding of the string it is added to
+string sub encodings(char a, string s) {
+    string r1 = a + s;
+    string r2 = s + a;
+    return sprintf("%s %y %s %y", r1.encoding(), r1 == "\u{e9}x\u{e9}", r2.encoding(), r2 == "x\u{e9}\u{e9}");
+}
+
+string sub unrepresentable(char a, string s) {
+    string rv;
+    try {
+        rv += t(a + s);
+    } catch (hash<ExceptionInfo> ex) {
+        rv += ex.err;
+    }
+    try {
+        rv += " " + t(s + a);
+    } catch (hash<ExceptionInfo> ex) {
+        rv += " " + ex.err;
+    }
+    return rv;
+}
+
+string sub rtf(string text, int i) {
+    string hex = text[i] + text[i + 1];
+    return sprintf("%y %d", hex, hex.size());
+}
+
+string sub reverseChars(string s) {
+    string r;
+    foreach char c in (s.iterator()) {
+        r = c + r;
+    }
+    return r;
+}
+
+string sub folds(string s, list<char> l) {
+    return sprintf("%s %s", t(foldl $1 + $2, s.iterator()), t(foldl $1 + $2, l));
+}
+
+# map and foldl over a list of chars with constants: the parse-time type of each expression is string
+string sub listOps(list<char> l) {
+    list<string> m1 = map $1 + 1, l;
+    list<string> m2 = map "-" + $1, l;
+    string f1 = foldl $1 + "," + $2, l;
+    string f2 = foldl $1 + $2 + 1, l;
+    return sprintf("%y %y %y %y", m1, m2, f1, f2);
+}
+
+string sub codePoints(char a, char b) {
+    return sprintf("%s %s", t(int(a) + int(b)), t(int(a) + 1));
+}
+
+# += on an lvalue that holds a char gives a string; a numeric lvalue adds the char as its one-character string
+string sub plusEquals(char c) {
+    auto a = c;
+    a += c"b";
+    auto b = c;
+    b += "bc";
+    auto i = c;
+    i += 1;
+    auto n = c;
+    n += NOTHING;
+    auto f = c;
+    f += 1.5n;
+    auto l = c;
+    l += (1, 2);
+    string s = "x";
+    s += c;
+    int si = 1;
+    si += c;
+    return sprintf("%s %s %s %s %s %s %s %s", t(a), t(b), t(i), t(n), t(f), t(l), t(s), t(si));
+}
+
+string sub plusEqualsElements(char c) {
+    list lst = (c,);
+    lst[0] += c"b";
+    hash h = {"k": c};
+    h.k += "z";
+    list<string> ls = ("x",);
+    ls[0] += c;
+    return sprintf("%s %s %s", t(lst[0]), t(h.k), t(ls[0]));
+}
+
+string sub plusEqualsSoftchar(char c) {
+    softchar sc = c;
+    sc += "";
+    string rv = t(sc);
+    try {
+        sc += c"b";
+        rv += " " + t(sc);
+    } catch (hash<ExceptionInfo> ex) {
+        rv += " " + ex.err;
+    }
+    return rv;
+}
+
+# folded at parse time
+const Folded = (c"a" + c"b", c"a" + 1, 1 + c"a", c"a" + "bc", "ab" + c"c", c"a" + 1.5n);
+
+string latin1 = convert_encoding("x\u{e9}", "ISO-8859-1");
+for (int i = 0; i < 3; ++i) {
+    printf("%d typed %s | %s\n", i, typed(c"a", c"b", "cd"), typed(c"\u{e9}", c"\u{1F600}", "\u{fc}"));
+    printf("%d scalars %s\n", i, typedScalars(c"a", 1, 1.5, 1.5n, True));
+    printf("%d ornothing %s %s %s\n", i, orNothing(c"a", c"b"), orNothing(c"a", NOTHING), orNothing(NOTHING, c"b"));
+    printf("%d untyped %s %s %s %s %s %s\n", i, untyped(c"a", c"b"), untyped(c"a", 1), untyped(1, c"a"),
+        untyped(c"a", NOTHING), untyped(NOTHING, c"a"), untyped(c"a", NULL));
+    printf("%d containers %s %s %s %s %s %s %s\n", i, untyped(c"a", (1, 2)), untyped((1, 2), c"a"),
+        untyped(c"a", {"k": 1}), untyped({"k": 1}, c"a"), untyped(c"a", <61>), untyped(c"a", new C()),
+        untyped(new C(), c"a"));
+    printf("%d dates %s %s\n", i, untyped(c"a", 2026-01-01), untyped(2026-01-01, c"a"));
+    printf("%d encodings %s\n", i, encodings(c"\u{e9}", latin1));
+    printf("%d unrepresentable %s\n", i, unrepresentable(c"\u{1F600}", latin1));
+    printf("%d rtf %s %s\n", i, rtf("\\" + chr(39) + "e9", 2), rtf("ab", 1));
+    printf("%d reverse %y\n", i, reverseChars("ab\u{e9}"));
+    printf("%d folds %s\n", i, folds("abc", (c"x", c"y", c"z")));
+    printf("%d listops %s\n", i, listOps((c"x", c"y", c"z")));
+    printf("%d codepoints %s\n", i, codePoints(c"a", c"b"));
+    printf("%d plusequals %s\n", i, plusEquals(c"a"));
+    printf("%d elements %s\n", i, plusEqualsElements(c"a"));
+    printf("%d softchar %s\n", i, plusEqualsSoftchar(c"a"));
+    printf("%d folded %y\n", i, Folded);
+}
+';
+
+        #! the expected output
+        const Lines = (
+            "typed \"ab\":string \"acd\":string \"cda\":string \"aba\":string \"<a>b\":string"
+                + " | \"\u{e9}\u{1F600}\":string \"\u{e9}\u{fc}\":string \"\u{fc}\u{e9}\":string"
+                + " \"\u{e9}\u{1F600}\u{e9}\":string \"<\u{e9}>\u{1F600}\":string",
+            "scalars \"a1\" \"1a\" \"a1.5\" \"1.5a\" \"a1.5\" \"1.5a\" \"a1\" \"1a\"",
+            "ornothing \"ab\":string \"a\":string \"b\":string",
+            "untyped \"ab\":string \"a1\":string \"1a\":string \"a\":string \"a\":string \"a\":string",
+            "containers [c'a', 1, 2]:list<auto> [1, 2, c'a']:list<auto> \"a\":string \"a\":string \"a\":string"
+                + " \"a\":string \"a\":string",
+            "dates \"a20260101000000\":string \"20260101000000a\":string",
+            "encodings ISO-8859-1 True ISO-8859-1 True",
+            "unrepresentable ENCODING-CONVERSION-ERROR ENCODING-CONVERSION-ERROR",
+            "rtf \"e9\" 2 \"b\" 1",
+            "reverse \"\u{e9}ba\"",
+            "folds \"abc\":string \"xyz\":string",
+            "listops [\"x1\", \"y1\", \"z1\"] [\"-x\", \"-y\", \"-z\"] \"x,y,z\" \"xy1z1\"",
+            "codepoints 195:integer 98:integer",
+            "plusequals \"ab\":string \"abc\":string \"a1\":string \"a\":string \"a1.5\":string \"a\":string"
+                + " \"xa\":string 1:integer",
+            "elements \"ab\":string \"az\":string \"xa\":string",
+            "softchar a:char INVALID-CHAR-CONVERSION",
+            "folded [\"ab\", \"a1\", \"1a\", \"abc\", \"abc\", \"a1.5\"]",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("CharPlusConcatenation", Script, CharPlusConcatenationTest::expected(),
+            "adds a char as a one-character string", NOTHING, NOTHING, ("-O0", "-O3")) {
+    }
+
+    static string expected() {
+        string rv;
+        for (int i = 0; i < 3; ++i) {
+            rv += foldl $1 + $2, (map sprintf("%d %s\n", i, $1), Lines);
+        }
+        return rv;
+    }
+}

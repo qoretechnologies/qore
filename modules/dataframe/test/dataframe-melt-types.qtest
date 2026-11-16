@@ -1,0 +1,214 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-melt-types.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameMeltTypesTest
+
+#! melt() keeps the types of its identifier columns and of non-numeric value columns (qore#6116)
+class DataFrameMeltTypesTest inherits QUnit::Test {
+    constructor() : Test("DataFrameMeltTypesTest", "1.0", \ARGV) {
+        addTestCase("melt() of columns of any type", \meltTest());
+        addTestCase("melt() of columns with schemas", \schemaTest());
+        set_return_value(main());
+    }
+
+    #! melt() of identifier and value columns of every type
+    meltTest() {
+        # the issue: an int and a string value column
+        DataFrame::DataFrame d(({"id": 1, "x": 10, "y": "s"}, {"id": 2, "x": 20, "y": "t"}));
+        DataFrame::DataFrame m = d.melt(("id",), ("x", "y"));
+        assertEq(("10", "s", "20", "t"), m.getColumn("value"), "int and string values");
+        # identifier columns of every type keep their types and values
+        DataFrame::DataFrame all({
+            "b": (True, NOTHING),
+            "d": (2024-01-01T00:00:00Z, 2024-01-02T00:00:00Z),
+            "u": (1h, NOTHING),
+            "a": (c'z', (1, 2)),
+            "s": ("x", "y"),
+            "f": (1.5, NOTHING),
+            "v": (1, 2),
+            "w": (3, 4),
+        });
+        m = all.melt(("b", "d", "u", "a", "s", "f"), ("v", "w"));
+        assertEq(4, m.numRows());
+        assertEq((True, True, NOTHING, NOTHING), m.getColumn("b"), "bool");
+        list<auto> dates = m.getColumn("d");
+        assertTrue(dates[0] == 2024-01-01T00:00:00Z && dates[3] == 2024-01-02T00:00:00Z, sprintf("dates: %y", dates));
+        list<auto> durations = m.getColumn("u");
+        assertTrue(is_date_relative(durations[0]) && durations[1] == 1h && !exists durations[2],
+            sprintf("durations: %y", durations));
+        assertEq((c'z', c'z', (1, 2), (1, 2)), m.getColumn("a"), "any value");
+        assertEq(("x", "x", "y", "y"), m.getColumn("s"), "string");
+        assertEq((1.5, 1.5, NOTHING, NOTHING), m.getColumn("f"), "float");
+        assertEq((1.0, 3.0, 2.0, 4.0), m.getColumn("value"), "numeric values");
+        # value columns of one type keep it; of durations, durations
+        DataFrame::DataFrame dur({"id": (1, 2), "p": (1h, 2h), "q": (3h, NOTHING)});
+        list<auto> dv = dur.melt(("id",)).getColumn("value");
+        assertTrue(is_date_relative(dv[0]) && dv[0] == 1h && dv[2] == 2h && !exists dv[3],
+            sprintf("duration values: %y", dv));
+        DataFrame::DataFrame bools({"id": (1,), "p": (True,), "q": (False,)});
+        assertEq((True, False), bools.melt(("id",)).getColumn("value"), "bool values");
+        # values of a column that holds any value
+        DataFrame::DataFrame anyv({"id": (1, 2), "p": (c'z', (1, 2)), "q": (1, 2)});
+        assertEq((c'z', 1, (1, 2), 2), anyv.melt(("id",)).getColumn("value"), "any values");
+        # an int and a bool value column make a string column, as the column hash constructor makes it
+        DataFrame::DataFrame ib({"id": (1,), "x": (10,), "b": (True,)});
+        assertEq(("10", "1"), ib.melt(("id",)).getColumn("value"), "int and bool values");
+        # decimal value columns keep their values and type
+        DataFrame::DataFrame dec = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "p": (12345678901234567.89n,), "q": (2.5n,),
+        }, {
+            "p": {"schema": {"kind": "decimal128", "precision": 20, "scale": 2}},
+            "q": {"schema": {"kind": "decimal128", "precision": 20, "scale": 2}},
+        }));
+        list<auto> dv2 = DataFrame::DataFrame::fromArrowIpc(dec.melt(("id",)).toArrowIpc()).getColumn("value");
+        assertTrue(dv2[0] == 12345678901234567.89n && dv2[1] == 2.5n, sprintf("decimal values: %y", dv2));
+        # an empty frame, and identifier columns only
+        DataFrame::DataFrame empty({"id": (), "x": (), "y": ()});
+        assertEq(0, empty.melt(("id",)).numRows(), "an empty frame");
+        DataFrame::DataFrame ids({"id": (1, 2)});
+        assertEq(0, ids.melt(("id",)).numRows(), "identifier columns only");
+    }
+
+    #! value columns of one type with different schemas: a common schema, or a column that holds any value
+    schemaTest() {
+        # decimals of different precisions and scales: a common decimal schema, which keeps every digit
+        DataFrame::DataFrame dec = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "p": (12345678901234567.89n,), "q": (2.5n,), "r": (1234567890123456789012.5n,),
+        }, {
+            "p": {"schema": {"kind": "decimal128", "precision": 20, "scale": 2}},
+            "q": {"schema": {"kind": "decimal128", "precision": 22, "scale": 1}},
+            "r": {"schema": {"kind": "decimal128", "precision": 23, "scale": 1}},
+        }));
+        DataFrame::DataFrame m = dec.melt(("id",), ("p", "q"));
+        assertEq(("decimal128", 23, 2), schema(m, "value"){"kind", "precision", "scale"}.values(), "decimal schema");
+        list<auto> v = DataFrame::DataFrame::fromArrowIpc(m.toArrowIpc()).getColumn("value");
+        assertTrue(v[0] == 12345678901234567.89n && v[1] == 2.5n, sprintf("decimal values: %y", v));
+        # decimals whose common schema would have more than 38 digits (30 integer digits and a scale of 29): a
+        # column that holds the exact numbers, with no schema
+        DataFrame::DataFrame wide = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "s": (1.23456789012345678901234567890n,), "l": (123456789012345678901234567890.5n,),
+        }, {
+            "s": {"schema": {"kind": "decimal128", "precision": 30, "scale": 29}},
+            "l": {"schema": {"kind": "decimal128", "precision": 31, "scale": 1}},
+        }));
+        m = wide.melt(("id",));
+        assertEq("auto", schema(m, "value").kind, "more than 38 digits: no schema");
+        list<auto> wv = m.getColumn("value");
+        # the numbers of the source columns, unchanged
+        assertTrue(wv[0] == wide.getColumn("s")[0] && wv[1] == wide.getColumn("l")[0]
+            && wv[1] == 123456789012345678901234567890.5n, sprintf("exact numbers: %y", wv));
+        assertThrows("DATAFRAME-IO-ERROR", \m.toArrowIpc(), (), "a column of numbers with no schema");
+        # a column that holds any value with and without a decimal schema: the values as they are, with no schema
+        DataFrame::DataFrame anydec = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "d": (2.5n,), "a": (c'z',),
+        }, {
+            "d": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}},
+            "a": {"schema": {"kind": "auto"}},
+        }));
+        foreach list<string> order in ((("d", "a"), ("a", "d"))) {
+            m = anydec.melt(("id",), order);
+            assertEq("auto", schema(m, "value").kind, sprintf("%y: no decimal schema", order));
+            assertEq((map anydec.getColumn($1)[0], order), m.getColumn("value"),
+                sprintf("%y: any values with and without a schema", order));
+        }
+        # a native type that is not the same for all value columns is dropped, one that is kept
+        hash<auto> str_schema = {"kind": "string", "nullable": True};
+        foreach list<string> natives in ((("varchar(10)", "text"), ("text", "text"))) {
+            DataFrame::DataFrame strs = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+                "id": (1,), "a": ("x",), "b": ("y",),
+            }, {
+                "a": {"schema": str_schema + {"native_type": natives[0]}},
+                "b": {"schema": str_schema + {"native_type": natives[1]}},
+            }));
+            m = strs.melt(("id",));
+            assertEq(natives[0] == natives[1] ? natives[0] : NOTHING, schema(m, "value").native_type,
+                sprintf("native types %y", natives));
+        }
+        # a timestamp column with a native type and a plain date column: microseconds, and no native type
+        DataFrame::DataFrame tsn = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "t": (2024-01-01T10:00:00Z,),
+        }, {
+            "t": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "UTC", "nullable": True,
+                "native_type": "timestamp[ms, tz=UTC]"}},
+        })).withColumn("p", (2024-01-01T10:00:00.25Z,));
+        foreach list<string> order in ((("t", "p"), ("p", "t"))) {
+            hash<auto> s = schema(tsn.melt(("id",), order), "value");
+            assertEq(("us", NOTHING), (s.time_unit, s.native_type), sprintf("%y: timestamp and plain date", order));
+        }
+        # float32 value columns keep their schema
+        string dir = get_script_dir() + DirSep + "data" + DirSep;
+        DataFrame::DataFrame f32 = DataFrame::DataFrame::readParquet(dir + "dense_float32.parquet");
+        f32.addColumn("k", (1, 2, 3, 4, 5, 6));
+        DataFrame::DataFrame f2 = f32.join(f32, ("k",));
+        m = f2.melt(("k",), ("v", "v_right"));
+        assertEq(schema(f32, "v"), schema(m, "value"), "float32 values");
+        # timestamps of different units: microseconds
+        DataFrame::DataFrame ts = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "a": (2024-01-01T10:00:00.5Z,), "b": (2024-01-02T10:00:00Z,),
+        }, {
+            "a": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "UTC", "nullable": True}},
+            "b": {"schema": {"kind": "timestamp", "time_unit": "s", "timezone": "UTC", "nullable": True}},
+        }));
+        m = ts.melt(("id",));
+        assertEq("us", schema(m, "value").time_unit, "timestamp unit");
+        list<auto> tv = DataFrame::DataFrame::fromArrowIpc(m.toArrowIpc()).getColumn("value");
+        assertTrue(tv[0] == 2024-01-01T10:00:00.5Z && tv[1] == 2024-01-02T10:00:00Z, sprintf("timestamps: %y", tv));
+        # timestamps of different zones: UTC; a nullable column makes the schema nullable
+        DataFrame::DataFrame tz = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1, 2), "a": (2024-01-01T10:00:00Z, 2024-01-01T11:00:00Z), "b": (2024-01-02T10:00:00Z, NOTHING),
+        }, {
+            "a": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "Europe/Prague", "nullable": False}},
+            "b": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "UTC", "nullable": True}},
+        }));
+        m = tz.melt(("id",));
+        hash<auto> tzs = (map $1, m.toColumnarResult().schemaV2(), $1.name == "value")[0];
+        assertEq(("UTC", "ms", True), (tzs.timezone, tzs.time_unit, tzs.nullable), "zone and nullable");
+        tv = DataFrame::DataFrame::fromArrowIpc(m.toArrowIpc()).getColumn("value");
+        assertTrue(tv[0] == 2024-01-01T10:00:00Z && tv[1] == 2024-01-02T10:00:00Z && !exists tv[3],
+            sprintf("timestamps of two zones: %y", tv));
+        # a plain date column and a timestamp column, in either order: microseconds
+        DataFrame::DataFrame mixed = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "t": (2024-01-01T10:00:00Z,),
+        }, {
+            "t": {"schema": {"kind": "timestamp", "time_unit": "s", "timezone": "UTC", "nullable": True}},
+        })).withColumn("p", (2024-01-01T10:00:00.25Z,));
+        foreach list<string> order in ((("t", "p"), ("p", "t"))) {
+            m = mixed.melt(("id",), order);
+            assertEq("us", schema(m, "value").time_unit, sprintf("%y: unit", order));
+            tv = DataFrame::DataFrame::fromArrowIpc(m.toArrowIpc()).getColumn("value");
+            assertTrue((select tv, $1 == 2024-01-01T10:00:00.25Z).size() == 1, sprintf("%y: values %y", order, tv));
+        }
+        # durations of different units: microseconds
+        DataFrame::DataFrame dur = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "s": (2s,), "ms": (1500ms,),
+        }, {
+            "s": {"schema": {"kind": "duration", "time_unit": "s", "nullable": True}},
+            "ms": {"schema": {"kind": "duration", "time_unit": "ms", "nullable": True}},
+        }));
+        m = dur.melt(("id",));
+        assertEq("us", schema(m, "value").time_unit, "duration unit");
+        tv = DataFrame::DataFrame::fromArrowIpc(m.toArrowIpc()).getColumn("value");
+        assertTrue(tv[0] == 2s && tv[1] == 1500ms, sprintf("durations: %y", tv));
+    }
+
+    #! returns the columnar schema of a column: its kind, element type, precision, scale, time unit and zone
+    private hash<auto> schema(DataFrame::DataFrame df, string name) {
+        foreach hash<auto> column in (df.toColumnarResult().schemaV2()) {
+            if (column.name == name) {
+                return column{"kind", "buffer_type", "precision", "scale", "time_unit", "timezone", "native_type"};
+            }
+        }
+        return {};
+    }
+}

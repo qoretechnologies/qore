@@ -1,0 +1,180 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  plugin-order-identity.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+# test-exec-mode: children - its probes run in child processes that set their own --exec-mode and in qcc executables
+# test-platform: macos - AOT code generation and linking of qcc executables and modules that dispatch plugin operations
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+
+%exec-class PluginOrderIdentityTest
+
+#! AOT code names a plugin operation by its module-local reference, so it dispatches the operation that it was compiled
+#! for when the plugin modules are loaded in another order at run time than at compile time, and refuses a missing
+#! operation or a changed signature with an exception (qore#6136)
+/** The test plugin modules pluginordera and pluginorderb (pluginorder-module.cpp) each register a subscript operation
+    on a class of their own that returns the key plus 1000 (pluginordera) or 2000 (pluginorderb); process-global
+    operation ids are assigned in the order in which the modules are loaded.
+*/
+class PluginOrderIdentityTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+
+        #! the function that dispatches the operations
+        const Functions = "
+public int sub plugin_order_a(PluginOrderA::Value v, int key) {
+    return v[key];
+}
+
+public int sub plugin_order_b(PluginOrderB::Value v, int key) {
+    return v[key];
+}
+";
+
+        #! the calls of the functions
+        const Calls = "
+PluginOrderA::Value va();
+PluginOrderB::Value vb();
+for (int i = 0; i < 3; ++i) {
+    printf(\"%d %d\\n\", plugin_order_a(va, i), plugin_order_b(vb, i));
+}
+";
+
+        #! the output of the calls
+        const Expected = "1000 2000\n1001 2001\n1002 2002\n";
+    }
+
+    constructor() : QUnit::Test("PluginOrderIdentityTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+
+        addTestCase("operations in each mode", \testModes());
+        addTestCase("executable compiled with the modules in another order", \testExecutable());
+        addTestCase("module compiled with the modules in another order", \testModule());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string module_dir = ENV.QORE_MODULE_DIR ?? "";
+        if (module_dir !~ /pluginordera/ || module_dir !~ /pluginorderb/) {
+            testSkip("the test modules pluginordera and pluginorderb are not in the module path");
+        }
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private static write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    testModes() {
+        TmpDir tmp("qore-plugin-order-modes-");
+        string src = tmp.path + "/probe.q";
+        write(src, "%modern\n%requires pluginordera\n%requires pluginorderb\n" + Functions + Calls);
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            # the modules in both orders
+            assertEq(Expected, run(sprintf("%s QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 %s --exec-mode=%s %s",
+                env, qore_bin, mode, src)), mode);
+            assertEq(Expected, run(sprintf("%s QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 %s -l pluginorderb "
+                "--exec-mode=%s %s", env, qore_bin, mode, src)), mode + " with pluginorderb loaded first");
+        }
+    }
+
+    #! an executable compiled with pluginorderb loaded first, which loads pluginordera first
+    /** qcc loads the modules in the order of the source, pluginorderb first; an executable loads the modules that it
+        depends on in the order of their names, pluginordera first.  The test checks that the operation ids differ.
+    */
+    testExecutable() {
+        TmpDir tmp("qore-plugin-order-exe-");
+        string src = tmp.path + "/probe.q";
+        write(src, "%modern\n%requires pluginorderb\n%requires pluginordera\n" + Functions + Calls);
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + "/probe" + opt;
+            string out = run(sprintf("%s QORE_PLUGIN_REGISTER_TRACE=1 %s %s -o %s %s", env, qcc_bin, opt, exe, src));
+            assertTrue(is_file(exe), sprintf("qcc %s links the executable: %s", opt, out));
+            if (!is_file(exe)) {
+                continue;
+            }
+            *string compile_id = getSubscriptId(out);
+            *string run_id = getSubscriptId(run(sprintf("%s QORE_PLUGIN_REGISTER_TRACE=1 %s", env, exe)));
+            assertTrue(exists compile_id && exists run_id && compile_id != run_id,
+                sprintf("the id of pluginordera's operation differs at compile time (%y) and at run time (%y)",
+                    compile_id, run_id));
+            assertEq(Expected, run(sprintf("%s %s", env, exe)), "executable " + opt);
+            checkMismatch(sprintf("%s %s", env, exe), "executable " + opt);
+        }
+    }
+
+    #! returns the process-global id of pluginordera's subscript operation from a registration trace
+    private static *string getSubscriptId(string trace) {
+        return (trace =~ x/assigned plugin operation id ([0-9]+) to 'pluginordera::subscript'/)[0];
+    }
+
+    #! a module compiled with pluginordera loaded first, loaded after pluginorderb
+    testModule() {
+        TmpDir tmp("qore-plugin-order-module-");
+        string mod_dir = tmp.path + "/mods";
+        mkdir(mod_dir);
+        string mod_src = tmp.path + "/PluginOrderProbe.qm";
+        write(mod_src, "%modern\n%requires pluginordera\n%requires pluginorderb\nmodule PluginOrderProbe {\n"
+            "    version = \"1.0\";\n    desc = \"test\";\n    author = \"test\";\n    url = \"https://qore.org\";\n}\n"
+            + Functions);
+        string probe = tmp.path + "/probe.q";
+        write(probe, sprintf("%%modern\n%%requires pluginorderb\n%%requires pluginordera\n%%append-module-path %s\n"
+            "%%requires PluginOrderProbe\n", mod_dir) + Calls);
+        foreach string opt in (("-O0", "-O3")) {
+            string qmod = mod_dir + "/PluginOrderProbe.qmod";
+            if (is_file(qmod)) {
+                unlink(qmod);
+            }
+            string out = run(sprintf("%s %s --module %s --output %s %s", env, qcc_bin, opt, qmod, mod_src));
+            assertTrue(is_file(qmod), sprintf("qcc %s compiles the module: %s", opt, out));
+            if (!is_file(qmod)) {
+                continue;
+            }
+            foreach string mode in (("ir", "jit")) {
+                string cmd = sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, probe);
+                assertEq(Expected, run(cmd), sprintf("module %s, %s", opt, mode));
+                checkMismatch(cmd, sprintf("module %s, %s", opt, mode));
+            }
+        }
+    }
+
+    #! the code refuses an operation whose signature changed or that is missing with an exception
+    /** A missing module is refused before any code runs, when the executable or module loads the modules that it
+        depends on (AOT-ERROR or LOAD-MODULE-ERROR), so the call sites never see one
+    */
+    private checkMismatch(string cmd, string label) {
+        foreach hash<auto> i in ({"variant": "signature", "err": "QORD-PLUGIN-SIGNATURE-HASH-MISMATCH"},
+                {"variant": "missing", "err": "PLUGIN-REGISTRY-OPERATION-NOT-REGISTERED"}) {
+            string out = backquote(sprintf("(PLUGINORDER_TEST_VARIANT=pluginordera:%s %s) 2>&1; echo status=$?",
+                i.variant, cmd));
+            assertRegex(i.err, out, sprintf("%s refuses a %s operation", label, i.variant));
+            assertRegex("status=[1-9]", out, sprintf("%s fails with a %s operation", label, i.variant));
+            assertNRegex("(?m)^100[0-9] ", out, sprintf("%s does not call the %s operation", label, i.variant));
+        }
+    }
+}

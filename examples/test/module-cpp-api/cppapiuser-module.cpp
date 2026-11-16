@@ -60,6 +60,10 @@ extern "C" DLLEXPORT void cppapiuser_qore_module_desc(QoreModuleInfo& mod_info) 
     mod_info.ns_init = cppapiuser_module_ns_init;
     mod_info.del = cppapiuser_module_delete;
     mod_info.parse_cmd = cppapiuser_parse_cmd;
+    // the command handler only records the commands that it receives (and raises an error for "fail"): it does
+    // nothing that the issuing code could not do itself, so it honors the restrictions of every issuer, also of the
+    // sandboxed Programs of aot-module-cmd-replay.qtest (see QoreModuleInfo::cmd_caller_aware)
+    mod_info.cmd_caller_aware = true;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }

@@ -160,6 +160,16 @@ public:
         }
     }
 
+    //! The parent and the source of a copy
+    DLLLOCAL void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const {
+        if (parentHashDecl) {
+            refs.push_back(&const_cast<typed_hash_decl_private*>(get(*parentHashDecl))->type_owner);
+        }
+        if (copy_source) {
+            refs.push_back(&copy_source->type_owner);
+        }
+    }
+
     DLLLOCAL void refTypeOwner() {
         ref();
     }

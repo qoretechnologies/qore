@@ -71,6 +71,11 @@ GroupedDataFrame::copy() {
 
     @throw DATAFRAME-COLUMN-ERROR a column is not found, or an aggregation cannot be applied to the type of a column
     @throw DATAFRAME-ERROR an aggregation is unknown, or is not a string or a list of strings
+    @throw NAN-COMPARE-ERROR a \c "min", \c "max" or \c "median" aggregation of a numeric column has a NaN value,
+    which cannot be ordered, as with the <=> operator and sortBy(); to aggregate a column without its NaN values,
+    drop them before grouping, as a NaN is never greater than or equal to \c -\@inf\@ (ex:
+    <tt>df.filter("v", ">=", -\@inf\@).groupBy(("g",)).agg({"v": "median"})</tt>; the rows are dropped for the
+    other aggregations of the same call too)
 
 */
 DataFrame GroupedDataFrame::agg(hash<auto> agg_spec) [flags=RET_VALUE_ONLY] {

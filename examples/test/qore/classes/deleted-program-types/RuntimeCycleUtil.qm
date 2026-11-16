@@ -1,0 +1,18 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%requires qore >= 2.0
+
+module RuntimeCycleUtil {
+    version = "1.0";
+    desc = "an AOT module that loads a module requiring it at run time, with user modules in the cycle (qore#6129)";
+    author = "Qore Technologies";
+    url = "https://qoretechnologies.com";
+}
+
+%modern
+
+public int sub runtime_cycle_util() {
+    load_module("RuntimeCycleClient");
+    return 1;
+}

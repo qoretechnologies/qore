@@ -204,21 +204,47 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   encodings differ
         # - relative-date-range (#6101): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - dataframe-aot-plugin-helpers (#6130): its probes run in child processes that set their own --exec-mode,
+        #   in qcc executables and with a module compiled by qcc
+        # - relative-date-overflow (#6103) and relative-date-multiply (#6109): their probes run in child processes
+        #   that set their own --exec-mode and in qcc executables
+        # - dataframe-plugin-exception-handler (#6135): its probes run in child processes that set their own
+        #   --exec-mode
+        # - plugin-order-identity (#6136): its probes run in child processes that set their own --exec-mode, in qcc
+        #   executables and with a module compiled by qcc
+        # - dataframe-inline-mask-subscript (#6141): its probes run in child processes that set their own --exec-mode
+        # - explicit-type-param-method-call (#5892): its probes run in child processes that set their own --exec-mode
+        #   and in qcc executables
+        # - generic-call-parse-type (#5896, #6151): its probes run in child processes that set their own --exec-mode
+        #   and in qcc executables
+        # - generic-method-hashdecl-paths (#5720, #5661): its probes run in child processes that set their own
+        #   --exec-mode, in qcc executables and in a qcc-compiled module
+        # - AOTInitParseOptions (#6189): its checks run in child processes that set their own --exec-mode and in qcc
+        #   executables
+        # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
+        #   under valgrind
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/classes/deleted-program-types.qtest",
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
+                                 "examples/test/qore/classes/explicit-type-param-method-call.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",
+                                 "examples/test/qore/operators/relative-date-overflow.qtest",
+                                 "examples/test/qore/operators/relative-date-multiply.qtest",
+                                 "examples/test/qore/functions/generic-call-parse-type.qtest",
+                                 "examples/test/qore/classes/generic-method-hashdecl-paths.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
                                  "examples/test/ir/AOTNamedCallRefModules.qtest",
                                  "examples/test/ir/AOTRuntimeNamedCallReturnType.qtest",
+                                 "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
                                  "examples/test/qore/parser/nested-callable-types.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit.qtest",
@@ -235,7 +261,11 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-8.qtest",
                                  "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest",
                                  "modules/dataframe/test/dataframe-default-encoding.qtest",
-                                 "modules/dataframe/test/dataframe-default-encoding-names.qtest"]),
+                                 "modules/dataframe/test/dataframe-default-encoding-names.qtest",
+                                 "modules/dataframe/test/dataframe-aot-plugin-helpers.qtest",
+                                 "modules/dataframe/test/dataframe-plugin-exception-handler.qtest",
+                                 "modules/dataframe/test/dataframe-inline-mask-subscript.qtest",
+                                 "modules/dataframe/test/parquet-memory-pool.qtest"]),
                          sorted(non_harness_children))
 
     def test_children_tests_check_nothing_in_their_own_process(self):

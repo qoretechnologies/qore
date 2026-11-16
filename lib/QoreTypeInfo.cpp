@@ -984,6 +984,18 @@ QoreTypeOwner::~QoreTypeOwner() {
     r.live.erase(this);
 }
 
+size_t qore_count_live_user_type_owners() {
+    QoreTypeOwnerRegistry& r = type_owner_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    size_t count = 0;
+    for (const QoreTypeOwner* o : r.live) {
+        if (!o->isTypeOwnerSystem()) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 bool qore_type_owner_is_live(const QoreTypeOwner* owner) {
     QoreTypeOwnerRegistry& r = type_owner_registry();
     std::lock_guard<std::mutex> lock(r.m);
@@ -1036,6 +1048,15 @@ struct QoreTypeOwnerGroup {
 //! The groups not collected yet, guarded by ctl
 static std::set<QoreTypeOwnerGroup*> type_owner_groups;
 
+//! The declarations whose names are counted (they hold references to the declarations that they name), guarded by ctl
+/** Not destroyed: declarations are freed at static destruction too.  Library cleanup frees the declarations that only
+    each other keep (delete_qore_types())
+*/
+static std::set<QoreTypeOwner*>& type_owner_counted_registry() {
+    static std::set<QoreTypeOwner*>* registry = new std::set<QoreTypeOwner*>;
+    return *registry;
+}
+
 //! References the declarations that a declaration names, if they are known, except the members of its group; the
 //! caller holds ctl
 static void type_owner_count_names(QoreTypeOwner* o) {
@@ -1050,6 +1071,7 @@ static void type_owner_count_names(QoreTypeOwner* o) {
         o->type_owner_refs.push_back(n);
     }
     o->type_owner_names_counted = true;
+    type_owner_counted_registry().insert(o);
 }
 
 //! Marks the declarations that a declaration kept until library cleanup names, which are retired, not freed; the
@@ -1334,7 +1356,10 @@ release:
 void qore_type_owner_destroyed(QoreTypeOwner* owner) {
     if (type_owner_cleanup.load(std::memory_order_acquire)) {
         // at library cleanup (or after it, at static destruction), the declarations that this one referenced are
-        // released directly: the lock and the release queue may be gone; no other thread decides then
+        // released directly: the lock and the release queue may be gone; no other thread decides then, and the
+        // registry is not locked for the same reason (the threads of the library have ended, and no declaration is
+        // decided by another thread once type_owner_cleanup is set)
+        type_owner_counted_registry().erase(owner);
         if (owner->type_owner_names_counted) {
             owner->type_owner_names_counted = false;
             std::vector<QoreTypeOwner*> refs;
@@ -1348,6 +1373,7 @@ void qore_type_owner_destroyed(QoreTypeOwner* owner) {
     std::vector<QoreTypeOwner*> release_list;
     {
         AutoLocker al(ctl);
+        type_owner_counted_registry().erase(owner);
         type_owner_uncount_names(owner, release_list);
         // a member of a group is freed only when the group has been collected, unless it is deleted with its class
         // object (qore_class_private::deref() with in_del): it leaves its group then
@@ -1545,6 +1571,94 @@ void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const 
     }
 }
 
+//! Finds the survivors of deleted Programs that only each other keep, with the references that they hold for their names
+//! and the others that they hold (base classes, import sources, parents of hashdecls); the caller holds ctl
+/** Nothing else can free such a cycle: each declaration is referenced by another one, and no value references any of
+    them.  A declaration that is referenced beyond the references that the declarations of the registry hold, or that
+    is held or named by a declaration that is, is not found.  A reference that a declaration does not list counts as
+    held from outside, which keeps the declaration and what it holds
+*/
+static void type_owner_find_cyclic_survivors(std::vector<QoreTypeOwner*>& garbage) {
+    std::set<QoreTypeOwner*> counted;
+    for (QoreTypeOwner* o : type_owner_counted_registry()) {
+        // a declaration without a reference is being destroyed (its destructor has not reached the registry yet)
+        if (o->type_owner_names_counted && !o->type_owner_retired && o->getTypeOwnerReferenceCount() > 0) {
+            counted.insert(o);
+        }
+    }
+    // the references that each declaration holds on declarations of the set
+    std::map<QoreTypeOwner*, std::vector<QoreTypeOwner*>> held;
+    std::map<QoreTypeOwner*, int> internal;
+    for (QoreTypeOwner* o : counted) {
+        std::vector<QoreTypeOwner*> refs(o->type_owner_refs);
+        o->getTypeOwnerHeldRefs(refs);
+        std::vector<QoreTypeOwner*>& in_set = held[o];
+        for (QoreTypeOwner* n : refs) {
+            if (counted.find(n) != counted.end()) {
+                in_set.push_back(n);
+                ++internal[n];
+            }
+        }
+    }
+    std::set<QoreTypeOwner*> keep;
+    std::vector<QoreTypeOwner*> work;
+    for (QoreTypeOwner* o : counted) {
+        auto i = internal.find(o);
+        if (o->getTypeOwnerReferenceCount() > (i == internal.end() ? 0 : i->second)) {
+            keep.insert(o);
+            work.push_back(o);
+        }
+    }
+    while (!work.empty()) {
+        QoreTypeOwner* m = work.back();
+        work.pop_back();
+        for (QoreTypeOwner* n : held[m]) {
+            if (keep.insert(n).second) {
+                work.push_back(n);
+            }
+        }
+        // a declaration that a kept one names must not be freed either, whether or not a reference is held for it
+        // (the pointers are only compared with the set: a name can be a freed declaration)
+        for (QoreTypeOwner* n : m->type_owner_names) {
+            if (counted.find(n) != counted.end() && keep.insert(n).second) {
+                work.push_back(n);
+            }
+        }
+    }
+    for (QoreTypeOwner* o : counted) {
+        if (keep.find(o) == keep.end()) {
+            garbage.push_back(o);
+        }
+    }
+}
+
+size_t qore_cyclic_type_owner_count() {
+    std::vector<QoreTypeOwner*> garbage;
+    AutoLocker al(ctl);
+    type_owner_find_cyclic_survivors(garbage);
+    return garbage.size();
+}
+
+namespace {
+//! Releases the references to declarations that it holds when it goes out of scope, also if an exception is thrown
+class QoreTypeOwnerReleaseGuard {
+public:
+    QoreTypeOwnerReleaseGuard() = default;
+    QoreTypeOwnerReleaseGuard(const QoreTypeOwnerReleaseGuard&) = delete;
+    QoreTypeOwnerReleaseGuard& operator=(const QoreTypeOwnerReleaseGuard&) = delete;
+
+    ~QoreTypeOwnerReleaseGuard() {
+        // a release can free declarations, whose destructors do not throw
+        for (QoreTypeOwner* o : refs) {
+            o->derefTypeOwner();
+        }
+    }
+
+    //! the references to release, in the order of the release
+    std::vector<QoreTypeOwner*> refs;
+};
+}
+
 void delete_qore_types() {
     // the retired class, hashdecl and enum declarations are freed first, as their destructors purge their types
     // from the caches deleted below; from now on, a declaration whose last reference is released is freed
@@ -1582,6 +1696,33 @@ void delete_qore_types() {
             } else if (!o->hasTypeOwnerReferences() && !o->type_owner_retiring) {
                 // one that another thread is retiring is freed when its last reference is released
                 o->freeTypeOwner();
+            }
+        }
+    }
+
+    // the survivors of deleted Programs that only each other keep (a cycle of declarations that name each other, or
+    // hold each other as base classes or sources) are freed now: they are in no list, and nothing else releases them
+    // (the Program of a module that they belong to is freed with them); no other thread decides declarations now
+    {
+        // declared first, so that it is destroyed last: the holds keep every one of them until the references that they
+        // hold for each other are released
+        QoreTypeOwnerReleaseGuard holds;
+        QoreTypeOwnerReleaseGuard names;
+        {
+            AutoLocker al(ctl);
+            std::vector<QoreTypeOwner*> garbage;
+            type_owner_find_cyclic_survivors(garbage);
+            // a hold is recorded only when it is taken, so a failure leaves nothing to release that was not referenced
+            holds.refs.reserve(garbage.size());
+            names.refs.reserve(garbage.size());
+            for (QoreTypeOwner* o : garbage) {
+                o->refTypeOwner();
+                holds.refs.push_back(o);
+            }
+            for (QoreTypeOwner* o : holds.refs) {
+                names.refs.insert(names.refs.end(), o->type_owner_refs.begin(), o->type_owner_refs.end());
+                o->type_owner_refs.clear();
+                o->type_owner_names_counted = false;
             }
         }
     }
@@ -2674,6 +2815,13 @@ const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti
     return qore_type_contains_type_parameter(ti)
         ? qore_substitute_type_params(ti, qore_get_current_receiver_type_info())
         : ti;
+}
+
+const TypedHashDecl* qore_substitute_hashdecl_type_params(const TypedHashDecl* hd) {
+    assert(hd);
+    const TypedHashDecl* rv = QoreTypeInfo::getUniqueReturnHashDecl(
+        qore_substitute_type_params_if_needed(hd->getTypeInfo()));
+    return rv ? rv : hd;
 }
 
 bool qore_resolve_explicit_type_param_instantiation(const QoreTypeParamInstantiation& inst,
@@ -8274,7 +8422,8 @@ qore_type_t qore_arith_runtime_result(QoreArithParseOp op, qore_type_t lt, qore_
             if (lt == NT_LIST || rt == NT_LIST) {
                 return NT_LIST;
             }
-            if (lt == NT_STRING || rt == NT_STRING) {
+            // a char is added as a one-character string
+            if (lt == NT_STRING || rt == NT_STRING || lt == NT_CHAR || rt == NT_CHAR) {
                 return NT_STRING;
             }
             if (lt == NT_DATE || rt == NT_DATE) {
@@ -8286,7 +8435,7 @@ qore_type_t qore_arith_runtime_result(QoreArithParseOp op, qore_type_t lt, qore_
             if (lt == NT_FLOAT || rt == NT_FLOAT) {
                 return NT_FLOAT;
             }
-            if (qore_arith_is_int(lt) || qore_arith_is_int(rt)) {
+            if (lt == NT_INT || rt == NT_INT) {
                 return NT_INT;
             }
             if (lt == NT_HASH) {

@@ -304,6 +304,32 @@ public:
     //! returns true if the number is an ordinary number (neither NaN nor an infinity)
     DLLEXPORT bool ordinary() const;
 
+    //! appends a binary key of the exact value of the number to the given string
+    /** Two numbers have the same key if and only if they have the same value, whatever their precisions: the key of
+        an ordinary number that is not zero is its sign, its binary exponent and the limbs of its significand, from
+        the most significant one to the last one that is not zero (a number of a higher precision with the same
+        value has only zero bits more); it is made with no string conversion and no allocation but that of the key.
+
+        The key of zero is the same for +0 and -0 (they are equal with the == operator), every NaN has one key (so
+        that the NaN values can be grouped, although NaN != NaN), and +inf and -inf have keys of their own.  The key
+        does not delimit itself: a caller that appends it to a key of several values must delimit it (with its
+        length, for example).  The bytes of a key depend on the platform (the size and byte order of a limb), so a
+        key can be compared with keys made in the same process only.
+
+        @param key the string to append the key to
+
+        @par Example:
+        @code{.cpp}
+        std::string a, b;
+        n1->appendExactKey(a);
+        n2->appendExactKey(b);
+        bool same_value = a == b;
+        @endcode
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void appendExactKey(std::string& key) const;
+
     //! returns the type information
     DLLLOCAL virtual int parseInit(QoreValue& val, QoreParseContext& parse_context);
 

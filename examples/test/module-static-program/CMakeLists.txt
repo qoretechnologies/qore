@@ -45,3 +45,7 @@ set_target_properties(staticpgmcode PROPERTIES
     SUFFIX "-api-${MODULE_API_MAJOR}.${MODULE_API_MINOR}.qmod"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/staticpgmcode")
 target_link_libraries(staticpgmcode PRIVATE libqore)
+
+# remove the files of these modules built for another module API (see qore_remove_stale_module_api_files())
+qore_remove_stale_module_api_files(staticpgm)
+qore_remove_stale_module_api_files(staticpgmcode)

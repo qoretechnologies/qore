@@ -35,12 +35,16 @@ static void secondsCases() {
             7730941129200LL, -7730941132800LL}) {
         for (int micros : {-2147483647 - 1, -1000001, -999999, -1, 0, 1, 999999, 1000001, 2147483647}) {
             const int64 expected_us = seconds * 1000000 + micros;
-            std::unique_ptr<DateTime> value(DateTime::makeRelativeFromSeconds(seconds, micros));
+            ExceptionSink xsink;
+            std::unique_ptr<DateTime> value(DateTime::makeRelativeFromSeconds(seconds, micros, &xsink));
+            require(value && !xsink, "DateTime::makeRelativeFromSeconds() raised an exception");
             check(*value, expected_us);
-            SimpleRefHolder<DateTimeNode> node(DateTimeNode::makeRelativeFromSeconds(seconds, micros));
+            SimpleRefHolder<DateTimeNode> node(DateTimeNode::makeRelativeFromSeconds(seconds, micros, &xsink));
+            require(*node && !xsink, "DateTimeNode::makeRelativeFromSeconds() raised an exception");
             check(**node, expected_us);
             DateTime assigned(false);
-            assigned.setRelativeDateSeconds(seconds, micros);
+            require(!assigned.setRelativeDateSeconds(seconds, micros, &xsink) && !xsink,
+                "DateTime::setRelativeDateSeconds() raised an exception");
             check(assigned, expected_us);
         }
         QoreValue input(seconds);
@@ -52,10 +56,12 @@ static void secondsCases() {
         check(converted, seconds * 1000000);
         SimpleRefHolder<DateTimeNode> converted_node(new DateTimeNode(input));
         check(**converted_node, seconds * 1000000);
+        ExceptionSink xsink;
         DateTime added(true);
-        added.addSecondsTo(seconds);
+        require(!added.addSecondsTo(seconds, 0, &xsink) && !xsink, "DateTime::addSecondsTo() raised an exception");
         check(added, seconds * 1000000);
-        std::unique_ptr<DateTime> sum(origin->add(converted));
+        std::unique_ptr<DateTime> sum(origin->add(converted, &xsink));
+        require(sum && !xsink, "DateTime::add() raised an exception");
         require(sum->getEpochSecondsUTC() - origin->getEpochSecondsUTC() == seconds,
             "absolute-date addition lost elapsed seconds");
         require(sum->getMicrosecond() == 123456, "absolute-date addition lost microseconds");
@@ -73,13 +79,32 @@ static void secondsCases() {
     for (int64 seconds : {7730941132800LL, -7730941136400LL}) {
         int micros = seconds > 0 ? -1 : 1;
         int64 expected_us = seconds * 1000000 + micros;
-        std::unique_ptr<DateTime> value(DateTime::makeRelativeFromSeconds(seconds, micros));
+        ExceptionSink xsink;
+        std::unique_ptr<DateTime> value(DateTime::makeRelativeFromSeconds(seconds, micros, &xsink));
+        require(value && !xsink, "DateTime::makeRelativeFromSeconds() raised an exception");
         check(*value, expected_us);
-        SimpleRefHolder<DateTimeNode> node(DateTimeNode::makeRelativeFromSeconds(seconds, micros));
+        SimpleRefHolder<DateTimeNode> node(DateTimeNode::makeRelativeFromSeconds(seconds, micros, &xsink));
+        require(*node && !xsink, "DateTimeNode::makeRelativeFromSeconds() raised an exception");
         check(**node, expected_us);
         DateTime assigned(false);
-        assigned.setRelativeDateSeconds(seconds, micros);
+        require(!assigned.setRelativeDateSeconds(seconds, micros, &xsink) && !xsink,
+            "DateTime::setRelativeDateSeconds() raised an exception");
         check(assigned, expected_us);
+    }
+    // one hour more is out of range: the overloads with an exception sink raise INVALID-DATE (issue #6103)
+    for (int64 seconds : {7730941132800LL, -7730941136400LL}) {
+        ExceptionSink xsink;
+        std::unique_ptr<DateTime> value(DateTime::makeRelativeFromSeconds(seconds, 0, &xsink));
+        require(!value && xsink, "DateTime::makeRelativeFromSeconds() did not raise an exception");
+        xsink.clear();
+        SimpleRefHolder<DateTimeNode> node(DateTimeNode::makeRelativeFromSeconds(seconds, 0, &xsink));
+        require(!*node && xsink, "DateTimeNode::makeRelativeFromSeconds() did not raise an exception");
+        xsink.clear();
+        DateTime assigned(false);
+        require(assigned.setRelativeDateSeconds(seconds, 0, &xsink) && xsink,
+            "DateTime::setRelativeDateSeconds() did not raise an exception");
+        xsink.clear();
+        ++cases;
     }
 }
 

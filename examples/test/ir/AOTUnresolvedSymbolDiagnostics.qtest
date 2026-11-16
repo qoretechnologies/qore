@@ -41,6 +41,7 @@ class AOTUnresolvedSymbolDiagnosticsTest inherits QUnit::Test {
         addTestCase("a missing enum member or enum is named", \missingEnum());
         addTestCase("a missing class or hashdecl is named", \missingClassOrHashdecl());
         addTestCase("a cast to a missing class raises an error", \castToMissingClass());
+        addTestCase("a cast in a default argument is applied, and a missing cast type is named", \castInDefault());
         set_return_value(main());
     }
 
@@ -106,11 +107,13 @@ class AOTUnresolvedSymbolDiagnosticsTest inherits QUnit::Test {
     public hashdecl NewEvent { int y = 2; }
     public class Box { int get() { return 1; } }
     public class NewBox { int get() { return 2; } }
+    public auto sub value(auto v) { return v; }
 }
 ");
         writeText(dir + "/provider-old/Prov.qm", header + "public namespace Prov {
     public enum Kind { A = 0 }
     public class Box { int get() { return 1; } }
+    public auto sub value(auto v) { return v; }
 }
 ");
     }
@@ -243,6 +246,96 @@ public namespace ClassCons {
                 ("--exec-mode=" + mode, "-ne", "%requires ClassCons\nprintf(\"%d\\n\", ClassCons::newHash());"));
             assertNeq(0, res.status, mode + ": " + res.output);
             assertTrue(res.output =~ /Prov::NewEvent/, mode + ": the error names the hashdecl: " + res.output);
+        }
+    }
+
+    #! a cast in a default argument (an expression read with the module) is applied; a cast type that is missing
+    #! when the module is loaded makes it fail to load with the type, instead of the cast giving no value (qore#6125)
+    castInDefault() {
+        string dir = makeDirs("aot-cast-in-default-");
+        on_exit remove_tree(dir);
+        writeProviders(dir);
+        compileModule(dir, "DefCons", "%requires Prov
+public namespace DefCons {
+    public auto sub enumCast(auto x = cast<*Prov::NewKind>(Prov::value(0))) { return x; }
+    public auto sub plainEnumCast(auto x = cast<Prov::Kind>(Prov::value(0))) { return x; }
+    public auto sub listCast(auto x = cast<*list<Prov::NewKind>>(Prov::value(NOTHING))) { return x; }
+    public auto sub hashCast(auto x = cast<*hash<string, Prov::NewKind>>(Prov::value(NOTHING))) { return x; }
+    public auto sub classCast(auto x = cast<*Prov::NewBox>(Prov::value(NOTHING))) { return x; }
+    public auto sub closureEnumCast() {
+        code c = auto sub (auto x = cast<*Prov::NewKind>(Prov::value(0))) { return x; };
+        return c();
+    }
+}
+", modulePath(dir + "/provider-new"));
+
+        string code = "%requires Prov\n%requires DefCons\n"
+            "printf(\"%y %y\\n\", DefCons::enumCast().typeCode() == NT_INT ? \"int\" : DefCons::enumCast(), "
+            "DefCons::enumCast() == Prov::NewKind::X);\n"
+            "printf(\"%y %y %y %y %y\\n\", DefCons::plainEnumCast() == Prov::Kind::A, DefCons::listCast(), "
+            "DefCons::hashCast(), DefCons::classCast(), DefCons::closureEnumCast() == Prov::NewKind::X);\n";
+        hash<auto> ref = runQore(dir, modulePath(dir + "/src", dir + "/provider-new"), ("--exec-mode=ast", "-ne",
+            code));
+        assertEq(0, ref.status, ref.output);
+        # the enum casts give the enum value
+        assertRegex("True\n(True null null null True)\n$", ref.output, ref.output);
+        foreach string mode in (Modes) {
+            hash<auto> res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-new"),
+                ("--exec-mode=" + mode, "-ne", code));
+            assertEq(0, res.status, mode + ": " + res.output);
+            assertEq(ref.output, res.output, mode);
+        }
+
+        # against the older provider, the module fails to load naming the cast type
+        foreach string mode in (Modes) {
+            hash<auto> res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-old"),
+                ("--exec-mode=" + mode, "-ne", code));
+            assertNeq(0, res.status, mode + ": " + res.output);
+            assertRegex("cannot resolve the target type '[^']*Prov::(NewKind|NewBox)[^']*' of an? [a-z]+ cast",
+                res.output, mode + ": " + res.output);
+        }
+
+        # each kind of cast on its own, also as the argument of a constructor of a typed container: the cast is
+        # applied with the provider, and the error of its type is the error of the module without it
+        hash<string, hash<auto>> kinds = {
+            "DefEnumOnly": {"expr": "cast<*Prov::NewKind>(Prov::value(0))", "result": "True",
+                "check": "== Prov::NewKind::X",
+                "error": "cannot resolve the target type '\\*enum<Prov::NewKind>' of an enum cast"},
+            "DefListOnly": {"expr": "cast<*list<Prov::NewKind>>(Prov::value(NOTHING))", "result": "True",
+                "check": "=== NOTHING",
+                "error": "cannot resolve the target type '\\*list<enum<Prov::NewKind>>' of a list cast"},
+            "DefHashOnly": {"expr": "cast<*hash<string, Prov::NewKind>>(Prov::value(NOTHING))", "result": "True",
+                "check": "=== NOTHING",
+                "error": "cannot resolve the target type '\\*hash<string, enum<Prov::NewKind>>' of a hash cast"},
+            "DefClassOnly": {"expr": "cast<*Prov::NewBox>(Prov::value(NOTHING))", "result": "True",
+                "check": "=== NOTHING",
+                "error": "cannot resolve the target type 'Prov::NewBox \\(module Prov\\)' of a class cast"},
+            "DefNewList": {"expr": "new list<auto>(cast<*Prov::NewKind>(Prov::value(0)))", "result": "True",
+                "check": "== (Prov::NewKind::X,)",
+                "error": "cannot resolve the target type '\\*enum<Prov::NewKind>' of an enum cast"},
+            "DefNewHash": {"expr": "new hash<string, auto>(cast<*hash<string, Prov::NewKind>>("
+                "Prov::value({})))", "result": "True", "check": "== {}",
+                "error": "cannot resolve the target type '\\*hash<string, enum<Prov::NewKind>>' of a hash cast"},
+            "DefNewHashdecl": {"expr": "new hash<Prov::NewEvent>()", "result": "True", "check": ".y == 2",
+                "error": "cannot resolve the hashdecl 'Prov::NewEvent' of a hashdecl constructor"},
+        };
+        foreach hash<auto> i in (kinds.pairIterator()) {
+            compileModule(dir, i.key, sprintf("%%requires Prov\npublic namespace %s {\n"
+                "    public auto sub f(auto x = %s) { return x; }\n}\n", i.key, i.value.expr),
+                modulePath(dir + "/provider-new"));
+            string kcode = sprintf("%%requires Prov\n%%requires %s\nprintf(\"%%y\\n\", %s::f() %s);\n", i.key,
+                i.key, i.value.check);
+            foreach string mode in (Modes) {
+                hash<auto> res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-new"),
+                    ("--exec-mode=" + mode, "-ne", kcode));
+                assertEq(0, res.status, i.key + " " + mode + ": " + res.output);
+                assertEq(i.value.result + "\n", res.output, i.key + " " + mode);
+                res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-old"),
+                    ("--exec-mode=" + mode, "-ne", kcode));
+                assertNeq(0, res.status, i.key + " " + mode + ": " + res.output);
+                assertRegex(i.value.error, res.output,
+                    i.key + " " + mode + ": " + res.output);
+            }
         }
     }
 

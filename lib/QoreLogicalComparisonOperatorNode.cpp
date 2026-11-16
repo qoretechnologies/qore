@@ -254,8 +254,9 @@ int QoreLogicalComparisonOperatorNode::doComparison(const QoreValue& left, const
         return li == ri ? 0 : 1;
     }
 
-    DateTimeValueHelper ld(l);
-    DateTimeValueHelper rd(r);
+    // a number converted to a relative date out of range raises INVALID-DATE (qore#6103)
+    DateTimeValueHelper ld(l, xsink);
+    DateTimeValueHelper rd(r, xsink);
 
     return (int)DateTime::compareDates(*ld, *rd);
 }

@@ -2275,11 +2275,10 @@ auto channel_select(list<auto> cases, timeout timeout = 0) [flags=NAMED_ARGS,CUR
         ci.channel->registerExternalWaiter(waiter);
     }
 
-    // Helper to get current time in milliseconds since epoch
+    // Helper to get the monotonic clock in milliseconds: the timeout is an interval, which a step of the system clock
+    // must not end or extend (#6150)
     auto now_ms = []() -> int64 {
-        int us;
-        int64 secs = q_epoch_us(us);
-        return secs * 1000 + us / 1000;
+        return q_get_monotonic_us() / 1000;
     };
 
     // Track user timeout via deadline

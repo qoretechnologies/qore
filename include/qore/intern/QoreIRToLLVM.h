@@ -54,11 +54,13 @@ class FunctionEntry;
 
 class QoreIRFunction;
 struct QoreJITObjectLayout;
+class QoreCallTargetCheckCache;
 class QoreIRBasicBlock;
 class QoreIRInstruction;
 class QoreIRPhiInstruction;
 class AbstractQoreFunctionVariant;
 struct AOTSlotMap;
+struct QorePluginLLVMCodegenInfo;
 class QoreIRToLLVM {
 public:
     explicit QoreIRToLLVM(llvm::LLVMContext& context) : ctx(context) {
@@ -251,6 +253,11 @@ private:
     // Callee AOT contexts loaded once in the logical function entry, keyed by
     // expression slot. The context mapping is immutable during an invocation.
     std::unordered_map<int32_t, llvm::Value*> aot_call_target_contexts;
+    // The callee AOT contexts and fast entries of the calls of other modules' functions (qore#6035), loaded once in
+    // the logical function entry like aot_call_target_contexts
+    std::unordered_map<int32_t, std::pair<llvm::Value*, llvm::Value*>> aot_cross_module_targets;
+    // The buffer of the state of a call of another module's function, in the function's entry block
+    llvm::AllocaInst* cross_module_call_state_storage = nullptr;
 
     // Exact-class checks for stable local receivers, materialized once in the
     // logical function entry. Object validity remains guarded at each call.
@@ -1273,6 +1280,26 @@ private:
             bool require_exact_object_class = false,
             const std::vector<uint8_t>* date_kind_guards = nullptr);
 
+    //! Emits the entry into the Program of another module's function before its native call (qore#6035)
+    /** qore_rt_enter_cross_module_call() enters the Program with the state that the runtime call path sets up
+        (qore_rt_call_direct_aot()); the insert point is then the block of the call.
+
+        @return the block taken if the Program cannot be entered: the call is not made and the exception is left in
+        the caller's exception sink; emitLeaveCrossModuleCall() completes it
+    */
+    llvm::BasicBlock* emitEnterCrossModuleCall(llvm::Module& module, llvm::Function* llvm_func, int32_t slot);
+
+    //! Emits the call of another module's function through @a fast_fn, the fast entry that its module registered
+    llvm::Value* emitCrossModuleFastEntryCall(const BatchCalleeInfo& callee_info, llvm::Value* fast_fn,
+            const std::vector<llvm::Value*>& call_args);
+
+    //! Emits the exit from the Program entered by emitEnterCrossModuleCall()
+    /** @return the call's result, or the zero value of the fast entry's return kind if the Program could not be
+        entered (@a skip_bb)
+    */
+    llvm::Value* emitLeaveCrossModuleCall(llvm::Module& module, llvm::Function* llvm_func,
+            const BatchCalleeInfo& callee_info, llvm::Value* call_result, llvm::BasicBlock* skip_bb);
+
     //! Returns @a can_use_fast_entry ANDed with the date kind checks @a date_kind_guards of a call's arguments
     /** @a date_kind_guards has a QoreDateKindGuardFlags entry (0: no check) per argument, as set by
         qore_ir_fast_entry_args_need_no_binding(); the check of a date argument for a date<absolute> or date<relative>
@@ -1567,7 +1594,24 @@ private:
 
     //! Emits the inline test that @a qv is an object that has not been deleted, with the layout of the running
     //! libqore (JIT only; QoreIROpcode::CheckCallTarget, issue #5784)
-    llvm::Value* emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout, llvm::Function* llvm_func);
+    llvm::Value* emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout, llvm::Function* llvm_func,
+        const QoreClass* qc = nullptr, const QoreClass* method_qc = nullptr);
+
+    //! Emits the inline test of the cache of a call site (QoreCallTargetCheckCache::hit()) for code that always runs
+    //! with the class context @a class_ctx (QoreIRFunction::static_call_context): true if @a qv is an object that has
+    //! not been deleted and the cache knows that a lookup by name finds a method for its class (JIT only, issue #5824)
+    /** An entry is made only after a full check found the lookup stable in the Program of the code; the epoch of the
+        entry changes when that can stop being so (a Program or a class is released, module lifetime ends), so the
+        stability is not tested again
+    */
+    llvm::Value* emitCallTargetCacheHitInline(const QoreCallTargetCheckCache* cache,
+        const qore_class_private* class_ctx, llvm::Value* qv, const QoreJITObjectLayout& layout,
+        llvm::Function* llvm_func);
+
+    //! Emits the fast test of QoreIROpcode::CheckCallTarget: true if @a target needs no other check (a method call
+    //! resolved at parse time on an object of its class that has not been deleted; issues #5784, #5824)
+    llvm::Value* emitCallTargetFastTest(const QoreIRExprInstruction* check, uint64_t call_bits, llvm::Value* target,
+        llvm::Module& module, llvm::Function* llvm_func);
 
     // Inline qore_rt_ref - reference count a value if it's a node
     // Returns the value unchanged if not a node, or qore_rt_refself result if node
@@ -1586,9 +1630,17 @@ private:
     // Uses LLVM branches to check INT48 tag and sign-extend inline, falling back to runtime
     // only for QoreBigIntNode values.  ~2x faster than ensureIntType for common INT48 values.
     llvm::Value* ensureIntTypeInline(llvm::Value* val, uint32_t value_id);
-    //! Converts a boxed value to a native int: an integer in the boxed value inline, any other value with
-    //! qore_rt_to_int()
-    llvm::Value* emitBoxedToIntInline(llvm::Value* val);
+    //! Converts a boxed value to a native int: an integer in the boxed value inline, any other value with the
+    //! runtime helper given (qore_rt_to_int() by default)
+    llvm::Value* emitBoxedToIntInline(llvm::Value* val, const char* slow_helper = "qore_rt_to_int");
+    //! Converts the operand of += on an integer lvalue to a native int: as ensureIntTypeInline(), except that a
+    //! char is converted as its one-character string is (qore_rt_plus_equals_operand_to_int()); the result is not
+    //! cached as the value's int conversion
+    llvm::Value* ensurePlusEqualsIntOperandInline(llvm::Value* val, uint32_t value_id);
+    //! Returns true if the IR value can hold a char at runtime: it is boxed, and its type does not exclude a char
+    bool irValueMayBeChar(uint32_t value_id) const;
+    //! Returns true if the IR value can be NOTHING at runtime, as far as its facts show
+    bool irValueMayBeNothing(uint32_t value_id) const;
     //! Returns the type path argument of the return type of a method that AOT-compiled code reads a member for
     //! directly (a getter, an assignment or a compound assignment that returns the member), or a null pointer
     //! when the return type accepts no value
@@ -1726,11 +1778,56 @@ private:
     // Update specialized runtime catch-scope state around CatchException,
     // CatchCleanup, and Rethrow lowering.
     void emitCatchScopeEnter(llvm::Module& module);
+    //! Closes the catch blocks of the frame that are still open on an exception exit of the frame (#5968)
+    void emitExceptionExitCatchUnwind(llvm::Module& module);
     void emitCatchScopeExit(unsigned count);
 
     // Publish current LLVM local allocas to the runtime local stack before
     // deferred handlers execute through AST/IR and read parent locals.
     void syncLocalsToRuntimeForHandlers(llvm::Module& module);
+
+    //! true if the code that runs pending handlers uses the table-driven helpers (qore#6110)
+    /** The code of each place that runs the pending handlers (see emitOnBlockExitExec()) published every local of the
+        function to the runtime and reloaded it afterwards, inline, so a function with many handlers and many locals
+        had code in the product of the two.  The places of a function over a size (shouldUseObeTables()) call helpers
+        with a table of the locals that they cover instead: the records of the locals are written once in the entry
+        block (obe_entries), and each table is a constant array of record indexes.
+    */
+    bool obe_table_mode = false;
+    //! the array of the records (QoreObeLocal) of the locals that the tables cover, in the entry block
+    llvm::AllocaInst* obe_entries = nullptr;
+    //! the local of each record of obe_entries
+    std::vector<const void*> obe_entry_keys;
+    //! the index of the record of each local
+    std::unordered_map<const void*, uint32_t> obe_entry_index;
+    //! the constant tables that were made, by their content
+    std::map<std::vector<uint32_t>, llvm::GlobalVariable*> obe_tables;
+
+    //! Returns true if the places that run the pending handlers of \a func use the table-driven helpers
+    /** True if the estimated size of the inline code (handlers x 2 x 18 x (locals + 1) instructions) is over
+        QORE_JIT_OBE_TABLE_BUDGET (default 8192; 0 for every function that has handlers)
+    */
+    bool shouldUseObeTables(const QoreIRFunction& func) const;
+    //! Returns the index of the record of the local in obe_entries, adding it if it has none
+    uint32_t getObeEntryIndex(const void* key);
+    //! Returns the constant table with the entries, which is shared by the places that have the same
+    llvm::Value* getObeTable(llvm::Module& module, const std::vector<uint32_t>& entries);
+    //! Creates the reload storage of the local (tracker, deferred slot and valid epoch) as the inline code does
+    void ensureLocalReloadStorage(const void* key, llvm::Function* llvm_func);
+    //! Publishes the locals to the runtime with qore_rt_obe_publish(); returns false, emitting nothing, if a local
+    //! has a native cache (the inline code publishes it)
+    bool publishLocalsViaTable(llvm::Module& module);
+    //! Reloads the locals from the runtime after handlers ran with qore_rt_obe_reload()
+    void reloadLocalsViaTable(llvm::Module& module, llvm::Function* llvm_func, bool honor_reload_exempt);
+    //! Releases the reload storage of the locals with qore_rt_obe_release(); as releaseLocalReloadStorage()
+    std::vector<const void*> releaseLocalReloadStorageViaTable(llvm::Module& module);
+    //! Returns the locals whose reload storage releaseLocalReloadStorage() releases, in the order of its release
+    std::vector<const void*> getReleasedReloadLocals();
+    //! Writes the records of obe_entries in the entry block, once the function is lowered
+    void finalizeObeEntries(llvm::Function* llvm_func);
+    //! Calls the helper \a name with the records and the table
+    llvm::CallInst* emitObeCall(llvm::Module& module, const char* name, const std::vector<uint32_t>& entries,
+        bool with_epoch);
 
     //! Publishes the locals to the runtime local stack before handlers run out of line (see the definition)
     void publishLocalsForHandlers(llvm::Module& module);
@@ -2171,6 +2268,28 @@ private:
     //! Returns the location of a call that AOT code makes, for the frame of the call: the constant location of the
     //! instruction, or a null pointer
     llvm::Constant* getAotCallLocation(const QoreIRInstruction* inst, llvm::Module& module);
+    //! Emits the call of the runtime helper of a plugin operation with an LLVM codegen extension in AOT code
+    /** The extension's code names a symbol of the plugin module, which AOT code cannot link (qore#6130); AOT code
+        calls the operation's runtime helper instead, through a pointer that the call site resolves on its first
+        call and caches (qore_rt_plugin_operation_helper_aot()), as the JIT calls it directly.
+
+        @return the call's result (QoreValue bits), or nullptr if the operation's helper ABI is not that of a unary,
+        binary or subscript value operation of the instruction's opcode; the caller then emits the generic dispatch
+    */
+    llvm::Value* emitAOTPluginHelperCall(const QoreIRPluginInstruction* inst, const QorePluginLLVMCodegenInfo& info,
+            const std::vector<llvm::Value*>& operands, llvm::Module& module, llvm::Function* llvm_func);
+    //! Emits the process-global id of a plugin operation that AOT code dispatches generically (qore#6136)
+    /** Process-global ids are assigned when plugin modules are loaded, so AOT code names the operation by its
+        module-local reference; the call site resolves the id on its first call and caches it
+        (qore_rt_plugin_operation_id_aot()).  An operation that cannot be resolved raises an exception and gives id
+        0, which the dispatch helpers refuse without raising another one.
+    */
+    llvm::Value* emitAOTPluginOperationId(const QoreIRPluginInstruction* inst, const QorePluginLLVMCodegenInfo& info,
+            llvm::Module& module, llvm::Function* llvm_func);
+    //! Returns the arguments that name a plugin operation by its module-local reference in AOT code: the module name,
+    //! the plugin-local id, the canonical signature version and the signature hash that the code was compiled for
+    std::vector<llvm::Value*> getAOTPluginOperationRefArgs(const QoreIRPluginInstruction* inst,
+            const QorePluginLLVMCodegenInfo& info);
     //! Emits the pop of the frame pushed by emitPushNativeCallFrame() or emitPushNativeCallFrameAOT()
     void emitPopNativeCallFrame(llvm::Module& module);
     //! Returns true if a direct native call of \a callee from the function being lowered must switch to the

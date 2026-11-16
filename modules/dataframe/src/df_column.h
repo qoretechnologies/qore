@@ -16,9 +16,13 @@
 
 #include <Eigen/Dense>
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
+#include <cmath>
 #include <cstdint>
+#include <cstring>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -143,6 +147,13 @@ static inline int dataFrameDateMicros(const DateTimeNode* dt, int64_t& out, Exce
     }
     return dataFrameDateOutOfRange(dt, xsink);
 }
+
+//! The kind of a date stored in a date cell, as DateTime::getEpochMicrosecondsUTCCheckedKind() returns it
+//! (qore#6107)
+enum DataFrameDateKind : int {
+    DFDK_ABSOLUTE = 1,
+    DFDK_RELATIVE = 2,
+};
 
 //! Compares two values as the core <=> operator does (qore#6097)
 /** @param cmp the result: -1, 0 or 1
@@ -358,8 +369,162 @@ DLLLOCAL void markScanColumnValuesStored(QoreObject& self, const std::vector<Col
 */
 DLLLOCAL bool scanColumnValues(const std::vector<Column>& columns, QorePrivateDataScanner& scanner);
 
+//! Appends the tag and the key of a float to a key: its bits, with -0.0 as 0.0 and every NaN as one NaN
+/** Two floats have the same key if they are equal (as with the == operator) or both NaN (qore#6107).
+*/
+static inline void appendDataFrameFloatKey(std::string& key, char tag, double value) {
+    if (value == 0.0) {
+        // -0.0 == 0.0
+        value = 0.0;
+    } else if (std::isnan(value)) {
+        // the NaN values make one group
+        value = std::numeric_limits<double>::quiet_NaN();
+    }
+    uint64_t bits;
+    std::memcpy(&bits, &value, sizeof(bits));
+    key += tag;
+    key.append(reinterpret_cast<const char*>(&bits), sizeof(bits));
+}
+
+//! Makes a duration of the given seconds and microseconds; the seconds of a relative date are an int, so a duration
+//! of more seconds than an int holds (about 68 years) is made of days and seconds (qore#6107)
+/** The days must fit in an int, as they do for the microseconds of a date cell; a caller with more seconds checks
+    them first.
+*/
+static inline DateTimeNode* dataFrameMakeDuration(int64_t seconds, int microseconds) {
+    if (seconds >= std::numeric_limits<int>::min() && seconds <= std::numeric_limits<int>::max()) {
+        return DateTimeNode::makeRelative(0, 0, 0, 0, 0, static_cast<int>(seconds), microseconds);
+    }
+    return DateTimeNode::makeRelative(0, 0, static_cast<int>(seconds / 86400), 0, 0,
+        static_cast<int>(seconds % 86400), microseconds);
+}
+
+//! Gives a date column made of the cells of another the columnar schema of the other (its time unit and zone, or
+//! that its dates are durations), with no name, so that its cells are returned and exported as those of the other
+//! (qore#6107)
+static inline void dataFrameCopyDateSchema(ColumnData& dest, const ColumnData& src) {
+    if (src.type == ColumnType::DATE && src.has_columnar_schema) {
+        dest.columnar_schema = src.columnar_schema;
+        dest.columnar_schema.name.clear();
+        dest.has_columnar_schema = true;
+    }
+}
+
+//! Gives a column made of the cells of another the columnar schema of the other (a decimal128, float32 or timestamp
+//! schema, for example), with no name, so that its cells are returned and exported as those of the other (qore#6116)
+static inline void dataFrameCopySchema(ColumnData& dest, const ColumnData& src) {
+    if (src.has_columnar_schema) {
+        dest.columnar_schema = src.columnar_schema;
+        dest.columnar_schema.name.clear();
+        dest.has_columnar_schema = true;
+    }
+}
+
+//! Merges the columnar schema of a column into a schema for the cells of several columns of one type (qore#6116)
+/** The first column gives the schema (has_schema and schema, with no name); each other column is merged into it:
+    two decimal128 schemas make one with the largest number of integer digits and the largest scale (if it has at most
+    38 digits), two temporal schemas one with the time unit "us" if their units differ and the time zone "UTC" if
+    their zones differ (a plain date column is one of absolute dates in microseconds with no time zone), and a
+    column that is nullable makes the schema nullable.
+
+    @return true if the schema holds the cells of the column exactly, false if the columns cannot share one schema
+    (columns of different types, a column of durations and one of absolute dates, decimals of more than 38 digits,
+    buffers of different element types)
+*/
+DLLLOCAL bool dataFrameMergeColumnSchema(bool& has_schema, QoreColumnarTypeDescriptor& schema,
+        const ColumnData& first, const ColumnData& src);
+
+//! Returns true if the column is a decimal column: one that holds any value (numbers) with a decimal128 schema
+static inline bool dataFrameIsDecimalColumn(const ColumnData& cd) {
+    return cd.type == ColumnType::AUTO && cd.has_columnar_schema
+        && cd.columnar_schema.kind == QoreColumnarTypeKind::Decimal128;
+}
+
+//! Gives the decimal schema of columns that are int64 and decimal columns, with at least one of each (qore#6144)
+/** An int64 column counts as a decimal(19, 0) column: the schema has the largest number of integer digits and the
+    largest scale of the columns, with the other fields of the first decimal schema, no native type, and nullable if
+    a decimal schema is nullable or an int64 column has a null value (the schema of an int64 column is not read);
+    if it would have more than 38 digits, there is none (has_schema is false), and the columns make a
+    column that holds their exact values with no schema, as for the other decimal merges
+    (dataFrameMergeColumnSchema()).
+
+    @return true if the columns are int64 and decimal columns, with at least one of each, false otherwise (the
+    schema is then not set)
+*/
+DLLLOCAL bool dataFrameIntDecimalSchema(const std::vector<const ColumnData*>& cols, bool& has_schema,
+        QoreColumnarTypeDescriptor& schema);
+
+//! Returns true if the columns are int64 and decimal columns, with at least one of each, with no scan of their
+//! cells (qore#6144)
+DLLLOCAL bool dataFrameIntDecimalTypes(const std::vector<const ColumnData*>& cols);
+
+//! Returns a value of a column merged into a decimal column (qore#6144): an int of an int64 column as a number,
+//! which holds it exactly, and any other value as it is, referenced
+DLLLOCAL QoreValue dataFrameDecimalValue(const ColumnData& cd, int64_t row, ExceptionSink* xsink);
+
+//! Appends the key of an arbitrary-precision number, as the key of a value of a column that holds any value
+//! (qore#6144)
+DLLLOCAL void dataFrameAppendNumberKey(std::string& key, const QoreNumberNode* n);
+
+//! Makes a date column a column of durations: gives it the columnar schema of durations in microseconds, so that
+//! its cells are returned as relative dates (qore#6107)
+DLLLOCAL void dataFrameSetDurationSchema(ColumnData& col);
+
+//! Appends the key of a value of a column that holds any value: its type and its exact value (qore#6107)
+/** The key tells every two values apart that are not equal or not of the same type; it delimits itself (each part
+    has its tag, and a part of any length its length), so it can be appended to a key of several values with no
+    length of its own.
+*/
+DLLLOCAL void dataFrameAppendAutoValueKey(std::string& key, QoreValue v);
+
+//! Appends the length of a part of a key and the part
+static inline void appendDataFrameKeyBytes(std::string& key, const char* data, size_t len) {
+    uint64_t n = len;
+    key.append(reinterpret_cast<const char*>(&n), sizeof(n));
+    key.append(data, len);
+}
+
+//! Appends the key of a cell that is not null: the key of its value as a column that holds any value keys it
+//! (dataFrameAppendAutoValueKey()), whatever the type of the column, so that equal values of the same type in two
+//! columns of different storage (an int64 column and a column that holds any value) make the same key (qore#6116)
+static inline void dataFrameAppendCellKey(std::string& key, const ColumnData& cd, int64_t row) {
+    assert(!cd.isNull(row));
+    switch (cd.type) {
+        case ColumnType::FLOAT64:
+            appendDataFrameFloatKey(key, 'g', cd.float_data(row));
+            return;
+        case ColumnType::INT64: {
+            int64 iv = cd.int_data[row];
+            key += 'i';
+            key.append(reinterpret_cast<const char*>(&iv), sizeof(iv));
+            return;
+        }
+        case ColumnType::STRING:
+            // a string cell is in UTF-8
+            key += 's';
+            appendDataFrameKeyBytes(key, cd.str_data[row].data(), cd.str_data[row].size());
+            return;
+        case ColumnType::BOOL:
+            key += cd.bool_data[row] ? 'T' : 'F';
+            return;
+        case ColumnType::DATE: {
+            // a date cell is in the range of an int64 of microseconds: an absolute date or a duration
+            int64 micros = cd.date_data[row];
+            key += cd.isDuration() ? 'r' : 'd';
+            key.append(reinterpret_cast<const char*>(&micros), sizeof(micros));
+            return;
+        }
+        case ColumnType::AUTO:
+            dataFrameAppendAutoValueKey(key, cd.auto_data[row]);
+            return;
+        default:
+            return;
+    }
+}
+
 //! Returns a key of the value of a row that is equal for equal values of the column and different for others
-/** A null value has a key of its own.
+/** A null value has a key of its own.  A float (in a float64 column or a column that holds any value) is keyed by
+    its bits, so that two floats have the same key only if they are equal (with -0.0 equal to 0.0) or both NaN.
 */
 DLLLOCAL std::string dataFrameValueKey(const ColumnData& cd, int64_t row);
 

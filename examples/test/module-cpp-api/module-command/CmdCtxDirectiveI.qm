@@ -1,0 +1,14 @@
+%modern
+
+# a user module with a %module-cmd directive in its own source, loaded by a sandboxed Program from its source and
+# compiled with qcc (module-command-context.qtest, testSandboxedLoaderReplay()): library code, whose command is the
+# module's own, also when it is replayed into the module's Program as the compiled module is loaded
+
+module CmdCtxDirectiveI {
+    version = "1.0";
+    desc = "issues a module command from the source of a module";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+%module-cmd(cmdctxaware) record

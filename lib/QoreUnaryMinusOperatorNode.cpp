@@ -68,7 +68,8 @@ QoreValue QoreUnaryMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
 
         case NT_DATE: {
             needs_deref = true;
-            return v->get<const DateTimeNode>()->unaryMinus();
+            // a component that is the smallest int has no negative that fits: INVALID-DATE (qore#6103)
+            return v->get<const DateTimeNode>()->unaryMinus(xsink);
         }
 
         case NT_CHAR:

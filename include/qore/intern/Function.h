@@ -1233,6 +1233,13 @@ protected:
 
     DLLLOCAL int findVariantNamed(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
             const qore_class_private* class_ctx, LexicalSemanticPolicy invocation_policy);
+    //! the variant search of a call whose variant committed at parse time rejected its arguments, made after the
+    //! callee's receiver is current: the caller's receiver is made current again for the search of a call with
+    //! explicit type arguments (qore#5892); out of line, as it is not on a call's common path
+    template <bool LexicalInvocation>
+    DLLLOCAL QORE_INTERN_NOINLINE int findVariantRetry(const QoreFunction* func,
+            const AbstractQoreFunctionVariant*& variant, const qore_class_private* cctx,
+            LexicalSemanticPolicy invocation_policy, bool explicit_type_args);
     DLLLOCAL int findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx);
 
@@ -1554,8 +1561,8 @@ DLLLOCAL bool qore_program_is_module(const QoreProgram* pgm);
 */
 DLLLOCAL QoreParseOptions qore_relieve_module_declared_domains(const QoreParseOptions& po, const QoreProgram* code_pgm);
 
-//! sets the runtime parse options override for a call of a user variant; see qore_get_user_call_runtime_po_override()
-/** The part of qore_get_user_call_runtime_po_override() for module code and for code that runs in a Program other
+//! sets the runtime parse options override for a call of a user variant; see qore_set_user_call_runtime_po_override()
+/** The part of qore_set_user_call_runtime_po_override() for module code and for code that runs in a Program other
     than the one that defined it
 */
 DLLLOCAL QORE_INTERN_NOINLINE void qore_set_user_call_runtime_po_override_slow(
@@ -2054,6 +2061,12 @@ public:
         return cached_aot_fn != nullptr;
     }
 
+    //! Returns the standard native entry of the AOT-compiled function, or nullptr; it identifies the function's
+    //! native fast entry in the registry of a module's fast entries (qore_aot_find_cross_module_fast_entry())
+    DLLLOCAL AotFunctionPtr getCachedAOTFunction() const {
+        return cached_aot_fn;
+    }
+
     //! Returns the location of the body of the AOT-compiled function, or nullptr if unknown
     /** Where AOT code that a summary of the body takes the place of a call of the function runs
         (qore_rt_push_native_inline_call_frame_aot()).
@@ -2167,39 +2180,8 @@ public:
     }
 };
 
-//! sets the runtime parse options override for a call of a user variant
-/** - a variant that runs in a Program other than the one that defined it (user code whose Program has released it,
-      which runs in its caller's Program) runs with the executing Program's options forced into its runtime parse
-      options;
-    - the code of a user module (a function or a method of the module, which runs in the module's Program) runs with
-      the module's options and, for a sandboxed caller only, also with the restrictions of its caller, except for the
-      options of get_module_own_access_parse_options(), which are those of the module's Program (see
-      qore_get_module_call_runtime_po_override()); a call of module code by code of the same module keeps the
-      override that is in effect (see runtime_module_call_override_in_effect());
-    - otherwise any override of the caller is cleared for the call.
-
-    Every path that calls a user variant applies it in the same way, so that the call behaves as it does with the AST
-    interpreter.
-
-    @param helper the helper that sets the override, created without one; it sets none if the call keeps the
-    thread's override
-    @param exec_pgm the Program that the variant runs in, or nullptr for the Program that defined it
-    @param uvb the variant
-    @param caller_po the effective options of the code making the call, or nullptr if they are those of \a caller_pgm
-    (see runtime_get_effective_parse_options_for()), which are then determined only if they are needed
-    @param caller_pgm the Program making the call, before the call switched to \a exec_pgm
-*/
-DLLLOCAL QORE_INTERN_ALWAYS_INLINE void qore_set_user_call_runtime_po_override(RuntimeParseOptionsOverrideHelper& helper,
-        const QoreProgram* exec_pgm, const UserVariantBase* uvb, const QoreParseOptions* caller_po,
-        const QoreProgram* caller_pgm) {
-    // the usual case: code that is not module code runs in the Program that defined it and clears the caller's
-    // override
-    if ((!exec_pgm || exec_pgm == uvb->pgm) && !qore_program_is_module(uvb->pgm)) {
-        helper.setCleared();
-        return;
-    }
-    qore_set_user_call_runtime_po_override_slow(helper, exec_pgm, uvb, caller_po, caller_pgm);
-}
+// qore_set_user_call_runtime_po_override() is defined in qore_program_private.h, where it can read the parse options
+// of the called variant's Program inline (qore_program_is_module_inline())
 
 // the following defines the pure virtual functions that are common to all user variants
 #define COMMON_USER_VARIANT_FUNCTIONS DLLLOCAL virtual int64 getFunctionality() const override {\
@@ -2824,6 +2806,21 @@ public:
     //! name, for a call resolved at run time by parameter name, or nullptr if it is not known
     DLLLOCAL const QoreTypeInfo* parseRuntimeNamedReturnType(const type_vec_t& argTypeInfo, const name_vec_t& argNames,
             const qore_class_private* class_ctx, QoreParseOptions po) const;
+
+    //! Returns the return type of a call whose variant is resolved at run time (qore#5896, qore#6151)
+    /** The type parameters of a generic variant's return type are those of the callee, not of the code that makes the
+        call: they are substituted with the call's explicit type arguments, or else with their bounds if the bounds
+        are basic types that convert no value, or else with auto, as the type arguments that the call binds at run
+        time are not known; the type is the union of the return types of the variants that the call can be resolved
+        to, or nullptr if it is not known
+
+        @param class_ctx the class context of the call, which the variants that it can be resolved to are accessible
+        in
+        @param all_variants true to take every variant, accessible in the class context or not: the union is then the
+        type of the call or a wider one (for a call whose class context is not known)
+    */
+    DLLLOCAL const QoreTypeInfo* parseRuntimeCallReturnType(const qore_class_private* class_ctx,
+            const QoreTypeInfo* receiver_type_info, const type_vec_t* explicit_type_args, bool all_variants = false);
 
     //! Returns a variant that run-time resolution could select for a named call and that does not have the parameter
     //! names of the binding at the positions of the arguments, or nullptr if there is none

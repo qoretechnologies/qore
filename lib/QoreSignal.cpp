@@ -666,9 +666,9 @@ void QoreSignalManager::signal_handler_thread() {
                         dbg_hold_armed = false;
                         dbg_held = true;
                         cond.broadcast();
-                        int64 deadline = q_clock_getmillis() + 30000;
+                        int64 deadline = q_get_monotonic_us() / 1000 + 30000;
                         while (!idle_waiting) {
-                            int64 left = deadline - q_clock_getmillis();
+                            int64 left = deadline - q_get_monotonic_us() / 1000;
                             if (left <= 0) {
                                 break;
                             }
@@ -953,9 +953,9 @@ void QoreSignalManager::dbgHoldAfterCallback() {
 
 bool QoreSignalManager::dbgWaitHeldAfterCallback(int timeout_ms) {
     AutoLocker al(&mutex);
-    int64 deadline = q_clock_getmillis() + timeout_ms;
+    int64 deadline = q_get_monotonic_us() / 1000 + timeout_ms;
     while (!dbg_held) {
-        int64 left = deadline - q_clock_getmillis();
+        int64 left = deadline - q_get_monotonic_us() / 1000;
         if (left <= 0) {
             return false;
         }

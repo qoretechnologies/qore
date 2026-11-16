@@ -175,7 +175,10 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             assert(v->getType() == NT_DATE);
             ValueHolder st(QoreLoggerEvent::getStartTime(), xsink);
             assert(st->getType() == NT_DATE);
-            ValueHolder d(v->get<const DateTimeNode>()->subtractBy(st->get<const DateTimeNode>()), xsink);
+            ValueHolder d(v->get<const DateTimeNode>()->subtractBy(*st->get<const DateTimeNode>(), xsink), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
             int64 duration = d->get<const DateTimeNode>()->getRelativeMilliseconds();
             if (option) {
                 ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);

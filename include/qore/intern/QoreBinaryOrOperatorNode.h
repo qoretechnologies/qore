@@ -46,7 +46,11 @@ public:
     }
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {
-        return copyBackgroundExplicit<QoreBinaryOrOperatorNode>(xsink);
+        QoreBinaryOrOperatorNode* rv = copyBackgroundExplicit<QoreBinaryOrOperatorNode>(xsink);
+        if (rv) {
+            rv->copyPluginTypeInfo(*this);
+        }
+        return rv;
     }
 };
 

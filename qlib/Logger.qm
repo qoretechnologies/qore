@@ -408,14 +408,23 @@ public class LoggerEventParameter {
       for no limit).  When the budget is used up the result is \c "partial" with reason \c "max-scanned-bytes" and a
       \c next_cursor at the first line not scanned; a call scans at least one line, so following \c next_cursor
       always reaches the rest of a source that is larger than the budget, and then the next sources (a budget of 0,
-      or a negative one other than @ref LoggerSearchUtil::UnlimitedScannedBytes, scans one line per call).  The
-      budget limits the lines matched, not the file data read: each call reads the sources it reaches whole.  A
-      cursor into an active \c file-ring source is stale once the appender writes to it, as the ring can rewrite
-      its lines
+      or a negative one other than @ref LoggerSearchUtil::UnlimitedScannedBytes, scans one line per call).  A call
+      that follows \c next_cursor into an uncompressed source reads about its budget and the blocks around it,
+      not the source: the cursor holds the byte offset and the index of the line where the next call resumes.  The
+      first backward call of a chain counts the lines of each source it starts in once, and a compressed rotated
+      source, which cannot be read from an offset, is decompressed whole by each call that reaches it.  A write to
+      a source after the cursor was made does not make the cursor stale; a cursor whose source was replaced by
+      another file, rewritten from the start, or truncated before its first 4096 bytes gives reason
+      \c "stale-cursor", and one whose source no longer has a line boundary at the offset of the cursor (the source
+      was truncated after them), or became shorter during the call, gives \c "source-truncated".  Forward, the last
+      line of an active source without a line terminator, which is still being written, is scanned by a call that
+      finds it complete
     - \c include_compressed_rotated: include compressed rotated file sources when applicable
 
     Implementations return a hash with stable generic fields including \c status, \c source, \c capabilities,
     \c entries, \c next_cursor, \c scanned_bytes, \c scanned_events, \c truncated, and optionally \c reason.
+    File-backed searches also return \c read_bytes: the bytes read from the sources (or decompressed) by the call,
+    including the context lines and the checks of the cursor.
 */
 public class LoggerSearchableAppender {
     #! Returns backend-neutral search capabilities for this appender
@@ -441,6 +450,10 @@ public class LoggerSearchUtil {
         const int DefaultMaxScannedBytes = 1024 * 1024;
         const int UnlimitedScannedBytes = -1;
         const list<string> SupportedCompressedRotatedEncodings = ("gzip", "bzip2", "zstd");
+        #! the number of bytes at the start of a source whose hash is in the identity of a cursor
+        const int IdentityHeadSize = 4096;
+        #! the size of the chunks of lines that a file search reads and splits at once
+        const int ScanChunkSize = 262144;
     }
 
     #! Returns generic search capabilities for an appender
@@ -977,9 +990,8 @@ public class LoggerSearchUtil {
         int scanned_bytes = 0;
         int scanned_events = 0;
         int matched_events = 0;
-        bool truncated = False;
-        *string reason;
-        *string next_cursor;
+        # the bytes read from the sources (or decompressed), including the context lines and the cursor checks
+        int read_bytes = 0;
 
         hash<auto> cursor = parseCursor(req.cursor);
         if (cursor.status) {
@@ -987,9 +999,9 @@ public class LoggerSearchUtil {
         }
 
         int source_start = cursor.source_index ?? 0;
-        *int cursor_line = cursor.line_index;
         if (source_start < 0 || source_start >= sources.size()) {
-            return getInvalidResult(caps, cursor.source_signature ? "stale-cursor" : "invalid-cursor");
+            return getInvalidResult(caps, (cursor.source_signature || cursor.identity) ? "stale-cursor"
+                : "invalid-cursor");
         }
 
         if (cursor.direction && cursor.direction != req.direction) {
@@ -1001,84 +1013,190 @@ public class LoggerSearchUtil {
             return getInvalidResult(caps, "stale-cursor");
         }
 
-        int step = req.direction == "backward" ? -1 : 1;
+        bool backward = req.direction == "backward";
         for (int source_idx = source_start; source_idx < sources.size(); ++source_idx) {
             hash<auto> source = sources[source_idx];
             *hash<StatInfo> stat = hstat(source.path);
-            if (!stat || !stat.size) {
+            # the source of a cursor is checked even if it is empty now: it may have been truncated
+            if ((!stat || !stat.size) && !(source_idx == source_start && cursor.identity)) {
                 continue;
             }
             # a budget used up by the sources before this one: the source is not read just to point a cursor at it
             if (req.max_scanned_bytes != UnlimitedScannedBytes && scanned_events
                     && scanned_bytes >= req.max_scanned_bytes) {
-                return makeSearchResult("partial", caps, entries,
-                    makeCursor(sources, source_idx, req.direction == "backward" ? -1 : 0, req.direction),
-                    scanned_bytes, scanned_events, True, "max-scanned-bytes");
+                return makeSearchResult("partial", caps, entries, makeCursor(sources, source_idx,
+                    backward ? -1 : 0, backward ? -1 : 0, req.direction, \read_bytes), scanned_bytes,
+                    scanned_events, True, "max-scanned-bytes", read_bytes);
             }
 
-            string content = readSourceContent(source);
-            list<string> lines = content.split("\n");
-            # split() leaves out the empty string after a final line terminator, so the last line has a terminator
-            # if the content ends with one
-            bool last_terminated = content.size() && content.substr(-1) == "\n";
-            int line_idx = getInitialLineIndex(lines, req.direction, source_idx == source_start ? cursor_line : NOTHING);
-
-            while (line_idx >= 0 && line_idx < lines.size()) {
-                # the budget counts the bytes of the lines scanned, each with its line terminator; a search that has
-                # scanned nothing yet scans the next line whatever its size, so that following next_cursor always
-                # gets further (issue #5817: a source larger than the budget was never scanned, and the cursor
-                # returned pointed at the same place)
-                int line_bytes = lines[line_idx].size()
-                    + ((line_idx < lines.size() - 1 || last_terminated) ? 1 : 0);
-                if (req.max_scanned_bytes != UnlimitedScannedBytes && scanned_events
-                        && scanned_bytes + line_bytes > req.max_scanned_bytes) {
-                    truncated = True;
-                    reason = "max-scanned-bytes";
-                    next_cursor = makeCursorForNextPosition(sources, source_idx, line_idx, req.direction);
-                    return makeSearchResult("partial", caps, entries, next_cursor, scanned_bytes, scanned_events,
-                        truncated, reason);
+            LoggerSearchLineReader reader;
+            try {
+                reader = LoggerSearchLineReader::open(source);
+            } catch (hash<ExceptionInfo> ex) {
+                # a source removed after the list of sources was made
+                if (source_idx == source_start && cursor.identity) {
+                    return getInvalidResult(caps, "stale-cursor");
                 }
-                scanned_bytes += line_bytes;
-                ++scanned_events;
-                bool matched;
-                try {
-                    matched = matchesRenderedLine(lines[line_idx], req);
-                } catch () {
-                    return getInvalidResult(caps, "invalid-regex");
-                }
-                if (matched) {
-                    foreach hash<auto> entry in (makeMatchEntries(lines, source, line_idx, req)) {
-                        push entries, entry;
-                    }
-                    ++matched_events;
-                    if (matched_events >= req.limit) {
-                        truncated = True;
-                        int next_line = line_idx + step;
-                        next_cursor = makeCursorForNextPosition(sources, source_idx, next_line, req.direction);
-                        return makeSearchResult("partial", caps, entries, next_cursor, scanned_bytes, scanned_events,
-                            truncated, "limit");
-                    }
-                }
-                line_idx += step;
+                continue;
             }
+
+            # the position to start from: a v3 cursor gives the byte offset and the index of the line there; a v2
+            # cursor or no cursor gives a line index only, from which the offset is found by reading the source
+            int offset;
+            int line_idx;
+            if (source_idx == source_start && cursor.identity) {
+                *string error = checkCursorSource(reader, source, cursor);
+                if (error) {
+                    hash<auto> rv = getInvalidResult(caps, error);
+                    rv.read_bytes = read_bytes + reader.getReadBytes();
+                    return rv;
+                }
+                offset = cursor.byte_offset;
+                line_idx = cursor.line_index;
+            } else {
+                offset = -1;
+                line_idx = source_idx == source_start ? (cursor.line_index ?? -1) : -1;
+            }
+            if (backward) {
+                if (offset < 0) {
+                    # the start of a backward chain: the index of the last line needs the number of lines, counted
+                    # once and then carried in the cursor
+                    int count = reader.countLines();
+                    if (line_idx < 0 || line_idx >= count) {
+                        offset = reader.size();
+                        line_idx = count - 1;
+                    } else {
+                        offset = reader.getLineEnd(line_idx);
+                    }
+                }
+            } else if (offset < 0) {
+                if (line_idx < 0) {
+                    line_idx = 0;
+                }
+                offset = reader.getLineStart(line_idx);
+            }
+
+            while (backward ? offset > 0 : offset < reader.size()) {
+                # the lines are read in chunks of about the budget left, which are split at once
+                int want = req.max_scanned_bytes == UnlimitedScannedBytes
+                    ? ScanChunkSize
+                    : min(ScanChunkSize, max(1, req.max_scanned_bytes - scanned_bytes));
+                hash<auto> chunk = backward ? reader.chunkEndingAt(offset, want) : reader.chunkAt(offset, want);
+                list<string> lines = chunk.lines;
+                int count = lines.size();
+                # a source that became shorter during the call (a ring file rotated beside it) cannot be paged:
+                # without this, a chunk without lines did not move the offset
+                if (chunk.truncated || !count) {
+                    hash<auto> rv = getInvalidResult(caps, "source-truncated");
+                    rv.read_bytes = read_bytes + reader.getReadBytes();
+                    return rv;
+                }
+                # forward, the last line of an active source without a terminator is still being written: it is
+                # scanned once it is complete, so that a cursor is never made in the middle of a line
+                if (!backward && source.active && !chunk.last_terminated && chunk.end == reader.size()) {
+                    --count;
+                    if (!count) {
+                        break;
+                    }
+                }
+                for (int k = 0; k < count; ++k) {
+                    int li = backward ? count - 1 - k : k;
+                    string text = lines[li];
+                    # the budget counts the bytes of the lines scanned, each with its line terminator; a search that
+                    # has scanned nothing yet scans the next line whatever its size, so that following next_cursor
+                    # always gets further (issue #5817: a source larger than the budget was never scanned, and the
+                    # cursor returned pointed at the same place)
+                    int line_bytes = text.size() + ((li < lines.size() - 1 || chunk.last_terminated) ? 1 : 0);
+                    if (req.max_scanned_bytes != UnlimitedScannedBytes && scanned_events
+                            && scanned_bytes + line_bytes > req.max_scanned_bytes) {
+                        string next_cursor = makeCursor(sources, source_idx, offset, line_idx, req.direction,
+                            \read_bytes, reader);
+                        return makeSearchResult("partial", caps, entries, next_cursor, scanned_bytes,
+                            scanned_events, True, "max-scanned-bytes", read_bytes + reader.getReadBytes());
+                    }
+                    scanned_bytes += line_bytes;
+                    ++scanned_events;
+                    bool matched;
+                    try {
+                        matched = matchesRenderedLine(text, req);
+                    } catch () {
+                        hash<auto> rv = getInvalidResult(caps, "invalid-regex");
+                        rv.read_bytes = read_bytes + reader.getReadBytes();
+                        return rv;
+                    }
+                    int next_offset = backward ? offset - line_bytes : offset + line_bytes;
+                    int next_line = line_idx + (backward ? -1 : 1);
+                    if (matched) {
+                        hash<auto> line = {
+                            "text": text,
+                            "start": backward ? next_offset : offset,
+                            "end": backward ? offset : next_offset,
+                        };
+                        foreach hash<auto> entry in (makeMatchEntries(reader, line, source, line_idx, req)) {
+                            push entries, entry;
+                        }
+                        ++matched_events;
+                        if (matched_events >= req.limit) {
+                            *string next_cursor;
+                            if (backward && !next_offset) {
+                                # the start of the source: the next call starts with the next source
+                                if (source_idx + 1 < sources.size()) {
+                                    next_cursor = makeCursor(sources, source_idx + 1, -1, -1, req.direction,
+                                        \read_bytes);
+                                }
+                            } else {
+                                next_cursor = makeCursor(sources, source_idx, next_offset, next_line,
+                                    req.direction, \read_bytes, reader);
+                            }
+                            return makeSearchResult("partial", caps, entries, next_cursor, scanned_bytes,
+                                scanned_events, True, "limit", read_bytes + reader.getReadBytes());
+                        }
+                    }
+                    offset = next_offset;
+                    line_idx = next_line;
+                }
+            }
+            read_bytes += reader.getReadBytes();
         }
 
-        string status = truncated ? "partial" : "ok";
-        return makeSearchResult(status, caps, entries, next_cursor, scanned_bytes, scanned_events, truncated, reason);
+        return makeSearchResult("ok", caps, entries, NOTHING, scanned_bytes, scanned_events, False, NOTHING,
+            read_bytes);
     }
 
-    private static int getInitialLineIndex(list<string> lines, string direction, *int cursor_line) {
-        if (direction == "backward") {
-            if (exists cursor_line && cursor_line >= 0) {
-                return cursor_line < lines.size() ? cursor_line : lines.size() - 1;
+    #! returns the reason why a v3 cursor cannot be used with its source, if it cannot (issue #5856)
+    /** the identity of the source (its device, inode and the hash of its first bytes) must be that of the cursor,
+        and the offset must be within the source and on a line boundary
+    */
+    private static *string checkCursorSource(LoggerSearchLineReader reader, hash<auto> source, hash<auto> cursor) {
+        # another source, or the same path replaced by another file
+        if (cursor.source_hash != getSourceHash(source)) {
+            return "stale-cursor";
+        }
+        # a source shorter than the head of the cursor cannot be compared with it: it may be another data (a ring
+        # file rewritten in place)
+        if (reader.size() < cursor.head_size) {
+            return "stale-cursor";
+        }
+        # a source rewritten from the start
+        if (cursor.head_hash != getHeadHash(reader, cursor.head_size)) {
+            return "stale-cursor";
+        }
+        int offset = cursor.byte_offset;
+        if (offset < 0) {
+            return NOTHING;
+        }
+        if (offset > reader.size()) {
+            return "source-truncated";
+        }
+        if (cursor.direction == "backward") {
+            if (offset != reader.size() && !reader.isNewlineAt(offset - 1)) {
+                return "source-truncated";
             }
-            return lines.size() - 1;
+        } else if (offset && offset != reader.size() && !reader.isNewlineAt(offset - 1)) {
+            # the end of an inactive source whose last line has no terminator is a valid end of its scan
+            return "source-truncated";
         }
-
-        if (exists cursor_line && cursor_line >= 0) {
-            return cursor_line;
-        }
-        return 0;
+        return NOTHING;
     }
 
     private static bool matchesRenderedLine(string line, hash<auto> req) {
@@ -1179,24 +1297,24 @@ public class LoggerSearchUtil {
         throw "LOGGER-SEARCH-ERROR", sprintf("unsupported log level %y", level);
     }
 
-    private static list<hash<auto>> makeMatchEntries(list<string> lines, hash<auto> source, int line_idx,
-            hash<auto> req) {
-        list<hash<auto>> entries = ();
-        int first = line_idx - req.context_before;
-        int last = line_idx + req.context_after;
-
-        if (first < 0) {
-            first = 0;
+    private static list<hash<auto>> makeMatchEntries(LoggerSearchLineReader reader, hash<auto> line,
+            hash<auto> source, int line_idx, hash<auto> req) {
+        # the context lines are read beside the line; they are not counted in the budget
+        list<hash<auto>> before = ();
+        int start = line.start;
+        for (int i = 0; i < req.context_before && start > 0; ++i) {
+            hash<auto> prev = reader.lineEndingAt(start);
+            unshift before, makeLineEntry(prev.text, source, line_idx - i - 1, "before");
+            start = prev.start;
         }
-        if (last >= lines.size()) {
-            last = lines.size() - 1;
+        list<hash<auto>> entries = before;
+        push entries, makeLineEntry(line.text, source, line_idx, "match");
+        int end = line.end;
+        for (int i = 0; i < req.context_after && end < reader.size(); ++i) {
+            hash<auto> next = reader.lineAt(end);
+            push entries, makeLineEntry(next.text, source, line_idx + i + 1, "after");
+            end = next.end;
         }
-
-        for (int i = first; i <= last; ++i) {
-            string context_type = i == line_idx ? "match" : (i < line_idx ? "before" : "after");
-            push entries, makeLineEntry(lines[i], source, i, context_type);
-        }
-
         return entries;
     }
 
@@ -1227,23 +1345,6 @@ public class LoggerSearchUtil {
         };
     }
 
-    private static string readSourceContent(hash<auto> source) {
-        if (!(source.compressed ?? False)) {
-            return ReadOnlyFile::readTextFile(source.path);
-        }
-
-        binary raw = ReadOnlyFile::readBinaryFile(source.path);
-        switch (source.compression) {
-            case "gzip":
-                return gunzip_to_string(raw);
-            case "bzip2":
-                return bunzip2_to_string(raw);
-            case "zstd":
-                return unzstd_to_string(raw);
-        }
-        throw "LOGGER-SEARCH-ERROR", sprintf("unsupported compressed log encoding %y", source.compression);
-    }
-
     private static hash<auto> parseCursor(auto cursor) {
         if (!cursor) {
             return {"source_index": 0};
@@ -1257,6 +1358,26 @@ public class LoggerSearchUtil {
         }
 
         list<string> parts = string(cursor).split(":");
+        # v3:<source_index>:<byte_offset>:<line_index>:<direction>:<head_size>.<source_hash>.<head_hash>
+        # (issue #5856)
+        if (parts.size() == 6 && parts[0] == "v3") {
+            *list<string> id = (parts[5] =~ x/^([0-9]+)\.([0-9a-f]+)\.([0-9a-f]+)$/);
+            if (!id || (parts[4] != "forward" && parts[4] != "backward")
+                    || !(parts[1] =~ /^[0-9]+$/) || !(parts[2] =~ /^-?[0-9]+$/) || !(parts[3] =~ /^-?[0-9]+$/)) {
+                return {"status": "invalid", "reason": "invalid-cursor"};
+            }
+            return {
+                "source_index": int(parts[1]),
+                "byte_offset": int(parts[2]),
+                "line_index": int(parts[3]),
+                "direction": parts[4],
+                "head_size": int(id[0]),
+                "source_hash": id[1],
+                "head_hash": id[2],
+                "identity": parts[5],
+            };
+        }
+
         if (parts.size() == 5 && parts[0] == "v2") {
             return {
                 "source_index": int(parts[1]),
@@ -1276,24 +1397,54 @@ public class LoggerSearchUtil {
         };
     }
 
-    private static *string makeCursorForNextPosition(list<hash<auto>> sources, int source_idx, int line_idx,
-            string direction) {
-        if (direction == "backward") {
-            if (line_idx >= 0) {
-                return makeCursor(sources, source_idx, line_idx, direction);
+    #! returns a v3 cursor: where the next call resumes in the given source (issue #5856)
+    /** @param byte_offset forward: the start of the next line to scan; backward: the end of the next line to scan
+        (just after its terminator); -1: the end of the source (backward) for a source not read yet
+        @param line_index the index of that line; -1 if it is not known yet (the last line of a source not read yet)
+        @param read_bytes the bytes read to make the identity of a source not read yet are added
+        @param reader the reader of the source, if it is open
+    */
+    private static string makeCursor(list<hash<auto>> sources, int source_idx, int byte_offset, int line_index,
+            string direction, reference<int> read_bytes, *LoggerSearchLineReader reader) {
+        hash<auto> source = sources[source_idx];
+        if (!reader) {
+            try {
+                reader = LoggerSearchLineReader::open(source);
+            } catch (hash<ExceptionInfo> ex) {
+                # a source removed after the list of sources was made: the next call reports the cursor as stale
+                return sprintf("v3:%d:%d:%d:%s:0.%s.%s", source_idx, byte_offset, line_index, direction,
+                    getSourceHash(source), getHeadHashOf(binary()));
             }
-            if (source_idx + 1 < sources.size()) {
-                return makeCursor(sources, source_idx + 1, -1, direction);
-            }
-            return NOTHING;
+            on_exit read_bytes += reader.getReadBytes();
         }
-
-        return makeCursor(sources, source_idx, line_idx, direction);
+        int head_size = min(reader.size(), IdentityHeadSize);
+        return sprintf("v3:%d:%d:%d:%s:%d.%s.%s", source_idx, byte_offset, line_index, direction, head_size,
+            getSourceHash(source), getHeadHash(reader, head_size));
     }
 
-    private static string makeCursor(list<hash<auto>> sources, int source_idx, int line_idx, string direction) {
-        return sprintf("v2:%d:%d:%s:%s", source_idx, line_idx, direction,
-            getSourceSignature(sources[source_idx]));
+    #! returns the hash of the identity of a source in a v3 cursor: its id, kind and path, and its device and inode
+    /** a compressed source, which never changes, also has its size and modification time in it; the size and
+        modification time of other sources are not in it, so that a write after the cursor was made does not make
+        it stale
+    */
+    private static string getSourceHash(hash<auto> source) {
+        *hash<StatInfo> stat = hstat(source.path);
+        string base = sprintf("%s|%s|%s|%y|%y", source.id, source.kind, source.path, stat ? stat.dev : NOTHING,
+            stat ? stat.inode : NOTHING);
+        if (source.compressed) {
+            base += sprintf("|%y|%y|%y", source.compression, stat ? stat.size : NOTHING, stat ? stat.mtime : NOTHING);
+        }
+        return has_digest("sha256") ? digest("sha256", base).toHex() : base.toMD5();
+    }
+
+    #! returns the hash of the first bytes of a source in a v3 cursor, which tells a source rewritten from the start
+    private static string getHeadHash(LoggerSearchLineReader reader, int head_size) {
+        return getHeadHashOf(reader.getHead(head_size));
+    }
+
+    #! returns the hash of the given first bytes of a source
+    private static string getHeadHashOf(binary head) {
+        return has_digest("sha256") ? digest("sha256", head).toHex() : head.toMD5();
     }
 
     private static string getSourceSignature(hash<auto> source) {
@@ -1321,13 +1472,15 @@ public class LoggerSearchUtil {
             "result_count": 0,
             "scanned_bytes": 0,
             "scanned_events": 0,
+            "read_bytes": 0,
             "truncated": False,
             "reason": reason,
         };
     }
 
     private static hash<auto> makeSearchResult(string status, hash<auto> caps, list<hash<auto>> entries,
-            *string next_cursor, int scanned_bytes, int scanned_events, bool truncated, *string reason) {
+            *string next_cursor, int scanned_bytes, int scanned_events, bool truncated, *string reason,
+            int read_bytes = 0) {
         hash<auto> result = {
             "status": status,
             "source": caps.source,
@@ -1337,6 +1490,7 @@ public class LoggerSearchUtil {
             "next_cursor": next_cursor,
             "scanned_bytes": scanned_bytes,
             "scanned_events": scanned_events,
+            "read_bytes": read_bytes,
             "truncated": truncated,
         };
 
@@ -1345,6 +1499,277 @@ public class LoggerSearchUtil {
         }
 
         return result;
+    }
+}
+
+#! Reads the lines of a log file search source by byte offset (issue #5856)
+/** An uncompressed source is read in aligned blocks, of which a few are cached, so that a call reads only the data
+    around the lines that it scans; a compressed source is decompressed whole when it is opened.  The text of a line
+    is the data before its \c "\\n" terminator, in the default encoding, as the lines of the source read as text.
+*/
+class LoggerSearchLineReader {
+    public {
+        #! the size of the blocks read
+        const BlockSize = 65536;
+        #! the number of blocks cached: more than a chunk of lines of the search (LoggerSearchUtil::ScanChunkSize)
+        const MaxCachedBlocks = 8;
+    }
+
+    private {
+        #! the file of an uncompressed source
+        *ReadOnlyFile file;
+        #! the data of a compressed source
+        *binary data;
+        #! the size of the data
+        int data_size;
+        #! the bytes read from the file, or decompressed
+        int read_bytes = 0;
+        #! the cached blocks, by index
+        hash<string, binary> blocks = {};
+        #! the indexes of the cached blocks, least recently used first
+        list<int> block_order = ();
+        #! the first bytes of the data, once read
+        *binary head;
+    }
+
+    private constructor() {
+    }
+
+    #! opens the given source
+    static LoggerSearchLineReader open(hash<auto> source) {
+        LoggerSearchLineReader rv();
+        if (source.compressed ?? False) {
+            binary raw = ReadOnlyFile::readBinaryFile(source.path);
+            switch (source.compression) {
+                case "gzip":
+                    rv.data = gunzip_to_binary(raw);
+                    break;
+                case "bzip2":
+                    rv.data = bunzip2_to_binary(raw);
+                    break;
+                case "zstd":
+                    rv.data = unzstd_to_binary(raw);
+                    break;
+                default:
+                    throw "LOGGER-SEARCH-ERROR", sprintf("unsupported compressed log encoding %y",
+                        source.compression);
+            }
+            rv.data_size = rv.data.size();
+            rv.read_bytes = rv.data_size;
+        } else {
+            rv.file = new ReadOnlyFile(source.path);
+            rv.data_size = rv.file.hstat().size;
+        }
+        return rv;
+    }
+
+    #! returns the size of the data
+    int size() {
+        return data_size;
+    }
+
+    #! returns the bytes read so far
+    int getReadBytes() {
+        return read_bytes;
+    }
+
+    #! returns the first bytes of the data (at most LoggerSearchUtil::IdentityHeadSize), which are cached
+    binary getHead(int len) {
+        if (!exists head || head.size() < len) {
+            head = range(0, len);
+        }
+        return head.size() > len ? head.substr(0, len) : head;
+    }
+
+    #! returns the data in the given range
+    binary range(int start, int end) {
+        binary rv = binary();
+        while (start < end) {
+            int idx = start / BlockSize;
+            binary block = getBlock(idx);
+            int block_start = idx * BlockSize;
+            int len = min(end, block_start + block.size()) - start;
+            if (len <= 0) {
+                break;
+            }
+            rv += block.substr(start - block_start, len);
+            start += len;
+        }
+        return rv;
+    }
+
+    #! returns True if the byte at the given offset is a line terminator
+    bool isNewlineAt(int offset) {
+        if (offset < 0 || offset >= data_size) {
+            return False;
+        }
+        int idx = offset / BlockSize;
+        int pos = offset - idx * BlockSize;
+        return getBlock(idx).find("\n", pos) == pos;
+    }
+
+    #! returns the line that starts at the given offset: \c text, \c start and \c end (after its terminator)
+    hash<auto> lineAt(int start) {
+        int nl = findForward(start);
+        int text_end = nl >= 0 ? nl : data_size;
+        return {
+            "text": binary_to_string(range(start, text_end)),
+            "start": start,
+            "end": nl >= 0 ? nl + 1 : data_size,
+        };
+    }
+
+    #! returns the line that ends at the given offset (after its terminator, or at the end of the data)
+    hash<auto> lineEndingAt(int end) {
+        int text_end = isNewlineAt(end - 1) ? end - 1 : end;
+        int prev = findBackward(text_end);
+        int start = prev >= 0 ? prev + 1 : 0;
+        return {
+            "text": binary_to_string(range(start, text_end)),
+            "start": start,
+            "end": end,
+        };
+    }
+
+    #! returns the complete lines that start at the given offset, of about \a want bytes (at least one line)
+    /** @return \c lines (the text of each line, in the order of the data), \c end (the offset after the last
+        line) and \c last_terminated (whether the last line has a terminator)
+    */
+    hash<auto> chunkAt(int start, int want) {
+        int target = min(data_size, start + max(want, 1));
+        # the end of the line that has the byte before the target
+        int nl = findForward(target - 1);
+        int end = nl >= 0 ? nl + 1 : data_size;
+        binary chunk_data = range(start, end);
+        return {
+            "lines": binary_to_string(chunk_data).split("\n"),
+            "end": end,
+            "last_terminated": nl >= 0,
+            # the source is shorter than when it was opened (truncated, as a ring file that is rotated)
+            "truncated": chunk_data.size() != end - start || end <= start,
+        };
+    }
+
+    #! returns the complete lines that end at the given offset, of about \a want bytes (at least one line)
+    /** @return \c lines (the text of each line, in the order of the data), \c start (the offset of the first
+        line) and \c last_terminated (whether the last line has a terminator)
+    */
+    hash<auto> chunkEndingAt(int end, int want) {
+        bool last_terminated = isNewlineAt(end - 1);
+        int text_end = last_terminated ? end - 1 : end;
+        int target = min(text_end, max(0, end - max(want, 1)));
+        # the start of the line that has the target
+        int start = findBackward(target) + 1;
+        binary chunk_data = range(start, end);
+        return {
+            "lines": binary_to_string(chunk_data).split("\n"),
+            "start": start,
+            "last_terminated": last_terminated,
+            # the source is shorter than when it was opened (truncated, as a ring file that is rotated)
+            "truncated": chunk_data.size() != end - start || end <= start,
+        };
+    }
+
+    #! returns the number of lines of the data, without building them
+    int countLines() {
+        int count = 0;
+        int idx = 0;
+        while (idx * BlockSize < data_size) {
+            binary block = getBlock(idx);
+            int pos = 0;
+            while ((pos = block.find("\n", pos)) >= 0) {
+                ++count;
+                ++pos;
+            }
+            ++idx;
+        }
+        # a last line without a terminator
+        if (data_size && !isNewlineAt(data_size - 1)) {
+            ++count;
+        }
+        return count;
+    }
+
+    #! returns the offset of the start of the line with the given index, or the size of the data
+    int getLineStart(int line_idx) {
+        int offset = 0;
+        for (int i = 0; i < line_idx && offset < data_size; ++i) {
+            int nl = findForward(offset);
+            if (nl < 0) {
+                return data_size;
+            }
+            offset = nl + 1;
+        }
+        return offset;
+    }
+
+    #! returns the offset of the end of the line with the given index (after its terminator)
+    int getLineEnd(int line_idx) {
+        int start = getLineStart(line_idx);
+        if (start >= data_size) {
+            return data_size;
+        }
+        int nl = findForward(start);
+        return nl >= 0 ? nl + 1 : data_size;
+    }
+
+    #! returns the offset of the first line terminator at or after the given offset, or -1
+    private int findForward(int from) {
+        while (from < data_size) {
+            int idx = from / BlockSize;
+            int block_start = idx * BlockSize;
+            binary block = getBlock(idx);
+            int pos = block.find("\n", from - block_start);
+            if (pos >= 0) {
+                return block_start + pos;
+            }
+            from = block_start + block.size();
+            if (!block.size()) {
+                break;
+            }
+        }
+        return -1;
+    }
+
+    #! returns the offset of the last line terminator before the given offset, or -1
+    private int findBackward(int before) {
+        while (before > 0) {
+            int idx = (before - 1) / BlockSize;
+            int block_start = idx * BlockSize;
+            binary block = getBlock(idx);
+            int pos = block.rfind("\n", before - 1 - block_start);
+            if (pos >= 0) {
+                return block_start + pos;
+            }
+            before = block_start;
+        }
+        return -1;
+    }
+
+    #! returns the block with the given index
+    private binary getBlock(int idx) {
+        string key = idx.toString();
+        *binary block = blocks{key};
+        if (exists block) {
+            # the most recently used block is last
+            if (block_order.last() != idx) {
+                block_order = (map $1, block_order, $1 != idx) + idx;
+            }
+            return block;
+        }
+        if (data) {
+            block = data.substr(idx * BlockSize, BlockSize);
+        } else {
+            file.setPos(idx * BlockSize);
+            block = file.readBinary(BlockSize) ?? binary();
+            read_bytes += block.size();
+        }
+        blocks{key} = block;
+        push block_order, idx;
+        if (block_order.size() > MaxCachedBlocks) {
+            remove blocks{shift block_order};
+        }
+        return block;
     }
 }
 

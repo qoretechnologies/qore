@@ -1,0 +1,380 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - binary module command handlers, qcc executables that replay recorded module commands
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The cmdctxaware and cmdctxlegacy test modules (examples/test/module-cpp-api/module-command) are built into the
+# build tree and never installed; the test finds them next to the qore binary
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/.."
+%requires FsUtil
+%requires QUnit
+%requires ExecModeHarness
+
+%exec-class ModuleCommandContextTest
+
+#! A module command handler gets the restrictions of the code that issued the command (issue #5699)
+/** A handler runs in the Program that a command applies to, so getProgram() and its parse options say nothing about the
+    code that issued the command.  QoreModuleCommandContext gives the handler the restrictions of the issuing code,
+    captured before the switch to the target Program: the effective run-time parse options, whether a sandbox governs
+    it, and for a command replayed from a compiled program also the parse options the program is declared with.  A
+    module that does not declare QoreModuleInfo::cmd_caller_aware is not given a command from restricted code.
+
+    The matrix program (module-command/cmdctx-matrix.q) issues commands from trusted, restricted and sandboxed code, as
+    \c %module-cmd directives and at run time, to the module that declares it and to the one that does not, and prints
+    one line for each case; it runs in every execution mode and as qcc executables, and every run must print the
+    literal output below.  The compiled programs replay a recorded command when they are loaded.
+*/
+class ModuleCommandContextTest inherits QUnit::Test {
+    public {
+        #! the output of the matrix program
+        const Expected = "01 trusted, own Program:      ok | origin=1 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "02 trusted, other Program:    ok | origin=1 po=none sandboxed=0 issuer_is_target=0 target_is_handler=1\n"
+            + "03 parse, no restriction:     ok | origin=0 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "04 parse, restricted before:  ok | origin=0 po=restricted sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "05 parse, restricted after:   ok | origin=0 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "06 restricted, record:        ok | origin=1 po=restricted sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "07 restricted, path:          CMDCTX-DENIED\n"
+            + "08 restricted, code:          ok\n"
+            + "09 restricted, thread:        CMDCTX-THREAD=allowed\n"
+            + "10 restricted, nested:        ok | origin=1 po=restricted sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "11 no-uncontrolled, code:     CMDCTX-DENIED\n"
+            + "12 no-uncontrolled, path:     ok\n"
+            + "13 no-uncontrolled, thread:   CMDCTX-THREAD=denied\n"
+            + "14 no-embedded-logic, code:   CMDCTX-DENIED\n"
+            + "15 trusted, code and path:    ok ok\n"
+            + "16 trusted, thread:           CMDCTX-THREAD=allowed\n"
+            + "17 outside a handler:         CMDCTX-OUTSIDE=null\n"
+            + "18 restricted to trusted:     RUNTIME-COMMAND-ERROR | \n"
+            + "19 legacy, trusted:           ok | origin=1 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "20 legacy, restricted:        RUNTIME-COMMAND-ERROR | \n"
+            + "21 legacy, parse, plain:      ok | origin=0 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "22 legacy, parse, restricted: PARSE-COMMAND-ERROR | \n"
+            + "23 legacy, parse, after:      ok | origin=0 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "24 sandboxed, record:         ok | origin=1 po=none sandboxed=1 issuer_is_target=1 target_is_handler=1\n"
+            + "25 sandboxed, code:           CMDCTX-DENIED\n"
+            + "26 sandboxed, path:           CMDCTX-DENIED\n"
+            + "27 sandboxed, thread:         CMDCTX-THREAD=denied\n"
+            + "28 sandboxed, legacy:         RUNTIME-COMMAND-ERROR | \n"
+            + "29 sandboxed to trusted:      RUNTIME-COMMAND-ERROR | \n"
+            + "30 sandboxed, via module:     ok | sandboxed=1\n"
+            + "31 sandboxed, via module, code: CMDCTX-DENIED\n"
+            + "32 sandboxed, via module, legacy: RUNTIME-COMMAND-ERROR\n"
+            + "33 restricted, via module:    ok | sandboxed=0\n"
+            + "34 restricted, via module, code: ok\n"
+            + "35 module directive, trusted loader:      ok | origin=0 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "36 module directive, no-filesystem loader: ok | origin=0 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "37 module directive, sandboxed loader:    ok | origin=0 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "38 library module, code directive:        ok\n"
+            + "39 path-chosen module, restricted:        CMDCTX-DENIED\n"
+            + "40 path-chosen module, trusted:           ok\n"
+            + "41 no-filesystem, via module, path: ok\n"
+            + "42 no-filesystem, own code, path:   CMDCTX-DENIED\n"
+            + "43 caller, no-filesystem, via module: po=none sandboxed=0\n"
+            + "44 caller, no-filesystem, own code:   po=restricted sandboxed=0\n"
+            + "45 caller, trusted, via module:       po=none sandboxed=0\n"
+            + "46 caller, trusted, own code:         po=none sandboxed=0\n"
+            + "47 caller, sandboxed, via module:     po=none sandboxed=1\n"
+            + "48 caller, sandboxed, own code:       po=none sandboxed=1\n"
+            + "49 caller, no-uncontrolled, via module: po=none sandboxed=0\n"
+            + "50 trusting sandbox, record:   ok | origin=1 po=none sandboxed=0 issuer_is_target=1 target_is_handler=1\n"
+            + "51 trusting sandbox, code:     ok\n"
+            + "52 trusting sandbox, legacy:   ok\n"
+            + "53 trusting sandbox, caller via module: po=none sandboxed=0\n"
+            + "54 child of restricted code:     ok | sandboxed=1\n"
+            + "55 child of trusting sandbox:    ok | sandboxed=0\n"
+            + "56 trusting sandbox, no-uncontrolled: ok | origin=1 po=restricted sandboxed=0 issuer_is_target=1 "
+                "target_is_handler=1\n"
+            + "";
+
+        #! the replay program: the helper that reads the history, and the output line
+        const ReplayBody = "string sub history(string mod) {\n"
+            + "    try {\n"
+            + "        Program::issueModuleCmd(mod, \"log\");\n"
+            + "        return \"?\";\n"
+            + "    } catch (hash<ExceptionInfo> ex) {\n"
+            + "        return ex.err == \"CMDCTX-LOG\" ? (ex.desc =~ x/^([^:]*)/)[0] ?? \"\" : ex.err;\n"
+            + "    }\n"
+            + "}\n"
+            + "printf(\"%s\\n\", history(\"cmdctxaware\"));\n"
+            + "";
+
+        #! the lines of the replay programs
+        const ReplayTrusted = "origin=2 po=none sandboxed=0 issuer_is_target=0 target_is_handler=1\n";
+        const ReplayRestricted = "origin=2 po=restricted sandboxed=0 issuer_is_target=0 target_is_handler=1\n";
+
+        #! the program that a sandboxed Program loads modules with %module-cmd directives in: arguments are the
+        #! extension of the modules that it loads by path, and their directory
+        const LoadSandboxedScript = "%modern
+string sub history() {
+    try {
+        Program::issueModuleCmd(\"cmdctxaware\", \"log\");
+        return \"?\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err == \"CMDCTX-LOG\" ? ((ex.desc =~ x/(po=\\w+ sandboxed=\\d)/)[0] ?? \"none\") : ex.err;
+    }
+}
+string sub load(string target) {
+    Program p(PO_NEW_STYLE);
+    SandboxManager sm();
+    # the loader may read the module that it chooses by path
+    sm.setFilesystemDefaultPolicy(True);
+    p.setSandboxManager(sm);
+    try {
+        p.parse(\"%requires \" + target + \"\\n\", \"load\");
+        return \"ok | \" + history();
+    } catch (hash<ExceptionInfo> ex) {
+        # the module's own refusal for sandboxed code: raised by the directive as the source is parsed, and the cause
+        # of the load error of a compiled module whose replayed command is refused
+        string err = (ex.err == \"CMDCTX-DENIED\" || (ex.err == \"MODULE-LOAD-ERROR\"
+            && ex.desc =~ /cannot path: the command was issued by sandboxed code/)) ? \"CMDCTX-DENIED\" : ex.err;
+        return err + \" | \" + history();
+    }
+}
+string ext = ARGV[0];
+string chosen = ARGV[1];
+printf(\"library, record: %s\\n\", load(\"CmdCtxDirectiveI\"));
+printf(\"library, path:   %s\\n\", load(\"CmdCtxDirectiveJ\"));
+printf(\"chosen, record:  %s\\n\", load(chosen + \"/CmdCtxDirectiveK.\" + ext));
+printf(\"chosen, path:    %s\\n\", load(chosen + \"/CmdCtxDirectiveL.\" + ext));
+# sandboxed code cannot issue a command to another Program at run time
+Program target(PO_NEW_STYLE);
+Program s(PO_NEW_STYLE);
+SandboxManager sm();
+s.setSandboxManager(sm);
+s.parse(\"sub issue_to(Program t) { t.issueModuleCmd(\\\"cmdctxaware\\\", \\\"record\\\"); }\", \"issue-to\");
+try {
+    s.callFunction(\"issue_to\", target);
+    printf(\"to another Program: ok\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"to another Program: %s | %s\\n\", ex.err, history());
+}
+";
+
+        #! the output of LoadSandboxedScript, from the source of the modules and compiled
+        /** a library module's own directive is library code, which is initialized outside the loader's sandbox (see
+            cmdctx-matrix.q, case 37), so it is not refused; a module that the sandboxed loader chose by path is judged
+            by the loader's sandbox
+        */
+        const LoadSandboxedExpected = "library, record: ok | po=none sandboxed=0\n"
+            + "library, path:   ok | none\n"
+            + "chosen, record:  ok | po=none sandboxed=1\n"
+            + "chosen, path:    CMDCTX-DENIED | none\n"
+            + "to another Program: RUNTIME-COMMAND-ERROR | none\n";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string module_path;
+        TmpDir tmp("qore-module-command-context-");
+        string matrix;
+    }
+
+    constructor() : QUnit::Test("ModuleCommandContextTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        module_path = sprintf("%s/modules/cmdctxaware:%s/modules/cmdctxlegacy:%s", libqore_dir, libqore_dir,
+            realpath(get_script_dir() + "/module-command"));
+        if (ENV.QORE_MODULE_DIR) {
+            module_path += ":" + ENV.QORE_MODULE_DIR;
+        }
+        matrix = realpath(get_script_dir() + "/module-command/cmdctx-matrix.q");
+
+        addTestCase("the matrix prints the same in every execution mode", \testModes());
+        addTestCase("the matrix prints the same as a qcc executable", \testCompiled());
+        addTestCase("a library module's own command is the same compiled and as source", \testLibraryModule());
+        addTestCase("a sandboxed Program loads a compiled module with a module command as it loads its source",
+            \testSandboxedLoaderReplay());
+        addTestCase("a replayed command carries the restrictions of the loader and of the program", \testReplay());
+        addTestCase("a restricted program cannot record a command for a module that does not declare support",
+            \testReplayRefused());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s CMDCTX_CHOSEN_DIR=%s",
+            libqore_dir, libqore_dir, libqore_dir, module_path,
+            realpath(get_script_dir() + "/module-command-chosen"));
+    }
+
+    private bool haveModules() {
+        return is_dir(libqore_dir + "/modules/cmdctxaware") && is_dir(libqore_dir + "/modules/cmdctxlegacy");
+    }
+
+    private skipWithoutModules() {
+        if (!haveModules()) {
+            testSkip("the cmdctxaware and cmdctxlegacy test modules are not built in " + libqore_dir + "/modules");
+        }
+    }
+
+    private string write(string name, string contents) {
+        string path = tmp.path + "/" + name;
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    testModes() {
+        skipWithoutModules();
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "--exec-mode=%s %s", env(), qore_bin, mode, matrix), True);
+            assertEq(0, r.rc, sprintf("%s: exit status: %s", mode, r.out));
+            assertEq(Expected, r.stdout, sprintf("%s: output", mode));
+        }
+    }
+
+    #! compiles \a src with qcc at \a opt, returns the output of qcc and sets the exit status
+    private string compile(string src, string exe, string opt, reference<int> rc) {
+        return backquote(sprintf("%s %s -O%s -o %s %s 2>&1", env(), qcc_bin, opt, exe, src), \rc);
+    }
+
+    testCompiled() {
+        skipWithoutModules();
+        int rc;
+        string probe_out = compile(matrix, tmp.path + "/matrix-probe", "0", \rc);
+        if (rc || !is_file(tmp.path + "/matrix-probe")) {
+            testSkip("qcc is not available or cannot compile the matrix: " + probe_out);
+        }
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/matrix.O%s", tmp.path, opt);
+            string out = compile(matrix, exe, opt, \rc);
+            assertEq(0, rc, sprintf("qcc -O%s exit status: %s", opt, out));
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env(), exe), True);
+            assertEq(0, r.rc, sprintf("qcc -O%s: exit status: %s", opt, r.out));
+            assertEq(Expected, r.stdout, sprintf("qcc -O%s: output", opt));
+        }
+    }
+
+    #! a library module whose source has the \c path command is loaded by a Program without the filesystem: the command
+    /** is the library's own, so it is not refused, whether the module is loaded from its source or compiled to a .qmod
+        (its recorded commands are replayed when it is loaded)
+    */
+    testLibraryModule() {
+        skipWithoutModules();
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(qmod_dir);
+        string src = realpath(get_script_dir() + "/module-command/CmdCtxDirectiveH.qm");
+        string out = backquote(sprintf("%s %s -m -o %s %s 2>&1", env(), qcc_bin,
+            qmod_dir + "/CmdCtxDirectiveH.qmod", src));
+        if (!is_file(qmod_dir + "/CmdCtxDirectiveH.qmod")) {
+            testSkip("qcc is not available or cannot compile the module: " + out);
+        }
+        string script = write("load-library.q", "%modern\nProgram p(PO_NEW_STYLE | PO_NO_FILESYSTEM);\n"
+            "p.parse(\"%requires CmdCtxDirectiveH\\n\", \"load\");\nprintf(\"loaded\\n\");\n");
+        foreach string dir in (("", qmod_dir + ":")) {
+            string label = dir ? "compiled" : "source";
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b "
+                "--enable-debug %s", replace(env(), "QORE_MODULE_DIR=", "QORE_MODULE_DIR=" + dir), qore_bin, script),
+                True);
+            assertEq(0, r.rc, sprintf("%s: exit status: %s", label, r.out));
+            assertEq("loaded\n", r.stdout, sprintf("%s: output", label));
+        }
+    }
+
+    #! a sandboxed Program loads modules whose source has a \c %module-cmd directive, from their source and compiled
+    /** The commands of a compiled module are replayed into the module's Program as it is loaded, while the sandboxed
+        loader is still running: a replayed command is the module's own directive, not a command that the loader issues
+        to another Program, so the compiled module loads as its source does, by name (library code, judged by the
+        sandbox) and by a path that the loader chose (judged by the loader's restrictions).  Sandboxed code still
+        cannot issue a command to another Program at run time.
+    */
+    testSandboxedLoaderReplay() {
+        skipWithoutModules();
+        string qmod_dir = tmp.path + "/qmod-sandboxed";
+        string chosen_qmod_dir = tmp.path + "/qmod-sandboxed-chosen";
+        mkdir(qmod_dir);
+        mkdir(chosen_qmod_dir);
+        string src_dir = realpath(get_script_dir() + "/module-command");
+        string chosen_dir = realpath(get_script_dir() + "/module-command-chosen");
+        foreach list<string> m in ((("CmdCtxDirectiveI", src_dir, qmod_dir), ("CmdCtxDirectiveJ", src_dir, qmod_dir),
+                ("CmdCtxDirectiveK", chosen_dir, chosen_qmod_dir),
+                ("CmdCtxDirectiveL", chosen_dir, chosen_qmod_dir))) {
+            string qmod = sprintf("%s/%s.qmod", m[2], m[0]);
+            string out = backquote(sprintf("%s %s -m -o %s %s/%s.qm 2>&1", env(), qcc_bin, qmod, m[1], m[0]));
+            if (!is_file(qmod)) {
+                testSkip("qcc is not available or cannot compile the module: " + out);
+            }
+        }
+        string script = write("load-sandboxed.q", LoadSandboxedScript);
+        foreach list<string> run in ((("source", "", "qm", chosen_dir),
+                ("compiled", qmod_dir + ":", "qmod", chosen_qmod_dir))) {
+            string label = run[0];
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "%s %s %s", replace(env(), "QORE_MODULE_DIR=", "QORE_MODULE_DIR=" + run[1]), qore_bin, script, run[2],
+                run[3]), True);
+            assertEq(0, r.rc, sprintf("%s: exit status: %s", label, r.out));
+            assertEq(LoadSandboxedExpected, r.stdout, sprintf("%s: output", label));
+        }
+    }
+
+    #! returns the output of a compiled replay program
+    private string replay(string name, string src, string opt) {
+        string path = write(name + ".q", src);
+        string exe = sprintf("%s/%s.O%s", tmp.path, name, opt);
+        int rc;
+        string out = compile(path, exe, opt, \rc);
+        assertEq(0, rc, sprintf("%s: qcc -O%s exit status: %s", name, opt, out));
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env(), exe), True);
+        assertEq(0, r.rc, sprintf("%s: -O%s: exit status: %s", name, opt, r.out));
+        return r.stdout;
+    }
+
+    testReplay() {
+        skipWithoutModules();
+        foreach string opt in (("0", "3")) {
+            # the loader is the process start (no restrictions) and the program is declared without any
+            assertEq(ReplayTrusted, replay("replay-trusted", "%modern\n%module-cmd(cmdctxaware) record\n" + ReplayBody,
+                opt), sprintf("-O%s: replay of a program with no restrictions", opt));
+            # the program is declared with %no-filesystem before the directive: the replayed command has it too
+            assertEq(ReplayRestricted, replay("replay-restricted", "%modern\n%no-filesystem\n"
+                "%module-cmd(cmdctxaware) record\n" + ReplayBody, opt),
+                sprintf("-O%s: replay of a program declared with %%no-filesystem", opt));
+            # the directive comes before the option: the replayed command has only what was in force at the directive,
+            # as when the program is interpreted; the "path" command is refused for code without the filesystem, so the
+            # program would not load if its command were replayed with the options that it is declared with
+            assertEq("loaded\n", replay("replay-first", "%modern\n%module-cmd(cmdctxaware) path\n%no-filesystem\n"
+                "printf(\"loaded\\n\");\n", opt),
+                sprintf("-O%s: replay of a program with the directive before %%no-filesystem", opt));
+            # a module that does not declare support gets a replayed command that nothing restricts
+            assertEq(ReplayTrusted, replay("replay-legacy", "%modern\n%module-cmd(cmdctxlegacy) record\n"
+                + replace(ReplayBody, "cmdctxaware", "cmdctxlegacy"), opt),
+                sprintf("-O%s: replay of a program for the module that does not declare support", opt));
+        }
+    }
+
+    testReplayRefused() {
+        skipWithoutModules();
+        # the command is refused already when the program is compiled: its parse has the restriction
+        string path = write("refused.q", "%modern\n%no-filesystem\n%module-cmd(cmdctxlegacy) record\n");
+        string exe = tmp.path + "/refused";
+        int rc;
+        string out = compile(path, exe, "0", \rc);
+        assertTrue(rc != 0, "qcc fails: " + out);
+        assertFalse(is_file(exe), "qcc wrote no executable");
+        assertTrue(out =~ /PARSE-COMMAND-ERROR/ && out =~ /cmd_caller_aware/,
+            "the error names the command error and the missing declaration: " + out);
+
+        # the same directive after the option is refused by the module that declares support: the command is the
+        # restricted code's own
+        string path2 = write("refused-path.q", "%modern\n%no-filesystem\n%module-cmd(cmdctxaware) path\n");
+        string exe2 = tmp.path + "/refused-path";
+        string out2 = compile(path2, exe2, "0", \rc);
+        assertTrue(rc != 0, "qcc fails for the path command: " + out2);
+        assertFalse(is_file(exe2), "qcc wrote no executable for the path command");
+        assertTrue(out2 =~ /CMDCTX-DENIED/, "the error is the module's: " + out2);
+    }
+}
