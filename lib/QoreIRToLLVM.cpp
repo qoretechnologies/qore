@@ -50,7 +50,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 439,
+static_assert(QORE_IR_MAX_OPCODE == 438,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -36633,13 +36633,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::CheckException: {
+            // a kept check of a release in a functional loop's body: native code checks the sink after the release
+            // itself, with the handler of the container that releases the value (qore#6072); nothing to emit
+            if (inst->release_check == QoreIRReleaseCheck::Kept || inst->release_check == QoreIRReleaseCheck::Pending) {
+                return true;
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
-        case QoreIROpcode::CheckReleaseException:
-            // native code checks the sink after the release itself, with the handler that the instruction which
-            // releases the value has (qore#6072): nothing to emit
-            return true;
         case QoreIROpcode::DiscardTemps: {
             emitDiscardTemps(module, inst->temp_scope_id);
             // a temporary's destructor can raise an exception, which the statement raises, as in the AST interpreter:

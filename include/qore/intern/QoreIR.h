@@ -1065,21 +1065,7 @@ enum class QoreIROpcode : uint16_t {
     */
     HandlerReturn = 438,
 
-    /** Raises an exception that a release left in the sink in the body of a functional loop (qore#6072)
-        The body of a map, select or fold expression keeps the values of an element until the next element replaces
-        them; the release of one whose type can hold an object can run a destructor that raises an exception.  The IR
-        interpreter checks the sink here and branches to the instruction's handler, after an instruction that builds
-        such a container and at the loop's back-edge, which are emitted only for values whose type can hold an object;
-        native code finds the exception with the check that follows the release, and emits nothing.  operands[0] = the
-        value whose release is checked (a container's or a call's), none at a back-edge; no result.
-        qore_ir_prune_release_checks() removes the checks of the values that cannot hold an object, gives a container
-        whose check stays the handler and turns the check of a call's or a Phi's value into a CheckException, which native
-        code compiles after the release of the previous value at the start of the call's continuation or of the Phi's
-        block.
-    */
-    CheckReleaseException = 439,
-
-    // NOTE: When adding new opcodes, assign the next sequential ID (440, 441, ...)
+    // NOTE: When adding new opcodes, assign the next sequential ID (439, 440, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1088,8 +1074,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::CheckReleaseException);
-static_assert(QORE_IR_MAX_OPCODE == 439, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::HandlerReturn);
+static_assert(QORE_IR_MAX_OPCODE == 438, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself
@@ -1500,6 +1486,24 @@ enum class QoreIRInstClass : uint8_t {
         return c == inst_class_id; \
     }
 
+//! The kind of a check of a release in the body of a functional loop (a CheckException; qore#6072)
+/** The body of a map, select or fold expression keeps the values of an element until the next element replaces them;
+    the release of one whose type can hold an object can run a destructor that raises an exception.  The lowering puts
+    a CheckException after each container, at the start of each call's continuation, after the Phis of each block and
+    at the loop's back-edge (QoreIRLowering::LoopBodyRegion), with the value whose release it checks as its operand
+    (none at a back-edge).  qore_ir_prune_release_checks() removes those of the values that cannot hold an object and
+    those that an append with the same handler follows, and clears the operands of the others.  The IR interpreter
+    executes every CheckException alike.
+*/
+enum class QoreIRReleaseCheck : uint8_t {
+    None,       //!< not a release check
+    Pending,    //!< a release check that qore_ir_prune_release_checks() has not decided yet (it has its operand)
+    Kept,       //!< a kept check of a container's value or at a back-edge: native code checks the sink after the
+                //!< release itself (the container gets the handler) and emits nothing for it
+    Native,     //!< a kept check of a call's or a Phi's value: native code releases the previous value at the start
+                //!< of the call's continuation or of the Phi's block, where it checks the sink
+};
+
 class QoreIRInstruction {
 public:
     enum class AOTStringCaseComparisonKind : uint8_t {
@@ -1563,6 +1567,9 @@ public:
     // Transient: ReleaseOwnedTemp in the exception cleanup of a functional operator, which only runs once the loop has
     // ended (see qore_ir_is_exception_only_release())
     bool exception_cleanup_release = false;
+    //! CheckException only: whether it checks a release in the body of a functional loop (qore#6072); transient, not
+    //! serialized: the IR interpreter executes it as any CheckException
+    QoreIRReleaseCheck release_check = QoreIRReleaseCheck::None;
     // Transient: a call with an argument that the IR interpreter's analysis found it can consume, which gives the
     // references of its temporary arguments to the callee (see IRConsumedCallArgs in QoreIRInterpreter.cpp, issue
     // #5882); set with the interpreter's analysis of the function, before the function runs

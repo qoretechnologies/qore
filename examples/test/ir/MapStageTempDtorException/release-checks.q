@@ -2,8 +2,8 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright 2026 Qore Technologies, s.r.o.
 # the IR of MapStageTempDtorException.qtest: the functional loops of values that cannot hold an object get no release
-# check (CheckReleaseException), and their containers no handler; the loops whose values can hold one get them
-# (qore#6072)
+# check (a CheckException marked as a release check), and their containers no handler; the loops whose values can
+# hold one get them (qore#6072)
 
 %modern
 

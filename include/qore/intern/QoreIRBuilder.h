@@ -41,7 +41,7 @@ DLLLOCAL bool qore_ir_takes_region_exception_target(QoreIROpcode opcode);
 /** The body keeps the values of an element until the next element replaces them: the instruction whose result
     replaces one releases it, and a destructor can raise an exception there.  When the body is lowered, the lowering
     gives the container instructions whose elements can hold an object the handler that was innermost when they were
-    appended, and a CheckReleaseException after them, and the loop's back-edge a CheckReleaseException when a value of
+    appended, and a release check (QoreIRReleaseCheck) after them, and the loop's back-edge a release check when a value of
     the body can hold an object; the IR interpreter checks the sink there, and native code checks it after the release
     with the handler (qore#6072).  The instructions of values that cannot hold an object get nothing, so such loops
     are as before.
@@ -460,7 +460,8 @@ public:
     QoreIRInstruction* createDebugBlockUnwind(uint16_t depth, const QoreProgramLocation* loc);
     //! Emit a pending-exception check after cleanup code that can run destructors.
     QoreIRInstruction* createCheckException(const QoreProgramLocation* loc = nullptr);
-    //! creates a CheckReleaseException instruction with the given handler (qore#6072)
+    //! creates a check of a release in a functional loop's body (a pending CheckException, see QoreIRReleaseCheck)
+    //! with the given handler (qore#6072)
     QoreIRInstruction* createCheckReleaseException(QoreIRBasicBlock* handler, const QoreProgramLocation* loc = nullptr);
     //! Emit the check of the value of a return statement against the declared return type (CheckReturnValue)
     /** @param value the value returned

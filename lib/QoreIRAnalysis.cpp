@@ -11816,7 +11816,7 @@ private:
                 case QoreIROpcode::IteratorNext:
                 case QoreIROpcode::IteratorRelease:
                 case QoreIROpcode::ReleaseOwnedTemp:
-                case QoreIROpcode::CheckReleaseException:
+                case QoreIROpcode::CheckException:
                     rv = false;
                     break;
                 default:
@@ -11874,7 +11874,7 @@ size_t qore_ir_prune_release_checks(QoreIRFunction& func) {
     bool any = false;
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
-            if (inst->opcode == QoreIROpcode::CheckReleaseException) {
+            if (inst->opcode == QoreIROpcode::CheckException && inst->release_check == QoreIRReleaseCheck::Pending) {
                 any = true;
                 break;
             }
@@ -11944,7 +11944,7 @@ size_t qore_ir_prune_release_checks(QoreIRFunction& func) {
         std::vector<std::unique_ptr<QoreIRInstruction>>& insts = block->instructions;
         for (size_t i = 0; i < insts.size(); ) {
             QoreIRInstruction* inst = insts[i].get();
-            if (inst->opcode != QoreIROpcode::CheckReleaseException) {
+            if (inst->opcode != QoreIROpcode::CheckException || inst->release_check != QoreIRReleaseCheck::Pending) {
                 ++i;
                 continue;
             }
@@ -11977,15 +11977,12 @@ size_t qore_ir_prune_release_checks(QoreIRFunction& func) {
                 }
                 if (covered) {
                     keep = false;
-                } else if (keep && def) {
-                    if (qore_ir_takes_region_exception_target(def->opcode)) {
-                        // the check stays for the IR interpreter, which emits nothing for it in native code
-                    } else if (def->opcode == QoreIROpcode::Invoke || def->opcode == QoreIROpcode::Phi) {
-                        // native code releases the previous value at the start of the call's continuation or of the
-                        // Phi's block, where this is
-                        inst->opcode = QoreIROpcode::CheckException;
-                        inst->operands.clear();
-                    }
+                } else if (keep) {
+                    // native code releases the previous value of a call or a Phi at the start of the call's
+                    // continuation or of the Phi's block, where this is, and checks it here; it checks that of a
+                    // container after the container, with the handler, and emits nothing here
+                    inst->release_check = def && (def->opcode == QoreIROpcode::Invoke || def->opcode == QoreIROpcode::Phi)
+                        ? QoreIRReleaseCheck::Native : QoreIRReleaseCheck::Kept;
                 }
             } else {
                 // at a back-edge; redundant when the instructions before it, which are transparent, follow one that
@@ -12004,6 +12001,11 @@ size_t qore_ir_prune_release_checks(QoreIRFunction& func) {
                 }
             }
             if (keep) {
+                // decided: the operand only served the decision, and the image carries a CheckException as before
+                if (inst->release_check == QoreIRReleaseCheck::Pending) {
+                    inst->release_check = QoreIRReleaseCheck::Kept;
+                }
+                inst->operands.clear();
                 ++i;
                 continue;
             }

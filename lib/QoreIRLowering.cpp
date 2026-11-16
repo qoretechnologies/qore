@@ -17867,7 +17867,7 @@ public:
         }
     }
 
-    //! ends the body: restores the enclosing region, and puts a CheckReleaseException of the value after each
+    //! ends the body: restores the enclosing region, and puts a release check (QoreIRReleaseCheck) of the value after each
     //! container and each call of the body that has a handler; qore_ir_prune_release_checks() removes those of the
     //! values that cannot hold an object, when the function is finalized
     DLLLOCAL void end() {
@@ -17933,7 +17933,8 @@ private:
     //! returns a check of the release of the value of an instruction, with the given handler
     DLLLOCAL static std::unique_ptr<QoreIRInstruction> makeCheck(const QoreIRInstruction* inst,
             QoreIRBasicBlock* handler) {
-        auto check = std::make_unique<QoreIRInstruction>(QoreIROpcode::CheckReleaseException);
+        auto check = std::make_unique<QoreIRInstruction>(QoreIROpcode::CheckException);
+        check->release_check = QoreIRReleaseCheck::Pending;
         check->loc = inst->loc;
         check->temp_scope_id = inst->temp_scope_id;
         check->exception_target = handler;

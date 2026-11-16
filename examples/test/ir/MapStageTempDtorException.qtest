@@ -19,8 +19,8 @@
     no handler, past the try statement, with the exception chained to itself; the IR interpreter left it in the sink for
     the next instruction that checks, which also returned from the frame when it had no handler.  The containers,
     calls and Phis of the body of a functional loop whose values can hold an object now check the release with the
-    loop's handler (CheckReleaseException, QoreIRLowering::LoopBodyRegion), as does the loop's back-edge; the loops of
-    values that cannot hold an object get no check (qore_ir_prune_release_checks()).
+    loop's handler (release checks, QoreIRReleaseCheck, QoreIRLowering::LoopBodyRegion), as does the loop's back-edge;
+    the loops of values that cannot hold an object get no check (qore_ir_prune_release_checks()).
 */
 class MapStageTempDtorExceptionTest inherits QUnit::Test {
     private {
@@ -108,7 +108,16 @@ class MapStageTempDtorExceptionTest inherits QUnit::Test {
             }
         }
         assertEq((), checks, int_part.join("\n"));
-        assertGt(0, (select obj_part, $1 =~ /check\.release\.exception/).size(), obj_part.join("\n"));
+        int obj_checks = 0;
+        block = "";
+        foreach string line in (obj_part) {
+            if (line =~ /^[A-Za-z_][A-Za-z0-9_.]*:$/) {
+                block = line;
+            } else if (line =~ /check\.exception/ && block !~ /cleanup|catch|propagate/) {
+                ++obj_checks;
+            }
+        }
+        assertGt(0, obj_checks, obj_part.join("\n"));
         # the program's output follows the dump
         assertRegex("int loops end\nobject loops end\n", dump);
     }

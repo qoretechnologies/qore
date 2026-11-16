@@ -1748,9 +1748,10 @@ QoreIRInstruction* QoreIRBuilder::createDebugBlockUnwind(uint16_t depth, const Q
 
 QoreIRInstruction* QoreIRBuilder::createCheckReleaseException(QoreIRBasicBlock* handler,
         const QoreProgramLocation* loc) {
-    auto inst = append<QoreIRInstruction>(QoreIROpcode::CheckReleaseException);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CheckException);
     inst->loc = loc;
     inst->exception_target = handler;
+    inst->release_check = QoreIRReleaseCheck::Pending;
     return inst;
 }
 

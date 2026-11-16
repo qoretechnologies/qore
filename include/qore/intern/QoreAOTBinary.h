@@ -517,11 +517,6 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        releases (two more arguments).  A handler of an earlier format returned its value, which the runtime no
 //!        longer reads; the AOT runtime identity changes with the runtime entry, so a module compiled for an earlier
 //!        format is refused and must be rebuilt (#6074).
-//! v40 (batch T; one format version for the format changes of the batch, one line each):
-//!      - the body of a map, select or fold expression can hold CheckReleaseException instructions
-//!        (QoreIROpcode::CheckReleaseException, 439), the check of the release of a value that can hold an object,
-//!        with that value as its operand or none at a loop's back-edge; an image that uses one has a higher maximum
-//!        opcode ID, which an earlier runtime refuses (#6072).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -564,11 +559,9 @@ constexpr uint16_t QORE_AOT_MODULE_CMD_OPTIONS_VERSION = 37;
 constexpr uint16_t QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION = 38;
 //! First format version whose out-of-line handlers hand their return values over with HandlerReturn (see v39 above).
 constexpr uint16_t QORE_AOT_HANDLER_RETURN_VERSION = 39;
-//! First format version whose functional loop bodies can check releases with CheckReleaseException (see v40 above).
-constexpr uint16_t QORE_AOT_RELEASE_CHECK_VERSION = 40;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_RELEASE_CHECK_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_HANDLER_RETURN_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
