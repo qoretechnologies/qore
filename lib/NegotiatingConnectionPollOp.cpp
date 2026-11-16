@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreSocketObject.h>
 #include "qore/intern/NegotiatingConnectionPollOp.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreHttp1ClientConnection.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QC_SocketPollOperation.h"
@@ -548,14 +549,16 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
             "negotiating connection has already been taken over");
         return nullptr;
     }
+    // a connection that was closed after it was found ready, or that another thread is closing (closeConnection()
+    // invalidated it; it still reports ready until the close ends), is refused as a closed connection refuses a
+    // submit, so that the caller reports it like one: its socket must not be handed over to a concrete connection while
+    // the close cancels it (qore#6301, qore#6303)
+    if (isClosed() || isInvalidated()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot hand over the negotiating connection: it has been closed");
+        return nullptr;
+    }
     if (!isReady()) {
-        // a connection that was closed after it was found ready (or that another thread is closing, which invalidated
-        // it) is refused as a closed connection refuses a submit, so that the caller reports it like one (qore#6301)
-        if (isClosed() || isInvalidated()) {
-            xsink->raiseException("HTTPCLIENT-STATE-ERROR",
-                "cannot hand over the negotiating connection: it has been closed");
-            return nullptr;
-        }
         xsink->raiseException("HTTPCLIENT-NEGOTIATE-ERROR",
             "negotiating connection is not ready");
         return nullptr;
@@ -644,8 +647,16 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
 }
 
 void NegotiatingHttpClientConnection::closeConnection(ExceptionSink* xsink) {
+#ifdef DEBUG
+    // tests check that no two closes of the connection run at the same time
+    QoreDbgHttpCloseScope dbg_close_scope(this);
+#endif
     markInvalidated();
     drainInFlight();
+#ifdef DEBUG
+    // tests hold the close here, after new calls are refused and before the connection is closed
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::CloseAfterInvalidate);
+#endif
 
     if (neg_priv) {
         neg_priv->clearOwner();

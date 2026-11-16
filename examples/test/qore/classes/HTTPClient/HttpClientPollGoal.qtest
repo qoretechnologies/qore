@@ -126,6 +126,8 @@ class HttpClientPollGoalTest inherits QUnit::Test {
             \testConcurrentClose());
         addTestCase("a request whose negotiating (ALPN) connection is closed before it is handed over fails in its poll "
             "operation", \testFinalizeAfterClose());
+        addTestCase("a request whose negotiating connection another thread is closing does not close it a second time",
+            \testFinalizeDuringClose());
         addTestCase("a request whose submit found the connection closed and that is invalidated before the error is "
             "classified fails in its poll operation", \testSubmitFailedThenInvalidated());
         addTestCase("a request on a multiplexed connection that another request closes is not closed a second time",
@@ -371,6 +373,94 @@ class HttpClientPollGoalTest inherits QUnit::Test {
             hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
             # reported as the poll operations report a disconnect
             assertEq("SOCKET-NOT-OPEN", result.ex.err, "the request fails in its poll operation");
+            assertFalse(spop.goalReached(), "a request that failed has not reached its goal");
+        }
+    }
+
+    #! A request finds its ALPN-negotiating connection ready, and another thread closes the client's connections: the
+    #! close has taken the connection out of the pool and invalidated it, and is held before it closes the connection,
+    #! when the request hands the connection over; the hand-over refuses it, the request fails in its poll operation, and
+    #! the connection is not closed a second time beside the close in progress (qore#6303)
+    testFinalizeDuringClose() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hooks that order the close and the finalize are only in debug builds");
+        }
+        H2Handler handler();
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("http-client-poll-goal", LoggerLevel::getLevelInfo()),
+        });
+        on_exit server.stop();
+        server.setDefaultHandler("tls", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": False,
+        }).port;
+        server.waitForAsyncIo();
+
+        HTTPClient hc({
+            "url": sprintf("https://localhost:%d", port),
+            "http3_mode": "disabled",
+            "ssl_verify_cert": False,
+        });
+        int closes = call_function("dbg_http_concurrent_closes");
+
+        Counter finalize_reached(1);
+        Counter finalize_release(1);
+        Counter close_reached(1);
+        Counter close_release(1);
+        # registered before the hooks are armed, so that a failure while arming them leaves none armed
+        on_exit {
+            call_function("dbg_http_hold_clear");
+            if (finalize_release.getCount()) {
+                finalize_release.dec();
+            }
+            if (close_release.getCount()) {
+                close_release.dec();
+            }
+        }
+        call_function("dbg_http_hold_at", "finalize", finalize_reached, finalize_release);
+
+        Counter submitted(1);
+        *AbstractPollOperation spop;
+        *hash<ExceptionInfo> start_ex;
+        background sub () {
+            on_exit submitted.dec();
+            try {
+                spop = hc.startPollSendRecv("GET", "/negotiated");
+            } catch (hash<ExceptionInfo> ex) {
+                start_ex = ex;
+            }
+        }();
+        assertEq(0, finalize_reached.waitForZero(HangGuard), "the request found its negotiating connection ready");
+
+        # another thread closes the client's connections; its close of the negotiating connection is held once it
+        # invalidated the connection
+        call_function("dbg_http_hold_at", "close", close_reached, close_release);
+        Counter closed(1);
+        background sub () {
+            on_exit closed.dec();
+            hc.disconnect();
+        }();
+        assertEq(0, close_reached.waitForZero(HangGuard), "the close invalidated the negotiating connection");
+
+        # the request hands over the connection while the close is in progress
+        finalize_release.dec();
+        assertEq(0, submitted.waitForZero(HangGuard), "startPollSendRecv() returned");
+        assertNothing(start_ex, sprintf("startPollSendRecv() raised no exception (%s: %s)", start_ex.err ?? "-",
+            start_ex.desc ?? "-"));
+        # the close completes
+        close_release.dec();
+        assertEq(0, closed.waitForZero(HangGuard), "the close completed");
+        assertEq(closes, call_function("dbg_http_concurrent_closes"), "no second close of the connection ran beside "
+            "the close in progress");
+
+        assertTrue(exists spop, "startPollSendRecv() returned a poll operation");
+        if (spop) {
+            hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
+            assertTrue(exists result.ex, "the request fails in its poll operation");
             assertFalse(spop.goalReached(), "a request that failed has not reached its goal");
         }
     }
