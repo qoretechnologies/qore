@@ -38,6 +38,9 @@ string sub example(string str) {
     no value (a member or variable of the type that was not assigned) or a deleted object; then the variant is resolved
     again at run time, as for a call resolved at run time, with the arguments as given.
 
+    A call through a @ref call_reference "call reference" is always resolved at run time: a reference names a function or method, not one of its variants, so the variant of an overloaded function or
+    method is selected each time the reference is called, with the arguments of that call.
+
     @section overloading_no_value Arguments With No Value And Overloading
     An argument with no value is an argument: it counts toward the number of arguments of the call, whether it is a
     literal @ref nothing "NOTHING" or a variable or expression holding no value, so the call selects the same variant
