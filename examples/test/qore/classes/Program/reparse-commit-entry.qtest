@@ -11,8 +11,8 @@
 %exec-class ReparseCommitEntryTest
 
 #! Entering a Program while a parse of it is committed (issue #6243)
-/** Only the committing thread, which runs the code of the commit, can enter the Program until the commit has
-    finished.  The commit is stopped where it has started with a gate of the debug build
+/** Only the committing thread, which runs the code of the commit, and the threads that such code starts can enter
+    the Program until the commit has finished.  The commit is stopped where it has started with a gate of the debug build
     (dbg_arm_parse_commit_gate()), so that another thread tries to enter the Program then.
 */
 public class ReparseCommitEntryTest inherits QUnit::Test {

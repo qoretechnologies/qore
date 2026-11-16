@@ -2085,6 +2085,10 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     if (atomic_rollback) {
         parsing_in_progress = false;
     }
+    {
+        AutoLocker al(plock);
+        parse_tids.clear();
+    }
 }
 
 //! the Programs that are left allocated at the end of the process; never destroyed, so they stay reachable
@@ -2499,6 +2503,7 @@ int qore_program_private::internParseCommit(bool standard_parse) {
                 DLLLOCAL ~CommitEntryRestrictionHelper() {
                     AutoLocker al(pp.plock);
                     pp.commit_entry_restricted = false;
+                    pp.parse_tids.clear();
                 }
             private:
                 qore_program_private& pp;
