@@ -547,6 +547,28 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         return data.typeCode() == NT_OBJECT && data.className() == "ColumnarResult";
     }
 
+    #! Returns a ColumnarResult with the given columns, keeping the schema of the source columns they were taken from
+    /** @param source the ColumnarResult that the columns were made from
+        @param columns the columns of the result, keyed by column name
+        @param sources maps the name of each column in \a columns that is a column of \a source taken unchanged to
+        the name of the source column; such a column keeps the schema of the source column, and any other column
+        gets the schema of its values
+
+        @return a ColumnarResult with the columns in \a columns
+
+        @since %DataProvider 3.12
+    */
+    static object columnarResultWithSchemas(object source, hash<auto> columns, hash<auto> sources) {
+        hash<string, hash<auto>> schemas = map {$1.name: $1}, source.schemaV2();
+        hash<auto> desc = {};
+        foreach hash<auto> i in (sources.pairIterator()) {
+            if (columns.hasKey(i.key) && schemas{i.value}) {
+                desc{i.key} = {"schema": schemas{i.value} - "name"};
+            }
+        }
+        return ColumnarResult::fromColumnHash(columns, desc);
+    }
+
     #! Returns True if the value is a hash of dense typed buffers
     /** @param data the value to test
 
