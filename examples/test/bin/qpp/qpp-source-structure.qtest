@@ -325,6 +325,28 @@ int TestCls::get6() [flags=CONSTANT] {
         assertSucceeded(r, "a comment ending in skipped code");
         assertRegex("TestCls_get6", r.cpp_text, "the method after the skipped code is bound");
 
+        # a string literal and a line comment that a backslash at the end of a line continues, in compiled and in
+        # skipped code
+        foreach list<auto> opts in ((), ("-DFOO",)) {
+            r = runQpp(ClassStart + "
+#ifndef FOO
+static const char* s7 = \"abc \\
+ /* def\";
+// comment \\
+/* still the comment
+#endif
+//! documented
+/** doc
+*/
+int TestCls::get7() [flags=CONSTANT] {
+    return 1;
+}
+", opts);
+            string what = "a literal and a comment continued over lines" + (opts ? " in skipped code" : "");
+            assertSucceeded(r, what);
+            assertRegex("TestCls_get7", r.cpp_text, what + ": the method after them is bound");
+        }
+
         # a method in a raw string literal is copied as it is
         r = runQpp(ClassStart + "
 static const char* s3 = R\"(

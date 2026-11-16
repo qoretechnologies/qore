@@ -1487,19 +1487,33 @@ static bool qpp_line_is_qore_constant(const std::string& line) {
 */
 class QppCopiedCodeState {
 public:
-    //! returns true if the next line is not compiled code: in a comment, a raw string literal or disabled code
+    //! returns true if the next line is not compiled code: in a comment, a raw string literal, a literal or comment
+    //! continued with a backslash at the end of a line, or disabled code
     bool inactive() const {
-        return in_block_comment || !raw_close.empty() || if0_depth;
+        return inText() || if0_depth;
     }
 
-    //! returns true if the next line is in a block comment or a raw string literal: a '#' there is not a directive
+    //! returns true if the next line is in a comment, a raw string literal, or a literal or comment continued with a
+    //! backslash at the end of a line: a '#' there is not a directive
     bool inText() const {
-        return in_block_comment || !raw_close.empty();
+        return in_block_comment || !raw_close.empty() || spliced_comment || spliced_literal;
     }
 
     //! updates the state with a line of C++ code
     void text(const std::string& line) {
-        for (size_t i = 0; i < line.size(); ++i) {
+        size_t i = 0;
+        // a line comment continued from the line before (a backslash at its end)
+        if (spliced_comment) {
+            spliced_comment = spliced(line);
+            return;
+        }
+        // a string or character literal continued from the line before
+        if (spliced_literal) {
+            char c = spliced_literal;
+            spliced_literal = 0;
+            i = skipLiteral(line, 0, c) + 1;
+        }
+        for (; i < line.size(); ++i) {
             char c = line[i];
             if (!raw_close.empty()) {
                 // in a raw string literal, which ends with its close sequence
@@ -1520,6 +1534,8 @@ public:
             }
             if (c == '/' && i + 1 < line.size()) {
                 if (line[i + 1] == '/') {
+                    // a line comment, which a backslash at the end of the line continues
+                    spliced_comment = spliced(line);
                     return;
                 }
                 if (line[i + 1] == '*') {
@@ -1536,12 +1552,7 @@ public:
             }
             // a literal; not a digit separator ("1'000")
             if (c == '"' || (c == '\'' && !qpp_is_digit_separator(line, i))) {
-                // skip the literal
-                for (++i; i < line.size() && line[i] != c; ++i) {
-                    if (line[i] == '\\') {
-                        ++i;
-                    }
-                }
+                i = skipLiteral(line, i + 1, c);
             }
         }
     }
@@ -1584,7 +1595,38 @@ private:
     bool in_block_comment = false;
     //! the sequence that ends the raw string literal that the code is in, if any
     std::string raw_close;
+    //! true if a line comment continues on the next line
+    bool spliced_comment = false;
+    //! the quote of a string or character literal that continues on the next line, if any
+    char spliced_literal = 0;
     unsigned if0_depth = 0;
+
+    //! returns true if the line ends with a backslash, which joins the next line to it
+    static bool spliced(const std::string& line) {
+        size_t e = line.size();
+        while (e && (line[e - 1] == '\n' || line[e - 1] == '\r')) {
+            --e;
+        }
+        return e && line[e - 1] == '\\';
+    }
+
+    //! returns the offset of the quote that ends the literal from \a start, or the size of the line if it does not
+    //! end in it; a literal that a backslash at the end of the line continues is continued on the next line
+    size_t skipLiteral(const std::string& line, size_t start, char quote) {
+        size_t i = start;
+        for (; i < line.size() && line[i] != quote; ++i) {
+            if (line[i] == '\\') {
+                ++i;
+            }
+        }
+        if (i >= line.size()) {
+            if (spliced(line)) {
+                spliced_literal = quote;
+            }
+            return line.size();
+        }
+        return i;
+    }
 };
 
 static int read_line(unsigned &lineNumber, std::string& str, FILE* fp) {
