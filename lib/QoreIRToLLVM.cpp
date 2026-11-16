@@ -17064,6 +17064,75 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     return true;
 }
 
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::emitStringAppendCow(const QoreIRInstruction* inst, llvm::Value* lhs_boxed,
+        llvm::Value* rhs_boxed, bool use_in_place, llvm::Module& module, llvm::Function* llvm_func, bool& borrowed,
+        std::string& error) {
+    borrowed = false;
+    if (inst->string_append_local_cow) {
+        auto definition = value_definitions.find(inst->operands[0].id);
+        if (definition == value_definitions.end()
+                || definition->second->opcode != QoreIROpcode::LoadLocal) {
+            error = "internal error: local string append has no local load";
+            return nullptr;
+        }
+        const auto* load = static_cast<const QoreIRLocalInstruction*>(definition->second);
+        auto key = reinterpret_cast<const void*>(load->local);
+        auto local = local_allocas.find(key);
+        if (local == local_allocas.end()) {
+            // Top-level variables referenced from a function are
+            // represented by LocalVar instructions but remain on the
+            // runtime stack. Their loads own a temporary reference, so
+            // use guarded CoW and let StoreLocal publish the result.
+            use_in_place = false;
+        } else if (ir_only_locals_set
+                && ir_only_locals_set->count(key) && !use_in_place) {
+            // raw local cache: the helper appends to the stored string in place
+            llvm::Value* owner = local->second.storage();
+            auto preinst_cleanup =
+                preinstantiated_entry_cleanup_by_local.find(key);
+            if (preinst_cleanup
+                    != preinstantiated_entry_cleanup_by_local.end()) {
+                owner = preinst_cleanup->second;
+            } else if (!fast_entry_param_allocas_by_local.count(key)
+                    && owned_ir_local_alloca_keys.insert(key).second) {
+                if (auto* local_ai =
+                        llvm::dyn_cast<llvm::AllocaInst>(local->second.storage())) {
+                    owned_ir_local_allocas.push_back(local_ai);
+                }
+            }
+
+            auto helper = module.getOrInsertFunction(
+                "qore_rt_string_append_local_cow",
+                llvm::FunctionType::get(i64_type,
+                    {ptr_type, ptr_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper,
+                {owner, local->second.storage(), rhs_boxed, xsink_arg});
+            markLocalCacheFresh(key, llvm_func);
+            // the helper returns the local's own value, which the local keeps
+            borrowed = true;
+            return result;
+        } else if (!(ir_only_locals_set
+                && ir_only_locals_set->count(key))) {
+            // The runtime stack owns the local. Drop only compiler-held
+            // reload/cache references so the helper's refcount test sees
+            // real aliases, then let the paired StoreLocal publish the
+            // owned result normally.
+            clearLocalCachedValue(key, module, llvm_func,
+                LocalCacheClearMode::DuplicateRefsOnly);
+            clearLocalReloadTracker(key, module, llvm_func);
+            use_in_place = false;
+        }
+    }
+    const char* helper_name = use_in_place
+        ? "qore_rt_string_append_in_place" : "qore_rt_string_append_cow";
+    auto helper = module.getOrInsertFunction(helper_name,
+            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+    // the in-place helper returns the local's own value
+    borrowed = use_in_place;
+    return builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
+}
+
 bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Function* llvm_func,
         llvm::Module& module, std::string& error) {
     printd(3, "LLVM-LOWER: opcode=%d result=%%%d\n", (int)inst->opcode, inst->result.id);
@@ -17687,72 +17756,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
-            bool use_in_place = inst->string_append_in_place;
-            if (inst->string_append_local_cow) {
-                auto definition = value_definitions.find(inst->operands[0].id);
-                if (definition == value_definitions.end()
-                        || definition->second->opcode != QoreIROpcode::LoadLocal) {
-                    error = "internal error: local string append has no local load";
-                    return false;
-                }
-                const auto* load = static_cast<const QoreIRLocalInstruction*>(
-                    definition->second);
-                auto key = reinterpret_cast<const void*>(load->local);
-                auto local = local_allocas.find(key);
-                if (local == local_allocas.end()) {
-                    // Top-level variables referenced from a function are
-                    // represented by LocalVar instructions but remain on the
-                    // runtime stack. Their loads own a temporary reference, so
-                    // use guarded CoW and let StoreLocal publish the result.
-                    use_in_place = false;
-                } else if (ir_only_locals_set
-                        && ir_only_locals_set->count(key) && !use_in_place) {
-                    // raw local cache: the helper appends to the stored string in place
-                    llvm::Value* owner = local->second.storage();
-                    auto preinst_cleanup =
-                        preinstantiated_entry_cleanup_by_local.find(key);
-                    if (preinst_cleanup
-                            != preinstantiated_entry_cleanup_by_local.end()) {
-                        owner = preinst_cleanup->second;
-                    } else if (!fast_entry_param_allocas_by_local.count(key)
-                            && owned_ir_local_alloca_keys.insert(key).second) {
-                        if (auto* local_ai =
-                                llvm::dyn_cast<llvm::AllocaInst>(local->second.storage())) {
-                            owned_ir_local_allocas.push_back(local_ai);
-                        }
-                    }
-
-                    auto helper = module.getOrInsertFunction(
-                        "qore_rt_string_append_local_cow",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, i64_type, ptr_type}, false));
-                    llvm::Value* result = builder->CreateCall(helper,
-                        {owner, local->second.storage(), rhs_boxed, xsink_arg});
-                    values[inst->result.id] = result;
-                    nanboxed_values.insert(inst->result.id);
-                    markLocalCacheFresh(key, llvm_func);
-                    emitExceptionCheck(module, llvm_func, inst);
-                    return true;
-                } else if (!(ir_only_locals_set
-                        && ir_only_locals_set->count(key))) {
-                    // The runtime stack owns the local. Drop only compiler-held
-                    // reload/cache references so the helper's refcount test sees
-                    // real aliases, then let the paired StoreLocal publish the
-                    // owned result normally.
-                    clearLocalCachedValue(key, module, llvm_func,
-                        LocalCacheClearMode::DuplicateRefsOnly);
-                    clearLocalReloadTracker(key, module, llvm_func);
-                    use_in_place = false;
-                }
+            bool borrowed = false;
+            llvm::Value* result = emitStringAppendCow(inst, lhs_boxed, rhs_boxed, inst->string_append_in_place,
+                module, llvm_func, borrowed, error);
+            if (!result) {
+                return false;
             }
-            const char* helper_name = use_in_place
-                ? "qore_rt_string_append_in_place" : "qore_rt_string_append_cow";
-            auto helper = module.getOrInsertFunction(helper_name,
-                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
-            if (!use_in_place) {
+            if (!borrowed) {
                 trackResultForCleanup(result, inst->result.id, llvm_func);
             }
             emitExceptionCheck(module, llvm_func, inst);
@@ -21180,6 +21192,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst);
             llvm::Value* result;
             bool result_proven_nothrow = false;
+            // true if the result is a value that a local keeps, which is not released (see emitStringAppendCow())
+            bool result_borrowed = false;
             BatchCalleeReturnKind invoke_return_kind = BatchCalleeReturnKind::Boxed;
 
             // Dispatch based on invoke_opcode and operand availability to avoid
@@ -21234,9 +21248,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!lhs || !rhs) { return false; }
                 llvm::Value* lhs_boxed = boxValue(lhs, inv->operands[0].id);
                 llvm::Value* rhs_boxed = boxValue(rhs, inv->operands[1].id);
-                auto helper = module.getOrInsertFunction("qore_rt_string_append_cow",
-                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
+                // an append to a local in a try block is paired with its load and store as outside of one (issue
+                // #6280); the helpers leave the local unchanged on the exception edge.  An invoke is never marked
+                // in place
+                result = emitStringAppendCow(inst, lhs_boxed, rhs_boxed, false, module, llvm_func, result_borrowed,
+                    error);
+                if (!result) {
+                    return false;
+                }
 
             } else if (inv->invoke_opcode == QoreIROpcode::StringConcat
                     && !inv->operands.empty()) {
@@ -23483,9 +23502,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (inv->invoke_opcode != QoreIROpcode::RefForeachInit
                     && invoke_return_kind == BatchCalleeReturnKind::Boxed) {
                 nanboxed_values.insert(inst->result.id);
-                result_deferred = trackResultForCleanup(result, inst->result.id, llvm_func,
-                    result_proven_nothrow ? nullptr
-                        : getInvokeResultDeferBlock(inv->normal_target, inv->exception_target));
+                if (!result_borrowed) {
+                    result_deferred = trackResultForCleanup(result, inst->result.id, llvm_func,
+                        result_proven_nothrow ? nullptr
+                            : getInvokeResultDeferBlock(inv->normal_target, inv->exception_target));
+                }
             } else if (invoke_return_kind != BatchCalleeReturnKind::Boxed) {
                 native_call_result_kinds.emplace(
                     inst->result.id, invoke_return_kind);

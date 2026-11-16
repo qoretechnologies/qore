@@ -2549,6 +2549,18 @@ private:
     llvm::AllocaInst* getOrCreateLocalValidEpoch(const void* key,
             llvm::Function* llvm_func);
     void markLocalCacheFresh(const void* key, llvm::Function* llvm_func);
+    //! Emits the copy-on-write string append of \a inst (string.append.cow, or the invoke made for it in a try block)
+    /** A paired local append (QoreIRInstruction::string_append_local_cow) of a local that only native code holds
+        appends to the local's string through its storage, and the runtime stack's local is released by the compiler
+        before the append, so that the helper sees the string as unique if no other variable holds it.  The helpers
+        leave the local unchanged if the append raises an exception.
+
+        @param use_in_place the append is marked in place (QoreIRInstruction::string_append_in_place)
+        @param borrowed set to true if the result is the local's own value, which is not released
+        @return the result of the append, or nullptr with \a error set
+    */
+    llvm::Value* emitStringAppendCow(const QoreIRInstruction* inst, llvm::Value* lhs_boxed, llvm::Value* rhs_boxed,
+            bool use_in_place, llvm::Module& module, llvm::Function* llvm_func, bool& borrowed, std::string& error);
     // Marks the cache of a local stale, so that the next ensureLocalCacheFresh() reloads it from the runtime stack
     // on every path (see clearLocalCachedValue())
     void markLocalCacheStale(const void* key, llvm::Function* llvm_func);
