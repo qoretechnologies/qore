@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+
+# a run on PostgreSQL has its own schema
+%requires ./PgsqlTestIsolation.qm
+
+%exec-class SqlUtilDistinctAliasTest
+
+/** A column alias of a distinct column (<tt>cop_as(cop_distinct("ddt_number"), "dn")</tt>) used elsewhere in the
+    query gave the alias's definition with the \c distinct keyword, which is not an expression, so the SQL was
+    invalid:
+    - in \c "orderby" (issue #6331): <tt>order by distinct ddt_number</tt>; the alias is ordered by its name, which
+      every database accepts in <tt>order by</tt>
+    - in a where clause (issue #6332): <tt>where distinct ddt_number is not null</tt>; the alias stands for the column,
+      as \c distinct applies to the select list, also in \c "groupby", where an alias is not portable
+
+    PostgreSQL is tested with the connection in \c QORE_DB_CONNSTR_PGSQL in a schema of its own; SQLite in memory.
+*/
+class SqlUtilDistinctAliasTest inherits QUnit::Test {
+    private {
+        hash<string, Datasource> dsh;
+        hash<string, string> skip_reasons;
+        bool pgsql_isolated;
+    }
+
+    constructor() : QUnit::Test("SqlUtilDistinctAliasTest", "1.0") {
+        foreach string label in ("pgsql", "sqlite3") {
+            addTestCase(label + ": orderby a distinct alias", \testOrderBy(), label);
+            addTestCase(label + ": orderby a distinct alias named like a column", \testOrderByColumnName(), label);
+            addTestCase(label + ": where a distinct alias", \testWhere(), label);
+            addTestCase(label + ": where a distinct alias in a join", \testWhereJoin(), label);
+            addTestCase(label + ": groupby a distinct alias", \testGroupBy(), label);
+            addTestCase(label + ": orderby another alias", \testOtherAlias(), label);
+        }
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        setUpConnection("pgsql");
+        setUpConnection("sqlite3");
+    }
+
+    globalTearDown() {
+        map $1.rollback(), dsh.iterator();
+        remove dsh;
+        if (pgsql_isolated) {
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    private setUpConnection(string label) {
+        string connstr;
+        if (label == "sqlite3") {
+            connstr = "sqlite3:x@:memory:";
+        } else {
+            if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+                skip_reasons{label} = "QORE_DB_CONNSTR_PGSQL is not set";
+                return;
+            }
+            connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        }
+        Datasource ds;
+        try {
+            ds = new Datasource(connstr);
+            if (ds.getDriverName() != label) {
+                skip_reasons{label} = sprintf("the connection uses driver %y, not %y", ds.getDriverName(), label);
+                return;
+            }
+            if (label == "pgsql") {
+                PgsqlRunSchema::setup(connstr, "SqlUtilDistinctAlias");
+                pgsql_isolated = True;
+            }
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            skip_reasons{label} = sprintf("%s: %s", ex.err, ex.desc);
+            return;
+        }
+        on_error ds.rollback();
+        on_success ds.commit();
+        ds.exec("create table items (transaction_id int, ddt_number varchar(10), name varchar(10))");
+        ds.exec("create table integ (transaction_id int, i_sepl_updated_id int)");
+        ds.exec("insert into items values (1, 'b', 'x'), (2, 'a', 'y'), (3, null, 'z'), (4, 'b', 'w')");
+        ds.exec("insert into integ values (1, 7), (2, 7), (3, 7), (4, 8)");
+        dsh{label} = ds;
+    }
+
+    private Table getTable(string label) {
+        if (*Datasource ds = dsh{label}) {
+            return new Table(ds, "items");
+        }
+        testSkip(skip_reasons{label} ?? sprintf("no %s connection", label));
+    }
+
+    testOrderBy(string label) {
+        Table t = getTable(label);
+        string sql;
+        list<auto> rows = t.selectRows({"columns": cop_as(cop_distinct("ddt_number"), "dn"), "orderby": "dn"},
+            \sql);
+        assertRegex("order by dn$", sql);
+        # NULL sorts last on PostgreSQL and first on SQLite
+        assertEq(("a", "b"), (select (map $1.dn, rows), $1.typeCode() == NT_STRING), sql);
+        assertEq(3, rows.size(), sql);
+    }
+
+    testOrderByColumnName(string label) {
+        Table t = getTable(label);
+        string sql;
+        list<auto> rows = t.selectRows({"columns": cop_as(cop_distinct("ddt_number"), "ddt_number"),
+            "where": {"ddt_number": op_ne(NULL)}, "orderby": "ddt_number"}, \sql);
+        assertRegex("order by ddt_number$", sql);
+        assertEq(({"ddt_number": "a"}, {"ddt_number": "b"}), rows, sql);
+    }
+
+    testWhere(string label) {
+        Table t = getTable(label);
+        string sql;
+        list<auto> rows = t.selectRows({"columns": cop_as(cop_distinct("ddt_number"), "dn"),
+            "where": {"dn": op_ne(NULL)}}, \sql);
+        assertRegex("where ddt_number is not null", sql);
+        assertEq(("a", "b"), sort(map $1.dn, rows), sql);
+    }
+
+    testWhereJoin(string label) {
+        Table t = getTable(label);
+        string sql;
+        list<auto> rows = t.selectRows({
+            "columns": cop_as(cop_distinct("ddt_number"), "dn"),
+            "join": join_inner("integ", "h", {"transaction_id": "transaction_id"}),
+            "where": {"h.i_sepl_updated_id": 7, "dn": op_ne(NULL)},
+        }, \sql);
+        assertFalse(sql =~ /distinct [^ ]+ is not null/, sql);
+        assertEq(("a", "b"), sort(map $1.dn, rows), sql);
+    }
+
+    testGroupBy(string label) {
+        Table t = getTable(label);
+        string sql;
+        list<auto> rows = t.selectRows({"columns": cop_as(cop_distinct("ddt_number"), "dn"),
+            "where": {"dn": op_ne(NULL)}, "groupby": "dn"}, \sql);
+        assertRegex("group by ddt_number", sql);
+        assertEq(("a", "b"), sort(map $1.dn, rows), sql);
+    }
+
+    testOtherAlias(string label) {
+        Table t = getTable(label);
+        # an alias that is not of a distinct column keeps its definition in "orderby", as before
+        string sql;
+        list<auto> rows = t.selectRows({"columns": ("transaction_id", cop_as(cop_upper("name"), "uname")),
+            "orderby": "uname"}, \sql);
+        assertRegex("order by upper\\(name\\)$", sql);
+        assertEq(("W", "X", "Y", "Z"), map $1.uname, rows, sql);
+    }
+}

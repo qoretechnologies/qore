@@ -2958,6 +2958,10 @@
       and a column alias of the query, which gave the alias's definition in the SQL (ex:
       <tt>items.distinct items.ddt_number is not null</tt>): the column is used, as in SQL
       (<a href="https://github.com/qoretechnologies/qore/issues/1747">issue 1747</a>)
+    - fixed a column alias of a distinct column of @ref sqlutilintro "SqlUtil" in the \c "orderby" option, a
+      where clause or the \c "groupby" option, which gave invalid SQL such as <tt>order by distinct ddt_number</tt>
+      (<a href="https://github.com/qoretechnologies/qore/issues/6331">issue 6331</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6332">issue 6332</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
