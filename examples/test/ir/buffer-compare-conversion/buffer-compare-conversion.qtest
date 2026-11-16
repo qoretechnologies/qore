@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the conversion of a comparison result
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class BufferCompareConversionTest
+
+#! Tests int(), float() and string() of a comparison whose operands can be buffers in every execution mode
+/** A comparison of auto operands is typed bool by the parser but gives a buffer<bool> for a buffer operand; the IR and
+    JIT converted that buffer to 0 where the AST interpreter raises RUNTIME-OVERLOAD-ERROR (qore#6264).  The AST
+    output is checked against explicit rows and every other mode, the default mode and the qcc executables (-O0 and
+    -O3) must print the same.
+*/
+class BufferCompareConversionTest inherits QUnit::Test {
+    public {
+        const Ops = ("<", "<=", ">", ">=", "==", "!=");
+        const Convs = ("int", "float", "string");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("BufferCompareConversion", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        addTestCase("every mode raises as the AST interpreter does", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-buffer-compare-conversion-");
+        string file = tmp.path + DirSep + "prog.q";
+        string src = "%modern\n%disable-all-warnings\nsub f(auto b, auto x, string kind) {\n";
+        foreach string conv in (Convs) {
+            foreach string op in (Ops) {
+                string label = sprintf("%s(b %s x) ", conv, op);
+                src += sprintf("    try { printf(\"%s%%s: %%y\\n\", kind, %s(b %s x)); } catch (hash<ExceptionInfo> ex) "
+                    "{ printf(\"%s%%s: ! %%s\\n\", kind, ex.err); }\n", label, conv, op, label);
+            }
+        }
+        src += "}\nf(new buffer<int64>((1, 2, 3)), 1, \"buffer\");\nf(2, 1, \"int\");\nf(1.5, 1, \"float\");\n"
+            "f(\"a\", \"b\", \"string\");\n";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(src);
+        f.close();
+
+        list<string> expected = run(sprintf("--exec-mode=ast %s", file));
+        foreach string row in ("int(b > x) buffer: ! RUNTIME-OVERLOAD-ERROR",
+                "float(b > x) buffer: ! RUNTIME-OVERLOAD-ERROR",
+                "int(b > x) int: 1", "float(b > x) int: 1.0") {
+            assertEq(1, (select expected, $1 == row).size(), "the AST interpreter prints: " + row);
+        }
+
+        foreach string mode in ("ir", "jit", "tiered") {
+            compare(mode, expected, run(sprintf("--exec-mode=%s %s", mode, file)));
+        }
+        compare("default", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, file)).split("\n"));
+        foreach string opt in ("-O0", "-O3") {
+            string exe = tmp.path + DirSep + "prog" + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe, file));
+            assertTrue(is_file(exe), "compiled the executable: " + out);
+            compare("executable " + opt, expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)).split("\n"));
+        }
+    }
+
+    private list<string> run(string args) {
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s", libqore_dir,
+            libqore_dir, qore_bin, args)).split("\n");
+    }
+
+    private compare(string mode, list<string> expected, list<string> actual) {
+        list<string> diffs = ();
+        int n = max(expected.size(), actual.size());
+        for (int i = 0; i < n && diffs.size() < 20; ++i) {
+            if (expected[i] !== actual[i]) {
+                diffs += sprintf("ast: %y\n%s: %y", expected[i], mode, actual[i]);
+            }
+        }
+        assertEq((), diffs, sprintf("%s differs:\n%s", mode, diffs.join("\n")));
+    }
+}
