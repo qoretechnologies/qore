@@ -1113,6 +1113,14 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchNamed(const QoreListNode* ar
         return QoreValue();
     }
     if (!m) {
+        // a member of the name is called before a pseudo-method by a positional call (qore_eval_missing_method()); a
+        // named call of a member holding code is refused, as for a direct call (issue #995)
+        if (cls->runtimeGetMemberInfo(method.c_str(), qc)) {
+            xsink->raiseException("NAMED-CALL-NOT-SUPPORTED", "cannot call %s::%s() with named arguments: it is a "
+                "member of the class, whose code takes the arguments of the call by position", obj->getClassName(),
+                method.c_str());
+            return QoreValue();
+        }
         // a pseudo-method of objects with its variants bound to the arguments by name, as a direct named call binds
         // them (issue #995)
         QoreClass* pqc;

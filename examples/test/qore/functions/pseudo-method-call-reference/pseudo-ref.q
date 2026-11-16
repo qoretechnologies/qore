@@ -197,6 +197,9 @@ tryit("named arguments to a pseudo-method of an object, direct call", auto sub (
 tryit("named arguments to a pseudo-method of an object, reference", auto sub () {
     return k.callInside2(\k.hasCallableMethod());
 });
+tryit("named arguments to a code member named like a pseudo-method, reference", auto sub () {
+    return (\mem.className())(x: 1);
+});
 string hw = "hello world";
 tryit("named arguments, direct call", auto sub () { return hw.substr(start: 6); });
 tryit("named arguments, reference", auto sub () { return (\hw.substr())(start: 6); });
