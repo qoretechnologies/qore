@@ -2209,7 +2209,10 @@ examples/test/qore/misc/fork-leaf-locks.qtest	0.0	0.0	1.0	0.0	0.0	-	-	0.0	0.0	0.
 examples/test/qore/misc/format-messages.qtest	0.0	0.0	1.0	0.0	0.0	-	-	0.0	0.0	0.0
 examples/test/qore/misc/gc.qtest	0.0	0.0	0.0	1.0	0.0	-	-	0.0	0.0	0.0
 examples/test/qore/misc/generic-classes.qtest	1.0	0.0	1.0	0.0	6.0	-	-	0.0	1.0	0.0
-examples/test/qore/misc/generic-hashdecl-programs/generic-hashdecl-programs.qtest	166.0	106.0	283.0	99.0	134.0	-	-	108.0	167.0	89.0
+examples/test/qore/misc/generic-hashdecl-programs/GenericHashdeclPrograms-1.qtest	31.7	48.5	29.7	51.2	25.4	-	-	45.5	37.0	25.7
+examples/test/qore/misc/generic-hashdecl-programs/GenericHashdeclPrograms-2.qtest	21.6	33.1	20.2	34.9	17.3	-	-	31.1	25.2	17.6
+examples/test/qore/misc/generic-hashdecl-programs/GenericHashdeclPrograms-3.qtest	21.6	33.1	20.2	34.9	17.3	-	-	31.1	25.2	17.6
+examples/test/qore/misc/generic-hashdecl-programs/GenericHashdeclPrograms-4.qtest	21.1	32.3	19.8	34.1	16.9	-	-	30.4	24.6	17.2
 examples/test/qore/misc/has_effect.qtest	0.0	0.0	0.0	0.0	1.0	-	-	0.0	0.0	0.0
 examples/test/qore/misc/hash-key-cancel.qtest	0.0	0.0	0.0	1.0	0.0	-	-	0.0	0.0	0.0
 examples/test/qore/misc/hash-key-encoding/hash-key-encoding.qtest	22.0	8.0	19.0	8.0	13.0	-	-	14.0	20.0	7.0

@@ -1,0 +1,20 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# Part 1 of 4 of the cases of GenericHashdeclPrograms.qc (qore#6359)
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+
+%include GenericHashdeclPrograms.qc
+
+%exec-class GenericHashdeclProgramsPart1
+
+#! runs part 1 of 4 of the cases of GenericHashdeclProgramsBase
+class GenericHashdeclProgramsPart1 inherits GenericHashdeclProgramsBase {
+    constructor() : GenericHashdeclProgramsBase("generic hashdecls of destroyed Programs, part 1", 1) {
+    }
+}
