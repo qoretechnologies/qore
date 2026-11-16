@@ -5605,6 +5605,24 @@ QoreSandboxManager* qore_module_init_lift_manager_ref() {
     return mib.loader_manager;
 }
 
+QoreTrustedBuildChargeHelper::QoreTrustedBuildChargeHelper() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+    try {
+        saved = td->sandbox_budgets.suspendCharge();
+        started = true;
+    } catch (std::bad_alloc&) {
+    }
+}
+
+QoreTrustedBuildChargeHelper::~QoreTrustedBuildChargeHelper() {
+    if (started) {
+        thread_data.get()->sandbox_budgets.resumeCharge(saved);
+    }
+}
+
 QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(const QoreTrustedBuildTag&) {
     ThreadData* td = thread_data.get();
     if (!td) {

@@ -706,6 +706,30 @@ DLLLOCAL QoreSandboxManager* qore_module_init_lift_manager_ref();
     its static initializers and init closure belong to no sandbox, and so do the objects they create.  Every later
     call into the module is governed by its caller as any other call.
 */
+//! The memory accounting of a trusted build (SandboxManager::createTrustedBuildCall()) while the object exists
+/** The memory that the build's own code allocates is charged to no call, the caller's code that it calls to the
+    caller's call budget (see QoreSandboxBudgetStack::suspendCharge()), and the continuations of its work capture none
+    of the caller's budgets
+*/
+class QoreTrustedBuildChargeHelper {
+public:
+    //! Starts it; established() is false if it could not be recorded for lack of memory
+    DLLLOCAL QoreTrustedBuildChargeHelper();
+    DLLLOCAL ~QoreTrustedBuildChargeHelper();
+
+    //! returns true if the accounting is in effect
+    DLLLOCAL bool established() const {
+        return started;
+    }
+
+    DLLLOCAL QoreTrustedBuildChargeHelper(const QoreTrustedBuildChargeHelper&) = delete;
+    DLLLOCAL QoreTrustedBuildChargeHelper& operator=(const QoreTrustedBuildChargeHelper&) = delete;
+
+private:
+    QoreSandboxCharge* saved = nullptr;
+    bool started = false;
+};
+
 //! Selects the barrier of a trusted build (see QoreModuleInitSandboxBarrierHelper)
 struct QoreTrustedBuildTag {
 };

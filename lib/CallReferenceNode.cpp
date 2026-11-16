@@ -2090,10 +2090,11 @@ public:
             if (*xsink) {
                 return QoreValue();
             }
-            // a trusted build's barrier is set before the Program that created the capability is entered: the
-            // sandbox of that Program, if it has one, still governs the build
+            // a trusted build's barrier hides the caller; it never hides the current Program, which is the Program
+            // that created the capability once it has been entered, so that Program's sandbox governs the build
             std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
-            if (enterBuild(build_barrier, xsink)) {
+            std::optional<QoreTrustedBuildChargeHelper> build_charge;
+            if (enterBuild(build_barrier, build_charge, xsink)) {
                 return QoreValue();
             }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
@@ -2139,10 +2140,11 @@ public:
             if (*xsink) {
                 return QoreValue();
             }
-            // a trusted build's barrier is set before the Program that created the capability is entered: the
-            // sandbox of that Program, if it has one, still governs the build
+            // a trusted build's barrier hides the caller; it never hides the current Program, which is the Program
+            // that created the capability once it has been entered, so that Program's sandbox governs the build
             std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
-            if (enterBuild(build_barrier, xsink)) {
+            std::optional<QoreTrustedBuildChargeHelper> build_charge;
+            if (enterBuild(build_barrier, build_charge, xsink)) {
                 return QoreValue();
             }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
@@ -2173,10 +2175,11 @@ public:
             if (*xsink) {
                 return QoreValue();
             }
-            // a trusted build's barrier is set before the Program that created the capability is entered: the
-            // sandbox of that Program, if it has one, still governs the build
+            // a trusted build's barrier hides the caller; it never hides the current Program, which is the Program
+            // that created the capability once it has been entered, so that Program's sandbox governs the build
             std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
-            if (enterBuild(build_barrier, xsink)) {
+            std::optional<QoreTrustedBuildChargeHelper> build_charge;
+            if (enterBuild(build_barrier, build_charge, xsink)) {
                 return QoreValue();
             }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
@@ -2224,12 +2227,20 @@ private:
 
         @return 0 for OK, -1 if the barrier could not be recorded (an out-of-memory exception is raised)
     */
-    int enterBuild(std::optional<QoreModuleInitSandboxBarrierHelper>& barrier, ExceptionSink* xsink) const {
+    int enterBuild(std::optional<QoreModuleInitSandboxBarrierHelper>& barrier,
+            std::optional<QoreTrustedBuildChargeHelper>& charge, ExceptionSink* xsink) const {
         if (!build) {
             return 0;
         }
         barrier.emplace(QoreTrustedBuildTag());
         if (!barrier->established()) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        // the memory that the build's own code allocates is shared state, charged to no call; the caller's code that
+        // it calls stays charged to the caller (QoreSandboxBudgetStack::suspendCharge())
+        charge.emplace();
+        if (!charge->established()) {
             xsink->outOfMemory();
             return -1;
         }

@@ -114,6 +114,23 @@ sub build_alloc(int n) {
     SharedState = l;
 }
 
+#! builds the shared state in a thread that it starts and waits for
+sub build_thread_alloc(int n) {
+    Queue done();
+    background sub () {
+        try {
+            build_alloc(n);
+            done.push(True);
+        } catch (hash<ExceptionInfo> ex) {
+            done.push(ex.err);
+        }
+    }();
+    auto r = done.get();
+    if (r !== True) {
+        throw r, "the build's thread failed";
+    }
+}
+
 #! trusted code: uses an object that it is given
 hash<auto> sub build_obj_read(object o) {
     return o.read();
@@ -169,6 +186,8 @@ class SandboxTrustedBuildTest inherits QUnit::Test {
         code BuildObjRead;
         code BuildObjMk;
         code BuildAlloc;
+        #! a trusted build whose thread allocates the shared state
+        code BuildThreadAlloc;
     }
 
     #! the code of the sandboxed Program
@@ -212,7 +231,11 @@ Program sub mk(string src) {
         addTestCase("an object of the caller passed to the build keeps its provenance", \callerObject());
         addTestCase("the sandbox of the Program that created the capability governs the build", \creatorSandbox());
         addTestCase("a Program sandboxed by its flag only cannot create the capability", \flagOnlyCreator());
-        addTestCase("the memory that a build allocates counts against the caller's call", \memory());
+        addTestCase("a Program sandboxed by its flag only governs the build when its code calls it",
+            \flagOnlyCreatorCalls());
+        addTestCase("the memory that a build keeps is charged to no caller, the caller's code that it calls is",
+            \memory());
+        addTestCase("work that a build hands to the event loop is not a part of the caller's call", \memoryAsync());
         set_return_value(main());
     }
 
@@ -231,6 +254,7 @@ Program sub mk(string src) {
         BuildObjRead = SandboxManager::createTrustedBuildCall(\build_obj_read());
         BuildObjMk = SandboxManager::createTrustedBuildCall(\build_obj_mk());
         BuildAlloc = SandboxManager::createTrustedBuildCall(\build_alloc());
+        BuildThreadAlloc = SandboxManager::createTrustedBuildCall(\build_thread_alloc());
 
         manager = new SandboxManager();
         manager.addFilesystemDeniedPath(DeniedFile);
@@ -335,7 +359,7 @@ Program sub mk(string src) {
         }
         # a system thread capability
         assertThrows("SANDBOX-CAPABILITY-ERROR", "not a bound callback or a capability",
-            \SandboxManager::createTrustedBuildCall(), SystemThreadWorker::Worker::deleted_program_cap);
+            \SandboxManager::createTrustedBuildCall(), SystemThreadWorker::Worker::live_cap);
         # the capability created by trusted code works
         code cap = make_capability(\build_program());
         assertEq(Ungoverned, sandboxed.callFunction("call", cap).callFunction("probe", DeniedFile));
@@ -399,6 +423,41 @@ hash<auto> sub call_own(code cap, string path) {
         fail("the capability was created in a Program sandboxed by its flag");
     }
 
+    flagOnlyCreatorCalls() {
+        # a capability created by a trusted Program, which is made sandboxed by its flag only afterwards (debug builds
+        # only): what the build does when the Program's own code calls it is sandboxed, though no manager governs it
+        Program creator(PO_MODERN);
+        creator.parse("%modern
+string sub try_create(code cb) {
+    try {
+        Qore::SandboxManager::createTrustedBuildCall(cb);
+        return \"created\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.desc;
+    }
+}
+code sub mk() {
+    return Qore::SandboxManager::createTrustedBuildCall(\\try_create());
+}
+string sub call_own(code cap, code cb) {
+    return cap(cb);
+}
+", "flag-only-creator");
+        code cap = creator.callFunction("mk");
+        assertEq("created", creator.callFunction("call_own", cap, \build_program()));
+        try {
+            call_function("dbg_make_program_flag_only", creator);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                testSkip("dbg_make_program_flag_only() is only available in debug builds");
+            }
+            rethrow;
+        }
+        assertRegex("that is sandboxed", creator.callFunction("call_own", cap, \build_program()));
+        # also when another Program calls it
+        assertRegex("that is sandboxed", cap(\build_program()));
+    }
+
     memory() {
         SandboxManager m();
         m.setUncontrolledApiPolicy(True);
@@ -417,16 +476,69 @@ code sub allocator() {
 }
 ", "memory");
         on_exit SharedState = ();
-        # the memory that a build allocates counts against the time of the caller's call, as its time does
-        assertThrows("SANDBOX-MEMORY-LIMIT", \p.callFunction(), ("call", BuildAlloc, 200000));
+        # the memory that the build's own code allocates is shared state, charged to no caller: also not after the
+        # call has ended
+        p.callFunction("call", BuildAlloc, 200000);
+        assertEq(200000, SharedState.size());
+        assertEq(0, m.getMemoryUsage());
         # the caller's own code that the build calls is charged to the caller's sandbox
         code c = p.callFunction("allocator");
         assertThrows("SANDBOX-MEMORY-LIMIT", c);
         assertThrows("SANDBOX-MEMORY-LIMIT", \p.callFunction(), ("call", BuildCalling, c));
-        # with a limit that allows it, the shared state is built
-        m.setMemoryLimit(0);
-        p.callFunction("call", BuildAlloc, 200000);
+        # a thread that the build's own code starts inherits nothing of the caller's call
+        SharedState = ();
+        p.callFunction("call", BuildThreadAlloc, 200000);
         assertEq(200000, SharedState.size());
+        assertEq(0, m.getMemoryUsage());
+    }
+
+    memoryAsync() {
+        # a creator Program with a sandbox of its own (no limits): the work that its build hands to the event loop
+        # captures the build's sandbox context, but none of the caller's budgets
+        Program creator(PO_MODERN);
+        creator.parse("%modern
+our list<string> state;
+auto sub build_async(int n) {
+    Queue done();
+    Qore::AsyncIoController::addTimerDelay(1ms, sub () {
+        try {
+            list<string> l = ();
+            for (int i = 0; i < n; ++i) {
+                l += sprintf(\"async shared state entry %d with some padding to use memory\", i);
+            }
+            state = l;
+            done.push(True);
+        } catch (hash<ExceptionInfo> ex) {
+            done.push(ex.err);
+        }
+    });
+    return done.get(60s);
+}
+int sub state_size() {
+    return state.size();
+}
+sub clear() {
+    remove state;
+}
+code sub mk() {
+    return Qore::SandboxManager::createTrustedBuildCall(\\build_async());
+}
+", "async-creator");
+        code cap = creator.callFunction("mk");
+        on_exit creator.callFunction("clear");
+        SandboxManager cs();
+        cs.setUncontrolledApiPolicy(True);
+        creator.setSandboxManager(cs);
+
+        SandboxManager m();
+        m.setUncontrolledApiPolicy(True);
+        m.setMemoryLimit(1024 * 1024);
+        Program p(PO_MODERN);
+        p.setSandboxManager(m);
+        p.parse(SandboxedSource, "memory-async");
+        assertEq(True, p.callFunction("call", cap, 200000));
+        assertEq(200000, creator.callFunction("state_size"));
+        assertEq(0, m.getMemoryUsage());
     }
 
     #! runs spin() of the Program in a thread, requests the sandbox's interrupt once it spins, returns its result

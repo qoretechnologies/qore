@@ -88,9 +88,14 @@ provenance. The current Program is never hidden by a build barrier (`ModuleInitB
 that created the capability, also when its own code called the capability, so that Program's own sandbox governs the
 build. The provenance of the caller's objects and callbacks that the build calls applies above the barrier: a frame
 of the same context as one that the barrier hides is applied again (`QoreSandboxProvenanceHelper::apply()`). The
-budgets of the caller's call (time, stack and memory: frames of the thread, not found by the walk) still count the
-build, so the caller's code that the build calls stays charged to the caller, and the memory that the build allocates
-is charged to the caller's call until it is freed or the call ends; the caller's interrupt requests do not reach it.
+time and stack budgets of the caller's call (frames of the thread, not found by the walk) still count the build; the
+caller's interrupt requests do not reach it. The memory that the build's own code allocates is shared state, charged to
+no caller (`QoreTrustedBuildChargeHelper`, `QoreSandboxBudgetStack::suspendCharge()`): storage keeps the charge it was
+created with, so a charged build would bill the first caller for as long as the state lives, and for its later growth
+by any caller. The caller's code that the build calls stays charged: entering its sandbox, whose budget is below the
+build, pushes a frame that makes that budget's charge current again (`enterBelowBuild()`). Work that the build hands to
+another thread captures only the budgets entered in the build (`capture()`), so it is not a part of the caller's call
+either.
 Creating the capability is refused to code that a sandbox governs or that is sandboxed, and for a callback that has
 provenance, belongs to a sandboxed or deleted Program, or is a bound callback or a capability; a trusted build
 capability cannot be registered with `createSystemPolicyCall()` either. The managers are released with the own manager when the Program is cleared, or when it is

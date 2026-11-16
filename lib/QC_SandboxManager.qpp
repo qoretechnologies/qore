@@ -1172,9 +1172,11 @@ static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_
       caller's sandbox as provenance (they have the sandbox of the %Program that created the capability, if it has
       one)
     - the caller's filesystem and network policy does not apply to the build itself, nor do the caller's interrupt
-      requests while it runs; the budgets of the caller's call (time, stack, memory) still count it: a caller with a
-      small budget can make the build fail, and the memory that the build allocates is charged to the caller's call
-      until it is freed or the call ends
+      requests while it runs; the time and stack budgets of the caller's call still count it (a caller with a small
+      budget can make the build fail), but not the threads that it starts, which are not a part of the caller's call
+    - the memory that the build's own code allocates, also in threads that it starts, is shared state charged to no
+      caller; the caller's own code that the build calls (its callbacks and the methods of its objects) is charged to
+      the caller's memory limit as when the caller calls it directly
     - the sandbox of the %Program that created the capability, if that %Program has one, governs the build, also when
       the code of that %Program calls the capability
     - objects and callbacks that the caller (or other sandboxed code) created keep their own provenance: what the
