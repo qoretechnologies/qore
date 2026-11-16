@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FixedLengthUtil
+
+%exec-class FixedLengthNumericValidationTest
+
+# issue #300: int, float and number fields are validated when read and written
+class FixedLengthNumericValidationTest inherits QUnit::Test {
+    constructor() : QUnit::Test("FixedLengthNumericValidation", "1.0") {
+        addTestCase("read invalid values", \readInvalid());
+        addTestCase("read valid values", \readValid());
+        addTestCase("read with a number format", \readFormat());
+        addTestCase("write", \write());
+        set_return_value(main());
+    }
+
+    auto read(string type, string value, *string fmt) {
+        hash<auto> field = {"length": value.size(), "type": type};
+        if (fmt) {
+            field.format = fmt;
+        }
+        FixedLengthDataIterator i(value + "\n", {"rec": {"a": field}});
+        assertTrue(i.next());
+        return i.getValue().record.a;
+    }
+
+    string write(string type, auto value, *string fmt) {
+        hash<auto> field = {"length": 8, "type": type};
+        if (fmt) {
+            field.format = fmt;
+        }
+        FixedLengthDataWriter w({"rec": {"a": field}});
+        return w.write({"type": "rec", "record": {"a": value}});
+    }
+
+    readInvalid() {
+        foreach string type in ("int", "float", "number") {
+            foreach string value in ("12abc", "abcde", "1x2  ", "12 3", "--1", "1.2.3") {
+                assertThrows("FIELD-VALUE-ERROR", "invalid " + type, \read(), (type, value), type + " " + value);
+            }
+        }
+        # an integer field cannot have decimals
+        assertThrows("FIELD-VALUE-ERROR", \read(), ("int", "  1.5"));
+        # the error names the field
+        assertThrows("FIELD-VALUE-ERROR", "field \"a\"", \read(), ("int", "1x"));
+    }
+
+    readValid() {
+        assertEq(12, read("int", "00012"));
+        assertEq(-12, read("int", "-0012"));
+        assertEq(12, read("int", "  +12"));
+        assertEq(12, read("int", "12   "));
+        assertEq(12, read("int", "12.00"));
+        assertEq(1200, read("int", "1.2e3"));
+        assertEq(1.5, read("float", "  1.5"));
+        assertEq(-12.0, read("float", "-0012"));
+        assertEq(1200.0, read("float", "1.2e3"));
+        assertEq(1.5n, read("number", "  1.5"));
+        assertEq(1200n, read("number", "1.2e3"));
+        # a field of only spaces is read as zero
+        assertEq(0, read("int", "     "));
+        assertEq(0.0, read("float", "     "));
+        assertEq(0n, read("number", "     "));
+    }
+
+    readFormat() {
+        assertEq(1234, read("int", "1.234", ".,"));
+        assertEq(1234.5, read("float", "1.234,5", ".,"));
+        assertEq(1234.5n, read("number", "1.234,5", ".,"));
+        assertEq(0, read("int", "     ", ".,"));
+        # the number format is also taken from the global option
+        FixedLengthDataIterator i("1.234\n", {"rec": {"a": {"length": 5, "type": "int"}}}, {"number_format": ".,"});
+        assertTrue(i.next());
+        assertEq(1234, i.getValue().record.a);
+        # an integer field cannot have decimals
+        assertThrows("FIELD-VALUE-ERROR", "number format", \read(), ("int", "1.2,5", ".,"));
+        foreach string type in ("int", "float", "number") {
+            assertThrows("FIELD-VALUE-ERROR", \read(), (type, "1.2x4", ".,"), type);
+        }
+    }
+
+    write() {
+        assertEq("      12\n", write("int", "12"));
+        assertEq("      12\n", write("int", 12));
+        assertEq("      12\n", write("int", 12.0));
+        assertEq("   1.234\n", write("int", "1.234", ".,"));
+        assertEq("     1.5\n", write("float", "1.5"));
+        assertEq("    1,50\n", write("float", 1.5, ".,2"));
+        assertEq("    1,50\n", write("number", "1.5", ".,2"));
+        assertEq("        \n", write("int", "  "));
+        foreach string type in ("int", "float", "number") {
+            assertThrows("FIELD-INPUT-ERROR", "invalid " + type, \write(), (type, "12abc"), type);
+            assertThrows("FIELD-INPUT-ERROR", \write(), (type, "1x", ".,2"), type + " format");
+        }
+        # a float or number string is converted to a number to format it, so it cannot have separators
+        assertThrows("FIELD-INPUT-ERROR", \write(), ("float", "1.234,5", ".,2"));
+        assertThrows("FIELD-INPUT-ERROR", \write(), ("number", "1.234,5", ".,2"));
+        assertThrows("FIELD-INPUT-ERROR", "not an integer", \write(), ("int", 1.5));
+        assertThrows("FIELD-INPUT-ERROR", "not an integer", \write(), ("int", 1.5n));
+        assertThrows("FIELD-INPUT-ERROR", \write(), ("int", "1.5"));
+    }
+}
