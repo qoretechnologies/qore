@@ -634,9 +634,9 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
                 QoreStringValueHelper strtype(h->getKeyValue("type"));
                 const char* type = strtype->c_str();
                 int typecode = (int)h->getKeyValue("typecode").getAsBigInt();
-                if (!strcmp(type, "new-thread"))
+                if (!strcmp(type, "new-thread")) {
                     out.sprintf(" %2d: *thread start*\n", pos);
-                else {
+                } else {
                     QoreStringValueHelper fn(h->getKeyValue("file"));
                     const char* fns = !fn->empty() ? fn->c_str() : nullptr;
                     int start_line = (int)h->getKeyValue("line").getAsBigInt();
