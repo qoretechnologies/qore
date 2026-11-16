@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - JIT code generation of generic hashdecl code in many Programs
 # Copyright (c) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 #
