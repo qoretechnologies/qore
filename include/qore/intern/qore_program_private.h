@@ -2938,7 +2938,8 @@ public:
     //! Checks that the Program can be parsed and marks the parse as in progress, atomically (issue #6206)
     /** With PO_ALLOW_REPARSE, the check that no thread runs the Program's code and the flag that refuses a thread to
         enter it (parsing_in_progress, see incThreadCount()) are made in one critical section of plock, which
-        incThreadCount() takes as well, so that no thread can enter the Program between them.  The caller holds the
+        incThreadCount() takes as well, so that no thread can enter the Program between them; the write lock of the
+        options is held as well, so that PO_ALLOW_REPARSE cannot change meanwhile (see checkReparseOptionChange()).  The caller holds the
         parse lock.
 
         @param guard records whether this call set the flag (it is not set without PO_ALLOW_REPARSE or if code is
@@ -4017,10 +4018,16 @@ public:
 
     // internal method - does not bother with the parse lock
     // returns true if the define already existed
-    DLLLOCAL bool setDefine(const char* name, QoreValue v, ExceptionSink* xsink) {
+    //! @param old if not null, takes the value replaced, which the caller releases (without plock; see
+    //! runTimeDefine()), otherwise it is released here
+    DLLLOCAL bool setDefine(const char* name, QoreValue v, ExceptionSink* xsink, ValueHolder* old = nullptr) {
         dmap_t::iterator i = dmap.find(name);
         if (i != dmap.end()) {
-            i->second.discard(xsink);
+            if (old) {
+                *old = i->second;
+            } else {
+                i->second.discard(xsink);
+            }
             i->second = v;
             return true;
         }
@@ -4179,10 +4186,16 @@ public:
 
     // internal method - does not bother with the parse lock
     // returns true if the define existed
-    DLLLOCAL bool unDefine(const char* name, ExceptionSink* xsink) {
+    //! @param old if not null, takes the value removed, which the caller releases (without plock; see
+    //! runTimeUnDefine()), otherwise it is released here
+    DLLLOCAL bool unDefine(const char* name, ExceptionSink* xsink, ValueHolder* old = nullptr) {
         dmap_t::iterator i = dmap.find(name);
         if (i != dmap.end()) {
-            i->second.discard(xsink);
+            if (old) {
+                *old = i->second;
+            } else {
+                i->second.discard(xsink);
+            }
             dmap.erase(i);
             source_defines.erase(name);
             return true;
@@ -4196,8 +4209,11 @@ public:
     }
 
     DLLLOCAL bool runTimeUnDefine(const char* name, ExceptionSink* xsink) {
+        // the value is released after plock: its destructor can run code that changes the Program's parse options,
+        // whose write lock beginParse() takes before plock (issue #6206)
+        ValueHolder old(xsink);
         AutoLocker al(plock);
-        return unDefine(name, xsink);
+        return unDefine(name, xsink, &old);
     }
 
     // internal method - does not bother with the parse lock
@@ -4253,8 +4269,10 @@ public:
             return;
 
         const bool untrusted = qore_caller_is_untrusted();
+        // the value replaced is released after plock (see runTimeUnDefine())
+        ValueHolder old(xsink);
         AutoLocker al(plock);
-        setDefine(str, val, xsink);
+        setDefine(str, val, xsink, &old);
         if (untrusted) {
             source_defines.insert(str);
         } else {
