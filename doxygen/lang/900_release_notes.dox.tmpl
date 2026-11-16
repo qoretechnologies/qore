@@ -1967,6 +1967,10 @@
       module or be given to other code, and a static registration of a module that was already loaded could crash at
       exit; it is now checked as a load of the module by path and is never library code (see
       @ref sandbox_static_modules) (<a href="https://github.com/qoretechnologies/qore/issues/5986">issue 5986</a>)
+    - in the IR, JIT and tiered @ref execution_modes "execution modes" and in programs compiled with qcc, a call
+      through a method call reference held as the value of a hash key (<tt>h.r(...)</tt>) whose object had been
+      deleted evaluated its arguments before it raised \c OBJECT-ALREADY-DELETED
+      (<a href="https://github.com/qoretechnologies/qore/issues/6225">issue 6225</a>)
     - a call through \c self of an @ref abstract "abstract method" that another parent class implements raised
       \c RUNTIME-OVERLOAD-ERROR instead of calling the implementation, except in programs compiled with qcc
       (<a href="https://github.com/qoretechnologies/qore/issues/3070">issue 3070</a>)

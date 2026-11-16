@@ -14402,6 +14402,16 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             pseudo_receiver_has_value = not_overridden && QoreTypeInfo::hasType(receiver_type)
                 && !QoreTypeInfo::parseAcceptsReturns(receiver_type, NT_NOTHING);
         }
+        // a hash whose member of the method's name is a call reference is called through it before any
+        // pseudo-method (QoreDotEvalOperatorNode::evalWithBase()), and the reference checks its object before the
+        // arguments are evaluated: a receiver that can be a hash is checked (issue #6225)
+        if (pseudo_receiver_has_value) {
+            const QoreTypeInfo* source_type = m->getSourceType();
+            if (!QoreTypeInfo::hasType(source_type) || QoreTypeInfo::parseAcceptsReturns(source_type, NT_HASH)
+                    || QoreTypeInfo::parseAcceptsReturns(source_type, NT_WEAKREF_HASH)) {
+                pseudo_receiver_has_value = false;
+            }
+        }
     }
     // a call of an overloaded user method that the parser resolved but that is dispatched by name at run time (see
     // the target of DotEvalMethodDirect below) is checked too: the dispatch by name would raise the error for a
