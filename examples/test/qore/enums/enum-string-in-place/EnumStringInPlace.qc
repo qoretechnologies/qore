@@ -271,7 +271,7 @@ class EnumStringInPlaceBase inherits QUnit::Test {
 
     testCompiledProgram() {
         if (!qcc_bin || !is_file(qcc_bin)) {
-            testSkip(sprintf("no qcc binary found (%y)", qcc_bin));
+            testSkip(qcc_bin ? sprintf("no qcc binary at %y", qcc_bin) : "no qcc binary found");
         }
         TmpDir tmp("qore-enum-string-in-place-");
         foreach int level in (0, 3) {
