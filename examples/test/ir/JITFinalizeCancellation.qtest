@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the refusal of a native function whose finalization is cancelled in the JIT code generation
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestInterpreter.qm
+
+%exec-class JITFinalizeCancellationTest
+
+#! A cancellation during the finalization of the lowering of a function refuses the function (qore#6305)
+/** The finalization loops write tables that the native code of the function reads (the records of the locals of the
+    handler helpers): a loop that a cancellation interrupts leaves entries unwritten, so the lowering fails and the
+    function is not compiled.  The debug hook dbg_force_finalize_cancel() makes the check of a loop report a
+    cancellation at an entry; the function must then run on its previous tier with the results of the AST, in jit and
+    tiered mode.
+*/
+class JITFinalizeCancellationTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("JITFinalizeCancellationTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        addTestCase("a cancelled finalization of the handler local table refuses the function", \testLoop(),
+            ("handler-local-table", "handler local table", "QORE_JIT_OBE_TABLE_BUDGET=0"));
+        set_return_value(main());
+    }
+
+    #! Returns a script with a function of \a n catch blocks with a local, an object local and a handler
+    /** If \a loop is given, the script arms the hook for the loop before it calls the function
+    */
+    private string getCode(int n, *string loop) {
+        string code = "%modern
+
+string log;
+
+class D {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { log += \"~\" + n; }
+    string get() { return n; }
+}
+
+int sub may_throw(int i) { if (i < 0) { throw \"NEG\", \"negative\"; } return i + 1; }
+
+string sub big(int n) {
+    int r = 0;
+    *D keep;
+";
+        for (int i = 0; i < n; ++i) {
+            code += sprintf("    try {
+        r += may_throw(n - %d);
+        keep = new D(\"t%d\");
+    } catch (hash<ExceptionInfo> ex) {
+        int l%d = r + %d;
+        D d%d = new D(\"c%d\");
+        on_exit { r += l%d; log += \"x%d\"; }
+        r += d%d.get().size();
+    }
+", i % 7 == 3 ? 1000 : 0, i, i, i, i, i, i, i, i);
+        }
+        code += "    return sprintf(\"%d:%s\", r, keep.get());
+}
+";
+        if (loop) {
+            code += sprintf("call_function(\"dbg_force_finalize_cancel\", %y, 1);\n", loop);
+        }
+        code += "for (int c = 0; c < 4; ++c) {
+    log = \"\";
+    string v = big(c);
+    printf(\"rv%d:%s %s\\n\", c, v, log);
+}
+";
+        return code;
+    }
+
+    #! Runs \a code in \a exec_mode with the environment \a env and returns its output with its standard error
+    private hash<auto> run(string code, string exec_mode, string env) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(code);
+        tmp.file.close();
+        int rc;
+        string out = backquote(sprintf("%s QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            "QORE_JIT_MAX_IR_INSTRUCTIONS=0 QORE_JIT_MAX_HANDLER_COST=0 QORE_JIT_TIMING=1 %s --enable-debug "
+            "--exec-mode=%s %s 2>&1", env, qore_bin, exec_mode, tmp.path), \rc);
+        string results;
+        foreach string line in (out.split("\n")) {
+            if (line =~ /^rv[0-9]:/) {
+                results += line + "\n";
+            }
+        }
+        return {"out": out, "rc": rc, "results": results};
+    }
+
+    testLoop(string loop, string label, string env) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the finalization cancellation hook needs a debug build");
+        }
+        hash<auto> expected = run(getCode(30), "ast", env);
+        assertEq(0, expected.rc, "the AST run succeeds");
+        assertEq(4, expected.results.split("\n").size(), "four result lines");
+        foreach string mode in (("jit", "tiered")) {
+            hash<auto> r = run(getCode(30, loop), mode, env);
+            assertEq(0, r.rc, sprintf("%s: the run succeeds: %s", mode, r.out.substr(-2000)));
+            assertRegex("finalization of the " + label + " of 'big[^']*' was cancelled", r.out,
+                mode + ": the lowering of the function was refused");
+            assertEq(expected.results, r.results, mode + ": the results of the AST");
+            # without the hook, the function is compiled
+            r = run(getCode(30), mode, env);
+            assertRegex("compiled 'big[^']*' and promoted to JIT tier", r.out, mode + ": compiled without the hook");
+            assertEq(expected.results, r.results, mode + ": the results of the AST when compiled");
+        }
+    }
+}

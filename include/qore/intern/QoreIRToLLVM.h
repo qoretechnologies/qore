@@ -63,6 +63,20 @@ class QoreIRPhiInstruction;
 class AbstractQoreFunctionVariant;
 struct AOTSlotMap;
 struct QorePluginLLVMCodegenInfo;
+//! The finalization loops of the lowering of a function that a cancellation interrupts, which refuses the function
+enum QoreFinalizeLoop : int {
+    // 1 is reserved for the loop of the reload chain slots, which another change adds, so that the numbers stay stable
+    //! QoreIRToLLVM::finalizeObeEntries()
+    QFL_HANDLER_LOCAL_TABLE = 2,
+};
+
+#ifdef DEBUG
+//! Makes the next check of the finalization loop \a loop (QoreFinalizeLoop) at its entry \a index report a
+//! cancellation, once (debug builds only; dbg_force_finalize_cancel()); process-wide: it fires in whichever lowering
+//! first reaches that loop at that index, on any thread, which can be a callee of the batch of another function
+DLLLOCAL void qore_dbg_force_finalize_cancel(int loop, int64_t index);
+#endif
+
 class QoreIRToLLVM {
 public:
     explicit QoreIRToLLVM(llvm::LLVMContext& context) : ctx(context) {
@@ -1888,7 +1902,10 @@ private:
     */
     std::vector<const void*> getReleasedReloadLocals(const std::unordered_set<const void*>* only = nullptr);
     //! Writes the records of obe_entries in the entry block, once the function is lowered
-    void finalizeObeEntries(llvm::Function* llvm_func);
+    /** @return false if it was cancelled (qore_finalize_cancelled()), leaving records unwritten: the function must
+        then be refused (qore#6305)
+    */
+    bool finalizeObeEntries(llvm::Function* llvm_func);
     //! Calls the helper \a name with the records and the table
     llvm::CallInst* emitObeCall(llvm::Module& module, const char* name, const std::vector<uint32_t>& entries,
         bool with_epoch);

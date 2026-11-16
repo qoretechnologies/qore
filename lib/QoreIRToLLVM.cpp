@@ -460,6 +460,7 @@ static bool isFastMethodCallEligible(
 #include "qore/intern/QoreCastOperatorNode.h"
 #include "qore/intern/QoreInstanceOfOperatorNode.h"
 #include <qore/QoreStringNode.h>
+#include <atomic>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Constants.h>
@@ -4745,10 +4746,41 @@ std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorageViaTable(llvm::M
     return released;
 }
 
+#ifdef DEBUG
+//! the finalization loop (QoreFinalizeLoop) whose check reports a cancellation once at the entry of
+//! qore_dbg_finalize_cancel_index (see qore_dbg_force_finalize_cancel()); 0: none
+static std::atomic<int> qore_dbg_finalize_cancel_loop{0};
+//! the index of the entry at which the check of the loop of qore_dbg_finalize_cancel_loop reports a cancellation
+static std::atomic<int64_t> qore_dbg_finalize_cancel_index{-1};
+
 // documented in QoreIRToLLVM.h
-void QoreIRToLLVM::finalizeObeEntries(llvm::Function* llvm_func) {
+void qore_dbg_force_finalize_cancel(int loop, int64_t index) {
+    qore_dbg_finalize_cancel_index.store(index, std::memory_order_relaxed);
+    qore_dbg_finalize_cancel_loop.store(loop, std::memory_order_release);
+}
+#endif
+
+//! Returns true if the finalization loop \a loop is cancelled at its entry \a i (every 100 entries)
+/** In debug builds, qore_dbg_force_finalize_cancel() makes it report a cancellation once at a given entry, so that a
+    test can check that the function is refused
+*/
+static bool qore_finalize_cancelled(int loop, size_t i, const char* what) {
+#ifdef DEBUG
+    if (qore_dbg_finalize_cancel_loop.load(std::memory_order_acquire) == loop
+            && qore_dbg_finalize_cancel_index.load(std::memory_order_relaxed) == static_cast<int64_t>(i)) {
+        int expected = loop;
+        if (qore_dbg_finalize_cancel_loop.compare_exchange_strong(expected, 0, std::memory_order_acq_rel)) {
+            return true;
+        }
+    }
+#endif
+    return i && !(i % 100) && qore_check_cancel(nullptr, what);
+}
+
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::finalizeObeEntries(llvm::Function* llvm_func) {
     if (!obe_entries) {
-        return;
+        return true;
     }
     llvm::BasicBlock& entry = llvm_func->getEntryBlock();
     llvm::Instruction* term = qoreGetTerminator(entry);
@@ -4764,8 +4796,10 @@ void QoreIRToLLVM::finalizeObeEntries(llvm::Function* llvm_func) {
     };
     for (size_t i = 0; i < obe_entry_keys.size(); ++i) {
         const void* key = obe_entry_keys[i];
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "LLVM handler local table")) {
-            break;
+        if (qore_finalize_cancelled(QFL_HANDLER_LOCAL_TABLE, i, "LLVM handler local table")) {
+            // the helpers read every record of the table: a function with a record left unwritten is refused
+            // (qore#6305)
+            return false;
         }
         auto cache_it = local_allocas.find(key);
         assert(cache_it != local_allocas.end());
@@ -4791,6 +4825,7 @@ void QoreIRToLLVM::finalizeObeEntries(llvm::Function* llvm_func) {
         store_ptr(i, offsetof(QoreObeLocal, entry_owner), find_alloca(preinstantiated_entry_cleanup_by_local));
     }
     obe_entries->setOperand(0, llvm::ConstantInt::get(i64_type, obe_entry_keys.size() * sizeof(QoreObeLocal)));
+    return true;
 }
 
 void QoreIRToLLVM::syncLocalsToRuntimeForHandlers(llvm::Module& module) {
@@ -17309,8 +17344,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // the release and reload of the locals' reload storage around the handlers run out of line, now that the
     // function's reload storage is known
     finalizeHandlerSites(module, llvm_func);
-    // the records of the locals that the tables of the places that run handlers cover (qore#6110)
-    finalizeObeEntries(llvm_func);
+    // the records of the locals that the tables of the places that run handlers cover (qore#6110); a cancelled
+    // finalization refuses the function, as its helpers would read records that were not written (qore#6305)
+    if (!finalizeObeEntries(llvm_func)) {
+        error = "the finalization of the handler local table of '" + fn_name + "' was cancelled";
+        return false;
+    }
     // the release of the values of an interrupted return that a handler's return replaced (#5992)
     finalizeHandlerReturnHoldSites(module);
 

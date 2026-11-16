@@ -26454,6 +26454,9 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         size_t check_count = 0;
         for (const auto& [variant, info] : *fast_entries) {
             if (++check_count % 100 == 0 && qore_check_cancel(nullptr, "AOT module fast-entry table")) {
+                // a module without fast entries is correct: a call compiled against one of them finds none when it
+                // looks it up (qore_aot_find_cross_module_fast_entry()), and takes the runtime path for good, as for
+                // a module loaded from source or rebuilt with another ABI (qore_rt_try_get_cross_module_fast_entry())
                 infos.clear();
                 break;
             }

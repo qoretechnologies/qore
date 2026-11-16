@@ -96,6 +96,7 @@
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreJIT.h"
+#include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBatchMemory.h"
 #include "qore/intern/FileStreamIo.h"
@@ -20965,6 +20966,28 @@ static bool dbg_get_bg_compile_hold_point(const QoreStringNode* point, QoreJIT::
     return true;
 }
 
+//! makes the next check of a finalization loop of the native lowering report a cancellation at the given entry
+/** The lowering of the function then fails, and the function is not compiled.  The loop is \c "handler-local-table"
+    (QoreIRToLLVM::finalizeObeEntries()); the hook is cleared when it fires, or with a negative index.  It is
+    process-wide: it fires in whichever lowering first reaches that loop at that index, on any thread, which can be that
+    of a callee of the batch of another function.
+
+    @throw DBG-ARGUMENT-ERROR the loop is unknown
+*/
+static QoreValue f_dbg_force_finalize_cancel(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* loop = get_param_value(params, 0).get<const QoreStringNode>();
+    int64_t index = get_param_value(params, 1).getAsBigInt();
+    int which;
+    if (!strcmp(loop->c_str(), "handler-local-table")) {
+        which = QFL_HANDLER_LOCAL_TABLE;
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "unknown finalization loop '%s'", loop->c_str());
+        return QoreValue();
+    }
+    qore_dbg_force_finalize_cancel(index < 0 ? 0 : which, index);
+    return QoreValue();
+}
+
 //! stops the next background JIT compile at the given point (\c "lowering", \c "llvm", \c "commit" or \c "install")
 /** The compile thread holds the compile lock while it is stopped, as a compile that takes a long time does.  If a
     function name is given, only the compile of that function (the root function of the batch) stops.
@@ -24618,6 +24641,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_get_bg_compile_refused_count", f_dbg_get_bg_compile_refused_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_force_finalize_cancel", f_dbg_force_finalize_cancel, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "loop", bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");
     qns.addBuiltinVariant("dbg_hold_bg_compile", f_dbg_hold_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG,
         "func");
