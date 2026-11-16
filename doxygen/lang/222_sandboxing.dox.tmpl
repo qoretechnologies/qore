@@ -382,8 +382,9 @@ authenticate();
     registrations in the module's own registries, threads it starts) belongs to no sandbox, so a later caller that
     uses it is not affected by the sandbox of the code that happened to load the module.  Every later call into the
     module is governed by its caller, as any other call.  The restrictions of the loading %Program's parse options
-    still apply to the module.  The time limits of the loading call still count the time that the initialization
-    takes.
+    still apply to the module.  The limits of the loading call still count the work of the initialization: its wall
+    time and CPU time limits count the time that the initialization takes, and its memory limit the memory that it
+    allocates.
 
     Library code that code that is not trusted loads is not shaped by that code:
     - its source is parsed with the parse defines that the loading %Program's host set (with
@@ -1007,6 +1008,13 @@ sm.setMaxStackSize(1024 * 1024);
     @ref Qore::parallel_map() "parallel_map()" and @ref Qore::parallel_foreach() "parallel_foreach()",
     @ref Qore::Thread::ThreadPool "ThreadPool" tasks, and asynchronous I/O operations and tasks.  With nested
     sandboxes, the deadline of every enclosing call stays in force in the inner sandbox.
+
+    The work that the call causes in its own thread counts as well, also when it runs code that is not sandboxed: a
+    module that the call loads (its initialization, see @ref sandbox_module_init) and code that it parses, with the
+    initializers of their constants.  Such an initializer runs with the parse options of the code that declares it,
+    not with the restrictions of the call, so that its value does not depend on the code that happens to trigger it,
+    but the time and memory that it takes are charged to the call (to all its limits: wall time, CPU time and memory),
+    so a sandbox cannot obtain work outside its limits by parsing or loading code again and again.
 
     When the deadline passes, every thread of the call raises a \c SANDBOX-TIMEOUT exception (with
     <tt>arg = {"wall_time_limit": </tt><em>ms</em><tt>}</tt>) at its next

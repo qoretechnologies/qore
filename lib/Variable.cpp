@@ -1437,6 +1437,25 @@ void LValueHelper::replaceEnumForWrite(const QoreValue& current) {
     saveTemp(old);
 }
 
+void LValueHelper::ensureUniqueSlow(const QoreValue& current) {
+    if (current.isEnum()) {
+        // the enum member's base value is shared and constant: the lvalue takes an owned copy to modify
+        replaceEnumForWrite(current);
+        return;
+    }
+    // never a scalar that the lvalue stores natively (qore#6094)
+    assert(!val || !val->optimized());
+    if (current.isShortString()) {
+        char buf[7];
+        current.getShortString(buf);
+        assignNodeIntern(new QoreStringNode(buf, current.shortStringLen(), QCS_UTF8));
+        return;
+    }
+    // an opaque reference
+    assert(current.isOpaque());
+    ensureUniqueNode();
+}
+
 void LValueHelper::keepCreatedNode(QoreValue rv) const {
     assert(val && val->optimized());
     // a large int or a special float, which a value holds in a new node (qore#6094); a natively stored scalar is never
@@ -3542,10 +3561,12 @@ int64 LValueHelper::preIncrementBigInt(const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    int64 newVal = qv->getAsBigInt() + 1;
+    // computed from the old value, as in postIncrementBigInt(): the compiler keeps one register less than for a new
+    // value that is both stored and returned
+    int64 oldVal = qv->getAsBigInt();
     saveTemp(*qv);
-    qv->set(newVal);
-    return newVal;
+    qv->set(oldVal + 1);
+    return oldVal + 1;
 }
 
 int64 LValueHelper::preDecrementBigInt(const char* desc) {
@@ -3561,10 +3582,12 @@ int64 LValueHelper::preDecrementBigInt(const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    int64 newVal = qv->getAsBigInt() - 1;
+    // computed from the old value, as in postDecrementBigInt(): the compiler keeps one register less than for a new
+    // value that is both stored and returned
+    int64 oldVal = qv->getAsBigInt();
     saveTemp(*qv);
-    qv->set(newVal);
-    return newVal;
+    qv->set(oldVal - 1);
+    return oldVal - 1;
 }
 
 int64 LValueHelper::postIncrementBigInt(const char* desc) {
