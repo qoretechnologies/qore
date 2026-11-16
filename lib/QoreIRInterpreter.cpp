@@ -4274,6 +4274,36 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
     return eligible_state;
 }
 
+//! ensureInterpreterResolvedInlineIRCallState() out of line, for the call sites that inline its fast path
+template <typename DirectCallInst>
+static QORE_INTERN_NOINLINE int8_t ensureInterpreterResolvedInlineIRCallStateSlow(DirectCallInst* inst,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, QoreProgram* caller_pgm, int nargs,
+        bool reject_copy_method) {
+    return ensureInterpreterResolvedInlineIRCallState(inst, method, variant, caller_pgm, nargs, reject_copy_method);
+}
+
+//! ensureInterpreterResolvedInlineIRCallState() with its fast paths always inlined
+/** For the call sites inlined into execute(), where GCC does not inline a function of this size, so that whether the
+    fast paths (a resolved call site and an ineligible one) are inlined does not depend on the size of the rest of the
+    single compilation unit (issue #6381)
+*/
+template <typename DirectCallInst>
+static QORE_INTERN_ALWAYS_INLINE int8_t ensureInterpreterResolvedInlineIRCallStateFast(DirectCallInst* inst,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, QoreProgram* caller_pgm, int nargs,
+        bool reject_copy_method) {
+    int8_t state = inst->inline_ir_state.load(std::memory_order_acquire);
+    if (state > 0 && inst->cached_callee_ir && inst->cached_uvb) {
+        // the acquire load above is the edge that publishes the payload to this thread
+        return state;
+    }
+    // ex: a callee whose code is compiled, which the tiered and JIT modes call through the generic call path
+    if (state == QORE_IR_INLINE_INELIGIBLE) {
+        return QORE_IR_INLINE_INELIGIBLE;
+    }
+    return ensureInterpreterResolvedInlineIRCallStateSlow(inst, method, variant, caller_pgm, nargs,
+        reject_copy_method);
+}
+
 //! Sets the location of a call instruction as the call site of the call that it makes for the scope's lifetime
 /** As QoreRcCallSiteHelper, through the thread's call site slot cached for the function (RuntimeLocationCache), so
     that the call stack frame of the called code is located at the call expression, as for an AST call; the call site
@@ -6043,8 +6073,12 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     return true;
 }
 
+// always inlined into the call sites of execute() (irCallMethodDirect(), irInvokeMethodDirect()): GCC inlines it, a
+// function not declared inline, only within the limit of --param max-inline-insns-auto, and whether it does
+// depended on the size of the rest of the single compilation unit, as did the cost of the method calls in the IR
+// (issue #6381)
 template <bool GIVEN = false, typename DirectMethodInst>
-static bool tryExecuteInterpreterInlineIRMethod(DirectMethodInst* inst, QoreObject* self,
+static QORE_INTERN_ALWAYS_INLINE bool tryExecuteInterpreterInlineIRMethod(DirectMethodInst* inst, QoreObject* self,
         QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr, uint64_t** arg_cleanups = nullptr) {
     if (!self || !caller_pgm) {
@@ -6054,7 +6088,7 @@ static bool tryExecuteInterpreterInlineIRMethod(DirectMethodInst* inst, QoreObje
     if (receiver_type_info && QoreTypeInfo::getParameterizedClassType(receiver_type_info)) {
         return false;
     }
-    int8_t inline_state = ensureInterpreterResolvedInlineIRCallState(
+    int8_t inline_state = ensureInterpreterResolvedInlineIRCallStateFast(
         inst, inst->method, inst->variant, caller_pgm, nargs, true);
     if (inline_state <= 0) {
         return false;
