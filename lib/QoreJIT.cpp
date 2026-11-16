@@ -2370,6 +2370,10 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 // If a callee fails to lower, fall back to compiling root alone
                 printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lowering failed: %s\n",
                     callee.ir_func->name.c_str(), error.c_str());
+                if (q_env_is_set("QORE_JIT_TIMING")) {
+                    fprintf(stderr, "[BG-JIT] batch member '%s' failed to lower (%s); compiling '%s' alone\n",
+                        callee.ir_func->name.c_str(), error.c_str(), root_func_name.c_str());
+                }
                 error.clear();
                 return compileFunctionInternal(root_func, error, root_deopt_counter);
             }
@@ -2427,15 +2431,17 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             fast_lowering.setFastEntryMode(fast_name, &param_map, &param_kind_map,
                 nullptr, callee_info.return_kind, sig->getReturnTypeInfo());
             if (!fast_lowering.lowerFunction(*callee.ir_func, *module, error)) {
-                // Fast entry failure is non-fatal: fall back to standard entry
+                // the fast entry was declared before the batch was lowered, and the code of the other members (and
+                // the callee's own standard entry) may call it already: the module is not compiled with an entry
+                // that has no body, and the root is compiled alone instead, as when a callee fails (qore#6313)
                 printd(2, "QoreJIT::compileFunctionBatch() fast entry '%s' lowering failed: %s\n",
                     fast_name.c_str(), error.c_str());
-                error.clear();
-                // Remove the fast entry from the batch map so callers don't try to use it
-                auto map_it = batch_callee_map.find(callee.variant);
-                if (map_it != batch_callee_map.end()) {
-                    map_it->second.approach_b_eligible = false;
+                if (q_env_is_set("QORE_JIT_TIMING")) {
+                    fprintf(stderr, "[BG-JIT] batch member '%s' failed to lower (%s); compiling '%s' alone\n",
+                        fast_name.c_str(), error.c_str(), root_func_name.c_str());
                 }
+                error.clear();
+                return compileFunctionInternal(root_func, error, root_deopt_counter);
             } else {
                 // the ABI is recorded with the symbol only once the entry is actually defined: a later batch that
                 // finds the name skips lowering the body, so recording a failed entry would bind its callers to a

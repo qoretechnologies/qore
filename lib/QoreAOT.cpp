@@ -18777,6 +18777,12 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     native_key.c_str(), llvm_error.c_str());
             }
             if (llvm::Function* fn = module.getFunction(llvm_symbol)) {
+                if (!fn->use_empty()) {
+                    // code of the module calls the closure's native function: it cannot be skipped (qore#6313)
+                    delete ir_func;
+                    setAOTCompileFatal(fatal_error, "closure", native_key, "lowering", llvm_error.c_str());
+                    return false;
+                }
                 fn->eraseFromParent();
             }
             delete ir_func;
