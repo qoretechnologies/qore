@@ -2224,8 +2224,6 @@ QoreUserModule::~QoreUserModule() {
 }
 
 void QoreUserModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) const {
-    //printd(5, "QoreUserModule::addToProgramImpl() mod '%s': tpgm %p po: %p pgm dom: %p\n", name.c_str(), tpgm,
-    //    tpgm->getParseOptions(), qore_program_private::getDomain(*pgm));
     // a module that another Program has loaded is not checked against the restrictions of the Program importing it:
     // it is a capability that the host gave the Program, and its code runs with the restrictions of its callers as
     // well as its own; only the first load is checked (see QoreModuleManager::loadSeparatedModule())

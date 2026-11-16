@@ -995,9 +995,6 @@ public:
     int exceptions_raised = 0,
         ptid = 0;      // TID of thread destroying the program's private data
 
-    QoreParseOptions dom,      // a mask of functional domains used in this Program
-        pend_dom;                // a mask of pending function domains used in this Program
-
     //! every functional domain that code parsed into this Program uses, whether or not its parse options allow it
     /** recorded in AOT images, so that loading a module checks the restrictions of the Program loading it against
         the functionality the module's code uses, as parsing the module's source does (see qore_aot_module_init_v3())
@@ -4543,7 +4540,6 @@ public:
             // make sure all positive arguments are set
             if ((pos & p_tmp) != pos) {
                 rv = ((pos & p_tmp) ^ pos);
-                pend_dom |= pos;
             }
         }
         QoreParseOptions neg = (n_dom & ~QoreParseOptions::POSITIVE_OPTIONS);
@@ -4562,7 +4558,6 @@ public:
         }
         if (neg && (neg & pwo.parse_options)) {
             rv |= (neg & pwo.parse_options);
-            pend_dom |= neg;
         }
 
         //printd(5, "qore_program_private::parseAddDomain() this: %p n_dom: " QLLD " po: " QLLD "\n", this, n_dom, pwo.parse_options);
@@ -5562,14 +5557,6 @@ public:
     //! library code
     DLLLOCAL static int64 getModuleTrustedDomains(const QoreProgram& pgm) {
         return pgm.priv->module_trusted_dom;
-    }
-
-    DLLLOCAL static QoreParseOptions getDomain(const QoreProgram& pgm) {
-        return pgm.priv->dom;
-    }
-
-    DLLLOCAL static void runtimeAddDomain(QoreProgram& pgm, const QoreParseOptions& n_dom) {
-        pgm.priv->dom |= n_dom;
     }
 
     //! Returns the lock that serializes the changes to the parse options of the Program (issue #6078)
