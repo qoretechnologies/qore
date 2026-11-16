@@ -3538,6 +3538,18 @@ public:
             return nullptr;
         }
 
+        // the thread owns the parse of the Program now (lockParsing()), so no other thread can begin one: the
+        // Program is still being parsed if it has code pending (Program::parsePending() without a commit or a
+        // rollback), or if a parse of it was rolled back without PO_ALLOW_REPARSE (it cannot be used then); the
+        // expression is refused, as its parse would end the parse state that keeps threads out of the Program, and
+        // it could refer to code that a rollback deletes (issue #6353)
+        if (parsing_in_progress) {
+            xsink->raiseException("EXPRESSION-ERROR", "an expression cannot be created in a Program that has code "
+                "pending (commit it with Program::parseCommit() or roll it back with Program::parseRollback() first) "
+                "or whose parse was rolled back without PO_ALLOW_REPARSE");
+            return nullptr;
+        }
+
         assert(!expression_mode);
         assert(!new_expression);
         expression_mode = true;
@@ -3547,7 +3559,7 @@ public:
         NonStandardParseFlagHelper nspfh(*this);
         startParsing(xsink, wS, wm);
 
-        // parse text given
+        // parse text given; the Program had no code pending, so the parse state ends with the expression's parse
         if (!internParsePending(xsink, exp_code.c_str(), label, orig_src, offset, false)) {
             internParseCommit(false);   // finalize parsing, back out or commit all changes
         } else {
