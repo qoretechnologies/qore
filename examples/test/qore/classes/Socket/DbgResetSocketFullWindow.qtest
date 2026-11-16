@@ -11,12 +11,24 @@
 %exec-class DbgResetSocketFullWindowTest
 
 #! dbg_reset_socket() raises an error instead of waiting forever when what was written cannot arrive
-/** dbg_reset_socket() resets a connection once the peer has acknowledged everything written on it; when more is left
-    than the peer's receive window takes (its receive buffer is full and its program does not read), the data could
-    only arrive once the peer's program reads, so it raises \c DBG-RESET-SOCKET-ERROR and leaves the socket open.
-    Debug builds only.
+/** dbg_reset_socket() resets a connection once the peer has acknowledged everything written on it; when the peer's
+    receive window is 0 with data left unacknowledged (its receive buffer is full and its program does not read), the
+    data could only arrive once the peer's program reads, so it raises \c DBG-RESET-SOCKET-ERROR and leaves the socket
+    open.  Debug builds only.
 */
 class DbgResetSocketFullWindowTest inherits QUnit::Test {
+    public {
+        #! the bytes the peer writes: more than a client that does not read and the peer's send buffer take
+        const WriteSize = 32 * 1024 * 1024;
+
+        #! the most milliseconds a poll waits before the window is looked at again; it paces the checks only
+        const PollPaceMs = 10;
+
+        #! the calls of the send after which the test fails if the client's receive window has not closed (a hang
+        #! guard: the window closes once the client's buffer is full)
+        const MaxCalls = 6000;
+    }
+
     constructor() : Test("DbgResetSocketFullWindowTest", "1.0") {
         addTestCase("a reset with data that cannot arrive raises an error", \fullWindowTest());
         set_return_value(main());
@@ -57,20 +69,29 @@ class DbgResetSocketFullWindowTest inherits QUnit::Test {
             testSkip("the system does not give the receive window that the peer of a TCP socket advertised");
         }
 
-        # the peer writes, without blocking, more than the client's receive buffer and its own send buffer take: a
-        # non-blocking send writes until the socket would block, and then returns the poll information; once two
-        # calls in a row have returned it, the buffers are full, as the client does not read
-        AbstractPollOperation op = peer.startPollSend(binary(strmul("x", 256 * 1024 * 1024)));
-        int would_block = 0;
-        while (would_block < 2) {
+        # the peer writes, without blocking, more than the client's receive buffer and its own send buffer take, as the
+        # client does not read: a non-blocking send writes until the socket would block, and then returns the poll
+        # information.  The send is driven, waiting on the poll between the calls, until the socket would block and
+        # the client's receive window is 0: the client's receive buffer is full, and nothing more can arrive until it
+        # reads.  The poll's bound only paces the checks, as a window that closes does not wake it up
+        AbstractPollOperation op = peer.startPollSend(binary(strmul("x", WriteSize)));
+        int calls = 0;
+        while (True) {
             *hash<SocketPollInfo> info = op.continuePoll();
             if (!info) {
                 testSkip("the buffers took the whole write");
             }
-            ++would_block;
+            if (++calls > 1 && call_function("dbg_tcp_peer_window", peer) == 0) {
+                break;
+            }
+            if (calls > MaxCalls) {
+                assertTrue(False, sprintf("the client's receive window did not close after %d calls", calls));
+                return;
+            }
+            Socket::poll((info,), PollPaceMs);
         }
 
-        assertThrows("DBG-RESET-SOCKET-ERROR", "more than the peer's receive window", \call_function(),
+        assertThrows("DBG-RESET-SOCKET-ERROR", "the peer's receive window is 0", \call_function(),
             ("dbg_reset_socket", peer));
         assertTrue(peer.isOpen(), "the socket is not closed");
     }
