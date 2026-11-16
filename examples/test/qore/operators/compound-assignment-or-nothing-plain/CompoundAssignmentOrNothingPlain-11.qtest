@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include CompoundAssignmentOrNothingPlain.qc
+
+%exec-class CompoundAssignmentOrNothingPlainPart11
+
+#! runs part 11 of 12 of CompoundAssignmentOrNothingPlainBase: the default mode with the second third of the functions
+class CompoundAssignmentOrNothingPlainPart11 inherits CompoundAssignmentOrNothingPlainBase {
+    constructor() : CompoundAssignmentOrNothingPlainBase("CompoundAssignmentOrNothingPlainPart11", 11) {
+    }
+}
