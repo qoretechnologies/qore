@@ -23285,7 +23285,9 @@ bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point) {
     checked the connection and holds its method guard; \c "drain-wait": the close of an HTTP client connection has to
     wait for a call in flight (with a release Counter of 0, it only reports it); \c "swap": a negotiating connection was
     handed over, and the connection manager is about to replace it in its pool with the connection that took it over;
-    \c "acquired": the connection manager found a connection in its pool for a request and released the pool lock
+    \c "acquired": the connection manager found a connection in its pool for a request and released the pool lock;
+    \c "reserve-pending": a stream of a Qore-level HTTP client connection is to be reserved, before the reservation
+    lock is taken
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
 
@@ -23310,6 +23312,8 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::Swap);
     } else if (!strcmp(name->c_str(), "acquired")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::Acquired);
+    } else if (!strcmp(name->c_str(), "reserve-pending")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ReservePending);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
