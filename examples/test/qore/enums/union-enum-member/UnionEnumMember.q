@@ -9,6 +9,25 @@ enum Color : int { Red = 1, Green = 2 }
 enum Name : string { A = "a", B = "b" }
 enum Ratio : float { Half = 0.5 }
 
+class C {
+    public {
+        union<string, Color> m;
+    }
+}
+
+hashdecl H {
+    union<string, Color> m;
+}
+
+union<string, Color> sub ret(Color c) {
+    return c;
+}
+
+auto sub runtimeTyped(auto v) {
+    union<int, Color> u = v;
+    return u;
+}
+
 sub show(string label, code c) {
     try {
         auto v = c();
@@ -40,6 +59,22 @@ sub main() {
     });
     show("param", auto sub () { code f = auto sub (union<string, Color> p) { return p; }; return f(Color::Red); });
     show("hash value", auto sub () { hash<string, union<string, Color>> h = {"a": Color::Red}; return h.a; });
+    show("object member", auto sub () { C c(); c.m = Color::Green; return c.m; });
+    show("hashdecl member", auto sub () { hash<H> h = <H>{"m": Color::Green}; return h.m; });
+    show("return", auto sub () { return ret(Color::Red); });
+    show("union<softstring, Color>", auto sub () { union<softstring, Color> u = Color::Red; return u; });
+    show("union<softint, Name>", auto sub () { union<softint, Name> u = Name::A; return u; });
+    show("value typed at run time", auto sub () { return runtimeTyped(Color::Green); });
+    show("int typed at run time", auto sub () { return runtimeTyped(7); });
+    show("another enum", auto sub () { return runtimeTyped(Name::A); });
+    show("union<list<int>, nothing, int, Color>", auto sub () {
+        union<list<int>, nothing, int, Color> u = Color::Red;
+        return u;
+    });
+    show("union<hash<string, int>, nothing, int, Color>", auto sub () {
+        union<hash<string, int>, nothing, int, Color> u = Color::Red;
+        return u;
+    });
 }
 
 main();

@@ -16,3 +16,13 @@ reassign: 2 enum<Color>
 list<union<string, Color>>: ["enum<Color>", "string"] list<string>
 param: 1 enum<Color>
 hash value: 1 enum<Color>
+object member: 2 enum<Color>
+hashdecl member: 2 enum<Color>
+return: 1 enum<Color>
+union<softstring, Color>: 1 enum<Color>
+union<softint, Name>: "a" enum<Name>
+value typed at run time: 2 enum<Color>
+int typed at run time: 7 integer
+another enum: RUNTIME-TYPE-ERROR: <lvalue> expects type 'union<int, enum<Color>>', but got type 'enum<Name>' instead
+union<list<int>, nothing, int, Color>: 1 enum<Color>
+union<hash<string, int>, nothing, int, Color>: 1 enum<Color>

@@ -8227,6 +8227,18 @@ void QoreTypeInfo::acceptInputParam(const QoreTypeInfo* ti, int param_num, const
 template <typename FilterPolicy>
 void QoreTypeInfo::acceptInputInternImpl(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
         const char* param_name, QoreValue& n, LValueHelper* lvhelper, q_lvalue_vts_e vts, FilterPolicy policy) const {
+    // a value of an enum is accepted by an enum type of a union before any other type, which would take its base value
+    // (union<int, E> accepts an E value as an E value), also in an optional type (qore#6277)
+    if (n.isEnum() && getAcceptSpecs().size() > 1) {
+        for (auto& t : getAcceptSpecs()) {
+            if (t.spec.getTypeSpec() == QTS_ENUM
+                    && t.spec.acceptInputImpl(xsink, *this, t, arg_type, obj, param_num, param_name, n, lvhelper,
+                        policy)) {
+                return;
+            }
+        }
+    }
+
     // CRITICAL FIX Phase 2: Prioritize complex hash/list handlers for optional types
     // For optional types (return_vec.size() > 1), we need to ensure complex hash/list
     // handlers are tried BEFORE hashdecl handlers to prevent incorrect routing.
@@ -8260,18 +8272,6 @@ void QoreTypeInfo::acceptInputInternImpl(ExceptionSink* xsink, const char* arg_t
             }
             doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink, vts);
             return;
-        }
-    }
-
-    // a value of an enum is accepted by an enum type of a union before any other type, which would take its base value
-    // (union<int, E> accepts an E value as an E value; qore#6277)
-    if (n.isEnum() && getAcceptSpecs().size() > 1) {
-        for (auto& t : getAcceptSpecs()) {
-            if (t.spec.getTypeSpec() == QTS_ENUM
-                    && t.spec.acceptInputImpl(xsink, *this, t, arg_type, obj, param_num, param_name, n, lvhelper,
-                        policy)) {
-                return;
-            }
         }
     }
 
