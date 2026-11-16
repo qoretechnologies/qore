@@ -16965,7 +16965,7 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                         }
                         break;
                     case LVCompoundOp::DivAssign:
-                        if (rhs.getAsFloat() == 0.0) {
+                        if (qore_number_divisor_is_zero(rhs)) {
                             xsink->raiseException("DIVISION-BY-ZERO",
                                 "division by zero in arbitrary-precision numeric expression");
                         } else {
