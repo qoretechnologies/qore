@@ -1,0 +1,18 @@
+union<string, Color>: 1 enum<Color>
+union<Color, string>: 1 enum<Color>
+union<int, Name>: "a" enum<Name>
+union<int, Color>: 1 enum<Color>
+union<Color, int>: 1 enum<Color>
+union<int, Color> int: 5 integer
+union<string, Color> string: "x" string
+union<string, int, Color>: 2 enum<Color>
+union<Name, Color> Color: 2 enum<Color>
+union<Name, Color> Name: "b" enum<Name>
+union<string, Ratio>: 0.5 enum<Ratio>
+union<float, Ratio>: 0.5 enum<Ratio>
+union<string, int> Color: 1 integer
+reassign: 2 enum<Color>
+*union<string, Color>: 1 enum<Color>
+list<union<string, Color>>: ["enum<Color>", "string"] list<string>
+param: 1 enum<Color>
+hash value: 1 enum<Color>

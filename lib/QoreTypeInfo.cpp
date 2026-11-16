@@ -5075,22 +5075,24 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
         }
         case QTS_TYPE: {
             qore_type_t t = n.getType();
-            // Unwrap TAG_ENUM to base type only for direct lvalue/parameter assignments
-            // (e.g. "string s = EnumVal"), NOT for hash key or member assignments where
-            // the TAG_ENUM must be preserved through containers for later typed retrieval
-            if (n.isEnum() && u.t != NT_ALL
-                && strcmp(arg_type, "key") && strcmp(arg_type, "member")) {
-                QoreValue base_val = n.getEnumMember()->getValue();
-                base_val.ref();
-                n.discard(xsink);
-                n = base_val;
-            }
             // special handling for objects; check for object validity; if it's already been deleted,
             // then we use NT_NOTHING
             if (t == NT_OBJECT && !n.get<QoreObject>()->isValid()) {
                 t = NT_NOTHING;
             }
             if (u.t == NT_ALL || u.t == t) {
+                // Unwrap TAG_ENUM to base type only for direct lvalue/parameter assignments
+                // (e.g. "string s = EnumVal"), NOT for hash key or member assignments where
+                // the TAG_ENUM must be preserved through containers for later typed retrieval; only when this type
+                // accepts the value: a type that does not leaves it for the other types of a union, such as an enum
+                // type (qore#6277)
+                if (n.isEnum() && u.t != NT_ALL
+                    && strcmp(arg_type, "key") && strcmp(arg_type, "member")) {
+                    QoreValue base_val = n.getEnumMember()->getValue();
+                    base_val.ref();
+                    n.discard(xsink);
+                    n = base_val;
+                }
                 ok = true;
             }
             break;
@@ -8258,6 +8260,18 @@ void QoreTypeInfo::acceptInputInternImpl(ExceptionSink* xsink, const char* arg_t
             }
             doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink, vts);
             return;
+        }
+    }
+
+    // a value of an enum is accepted by an enum type of a union before any other type, which would take its base value
+    // (union<int, E> accepts an E value as an E value; qore#6277)
+    if (n.isEnum() && getAcceptSpecs().size() > 1) {
+        for (auto& t : getAcceptSpecs()) {
+            if (t.spec.getTypeSpec() == QTS_ENUM
+                    && t.spec.acceptInputImpl(xsink, *this, t, arg_type, obj, param_num, param_name, n, lvhelper,
+                        policy)) {
+                return;
+            }
         }
     }
 
