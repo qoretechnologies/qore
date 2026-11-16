@@ -10963,15 +10963,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_add_typed(uint64_t left, uint64_t r
 }
 
 //! Appends a value that is not a string to a string local as its string (issue #6266)
-/** The value is converted as doPlusEqualsOnLValue() converts the value it appends to a string (QoreStringValueHelper)
-    and the string is appended by \a append, a call of a string append helper with the string as its right operand;
-    a value that is not a string is never the string appended to, so the helper's alias check is unaffected
+/** The value is converted to the string that doPlusEqualsOnLValue() appends for it (its string representation, in the
+    same encoding), made once as a string node (QoreStringNodeValueHelper), and the string is appended by \a append, a
+    call of a string append helper with the string as its right operand; a value that is not a string is never the
+    string appended to, so the helper's alias check is unaffected
 */
 template <typename Append>
 static __attribute__((noinline)) uint64_t qore_rt_string_append_converted(QoreValue right, ExceptionSink* xsink,
         Append append) {
-    QoreStringValueHelper right_string(right);
-    ReferenceHolder<QoreStringNode> right_node(new QoreStringNode(**right_string), xsink);
+    ReferenceHolder<QoreStringNode> right_node(QoreStringNodeValueHelper(right).getReferencedValue(), xsink);
     return append(toBits(QoreValue(*right_node)));
 }
 
