@@ -72,7 +72,7 @@ QoreObject* qore_get_async_io_logger_object() {
     return nullptr;
 }
 
-bool qore_async_io_log_v(int level, const char* fmt, va_list args) {
+bool qore_async_io_log_v(int level, const char* fmt, va_list args, ExceptionSink* logger_xsink) {
     if (!qore_async_io_any_logger()) {
         return false;
     }
@@ -86,13 +86,23 @@ bool qore_async_io_log_v(int level, const char* fmt, va_list args) {
     }
     if (!lgr) {
         // no global async I/O logger: use the global controller's logger, if it has one
-        return qore_async_io_controller_log_v(level, fmt, args);
+        return qore_async_io_controller_log_v(level, fmt, args, logger_xsink);
     }
-    // Check level outside lock (calls Qore method)
-    if (!lgr->isEnabledFor(level)) {
-        ExceptionSink xsink;
-        lgr->deref(&xsink);
-        return true;
+    // Check level outside lock (calls Qore method); an exception that the logger raises is the caller's to report
+    {
+        ExceptionSink enabled_xsink;
+        bool enabled = lgr->isEnabledFor(level, &enabled_xsink);
+        if (enabled_xsink) {
+            if (logger_xsink) {
+                logger_xsink->assimilate(enabled_xsink);
+            } else {
+                enabled_xsink.clear();
+            }
+        }
+        if (!enabled) {
+            lgr->derefLogged(logger_xsink != nullptr);
+            return true;
+        }
     }
     // Format and log.  QoreString::vsprintf returns -1 (no retry) when its
     // buffer is too small; re-copy the va_list and retry until it fits.
@@ -111,10 +121,15 @@ bool qore_async_io_log_v(int level, const char* fmt, va_list args) {
     ExceptionSink xsink;
     lgr->logArgs(level, msg, nullptr, &xsink);
     msg->deref();
-    lgr->deref(&xsink);
     if (xsink) {
-        xsink.clear();
+        // the caller reports the logger's exception, or it is discarded
+        if (logger_xsink) {
+            logger_xsink->assimilate(xsink);
+        } else {
+            xsink.clear();
+        }
     }
+    lgr->derefLogged(logger_xsink != nullptr);
     return true;
 }
 

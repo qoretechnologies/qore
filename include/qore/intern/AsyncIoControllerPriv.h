@@ -2511,11 +2511,19 @@ private:
     */
     DLLLOCAL bool log(int level, const char* fmt, ...) const;
 
+    //! Logs a message as @ref log() does; an exception that the logger raises is added to @a logger_xsink
+    DLLLOCAL bool logWithSink(ExceptionSink* logger_xsink, int level, const char* fmt, ...) const;
+
+    //! Logs a message as @ref log() does, with the arguments in a va_list
+    /** @param logger_xsink if not null, receives an exception that the logger raises; otherwise it is discarded
+    */
+    DLLLOCAL bool logV(ExceptionSink* logger_xsink, int level, const char* fmt, va_list args) const;
+
 public:
     //! Logs a message with this controller's own logger only (acquires lock — must NOT be called with lock held)
     /** @return false if the controller has no logger; the message is then not logged
     */
-    DLLLOCAL bool logOwnV(int level, const char* fmt, va_list args) const;
+    DLLLOCAL bool logOwnV(int level, const char* fmt, va_list args, ExceptionSink* logger_xsink = nullptr) const;
 
 private:
 

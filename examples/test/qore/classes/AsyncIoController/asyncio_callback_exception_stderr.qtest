@@ -50,6 +50,27 @@ code sub make_cleanup_cb(Queue q, Queue gate) {
     };
 }
 
+# a logger that fails to log every message
+class RaisingLogger inherits LoggerInterfaceBase {
+    logArgs(int level, string message, *softlist<auto> format_args) {
+        throw \"LOGGER-ERR\", \"the logger failed\";
+    }
+
+    bool isEnabledFor(int level) {
+        return True;
+    }
+}
+
+# a logger that fails to tell whether it is enabled
+class EnabledRaisingLogger inherits LoggerInterfaceBase {
+    logArgs(int level, string message, *softlist<auto> format_args) {
+    }
+
+    bool isEnabledFor(int level) {
+        throw \"LOGGER-ERR\", \"the logger failed\";
+    }
+}
+
 Logger sub stdout_logger(LoggerLevel level) {
     Logger logger(\"cb\", level);
     LoggerAppenderStdOut appender(\"out\", new LoggerLayoutPattern(\"LOG: %%m%%n\"));
@@ -72,6 +93,15 @@ sub main() {
             break;
         case \"filtered-logger\":
             AsyncIoController::setLogger(stdout_logger(LoggerLevel::getLevelFatal()));
+            break;
+        case \"raising-logger\":
+            AsyncIoController::setLogger(new RaisingLogger());
+            break;
+        case \"raising-global-logger\":
+            set_async_io_logger(new RaisingLogger());
+            break;
+        case \"enabled-raising-logger\":
+            AsyncIoController::setLogger(new EnabledRaisingLogger());
             break;
     }
     switch (mode) {
@@ -136,6 +166,11 @@ main();
         addTestCase("a timer's exception goes to the async I/O logger, not to stderr", \testGlobalLogger());
         addTestCase("a logger that does not log errors takes the exception: nothing goes to stderr",
             \testFilteredLogger());
+        addTestCase("a logger that raises an exception: both exceptions go to stderr", \testRaisingLogger());
+        addTestCase("an async I/O logger that raises an exception: both exceptions go to stderr",
+            \testRaisingGlobalLogger());
+        addTestCase("a logger whose isEnabledFor() raises an exception: both exceptions go to stderr",
+            \testEnabledRaisingLogger());
         set_return_value(main());
     }
 
@@ -149,17 +184,20 @@ main();
         };
     }
 
-    #! Checks that the exception of a child without a logger appears on stderr
-    private checkStderr(string mode, string err, string desc) {
+    #! Checks that the exception of a child without a logger appears on stderr; returns the stderr output
+    private string checkStderr(string mode, string err, string desc) {
         hash<auto> rv = run(mode);
         assertEq("done\n", rv.out, mode + ": the script ended");
         assertTrue(rv.err.find(err) >= 0, sprintf("%s: the exception's code is on stderr: %y", mode, rv.err));
         assertTrue(rv.err.find(desc) >= 0, sprintf("%s: the exception's description is on stderr: %y", mode,
             rv.err));
+        return rv.err;
     }
 
     testTimerNoLogger() {
-        checkStderr("timer", "CB-ERR", "from the timer");
+        string err = checkStderr("timer", "CB-ERR", "from the timer");
+        assertTrue(err.find("unhandled exception in an AsyncIoController callback (type=callback class=null owner=- "
+            "key=- stream_key=-):") >= 0, sprintf("a line names the work item: %y", err));
     }
 
     testTimerCallbackNoLogger() {
@@ -167,7 +205,9 @@ main();
     }
 
     testCleanupNoLogger() {
-        checkStderr("cleanup", "CLEANUP-ERR", "from the destructor");
+        string err = checkStderr("cleanup", "CLEANUP-ERR", "from the destructor");
+        assertTrue(err.find("unhandled exception in the cleanup of an AsyncIoController work item (type=callback):")
+            >= 0, sprintf("a line names the cleanup: %y", err));
     }
 
     #! the exception of the cleanup case is raised by the cleanup of the work item, not by the work item itself
@@ -199,6 +239,32 @@ main();
 
     testGlobalLogger() {
         checkLogged("global-logger");
+    }
+
+    testRaisingLogger() {
+        checkRaisingLogger("raising-logger");
+    }
+
+    testRaisingGlobalLogger() {
+        checkRaisingLogger("raising-global-logger");
+    }
+
+    testEnabledRaisingLogger() {
+        checkRaisingLogger("enabled-raising-logger");
+    }
+
+    #! Checks that the callback's exception and the logger's go to stderr, in this order
+    private checkRaisingLogger(string mode) {
+        string err = checkStderr(mode, "CB-ERR", "from the timer");
+        assertTrue(err.find("unhandled exception in an AsyncIoController callback (type=callback class=null owner=- "
+            "key=- stream_key=-), which the logger could not log:") >= 0, sprintf("a line names the work item and "
+            "the logger's failure: %y", err));
+        assertTrue(err.find("LOGGER-ERR") >= 0, sprintf("the logger's exception is on stderr: %y", err));
+        assertTrue(err.find("the logger failed") >= 0, sprintf("the description of the logger's exception is on "
+            "stderr: %y", err));
+        # the callback's exception comes first
+        assertTrue(err.find("CB-ERR") < err.find("LOGGER-ERR"), sprintf("the callback's exception is reported "
+            "before the logger's: %y", err));
     }
 
     testFilteredLogger() {

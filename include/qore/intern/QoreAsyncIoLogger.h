@@ -82,13 +82,19 @@ DLLLOCAL void qore_async_io_log(int level, const char* fmt, ...);
 
     @return true if the message was handed to the controller's logger
 */
-DLLLOCAL bool qore_async_io_controller_log_v(int level, const char* fmt, va_list args);
+/** @param logger_xsink if not null, receives an exception that the logger raises; otherwise it is discarded
+*/
+DLLLOCAL bool qore_async_io_controller_log_v(int level, const char* fmt, va_list args,
+    ExceptionSink* logger_xsink = nullptr);
 
 //! va_list variant for forwarding from other variadic functions
-/** @return false if there is no logger to take the message (neither the global async I/O logger nor the global
-    controller's logger); a logger that is not enabled for the level counts as taking it
+/** @param logger_xsink if not null, receives an exception that the logger raises; otherwise it is discarded
+
+    @return false if there is no logger to take the message (neither the global async I/O logger nor the global
+    controller's logger); a logger that is not enabled for the level counts as taking it, as does one that raises an
+    exception
 */
-DLLLOCAL bool qore_async_io_log_v(int level, const char* fmt, va_list args);
+DLLLOCAL bool qore_async_io_log_v(int level, const char* fmt, va_list args, ExceptionSink* logger_xsink = nullptr);
 
 //! Cleanup (called from qore_cleanup())
 DLLLOCAL void qore_async_io_logger_cleanup();

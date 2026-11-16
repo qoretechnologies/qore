@@ -2421,19 +2421,32 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             const char* key = async_item.key.empty() ? "-" : async_item.key.c_str();
             const char* stream_key = async_item.stream_key.empty() ? "-" : async_item.stream_key.c_str();
             // the exception is logged at the error level; without a logger it is reported on stderr as an unhandled
-            // exception, as one raised by a task (submitTask()) or a background thread is, so that the failure of a
-            // callback is never silent (qore#6275)
-            bool logged = ctrl && ctrl->log(QORE_LOG_LEVEL_ERROR,
+            // exception, as one raised by a task (submitTask()) or a background thread is, after a line that names
+            // the work item, so that the failure of a callback is never silent; a logger that raises an exception
+            // itself has both exceptions reported on stderr (qore#6275)
+            ExceptionSink logger_xsink;
+            bool logged = ctrl && ctrl->logWithSink(&logger_xsink, QORE_LOG_LEVEL_ERROR,
                 "QoreCallDispatcher::workerLoop() %s exception: %s: %s "
                 "(type=%s class=%s owner=%s key=%s stream_key=%s)",
                 method_name ? method_name : "unknown",
                 *err_str ? err_str->c_str() : "?",
                 *desc_str ? desc_str->c_str() : "?",
                 type_name, class_name, owner, key, stream_key);
-            if (logged) {
+            if (logged && !logger_xsink) {
                 work_xsink.clear();
             } else {
+                // a callback that called thread_exit leaves no exception, and nothing is reported for it
+                if (work_xsink.isException()) {
+                    printe("unhandled exception in an AsyncIoController %s (type=%s class=%s owner=%s key=%s "
+                    "stream_key=%s)%s:\n", method_name ? method_name : "unknown", type_name, class_name, owner, key,
+                        stream_key, logged ? ", which the logger could not log" : "");
+                }
                 work_xsink.handleExceptions();
+                if (logger_xsink) {
+                    printe("exception raised by the logger while logging the exception of the AsyncIoController "
+                        "%s:\n", method_name ? method_name : "unknown");
+                    logger_xsink.handleExceptions();
+                }
             }
         }
 
@@ -2570,13 +2583,22 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             QoreStringValueHelper err(xsink->getExceptionErr());
             QoreStringValueHelper desc(xsink->getExceptionDesc());
             // without a logger, reported on stderr as an unhandled exception, as an exception of the work item is
-            bool logged = ctrl && ctrl->log(QORE_LOG_LEVEL_ERROR, "QoreCallDispatcher::workerLoop() discarding "
-                "an exception left pending by %s cleanup: %s: %s", getDispatchTypeName(async_item.type),
-                *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
-            if (logged) {
+            ExceptionSink logger_xsink;
+            bool logged = ctrl && ctrl->logWithSink(&logger_xsink, QORE_LOG_LEVEL_ERROR, "QoreCallDispatcher::"
+                "workerLoop() discarding an exception left pending by %s cleanup: %s: %s",
+                getDispatchTypeName(async_item.type), *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+            if (logged && !logger_xsink) {
                 xsink->clear();
             } else {
+                if (xsink->isException()) {
+                    printe("unhandled exception in the cleanup of an AsyncIoController work item (type=%s)%s:\n",
+                        getDispatchTypeName(async_item.type), logged ? ", which the logger could not log" : "");
+                }
                 xsink->handleExceptions();
+                if (logger_xsink) {
+                    printe("exception raised by the logger while logging the exception of the cleanup:\n");
+                    logger_xsink.handleExceptions();
+                }
             }
         }
     }
@@ -9837,24 +9859,41 @@ void AsyncIoControllerPriv::waitCancel(const std::string& key) {
 }
 
 bool AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
+    va_list args;
+    va_start(args, fmt);
+    bool logged = logV(nullptr, level, fmt, args);
+    va_end(args);
+    return logged;
+}
+
+bool AsyncIoControllerPriv::logWithSink(ExceptionSink* logger_xsink, int level, const char* fmt, ...) const {
+    va_list args;
+    va_start(args, fmt);
+    bool logged = logV(logger_xsink, level, fmt, args);
+    va_end(args);
+    return logged;
+}
+
+bool AsyncIoControllerPriv::logV(ExceptionSink* logger_xsink, int level, const char* fmt, va_list args) const {
     // no logger can take the message: no lock is taken (see qore_async_io_logger_count)
     if (!qore_async_io_any_logger()) {
         return false;
     }
-    va_list args;
-    va_start(args, fmt);
-    bool logged = logOwnV(level, fmt, args);
-    va_end(args);
+    va_list own_args;
+    va_copy(own_args, args);
+    bool logged = logOwnV(level, fmt, own_args, logger_xsink);
+    va_end(own_args);
     if (!logged) {
         // No per-controller logger — delegate to global async I/O logger (outside lock)
-        va_start(args, fmt);
-        logged = qore_async_io_log_v(level, fmt, args);
-        va_end(args);
+        va_list global_args;
+        va_copy(global_args, args);
+        logged = qore_async_io_log_v(level, fmt, global_args, logger_xsink);
+        va_end(global_args);
     }
     return logged;
 }
 
-bool AsyncIoControllerPriv::logOwnV(int level, const char* fmt, va_list args) const {
+bool AsyncIoControllerPriv::logOwnV(int level, const char* fmt, va_list args, ExceptionSink* logger_xsink) const {
     // Snapshot and ref the logger under lock, then release the lock before calling
     // any user-provided methods (isEnabledFor, logArgs) to avoid deadlock if the
     // logger re-enters the controller.
@@ -9868,10 +9907,21 @@ bool AsyncIoControllerPriv::logOwnV(int level, const char* fmt, va_list args) co
         lgr->ref();
     }
 
-    if (!lgr->isEnabledFor(level)) {
-        ExceptionSink xsink;
-        lgr->deref(&xsink);
-        return true;
+    // an exception that the logger raises is the caller's to report
+    {
+        ExceptionSink enabled_xsink;
+        bool enabled = lgr->isEnabledFor(level, &enabled_xsink);
+        if (enabled_xsink) {
+            if (logger_xsink) {
+                logger_xsink->assimilate(enabled_xsink);
+            } else {
+                enabled_xsink.clear();
+            }
+        }
+        if (!enabled) {
+            lgr->derefLogged(logger_xsink != nullptr);
+            return true;
+        }
     }
 
     // QoreString::vsprintf returns -1 (no retry) when the buffer is too small;
@@ -9893,14 +9943,19 @@ bool AsyncIoControllerPriv::logOwnV(int level, const char* fmt, va_list args) co
     ExceptionSink xsink;
     lgr->logArgs(level, msg, nullptr, &xsink);
     msg->deref();
-    lgr->deref(&xsink);
     if (xsink) {
-        xsink.clear();
+        // the caller reports the logger's exception, or it is discarded
+        if (logger_xsink) {
+            logger_xsink->assimilate(xsink);
+        } else {
+            xsink.clear();
+        }
     }
+    lgr->derefLogged(logger_xsink != nullptr);
     return true;
 }
 
-bool qore_async_io_controller_log_v(int level, const char* fmt, va_list args) {
+bool qore_async_io_controller_log_v(int level, const char* fmt, va_list args, ExceptionSink* logger_xsink) {
     AsyncIoControllerPriv* ctrl;
     {
         AutoLocker al(aio_singleton_lock);
@@ -9910,7 +9965,7 @@ bool qore_async_io_controller_log_v(int level, const char* fmt, va_list args) {
         }
         ctrl->ref();
     }
-    bool rv = ctrl->logOwnV(level, fmt, args);
+    bool rv = ctrl->logOwnV(level, fmt, args, logger_xsink);
     ExceptionSink xsink;
     ctrl->deref(&xsink);
     xsink.clear();
