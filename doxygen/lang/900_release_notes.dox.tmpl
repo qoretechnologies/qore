@@ -1387,6 +1387,11 @@
         @ref smtpclientintro "SmtpClient" module sends the message to all of them; only the first one was, so an
         untrusted display name must be quoted or given separately from the address
         (<a href="https://github.com/qoretechnologies/qore/issues/6134">issue 6134</a>)
+      - a message in any character encoding is parsed in time proportional to its length, as are encoded words and
+        quoted-printable text by the @ref mimeintro "Mime" module; it grew with the square of the number of header
+        lines (<a href="https://github.com/qoretechnologies/qore/issues/6139">issue 6139</a>)
+      - a parsed message without a \c Subject or a \c From header can be serialized; it raised
+        \c RUNTIME-OVERLOAD-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6267">issue 6267</a>)
       - see @ref mailmessage_v1_5_1 for all changes
 
     - @ref mapperintro "Mapper" module
