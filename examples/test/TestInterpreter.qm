@@ -1,0 +1,211 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file TestInterpreter.qm locates the qore interpreter and qcc for tests that run them in child processes
+
+/*  TestInterpreter.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module TestInterpreter {
+    version = "1.0";
+    desc    = "locates the qore interpreter and qcc for tests that run them in child processes";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+    init    = sub () {
+        TestInterpreter::guard_recursion();
+    };
+}
+
+/** A test that runs the interpreter in a child process must not take the interpreter from the path of its own
+    executable (\c QORE_ARGV[0]) when it runs as an executable compiled with qcc: the executable is then the test
+    itself, which, run as "the interpreter" with a script, runs the test again, which runs itself again, without end
+    (a test compiled for a batch run started more than 13,000 processes that way).
+
+    qore_interpreter() and qcc_compiler() take the interpreter and qcc from the environment that the test runner sets
+    (\c QORE_BINARY, which run_tests.sh exports, or \c QORE_BIN, \c QORE_EXECUTABLE; \c QCC, \c QORE_QCC), then, in
+    an interpreted test only, from the running interpreter, and never return the running executable of a compiled test.
+
+    A compiled test that loads this module or calls qore_interpreter() or qcc_compiler() records its executable in
+    the environment, which its child processes inherit; if one of them is the same executable, the module's
+    initialization and these functions fail, so that a test that still runs itself stops at once instead of starting
+    processes without end.  The functions check it too because a compiled executable does not stop when the
+    initialization of a module raises an exception.
+*/
+public namespace TestInterpreter {
+    #! the environment variable that records the executable of a compiled test for its child processes
+    public const ParentExecutableVar = "QORE_TEST_COMPILED_PARENT";
+
+    #! returns True if the process runs a script compiled with qcc (an executable), False for the interpreter
+    /** The interpreter's \c QORE_ARGV holds the interpreter, its options and the script before the arguments of the
+        script (\c ARGV); that of a compiled executable holds the executable and the arguments only
+    */
+    public bool sub running_compiled() {
+        # no QORE_ARGV: the module is initialized by qcc when it compiles code that requires it
+        if (!QORE_ARGV) {
+            return False;
+        }
+        return (QORE_ARGV.size() - (ARGV.size() ?? 0)) < 2;
+    }
+
+    #! returns the canonical path of the running executable (\c QORE_ARGV[0])
+    public string sub own_executable() {
+        string path = QORE_ARGV[0];
+        if (path !~ /\//) {
+            # found in the PATH
+            *string found = trim(backquote(sprintf("command -v '%s' 2>/dev/null", replace(path, "'", "'\\''"))));
+            if (found) {
+                path = found;
+            }
+        }
+        try {
+            return realpath(path);
+        } catch (hash<ExceptionInfo> ex) {
+            return path;
+        }
+    }
+
+    #! returns True if the path names the running executable of a compiled test
+    public bool sub is_own_executable(string path) {
+        if (!running_compiled()) {
+            return False;
+        }
+        string own = own_executable();
+        if (path !~ /\//) {
+            *string found = trim(backquote(sprintf("command -v '%s' 2>/dev/null", replace(path, "'", "'\\''"))));
+            if (!found) {
+                return False;
+            }
+            path = found;
+        }
+        try {
+            return realpath(path) == own;
+        } catch (hash<ExceptionInfo> ex) {
+            return path == own;
+        }
+    }
+
+    #! returns the qore interpreter that the test runs in child processes
+    /** @throw TEST-INTERPRETER-ERROR a compiled test has no interpreter configured in its environment and none is
+        found in the \c PATH
+    */
+    public string sub qore_interpreter() {
+        guard_recursion();
+        # QORE_BIN first: a developer sets it to choose a build, while run_tests.sh always exports QORE_BINARY
+        foreach *string candidate in ((ENV.QORE_BIN, ENV.QORE_BINARY, ENV.QORE_EXECUTABLE)) {
+            if (candidate && !is_own_executable(candidate)) {
+                return absolute_command_path(candidate);
+            }
+        }
+        if (!running_compiled()) {
+            # the running interpreter; a name found in the PATH is given as the path that the PATH names, so that it
+            # also runs from another directory
+            string path = QORE_ARGV[0];
+            if (path !~ /\//) {
+                *string found = trim(backquote(sprintf("command -v '%s' 2>/dev/null", replace(path, "'", "'\\''"))));
+                if (found) {
+                    return found;
+                }
+            }
+            return absolute_command_path(path);
+        }
+        *string found = trim(`command -v qore 2>/dev/null`);
+        if (found && !is_own_executable(found)) {
+            return found;
+        }
+        throw "TEST-INTERPRETER-ERROR", sprintf("the test runs as a compiled executable (%y) and no qore interpreter "
+            "is configured (QORE_BINARY) or found in the PATH", QORE_ARGV[0]);
+    }
+
+    #! returns a path that names the same file from any directory
+    /** A relative path with a directory (\c build/qcc, as run_tests.sh finds the build directory when QORE_BINARY is
+        not set) is made absolute, so that a test that runs a command in another directory (<tt>cd \<dir\> && ...</tt>)
+        still finds it; a bare name is left to the PATH
+    */
+    public string sub absolute_command_path(string path) {
+        if (path !~ /\// || path =~ /^\//) {
+            return path;
+        }
+        *string cwd = getcwd();
+        return cwd ? cwd + "/" + path : path;
+    }
+
+    #! returns qcc: the one configured in the environment, the one next to the interpreter, or the one in the PATH
+    /** @return the path of qcc, or NOTHING if none is found
+    */
+    public *string sub qcc_compiler() {
+        guard_recursion();
+        foreach *string candidate in ((ENV.QCC, ENV.QORE_QCC, ENV.QORE_QCC_EXECUTABLE)) {
+            if (candidate && !is_own_executable(candidate)) {
+                return absolute_command_path(candidate);
+            }
+        }
+        string qore = qore_interpreter();
+        if (qore =~ /\//) {
+            string next = dirname(qore) + "/qcc";
+            if (is_file(next)) {
+                return next;
+            }
+        }
+        *string found = trim(`command -v qcc 2>/dev/null`);
+        return found && !is_own_executable(found) ? found : NOTHING;
+    }
+
+    #! fails if a compiled test runs itself in a child process, and records the executable for child processes
+    /** Called when the module is loaded and by qore_interpreter() and qcc_compiler()
+
+        @throw TEST-RECURSION-ERROR the process is a child process of the same compiled test
+    */
+    public sub guard_recursion() {
+        if (!running_compiled()) {
+            return;
+        }
+        string own = own_executable();
+        if (TestInterpreterState::inherited(own) == own) {
+            throw "TEST-RECURSION-ERROR", sprintf("the compiled test %y was run by itself as a child process (it took "
+                "its own executable for the qore interpreter); use TestInterpreter::qore_interpreter()", own);
+        }
+    }
+}
+
+#! the executable that the parent process recorded, read once, before this process records its own
+/** The process records its executable in the environment for its child processes the first time that it checks: what
+    it reads later is its own record, not its parent's, so the check compares the value read the first time
+*/
+class TestInterpreterState {
+    private:internal {
+        static Mutex lck();
+        static bool read;
+        static *string parent_executable;
+    }
+
+    #! returns the executable that the parent process recorded, if any, and records \a own for child processes
+    static *string inherited(string own) {
+        AutoLock al(lck);
+        if (!read) {
+            # the process environment itself: a compiled executable initializes its modules before it sets ENV
+            parent_executable = getenv(TestInterpreter::ParentExecutableVar);
+            setenv(TestInterpreter::ParentExecutableVar, own);
+            read = True;
+        }
+        return parent_executable;
+    }
+}

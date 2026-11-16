@@ -61,8 +61,8 @@ DLLLOCAL int qore_check_object_method_call(QoreObject* obj, const char* name, co
 
 //! Raises the exception that a method call raises for its receiver @a base before it evaluates its arguments, if any
 /** As QoreDotEvalOperatorNode::evalWithBase() dispatches the call: an object that has been deleted (also through a
-    weak reference), or a value whose pseudo-class has no method @a name; nothing for a hash whose member @a name is a
-    call reference.  The call is given by its method name and by what parse initialization resolved (@a qc,
+    weak reference), or a value whose pseudo-class has no method @a name; for a hash whose member @a name is a method
+    call reference, the error of the reference (an object that has been deleted, issue #6225).  The call is given by its method name and by what parse initialization resolved (@a qc,
     @a method, @a variant, @a pseudo), so that the AOT runtime can make the check from the call's target as well
     (issue #5784).
 
@@ -101,6 +101,7 @@ public:
     DLLLOCAL QoreDotEvalOperatorNode(const QoreProgramLocation* loc, QoreValue n_left, MethodCallNode* n_m)
             : QoreOperatorNode(loc), left(n_left), m(n_m), returnTypeInfo(nullptr) {
         //printd(5, "QoreDotEvalOperatorNode::QoreDotEvalOperatorNode() this: %p left: %p m: %p\n", this, &left, m);
+        setDotEvalOperator();
     }
 
     DLLLOCAL ~QoreDotEvalOperatorNode() {
@@ -205,6 +206,21 @@ QoreDotEvalOperatorNode* qore_make_dot_call(LexicalSemanticPolicy policy, Args&&
         : new LexicalDotEvalOperatorNode(std::forward<Args>(args)...);
     ParseNode::bindSemanticPolicy(QoreValue(node), policy);
     return node;
+}
+
+//! Returns the node as a QoreDotEvalOperatorNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const QoreDotEvalOperatorNode*>(), from a flag that the QoreDotEvalOperatorNode
+    constructor sets, so that it covers its subclass LexicalDotEvalOperatorNode: a dynamic_cast searches the class
+    hierarchy with string comparisons of the type names, which is too slow for the per-call paths of compiled code.
+    Every node with NT_OPERATOR is a QoreOperatorNode.
+*/
+DLLLOCAL inline const QoreDotEvalOperatorNode* qore_get_dot_eval_operator_node(const AbstractQoreNode* n) {
+    const QoreDotEvalOperatorNode* rv = (n && n->getType() == NT_OPERATOR
+            && static_cast<const QoreOperatorNode*>(n)->isDotEvalOperator())
+        ? static_cast<const QoreDotEvalOperatorNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const QoreDotEvalOperatorNode*>(n));
+    return rv;
 }
 
 #endif

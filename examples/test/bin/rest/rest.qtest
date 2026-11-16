@@ -4,6 +4,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires HttpServer
 %requires FsUtil
 %requires json
@@ -60,7 +61,7 @@ class RestCommandTest inherits QUnit::Test {
         provider.close();
         command = "env QORE_MODULE_DIR=" + quote(root + "/qlib:" + (ENV.QORE_MODULE_DIR ?? ""))
             + " QORE_CONNECTION_PROVIDERS=" + quote(tmp.path + "/RestCommandConnections.qm")
-            + " " + quote(QORE_ARGV[0]) + " --enable-debug " + quote(root + "/bin/rest") + " -C -A 1.1";
+            + " " + quote(TestInterpreter::qore_interpreter()) + " --enable-debug " + quote(root + "/bin/rest") + " -C -A 1.1";
     }
 
     globalTearDown() {

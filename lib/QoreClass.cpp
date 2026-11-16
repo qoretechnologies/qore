@@ -48,6 +48,7 @@
 #include <atomic>
 #include <climits>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
 #include <unordered_set>
@@ -5248,6 +5249,15 @@ QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* 
         if (w) {
             return qore_method_private::evalGivenArgs(*w, xsink, rc, self, args, class_ctx, pgm_ctx);
         }
+        // a member that holds a closure or a call reference is called with the argument list's values, which its
+        // parameters take over (issue #5958); a call through a call reference of another Program (pgm_ctx) is made
+        // as evalMethod() makes it
+        if (!pgm_ctx) {
+            QoreValue rv;
+            if (qore_class_eval_member_code_given_args(*this, self, nme, args, class_ctx, xsink, rv)) {
+                return rv;
+            }
+        }
     }
     // anything else is called as evalMethod() calls it
     return evalMethod(self, nme, args, class_ctx, rc, xsink, nullptr, pgm_ctx);
@@ -8492,6 +8502,35 @@ static QORE_INTERN_NOINLINE void raise_abstract_variant_call(ExceptionSink* xsin
         f->getClassName(), f->getName(), mv->getSignature()->getSignatureText());
 }
 
+void qore_raise_deleted_method_call_after_args(QoreObject* self, const QoreMethod& m,
+        const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t* arg_names,
+        ExceptionSink* xsink) {
+    assert(!m.isStatic());
+    const NormalMethodFunction* f = NMETHF(qore_method_private::get(m)->getFunction());
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreSourceProgramHolder spgm_holder(xsink);
+    {
+        // as NormalMethodFunction::evalMethodTmpArgs(), which the call runs: the variant is resolved with the
+        // arguments, raising the error of the resolution as the AST interpreter does before it enters the method's
+        // code
+        CodeEvaluationHelper ceh(CodeEvaluationHelper::DeletedByArgs(), xsink, rc, f, variant, f->getName(),
+            args, self, qore_class_private::get(*f->getClass()), cctx,
+            qore_get_method_pgm_context(*f->getClass(), spgm_holder), explicit_type_param_instantiation,
+            arg_names);
+        if (*xsink) {
+            return;
+        }
+    }
+    const MethodVariant* mv = METHV_const(variant);
+    if (mv->isAbstract()) {
+        raise_abstract_variant_call(xsink, f, mv);
+        return;
+    }
+    // the error of the method's code, which names the class of the variant (CodeContextHelper)
+    qore_object_private::get(*self)->raiseDeletedCall(qore_class_private::get(*mv->getClass()), f->getName(), xsink);
+}
+
 QoreValue NormalMethodFunction::evalMethod(
         ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, QoreObject* self, const QoreListNode* args,
@@ -9128,6 +9167,10 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
     if (exp) {
         printd(5, "QoreMemberInfo::parseInit() this: %p '%s' s'%s' %d\n", this, name, exp.getFullTypeName(),
             exp.getType());
+        // the initializer is code of the class, whatever code makes the class parse it: it sees self and the
+        // top-level local variables (qore#6268)
+        DeclarationParseScopeHelper declaration_scope;
+        SelfLocalVarParseHelper slvph(&selfid);
         QoreParseContext parse_context(&selfid);
         if (parse_init_value(exp, parse_context) && !err) {
             err = -1;
@@ -9182,6 +9225,8 @@ int QoreVarInfo::parseInit(const char* name) {
     val.set(typeInfo);
 
     if (exp) {
+        // the initializer is code of the class, whatever code makes the class parse it (qore#6268)
+        DeclarationParseScopeHelper declaration_scope;
         QoreParseContext parse_context;
         if (parse_init_value(exp, parse_context) && !err) {
             err = -1;
@@ -9262,6 +9307,31 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink, bool defer_pen
     // recursing
     eval_init = true;
     if (exp) {
+        // the initializer runs with the parse options of the code that declares the variable, as a constant's does
+        // (qore#6205) and as the code of a function runs with those of its declaration, not with those of the code
+        // that triggers the evaluation: the statement that parses the declaring code, or the code that reads the
+        // variable first; any override of that code is suspended, so that the value is not shaped by the code that
+        // happens to initialize it.  Both the thread's options and those of the thread-local RuntimeConfig, which the
+        // AST interpreter reads, are set
+        struct StaticVarInitRcParseOptionsHelper {
+            RuntimeConfig& rc;
+            QoreParseOptions old_po;
+
+            StaticVarInitRcParseOptionsHelper(RuntimeConfig& rc, const QoreParseOptions& po) : rc(rc),
+                    old_po(rc.getParseOptions()) {
+                rc.setParseOptions(po);
+            }
+
+            ~StaticVarInitRcParseOptionsHelper() {
+                rc.setParseOptions(old_po);
+            }
+        };
+        std::optional<LoadTimeParseOptionsHelper> init_po;
+        std::optional<StaticVarInitRcParseOptionsHelper> init_rc_po;
+        if (has_decl_po) {
+            init_po.emplace(decl_po);
+            init_rc_po.emplace(rc_get_tls_ref(), decl_po);
+        }
         // the initializer is evaluated as a statement of its own (see design/temporary-lifetime.md)
         QoreScopedEvalHolder val(exp, true, &init_xsink);
         if (!init_xsink) {

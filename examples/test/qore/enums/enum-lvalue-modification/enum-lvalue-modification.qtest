@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 
@@ -65,6 +66,7 @@ class EnumLvalueModificationTest inherits QUnit::Test {
                 " value\", b: 1}",
             "container-chomp": "[\"a line of text\", \"a long string value that is not short\", 1] {a: \"a line of"
                 " text\", b: 1}",
+            "container-short": "[\"ab\", \"ab\"] {a: \" ab \", b: \"ab\"} {a: \"ab\", b: \"ab\"}",
             "object-members": "\"a long string value that is not shortx\" \"a long string value that is not"
                 " shorty\" 12345678901234567891.25 8",
             "object-method": "a LONG string value that is not short-m",
@@ -78,7 +80,7 @@ class EnumLvalueModificationTest inherits QUnit::Test {
             "global": "\"a long string value that is not shortx\" 12345678901234567891.25",
             "loop": "0",
             "members": "[\"42\", \"a long string value that is not short\", \"  padded value  \", \"a line of"
-                " text\\n\", 1.5, 12345678901234567890.25, 0.5, 2.5, 1, 7]",
+                " text\\n\", \" ab \", \"ab\\n\", 1.5, 12345678901234567890.25, 0.5, 2.5, 1, 7]",
         };
     }
 
@@ -89,7 +91,7 @@ class EnumLvalueModificationTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("EnumLvalueModificationTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"

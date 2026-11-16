@@ -37,6 +37,7 @@
 #include <qore/QoreThreadLock.h>
 #include <qore/QoreCondition.h>
 #include <qore/QoreCounter.h>
+#include "qore/intern/qore_thread_intern.h"
 
 #include <csignal>
 #include <map>
@@ -78,6 +79,10 @@ class CodePgm {
 public:
    ResolvedCallReferenceNode* funcref;
    QoreProgram* pgm;
+   //! the run-time parse options of the code that set the handler, which the handler runs with (qore#6208)
+   /** A handler that is a call reference to builtin code sets no options of its own
+   */
+   QoreThreadRuntimeParseOptions po;
 
    DLLLOCAL void setProgram(QoreProgram* n_pgm) {
       assert(n_pgm);
@@ -99,6 +104,7 @@ public:
 
       funcref = n_funcref->refRefSelf();
       setProgram(n_pgm);
+      po = QoreThreadRuntimeParseOptions::capture();
    }
 
    // must be called in the signal lock
@@ -107,9 +113,13 @@ public:
       assert(pgm);
       assert(n_funcref);
       CodePgm rv(funcref, pgm);
+      // the old options go with the old handler, which is released outside the signal lock, as their references to
+      // Programs can be the last ones
+      rv.po = po;
 
       funcref = n_funcref->refRefSelf();
       setProgram(n_pgm);
+      po = QoreThreadRuntimeParseOptions::capture();
       return rv;
    }
 
@@ -133,10 +143,16 @@ public:
       CodePgm rv(funcref, pgm);
       funcref = 0;
       pgm = 0;
+      // the options go with the handler taken, which is released outside the signal lock, as their references to
+      // Programs can be the last ones (qore#6208)
+      std::swap(rv.po.po, po.po);
+      std::swap(rv.po.override, po.override);
       return rv;
    }
 
    DLLLOCAL void del(ExceptionSink* xsink) {
+      // the options hold references to Programs, which must not outlive the handler (qore#6208)
+      po = QoreThreadRuntimeParseOptions();
       if (funcref) {
          funcref->deref(xsink);
          assert(pgm);
