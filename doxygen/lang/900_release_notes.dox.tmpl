@@ -1995,6 +1995,10 @@
       (see @ref unittestformats; issue #2297)
     - an empty \c "regex_mask" option of @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()" matches
       every file; it caused the constructor to throw an \c INVALID-MEMBER exception (issue #3377)
+    - two @ref Qore::Program "Program" objects whose commits run code that parses code in each other waited for each
+      other's parse lock forever; such a wait is refused with \c PROGRAM-ERROR, and the wait of a parse action for a
+      parse lock can be ended with @ref Qore::cancel_thread() "cancel_thread()"; see @ref program_parse_lock_waits
+      (issue #5693)
     - an allocation that fails while a thread enters another %Program (ex: in a binary module's
       \c QoreExternalProgramContextHelper or a parse commit) leaves the thread in the calling %Program and releases
       its thread count in the entered %Program, which could otherwise not be deleted (issue #6198)

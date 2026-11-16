@@ -1554,6 +1554,22 @@ const WARN_NONEXHAUSTIVE_SWITCH = QP_WARN_NONEXHAUSTIVE_SWITCH;
     code into the same %Program object will fail with an exception.  If parsing fails due to a parse exception, the Program
     object is generally no longer usable and must be recreated to be used.
 
+    @anchor program_parse_lock_waits
+    @par Waiting for the Parse Lock
+    A parse action waits while another thread holds the Program's parse lock, which a thread holds for the whole parse
+    action, including the code that a commit runs (such as the initializers of global variables and static class
+    members).  A thread that holds the parse lock of one Program and waits for that of another could otherwise wait
+    forever: when the initializers of two Programs that are committed in two threads each parse code in the other
+    Program, each thread waits for a lock that the other holds.  The wait of a parse action that would close such a
+    cycle (also through further threads and Programs) is therefore refused with a \c PROGRAM-ERROR exception, and the
+    wait of a parse action for the parse lock can be ended with @ref Qore::cancel_thread() "cancel_thread()" or
+    @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()", as other blocking waits can
+    (unless cancellation is deferred, as in the destructor of a trusted class).  A wait that does not close a cycle is
+    not refused, also when the thread that holds the lock waits for the parse lock of a third Program itself.  Some
+    internal waits for the parse lock (of binary modules, for example) can neither be refused nor ended; when such a
+    wait closes a cycle, a wait of a parse action in the cycle is refused instead (unless all of them wait in code
+    run with cancellation deferred by @ref Qore::defer_thread_cancel() "defer_thread_cancel()").
+
     @ref parse_options "Parse option constants" can be used to limit the capabilities of a Program object. These options should be
     binary-OR'ed together and passed to the Program object's constructor. Also see @ref command_line_processing for equivalent
     command-line options, and @ref parse_directives for equivalent parse directives.

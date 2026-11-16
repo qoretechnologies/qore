@@ -1715,13 +1715,21 @@ private:
     @param timeout_ms the timeout in milliseconds; negative for no timeout
     @param xsink for the cancellation exception; may be nullptr
     @param operation the operation named in the cancellation exception
+    @param before_block if not nullptr, called with \a before_block_arg and the mutex held after the wait is
+    registered and the last check for a request, just before the thread blocks (also when the wait cannot be
+    registered: then nothing can wake it for what the check reads); if it returns non-zero, the thread does not
+    block and QORE_COND_RESULT_SUCCESS is returned.  A thread that sets what the check reads and then wakes the
+    waiter with QoreThreadList::wakeCondWaiter() is never lost: either the check sees it, or the wakeup sees the
+    registration
+    @param before_block_arg the argument of \a before_block
 
     @return QORE_COND_RESULT_SUCCESS if woken, QORE_COND_RESULT_TIMEOUT on timeout, or QORE_COND_RESULT_INTERRUPTED
     if the thread was cancelled or interrupted (or the condition waker thread could not be started), in which case
     an exception has been raised on \a xsink if it is not nullptr
 */
 DLLLOCAL int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms,
-        ExceptionSink* xsink, const char* operation);
+        ExceptionSink* xsink, const char* operation, int (*before_block)(void*) = nullptr,
+        void* before_block_arg = nullptr);
 
 //! Stops the condition waker thread; called when no thread can be waiting any more
 DLLLOCAL void qore_stop_cond_waker();
@@ -1729,6 +1737,8 @@ DLLLOCAL void qore_stop_cond_waker();
 #ifdef DEBUG
 //! Test hook called by qore_cond_wait_cancellable() after its final check for a request and before it blocks
 DLLLOCAL extern std::atomic<void (*)()> qore_cond_wait_window_hook;
+//! Test hook called by qore_cond_wait_cancellable() before it registers a wait that it can register for a wakeup
+DLLLOCAL extern std::atomic<void (*)()> qore_cond_wait_register_hook;
 #endif
 
 //! Sleeps for the given number of microseconds or until the current thread is cancelled or interrupted

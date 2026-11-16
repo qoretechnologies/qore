@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - condition waits for a Program's parse lock, thread cancellation and sandbox interrupts
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ParseLockCycleTest
+
+#! Tests waits for the parse lock of a Program whose commit runs code that parses code in other Programs
+/** A thread holds a Program's parse lock for the whole parse, including the initializers that its commit runs.  Two
+    Programs whose initializers, committed in two threads, each parse code in the other Program waited for each other
+    forever, and cancel_thread() did not end the waits (issue #5693).  A wait that would close a cycle of parse lock
+    waits is now refused with \c PROGRAM-ERROR, and the wait is a cancellation point.
+
+    The child script (parse-lock-cycle/parse-lock-cycle.q) runs the cases: a Program that parses code in itself from
+    its initializer, a chain of waits (the owner of the lock waits for another parse lock itself, which is no cycle),
+    the cancellation of a waiting thread, the interrupt of a waiting thread that runs the code of a sandboxed
+    Program, and cycles through two and three Programs.  Each wait in it is bounded, and
+    it ends itself when a case does not end, so that a deadlock fails the test instead of hanging it.  It runs in
+    every execution mode, and compiled with AOT, against the same expected output.
+*/
+class ParseLockCycleTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+
+        TmpDir tmp("qore-parse-lock-cycle-");
+
+        #! the output of the child script
+        const ExpectedOutput = "self: s: parsed into s
+chain: p: parsed into q; q: parsed into r; r: nothing parsed
+cancel: THREAD-CANCELLED
+interrupt: PROGRAM-INTERRUPTED
+cross: PROGRAM-ERROR; parsed
+cycle3: PROGRAM-ERROR; parsed; parsed
+";
+    }
+
+    constructor() : QUnit::Test("ParseLockCycle", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/parse-lock-cycle/parse-lock-cycle.q";
+
+        addTestCase("parse lock waits of commits, in every mode", \testModes());
+        addTestCase("parse lock waits of commits, compiled with AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --exec-mode=%s %s",
+                env(), qore_bin, mode, script));
+            assertEq(0, r.rc, sprintf("%s: exit code: %s", mode, r.out));
+            assertEq(ExpectedOutput, r.out, mode);
+        }
+    }
+
+    testAot() {
+        string bin = tmp.path + "/parse-lock-cycle";
+        string out = backquote(sprintf("%s %s -b --compile --output %s %s 2>&1", env(), qore_bin, bin, script));
+        assertTrue(is_file(bin), sprintf("compiled: %s", out));
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env(), bin));
+        assertEq(0, r.rc, sprintf("AOT: exit code: %s", r.out));
+        assertEq(ExpectedOutput, r.out, "AOT");
+    }
+}
