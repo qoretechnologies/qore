@@ -6530,7 +6530,12 @@ QoreObject* QoreBreakpoint::getQoreObject() {
 void QoreBreakpoint::setQoreObject(QoreObject *n_qo) {
 }
 
-QoreExternalProgramContextHelper::QoreExternalProgramContextHelper(ExceptionSink* xsink, QoreProgram* pgm) : priv(new ProgramThreadCountContextHelper(xsink, pgm, true)) {
+QoreExternalProgramContextHelper::QoreExternalProgramContextHelper(ExceptionSink* xsink, QoreProgram* pgm) {
+    // a C++ exception of the entry propagates to the C++ code that enters the Program, once the thread is as it was
+    // (issue #6198); the interpreter's entries raise it as a Qore exception instead (issue #6255)
+    std::unique_ptr<ProgramThreadCountContextHelper> p(new ProgramThreadCountContextHelper);
+    p->setRethrow(xsink, pgm, true);
+    priv = p.release();
 }
 
 QoreExternalProgramContextHelper::~QoreExternalProgramContextHelper() {

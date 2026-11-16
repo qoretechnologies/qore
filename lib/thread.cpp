@@ -4526,6 +4526,7 @@ int ThreadEntryHandlerFrame::enterHandlers(ThreadData* td, QoreProgram* pgm, Exc
         if (xsink) {
             xsink->assimilate(handler_xsink);
         }
+        handler_cpp_exception = true;
         throw;
     }
     if (!handler_xsink) {
@@ -4868,6 +4869,49 @@ void ProgramThreadCountContextHelper::takeModuleThreadCount(QoreReferenceProgram
 }
 
 void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime) {
+    if (!pgm) {
+        return;
+    }
+    // a call within the Program that the thread has entered, the usual case, has nothing to do (see setRethrow()),
+    // and is made without the call that converts a C++ exception
+    {
+        ThreadData* td = thread_data.get();
+        if (pgm == td->current_pgm && td->tlpd && td->entry_pgm == pgm && !td->cancel_defer_count
+                && !td->dtor_cancel_defer_count) {
+            assert(!old_pgm);
+            assert(!entry_frame.isActive());
+            ctx_td = td;
+            return;
+        }
+    }
+    try {
+        setRethrow(xsink, pgm, runtime);
+    } catch (std::exception& e) {
+        // the entry left the thread as it was; the code that enters the Program gets a Qore exception instead, which
+        // it can catch (issue #6255), as for a Qore exception of the entry handler; an exception already in xsink
+        // (one that the handler raised, or one propagating while a destructor runs) is the one reported
+        if (!xsink) {
+            // nothing can tell the caller that the entry failed but the exception
+            throw;
+        }
+        failed = true;
+        if (!*xsink) {
+            try {
+                if (entry_frame.handlerFailedWithCppException()) {
+                    xsink->raiseException("THREAD-ENTRY-HANDLER-ERROR", "the Program's thread entry handler could "
+                        "not be completed: out of memory or an internal error (%s)", e.what());
+                } else {
+                    xsink->raiseException("PROGRAM-ENTRY-ERROR", "the thread could not enter Program " QLLD ": out "
+                        "of memory or an internal error (%s)", (int64)pgm->getProgramId(), e.what());
+                }
+            } catch (...) {
+                // nothing more can be recorded
+            }
+        }
+    }
+}
+
+void ProgramThreadCountContextHelper::setRethrow(ExceptionSink* xsink, QoreProgram* pgm, bool runtime) {
     if (!pgm) {
         return;
     }
