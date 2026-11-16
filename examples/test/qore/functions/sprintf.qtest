@@ -8,9 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %exec-class SprintfTest
 
@@ -316,9 +314,6 @@ auto sub test1(string fmt) { softlist<auto> args = fmt; if (argv) args += argv; 
     }
 
     yamlParsing() {
-%ifdef NoYaml
-        testSkip("the yaml module is not available");
-%else
         # verify that "%y" output for date/time and floating-point values can be parsed as YAML
         date named = new TimeZone("Europe/Prague").date(2026-08-03T09:12:28.795991Z);
         hash<auto> h = {
@@ -379,6 +374,5 @@ auto sub test1(string fmt) { softlist<auto> args = fmt; if (argv) args += argv; 
         assertEq(empty_expected, parse_yaml(sprintf("%y", new Empty())));
         assertEq(empty_expected, parse_yaml(sprintf("%Y", new Empty())));
         assertEq({"o": empty_expected}, parse_yaml(sprintf("%Y", {"o": new Empty()})));
-%endif
     }
 }

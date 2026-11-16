@@ -539,7 +539,9 @@ struct qore_number_private : public qore_number_private_intern {
     }
 
     // for round functions: round(), ceil(), floor()
-    DLLLOCAL qore_number_private* doRoundNR(q_mpfr_unary_nr_func_t func, int prec = 0, ExceptionSink* xsink = NULL) const {
+    //! the precision is an int64: it was cut to an int (qore#6212); a power of 10 above 10^308 is 10^308, as for a float
+    DLLLOCAL qore_number_private* doRoundNR(q_mpfr_unary_nr_func_t func, int64 prec = 0, ExceptionSink* xsink = NULL)
+            const {
         std::unique_ptr<qore_number_private> p0(new qore_number_private(*this));
 
         if (prec == 0) {
@@ -553,13 +555,17 @@ struct qore_number_private : public qore_number_private_intern {
 
         qore_number_private* p2;
 
+        // the magnitude of the precision, also of the smallest int, limited to 308: pow() gives infinity above it, which
+        // gave a NaN result
+        uint64_t k = prec < 0 ? 0 - static_cast<uint64_t>(prec) : static_cast<uint64_t>(prec);
+        double scale = pow(10.0, static_cast<double>(k < 308 ? k : 308));
         if (prec > 0) {
-            std::unique_ptr<qore_number_private> c(new qore_number_private(pow(10, prec)));
+            std::unique_ptr<qore_number_private> c(new qore_number_private(scale));
             std::unique_ptr<qore_number_private> p1(p0 -> doMultiply(*c));
             func(p1 -> num, p1 -> num);
             p2 = p1 -> doDivideBy(*c, xsink);
         } else {
-            std::unique_ptr<qore_number_private> c(new qore_number_private(pow(10, -prec)));
+            std::unique_ptr<qore_number_private> c(new qore_number_private(scale));
             std::unique_ptr<qore_number_private> p1(p0 -> doDivideBy(*c, xsink));
             func(p1 -> num, p1 -> num);
             p2 = p1 -> doMultiply(*c);
@@ -707,7 +713,8 @@ public:
         return p ? new QoreNumberNode(p) : 0;
     }
 
-    DLLLOCAL static QoreNumberNode* doRoundNR(const QoreNumberNode& n, q_mpfr_unary_nr_func_t func, int prec = 0, ExceptionSink* xsink = 0) {
+    DLLLOCAL static QoreNumberNode* doRoundNR(const QoreNumberNode& n, q_mpfr_unary_nr_func_t func, int64 prec = 0,
+            ExceptionSink* xsink = 0) {
         qore_number_private* p = n.priv->doRoundNR(func, prec, xsink);
         return p ? new QoreNumberNode(p) : 0;
     }

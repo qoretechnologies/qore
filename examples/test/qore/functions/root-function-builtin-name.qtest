@@ -10,6 +10,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../ExecModeHarness.qm
 
@@ -26,7 +27,7 @@
 */
 class RootFunctionBuiltinNameTest inherits QUnit::Test {
     private {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string dir = get_script_dir() + "/root-function-builtin-name";
 
         const Modes = ("ast", "ir", "jit", "tiered");

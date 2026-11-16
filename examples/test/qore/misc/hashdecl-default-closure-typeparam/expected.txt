@@ -1,0 +1,23 @@
+string mk: ["a"] list<string>
+int mk: [1] list<int>
+string mk int: RUNTIME-OVERLOAD-ERROR
+int mk string: RUNTIME-OVERLOAD-ERROR
+string body: {x: "string", b: "hash<HdcBox<string>>", l: "list<string>", cl: "list<string>"} hash<string, string>
+int body: {x: "integer", b: "hash<HdcBox<int>>", l: "list<int>", cl: "list<int>"} hash<string, string>
+string cast: {val: "h"} hash<HdcBox<string>>
+int cast: {val: 11} hash<HdcBox<int>>
+string nested: ["n", "n"] list<string>
+int nested: [3, 3] list<int>
+int again: [4] list<int>
+copy: ["c"] list<string>
+passed: [5] list<int>
+list: ["list<string>", "list<int>"] list<string>
+hash: [7] list<int>
+generic function: ["g"] list<string>
+generic method: [8] list<int>
+threads: ["[\"t\"] list<string>", "[9] list<int>"] list<string>
+made in a thread: [10] list<int>
+inherited mk: [[12]] list<list<int>>
+inherited cast: {val: [13]} hash<HdcBox<list<int>>>
+inherited own: [14, 14] list<int>
+plain: ["p"] list<string>

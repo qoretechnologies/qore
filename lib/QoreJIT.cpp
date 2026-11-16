@@ -765,11 +765,11 @@ std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
         }
 
         const QoreTypeInfo* ti = ir_func.specializeType(lv->getTypeInfo());
-        if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+        if (QoreTypeInfo::isPlainType(ti, NT_INT)) {
             kinds[i] = BatchCalleeParamKind::NativeInt;
-        } else if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_FLOAT)) {
             kinds[i] = BatchCalleeParamKind::NativeFloat;
-        } else if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_BOOLEAN)) {
             kinds[i] = BatchCalleeParamKind::NativeBool;
         }
     }
@@ -801,8 +801,12 @@ bool qore_ir_fast_entry_param_is_private(
     // A safe local referenced by lowered IR would be in ir_only_locals.
     // Therefore absence from both local inventories proves that the parameter
     // is unused. Object locals are excluded because their lifetime still
-    // requires the runtime stack even when their value is not loaded.
+    // requires the runtime stack even when their value is not loaded.  A written
+    // parameter is not unused, whatever kept it off the IR-only path: its store
+    // goes to the runtime stack, where the fast entry would not have instantiated
+    // it (an optional object, *T, which has no unique class; issue #6148)
     return !ir_func.has_opaque_ast_local_access
+        && !qore_ir_local_is_written(ir_func, local)
         && !ir_func.isAstVisibleLocal(key)
         && !local->isTopLevel()
         && !QoreTypeInfo::getUniqueReturnClass(local->getTypeInfo());
@@ -821,11 +825,11 @@ std::vector<BatchCalleeParamKind> qore_ir_get_signature_param_kinds(
         }
         const LocalVar* lv = sig->lv[i];
         const QoreTypeInfo* ti = lv ? lv->getTypeInfo() : nullptr;
-        if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+        if (QoreTypeInfo::isPlainType(ti, NT_INT)) {
             kinds[i] = BatchCalleeParamKind::NativeInt;
-        } else if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_FLOAT)) {
             kinds[i] = BatchCalleeParamKind::NativeFloat;
-        } else if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_BOOLEAN)) {
             kinds[i] = BatchCalleeParamKind::NativeBool;
         }
     }
@@ -838,13 +842,13 @@ BatchCalleeParamKind qore_ir_get_scalar_local_kind(const LocalVar* local) {
             || QoreTypeInfo::parseAcceptsReturns(type, NT_NOTHING)) {
         return BatchCalleeParamKind::Boxed;
     }
-    if (QoreTypeInfo::isType(type, NT_INT) && !QoreTypeInfo::getReturnEnum(type)) {
+    if (QoreTypeInfo::isPlainType(type, NT_INT)) {
         return BatchCalleeParamKind::NativeInt;
     }
-    if (QoreTypeInfo::isType(type, NT_FLOAT)) {
+    if (QoreTypeInfo::isPlainType(type, NT_FLOAT)) {
         return BatchCalleeParamKind::NativeFloat;
     }
-    if (QoreTypeInfo::isType(type, NT_BOOLEAN)) {
+    if (QoreTypeInfo::isPlainType(type, NT_BOOLEAN)) {
         return BatchCalleeParamKind::NativeBool;
     }
     return BatchCalleeParamKind::Boxed;
@@ -889,13 +893,13 @@ BatchCalleeReturnKind qore_ir_get_fast_entry_return_kind(
     const QoreTypeInfo* ti = ir_func
         ? ir_func->specializeType(sig->getReturnTypeInfo())
         : sig->getReturnTypeInfo();
-    if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+    if (QoreTypeInfo::isPlainType(ti, NT_INT)) {
         return BatchCalleeReturnKind::NativeInt;
     }
-    if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+    if (QoreTypeInfo::isPlainType(ti, NT_FLOAT)) {
         return BatchCalleeReturnKind::NativeFloat;
     }
-    if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+    if (QoreTypeInfo::isPlainType(ti, NT_BOOLEAN)) {
         return BatchCalleeReturnKind::NativeBool;
     }
     return BatchCalleeReturnKind::Boxed;
@@ -1308,7 +1312,6 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     }
 
     auto& es = jit->getExecutionSession();
-    auto& dl = jit->getDataLayout();
     auto& jd = jit->getMainJITDylib();
 
     // Build symbol map for all C ABI runtime helpers
@@ -1903,6 +1906,8 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
 
     // Run LLVM optimization passes
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
+    // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
+    QoreIRToLLVM::expandFloatToIntForTarget(*module, llvm::Triple(llvm::sys::getProcessTriple()));
 
     // Dump LLVM IR if requested (after optimization)
     if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
@@ -2467,6 +2472,8 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
 
     // Run LLVM optimization passes
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
+    // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
+    QoreIRToLLVM::expandFloatToIntForTarget(*module, llvm::Triple(llvm::sys::getProcessTriple()));
 
     // Dump LLVM IR if requested (after optimization)
     if (q_env_is_set("QORE_DUMP_LLVM_IR")) {

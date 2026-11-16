@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../TestInterpreter.qm
 
 %exec-class JITBatchDebugDiagnosticsTest
 
@@ -67,7 +68,7 @@ printf(\"%d\\n\", t);
     }
 
     globalSetUp() {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         script_path = tmp_location() + DirSep + sprintf("jit-batch-debug-%d-%s.q", getpid(),
             get_random_bytes(4).toHex());
         File f();

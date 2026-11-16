@@ -425,7 +425,8 @@ int64 QoreValue::getAsBigInt() const {
         return getInt();
     }
     if (isFloat()) {
-        return static_cast<int64>(getDouble());
+        // saturated; NaN gives 0, as for a number (issue #6181)
+        return q_float_to_int64(getDouble());
     }
     if (isBool()) {
         return getBool() ? 1 : 0;

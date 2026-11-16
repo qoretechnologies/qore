@@ -7,14 +7,15 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 %exec-class MixedDirectiveNativeGateTest
 
 class MixedDirectiveNativeGateTest inherits QUnit::Test {
     private {
-        string qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0];
-        string qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? (dirname(QORE_ARGV[0]) + DirSep + "qcc");
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string qcc_bin = TestInterpreter::qcc_compiler();
     }
 
     # The compatibility directive is restored before the enclosing statement/body ends.

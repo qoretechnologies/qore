@@ -1437,6 +1437,25 @@ void LValueHelper::replaceEnumForWrite(const QoreValue& current) {
     saveTemp(old);
 }
 
+void LValueHelper::ensureUniqueSlow(const QoreValue& current) {
+    if (current.isEnum()) {
+        // the enum member's base value is shared and constant: the lvalue takes an owned copy to modify
+        replaceEnumForWrite(current);
+        return;
+    }
+    // never a scalar that the lvalue stores natively (qore#6094)
+    assert(!val || !val->optimized());
+    if (current.isShortString()) {
+        char buf[7];
+        current.getShortString(buf);
+        assignNodeIntern(new QoreStringNode(buf, current.shortStringLen(), QCS_UTF8));
+        return;
+    }
+    // an opaque reference
+    assert(current.isOpaque());
+    ensureUniqueNode();
+}
+
 void LValueHelper::keepCreatedNode(QoreValue rv) const {
     assert(val && val->optimized());
     // a large int or a special float, which a value holds in a new node (qore#6094); a natively stored scalar is never
@@ -1508,7 +1527,7 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
         if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             evaluated += op->getRight().needsEval() ? 1 : 0;
             c = op->getLeft();
-        } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        } else if (auto* hop = qore_exact_node_cast<QoreHashObjectDereferenceOperatorNode>(node)) {
             evaluated += hop->getRight().needsEval() ? 1 : 0;
             c = hop->getLeft();
         } else if (auto* cop = qore_get_cast_operator_node(node)) {
@@ -1529,7 +1548,7 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
         if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             keys.push_back(op->getRight());
             c = op->getLeft();
-        } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        } else if (auto* hop = qore_exact_node_cast<QoreHashObjectDereferenceOperatorNode>(node)) {
             keys.push_back(hop->getRight());
             c = hop->getLeft();
         } else if (auto* cop = qore_get_cast_operator_node(node)) {
@@ -2330,9 +2349,9 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
         setObjectContext(qore_object_private::get(*obj));
     } else if (ntype == NT_CLASS_VARREF) {
         const AbstractQoreNode* node = n.getInternalNode();
-        const StaticClassVarRefNode* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
+        const StaticClassVarRefNode* static_var = qore_exact_node_cast<StaticClassVarRefNode>(node);
         const DeferredStaticClassMemberRefNode* deferred_static =
-            static_var ? nullptr : dynamic_cast<const DeferredStaticClassMemberRefNode*>(node);
+            static_var ? nullptr : qore_exact_node_cast<DeferredStaticClassMemberRefNode>(node);
         if (!static_var && !deferred_static) {
             vl.xsink->raiseException("REFERENCE-ERROR", "invalid static class variable reference node");
             clearPtr();
@@ -2468,9 +2487,9 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
         setObjectContext(qore_object_private::get(*obj));
     } else if (ntype == NT_CLASS_VARREF) {
         const AbstractQoreNode* node = n.getInternalNode();
-        const StaticClassVarRefNode* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
+        const StaticClassVarRefNode* static_var = qore_exact_node_cast<StaticClassVarRefNode>(node);
         const DeferredStaticClassMemberRefNode* deferred_static =
-            static_var ? nullptr : dynamic_cast<const DeferredStaticClassMemberRefNode*>(node);
+            static_var ? nullptr : qore_exact_node_cast<DeferredStaticClassMemberRefNode>(node);
         if (!static_var && !deferred_static) {
             vl.xsink->raiseException("REFERENCE-ERROR", "invalid static class variable reference node");
             clearPtr();
@@ -3534,10 +3553,12 @@ int64 LValueHelper::preIncrementBigInt(const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    int64 newVal = qv->getAsBigInt() + 1;
+    // computed from the old value, as in postIncrementBigInt(): the compiler keeps one register less than for a new
+    // value that is both stored and returned
+    int64 oldVal = qv->getAsBigInt();
     saveTemp(*qv);
-    qv->set(newVal);
-    return newVal;
+    qv->set(oldVal + 1);
+    return oldVal + 1;
 }
 
 int64 LValueHelper::preDecrementBigInt(const char* desc) {
@@ -3553,10 +3574,12 @@ int64 LValueHelper::preDecrementBigInt(const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    int64 newVal = qv->getAsBigInt() - 1;
+    // computed from the old value, as in postDecrementBigInt(): the compiler keeps one register less than for a new
+    // value that is both stored and returned
+    int64 oldVal = qv->getAsBigInt();
     saveTemp(*qv);
-    qv->set(newVal);
-    return newVal;
+    qv->set(oldVal - 1);
+    return oldVal - 1;
 }
 
 int64 LValueHelper::postIncrementBigInt(const char* desc) {
@@ -4092,11 +4115,11 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
 
     if (t == NT_CLASS_VARREF) {
         AbstractQoreNode* node = lvalue.getInternalNode();
-        if (StaticClassVarRefNode* static_var = dynamic_cast<StaticClassVarRefNode*>(node)) {
+        if (StaticClassVarRefNode* static_var = qore_exact_node_cast<StaticClassVarRefNode>(node)) {
             static_var->remove(*this);
         } else {
             DeferredStaticClassMemberRefNode* deferred_static =
-                dynamic_cast<DeferredStaticClassMemberRefNode*>(node);
+                qore_exact_node_cast<DeferredStaticClassMemberRefNode>(node);
             if (deferred_static) {
                 deferred_static->remove(*this);
             } else {

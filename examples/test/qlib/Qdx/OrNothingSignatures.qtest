@@ -1,0 +1,202 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  OrNothingSignatures.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# qore#6213: the or-nothing type of a signature was left as the placeholder "__7_ " in the search index of the
+# generated documentation
+
+%modern
+%exec-class OrNothingSignaturesTests
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Qdx
+%requires astparser
+%requires FsUtil
+%requires Util
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+public class OrNothingSignaturesTests inherits QUnit::Test {
+    private {
+        #! the source files of the build of the documentation that run qdx --post (relative to the repository)
+        const BuildFiles = ("CMakeLists.txt", "cmake/QoreMacros.cmake");
+
+        #! signatures of every form that carries an or-nothing type, with the text of each that the documentation
+        #! must show
+        const Signatures = (
+            {
+                "what": "parameters, the trailing parameter, a default value",
+                "code": "sub f(*string a, int b = 1, *hash<auto> c) { }",
+                "shown": ("*string a", "*hash<auto> c"),
+            },
+            {
+                "what": "a reference to an or-nothing type, nested generics",
+                "code": "sub g(reference<*int> r, hash<string, *int> h, list<*hash<auto>> l, *list<*string> s) { }",
+                "shown": ("reference<*int> r", "hash<string, *int> h", "list<*hash<auto>> l", "*list<*string> s"),
+            },
+            {
+                "what": "a hashdecl parameter and a hashdecl member",
+                "code": "hashdecl Opts { *hash<auto> extra; *string name; }\n"
+                    "sub h(*hash<Opts> o, hash<Opts> p) { }",
+                "shown": ("*hash<auto> extra", "*string name", "*hash<Opts> o"),
+            },
+            {
+                "what": "methods: constructor, static method, an or-nothing class type, an or-nothing return type",
+                "code": "class Reader { }\n"
+                    "class C {\n"
+                    "    constructor(*Reader reader, *string name = \"x\") { }\n"
+                    "    static *string sm(*Reader reader) { return NOTHING; }\n"
+                    "    *hash<auto> m(int i, *code cb) { return NOTHING; }\n"
+                    "}\n",
+                "shown": ("*Reader reader", "*string name", "*code cb"),
+            },
+        );
+    }
+
+    constructor() : Test("OrNothingSignaturesTests", "1.0", ARGV) {
+        addTestCase("every form of signature is decoded in html and in the search index", \testSignatures());
+        addTestCase("qdx --post decodes the search index", \testPostProcessFiles());
+        addTestCase("every build of documentation post-processes the search index", \testBuildCommands());
+        set_return_value(main());
+    }
+
+    private list<auto> parseCode(string code) {
+        AstParser parser();
+        auto tree = parser.parseString(Qdx::stripConditionalDirectives(code));
+        if (!tree) {
+            throw "PARSE-ERROR", sprintf("Failed to parse code: %d errors", parser.getErrorCount());
+        }
+        return tree.getNodesInfo();
+    }
+
+    private string processCode(string code) {
+        string stripped = Qdx::stripConditionalDirectives(code);
+        AstProcessor proc(parseCode(stripped), {"source": stripped});
+        return proc.process();
+    }
+
+    #! the text that qdx --post makes of the line of the files that doxygen generates
+    private string postProcess(string text) {
+        QorePostProcessingInputStreamLineIterator i(new StringInputStream(text));
+        string rv;
+        while (i.next()) {
+            rv += i.getValue() + "\n";
+        }
+        return rv;
+    }
+
+    testSignatures() {
+        foreach hash<auto> s in (Signatures) {
+            string dox = processCode(s.code);
+            assertTrue(dox =~ /__7_ /, s.what + ": the or-nothing types are encoded for doxygen: " + dox);
+            # the signature as it is in a page of the documentation, and in an entry of the search index
+            string html = "<td class=\"memname\">" + replace(dox, "\n", " ") + "</td>\n";
+            string js = "['f_0',['" + replace(replace(dox, "\n", " "), "'", "\\'") + "',['f.html']]],\n";
+            foreach hash<auto> i in (({"kind": "html", "text": html}, {"kind": "search index", "text": js})) {
+                string out = postProcess(i.text);
+                assertFalse(out =~ /__[1-8]_/, sprintf("%s: %s: no placeholder is left: %s", s.what, i.kind, out));
+                foreach string shown in (s.shown) {
+                    assertTrue(out.find(shown) >= 0, sprintf("%s: %s: %y is shown: %s", s.what, i.kind, shown, out));
+                }
+            }
+        }
+    }
+
+    testPostProcessFiles() {
+        string qdx = normalize_dir(get_script_dir() + "../../../../doxygen/qdx");
+        if (!is_file(qdx)) {
+            testSkip("doxygen/qdx is not available");
+        }
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string module_dir = normalize_dir(get_script_dir() + "../../../../qlib")
+            + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+
+        string sig = "Qore::f(__7_ string a, int b=1, reference&lt; __7_ hash&lt; auto &gt; &gt; c, __7_ hash&lt; auto &gt; d)";
+        string expected = "Qore::f(*string a, int b=1, reference&lt; *hash&lt; auto &gt; &gt; c, *hash&lt; auto &gt; d)";
+        string page = "<td class=\"memname\">" + sig + "</td>\n";
+        string index = "var searchData=\n[\n  ['f_0',['" + sig + "',['f.html']]],\n];\n";
+
+        # the forms of the commands of the build: the files by glob, and the two directories
+        foreach string form in ("glob", "directories") {
+            TmpDir tmp("qdx-search-");
+            string html = tmp.path + DirSep + "html";
+            mkdir(html);
+            mkdir(html + DirSep + "search");
+            write_file(html + DirSep + "a.html", page);
+            write_file(html + DirSep + "search" + DirSep + "functions_0.js", index);
+            write_file(html + DirSep + "search" + DirSep + "all_0.js", index);
+            string args = form == "glob"
+                ? sprintf("'%s'/*.html '%s'/*.js '%s'/search/*.html '%s'/search/*.js", html, html, html, html)
+                : sprintf("'%s' '%s'/search", html, html);
+            int rc;
+            string output = backquote(sprintf("QORE_MODULE_DIR='%s' '%s' '%s' --post %s 2>&1", module_dir, qore_bin,
+                qdx, args), \rc);
+            assertEq(0, rc, output);
+            assertEq(replace(page, sig, expected), File::readTextFile(html + DirSep + "a.html"), form + ": html");
+            foreach string name in ("functions_0.js", "all_0.js") {
+                assertEq(replace(index, sig, expected), File::readTextFile(html + DirSep + "search" + DirSep + name),
+                    form + ": " + name);
+            }
+        }
+    }
+
+    #! the files that the commands of the build give to qdx --post: html pages and the search index
+    testBuildCommands() {
+        string root = normalize_dir(get_script_dir() + "../../../..");
+        int checked = 0;
+        list<string> missing = ();
+        foreach string name in (BuildFiles) {
+            string path = root + DirSep + name;
+            if (!is_file(path)) {
+                testSkip(sprintf("%s is not available", path));
+            }
+            int lineno = 0;
+            foreach string line in (File::readTextFile(path).split("\n")) {
+                ++lineno;
+                int pos = line.find("--post ");
+                if (pos < 0) {
+                    continue;
+                }
+                list<string> args = line.substr(pos + 7).split(" ");
+                foreach string arg in (args) {
+                    if (arg.size() < 7 || arg.substr(arg.size() - 6) != "*.html") {
+                        continue;
+                    }
+                    ++checked;
+                    # each command for the pages names the files of the same directory that doxygen writes as scripts
+                    if (!inlist(arg.substr(0, arg.size() - 6) + "*.js", args)) {
+                        missing += sprintf("%s:%d: %s", name, lineno, arg);
+                    }
+                }
+            }
+        }
+        assertGt(0, checked, "the commands that post-process the files of the documentation are found");
+        assertEq((), missing, "every command that post-processes pages also post-processes the search index (qore#6213)");
+    }
+
+    static write_file(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(data);
+    }
+}

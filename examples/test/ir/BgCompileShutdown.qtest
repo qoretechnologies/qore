@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 
 %exec-class BgCompileShutdownTest
 
@@ -20,7 +21,7 @@ class BgCompileShutdownTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("BgCompileShutdownTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         script_path = "/tmp/qore-bg-compile-shutdown-" + string(getpid()) + ".qr";
         addTestCase("queued tier promotions are cancelled at shutdown", \testShutdown());

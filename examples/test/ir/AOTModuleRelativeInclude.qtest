@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class AOTModuleRelativeIncludeTest
@@ -24,7 +25,7 @@ class AOTModuleRelativeIncludeTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("AOTModuleRelativeIncludeTest", "1.0") {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         # the checks run in other directories, so a path to the binary must be absolute; a bare name is looked up
         # in the PATH
         if (qore_bin =~ /\//) {

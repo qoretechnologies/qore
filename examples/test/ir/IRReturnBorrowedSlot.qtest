@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class IRReturnBorrowedSlotTest
@@ -64,7 +65,7 @@ class IRReturnBorrowedSlotTest inherits QUnit::Test {
     }
 
     testSelfReferentialReturnSlot() {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = TestInterpreter::qore_interpreter();
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;

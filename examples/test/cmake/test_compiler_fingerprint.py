@@ -91,6 +91,23 @@ file(WRITE "{build}/config.txt" "${{recorded}}")
         self.assertEqual(1_000_000_000, (build / "digest").stat().st_mtime_ns)
         self.assertGreater((build / "success").stat().st_mtime_ns, 1_000_000_000)
 
+    def test_without_success_stamp_only_a_changed_digest_is_written(self):
+        source, build = self.fixture("no success stamp")
+        script = [f"-DINPUT_LIST={build}/inputs.txt", f"-DOUTPUT={build}/digest",
+                  f"-DINPUT_LABELS={build}/labels.txt", "-P", ROOT / "cmake/QoreWriteContentDigest.cmake"]
+        self.run_cmake(*script)
+        expected = (build / "digest").read_text()
+        self.assertFalse((build / "success").exists())
+        os.utime(build / "digest", ns=(1_000_000_000, 1_000_000_000))
+        self.run_cmake(*script)
+        self.assertEqual(1_000_000_000, (build / "digest").stat().st_mtime_ns)
+        self.assertEqual(expected, (build / "digest").read_text())
+        self.assertEqual([], sorted(path.name for path in build.iterdir() if path.name.startswith("success")))
+        (source / "compiler.cpp").write_text("changed compiler input\n")
+        self.run_cmake(*script)
+        self.assertNotEqual(expected, (build / "digest").read_text())
+        self.assertGreater((build / "digest").stat().st_mtime_ns, 1_000_000_000)
+
     def test_prefix_siblings_are_not_rewritten(self):
         source, build = self.fixture("boundaries")
         script = build / "boundary.cmake"

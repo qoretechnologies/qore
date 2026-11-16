@@ -70,16 +70,6 @@ public:
 DLLLOCAL QoreValue qore_call_ref_invoke_named(const ResolvedCallReferenceNode* r, const QoreListNode* args,
         const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink);
 
-//! calls a call reference or closure value with an argument list that holds the last references of the arguments
-//! that the caller gave to the call
-/** The parameters of the code called take the values over, as the AST interpreter's call moves its evaluated
-    arguments into the parameters, so that the last reference of a temporary argument is released in the callee's
-    frame (issues #5882, #6063); a reference whose call cannot take them over (one implemented outside of the
-    library) is called with invoke().  The list stays the caller's.
-*/
-DLLLOCAL QoreValue qore_call_ref_invoke_given_args(const ResolvedCallReferenceNode* r, QoreListNode* args,
-        ExceptionSink* xsink);
-
 class ResolvedCallReferenceNodeIntern : public ResolvedCallReferenceNode, public CallReferenceNodeLocation {
 public:
     QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const override = 0;

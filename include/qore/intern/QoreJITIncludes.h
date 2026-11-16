@@ -53,11 +53,24 @@ static inline uint64_t toBitsNB(const QoreValue& v) {
 DLLLOCAL uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_name,
     uint64_t* args, int nargs, ExceptionSink* xsink,
     const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
-
-//! dot_eval_fallback_with_args() with the cleanup slots of the arguments, whose references are given to the call,
-//! which the callee takes over (issue #6063)
-DLLLOCAL uint64_t dot_eval_fallback_with_given_args(QoreValue base, const char* method_name,
+//! as dot_eval_fallback_with_args(), for a call that gives the references of its temporary arguments (\a arg_cleanups,
+//! see IRGivenCallArgs), whose parameters take them over (issues #5882, #5958)
+DLLLOCAL uint64_t dot_eval_fallback_with_args_consume(QoreValue base, const char* method_name,
     uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
     const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
+//! the pseudo-method call of the JIT runtime (qore_rt_dot_eval_pseudo_method_direct()) for a call that gives the
+//! references of its temporary arguments (\a arg_cleanups), whose callee takes them over when the call is made by name
+//! (issue #5958)
+DLLLOCAL uint64_t qore_rt_dot_eval_pseudo_method_direct_given(uint64_t base_bits, const QoreMethod* method,
+    const QoreClass* qc, const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups,
+    int nargs, ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation);
+//! calls the method \a method_name of \a object, found by name, with \a args, whose values a call gave, so that the
+//! method's parameters take them over (qore_class_private::evalMethodGivenArgs(), issue #5958)
+/** This, qore_rt_dot_eval_pseudo_method_direct_given() and dot_eval_fallback_with_args_consume() are compiled in
+    JITRuntimeTakeOver.cpp, outside the single compilation unit of libqore, so that the code of the other calls does
+    not change
+*/
+DLLLOCAL uint64_t qore_rt_eval_method_given_args(const qore_class_private* object_class, QoreObject* object,
+    const char* method_name, QoreListNode* args, const qore_class_private* class_ctx, ExceptionSink* xsink);
 
 #endif

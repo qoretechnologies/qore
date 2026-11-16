@@ -8,13 +8,14 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 %exec-class AOTConcreteHashDeclCacheTest
 
 class AOTConcreteHashDeclCacheTest inherits QUnit::Test {
     private {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore_bin = TestInterpreter::qore_interpreter();
         string source = get_script_dir() + "/aot-concrete-hashdecl-cache.q";
         const Expected = "0:1:RUNTIME-TYPE-ERROR:0:ok\n1:2:RUNTIME-TYPE-ERROR:1:ok\n"
             + "2:3:RUNTIME-TYPE-ERROR:2:ok\n";
