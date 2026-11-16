@@ -32,6 +32,7 @@
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreHandlerRun.h"
+#include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreJITException.h"
 #include "qore/intern/QoreJIT.h"
@@ -4839,9 +4840,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
     QoreValue obj_val = fromBits(object_bits);
     QoreObject* obj = obj_val.getType() == NT_OBJECT ? obj_val.get<QoreObject>() : nullptr;
     if (!obj) {
-        xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR",
-            "expression does not evaluate to an object; got type '%s' instead", obj_val.getTypeName());
-        return toBits(QoreValue());
+        // issue #995: a reference to a pseudo-method of the value, as in ParseObjectMethodReferenceNode::makeReference()
+        return toBits(qore_make_pseudo_method_reference(&loc_builtin, obj_val, method_name, xsink));
     }
 
     // a static method of the receiver's declared class: the reference is bound to it, whatever the class of the
@@ -4876,6 +4876,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
     if (!method) {
         method = obj_class->findStaticMethod(method_name, access);
         if (!method) {
+            // issue #995: a pseudo-method of objects, as in ParseObjectMethodReferenceNode::makeReferenceForClass()
+            QoreClass* pqc;
+            if (pseudo_classes_find_method(NT_OBJECT, method_name, pqc)) {
+                return toBits(qore_make_pseudo_method_reference(&loc_builtin, obj_val, method_name, xsink));
+            }
             xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR",
                 "cannot resolve reference to %s::%s(): unknown method", obj->getClassName(), method_name);
             return toBits(QoreValue());

@@ -42,6 +42,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/QorePseudoMethods.h"
 
 #include <shared_mutex>
 #include <unordered_map>
@@ -459,9 +460,8 @@ QoreValue ParseObjectMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& need
 QoreValue ParseObjectMethodReferenceNode::makeReference(QoreValue val, ExceptionSink* xsink) const {
     QoreObject* o = val.getType() == NT_OBJECT ? val.get<QoreObject>() : nullptr;
     if (!o) {
-        xsink->raiseException(*loc, "OBJECT-METHOD-REFERENCE-ERROR", QoreValue(),
-                              "expression does not evaluate to an object; got type '%s' instead", val.getTypeName());
-        return QoreValue();
+        // issue #995: a reference to a pseudo-method of the value, as a call of the method is a call of it
+        return qore_make_pseudo_method_reference(loc, val, method.c_str(), xsink);
     }
 
     const QoreClass* oc = o->getClass();
@@ -492,6 +492,11 @@ QoreValue ParseObjectMethodReferenceNode::makeReferenceForClass(QoreObject* o, c
     if (!om) {
         om = oc->findStaticMethod(method.c_str(), access);
         if (!om) {
+            // issue #995: a pseudo-method of objects, such as className(), as a call of the method calls it
+            QoreClass* pqc;
+            if (pseudo_classes_find_method(NT_OBJECT, method.c_str(), pqc)) {
+                return qore_make_pseudo_method_reference(loc, o, method.c_str(), xsink);
+            }
             xsink->raiseException(*loc, "OBJECT-METHOD-REFERENCE-ERROR", QoreValue(),
                 "cannot resolve reference to %s::%s(): unknown method", o->getClassName(), method.c_str());
             return QoreValue();
@@ -559,11 +564,17 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
 
     if (QoreTypeInfo::hasType(argTypeInfo)) {
         if (objectTypeInfo && argTypeInfo && !QoreTypeInfo::parseAccepts(objectTypeInfo, argTypeInfo)) {
-            if (!err) {
-                // raise parse exception
-                QoreStringNode* desc = new QoreStringNode("invalid call; object expression gives ");
+            // issue #995: a value that is not an object gives a reference to a pseudo-method of its type, as a call
+            // of the method calls it; the type must have the pseudo-method, as for a call
+            QoreClass* pqc;
+            bool possible_match = false;
+            if (!pseudo_classes_find_method(argTypeInfo, method.c_str(), pqc, possible_match) && !possible_match
+                    && !err) {
+                QoreStringNode* desc = new QoreStringNode("cannot take a call reference to pseudo-method '");
+                desc->concat(method);
+                desc->concat("()'; the expression gives ");
                 QoreTypeInfo::getThisType(argTypeInfo, *desc);
-                desc->concat(", but should resolve to an object to make a call with this syntax");
+                desc->concat(", which has no such method");
                 qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
                 err = -1;
             }
@@ -596,10 +607,15 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
                     }
                     qc = n_qc;
                 } else {
-                    parseException(*loc, "PARSE-ERROR", "no method %s::%s() is accessible in this context",
-                        n_qc->getName(), method.c_str());
-                    if (!err) {
-                        err = -1;
+                    // issue #995: a pseudo-method of objects, such as className(), as a call of the method calls
+                    // it; the reference is made for the object's class when the expression is evaluated
+                    QoreClass* pqc;
+                    if (!pseudo_classes_find_method(NT_OBJECT, method.c_str(), pqc)) {
+                        parseException(*loc, "PARSE-ERROR", "no method %s::%s() is accessible in this context",
+                            n_qc->getName(), method.c_str());
+                        if (!err) {
+                            err = -1;
+                        }
                     }
                 }
             }
@@ -858,6 +874,93 @@ bool RunTimeResolvedMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v
 
 QoreFunction* RunTimeResolvedMethodReferenceNode::getFunction() const {
     return method ? qore_method_private::get(*method)->getFunction() : 0;
+}
+
+QoreValue qore_make_pseudo_method_reference(const QoreProgramLocation* loc, QoreValue val, const char* method,
+        ExceptionSink* xsink) {
+    // the exception of a call of a pseudo-method that the value's type does not have is raised when the reference is
+    // made, as for a method that an object's class does not have
+    if (pseudo_classes_check_method(val, method, xsink)) {
+        return QoreValue();
+    }
+    return new RunTimePseudoMethodReferenceNode(loc, val, method);
+}
+
+RunTimePseudoMethodReferenceNode::RunTimePseudoMethodReferenceNode(const QoreProgramLocation* loc, QoreValue n_val,
+        const char* n_method) : ResolvedCallReferenceNodeIntern(loc), val(n_val), method(n_method) {
+    if (val.getType() == NT_OBJECT) {
+        // a weak reference, as a method reference holds its object (RunTimeResolvedMethodReferenceNode)
+        val.get<QoreObject>()->tRef();
+    } else {
+        val.refSelf();
+    }
+    // the restrictions that a call of the reference is checked against: those of the creating context
+    captureCreatorParseOptions();
+}
+
+RunTimePseudoMethodReferenceNode::~RunTimePseudoMethodReferenceNode() {
+    // a value other than an object is released in derefImpl()
+    if (val.getType() == NT_OBJECT) {
+        val.get<QoreObject>()->tDeref();
+    } else {
+        assert(val.isNothing());
+    }
+}
+
+bool RunTimePseudoMethodReferenceNode::derefImpl(ExceptionSink* xsink) {
+    if (val.getType() != NT_OBJECT) {
+        val.discard(xsink);
+        val.clear();
+    }
+    return ResolvedCallReferenceNodeIntern::derefImpl(xsink);
+}
+
+int RunTimePseudoMethodReferenceNode::checkObject(ExceptionSink* xsink) const {
+    if (val.getType() != NT_OBJECT) {
+        return 0;
+    }
+    // the reference holds the object weakly: a call on an object that has been deleted raises the exception of a
+    // direct call of the pseudo-method on it, as a method reference does (RunTimeResolvedMethodReferenceNode)
+    const QoreObject* obj = val.get<const QoreObject>();
+    const qore_object_private* priv = qore_object_private::get(*obj);
+    if (priv->status == OS_DELETED) {
+        priv->raiseDeletedCall(qore_class_private::get(*obj->getClass()), method.c_str(), xsink);
+        return -1;
+    }
+    return 0;
+}
+
+QoreValue RunTimePseudoMethodReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    if (checkObject(xsink)) {
+        return QoreValue();
+    }
+    return pseudo_classes_eval(val, method.c_str(), args, xsink);
+}
+
+QoreValue RunTimePseudoMethodReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    if (checkObject(xsink)) {
+        return QoreValue();
+    }
+    return pseudo_classes_eval(policy, val, method.c_str(), args, xsink);
+}
+
+bool RunTimePseudoMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
+    const RunTimePseudoMethodReferenceNode* vc = dynamic_cast<const RunTimePseudoMethodReferenceNode*>(v);
+    return vc && vc->method == method && vc->val.isEqualHard(val, xsink);
+}
+
+QoreFunction* RunTimePseudoMethodReferenceNode::getFunction() const {
+    QoreClass* qc;
+    const QoreMethod* m = pseudo_classes_find_method(val.getType(), method.c_str(), qc);
+    return m ? qore_method_private::get(*m)->getFunction() : nullptr;
 }
 
 RunTimeObjectMethodReferenceNode::RunTimeObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,

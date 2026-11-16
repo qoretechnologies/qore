@@ -1,0 +1,36 @@
+object method: 1
+object pseudo-method: "Ble"
+object own method named like no pseudo-method: "own"
+list size: 3
+list join with an argument: "1+2+3"
+list first: 1
+long string size: 26
+short string size: 2
+string type: "string"
+hash keys: ["a", "b"]
+hash hasKey with an argument: True
+binary size: 2
+int typeCode: 1
+float typeCode: 2
+date durationSeconds: 4
+nothing typeCode: 0
+closure typeCode: 29
+auto list size: 2
+auto string size: 3
+auto unknown pseudo-method: PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <string>::noSuchMethod() has been defined
+kept value: 3
+current value: 4
+equal references: True
+references to other methods: False
+references to other values: False
+call_function: 3
+call_function_args: "1/2/3"
+map: [1, 2, 3]
+callref type: True
+deleted object, direct call: OBJECT-ALREADY-DELETED: cannot call Ble::className() on an object that has already been deleted
+deleted object, reference: OBJECT-ALREADY-DELETED: cannot call Ble::className() on an object that has already been deleted
+temporary object: "Ble"
+auto object pseudo-method: "Ble"
+auto object method: 1
+object holding its own reference: "Holder"
+list held by the reference: 2

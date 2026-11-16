@@ -1867,6 +1867,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a @ref call_reference_pseudo_method "call reference to a pseudo-method" (ex: <tt>\\l.size()</tt> for a list
+      \c l, or <tt>\\o.className()</tt>) refers to the pseudo-method of the value; it raised a parse or run-time
+      exception (issue #995)
     - an allocation that fails while a thread enters another %Program (ex: in a binary module's
       \c QoreExternalProgramContextHelper or a parse commit) leaves the thread in the calling %Program and releases
       its thread count in the entered %Program, which could otherwise not be deleted (issue #6198)

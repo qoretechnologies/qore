@@ -542,6 +542,56 @@ private:
     DLLLOCAL virtual ~RunTimeObjectMethodReferenceNode();
 };
 
+//! a run-time call reference to a pseudo-method of a value (issue #995): \c \\l.size() for a list \c l, or a
+//! pseudo-method of an object that its class does not have, such as \c \\o.className()
+/** The reference holds the value, an object weakly, as a method reference does, so that an object can hold a
+    reference to its own pseudo-method; a call evaluates the pseudo-method with it as a direct call does
+    (pseudo_classes_eval())
+*/
+class RunTimePseudoMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
+public:
+    //! raises the exception of a direct call of the pseudo-method on an object that has been deleted
+    /** @return -1 if the exception was raised, 0 if not
+    */
+    DLLLOCAL int checkObject(ExceptionSink* xsink) const;
+
+    //! creates the reference; takes a new reference to \a n_val (a weak reference to an object)
+    DLLLOCAL RunTimePseudoMethodReferenceNode(const QoreProgramLocation* loc, QoreValue n_val, const char* n_method);
+
+    DLLLOCAL virtual QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const override;
+
+    DLLLOCAL virtual bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
+        return RunTimePseudoMethodReferenceNode::is_equal_hard(v, xsink);
+    }
+
+    //! two references are equal if they refer to the same pseudo-method of the same value (hard comparison)
+    DLLLOCAL virtual bool is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const;
+
+    //! returns the function of the pseudo-method of the value's type, or nullptr if there is none
+    DLLLOCAL virtual QoreFunction* getFunction() const;
+
+protected:
+    //! releases the value, which can hold objects, with the ExceptionSink of the dereference
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
+
+private:
+    //! the value; an object is held with a weak reference
+    QoreValue val;
+    std::string method;
+
+    DLLLOCAL virtual ~RunTimePseudoMethodReferenceNode();
+};
+
+//! makes a call reference to the pseudo-method \a method of \a val (issue #995)
+/** raises an exception as a direct call of the pseudo-method does if the value's type has no such pseudo-method
+
+    @return the reference, or no value if an exception was raised
+*/
+DLLLOCAL QoreValue qore_make_pseudo_method_reference(const QoreProgramLocation* loc, QoreValue val,
+        const char* method, ExceptionSink* xsink);
+
 //! a run-time call reference to a method of a particular object where the method's class
 // is known when the method reference node object is created
 class RunTimeResolvedMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
