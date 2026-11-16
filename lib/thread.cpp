@@ -5605,21 +5605,43 @@ QoreSandboxManager* qore_module_init_lift_manager_ref() {
     return mib.loader_manager;
 }
 
-QoreTrustedBuildChargeHelper::QoreTrustedBuildChargeHelper() {
+QoreTrustedBuildChargeHelper::QoreTrustedBuildChargeHelper(QoreProgram* creator) {
     ThreadData* td = thread_data.get();
     if (!td) {
         return;
     }
     try {
         saved = td->sandbox_budgets.suspendCharge();
-        started = true;
     } catch (std::bad_alloc&) {
+        return;
+    }
+    started = true;
+    tid = td->tid;
+    if (!creator) {
+        return;
+    }
+    // the creator's sandboxes, entered as ProgramThreadCountContextHelper enters them: a budget of the creator's
+    // call below the floor (its own code called the capability) is charged again, else a budget is started; a budget
+    // that cannot be recorded fails the build at its next cancellation point (see QoreSandboxBudgetStack::lose())
+    QoreSandboxManager* own_ptr;
+    QoreSandboxManager* creator_ptr;
+    qore_program_private::get(*creator)->getSandboxManagerRefs(own_ptr, creator_ptr);
+    ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
+    ReferenceHolder<QoreSandboxManager> creator_sm(creator_ptr, nullptr);
+    if (own) {
+        td->sandbox_budgets.enter(tid, *own, this);
+    }
+    if (creator_sm) {
+        td->sandbox_budgets.enter(tid, *creator_sm, this);
     }
 }
 
 QoreTrustedBuildChargeHelper::~QoreTrustedBuildChargeHelper() {
     if (started) {
-        thread_data.get()->sandbox_budgets.resumeCharge(saved);
+        ThreadData* td = thread_data.get();
+        // the frames entered for the creator are above the floor and on the top of the stack again
+        td->sandbox_budgets.leave(tid, this);
+        td->sandbox_budgets.resumeCharge(saved);
     }
 }
 

@@ -334,6 +334,9 @@ private:
         QoreSandboxCharge* saved_charge;
         //! true if the frame made its budget's charge the thread's charge
         bool charge_set;
+        //! a charge that the frame created and made the thread's charge (referenced), or nullptr; see
+        //! enterBelowBuild()
+        QoreSandboxCharge* owned_charge = nullptr;
     };
     std::vector<Frame> frames;
     //! the number of frames when each trusted build that the thread runs started (see suspendCharge())

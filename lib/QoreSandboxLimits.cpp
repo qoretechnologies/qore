@@ -652,16 +652,35 @@ void QoreSandboxBudgetStack::enterBelowBuild(int tid, QoreSandboxManager* sm, co
     if (!below || !below->charge) {
         return;
     }
+    // a charge made current in the build already (a budget started in the same entry, such as one of another
+    // constituent of a composite manager) is kept: the memory is charged to its accounts as well
+    QoreSandboxCharge* current = qore_sb_mem.charge;
+    QoreSandboxCharge* combined = nullptr;
     try {
-        frames.push_back({below, owner, true, 0, 0, nullptr, false});
+        if (current && current != below->charge) {
+            std::vector<QoreSandboxMemoryAccount*> accounts(below->charge->accounts);
+            for (QoreSandboxMemoryAccount* account : current->accounts) {
+                if (std::find(accounts.begin(), accounts.end(), account) == accounts.end()) {
+                    accounts.push_back(account);
+                }
+            }
+            combined = new QoreSandboxCharge(std::move(accounts));
+            for (QoreSandboxMemoryAccount* account : combined->accounts) {
+                account->ref();
+            }
+        }
+        frames.push_back({below, owner, true, 0, 0, nullptr, false, combined});
     } catch (std::bad_alloc&) {
+        if (combined) {
+            combined->deref();
+        }
         // the caller's code is refused at its next cancellation point rather than run uncharged
         lose(tid, owner, below);
         return;
     }
     below->ref();
     Frame& frame = frames.back();
-    frame.saved_charge = qore_sb_set_charge(below->charge);
+    frame.saved_charge = qore_sb_set_charge(combined ? combined : below->charge);
     frame.charge_set = true;
 }
 
@@ -683,6 +702,9 @@ QoreSandboxCallBudget* QoreSandboxBudgetStack::popFrame() {
     Frame& frame = frames.back();
     if (frame.charge_set) {
         qore_sb_set_charge(frame.saved_charge);
+    }
+    if (frame.owned_charge) {
+        frame.owned_charge->deref();
     }
     if (frame.applied_stack_limit) {
         qore_sandbox_restore_stack(frame.saved_stack_limit);

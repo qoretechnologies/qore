@@ -2237,9 +2237,11 @@ private:
             xsink->outOfMemory();
             return -1;
         }
-        // the memory that the build's own code allocates is shared state, charged to no call; the caller's code that
-        // it calls stays charged to the caller (QoreSandboxBudgetStack::suspendCharge())
-        charge.emplace();
+        // the memory that the build's own code allocates is shared state, charged to no caller but to the sandbox of
+        // the Program that created the capability, if it has a memory limit; the caller's code that it calls stays
+        // charged to the caller (QoreSandboxBudgetStack::suspendCharge()); the floor is set before the creator is
+        // entered, so that the creator's budgets are above it
+        charge.emplace(trusted_program);
         if (!charge->established()) {
             xsink->outOfMemory();
             return -1;

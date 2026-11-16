@@ -236,6 +236,8 @@ Program sub mk(string src) {
         addTestCase("the memory that a build keeps is charged to no caller, the caller's code that it calls is",
             \memory());
         addTestCase("work that a build hands to the event loop is not a part of the caller's call", \memoryAsync());
+        addTestCase("the memory limit of the Program that created the capability governs the build",
+            \creatorMemory());
         set_return_value(main());
     }
 
@@ -492,6 +494,58 @@ code sub allocator() {
         assertEq(0, m.getMemoryUsage());
     }
 
+    creatorMemory() {
+        # a capability created by a trusted Program, which the host then gives a memory limit: the creator's limit
+        # governs the build, whoever calls it
+        Program creator(PO_MODERN);
+        creator.parse("%modern
+our list<string> state;
+sub build(int n) {
+    list<string> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += sprintf(\"creator shared state entry %d with some padding to use memory\", i);
+    }
+    state = l;
+}
+code sub mk() {
+    return Qore::SandboxManager::createTrustedBuildCall(\\build());
+}
+string sub call_own(code cap, int n) {
+    try {
+        cap(n);
+        return \"built\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+sub clear() {
+    remove state;
+}
+", "memory-creator");
+        code cap = creator.callFunction("mk");
+        on_exit creator.callFunction("clear");
+        SandboxManager cs();
+        cs.setUncontrolledApiPolicy(True);
+        cs.setMemoryLimit(1024 * 1024);
+        creator.setSandboxManager(cs);
+        # the creator's own code calls the capability: its Program is current already
+        assertEq("SANDBOX-MEMORY-LIMIT", creator.callFunction("call_own", cap, 200000));
+        # trusted code calls it
+        assertThrows("SANDBOX-MEMORY-LIMIT", cap, 200000);
+        # a tenant with a limit of its own calls it: the build is charged to the creator, not to the tenant
+        SandboxManager m();
+        m.setUncontrolledApiPolicy(True);
+        m.setMemoryLimit(64 * 1024 * 1024);
+        Program p(PO_MODERN);
+        p.setSandboxManager(m);
+        p.parse(SandboxedSource, "memory-creator-tenant");
+        assertThrows("SANDBOX-MEMORY-LIMIT", \p.callFunction(), ("call", cap, 200000));
+        assertEq(0, m.getMemoryUsage());
+        # within the creator's limit, the state is built
+        cs.setMemoryLimit(0);
+        assertEq("built", creator.callFunction("call_own", cap, 200000));
+    }
+
     memoryAsync() {
         # a creator Program with a sandbox of its own (no limits): the work that its build hands to the event loop
         # captures the build's sandbox context, but none of the caller's budgets
@@ -536,8 +590,9 @@ code sub mk() {
         Program p(PO_MODERN);
         p.setSandboxManager(m);
         p.parse(SandboxedSource, "memory-async");
-        assertEq(True, p.callFunction("call", cap, 200000));
-        assertEq(200000, creator.callFunction("state_size"));
+        # about 2 MB: more than the caller's limit, if the work were charged to the caller
+        assertEq(True, p.callFunction("call", cap, 20000));
+        assertEq(20000, creator.callFunction("state_size"));
         assertEq(0, m.getMemoryUsage());
     }
 
