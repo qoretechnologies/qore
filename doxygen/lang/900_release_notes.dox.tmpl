@@ -1480,6 +1480,8 @@
         (<a href="https://github.com/qoretechnologies/qore/issues/5563">issue 5563</a>)
       - fixed modifying a column named like a clause of <tt>ALTER TABLE ... MODIFY</tt>, such as \c scope, in table
         alignment, which failed with \c ORA-03050
+      - fixed a column declared with \c "default null", which was described with the default value \c null
+        (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
 
     - @ref pgsqlsqlutilbaseintro "PgsqlSqlUtilBase" module
       - tables, sequences, and materialized views are listed only from the schemas of the connection's
@@ -1488,6 +1490,9 @@
       - the template tables of a schema description read the default schema once for all tables instead of reading
         the catalog three times per table (<a href="https://github.com/qoretechnologies/qore/issues/5584">issue
         5584</a>)
+      - fixed a column declared with \c "default null", which was described with a default value such as
+        \c NULL::character varying, so @ref schemareverseintro "SchemaReverse" gave it as a default and alignment
+        dropped it (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
 
     - @ref pop3clientintro "Pop3Client" module
       - a line of a message that starts with \c "." is returned without the \c "." that the server adds before it
@@ -1569,6 +1574,8 @@
         @ref sqlite3_foreign_constraints)
       - fixed duplicate-row detection, and describing indexes (automatic indexes, lower-case unique indexes and
         quoted column names)
+      - fixed a column declared with \c "default null" or \c "default (null)", which was described with a
+        default value (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
 
     - @ref sqlutilintro "SqlUtil" module
       - portable table partitioning APIs for PostgreSQL, Oracle, MySQL/MariaDB and SQL Server

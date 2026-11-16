@@ -266,6 +266,10 @@ $function$
     - fixed listing functions on PostgreSQL 10 and earlier, which raised an error (column \c prokind does not
       exist)
       - the default mode (\c IN) of a procedure's argument is left out of its name, as for a function
+    - fixed a column declared with \c "default null", which was described with a default value such as
+      \c NULL::character varying or \c NULL::numeric, so @ref schemareverseintro "SchemaReverse" gave it as a
+      default and table alignment dropped it
+      (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
     - a template table built from a description, as for each table of a schema description in
       @ref SqlUtil::Tables::populate() "Tables::populate()" and schema alignment, no longer reads the catalog three
       times (the default schema, a temporary table of its name and the tablespace of a table of its name): the default
@@ -701,6 +705,12 @@ string sub pgsql_get_string_literal(string v) {
         return "E'" + replace(replace(v, "\\", "\\\\"), "'", "''") + "'";
     }
     return "'" + replace(v, "'", "''") + "'";
+}
+
+# returns True if a column default expression read from the catalog is a NULL (ex: NULL, NULL::character varying,
+# (NULL)::numeric), as PostgreSQL reports a "default null" declaration for some types; a string such as 'NULL' is not
+bool sub pgsql_is_null_default(*string expr) {
+    return exists expr && expr =~ /^\(*\s*null\s*\)*(\s*::\s*[^':]+(\s*::\s*[^':]+)*)?\s*\)*$/i;
 }
 
 # returns the value of a string literal (ex: 'a''b' or E'a\\b'), or NOTHING if the argument is not a string literal
@@ -5051,6 +5061,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             # normalize default value expressions
             if (defval =~ /::bpchar$/) {
                 defval =~ s/::bpchar$//;
+            }
+            # issue #1746: a column declared with "default null" has no default value; PostgreSQL reports it for some
+            # types as a cast NULL (ex: NULL::character varying, NULL::numeric)
+            if (pgsql_is_null_default(defval)) {
+                remove defval;
             }
             # issue #4348: strip quotes from columns using reserved words
             row.column_name =~ s/^"(.*)"$/$1/g;
