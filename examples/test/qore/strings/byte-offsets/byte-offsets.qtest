@@ -18,10 +18,12 @@
 #! Regression test for issue #6271: byte positions of bindex() and brindex()
 /** brindex() did not find a match that ends at the search position, which rindex() finds, and bindex() with a
     negative position gave no match where index() searches from the resolved position; the C++ API's
-    QoreString::findAny() searched for the whole string instead of any of its bytes.
+    QoreString::findAny() searched for the whole string instead of any of its bytes.  <binary>::find() gave -1 for a
+    negative offset before the start, where the string search functions search from the start (issue #6281).
 
-    ByteOffsets.q checks bindex(), brindex(), index() and rindex() for texts in ISO-8859-1, UTF-8 and UTF-16LE at every
-    position against a reference implementation over the text's bytes and characters; its output must be the one in
+    ByteOffsets.q checks bindex(), brindex(), index(), rindex(), <string>::find(), <string>::rfind(),
+    <binary>::find() and <binary>::rfind() for texts in ISO-8859-1, UTF-8 and UTF-16LE at every position against a
+    reference implementation over the text's bytes and characters; its output must be the one in
     ByteOffsets.expected in every execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.  The
     native executable qore-byte-offsets-test (byte_offsets.cpp) checks the C++ overloads of bindex(), brindex(),
     find(), rfind(), findAny() and rfindAny().
