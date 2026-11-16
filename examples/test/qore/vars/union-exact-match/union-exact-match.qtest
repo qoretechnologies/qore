@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class UnionExactMatchTest
+
+#! Tests that a union accepts a value of one of its member types as it is, whatever the order of its members (qore#6407)
+/** A member type that comes before the value's own type could accept the value by converting it (an enum value by
+    its base type, an int by float, a float by number, a string by softint, an int by softstring); the union keeps
+    the value as it is, as a variable, a list or hash element, a hashdecl member, a parameter and a return value.  The
+    checks are in union-exact-match-worker.qr, which is run in each execution mode, on the IR tier and as a program
+    compiled with qcc at -O0 and -O3; every run must give the results below.
+*/
+class UnionExactMatchTest inherits QUnit::Test {
+    public {
+        #! the type of the value stored by every check the worker makes
+        const Expected = {
+            "var-int-enum": "enum<EI>",
+            "var-enum-int": "enum<EI>",
+            "var-int-string-enum": "enum<EI>",
+            "var-string-enum-int": "enum<EI>",
+            "var-or-nothing-int-enum": "enum<EI>",
+            "list-int-enum": "enum<EI>",
+            "list-enum-int": "enum<EI>",
+            "hash-int-enum": "enum<EI>",
+            "hash-key-int-enum": "enum<EI>",
+            "hashdecl-int-enum": "enum<EI>",
+            "hashdecl-enum-int": "enum<EI>",
+            "hashdecl-string-float-enum": "enum<EI>",
+            "return-int-enum": "enum<EI>",
+            "return-enum-int": "enum<EI>",
+            "param-int-enum": "enum<EI>",
+            "param-enum-int": "enum<EI>",
+            "var-enum-int-int": "integer",
+            "var-float-int": "integer",
+            "var-int-float": "integer",
+            "var-string-float-int": "integer",
+            "list-float-int": "integer",
+            "hashdecl-float-int": "integer",
+            "hashdecl-int-float": "integer",
+            "return-float-int": "integer",
+            "param-float-int": "integer",
+            "var-float-string-int": "float",
+            "var-number-float": "float",
+            "var-float-number": "float",
+            "param-number-float": "float",
+            "var-softint-string": "string",
+            "var-string-softint": "string",
+            "var-softstring-int": "integer",
+            "var-int-softstring": "integer",
+            "var-base-sub": "object<D>",
+            "var-sub-base": "object<D>",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("UnionExactMatchTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
+        addTestCase("compiled program", \testCompiledProgram());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, getWorker()));
+            checkWorkerOutput(mode, out);
+        }
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testIrTier() {
+        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=tiered %s", libqore_dir, qore_bin, getWorker())));
+    }
+
+    testCompiledProgram() {
+        TmpDir tmp("qore-union-exact-match-");
+        foreach int opt in (0, 3) {
+            string label = sprintf("aot -O%d", opt);
+            string exe = tmp.path + DirSep + sprintf("union-exact-match-O%d", opt);
+            string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d --strip-source -o %s %s 2>&1",
+                libqore_dir, qcc_bin, opt, exe, getWorker()));
+            assertTrue(is_file(exe), label + ": " + compile_out);
+            checkWorkerOutput(label, backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+        }
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "union-exact-match-worker.qr";
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them; any other output fails
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

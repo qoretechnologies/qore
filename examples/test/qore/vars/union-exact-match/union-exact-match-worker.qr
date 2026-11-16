@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks that a union accepts a value of one of its member types as it is; run by union-exact-match.qtest
+
+/** A union whose members include the type of a value keeps the value as it is, whatever the order of its members,
+    although a member that comes before could accept it by converting it (qore#6407).  Each check prints
+    "name=type", where the type is the full type of the value stored.
+*/
+
+%modern
+
+enum EI : int {
+    One = 1,
+    Two = 2,
+}
+
+class B {
+}
+
+class D inherits B {
+}
+
+hashdecl HU {
+    union<int, EI> ie;
+    union<EI, int> ei;
+    union<float, int> fi;
+    union<int, float> i_f;
+    union<string, float, EI> sfe;
+}
+
+sub show(string name, auto v) {
+    printf("%s=%s\n", name, v.fullType());
+}
+
+union<int, EI> sub ret_ie(EI e) {
+    return e;
+}
+
+union<EI, int> sub ret_ei(EI e) {
+    return e;
+}
+
+union<float, int> sub ret_fi(int i) {
+    return i;
+}
+
+auto sub param_ie(union<int, EI> v) {
+    return v;
+}
+
+auto sub param_ei(union<EI, int> v) {
+    return v;
+}
+
+auto sub param_fi(union<float, int> v) {
+    return v;
+}
+
+auto sub param_nf(union<number, float> v) {
+    return v;
+}
+
+sub run(EI e, int i, float f, string s, B o) {
+    # an enum value in a union with its base type
+    {
+        union<int, EI> a = e;
+        show("var-int-enum", a);
+        union<EI, int> b = e;
+        show("var-enum-int", b);
+        union<int, string, EI> c = e;
+        show("var-int-string-enum", c);
+        union<string, EI, int> d = e;
+        show("var-string-enum-int", d);
+        *union<int, EI> n = e;
+        show("var-or-nothing-int-enum", n);
+        list<union<int, EI>> l = (e,);
+        show("list-int-enum", l[0]);
+        list<union<EI, int>> l2 = (e,);
+        show("list-enum-int", l2[0]);
+        hash<string, union<int, EI>> h = {"a": e};
+        show("hash-int-enum", h.a);
+        h.b = e;
+        show("hash-key-int-enum", h.b);
+        hash<HU> hu = <HU>{"ie": e, "ei": e, "sfe": e};
+        show("hashdecl-int-enum", hu.ie);
+        show("hashdecl-enum-int", hu.ei);
+        show("hashdecl-string-float-enum", hu.sfe);
+        show("return-int-enum", ret_ie(e));
+        show("return-enum-int", ret_ei(e));
+        show("param-int-enum", param_ie(e));
+        show("param-enum-int", param_ei(e));
+        # a value of the base type is accepted as it is
+        union<EI, int> ib = 3;
+        show("var-enum-int-int", ib);
+    }
+
+    # an int in a union with float
+    {
+        union<float, int> a = i;
+        show("var-float-int", a);
+        union<int, float> b = i;
+        show("var-int-float", b);
+        union<string, float, int> c = i;
+        show("var-string-float-int", c);
+        list<union<float, int>> l = (i,);
+        show("list-float-int", l[0]);
+        hash<HU> hu = <HU>{"fi": i, "i_f": i};
+        show("hashdecl-float-int", hu.fi);
+        show("hashdecl-int-float", hu.i_f);
+        show("return-float-int", ret_fi(i));
+        show("param-float-int", param_fi(i));
+        # a value of no member type is still converted by the first member that accepts it
+        union<float, string> fs = i;
+        show("var-float-string-int", fs);
+    }
+
+    # a float in a union with number
+    {
+        union<number, float> a = f;
+        show("var-number-float", a);
+        union<float, number> b = f;
+        show("var-float-number", b);
+        show("param-number-float", param_nf(f));
+    }
+
+    # soft types
+    {
+        union<softint, string> a = s;
+        show("var-softint-string", a);
+        union<string, softint> b = s;
+        show("var-string-softint", b);
+        union<softstring, int> c = i;
+        show("var-softstring-int", c);
+        union<int, softstring> d = i;
+        show("var-int-softstring", d);
+    }
+
+    # objects are accepted as they are by a base class or their own class
+    {
+        union<B, D> a = o;
+        show("var-base-sub", a);
+        union<D, B> b = o;
+        show("var-sub-base", b);
+    }
+}
+
+run(EI::Two, 1, 1.5, "1", new D());
