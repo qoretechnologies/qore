@@ -21192,6 +21192,49 @@ static QoreValue f_dbg_ir_returns_pass_through_without_thread_data(const QoreLis
     return rv;
 }
 
+//! removes the installed native code of a user function without recompiling it, as a recompilation does while it
+//! runs, so that a test can call the function while it has none (qore#6317)
+/** @param code a call reference to a user function with one variant
+
+    @return True if native code was installed (with JIT or tiered execution), False if not
+
+    @throw DBG-ARGUMENT-ERROR the call reference does not refer to a user function with one variant
+*/
+static QoreValue f_dbg_jit_drop_native_code(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    const QoreFunction* qf = code->getFunction();
+    const AbstractQoreFunctionVariant* variant = qf && qf->numVariants() == 1 ? qf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (!uvb) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_jit_drop_native_code() requires a call reference to a user "
+            "function with one variant");
+        return QoreValue();
+    }
+    return uvb->dbgDropNativeCode();
+}
+
+//! recompiles a user function to native code as a recompilation after deoptimizations does: alone, not in a batch,
+//! so that its recursive calls are made with the native self-recursive call helper (qore#6317)
+/** @param code a call reference to a user function with one variant
+
+    @return True if the function has native code after the recompilation (with JIT or tiered execution), False if not
+
+    @throw DBG-ARGUMENT-ERROR the call reference does not refer to a user function with one variant
+*/
+static QoreValue f_dbg_jit_recompile_native_code(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    const QoreFunction* qf = code->getFunction();
+    const AbstractQoreFunctionVariant* variant = qf && qf->numVariants() == 1 ? qf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (!uvb) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_jit_recompile_native_code() requires a call reference to "
+            "a user function with one variant");
+        return QoreValue();
+    }
+    return uvb->dbgRecompileNativeCode();
+}
+
 //! returns the number of background JIT compiles refused because a Program they refer to is being or was deleted
 static QoreValue f_dbg_get_bg_compile_refused_count(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -24985,6 +25028,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_ir_returns_pass_through_without_thread_data",
         f_dbg_ir_returns_pass_through_without_thread_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
         codeTypeInfo, QORE_PARAM_NO_ARG, "code");
+    qns.addBuiltinVariant("dbg_jit_drop_native_code", f_dbg_jit_drop_native_code, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
+    qns.addBuiltinVariant("dbg_jit_recompile_native_code", f_dbg_jit_recompile_native_code, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_closure_call_cache_program_misses", f_dbg_closure_call_cache_program_misses,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_program_registered_with_id", f_dbg_program_registered_with_id, QCF_NO_FLAGS,
