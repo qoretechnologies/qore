@@ -27,7 +27,9 @@
     in executables and modules made by qcc at -O0 and -O3: for the function of the issue (catch blocks with locals and
     a handler) at the default thresholds, just under and just over the threshold of its size, and for a small function
     with forced thresholds that reassigns locals, a parameter and the list of a \c foreach in the helpers, also in
-    helpers called in the body of the \c foreach.
+    helpers called in the body of the \c foreach; for a function that an exception leaves from a helper, whose
+    \c on_exit handler reads the locals that the helpers reassign; and for a parameter that holds a temporary
+    argument of the caller, released at its first reassignment in a helper.
 */
 class AOTOutlinedHelperLocalReleaseTest inherits QUnit::Test {
     public {
@@ -66,6 +68,9 @@ class AOTOutlinedHelperLocalReleaseTest inherits QUnit::Test {
         addTestCase("just under and just over the threshold of the function's size", \testBoundary());
         addTestCase("a module's function over the default threshold", \testModule());
         addTestCase("locals, a parameter and a foreach list reassigned in the helpers", \testForced());
+        addTestCase("an exception that leaves a helper, with an on_exit handler of the coordinator",
+            \testException());
+        addTestCase("a parameter that holds a temporary argument reassigned in a helper", \testTemporaryArg());
         set_return_value(main());
     }
 
@@ -258,8 +263,8 @@ for (int c = 0; c < 3; ++c) {
     /** @param outline True if the functions \a names must be outlined, False if they must not be
     */
     private checkExecutables(string src, string expected, softlist<string> names, bool outline, string env,
-            string what) {
-        foreach string opt in (OptLevels) {
+            string what, softlist<string> opts = OptLevels) {
+        foreach string opt in (opts) {
             string exe = src + opt;
             string out = compile(src, exe, opt, env);
             foreach string name in (names) {
@@ -287,20 +292,22 @@ for (int c = 0; c < 3; ++c) {
         string src = join_paths(dir.path, "boundary.qr");
         writeFile(src, getIssueScript(Over));
         string expected = getExpected(src);
-        # the size of the function that the thresholds are compared with
-        string out = compile(src, join_paths(dir.path, "size"), "-O0", "QORE_AOT_OUTLINE_FN_MIN_INSTS=1");
-        *list<auto> m = out.regexExtract("AOT-OUTLINE-FN: 'OutlineRelease::big' over the thresholds "
-            "\\(blocks=([0-9]+) insts=([0-9]+)\\)");
-        assertEq(2, m.size(), "the outliner gives the size of the function");
-        int blocks = m[0].toInt();
-        int insts = m[1].toInt();
-        assertGt(0, insts, "the function has IR instructions");
-        # just under: the function is one instruction and one block short of the thresholds, and is not outlined
-        checkExecutables(src, expected, "OutlineRelease::big", False, sprintf("QORE_AOT_OUTLINE_FN_MIN_INSTS=%d "
-            "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=%d", insts + 1, blocks + 1), "just under");
-        # just over: the function reaches the instruction threshold, and is outlined
-        checkExecutables(src, expected, "OutlineRelease::big", True, sprintf("QORE_AOT_OUTLINE_FN_MIN_INSTS=%d "
-            "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=%d", insts, blocks + 1), "just over");
+        # the size of the function that the thresholds are compared with, at each optimization level
+        foreach string opt in (OptLevels) {
+            string out = compile(src, join_paths(dir.path, "size" + opt), opt, "QORE_AOT_OUTLINE_FN_MIN_INSTS=1");
+            *list<auto> m = out.regexExtract("AOT-OUTLINE-FN: 'OutlineRelease::big' over the thresholds "
+                "\\(blocks=([0-9]+) insts=([0-9]+)\\)");
+            assertEq(2, m.size(), opt + ": the outliner gives the size of the function");
+            int blocks = m[0].toInt();
+            int insts = m[1].toInt();
+            assertGt(0, insts, opt + ": the function has IR instructions");
+            # just under: the function is one instruction and one block short of the thresholds, and is not outlined
+            checkExecutables(src, expected, "OutlineRelease::big", False, sprintf("QORE_AOT_OUTLINE_FN_MIN_INSTS=%d "
+                "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=%d", insts + 1, blocks + 1), "just under", opt);
+            # just over: the function reaches the instruction threshold, and is outlined
+            checkExecutables(src, expected, "OutlineRelease::big", True, sprintf("QORE_AOT_OUTLINE_FN_MIN_INSTS=%d "
+                "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=%d", insts, blocks + 1), "just over", opt);
+        }
     }
 
     testModule() {
@@ -343,5 +350,123 @@ module OutlineRelease {
         checkExecutables(src, expected, ("seq", "loopy"), True, ForceEnv, "forced");
         # the same without outlining
         checkExecutables(src, expected, ("seq", "loopy"), False, "QORE_AOT_OUTLINE_FN=0", "not outlined");
+    }
+
+    #! Returns a script whose function reassigns locals that its on_exit handler reads around a call that raises
+    #! an exception, which leaves the function and is caught by its caller
+    private static string getExceptionScript() {
+        return "%modern
+
+string log;
+
+class D {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { log += \"~\" + n; }
+    string get() { return n; }
+}
+
+sub thrower(int n) {
+    if (n > 0) {
+        throw \"X\";
+    }
+}
+
+string sub prop(int n) {
+    D k = new D(\"k\");
+    D j = new D(\"j\");
+    on_exit {
+        log += \"x\" + k.get() + j.get();
+    }
+    log += \"a\";
+    k = new D(\"t\" + n);
+    log += \"b\" + j.get();
+    j = new D(\"i\" + n);
+    thrower(n);
+    k = new D(\"u\" + n);
+    log += \"c\";
+    k = new D(\"w\" + n);
+    log += \"d\" + k.get();
+    return k.get() + j.get();
+}
+
+string sub outer(int n) {
+    try {
+        return prop(n);
+    } catch (hash<ExceptionInfo> ex) {
+        log += \"E\";
+    }
+    return \"e\";
+}
+
+for (int c = 0; c < 3; ++c) {
+    log = \"\";
+    string v = outer(c);
+    printf(\"rv%d:%s %s\\n\", c, v, log);
+}
+";
+    }
+
+    #! Returns a script whose function reassigns a parameter that holds a temporary argument of its caller
+    private static string getTemporaryArgScript() {
+        return "%modern
+
+string log;
+
+class D {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { log += \"~\" + n; }
+    string get() { return n; }
+}
+
+string sub param(D p, int n) {
+    log += \"a\" + p.get();
+    p = new D(\"p0\");
+    log += \"b\";
+    if (n > 1) {
+        log += \"c\";
+    }
+    p = new D(\"p1\");
+    log += \"d\" + p.get();
+    return p.get();
+}
+
+for (int c = 0; c < 3; ++c) {
+    log = \"\";
+    string v = param(new D(\"q\" + c), c);
+    log += \"r\";
+    printf(\"rv%d:%s %s\\n\", c, v, log);
+}
+";
+    }
+
+    testException() {
+        TmpDir dir("qore-aot-outline-release-");
+        string src = join_paths(dir.path, "exception.qr");
+        writeFile(src, getExceptionScript());
+        string expected = getExpected(src);
+        # the exception leaves the function before the second reassignment in two of the three calls
+        assertEq(2, expected.split("E").size() - 1, "the exception is caught twice");
+        foreach string mode in (Modes) {
+            assertEq(expected, runMode(src, mode), "exception: " + mode);
+        }
+        checkExecutables(src, expected, "prop", True, ForceEnv, "exception");
+        checkExecutables(src, expected, "prop", False, "QORE_AOT_OUTLINE_FN=0", "exception, not outlined");
+    }
+
+    #! The value of the parameter, the caller's temporary argument, is released at its first reassignment
+    /** The ir and tiered modes hold a temporary argument until the call returns (see qore#5958), so the
+        executables are compared with the AST only
+    */
+    testTemporaryArg() {
+        TmpDir dir("qore-aot-outline-release-");
+        string src = join_paths(dir.path, "temporary.qr");
+        writeFile(src, getTemporaryArgScript());
+        string expected = getExpected(src);
+        # the argument is released at the first reassignment, before "b"
+        assertRegex("^rv0:p1 aq0~q0b", expected, "the AST releases the argument at the reassignment");
+        checkExecutables(src, expected, "param", True, ForceEnv, "temporary argument");
+        checkExecutables(src, expected, "param", False, "QORE_AOT_OUTLINE_FN=0", "temporary argument, not outlined");
     }
 }

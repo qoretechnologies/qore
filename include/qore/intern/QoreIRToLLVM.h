@@ -1897,8 +1897,11 @@ private:
 
         @param call the call of the helper
         @param shared_locals the locals of the function that the helper references
+        @param reload_after the instruction after which the released locals are reloaded: the last one of the
+        invalidation of the caches after the call, so that the reloads leave the caches fresh
     */
-    void recordHelperSite(llvm::CallInst* call, const std::vector<const LocalVar*>& shared_locals);
+    void recordHelperSite(llvm::CallInst* call, const std::vector<const LocalVar*>& shared_locals,
+        llvm::Instruction* reload_after);
 
     //! Emits the release before and the reload after each call recorded by recordHandlerSite() or
     //! recordHelperSite(), once the function is lowered and its reload storage is known
@@ -1918,6 +1921,8 @@ private:
         //! for the call of an outlined helper: the locals that it shares with this function, whose storage is
         //! released (instead of that of the locals that the handlers reference)
         std::unique_ptr<std::unordered_set<const void*>> shared_locals;
+        //! for the call of an outlined helper: the instruction after which the released locals are reloaded
+        llvm::Instruction* reload_after;
     };
     std::vector<HandlerSite> handler_sites;
 

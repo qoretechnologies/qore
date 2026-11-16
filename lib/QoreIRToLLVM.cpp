@@ -4896,12 +4896,13 @@ bool QoreIRToLLVM::releasesReloadStorageForHandlers(const void* key) const {
 
 void QoreIRToLLVM::recordHandlerSite(llvm::CallInst* call, bool reload) {
     if (has_on_block_exit_handlers) {
-        handler_sites.push_back({call, reload, nullptr});
+        handler_sites.push_back({call, reload, nullptr, nullptr});
     }
 }
 
 // documented in QoreIRToLLVM.h
-void QoreIRToLLVM::recordHelperSite(llvm::CallInst* call, const std::vector<const LocalVar*>& shared_locals) {
+void QoreIRToLLVM::recordHelperSite(llvm::CallInst* call, const std::vector<const LocalVar*>& shared_locals,
+        llvm::Instruction* reload_after) {
     if (shared_locals.empty()) {
         return;
     }
@@ -4910,7 +4911,7 @@ void QoreIRToLLVM::recordHelperSite(llvm::CallInst* call, const std::vector<cons
     for (const LocalVar* lv : shared_locals) {
         keys->insert(reinterpret_cast<const void*>(lv));
     }
-    handler_sites.push_back({call, true, std::move(keys)});
+    handler_sites.push_back({call, true, std::move(keys), reload_after});
 }
 
 void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* llvm_func) {
@@ -4944,12 +4945,14 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
         // of endPendingHandlerRun(), and every block of the lowered function has a terminator, so the call has a next
         // instruction; a block without one gets the reloads at its end, after the call, and is then rejected by the
         // check for blocks without a terminator that lowerFunction() makes afterwards, so no invalid IR gets through
-        llvm::Instruction* next = site.call->getNextNode();
+        // the reloads after a helper call follow the invalidation of the caches after it (see recordHelperSite())
+        llvm::Instruction* after = site.reload_after ? site.reload_after : site.call;
+        llvm::Instruction* next = after->getNextNode();
         assert(next);
         if (next) {
             builder->SetInsertPoint(next);
         } else {
-            builder->SetInsertPoint(site.call->getParent());
+            builder->SetInsertPoint(after->getParent());
         }
         if (obe_table_mode) {
             // the locals that have an owner are reloaded by one call (qore#6110)
@@ -37026,13 +37029,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the references of this function's reload storage to the values of the locals that the helper shares
             // are released before the call, and the locals reloaded right after it, so that a value that the helper
             // replaces is released at its assignment (qore#6300; see finalizeHandlerSites())
-            recordHelperSite(result, cah->shared_locals);
             // Outlined function-body helpers execute with this function's
             // runtime frame and can assign shared (non-IR-only) locals
             // through the TLS stack — mark all reloadable local allocas
             // stale (no-op for init-expression helpers, which reference no
             // locals).
             reloadAllLocalsFromRuntime(module, llvm_func);
+            // the eager reloads of the released locals go after the epoch bump above, so that they leave the caches
+            // fresh and a later read does not reload them again
+            recordHelperSite(result, cah->shared_locals, &builder->GetInsertBlock()->back());
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
