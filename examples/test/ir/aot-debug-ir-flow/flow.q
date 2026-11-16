@@ -146,6 +146,26 @@ auto sub facts_typed(int n) {
     return total;
 }
 
+# an immediately called closure, whose return facts the native code of a caller can rely on
+int sub facts_take_int(int v) {
+    return v + 1;
+}
+
+auto sub facts_closure(int n) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        try {
+            total += facts_take_int((auto sub () {
+                int v = 40;                         ### facts_closure_first
+                return v + 2;
+            })());
+        } catch (hash<ExceptionInfo> ex) {
+            push log, ex.err;
+        }
+    }
+    return total;
+}
+
 const Flows = {"return": DebugFlowReturn, "break": DebugFlowBreak, "continue": DebugFlowContinue};
 FlowDebugger dbg(Flows{ARGV[1]}, ARGV[2].toInt(), ARGV[3].toInt());
 ProgramControl pc = ProgramControl::getProgram();
@@ -163,4 +183,4 @@ background sub () {
 }();
 done.waitForZero();
 # the steps of the functions; the top-level code of AOT code is native code without step events
-printf("RESULT:%s LOG:%y STEPS:%y\n", result, log, select dbg.steps, $1 > 38 && $1 < 149);
+printf("RESULT:%s LOG:%y STEPS:%y\n", result, log, select dbg.steps, $1 > 38 && $1 < 169);

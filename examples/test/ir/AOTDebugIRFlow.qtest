@@ -49,6 +49,8 @@ class AOTDebugIRFlowTest inherits QUnit::Test {
             ("facts_argument", "return", "facts_string_first", 3),
             ("facts_argument", "break", "facts_string_first", 3),
             ("facts_typed", "return", "facts_typed_first", 3),
+            # an immediately called closure, whose return facts the native code of a caller can rely on
+            ("facts_closure", "return", "facts_closure_first", 3),
         );
 
         #! the environment that has the AOT compiler outline the loop body of outlined() (see
