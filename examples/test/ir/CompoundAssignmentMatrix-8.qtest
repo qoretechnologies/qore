@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+%include CompoundAssignmentMatrix.qc
+
+%exec-class CompoundAssignmentMatrixPart8
+
+#! runs part 8 of 9 of CompoundAssignmentMatrixBase: the qcc executable of the first half of the functions
+class CompoundAssignmentMatrixPart8 inherits CompoundAssignmentMatrixBase {
+    constructor() : CompoundAssignmentMatrixBase("CompoundAssignmentMatrixPart8", 8) {
+    }
+}
