@@ -1304,6 +1304,9 @@
 
     - @ref csvutilintro "CsvUtil" module
       - CSV data is written and read as RFC 4180 by default (see @ref qore_3_0_0_compatibility)
+      - the writers can quote fields by type and write a field without a value without quotes, so that it can be told
+        apart from an empty string (see @ref csvwriter_quoting)
+        (<a href="https://github.com/qoretechnologies/qore/issues/3113">issue 3113</a>)
       - see @ref csvutil_v1_12 for all changes
 
     - @ref connectionproviderintro "ConnectionProvider" module
