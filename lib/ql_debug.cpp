@@ -22752,11 +22752,18 @@ void qore_dbg_http_hold(QoreDbgHttpHoldPoint point) {
     xsink.clear();
 }
 
+bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point) {
+    std::lock_guard<std::mutex> l(dbg_http_hold_m);
+    return dbg_http_holds[static_cast<int>(point)].reached != nullptr;
+}
+
 //! holds the next HTTP client thread that reaches the given point until \a release reaches zero (one-shot)
 /** @param point \c "submit": HTTPClient::startPollSendRecv() has checked out its connection and is about to submit
     the request; \c "close": an HTTP/1 or HTTP/2 client connection that is being closed has been invalidated (new
     calls on it are refused) and is not closed yet; \c "submit-failed": the submit of a request on a ready connection
-    raised an exception, which is about to be classified
+    raised an exception, which is about to be classified; \c "finalize": HTTPClient::startPollSendRecv() found an
+    ALPN-negotiating connection ready and is about to hand it over to a concrete connection (while it is armed, the
+    request waits for its connection to be ready first)
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
 
@@ -22771,6 +22778,8 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::CloseAfterInvalidate);
     } else if (!strcmp(name->c_str(), "submit-failed")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::SubmitFailed);
+    } else if (!strcmp(name->c_str(), "finalize")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Finalize);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();

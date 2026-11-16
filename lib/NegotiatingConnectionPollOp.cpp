@@ -549,6 +549,13 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
         return nullptr;
     }
     if (!isReady()) {
+        // a connection that was closed after it was found ready (or that another thread is closing, which invalidated
+        // it) is refused as a closed connection refuses a submit, so that the caller reports it like one (qore#6301)
+        if (isClosed() || isInvalidated()) {
+            xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+                "cannot hand over the negotiating connection: it has been closed");
+            return nullptr;
+        }
         xsink->raiseException("HTTPCLIENT-NEGOTIATE-ERROR",
             "negotiating connection is not ready");
         return nullptr;

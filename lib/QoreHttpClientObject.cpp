@@ -9410,9 +9410,31 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     // submit in particular) works with a connection that can accept a request.
     // A connection that is still CONNECTING is morphed by the poll op instead,
     // when it reports ready.
+#ifdef DEBUG
+    // tests that hold the finalize have the request wait for its connection to be ready, so that it reaches the hold
+    if (qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint::Finalize)) {
+        ExceptionSink ready_xsink;
+        // a hang guard only: the test's connection becomes ready
+        conn->waitForReadyOrError(60000, &ready_xsink);
+        ready_xsink.clear();
+    }
+#endif
     if (conn->isReady()) {
+#ifdef DEBUG
+        // tests hold the finalize to order it with a close of the connection by another thread
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::Finalize);
+#endif
         HttpClientConnectionBase* concrete = mgr.finalizeAsyncConnection(conn, true, xsink);
         if (!concrete || *xsink) {
+            // the connection was closed after it was found ready (by the server, or by another thread, which
+            // invalidated it): the hand-over refuses it as a closed connection refuses a submit, and the error is
+            // reported through the poll operation, as for a connection found closed (qore#6301)
+            if (*xsink) {
+                QoreStringValueHelper err(xsink->getExceptionErr());
+                if (!strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR")) {
+                    return deferred_submit_error();
+                }
+            }
             release_local_conn_ref();
             return nullptr;
         }

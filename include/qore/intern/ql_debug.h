@@ -247,12 +247,19 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! HTTPClient::startPollSendRecv() submitted the request on a ready connection, the submit raised an exception, and
     //! the error is about to be classified (whether it is reported through the poll operation)
     SubmitFailed,
+    //! HTTPClient::startPollSendRecv() found an ALPN-negotiating connection ready and is about to finalize it (hand it
+    //! over to a concrete connection); while this point is armed, the request waits for its connection to be ready
+    //! first, so that it reaches the point
+    Finalize,
     //! the number of hold points
     Count,
 };
 
 //! holds the calling thread at the given point if dbg_http_hold_at() armed it (one-shot)
 DLLLOCAL void qore_dbg_http_hold(QoreDbgHttpHoldPoint point);
+
+//! returns true if dbg_http_hold_at() armed the given point and no thread has reached it yet
+DLLLOCAL bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point);
 
 //! records that an HTTP client connection's closeConnection() runs, for dbg_http_concurrent_closes(); destroying it
 //! records the end of the close
