@@ -1,0 +1,209 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the counted test runs in child processes of its own binary in the default mode
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%try-module xml
+%define NO_XML
+%endtry
+
+%exec-class ResultCountsTest
+
+#! Tests the counts of test case results in the summary and in the junit report of QUnit (issue #2297), and the list of
+#! failed test cases after the run (issue #3134)
+/** The test whose results are counted runs in a qore process of its own; it has 1 test case that succeeds, 2 that
+    fail, 3 that end with an error and 4 that are skipped
+*/
+class ResultCountsTest inherits QUnit::Test {
+    private {
+        const Script = "%modern
+%requires QUNIT_PATH
+%exec-class CountedTest
+class CountedTest inherits QUnit::Test {
+    constructor() : Test(\"CountedTest\", \"1.0\", \\ARGV) {
+        addTestCase(\"pass\", \\pass());
+        addTestCase(\"assertion failure\", \\failAssertion());
+        addTestCase(\"condition failure\", \\failCondition());
+        addTestCase(\"exception\", \\raise(), \"SOME-ERROR\");
+        addTestCase(\"exception like a test exception\", \\raise(), \"TEST-OTHER-EXCEPTION\");
+        addTestCase(\"another exception\", \\raise(), \"OTHER-ERROR\");
+        for (int i = 1; i <= 4; ++i) {
+            addTestCase(\"skip \" + i, \\skip(), i);
+        }
+        set_return_value(main());
+    }
+    pass() {
+        assertEq(1, 1, \"the passed assertion\");
+    }
+    failAssertion() {
+        assertEq(1, 2, \"the failed assertion\");
+    }
+    failCondition() {
+        # a condition that fails outside an assertion
+        equals(1, 2);
+    }
+    raise(string err) {
+        throw err, \"the error of the test case\";
+    }
+    skip(int i) {
+        testSkip(\"skip reason %d\", i);
+    }
+}
+";
+        FsUtil::TmpDir tmp_dir("qunit-result-counts-");
+        string path;
+    }
+
+    constructor() : Test("result counts", "1.0", \ARGV) {
+        path = tmp_dir.path + "/counted.qtest";
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(replace(Script, "QUNIT_PATH", get_module_hash().QUnit.filename));
+        f.close();
+        addTestCase("plain summary", \plainSummary());
+        addTestCase("verbose summary", \verboseSummary());
+        addTestCase("junit report", \junitReport());
+        addTestCase("failure list", \failureList());
+        set_return_value(main());
+    }
+
+    plainSummary() {
+        hash<auto> res = runTest();
+        # the exit status is the number of test cases that failed or ended with an error
+        assertEq(5, res.rc, res.out);
+        assertRegex("\nRan 10 test cases, 1 succeeded, 2 failed, 3 errors, 4 skipped \\(", res.out);
+    }
+
+    verboseSummary() {
+        hash<auto> res = runTest("-v");
+        assertEq(5, res.rc, res.out);
+        assertEq(1, countMatches("^Success: ", res.out), res.out);
+        assertEq(2, countMatches("^FAILURE: ", res.out), res.out);
+        assertEq(3, countMatches("^ERROR: ", res.out), res.out);
+        assertEq(4, countMatches("^Skipped: ", res.out), res.out);
+        assertRegex("\nRan 10 test cases, 1 succeeded, 2 failed, 3 errors, 4 skipped \\(", res.out);
+    }
+
+    junitReport() {
+%ifdef NO_XML
+        testSkip("the xml module is not available");
+%else
+        hash<auto> res = runTest("--format=junit");
+        assertEq(5, res.rc, res.out);
+        hash<auto> xml = parse_xml(res.out);
+
+        # the counts are given for all test suites and for the one test suite of the test
+        hash<auto> counts = {"tests": "10", "failures": "2", "errors": "3", "skipped": "4"};
+        assertEq(counts, xml.testsuites."^attributes^"{keys counts}, res.out);
+        assertEq("CountedTest", xml.testsuites."^attributes^".name);
+        assertRegex("^[0-9]+\\.[0-9]{3}$", xml.testsuites."^attributes^".time);
+        hash<auto> suite = xml.testsuites.testsuite;
+        assertEq(NT_HASH, suite.typeCode(), "one testsuite element");
+        assertEq(counts, suite."^attributes^"{keys counts}, res.out);
+        assertEq("CountedTest", suite."^attributes^".name);
+        assertRegex("^[0-9]+\\.[0-9]{3}$", suite."^attributes^".time);
+        assertRegex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$", suite."^attributes^".timestamp);
+        assertTrue(suite."^attributes^".hostname.val());
+        assertFalse(exists xml.testsuites.testcase, "the testcase elements are in the testsuite element");
+
+        hash<string, hash<auto>> cases = map {$1."^attributes^".name: $1}, suite.testcase;
+        assertEq(("pass", "assertion failure", "condition failure", "exception", "exception like a test exception",
+            "another exception", "skip 1", "skip 2", "skip 3", "skip 4"), keys cases);
+        foreach hash<auto> tc in (cases.pairIterator()) {
+            assertEq("CountedTest", tc.value."^attributes^".classname, tc.key);
+            assertRegex("^[0-9]+\\.[0-9]{3}$", tc.value."^attributes^".time, tc.key);
+            # a test case has one element for its result at most
+            list<string> result_elems = select keys tc.value, $1 != "^attributes^";
+            switch (tc.key) {
+                case "pass":
+                    assertEq((), result_elems, tc.key);
+                    break;
+                case "assertion failure":
+                case "condition failure":
+                    assertEq(("failure",), result_elems, tc.key);
+                    assertRegex("Assertion .*failure at ", tc.value.failure."^attributes^".message, tc.key);
+                    assertRegex("Expected: 1|mismatch", tc.value.failure."^value^", tc.key);
+                    break;
+                case =~ /exception$/:
+                    assertEq(("error",), result_elems, tc.key);
+                    assertEq((tc.key == "exception" ? "SOME-ERROR" : (tc.key == "another exception"
+                        ? "OTHER-ERROR" : "TEST-OTHER-EXCEPTION")), tc.value.error."^attributes^".type, tc.key);
+                    assertRegex("Unexpected exception: ", tc.value.error."^attributes^".message, tc.key);
+                    assertRegex("the error of the test case", tc.value.error."^value^", tc.key);
+                    break;
+                default:
+                    assertEq(("skipped",), result_elems, tc.key);
+                    assertEq("skip reason " + tc.key.substr(5), tc.value.skipped."^attributes^".message, tc.key);
+                    break;
+            }
+        }
+%endif
+    }
+
+    failureList() {
+        # the failures and errors are listed after the reports of all test cases, at each verbosity
+        foreach *string args in ((NOTHING, "-v")) {
+            string label = sprintf("args %y", args);
+            hash<auto> res = runTest(args);
+            assertEq(5, res.rc, res.out);
+            list<string> lines = res.out.split("\n");
+            int start = -1;
+            for (int i = 0; i < lines.size(); ++i) {
+                if (lines[i] == "Failed test cases:") {
+                    start = i;
+                    break;
+                }
+            }
+            assertGt(-1, start, label + ": " + res.out);
+            # no test case report follows the list
+            list<string> after = lines[start + 1..];
+            assertEq((), (select after, $1 =~ /^(Success|FAILURE|ERROR|Skipped): /), label);
+            list<string> listed = after[0..4];
+            assertRegex("^Ran 10 test cases, ", after[5], label);
+            string ts = "[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:.]+";
+            string at = " at .*counted\\.qtest:[0-9]+";
+            list<string> expected = (
+                "^  FAILURE: assertion failure: " + ts + ": Assertion \"the failed assertion\" failure" + at,
+                "^  FAILURE: condition failure: " + ts + ": Assertion failure" + at,
+                "^  ERROR: exception: " + ts + ": Unexpected exception: SOME-ERROR" + at,
+                "^  ERROR: exception like a test exception: " + ts
+                    + ": Unexpected exception: TEST-OTHER-EXCEPTION" + at,
+                "^  ERROR: another exception: " + ts + ": Unexpected exception: OTHER-ERROR" + at,
+            );
+            for (int i = 0; i < expected.size(); ++i) {
+                assertRegex(expected[i], listed[i], label);
+            }
+        }
+
+        # no list is printed when no test case failed
+        hash<auto> res = runTest("--include='pass'");
+        assertEq(0, res.rc, res.out);
+        assertNRegex("Failed test cases", res.out);
+        assertRegex("\nRan 10 test cases, 1 succeeded, 9 skipped \\(", res.out);
+    }
+
+    private int countMatches(string pattern, string out) {
+        return (select out.split("\n"), $1.regex(pattern)).size();
+    }
+
+    private hash<auto> runTest(*string args) {
+        string cmd;
+        # the library path is set again because a shell can remove it from its environment (macOS)
+        foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
+            if (ENV{var}) {
+                cmd += sprintf("%s='%s' ", var, ENV{var});
+            }
+        }
+        # only the standard output is read: it is the junit report with --format=junit
+        cmd += sprintf("'%s' '%s' %s", ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore", path, args ?? "");
+        int rc;
+        string out = backquote(cmd, \rc);
+        return {"rc": rc, "out": out};
+    }
+}

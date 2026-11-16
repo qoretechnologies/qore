@@ -1502,6 +1502,11 @@
         <a href="https://github.com/qoretechnologies/qore/issues/5573">issue 5573</a>)
       - see @ref qdx_1_1_3 for all changes
 
+    - @ref qunitintro "QUnit" module
+      - the summary of a test lists the test cases that failed or ended with an error, with the failed assertion or
+        the exception and where it was raised (see @ref unittestformats; issue #3134)
+      - see @ref qunit_v0_5_2 for all changes
+
     - @ref reflectionintro "reflection" module
       - enum reflection (@ref Qore::Reflection::Enum "Reflection::Enum")
       - @ref Qore::Reflection::Class::getAllMethods() "Class::getAllMethods()" and related methods return every
@@ -1945,6 +1950,9 @@
     - a range of the @ref list_element_operator "[] operator" (ex: <tt>x[-9..1]</tt>) gives only elements of its
       value: a range of an empty value is empty, of the same type, and a range of a string with multi-byte
       characters is resolved against its characters (issue #6306)
+    - the summary and the junit report of a @ref qunitintro "QUnit" test count skipped test cases, which they gave
+      as succeeded, and the junit report has a \c testsuite element and counts assertion failures apart from errors
+      (see @ref unittestformats; issue #2297)
     - an allocation that fails while a thread enters another %Program (ex: in a binary module's
       \c QoreExternalProgramContextHelper or a parse commit) leaves the thread in the calling %Program and releases
       its thread count in the entered %Program, which could otherwise not be deleted (issue #6198)
