@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DeepInheritanceChainParseScalingTest
+
+#! Test for issue #6106: the time to parse a chain of classes grows about linearly with its length
+/** Each class of a chain walked the whole hierarchy again for each of its ancestors to add them to its list of base
+    classes, and initialized the hierarchy of each ancestor again, adding the ancestors of their methods again: the
+    parse time grew about with the fourth power of the length of the chain (a chain four times as long took about 200
+    times as long to parse).  This test parses chains of Short and of Long classes and checks that the longer one
+    does not take more than MaxRatio times as long, a bound far above the ratio of the lengths (the list of base
+    classes of each class still has all of its ancestors) and far below the ratio of the fourth powers.  The best time
+    of several parses is taken for each length, so that the load of the machine does not decide the result.
+*/
+class DeepInheritanceChainParseScalingTest inherits QUnit::Test {
+    public {
+        const Short = 150;
+        const Long = 600;
+        const Runs = 3;
+        const MaxRatio = 40.0;
+    }
+
+    constructor() : QUnit::Test("deep inheritance chain parse scaling", "1.0", \ARGV) {
+        addTestCase("chain of classes", \chainTest());
+        addTestCase("chain of classes with several base classes", \multiTest());
+        set_return_value(main());
+    }
+
+    chainTest() {
+        checkScaling(\chainSource());
+    }
+
+    multiTest() {
+        checkScaling(\multiSource());
+    }
+
+    private checkScaling(code source) {
+        # the best of several parses of each length; one parse of each first, so that nothing is set up in a timed one
+        parse(source(Short));
+        float short_time = bestTime(source, Short);
+        float long_time = bestTime(source, Long);
+        float ratio = long_time / short_time;
+        if (m_options.verbose) {
+            printf("%d classes: %.4fs, %d classes: %.4fs, ratio: %.1f\n", Short, short_time, Long, long_time, ratio);
+        }
+        assertTrue(ratio < MaxRatio, sprintf("parsing %d classes took %.1f times as long as parsing %d classes "
+            "(%.4fs and %.4fs); the bound is %.1f", Long, ratio, Short, long_time, short_time, MaxRatio));
+    }
+
+    private float bestTime(code source, int n) {
+        string src = source(n);
+        float best;
+        for (int i = 0; i < Runs; ++i) {
+            date start = now_us();
+            parse(src);
+            float t = (now_us() - start).durationSecondsFloat();
+            if (!exists best || t < best) {
+                best = t;
+            }
+        }
+        return best;
+    }
+
+    private static parse(string src) {
+        Program pgm(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION);
+        pgm.parse(src, "chain");
+    }
+
+    #! each class calls its base class constructor, declares a member and overrides a method
+    private static string chainSource(int n) {
+        string src = "class C0 { public { int m0 = 0; } constructor() {} int m() { return 0; } }\n";
+        for (int i = 1; i < n; ++i) {
+            src += sprintf("class C%d inherits C%d { public { int m%d = %d; } constructor() : C%d() {} "
+                "int m() { return %d; } }\n", i, i - 1, i, i, i - 1, i);
+        }
+        return src;
+    }
+
+    #! each class also inherits a class of its own, and those classes have a common base class
+    private static string multiSource(int n) {
+        string src = "class B {}\nclass C0 { constructor() {} }\n";
+        for (int i = 1; i < n; ++i) {
+            src += sprintf("class M%d inherits B {}\nclass C%d inherits C%d, M%d { constructor() : C%d(), M%d() {} "
+                "}\n", i, i, i - 1, i, i - 1, i);
+        }
+        return src;
+    }
+}
