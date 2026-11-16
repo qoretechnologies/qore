@@ -88,6 +88,57 @@ class QoreBlockStream inherits InputStream {
     }
 }
 
+#! reports when the server has seen that the client abandoned an HTTP/2 or HTTP/3 request stream
+/** Registered with the stream-teardown notification of the request's stream (\c register_sse_close_notify in the
+    request's \c header-info), which the server runs once it has processed the peer's stream reset or the close of
+    the connection; an HTTP/2 response is then no longer sent on the stream.  The probe only observes the stream: it
+    is not an SSE stream, and nothing is sent through it.
+*/
+class StreamGoneProbe inherits AbstractSseConnection {
+    constructor(Queue gone) {
+        setPeerCloseCallback(sub () {
+            gone.push(True);
+        });
+    }
+
+    string getProtocol() {
+        return "probe";
+    }
+
+    queueEvent(*string event_type, string data, *string id, *int retry) {
+        throw "STREAM-GONE-PROBE-ERROR", "the probe does not send events";
+    }
+
+    queueRawEvent(hash<auto> event) {
+        throw "STREAM-GONE-PROBE-ERROR", "the probe does not send events";
+    }
+
+    queueRawString(string data) {
+        throw "STREAM-GONE-PROBE-ERROR", "the probe does not send events";
+    }
+
+    setHeartbeat(int interval_ms, string msg = DefaultSseHeartbeatMsg) {
+    }
+
+    bool isOpen() {
+        return False;
+    }
+
+    bool isDisconnected() {
+        return False;
+    }
+
+    int getQueueSize() {
+        return 0;
+    }
+
+    close() {
+    }
+
+    abort() {
+    }
+}
+
 #! returns responses of every form, each with an after_send callback
 class AfterSendHandler inherits AbstractHttpRequestHandler {
     public {
@@ -105,6 +156,10 @@ class AfterSendHandler inherits AbstractHttpRequestHandler {
         Queue entered();
         #! the "wait" request returns its response when this Queue has an entry
         Queue release();
+        #! receives an entry when the server has seen that the client abandoned the stream of a "wait" request
+        /** Only for a request with the \c x-watch-gone header on HTTP/2 or HTTP/3; see @ref StreamGoneProbe
+        */
+        Queue gone();
         #! the probe for the "order" request
         *code order_probe;
     }
@@ -121,6 +176,13 @@ class AfterSendHandler inherits AbstractHttpRequestHandler {
     #! waits until a "wait" request is being handled
     waitEntered() {
         entered.get(30s);
+    }
+
+    #! waits until the server has seen that the client abandoned the stream of a "wait" request
+    /** The request must have been sent with the \c x-watch-gone header on HTTP/2 or HTTP/3
+    */
+    waitStreamGone() {
+        gone.get(30s);
     }
 
     #! lets a "wait" request return its response
@@ -173,6 +235,13 @@ class AfterSendHandler inherits AbstractHttpRequestHandler {
             case "large":
                 return <HttpResponseInfo>{"code": 200, "body": strmul("x", LargeSize), "after_send": after_send};
             case "wait":
+                if (hdr."x-watch-gone") {
+                    *code<nothing(object)> watch = cx."header-info".register_sse_close_notify;
+                    if (!watch) {
+                        throw "AFTER-SEND-TEST-ERROR", "the stream of the request cannot be watched";
+                    }
+                    watch(new StreamGoneProbe(gone));
+                }
                 entered.push(True);
                 release.get(30s);
                 return <HttpResponseInfo>{"code": 200, "body": strmul("x", HugeSize), "after_send": after_send};
@@ -684,9 +753,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         string id = getId("wait");
         {
             HTTPClient hc = getH2Client(2s);
-            # the client gives up waiting for the response and closes the connection
+            # the client gives up waiting for the response (it resets the request's stream) and closes the
+            # connection
             try {
-                send(hc, "/as/wait", id);
+                send(hc, "/as/wait", id, {"x-watch-gone": "1"});
                 fail("the request does not time out");
             } catch (hash<ExceptionInfo> ex) {
                 # the request timed out
@@ -694,6 +764,10 @@ l50Xb2GWQesIt9k5jF5IOw==
             handler.waitEntered();
             hc.disconnect();
         }
+        # the response is released only once the server has processed the stream reset or the connection close:
+        # before that, the response (compressed to a few KB) could still be written completely to the socket and
+        # count as sent (qore#6426)
+        handler.waitStreamGone();
         handler.releaseWait();
         assertNotSent(id);
     }
@@ -721,7 +795,7 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     #! the client closes its connection while the handler runs, without resetting the request's stream
-    /** The response's transmission is watched only after the connection has been closed.
+    /** The response's transmission is watched only after the server has processed the close of the connection.
     */
     private connectionClosedTest(string protocol, int port) {
         string id = getId("wait");
@@ -735,7 +809,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         background sub () {
             on_exit done.dec();
             try {
-                mgr.request("https://127.0.0.1:" + port, "GET", "/as/wait", {"x-id": id});
+                mgr.request("https://127.0.0.1:" + port, "GET", "/as/wait", {"x-id": id, "x-watch-gone": "1"});
             } catch (hash<ExceptionInfo> ex) {
                 # the connection manager is deleted while the request is in progress
             }
@@ -743,6 +817,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         handler.waitEntered();
         delete mgr;
         done.waitForZero(30s);
+        # the response is released only once the server has processed the close of the connection (HTTP/3: of the
+        # QUIC session): before that, it could still be written and count as sent (qore#6426)
+        handler.waitStreamGone();
         handler.releaseWait();
         assertNotSent(id);
     }
