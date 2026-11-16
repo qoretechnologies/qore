@@ -137,12 +137,24 @@ bool HttpClientConnectionBase::tryBeginIdleClose(active_stream_count_t active_st
     return true;
 }
 
-bool HttpClientConnectionBase::tryReservePendingStream(int active_streams, int max_streams) {
+bool HttpClientConnectionBase::tryReservePendingStream(active_stream_count_t active_streams, const void* op,
+        int max_streams) {
+    assert(active_streams && op);
+#ifdef DEBUG
+    // tests hold the reservation here, before the reservation lock, while another request is submitted on the
+    // connection: the active streams are read under the lock, so the submitted request is seen
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::ReservePending);
+#endif
     AutoLocker al(reserve_lock);
-    if (isDraining() || isClosed() || idle_closing) {
+    // the active streams are read under the lock, which a release of a reservation takes: a submit counts its active
+    // stream before it releases its reservation, so a request that is being submitted is in one of the two counts
+    if (max_streams && (active_streams(op) + pending_stream_count) >= max_streams) {
         return false;
     }
-    if (max_streams && (active_streams + pending_stream_count) >= max_streams) {
+    // A connection stops accepting requests (it is draining) before it releases the stream of the response that
+    // ends it, so a stream count that shows the released stream is followed by the draining state: checked after
+    // the count, as in tryReserveStream(), a connection that the response ends is not reserved
+    if (isDraining() || isClosed() || idle_closing) {
         return false;
     }
     ++pending_stream_count;

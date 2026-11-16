@@ -268,6 +268,9 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! HttpClientConnectionManagerBase::acquireConnectionImpl() found a connection in its pool and released the pool
     //! lock, before it returns the connection
     Acquired,
+    //! HttpClientConnectionBase::tryReservePendingStream() was called to reserve a stream of a Qore-level connection,
+    //! before it takes the reservation lock
+    ReservePending,
     //! the number of hold points
     Count,
 };
