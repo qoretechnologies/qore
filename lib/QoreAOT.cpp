@@ -4984,6 +4984,59 @@ static void aotEraseUnusedClosureDispatchDecls(llvm::Module& module, const std::
     }
 }
 
+//! Erases the LLVM functions of outlined helpers and the nested functions that their lowering emitted
+/** Called when a helper or the coordinator failed to lower and the function is lowered again un-outlined.  A helper
+    that lowered emitted nested functions for the handler bodies and background helpers of its code
+    (<tt>\<helper\>_obe_\<n\></tt>, <tt>\<helper\>_bg_\<n\></tt>, and the ones nested in them, which extend the name),
+    which call the closure dispatch functions declared with the helper's ABI; with \a coordinator_nested, the nested
+    functions that the failed lowering of the coordinator \a owner emitted are erased too, as the retry emits them
+    again under the same names.  Then the unused closure dispatch declarations of \a owner are erased
+    (aotEraseUnusedClosureDispatchDecls(), qore#6310).
+*/
+static void aotEraseOutlinedFunctions(llvm::Module& module, const std::vector<AOTOutlinedHelper>& helpers,
+        const std::string& owner, bool coordinator_nested) {
+    std::vector<std::string> prefixes;
+    prefixes.reserve(helpers.size() * 2 + 2);
+    std::unordered_set<std::string> names;
+    for (const auto& h : helpers) {
+        names.insert(h.ir_func->name);
+        prefixes.push_back(h.ir_func->name + "_obe_");
+        prefixes.push_back(h.ir_func->name + "_bg_");
+    }
+    if (coordinator_nested) {
+        prefixes.push_back(owner + "_obe_");
+        prefixes.push_back(owner + "_bg_");
+    }
+    std::vector<llvm::Function*> erase;
+    for (llvm::Function& f : module) {
+        // not a cancellation point: this only collects pointers on a failure path, bounded by the module's size
+        if (f.isDeclaration()) {
+            continue;
+        }
+        llvm::StringRef name = f.getName();
+        bool match = names.count(name.str()) > 0;
+        for (size_t i = 0; !match && i < prefixes.size(); ++i) {
+            match = name.starts_with(prefixes[i]);
+        }
+        if (match) {
+            erase.push_back(&f);
+        }
+    }
+    // the functions call each other (a helper its handlers), so their references are dropped before any is erased
+    for (llvm::Function* f : erase) {
+        f->dropAllReferences();
+    }
+    for (llvm::Function* f : erase) {
+        if (!f->use_empty()) {
+            f->replaceAllUsesWith(llvm::PoisonValue::get(f->getType()));
+        }
+        // detach the subprogram first, as an incompletely lowered function does (no orphan debug metadata)
+        f->setSubprogram(nullptr);
+        f->eraseFromParent();
+    }
+    aotEraseUnusedClosureDispatchDecls(module, owner);
+}
+
 static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
         llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
         llvm::DIBuilder* di_builder, llvm::DICompileUnit* di_cu, std::string& error) {
@@ -5007,12 +5060,7 @@ static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
             }
             // Erase helpers already emitted; the caller will lower the
             // restored original function instead.
-            for (auto& h2 : helpers) {
-                if (llvm::Function* f = module.getFunction(h2.ir_func->name)) {
-                    f->eraseFromParent();
-                }
-            }
-            aotEraseUnusedClosureDispatchDecls(module, helper->getAOTSymbolOwner());
+            aotEraseOutlinedFunctions(module, helpers, helper->getAOTSymbolOwner(), false);
             return false;
         }
         if (llvm::Function* f = module.getFunction(helper->name)) {
@@ -21127,12 +21175,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 "failed (%s); retrying un-outlined\n",
                                 variant_key.c_str(), llvm_error.c_str());
                         }
-                        for (auto& h : fn_outliner.helpers) {
-                            if (llvm::Function* f = module.getFunction(h.ir_func->name)) {
-                                f->eraseFromParent();
-                            }
-                        }
-                        aotEraseUnusedClosureDispatchDecls(module, ir_func->name);
+                        aotEraseOutlinedFunctions(module, fn_outliner.helpers, ir_func->name, true);
                         fn_outliner.undo();
                         QoreIRToLLVM retry_lowerer(ctx);
                         retry_lowerer.setAOTMode(&slots);
@@ -21602,12 +21645,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                     "failed (%s); retrying un-outlined\n",
                                     variant_key.c_str(), llvm_error.c_str());
                             }
-                            for (auto& h : fn_outliner.helpers) {
-                                if (llvm::Function* f = module.getFunction(h.ir_func->name)) {
-                                    f->eraseFromParent();
-                                }
-                            }
-                            aotEraseUnusedClosureDispatchDecls(module, ir_func->name);
+                            aotEraseOutlinedFunctions(module, fn_outliner.helpers, ir_func->name, true);
                             fn_outliner.undo();
                             QoreIRToLLVM retry_lowerer(ctx);
                             retry_lowerer.setAOTMode(&slots);

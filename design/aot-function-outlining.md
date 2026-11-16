@@ -109,12 +109,17 @@ This generalizes the existing Phase 1.5 init-expression outliner
    read as a boxed one.
 
    When a helper or the coordinator fails to lower and the function is
-   lowered again un-outlined, the erased helpers' dispatch declarations
-   are erased too (`aotEraseUnusedClosureDispatchDecls()`): the retry,
-   lowered with the batch callee map, declares them with its own ABI
-   (a `double` or `i1` result for a float or bool closure), and a call
-   site whose dispatch function is already declared with another ABI
-   fails the lowering instead of emitting a mismatched call.
+   lowered again un-outlined, `aotEraseOutlinedFunctions()` erases the
+   helpers with the nested functions that their lowering emitted
+   (`<helper>_obe_<n>` handler bodies and `<helper>_bg_<n>` background
+   helpers, which call the helpers' dispatch declarations; after a
+   coordinator failure also the coordinator's own nested functions,
+   which the retry emits again under the same names), and then the
+   unused dispatch declarations (`aotEraseUnusedClosureDispatchDecls()`):
+   the retry, lowered with the batch callee map, declares them with its
+   own ABI (a `double` or `i1` result for a float or bool closure), and
+   a call site whose dispatch function is already declared with another
+   ABI fails the lowering instead of emitting a mismatched call.
 
    Closure creation is allowed in regions on purpose: generated giant
    functions use closures (`map` with a closure, callbacks), and keeping
@@ -293,13 +298,15 @@ the one giant function regardless of the optimization level.
   reference args and container locals, object lifetime/destructor order,
   disabled-mode equivalence, no-safe-partition fallback (loop with
   embedded returns), and deterministic helper naming.
-- `examples/test/ir/AOTOutlinedClosure.qtest` — closures created and
+- `examples/test/ir/AOTOutlinedClosure.qc` (run in parts by
+  `AOTOutlinedClosure-<n>.qtest`) — closures created and
   called in outlined regions (qore#6310): the issue's function at the
   default thresholds (executables and a module, -O0 and -O3), small
   functions with forced thresholds whose regions hold closures with
   native results and capturing, stored, returned and nested closures,
-  and float/bool closures in a function whose helper fails to lower
-  (`QORE_AOT_TEST_FAIL_LOWERING`), retried un-outlined; it checks with
+  float/bool closures, also in a handler, in a function whose helper
+  fails to lower (`QORE_AOT_TEST_FAIL_LOWERING`), retried un-outlined,
+  and closures in handlers (qore#6339); it checks with
   `QORE_AOT_DUMP_IR` that the helpers create the closures and compares
   the results with the AST.
 - The full `examples/test/ir/` suite passes both normally and with

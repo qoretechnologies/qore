@@ -1,19 +1,9 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: children - its checks run in children that set their own execution modes, qcc executables and modules
-# test-platform: macos - the AOT code generation and linking of closures in outlined function-body helpers
 # Copyright 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
+# The cases of the AOTOutlinedClosure-<n>.qtest tests: each runs one part of them (see addPartCase()), so that each
+# takes a short time with a debug libqore, and together they run every case
 
-%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires ../ExecModeHarness.qm
-%requires ../TestInterpreter.qm
-
-%exec-class AOTOutlinedClosureTest
 
 #! A closure created in an outlined region or a handler is called through a dispatch function that is defined
 #! (qore#6310, qore#6339)
@@ -31,11 +21,12 @@
     in the first and in the second region, also in a module, and for small functions with forced thresholds whose
     outlined regions create closures without captures that return native values, closures that capture locals of the
     region, several closures stored in locals, closures returned to the caller that share a captured local, and nested
-    closures, and for float and bool closures of a helper whose sibling fails to lower, after which the function is
-    lowered un-outlined, and for closures called in \c on_exit, \c on_success and \c on_error handlers, with and
-    without outlining (qore#6339).  It checks with the IR dump of qcc that the closures are created in the helpers.
+    closures; for float and bool closures of a helper whose sibling fails to lower, after which the function is
+    lowered un-outlined, also with the closures in a handler of the helper; and for closures called in \c on_exit,
+    \c on_success and \c on_error handlers, with and without outlining (qore#6339).  It checks with the IR dump of qcc
+    and the symbols of the executables that the closures and handlers are in the helpers.
 */
-class AOTOutlinedClosureTest inherits QUnit::Test {
+class AOTOutlinedClosureBase inherits QUnit::Test {
     public {
         #! the filler statements of the function at the default thresholds (the issue's function had 120)
         const Filler = 120;
@@ -58,22 +49,42 @@ class AOTOutlinedClosureTest inherits QUnit::Test {
         string qcc_bin;
         #! the library path of the qcc compiles and of the executables
         string lib_env;
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
     }
 
-    constructor() : QUnit::Test("AOTOutlinedClosureTest", "1.0", \ARGV) {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         # never the test's own executable when it runs compiled with qcc (TestInterpreter)
         qore_bin = TestInterpreter::qore_interpreter();
         qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
-        # the library of the interpreter: a bare name found in the PATH has no directory of its own
-        string libqore_dir = ENV.QORE_LIBDIR ?? (qore_bin =~ /\// ? dirname(qore_bin) : dirname(qcc_bin));
+        # the library of the interpreter, in its directory: a bare name is resolved through the PATH first
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(resolveCommand(qore_bin));
         lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
-        addTestCase("the function of the issue at the default thresholds", \testDefaultThresholds());
-        addTestCase("a module's function over the default threshold", \testModule());
-        addTestCase("the minimal function of the issue with forced thresholds", \testMinimal());
-        addTestCase("captures, several, returned and nested closures in outlined regions", \testForms());
-        addTestCase("float and bool closures of a helper that fails to lower", \testHelperFailure());
-        addTestCase("closures in on_exit, on_success and on_error handlers", \testHandlers());
+        addPartCase(1, "the function of the issue at the default thresholds", \testDefaultThresholds());
+        addPartCase(1, "a module's function over the default threshold", \testModule());
+        addPartCase(2, "the minimal function of the issue with forced thresholds", \testMinimal());
+        addPartCase(2, "captures, several, returned and nested closures in outlined regions", \testForms());
+        addPartCase(3, "float and bool closures of a helper that fails to lower", \testHelperFailure());
+        addPartCase(3, "closures in on_exit, on_success and on_error handlers", \testHandlers());
+        addPartCase(3, "handler closures of a helper whose sibling fails to lower", \testHelperFailureHandlers());
         set_return_value(main());
+    }
+
+    #! adds a case if it is in the part that this test runs: each case is in one part, and each part is a test
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
+    }
+
+    #! Returns the path of \a cmd: \a cmd itself if it has a directory, else the file that the PATH names
+    private static string resolveCommand(string cmd) {
+        if (cmd =~ /\//) {
+            return cmd;
+        }
+        *string found = trim(backquote(sprintf("command -v '%s' 2>/dev/null", replace(cmd, "'", "'\\''"))));
+        return found ? found : cmd;
     }
 
     #! Returns the code of the namespace with the function of the issue, with the closure after \a pos filler statements
@@ -326,6 +337,17 @@ for (int c = 0; c < 3; ++c) {
         return False;
     }
 
+    #! Returns the symbols of the executable \a exe listed by nm, or NOTHING if there is no nm
+    private *string getSymbols(string exe) {
+        if (!trim(`command -v nm 2>/dev/null`)) {
+            return NOTHING;
+        }
+        int rc;
+        string out = backquote(sprintf("nm %s 2>&1", exe), \rc);
+        assertEq(0, rc, sprintf("nm %s: exit status", exe));
+        return out;
+    }
+
     #! Returns the output of the executable \a exe
     private string runExe(string exe) {
         int rc;
@@ -575,9 +597,70 @@ for (int c = 0; c < 3; ++c) {
                 string exe = src + opt + (i.env == ForceEnv ? "-outlined" : "");
                 string out = compile(src, exe, opt, i.env);
                 # the handlers of f leave every region of f by an exception edge; g's try statement is outlined
-                assertEq(i.env == ForceEnv, outlined(out, "g"), sprintf("handlers, %s %s: g outlined", i.what, opt));
+                bool outline = i.env == ForceEnv;
+                assertEq(outline, outlined(out, "g"), sprintf("handlers, %s %s: g outlined", i.what, opt));
+                # the handler functions of g's try block are nested in the helper: <helper>_obe_<n>
+                *string syms = getSymbols(exe);
+                if (syms) {
+                    assertEq(outline, syms =~ /g_[A-Za-z0-9_]*_outline_[0-9]+_obe_[0-9]/,
+                        sprintf("handlers, %s %s: a handler function of g is nested in a helper", i.what, opt));
+                }
                 assertEq(expected, runExe(exe), sprintf("handlers, %s: qcc %s", i.what, opt));
             }
+        }
+    }
+
+    #! Returns a script whose function has float, bool and int closures in a handler in its first outlined region
+    private static string getHelperFailureHandlersScript() {
+        return "%modern
+
+list sub f(int n) {
+    list out;
+    {
+        on_exit {
+            out += (float sub () { return 1.5; })();
+            out += (bool sub () { return True; })();
+            out += (int sub () { return 42; })();
+        }
+        out += n;
+    }
+    foreach auto v in (out) {
+    }
+    out += n + 1;
+    out += n + 2;
+    foreach auto v in (out) {
+        out += 0;
+        break;
+    }
+    return out;
+}
+
+printf(\"rv:%y\\n\", f(2));
+";
+    }
+
+    #! The nested handler functions of a helper are erased with it when a sibling helper fails to lower
+    /** The handler function of the first helper (<tt>\<helper\>_obe_0</tt>) called the closures' dispatch functions
+        declared with the helper's boxed result; it was kept when the helpers were erased, so its calls kept the
+        declarations, and the un-outlined retry, which declares a native float, bool and int result, failed: "closure
+        dispatch function ... is already declared with another ABI"
+    */
+    testHelperFailureHandlers() {
+        TmpDir dir("qore-aot-outline-closure-");
+        string src = join_paths(dir.path, "failure-handlers.qr");
+        writeFile(src, getHelperFailureHandlersScript());
+        string expected = getExpected(src, "^rv:\\[2, 1\\.5, True, 42, 3, 4, 0\\]\n$");
+        foreach string opt in (OptLevels) {
+            string exe = src + opt;
+            string out = compile(src, exe, opt, ForceEnv + " QORE_AOT_TEST_FAIL_LOWERING=_outline_1");
+            assertTrue(outlined(out, "f"), opt + ": f outlined");
+            assertRegex("AOT-OUTLINE-FN: helper 'f_[^']*_outline_1' lowering failed", out,
+                opt + ": the second helper fails to lower");
+            *string syms = getSymbols(exe);
+            if (syms) {
+                assertFalse(syms =~ /_outline_[0-9]+/, opt + ": no helper or nested helper function is left");
+            }
+            assertEq(expected, runExe(exe), "helper failure with handlers: qcc " + opt);
         }
     }
 }
