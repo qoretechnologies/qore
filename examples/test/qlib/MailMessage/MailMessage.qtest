@@ -2389,6 +2389,12 @@ lorem ipsum\r
         return bytes;
     }
 
+    #! returns the message with its multipart boundary, if any, replaced by \c BOUNDARY
+    private static string normalizeBoundary(string msg) {
+        *string boundary = (msg =~ x/[Bb]oundary="?([^"\r\n;]+)"?/)[0];
+        return boundary ? replace(msg, boundary, "BOUNDARY") : msg;
+    }
+
     testMissingHeaders() {
         # a parsed message without a Subject or a From header is serialized without it; getting its headers raised
         # RUNTIME-OVERLOAD-ERROR (issue #6267)
@@ -2453,7 +2459,8 @@ lorem ipsum\r
             assertEq(m.getBCC(), m2.getBCC(), i.key);
             assertEq(m.getBody(), m2.getBody(), i.key);
             assertEq(m.getAttachments().size(), m2.getAttachments().size(), i.key);
-            assertEq(m.serializeRaw(), m2.serializeRaw(), i.key);
+            # each serialization makes a new multipart boundary, which is made from the time
+            assertEq(normalizeBoundary(m.serializeRaw()), normalizeBoundary(m2.serializeRaw()), i.key);
         }
 
         # a message without a subject has an empty subject; this raised RUNTIME-TYPE-ERROR
