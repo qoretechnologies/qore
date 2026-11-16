@@ -21866,6 +21866,35 @@ bool readFunctionalDomain(const QoreAOTBinaryReader& reader, QoreParseOptions& d
     return true;
 }
 
+void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone) {
+    if (zone.empty()) {
+        return;
+    }
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::TIME_ZONE);
+    writer.writeStringRef(zone.c_str());
+    writer.endSection(sec_idx);
+}
+
+bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, std::string& error) {
+    zone.clear();
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::TIME_ZONE);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr || sec->size < 4) {
+        error = "invalid TIME_ZONE section";
+        return false;
+    }
+    const char* z = reader.readStringRef(ptr);
+    if (!z || !*z) {
+        error = "invalid TIME_ZONE section: empty time zone";
+        return false;
+    }
+    zone = z;
+    return true;
+}
+
 void serializeModuleDomains(QoreAOTBinaryWriter& writer, int64 dom) {
     if (!dom) {
         return;

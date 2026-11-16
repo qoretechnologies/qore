@@ -2095,6 +2095,8 @@ static bool appendModulePathListSections(QoreAOTBinaryWriter& writer,
     }
     serializeModulePathLists(writer, pp->prepended_module_paths,
         pp->appended_module_paths, feature_flags);
+    // the time zone that the code sets with %set-time-zone (qore#6270)
+    serializeTimeZone(writer, pp->time_zone_directive);
     std::vector<AOTModuleCommand> commands;
     module_cmd_begin = std::min(module_cmd_begin, pp->module_parse_commands.size());
     module_cmd_end = std::min(module_cmd_end, pp->module_parse_commands.size());
