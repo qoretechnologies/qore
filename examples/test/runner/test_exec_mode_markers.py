@@ -167,6 +167,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # the tests that run their checks in default-mode child processes without the harness:
         # - AOTConstantImportStale (#5798) and AOTDumpInfoPendingConstants (#5799): their checks run qcc and the
         #   programs and modules it compiles in child processes
+        # - AOTDumpInfoFindCallRef (#6235): its checks run qcc --dump-info in child processes
         # - AOTInstanceOfTypePath (#5976): its checks run an AOT-compiled module and the same module's source in the
         #   AST interpreter in child processes
         # - AOTModuleDelClosure (#6015): its checks compile modules and scripts with qcc and run the interpreter and the
@@ -233,6 +234,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
+                                 "examples/test/ir/AOTDumpInfoFindCallRef.qtest",
                                  "examples/test/ir/AOTModuleInitException.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/classes/deleted-program-types.qtest",
