@@ -1033,6 +1033,8 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             push system_blocks, {"text": extra_system_prompt};
         }
 
+        # True if the last message sent is a user message of tool results, to which the next tool result is added
+        bool last_tool_results;
         foreach hash<QoreLlmUtils::ChatMessage> msg in (messages) {
             if (msg.role == "system") {
                 if (msg.content_parts) {
@@ -1059,16 +1061,24 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 }
             }
             if (msg.role == "tool") {
-                push content_blocks, {
+                hash<auto> result = {
                     "toolResult": {
                         "toolUseId": msg.tool_call_id
                             ?? msg.name ?? "tool_result",
                         "content": ({"text": msg.content ?? ""},),
                     },
                 };
-                push wire_messages, {"role": "user", "content": content_blocks};
+                # Converse requires the results of all the tool calls of an assistant turn in the one user message
+                # that follows it (HTTP 400 otherwise), so consecutive tool results share a user message, in order
+                if (last_tool_results) {
+                    push wire_messages[wire_messages.size() - 1].content, result;
+                } else {
+                    push wire_messages, {"role": "user", "content": (result,)};
+                    last_tool_results = True;
+                }
                 continue;
             }
+            last_tool_results = False;
 
             if (msg.content_parts) {
                 foreach hash<QoreLlmUtils::ContentPart> part
