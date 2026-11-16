@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires FsUtil
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %try-module xml
 %define NO_XML
@@ -24,7 +25,6 @@ class ResultCountsTest inherits QUnit::Test {
     private {
         const Script = "%modern
 %requires QUNIT_PATH
-%requires ../../TestInterpreter.qm
 %exec-class CountedTest
 class CountedTest inherits QUnit::Test {
     constructor() : Test(\"CountedTest\", \"1.0\", \\ARGV) {
