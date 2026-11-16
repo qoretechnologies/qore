@@ -787,6 +787,12 @@
     (see @ref call_reference_deleted_object; <a href="https://github.com/qoretechnologies/qore/issues/6083">issue
     6083</a>).
 
+    @par rindex() and rfind() Find a Match at a Multi-Byte Character Position
+    @ref Qore::rindex() "rindex()" and @ref <string>::rfind() "<string>::rfind()" search the characters up to and
+    including the one at the search position in every encoding; in a multi-byte encoding they searched only up to the
+    first byte of that character, so their results change for valid UTF-8 (and other multi-byte) text when that
+    character is not one byte (ex: <tt>rindex("aézaéb", "é", 4)</tt> is 4, not 1) (issue #6246).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Module Commands Know the Restrictions of the Code That Issues Them
     A binary module's command handler gets the effective restrictions of the issuing code, not those of the target
@@ -1897,6 +1903,14 @@
       replace a range of it with a shorter string (issue #6188)
     - the @ref splice "splice" and @ref extract "extract" operators no longer read past the end of a list, which could
       crash, when they replace a range of it with fewer elements (issue #6192)
+    - out-of-bounds read of uninitialized heap memory when decoding a character at or after the end of a string in
+      UTF-16, UTF-32 or UCS-2 (potential information disclosure) (issue #6246)
+    - @ref <string>::getUnicode() "<string>::getUnicode()" returns 0 at and after the end of a string in IBM037 and
+      Shift_JIS, as in the other encodings; it raised \c INVALID-ENCODING (issue #6246)
+    - @ref Qore::rindex() "rindex()" and @ref <string>::rfind() "<string>::rfind()" also find a match at the search
+      position when its character is not one byte, so results change for valid UTF-8 text (ex:
+      <tt>rindex("aézaéb", "é", 4)</tt> is 4, not 1), and a negative position before the start gives the results of
+      a single-byte encoding with them and @ref Qore::index() "index()" in multi-byte encodings (issue #6246)
     - the heartbeat of @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" connections is measured on the
       monotonic clock: a step back of the system clock no longer stops the heartbeat PINGs for the size of the step
       (see @ref Qore::AsyncIoController::addTimerDelay() "AsyncIoController::addTimerDelay()")

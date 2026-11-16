@@ -1151,7 +1151,9 @@ unsigned int qore_string_private::getUnicodePointFromBytePos(size_t offset, unsi
         clen = offset < len ? static_cast<unsigned>(len - offset) : 1;
         return static_cast<unsigned int>(-1);
     }
-    // gets the unicode code point (source may be a view)
+    // gets the unicode code point (source may be a view); at or after the end of the string, there is no character:
+    // QoreEncoding::getUnicode() returns 0 with a length of 0 there and reads no byte, so the loops over the
+    // characters of a string pay no check of their own
     const char* b = effective_buf();
     return getEncoding()->getUnicode(b + offset, b + len, clen, xsink);
 }

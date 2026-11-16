@@ -968,7 +968,8 @@ public:
     /** @param offset the offset in characters (not bytes) in the string; may be negative giving an offset from the end of the string
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
-        @return the unicode code for the character or -1 in case of an error
+        @return the unicode code for the character or -1 in case of an error; 0 for an offset at or after the end of
+        the string, in every encoding
     */
     DLLEXPORT unsigned int getUnicodePoint(qore_offset_t offset, ExceptionSink* xsink) const;
 
@@ -977,7 +978,8 @@ public:
         @param len the length of the character in bytes in the source string in the original encoding
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
-        @return the unicode code for the character at the given byte offset or -1 in case of an error
+        @return the unicode code for the character at the given byte offset or -1 in case of an error; 0 (and
+        \a len 0) for an offset at or after the end of the string
 
         @since Qore 0.8.8
     */

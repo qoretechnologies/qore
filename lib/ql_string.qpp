@@ -1409,7 +1409,9 @@ int bindex() [flags=RUNTIME_NOOP] {
 
     @param str the string to search in
     @param substr the substring to find in \a str; if the @ref character_encoding "character encoding" of this string does not match \a str, then it will be converted to <em>str</em>'s @ref character_encoding "character encoding" before processing
-    @param pos the starting character position for the search, -1 means start from the end of the string
+    @param pos the starting character position for the search, -1 means start from the end of the string;
+    the substring is found when it lies within the characters from the start of the string up to and including the
+    character at this position, in every @ref character_encoding "character encoding"
 
     @return the character position of a substring within a string, -1 is returned if the substring is not found
 
