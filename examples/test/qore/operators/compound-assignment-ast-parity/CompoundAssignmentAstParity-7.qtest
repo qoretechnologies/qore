@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include CompoundAssignmentAstParity.qc
+
+%exec-class CompoundAssignmentAstParityPart7
+
+#! runs part 7 of 28 of the cases of CompoundAssignmentAstParityBase: -=: the tiered mode
+class CompoundAssignmentAstParityPart7 inherits CompoundAssignmentAstParityBase {
+    constructor() : CompoundAssignmentAstParityBase("CompoundAssignmentAstParityPart7", 7) {
+    }
+}

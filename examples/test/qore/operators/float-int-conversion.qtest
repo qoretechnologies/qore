@@ -1,0 +1,84 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT native code and qcc AOT code generation of float to int conversions
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class FloatIntConversionTest
+
+#! The conversion of a float out of the range of an int, of an infinite float and of NaN to an int is the same in every
+#! mode: saturated, with NaN giving 0, as for a number (qore#6181)
+/** The conversion of such a float was a C++ cast with an undefined result (the smallest int on x86-64 in the
+    interpreters) and an LLVM fptosi with a poison result in native code (0 for a constant in the JIT, a crash of a
+    qcc -O3 executable).  The probes (float-int-conversion/probes.q) convert out-of-range, infinite and NaN floats, the
+    limits of an int (also a negative NaN and a negative value that a float node holds) and their number equivalents
+    with int(), softint assignments and parameters, %, the bitwise operators, +=, |= and &= on int and untyped lvalues,
+    substr(), sprintf("%d"), list and string indexing and native float locals, as constants and as typed and untyped
+    values, and build dense int64 ColumnarResult columns from them (fromColumnHash() and fromRows()), with the buffer
+    errors of a column naming it;
+    they run in each execution mode in a child process, with tiered execution at the IR tier and promoted to native
+    code, and as qcc-compiled executables (-O0, -O3).  The expected output is float-int-conversion/expected.txt.
+*/
+class FloatIntConversionTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("FloatIntConversion", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        string lines = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "float-int-conversion" + DirSep
+            + "expected.txt");
+        for (int i = 0; i < 4; ++i) {
+            expected += sprintf("%d: %s", i, lines);
+        }
+
+        addTestCase("float to int conversions", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-float-int-conversion-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "float-int-conversion" + DirSep + "probes.q")
+            + "\nfor (int i = 0; i < 4; ++i) {\n    printf(\"%d: %s\\n\", i, probes());\n}\n");
+        f.close();
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=2 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), "tiered, IR tier");
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                libqore_dir, exe)), "qcc " + opt);
+            assertEq(expected, backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe)), "qcc " + opt + ", JIT");
+        }
+    }
+}

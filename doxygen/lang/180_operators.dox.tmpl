@@ -236,6 +236,7 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     Retrieves given list element(s), given character(s) of a string, the integer value of a byte for a binary object or a binary object composed of given bytes, or a typed element from a buffer.
     If the index value is neither a list nor an integer it is converted to an integer. If the index is an integer and out of range, @ref nothing is returned.
     If the index is a list and completely out of range, empty list/string/binary is returned. A single integer index on a string returns a @ref char value; string ranges and list indexes return strings.
+    A character of a string in a single-byte @ref character_encoding "character encoding" is found in constant time; in UTF-8, a character in the ASCII text at the start of the string is also found in constant time (the string remembers the length of that text, so a loop over the characters of an ASCII string is linear), and a character after that text in time linear in its distance from the end of that text; in other multi-byte encodings, a character is found in time linear in its offset.
     With @ref negative-offsets "%negative-offsets" (implied by @ref modern "%modern"), negative list, string, binary, and buffer indexes and range endpoints are interpreted from the end of the value, so \c value[-1] is the last element and \c value[-2..] is the last two elements.
     Note that this operator is not supported with multiple values and/or ranges between the square brackets on the left-hand side of an assignment expression.
 
@@ -581,6 +582,8 @@ list nlist = remove l[2,5..7,8];
     - <tt><b>cast</b>&lt;@ref hash_type "hash"&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt>
     - <tt><b>cast</b>&lt;@ref list_type "list"&lt;</tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;&gt;(</tt><em>list_elements, ...</em><tt>)</tt>
     - <tt><b>cast</b>&lt;@ref list_type "list"&gt;(</tt><em>list_elements, ...</em><tt>)</tt>
+    - <tt><b>cast</b>&lt;<b>enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;&gt;(</tt><em>@ref expressions "expression"</em><tt>)</tt>
+    - <tt><b>cast</b>&lt;<b>*enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;&gt;(</tt><em>@ref expressions "expression"</em><tt>)</tt>
 
     @par Return Type
     - If a @ref qore_classes "class name" is given as the target type, then this operator returns an object of the specific class given at runtime.
@@ -592,6 +595,8 @@ list nlist = remove l[2,5..7,8];
     at runtime if possible.
     - If @ref hash_type "hash" is given as the target type, the runtime type must be a valid hash or a runtime exception will be raised, additionally, any type-safe information is removed and an untyped hash is returned
     - If @ref list_type "list" is given as the target type, the runtime type must be a valid list or a runtime exception will be raised, additionally, any type-safe information is removed and an untyped list is returned
+    - If an @ref enums "enum" type is given as the target type (<tt>enum&lt;</tt><em>enum_identifier</em><tt>&gt;</tt>), the value must have the enum's base type (or be the value of an enum with that base type) and be the value of one of its members, or a runtime exception will be raised; the enum value is returned (see @ref enum_cast); with the or-nothing form (<tt>*enum&lt;</tt><em>enum_identifier</em><tt>&gt;</tt>), \c NOTHING is also accepted and returned
+    - If an or-nothing type (ex: \c *enum<E>) is given as the target type, or if @ref broken-cast "%broken-cast" is in effect, @ref nothing is returned unchanged; the target type is still checked: an undefined or invalid type in the target type (ex: an undeclared class, @ref hashdecl "hashdecl" or @ref enums "enum" name, or the wrong number of type arguments), or a type that cannot be cast to, is a parse error for every operand, including a literal or constant @ref nothing
 
     @par Data Conversions with cast<>()
     - <tt><b>cast</b>&lt;@ref hash_type "hash"&lt;</tt><em>@ref hashdecl "hashdecl_identifier"</em><tt>&gt;&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt>: performs initialization of @ref hashdecl "hashdecl" keys with initializer expressions for keys not present in the output evaluated hash expression
@@ -633,6 +638,8 @@ auto l = cast<list>(new list<int>(1));
     |<em>@ref hashdecl "hashdecl_identifier"</em>|This must be a literal unquoted string giving a @ref hashdecl "type-safe hash" name or a namespace-qualified path to a type-safe hash (ex: \c Namespace::MyHash); a runtime check for compatibility with the target @ref hashdecl "hashdecl" is performed on the evaluated expression; any keys missing from the expression that have default initializer expressions in the @ref hashdecl "hashdecl" are initialized accordingly
     |<tt>@ref hash_type "hash"&lt;string, </tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;</tt>|The second type in the type parameter list gives the hash value type; the values, including those of nested containers, are converted to it as an assignment converts them, and a value that an assignment refuses raises a \c RUNTIME-TYPE-ERROR exception
     |<tt>@ref list_type "list"&lt;</tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;</tt>|The single type in the type parameter list gives the list element type; the elements, including those of nested containers, are converted to it as an assignment converts them, and an element that an assignment refuses raises a \c RUNTIME-TYPE-ERROR exception
+    |<tt><b>enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;</tt>|The value of the enum's base type is returned as the enum member with that value; a value that is not a member raises a \c RUNTIME-CAST-ERROR exception; this is the only way to convert a value of the base type to the enum type (see @ref enum_cast)
+    |<tt><b>*enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;</tt>|As <tt><b>enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;</tt>, but \c NOTHING is also accepted and returned
 
     @throw RUNTIME-CAST-ERROR The expression given does not evaluate to a value that can be converted to the given type
 

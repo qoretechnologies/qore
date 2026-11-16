@@ -63,6 +63,7 @@ class StatementBlock;
 class AbstractStatement;
 class CaseNodeRegex;
 class QoreIRFunction;
+class QoreIRInstruction;
 class FunctionalOperator;
 class ContextStatement;
 class SummarizeStatement;
@@ -108,6 +109,46 @@ DLLLOCAL bool qore_ir_local_may_hold_reference(const LocalVar* lv);
     inventories, which together cover every way IR can assign a local.
 */
 DLLLOCAL bool qore_ir_local_is_written(const QoreIRFunction& ir_func, const LocalVar* lv);
+
+//! Returns true if \a ir_func can leave the function by a deoptimization: it has a guard with a deopt target
+/** The deoptimization runs the function again from its parameters' runtime variables, so such a function takes no
+    parameter over (native code: QoreIRToLLVM::preCreateLocalAllocas(); the IR interpreter:
+    buildInterpreterAnalysis()); no lowering makes such a function today, which a debug build asserts
+*/
+DLLLOCAL bool qore_ir_function_may_deopt(const QoreIRFunction& ir_func);
+
+//! Sets QoreIRFunction::param_take_over of \a ir_func for the \a num_params parameters \a params of its signature
+/** The AST interpreter's parameter takes the caller's temporary argument over (UserVariantBase::setupCall()), so a
+    write to the parameter releases the argument, and the destructor of an object that the caller no longer holds runs
+    at the write.  A parameter takes its argument over in this sense if it can hold an object (directly or in a
+    container) and the function writes it; a write that the IR of the function does not record counts as well: one in
+    a closure that captures the parameter (LocalVar::closureUse()), one through a reference to the parameter that the
+    function creates, and one in a handler of the function (on_exit, on_error, on_success), which is a function of its
+    own (QoreIROnBlockExitInstruction::handler_ir; qore#6004).  The function is walked once, for all of its
+    parameters.  Defined in QoreIRTakeOver.cpp, which is compiled outside the single compilation unit of libqore
+*/
+DLLLOCAL void qore_ir_compute_param_take_over(QoreIRFunction& ir_func, LocalVar* const* params, unsigned num_params);
+
+//! Returns true if a parameter of \a params takes its argument over (see qore_ir_compute_param_take_over()); if
+//! \a take_over is not null, the keys of all such parameters are added to it
+/** Called once per function by the IR interpreter's analysis and by native code generation, whose binding of such a
+    parameter from the runtime stack takes the value over (see design/param-take-over.md); defined in
+    QoreIRTakeOver.cpp
+*/
+DLLLOCAL bool qore_ir_collect_take_over_params(const QoreIRFunction& ir_func, const LocalVar* const* params,
+        unsigned num_params, std::unordered_set<const void*>* take_over);
+
+//! As qore_ir_collect_take_over_params() for the parameters of QoreIRFunction::param_local_vars, which every build of
+//! an IR function sets, also those of the AOT compiler, which do not set QoreIRFunction::param_take_over
+DLLLOCAL bool qore_ir_collect_take_over_params(const QoreIRFunction& ir_func,
+        std::unordered_set<const void*>* take_over);
+
+//! Returns true if \a inst is a range slice or an extract (also in an exception region, as an Invoke)
+/** Its value is a new list, string or binary, a temporary that a call that takes it as an argument consumes as it consumes a
+    call's result, so that a parameter that takes it over releases it when it is written, as in the AST interpreter
+    (issue #5958); defined in QoreIRTakeOver.cpp
+*/
+DLLLOCAL bool qore_ir_is_sequence_temp(const QoreIRInstruction* inst);
 
 DLLLOCAL bool qore_plugin_get_value_profile_info(const AbstractQoreNode* node, std::string& module_name,
     uint16_t& local_type_id, const QoreTypeInfo*& type_info);
@@ -1048,7 +1089,24 @@ enum class QoreIROpcode : uint16_t {
     GtPlugin = 436,
     GePlugin = 437,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (438, 439, ...)
+    /** Hands the value of a return statement in a handler run out of line to the function that the handler runs for,
+        as the AST interpreter runs a handler with a reference to the return value of its function (#6074)
+
+        operands[0] = the value of the return, or no operand for a return without a value; no result.  Lowered only in
+        the body of a handler compiled as a function of its own (QoreIROnBlockExitInstruction::handler_ir), where the
+        return statement executes, before the handler's own handlers run, or where the outermost try statement of the
+        handler that the return is in ends, as the AST interpreter's try statement gives the value of its return to
+        the enclosing block when it ends.  While the handler runs during an unwind (an exception or a thread_exit),
+        the value replaces the value of the return that the unwind interrupted, which is released then, and the value
+        of an earlier hand-over; otherwise it is ignored, as the value that the handler function returns is.  A
+        return without a value replaces it with no value.  The release of a replaced value can raise an exception (a
+        destructor), which the IR interpreter takes to the instruction's exception target and native code to the target
+        of the CheckException that the lowering emits after the instruction (the same target).  See
+        qore_rt_handler_return().
+    */
+    HandlerReturn = 438,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (439, 440, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1057,8 +1115,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::GePlugin);
-static_assert(QORE_IR_MAX_OPCODE == 437, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::HandlerReturn);
+static_assert(QORE_IR_MAX_OPCODE == 438, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself
@@ -1379,6 +1437,11 @@ inline const char* qore_ir_cancel_point_operation(int64_t point) {
 class QoreIRBasicBlock;
 struct QoreIRPhiIncoming;
 
+//! QoreIRInstruction::interpreter_gives_call_args: the call gives the references of arguments that it consumes
+static constexpr uint8_t QORE_IR_GIVES_CALL_ARGS = 1;
+//! QoreIRInstruction::interpreter_gives_call_args: one of them can be taken over observably by a parameter (#5958)
+static constexpr uint8_t QORE_IR_GIVES_CALL_TEMPS = 2;
+
 //! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
 enum class QoreIRFusedCallTargetCheck : uint8_t {
     None,           //!< no check
@@ -1509,6 +1572,9 @@ public:
     bool list_push_local_cow = false;  // Transient: paired local push can run CoW after compiler refs are cleared
     bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
     bool string_append_local_cow = false;  // Transient: instruction belongs to a paired local append with alias guard
+    // Transient: AppendStringCow whose right operand the lowering proved to be a string with a value; only such an
+    // append can be marked in place, as qore_rt_string_append_in_place() requires a string (issue #6266)
+    bool string_append_string_operand = false;
     // Transient: LoadLocal directly followed by the CheckCallTarget of its value: the interpreter makes the check in
     // the load and steps over it (qore_ir_fuse_call_target_checks(); issue #5784)
     QoreIRFusedCallTargetCheck fused_call_target_check = QoreIRFusedCallTargetCheck::None;
@@ -1534,8 +1600,12 @@ public:
     bool exception_cleanup_release = false;
     // Transient: a call with an argument that the IR interpreter's analysis found it can consume, which gives the
     // references of its temporary arguments to the callee (see IRConsumedCallArgs in QoreIRInterpreter.cpp, issue
-    // #5882); set with the interpreter's analysis of the function, before the function runs
-    bool interpreter_gives_call_args = false;
+    // #5882): QORE_IR_GIVES_CALL_ARGS, with QORE_IR_GIVES_CALL_TEMPS if one of them is a value that a parameter of the
+    // callee can take over observably (anything but a read of a plain local, which holds the value for the whole call;
+    // issue #5958, see design/param-take-over.md); 0 for a call that gives nothing; set with the interpreter's analysis
+    // of the function, before the function runs.  A byte with bits, not two bools: the next member follows it without
+    // padding, so a second bool would change the layout of every instruction
+    uint8_t interpreter_gives_call_args = 0;
     AOTStringCaseComparisonKind aot_string_case_comparison =
         AOTStringCaseComparisonKind::None;
     uint8_t aot_string_case_comparison_operand = 0;
@@ -1642,6 +1712,9 @@ public:
     //! leaves the block releases before the debugger's exception event of the statement that contains it, with a
     //! debugger attached (#5921); a pointer, so that the instructions of other code are not larger
     std::unique_ptr<QoreIRDebugBlockLocals> block_locals;
+    //! the operation that keeps this step event (qore_ir_fold_debug_statements()), which owns it and runs after it,
+    //! or nullptr for an instruction of its own
+    QoreIRInstruction* folded_host = nullptr;
 };
 
 class QoreIRConstInstruction : public QoreIRInstruction {
@@ -2528,6 +2601,9 @@ public:
     uint32_t target_slot_id = UINT32_MAX;  //!< Pre-computed slot index for target
     uint32_t source_slot_id = UINT32_MAX;  //!< Pre-computed slot index for source
     bool target_ir_only = false;  //!< True if target is IR-only (skip write-through)
+    //! the debugger's step event of the statement of the instruction, which runs before it; see
+    //! qore_ir_fold_debug_statements()
+    std::unique_ptr<QoreIRDebugStatementInstruction> folded_debug_step;
 };
 
 //! Fused increment for typed int local: local += delta (constant int)
@@ -2549,7 +2625,23 @@ public:
     int64_t delta;
     uint32_t slot_id = UINT32_MAX;  //!< Pre-computed slot index for local
     bool ir_only = false;  //!< True if local is IR-only (skip write-through)
+    //! the debugger's step event of the statement of the instruction, which runs before it; see
+    //! qore_ir_fold_debug_statements()
+    std::unique_ptr<QoreIRDebugStatementInstruction> folded_debug_step;
 };
+
+//! Returns the debugger's step event that runs before \a inst, as the QoreIROpcode::DebugStatement instruction that
+//! preceded it, or nullptr if none; see qore_ir_fold_debug_statements()
+inline QoreIRDebugStatementInstruction* qore_ir_folded_debug_step(const QoreIRInstruction* inst) {
+    switch (inst->opcode) {
+        case QoreIROpcode::AddAssignLocalInt:
+            return static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst)->folded_debug_step.get();
+        case QoreIROpcode::IncrementLocalInt:
+            return static_cast<const QoreIRIncrementLocalIntInstruction*>(inst)->folded_debug_step.get();
+        default:
+            return nullptr;
+    }
+}
 
 //! Fused compare-and-branch for two typed int locals: if (lhs < rhs) goto true else goto false
 //! Replaces LoadLocal(lhs) + LoadLocal(rhs) + LtInt + BranchIf
@@ -4144,6 +4236,14 @@ public:
     bool has_phi_nodes = false;
 };
 
+//! A parameter with IR storage that takes its argument over (QoreIRFunction::interpreter_take_over_param_moves)
+struct IRTakeOverParam {
+    //! the parameter's local slot
+    uint32_t slot_id;
+    //! the parameter's variable
+    const LocalVar* var;
+};
+
 class QoreIRFunction {
 public:
     explicit QoreIRFunction(std::string n_name, std::string n_display_name = {})
@@ -4430,6 +4530,21 @@ public:
     //! not closure-captured, not reference-typed) AND no argvid is needed.
     //! When true, callers can use IRDirectParams to skip TLS entirely.
     bool direct_params_eligible = false;
+    //! True if a parameter of the function takes its argument over (qore_ir_compute_param_take_over())
+    /** The storage of such a parameter is as for any other parameter (IR-only, a fast entry): a call that gives none
+        of its arguments is made as before.  The IR interpreter does not inline a call of such a function from a call
+        that can give it a temporary argument (QoreIRInstruction::interpreter_gives_call_args; the code instantiated
+        for GIVEN for closures): the call path makes it, whose binding of the parameters takes the given references
+        over (issue #5958; see design/param-take-over.md).  Declared after direct_params_eligible, in the padding
+        before the next member, so that the layout of the function does not change
+    */
+    bool param_take_over = false;
+    //! Whether a parameter of the function takes its argument over, for the IR of the AOT compiler, which does not
+    //! set param_take_over: 0 if not computed yet, 1 if none does, 2 if one does; computed by the code generation of
+    //! the calls of the function (see qore_ir_fast_entry_refuses_given_args() in QoreIRToLLVM.cpp) and reset to 0 by
+    //! every change of the write inventories that it is computed from (computeIROnlyLocals(), the scalar replacement
+    //! of containers), in the padding after param_take_over
+    mutable std::atomic<int8_t> take_over_params_state{0};
 
     // Set of LocalVar* pointers that are already instantiated by the caller
     // (tiered compilation: params from setupCall(), argvid/selfid from evalTiered(),
@@ -4845,6 +4960,9 @@ public:
     mutable std::vector<uint32_t> interpreter_param_slot_ids;
     mutable std::vector<const LocalVar*> interpreter_param_local_vars;
     mutable std::vector<uint8_t> interpreter_locals_ir_only;
+    //! The parameters with IR storage that take their arguments over (qore_ir_collect_take_over_params()): a frame
+    //! bound from the runtime stack moves the value of each one's variable into its slot (issue #5958)
+    mutable std::vector<IRTakeOverParam> interpreter_take_over_param_moves;
     //! Non-zero for the local slots of reference_slot_locals, whose slot can hold a reference that a store writes
     //! through
     mutable std::vector<uint8_t> interpreter_reference_slots;

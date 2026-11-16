@@ -545,12 +545,24 @@ class SseRestClientIoTest inherits Test {
         Socket server_sock = listener.accept(5s);
         on_exit server_sock.close();
 
+        # the operation starts its heartbeat interval when it is created, and continuePoll() arms the poll with the
+        # time that remains of it (the interval less the whole milliseconds that passed since then), so the time
+        # between the two bounds the remaining time from below
+        int before_us = clock_get_monotonic_us();
         HttpServerAsyncIo::HttpSseStreamPollOperation op(server_sock);
 
         *hash<SocketPollInfo> poll_info = op.continuePoll();
+        int passed_ms = (clock_get_monotonic_us() - before_us) / 1000;
         assertTrue(exists poll_info, "open SSE poll operation returns poll info");
-        assertEq(HttpServerAsyncIo::DefaultSseHeartbeatIntervalMs,
-            poll_info.poll_timeout_ms, "heartbeat is enabled by default");
+        int interval_ms = HttpServerAsyncIo::DefaultSseHeartbeatIntervalMs;
+        @assert(passed_ms < interval_ms);
+        assertEq(Type::Int, poll_info.poll_timeout_ms.type(), "heartbeat is enabled by default");
+        assertTrue(poll_info.poll_timeout_ms <= interval_ms,
+            sprintf("the first poll waits at most the default heartbeat interval: %d <= %d", poll_info.poll_timeout_ms,
+                interval_ms));
+        assertTrue(poll_info.poll_timeout_ms >= interval_ms - passed_ms,
+            sprintf("the first poll waits for the rest of the default heartbeat interval: %d >= %d - %d",
+                poll_info.poll_timeout_ms, interval_ms, passed_ms));
 
         op.setHeartbeat(0);
         *hash<SocketPollInfo> disabled_info = op.continuePoll();

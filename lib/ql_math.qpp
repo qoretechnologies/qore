@@ -50,6 +50,14 @@ static double minus_infinity() {
 #endif
 }
 
+// the power of 10 for a rounding precision: a double, so that a precision above 9 does not overflow an int (it was
+// converted to an int, which is undefined behavior above 2^31; qore#6212); limited to 10^308, the largest finite one
+static double qore_round_scale(int64 precision) {
+    // the magnitude, also of the smallest int
+    uint64_t m = precision < 0 ? 0 - static_cast<uint64_t>(precision) : static_cast<uint64_t>(precision);
+    return pow(10.0, static_cast<double>(m < 308 ? m : 308));
+}
+
 /** @defgroup math_constants Math Constants
     Math constants
  */
@@ -90,6 +98,8 @@ const MININT = qore(QoreValue(-LLONG_MAX - 1));
   *     round( 6450, -5);  // returns      0
   * @endcode
   *
+  * @note a result out of the range of an int gives the largest or the smallest int
+  *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
 int round(softint value, int precision = 0) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
@@ -112,17 +122,22 @@ int round(softint value, int precision = 0) [flags=TOTAL,HOST_PORTABLE,NAMED_ARG
   *     round(-6450.36481, -5);  // returns     0.0
   * @endcode
   *
+  * @note a precision above 308 or below -308 is handled as 308 or -308, the largest power of 10 that a float
+  * can hold
+  *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
 float round(softfloat value, int precision = 0) [flags=PURE,NAMED_ARGS] {
 #ifdef HAVE_ROUND
     if (precision > 0) {
-        int c = pow(10, precision);
-        return round(c*value)/c;
+        double c = qore_round_scale(precision);
+        double scaled = c * value;
+        // a value that the scale makes infinite has no digits at that precision
+        return std::isfinite(scaled) ? round(scaled) / c : value;
     }
     if (precision < 0) {
-        int c = pow(10, -precision);
-        return c*round(value/c);
+        double c = qore_round_scale(precision);
+        return c * round(value / c);
     }
     return round(value);
 #else
@@ -143,6 +158,8 @@ float round(softfloat value, int precision = 0) [flags=PURE,NAMED_ARGS] {
   *     round( 645084.36481772n, -6);  // returns 1000000n
   *     round(-645084.36481772n, -7);  // returns       0n
   * @endcode
+  *
+  * @note a precision above 308 or below -308 is handled as 308 or -308
   *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
@@ -171,6 +188,8 @@ float round() [flags=RUNTIME_NOOP] {
   *
   * @see floor(softint value, int precision = 0)
   *
+  * @note a result out of the range of an int gives the largest or the smallest int
+  *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
 int ceil(int value, int precision = 0) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
@@ -193,16 +212,21 @@ int ceil(int value, int precision = 0) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
   *
   * @see floor(softfloat value, int precision = 0)
   *
+  * @note a precision above 308 or below -308 is handled as 308 or -308, the largest power of 10 that a float
+  * can hold
+  *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
 float ceil(softfloat value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
     if (precision > 0) {
-        int c = pow(10, precision);
-        return ceil(c*value)/c;
+        double c = qore_round_scale(precision);
+        double scaled = c * value;
+        // a value that the scale makes infinite has no digits at that precision
+        return std::isfinite(scaled) ? ceil(scaled) / c : value;
     }
     if (precision < 0) {
-        int c = pow(10, -precision);
-        return c*ceil(value/c);
+        double c = qore_round_scale(precision);
+        return c * ceil(value / c);
     }
     return ceil(value);
 }
@@ -222,6 +246,8 @@ float ceil(softfloat value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
   * @endcode
   *
   * @see floor(number value, int precision = 0)
+  *
+  * @note a precision above 308 or below -308 is handled as 308 or -308
   *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
@@ -250,6 +276,8 @@ float ceil() [flags=RUNTIME_NOOP] {
   *
   * @see ceil(softint value, int precision = 0)
   *
+  * @note a result out of the range of an int gives the largest or the smallest int
+  *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
 int floor(int value, int precision = 0) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
@@ -272,16 +300,21 @@ int floor(int value, int precision = 0) [flags=TOTAL,HOST_PORTABLE,NAMED_ARGS] {
   *
   * @see ceil(softfloat value, int precision = 0)
   *
+  * @note a precision above 308 or below -308 is handled as 308 or -308, the largest power of 10 that a float
+  * can hold
+  *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
 float floor(softfloat value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
     if (precision > 0) {
-        int c = pow(10, precision);
-        return floor(c*value)/c;
+        double c = qore_round_scale(precision);
+        double scaled = c * value;
+        // a value that the scale makes infinite has no digits at that precision
+        return std::isfinite(scaled) ? floor(scaled) / c : value;
     }
     if (precision < 0) {
-        int c = pow(10, -precision);
-        return c*floor(value/c);
+        double c = qore_round_scale(precision);
+        return c * floor(value / c);
     }
     return floor(value);
 }
@@ -301,6 +334,8 @@ float floor(softfloat value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
   * @endcode
   *
   * @see ceil(number value, int precision = 0)
+  *
+  * @note a precision above 308 or below -308 is handled as 308 or -308
   *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
@@ -371,7 +406,8 @@ float pow(softfloat base = 0.0, softfloat exponent = 0.0) [flags=RET_VALUE_ONLY,
     @param base the number to raise to the power of \a exponent
     @param exponent the power to raise \a base to
 
-    @return a number raised to the power of another number
+    @return a number raised to the power of another number; a result out of the range of an integer gives the
+    largest or the smallest integer (see @ref float_to_int_conversion)
 
     @par Example:
     @code{.py}
@@ -387,7 +423,8 @@ int pow(int base = 0, int exponent = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
             "non-negative value");
     }
 
-    return (int64)pow((double)base, (double)exponent);
+    // a result out of the range of an int is saturated (issue #6181)
+    return q_float_to_int64(pow((double)base, (double)exponent));
 }
 
 //! Returns the absolute value of the argument passed
@@ -1221,24 +1258,51 @@ int compare(float left, float right, float epsilon) [flags=TOTAL,HOST_PORTABLE,N
 ///@}
 
 typedef enum {ROUND, CEIL, FLOOR} FUN;
-long long round_ceil_floor_intern(long long num, int prec, FUN fun) {
-    if (prec >= 0)
+// rounds an int to a multiple of 10^-prec for a negative precision (qore#6212): the precision was cut to an int (so
+// -4294967295 rounded at 10^-1), the magnitude of the smallest int and a precision below -19 overflowed, and a result
+// out of the range of an int raised a C++ exception that ended the process (round(9223372036854775807, -1)); the
+// result is now computed in 128 bits and saturated
+long long round_ceil_floor_intern(long long num, int64 prec, FUN fun) {
+    if (prec >= 0) {
         return num;
-
-    string s = string(to_string(LLONG_MAX).length() + 4, '0') + to_string(num < 0 ? -num : num);
-    int len = s.length();
-    if (len < -prec)
-        return 0;
-
-    int pos = len + prec;
-    unsigned long long n = stoll(s.substr(0, pos));
-
-    switch (fun) {
-        case ROUND: if (s[pos] - '0' > 4)                 n++; break;
-        case CEIL:  if (num >= 0 && stoll(s.substr(pos))) n++; break;
-        case FLOOR: if (num <  0 && stoll(s.substr(pos))) n++;
     }
-
-    unsigned long long res = stoll(to_string(n) + string(-prec, '0'));
-    return num < 0 ? -res : res;
+    // any |num| is below 10^19, so every power from 10^20 up gives the same result; 38 keeps 10^k in 128 bits
+    uint64_t k = 0 - static_cast<uint64_t>(prec);
+    if (k > 38) {
+        k = 38;
+    }
+    __int128 p = 1;
+    for (uint64_t i = 0; i < k; ++i) {
+        p *= 10;
+    }
+    __int128 n = num;
+    __int128 q = n / p;
+    __int128 r = n % p;
+    switch (fun) {
+        case ROUND:
+            // half away from zero
+            if (r < 0 ? -r * 2 >= p : r * 2 >= p) {
+                q += n < 0 ? -1 : 1;
+            }
+            break;
+        case CEIL:
+            if (r > 0) {
+                ++q;
+            }
+            break;
+        case FLOOR:
+            if (r < 0) {
+                --q;
+            }
+            break;
+    }
+    // |q| <= 10^19 / p + 1 and p <= 10^38, so the product fits 128 bits
+    __int128 rv = q * p;
+    if (rv > std::numeric_limits<long long>::max()) {
+        return std::numeric_limits<long long>::max();
+    }
+    if (rv < std::numeric_limits<long long>::min()) {
+        return std::numeric_limits<long long>::min();
+    }
+    return static_cast<long long>(rv);
 }

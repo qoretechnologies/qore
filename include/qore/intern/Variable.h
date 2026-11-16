@@ -600,6 +600,10 @@ DLLLOCAL int64 q_get_lvalue_removal_probe_count();
 DLLLOCAL void q_record_lvalue_removal_probe();
 //! returns the number of lazy removal-tracker states allocated in this thread
 DLLLOCAL int64 q_get_lvalue_removal_allocation_count();
+//! returns the number of old values of number lvalues copied by post-increments and post-decrements in this thread
+/** for tests; see dbg_get_number_old_value_copy_count()
+*/
+DLLLOCAL int64 q_get_number_old_value_copy_count();
 #endif
 
 //! Identities held by a removal until its recursive-reference scan completes
@@ -755,36 +759,39 @@ protected:
         // an enum (QV_Enum, which QoreLValue::getValue() returns borrowed), a container or a string: never a scalar
         // that the lvalue stores natively in a node that getValue() would create and keep (qore#6094)
         QoreValue current = val ? val->getValue() : *qv;
-        if (current.isEnum()) {
-            // the enum member's base value is shared and constant: the lvalue takes an owned copy to modify
-            return replaceEnumForWrite(current, Checked ? desc : nullptr);
+        // an enum value, a short string held inline and an opaque reference take the slow path
+        if (!current.isPlainPointer()) [[unlikely]] {
+            return ensureUniqueSlow(current, Checked ? desc : nullptr);
         }
         assert(!val || !val->optimized());
-        if (current.isShortString()) {
-            char buf[7];
-            current.getShortString(buf);
-            assignNodeIntern(new QoreStringNode(buf, current.shortStringLen(), QCS_UTF8));
-            return 0;
-        }
+        ensureUniqueNode();
+        return 0;
+    }
 
+    //! ensureUnique() for a value other than an ordinary node pointer: an enum value, an inline short string or an
+    //! opaque reference; returns -1 if the copy of an enum value is refused (only with \a desc, see
+    //! ensureUnique(const char*))
+    DLLLOCAL QORE_INTERN_NOINLINE int ensureUniqueSlow(const QoreValue& current, const char* desc);
+
+    //! ensureUnique() for a node held as an ordinary pointer or through an opaque reference
+    DLLLOCAL void ensureUniqueNode() {
         AbstractQoreNode* current_value = getNodeValue();
         assert(current_value && current_value->getType() != NT_OBJECT);
 
         if (current_value->is_unique()) {
-            return 0;
+            return;
         }
         if (qv) {
             // a value stored in a container can be held through an opaque reference: the copy keeps its
             // representation, and the value replaced is released as it is held (see qore_value_copy_on_write())
             saveTemp(qore_value_copy_on_write(*qv));
-            return 0;
+            return;
         }
         // a variable holds its node as an ordinary reference (QoreLValue never holds an opaque value)
         assert(!val->getValue().isOpaque());
         AbstractQoreNode* old = current_value;
         assignNodeIntern(current_value->realCopy());
         saveTemp(old);
-        return 0;
     }
 
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
@@ -847,7 +854,9 @@ protected:
     DLLLOCAL bool numberResultNeedsConversion() const;
 
     //! stores a number result of an operation, converted to the lvalue's type; takes the reference of \a n
-    DLLLOCAL void storeNumberResult(QoreNumberNode* n, const char* desc);
+    /** @return 0 for OK, -1 if the lvalue's type refused the result (an exception was raised)
+    */
+    DLLLOCAL int storeNumberResult(QoreNumberNode* n, const char* desc);
     DLLLOCAL int makeIntVal(const char* desc);
 
     //! returns true if a removal started with startContainerRemoval() left the reachable objects unchanged
@@ -1599,7 +1608,9 @@ public:
     DLLLOCAL void divideEqualsNumber(QoreValue r, const char* desc = "<lvalue>");
     DLLLOCAL void preIncrementNumber(const char* desc = "<lvalue>");
     DLLLOCAL void preDecrementNumber(const char* desc = "<lvalue>");
+    //! increments a number lvalue; returns the old value if \a ref_rv is true, or nullptr if an exception was raised
     DLLLOCAL QoreNumberNode* postIncrementNumber(bool ref_rv, const char* desc = "<lvalue>");
+    //! decrements a number lvalue; returns the old value if \a ref_rv is true, or nullptr if an exception was raised
     DLLLOCAL QoreNumberNode* postDecrementNumber(bool ref_rv, const char* desc = "<lvalue>");
 
     DLLLOCAL QoreNumberNode* ensureUniqueNumber(const char* desc = "<lvalue>") {

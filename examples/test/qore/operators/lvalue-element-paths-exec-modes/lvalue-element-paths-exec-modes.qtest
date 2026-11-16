@@ -1,0 +1,173 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class LvalueElementPathsExecModesTest
+
+#! Tests the lvalues of hash and list elements, references to them and static class variables in every execution mode against the AST interpreter
+/** The lvalue and reference paths find the hash dereference and static class variable nodes of an lvalue by their
+    exact class, and the IR lvalue analysis finds the variable at the root of an element path by its node type,
+    without dynamic_cast.
+
+    The program in \c lvalue-element-paths.q applies operators, assignments, \c remove and \c delete to elements of
+    local, global, typed, nested, list element and object member hashes and to static class variables, directly and
+    through references, including cases that fail or convert, in three passes.  The AST interpreter's output is the
+    expected result; every other execution mode, the default execution mode and a qcc-compiled executable must give
+    the same output.
+
+    The static member references of \c deferred-static-consumer.qc are deferred when qcc parses it, as it is compiled
+    before the object of its provider exists; the executable linked from the objects must give the result of the
+    AST interpreter.  The deferred references are resolved when the objects are linked, so the executable runs none
+    of the deferred-node branches of the lvalue paths: no program built by qcc or by --compile-module that was tried
+    (a linked executable, native module code, the IR of an on_exit handler, a module constant initializer) creates a
+    DeferredStaticClassMemberRefNode at run time.
+*/
+class LvalueElementPathsExecModesTest inherits QUnit::Test {
+    public {
+        #! the number of lines that the program prints: 28 cases in 3 passes
+        const Rows = 84;
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        #! the directory of the test and of its programs
+        string dir;
+        string program;
+    }
+
+    constructor() : QUnit::Test("LvalueElementPathsExecModes", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        dir = get_script_dir();
+        program = dir + DirSep + "lvalue-element-paths.q";
+
+        addTestCase("every execution mode gives the AST result", \testMatrix());
+        addTestCase("a qcc executable gives the AST result", \testExecutable());
+        addTestCase("separately compiled static member references give the AST result", \testSeparateObjects());
+
+        set_return_value(main());
+    }
+
+    #! returns the output of the program in the AST interpreter, after checking some of its results
+    private list<string> astResult() {
+        list<string> expected = run(sprintf("--exec-mode=ast %s", program));
+        assertEq(Rows, (select expected, $1 =~ / => /).size(), "every case gave a result");
+        # the results of the AST interpreter that the other execution modes are compared with
+        assertEq(1, (select expected, $1 == "0|local h.a.b += 1 => {a: {b: 3}} hash<string, hash<string, int>>")
+            .size());
+        assertEq(1, (select expected, $1 == "0|typed ++h.k => {k: 6} hash<string, int>").size());
+        assertEq(1, (select expected, $1 == "2|ref \\h.a{k} => {a: {k: 4}} hash<string, hash<string, int>>").size());
+        assertEq(1, (select expected, $1 == "0|ref \\o.h.k => [{k: 2, a: {b: 3}}, 1] list<auto>").size());
+        assertEq(3, (select expected, $1 =~ /^[0-2]\|ref remove => \[{j: 2}, 1\] list<auto>$/).size());
+        # the static class variables keep their values from one pass to the next
+        assertEq(1, (select expected, $1 == "0|static ++ => 8 integer").size());
+        assertEq(1, (select expected, $1 == "2|static ++ => 62 integer").size());
+        assertEq(1, (select expected, $1 == "2|static ref => [63, {k: 33}] list<auto>").size());
+        return expected;
+    }
+
+    testMatrix() {
+        list<string> expected = astResult();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            compare(mode, expected, run(sprintf("--exec-mode=%s %s", mode, program)));
+        }
+        # the default execution mode
+        compare("default", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, program)).split("\n"));
+    }
+
+    testExecutable() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        list<string> expected = astResult();
+        TmpDir tmp("qore-lvalue-element-paths-");
+        string exe = tmp.path + DirSep + "paths";
+        # a qcc that is available but cannot compile the program fails the test
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, program));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        compare("executable", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)).split("\n"));
+    }
+
+    testSeparateObjects() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+        list<string> sources = map dir + DirSep + $1, ("deferred-static-provider.qc", "deferred-static-consumer.qc",
+            "deferred-static-main.qr");
+
+        # the expected result: the sources parsed together by the AST interpreter
+        TmpDir tmp("qore-lvalue-element-paths-objects-");
+        string whole = tmp.path + DirSep + "whole.q";
+        {
+            File f();
+            f.open2(whole, O_CREAT | O_WRONLY | O_TRUNC);
+            map f.printf("%%include %s\n", $1), sources;
+        }
+        string expected = ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, whole));
+        assertEq("direct: 12 {k: 7} \"removed\"\nhandler: 2 {n: 14}\n", expected);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode != "ast") {
+                assertEq(expected, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                    whole)), mode);
+            }
+        }
+
+        # the consumer is compiled first, against an empty object directory: its provider does not exist yet
+        string qo_dir = tmp.path + DirSep + "qo";
+        mkdir(qo_dir);
+        list<string> objects = ();
+        foreach string src in (sources[1], sources[0], sources[2]) {
+            string qo = qo_dir + DirSep + (basename(src) =~ x/^([^.]+)/)[0] + ".qo";
+            string out = backquote(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s 2>&1", env, qcc_bin,
+                qo_dir, qo, src));
+            assertTrue(is_file(qo), sprintf("compiled %s: %s", basename(src), out));
+            objects += qo;
+        }
+        string exe = tmp.path + DirSep + "deferred-static";
+        string out = backquote(sprintf("%s %s -o %s %s 2>&1", env, qcc_bin, exe, objects.join(" ")));
+        assertTrue(is_file(exe), "linked the executable: " + out);
+        assertEq(expected, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "the linked executable");
+    }
+
+    private list<string> run(string args) {
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s", libqore_dir,
+            libqore_dir, qore_bin, args)).split("\n");
+    }
+
+    #! compares the lines of a mode with the AST lines, reporting the first differences
+    private compare(string mode, list<string> expected, list<string> actual) {
+        list<string> diffs = ();
+        int count = 0;
+        int n = max(expected.size(), actual.size());
+        for (int i = 0; i < n; ++i) {
+            if (expected[i] !== actual[i]) {
+                ++count;
+                if (diffs.size() < 20) {
+                    diffs += sprintf("ast: %y\n%s: %y", expected[i], mode, actual[i]);
+                }
+            }
+        }
+        assertEq((), diffs, sprintf("%s: %d differences:\n%s", mode, count, diffs.join("\n")));
+    }
+}

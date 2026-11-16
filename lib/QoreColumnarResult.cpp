@@ -653,6 +653,19 @@ static QoreValue columnar_make_column_value(const QoreListNode* source, const Co
     return columnar_make_typed_list(source, shape.element_type, shape.nullable, xsink);
 }
 
+// the buffer errors raised while a column is built name the element only; adds the column (issue #6181)
+static void columnar_add_column_to_buffer_error(const char* name, ExceptionSink* xsink) {
+    QoreValue err = xsink->getExceptionErr();
+    if (err.getType() != NT_STRING) {
+        return;
+    }
+    // the error code can be held in inline short string storage, which has no QoreStringNode
+    QoreStringDataHelper e(err);
+    if (e == "BUFFER-RANGE-ERROR" || e == "BUFFER-TYPE-ERROR") {
+        xsink->appendLastDescription(" (column '%s')", name);
+    }
+}
+
 static size_t columnar_value_size(QoreValue value) {
     switch (value.getType()) {
         case NT_LIST:
@@ -796,8 +809,10 @@ static QoreValue columnar_filter_value(QoreValue value, QoreValue mask, size_t s
             return new QoreBufferNode(source->getElementType(), source->hasNullableElements(), *values, xsink);
         }
 
+        // carry the source buffer's decimal precision and scale (ignored for other element types)
         ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(source->getElementType(),
-            source->hasNullableElements(), selected), xsink);
+            source->hasNullableElements(), selected, source->getDecimalPrecision(), source->getDecimalScale()),
+            xsink);
         size_t out = 0;
         for (size_t i = 0; i < source->size(); ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "filtering columnar buffer column")) {
@@ -873,8 +888,10 @@ static QoreValue columnar_take_value(QoreValue value, const std::vector<size_t>&
             return new QoreBufferNode(source->getElementType(), source->hasNullableElements(), *values, xsink);
         }
 
+        // carry the source buffer's decimal precision and scale (ignored for other element types)
         ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(source->getElementType(),
-            source->hasNullableElements(), indices.size()), xsink);
+            source->hasNullableElements(), indices.size(), source->getDecimalPrecision(),
+            source->getDecimalScale()), xsink);
         for (size_t i = 0; i < indices.size(); ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "taking columnar buffer rows")) {
                 return QoreValue();
@@ -1265,11 +1282,15 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
     if (kind_name.empty()) {
         kind_name = columnar_get_desc_string(desc, "logical_type");
     }
+    // an explicit kind is not replaced by the kind derived from the buffer type below: a date, timestamp or
+    // duration column is stored in a buffer<int64>, and its schema has both
+    bool has_kind = false;
     if (!kind_name.empty()) {
         QoreColumnarTypeKind kind;
         if (columnar_type_kind_from_name(kind_name, kind)) {
             schema.kind = kind;
             schema.column_type = columnar_flat_type_from_kind(kind);
+            has_kind = kind != QoreColumnarTypeKind::Auto;
         }
     }
 
@@ -1299,8 +1320,10 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
         QoreBufferElementType parsed = QoreBufferElementType::Invalid;
         if (qore_buffer_element_type_from_name(buffer_type.c_str(), parsed)) {
             schema.buffer_type = parsed;
-            schema.column_type = columnar_type_from_buffer(parsed);
-            schema.kind = columnar_kind_from_flat_type(schema.column_type);
+            if (!has_kind) {
+                schema.column_type = columnar_type_from_buffer(parsed);
+                schema.kind = columnar_kind_from_flat_type(schema.column_type);
+            }
             if (parsed == QoreBufferElementType::Decimal128) {
                 schema.kind = QoreColumnarTypeKind::Decimal128;
                 schema.column_type = QoreColumnarColumnType::Number;
@@ -4173,6 +4196,7 @@ int QoreColumnarResult::addColumnIntern(const char* name, QoreValue data, const 
             ValueHolder column_value(columnar_make_column_value(source, shape, name, script_values, xsink),
                 xsink);
             if (*xsink) {
+                columnar_add_column_to_buffer_error(name, xsink);
                 return -1;
             }
 
@@ -4278,6 +4302,7 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHashIntern(const QoreHashNode*
         ValueHolder column_value(columnar_make_column_value(source, shape, i.getKey(), script_values, xsink),
             xsink);
         if (*xsink) {
+            columnar_add_column_to_buffer_error(i.getKey(), xsink);
             return nullptr;
         }
         // the schema can come from a "schema" sub-hash of the description, which can make a list column that the

@@ -1,0 +1,73 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of native int and float values, locals and returns for enum types
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class EnumReadFastPathsTest
+
+#! Regression test for issue #6236: values of int and float enum types keep their enum type in the compiled modes
+/** The type of an int or float enum gives its base type to the type tests of the compiled modes (isType() and
+    parseReturns()), but its values are the enum's members (TAG_ENUM values); the fast paths that hold or pass on
+    values as native ints or floats gave plain ints and floats for them, or raised RUNTIME-TYPE-ERROR when storing them
+    back in an enum-typed list or local, where the AST interpreter keeps the enum values.
+
+    EnumReadFastPaths.q reads enum-typed values through these paths (hash values with a constant key, map, select,
+    folds, locals, returns and captures) and prints their types; its output must be the one in
+    EnumReadFastPaths.expected in every execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
+*/
+class EnumReadFastPathsTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/EnumReadFastPaths.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/EnumReadFastPaths.expected");
+    }
+
+    constructor() : QUnit::Test("enum values read through the fast paths of the compiled modes", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/enum-read-fast-paths";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

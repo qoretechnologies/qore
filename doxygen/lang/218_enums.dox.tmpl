@@ -7,10 +7,11 @@
     specific base type. Enums provide named constants that are grouped together and can be used for
     type-safe programming where only specific values are valid.
 
-    Enum values are compatible with their underlying base type in both directions - enum constants
-    can be used where the base type is expected, and base type values can be assigned to enum
-    variables (with runtime validation). For guaranteed type safety, the @ref cast "cast<>" operator
-    can be used to validate that a base type value corresponds to a valid enum member.
+    An enum value converts implicitly to the enum's base type, so enum constants can be used wherever the
+    base type is expected.  The reverse conversion is not implicit: a value of the base type cannot be
+    assigned to an enum-typed variable or passed to an enum-typed parameter, even when it equals the value
+    of a member; it must be converted with @ref enum_cast "cast<enum<EnumName>>()", which checks at run time
+    that the value is a member of the enum.  See @ref enum_type_safety "Enum Type Safety".
 
     @section enum_syntax Enum Declaration Syntax
     <tt>[<b>public</b>]</tt> <tt><b>enum</b></tt> <em>enum_identifier</em> [<tt><b>:</b></tt> <em>base_type</em>] <tt>{</tt> \n
@@ -86,9 +87,21 @@ enum Bad {
     @endcode
 
     @section enum_type_safety Enum Type Safety
-    Enums in Qore are type-compatible with their base type in both directions. Enum values can be
-    used where the base type is expected, and base type values can be assigned to enum-typed
-    variables or passed to enum-typed parameters.
+    Conversions between an enum and its base type are implicit in one direction only:
+
+    |!Conversion|!Result
+    |an enum value to its base type, or to a type that the base type converts to (ex: <tt>int i = Color::Red;</tt>)|allowed; the value takes the target type (here \c int), also when it is passed to a parameter of the base type or returned from code declared to return the base type
+    |an enum value to a variable without a type, or of type \c auto|allowed; the value keeps its enum type
+    |a value of the base type to an enum-typed variable or parameter (ex: <tt>Color c = 2;</tt>)|not allowed, even when the value equals the value of a member: a \c PARSE-TYPE-ERROR exception is raised at parse time when the parser knows the value's type; otherwise (ex: an \c auto variable) a \c RUNTIME-TYPE-ERROR exception is raised at run time by an assignment, and a \c RUNTIME-OVERLOAD-ERROR exception by a call
+    |a value of another enum type to an enum-typed variable or parameter|not allowed, with the same errors, even when both enums have the same base type
+    |a value of the base type with @ref enum_cast "cast<enum<EnumName>>()"|allowed when the value is a member of the enum; otherwise a \c RUNTIME-CAST-ERROR exception is raised at run time
+
+    An or-nothing enum type (ex: <tt>*Color</tt>) accepts \c NOTHING, so a parse-time check of an or-nothing
+    base type value (ex: <tt>*int</tt>) assigned to it passes; a value other than \c NOTHING still raises
+    \c RUNTIME-TYPE-ERROR at run time.
+
+    An enum value is equal to its base type value with the @ref logical_equality_operator "== operator", but not
+    with the @ref logical_absolute_equality_operator "=== operator", as the types differ.
 
     @par Example: Type Compatibility
     @code{.py}
@@ -99,30 +112,45 @@ public enum Color : int {
 }
 
 # Enum to base type - OK
-int i = Color::Red;  # i = 1
+int i = Color::Red;  # i = 1 (an int)
 
-# Base type to enum - OK (accepted at parse time)
+# Base type to enum - not allowed
 int rawValue = 2;
-Color c = rawValue;
+Color c = rawValue;  # PARSE-TYPE-ERROR: lvalue for assignment operator '=' expects enum<Color>, but right-hand side is type 'int'
+
+# Base type to enum with a cast - OK
+Color c2 = cast<enum<Color>>(rawValue);  # c2 = Color::Green
+
+# A base type value whose type is only known at run time
+auto x = 3;
+c2 = x;  # RUNTIME-TYPE-ERROR: <lvalue> expects type 'enum<Color>', but got type 'integer' instead
 
 # Function with enum parameter
 sub processColor(Color c) {
     printf("Color value: %d\n", c);
 }
 
-processColor(Color::Blue);  # OK: enum constant
-processColor(3);             # OK: base type value accepted
+processColor(Color::Blue);             # OK: enum constant
+processColor(cast<enum<Color>>(3));    # OK: base type value converted with a cast
+processColor(3);                       # PARSE-TYPE-ERROR: argument 'c' to 'processColor(enum<::Color> c)' expects enum<::Color>, but call supplies int
     @endcode
 
-    @note While base type values are accepted where enum types are expected, using
-    @ref cast "cast<enum<EnumName>>()" provides additional runtime validation that the value
-    corresponds to a valid enum member. See @ref enum_cast "Casting to Enum Types" below.
-
     @section enum_cast Casting to Enum Types
-    The @ref cast "cast<>" operator can be used to convert base type values to enum values with
-    runtime validation. While base type values can be assigned directly to enum-typed variables
-    (see @ref enum_type_safety "Enum Type Safety"), using a cast ensures at runtime that the value
-    corresponds to a valid enum member, throwing a \c RUNTIME-CAST-ERROR if it does not.
+    The @ref cast "cast<>" operator converts a base type value to an enum value; it is the only way to do so.
+    The value must have the enum's base type, or be the value of an enum with that base type; it is not
+    converted to the base type:
+    - a value that is a member of the enum is returned as that enum value
+    - a value of the base type that is not a member of the enum raises a \c RUNTIME-CAST-ERROR exception at
+      run time, also when the value is a literal
+    - a value of another type raises a \c PARSE-EXCEPTION at parse time when the parser knows its type (ex:
+      <tt>cast&lt;enum&lt;Color&gt;&gt;(2.0)</tt>), and otherwise a \c RUNTIME-CAST-ERROR exception at run time
+    - \c NOTHING raises a \c PARSE-EXCEPTION at parse time when the parser knows that the value is \c NOTHING or
+      cannot be the base type (ex: a literal \c NOTHING, or a <tt>*string</tt> value cast to an \c int enum), and
+      otherwise (ex: a <tt>*int</tt> value cast to an \c int enum) a \c RUNTIME-CAST-ERROR exception at run time;
+      the or-nothing form <tt>cast&lt;*enum&lt;EnumName&gt;&gt;()</tt> accepts \c NOTHING and returns it
+
+    A value of another enum type with the same base type is treated like its base type value: it is converted
+    when its value is a member of the target enum.
 
     @par Syntax
     <tt><b>cast</b>&lt;<b>enum</b>&lt;<em>EnumName</em>&gt;&gt;(</tt><em>expression</em><tt>)</tt> \n
@@ -148,7 +176,7 @@ Status st = cast<enum<Status>>(s);  # RUNTIME-CAST-ERROR: "unknown" is not a val
     @par Example: Wrong Base Type (Runtime Error)
     @code{.py}
 auto v = 123;
-Status st = cast<enum<Status>>(v);  # RUNTIME-CAST-ERROR: expected string value, got integer
+Status st = cast<enum<Status>>(v);  # RUNTIME-CAST-ERROR: cannot cast from type 'integer' to enum 'Status'; expected string value
     @endcode
 
     @par Example: Or-Nothing Cast

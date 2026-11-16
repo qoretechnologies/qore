@@ -246,22 +246,6 @@ static void makeRuntimeDeserializedClosureIRNameUnique(QoreIRFunction& ir, const
         + "_" + std::to_string(closure_ir_counter.fetch_add(1));
 }
 
-static const AbstractQoreZoneInfo* runtimeReadAOTDateZone(const char* zone_name) {
-    if (!zone_name || !*zone_name || !strcmp(zone_name, "UTC")) {
-        return nullptr;
-    }
-
-    ExceptionSink xsink;
-    const AbstractQoreZoneInfo* zone = (*zone_name == '+' || *zone_name == '-')
-        ? QTZM.findCreateOffsetZone(zone_name, &xsink)
-        : QTZM.findLoadRegion(zone_name, &xsink);
-    if (xsink) {
-        xsink.clear();
-        return nullptr;
-    }
-    return zone;
-}
-
 static std::string getAOTTypePathForLValue(const QoreTypeInfo* ti) {
     return qore_get_aot_serializable_type_path(ti);
 }
@@ -1506,7 +1490,6 @@ static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const 
     if (!pgm) {
         return 0;
     }
-    qore_program_private* pp = qore_program_private::get(*pgm);
 
     switch (kind) {
         case AOTExprKind::FUNC_CALL: {
@@ -1991,8 +1974,13 @@ static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const 
             if (!ref1 || !*ref1) {
                 return 0;
             }
-            const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, ref1);
+            const TypedHashDecl* hd = qore_aot_decode_expr_hashdecl_path(pgm, ref1);
             if (!hd) {
+                // a hashdecl with type parameters is resolved with the instantiation of the call (qore#6173)
+                if (strstr(ref1, "typeparam<")) {
+                    return toBitsNB(QoreValue(new NewHashDeclNode(&loc_builtin, ref1, hashTypeInfo,
+                        static_cast<QoreParseListNode*>(nullptr))));
+                }
                 printd(0, "AOT v2: cannot resolve hashdecl '%s' for new hashdecl\n", ref1);
                 aot_slot_resolve_error = describeUnresolvedAOTSymbol("hashdecl", ref1, pgm);
                 return 0;
@@ -2048,8 +2036,6 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
     if (!ref1 || !*ref1) {
         return 0;
     }
-    qore_program_private* pp = qore_program_private::get(*pgm);
-    qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
 
     switch (kind) {
         case AOTExprKind::CAST_HASHDECL: {
@@ -2058,7 +2044,7 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
                     static_cast<const TypedHashDecl*>(nullptr), QoreValue(), or_nothing);
                 return toBitsNB(QoreValue(node));
             }
-            const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, ref1);
+            const TypedHashDecl* hd = qore_aot_decode_expr_hashdecl_path(pgm, ref1);
             if (!hd && (!ref1 || !*ref1)) {
                 printd(0, "AOT v2: cannot resolve hashdecl '%s' for cast\n", ref1);
                 return 0;
@@ -2840,7 +2826,6 @@ QoreValue readOneExpr(
     // Deferred defaults can be reconstructed after the main load phases, even during a legacy source parse.
     LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     uint8_t ekind = QoreAOTBinaryReader::readU8(p);
-    AOTExprKind ek = static_cast<AOTExprKind>(ekind);
 
     // Dispatch via registry
     const auto* kinfo = getAOTExprKindInfo(ekind);
@@ -3857,7 +3842,6 @@ static QoreAOTContext* buildContextFromSlotMap(
             delete ctx;
             return nullptr;
         }
-        const uint8_t* before_expr = ptr;  // Track ptr position for validation
         uint8_t kind_byte = QoreAOTBinaryReader::readU8(ptr);
         AOTExprKind kind = static_cast<AOTExprKind>(kind_byte);
         const auto* expr_kind_info = getAOTExprKindInfo(kind_byte);
@@ -4261,8 +4245,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 // Resolve hashdecl and create node with args
                 if (ref1 && *ref1) {
-                    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, ref1);
-                    if (hd) {
+                    const TypedHashDecl* hd = qore_aot_decode_expr_hashdecl_path(pgm, ref1);
+                    // a hashdecl with type parameters is resolved with the instantiation of the call (qore#6173)
+                    if (hd || strstr(ref1, "typeparam<")) {
                         // Convert call_args to QoreParseListNode for NewHashDeclNode
                         QoreParseListNode* pln = nullptr;
                         if (call_args) {
@@ -4278,7 +4263,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                         }
                         // the parse's key check is not serialized, so the keys are always checked when the
                         // hash is made
-                        NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, pln, true);
+                        NewHashDeclNode* nhd = hd
+                            ? new NewHashDeclNode(&loc_builtin, hd, pln, true)
+                            : new NewHashDeclNode(&loc_builtin, ref1, hashTypeInfo, pln);
                         ctx->exprs[i] = toBitsNB(QoreValue(nhd));
                     } else {
                         printd(0, "AOT v2: cannot resolve hashdecl '%s' for new hashdecl\n", ref1);
@@ -7090,12 +7077,10 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     if (!validateAOTIROpcode(opcode_raw, error)) {
         return nullptr;
     }
-    auto opcode = static_cast<QoreIROpcode>(opcode_raw);
     if (!need(1, "instruction group")) {
         return nullptr;
     }
     uint8_t group_byte = QoreAOTBinaryReader::readU8(ptr);
-    auto group = static_cast<QoreIRInstGroup>(group_byte);
     if (!qore_aot_validate_ir_layout(opcode_raw, group_byte, error)) {
         return nullptr;
     }
@@ -7178,1026 +7163,6 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             + std::to_string(group_byte) + "): " + error;
         return nullptr;
     }
-
-    // This #if 0 block contains the original switch statement that was replaced by registry dispatch.
-    // It is kept for reference only.
-    #if 0
-    switch (group) {
-        case QoreIRInstGroup::Base: {
-            inst = std::make_unique<QoreIRInstruction>(opcode);
-            break;
-        }
-
-        case QoreIRInstGroup::Const: {
-            auto* ci = new QoreIRConstInstruction();
-            ci->opcode = opcode;
-            uint8_t kind_byte = QoreAOTBinaryReader::readU8(ptr);
-            ci->constant.kind = static_cast<QoreIRConstant::Kind>(kind_byte);
-            switch (ci->constant.kind) {
-                case QoreIRConstant::Kind::Int:
-                    ci->constant.int_value = QoreAOTBinaryReader::readI64(ptr);
-                    break;
-                case QoreIRConstant::Kind::Float:
-                    ci->constant.float_value = QoreAOTBinaryReader::readF64(ptr);
-                    break;
-                case QoreIRConstant::Kind::Bool:
-                    ci->constant.bool_value = QoreAOTBinaryReader::readU8(ptr) != 0;
-                    break;
-                case QoreIRConstant::Kind::Nothing:
-                case QoreIRConstant::Kind::Null:
-                    break;
-                case QoreIRConstant::Kind::String:
-                    ci->constant.string_value = reader.readStringRef(ptr);
-                    break;
-                case QoreIRConstant::Kind::Date:
-                    ci->constant.date_microseconds = QoreAOTBinaryReader::readI64(ptr);
-                    ci->constant.date_is_relative = QoreAOTBinaryReader::readU8(ptr) != 0;
-                    if (ci->constant.date_is_relative) {
-                        ci->constant.rel_years = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
-                        ci->constant.rel_months = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
-                        ci->constant.rel_days = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
-                        ci->constant.rel_hours = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
-                        ci->constant.rel_minutes = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
-                        ci->constant.rel_seconds = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
-                        ci->constant.rel_us = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
-                    } else {
-                        const char* zone_name = reader.readStringRef(ptr);
-                        if (zone_name && *zone_name) {
-                            ci->constant.date_zone = runtimeReadAOTDateZone(zone_name);
-                            ci->constant.date_zone_set = true;
-                        }
-                    }
-                    break;
-                case QoreIRConstant::Kind::Enum: {
-                    const char* enum_path = reader.readStringRef(ptr);
-                    const char* member_name = reader.readStringRef(ptr);
-                    if (enum_path && *enum_path && member_name && *member_name) {
-                        const QoreNamespace* pns = nullptr;
-                        const QoreEnumDecl* ed = qore_program_private::get(*pgm)->findEnumCanonical(enum_path, pns);
-                        if (ed) {
-                            ci->constant.enum_member = ed->findMember(member_name);
-                            if (ci->constant.enum_member) {
-                                ci->constant.int_value = ci->constant.enum_member->getValue().getAsBigInt();
-                            }
-                        }
-                    }
-                    break;
-                }
-            }
-            inst.reset(ci);
-            break;
-        }
-
-        case QoreIRInstGroup::Branch: {
-            auto* bi = new QoreIRBranchInstruction();
-            bi->opcode = opcode;
-            uint16_t target_idx = QoreAOTBinaryReader::readU16(ptr);
-            bi->target = resolveBlock(target_idx);
-            inst.reset(bi);
-            break;
-        }
-
-        case QoreIRInstGroup::BranchIf: {
-            auto* bi = new QoreIRBranchIfInstruction();
-            bi->opcode = opcode;
-            bi->condition = QoreIRValue(QoreAOTBinaryReader::readU32(ptr));
-            uint16_t true_idx = QoreAOTBinaryReader::readU16(ptr);
-            uint16_t false_idx = QoreAOTBinaryReader::readU16(ptr);
-            bi->true_target = resolveBlock(true_idx);
-            bi->false_target = resolveBlock(false_idx);
-            inst.reset(bi);
-            break;
-        }
-
-        case QoreIRInstGroup::Return: {
-            auto* ri = new QoreIRReturnInstruction();
-            ri->opcode = opcode;
-            ri->has_value = QoreAOTBinaryReader::readU8(ptr) != 0;
-            if (ri->has_value) {
-                ri->value = QoreIRValue(QoreAOTBinaryReader::readU32(ptr));
-            }
-            inst.reset(ri);
-            break;
-        }
-
-        case QoreIRInstGroup::Throw: {
-            auto* ti = new QoreIRThrowInstruction(opcode);
-            uint16_t throw_exc_idx = QoreAOTBinaryReader::readU16(ptr);
-            ti->exception_target = resolveBlock(throw_exc_idx);
-            ti->catch_depth = static_cast<int>(QoreAOTBinaryReader::readU16(ptr));
-            ti->synthetic = QoreAOTBinaryReader::readU8(ptr) != 0;
-            inst.reset(ti);
-            break;
-        }
-
-        case QoreIRInstGroup::Local: {
-            const char* lname = reader.readStringRef(ptr);
-            const char* ltype = reader.readStringRef(ptr);
-            uint32_t slot_id = QoreAOTBinaryReader::readU32(ptr);
-            bool auto_ref = QoreAOTBinaryReader::readU8(ptr) != 0;
-            AssignmentMode mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ptr));
-            bool is_closure = QoreAOTBinaryReader::readU8(ptr) != 0;
-            bool is_ref = QoreAOTBinaryReader::readU8(ptr) != 0;
-            bool read_only = false;
-            bool initial_assignment = false;
-            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_READONLY_LOCALS) != 0) {
-                read_only = QoreAOTBinaryReader::readU8(ptr) != 0;
-                initial_assignment = QoreAOTBinaryReader::readU8(ptr) != 0;
-            }
-            LocalVar* lv = resolveLocal(lname);
-            if (!lv && lname && *lname) {
-                // Create a new local variable for handler/closure locals
-                std::string type_error;
-                QoreAOTTypeResolver type_resolver(pgm);
-                const QoreTypeInfo* ti = (ltype && *ltype)
-                    ? type_resolver.resolve(ltype, type_error) : nullptr;
-                qore_program_private* pp = qore_program_private::get(
-                    *(local_owner_pgm ? local_owner_pgm : pgm));
-                lv = pp->createLocalVar(lname, ti);
-            }
-            if (lv && read_only && !lv->isReadOnly()) {
-                lv->setReadOnly();
-            }
-            auto* li = new QoreIRLocalInstruction(opcode, lv, auto_ref);
-            li->mode = mode;
-            li->initial_assignment = initial_assignment;
-            li->is_closure = is_closure;
-            li->is_ref = is_ref;
-            li->slot_id = slot_id;
-            inst.reset(li);
-            break;
-        }
-
-        case QoreIRInstGroup::Var: {
-            const char* vname = reader.readStringRef(ptr);
-            AssignmentMode mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ptr));
-            Var* var = nullptr;
-            if (vname && *vname) {
-                qore_program_private* pp = qore_program_private::get(*pgm);
-                const qore_ns_private* vns = nullptr;
-                var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, vname, vns, LexicalSemanticPolicy{});
-            }
-            auto* vi = new QoreIRVarInstruction(opcode, var);
-            vi->mode = mode;
-            inst.reset(vi);
-            break;
-        }
-
-        case QoreIRInstGroup::LValue: {
-            QoreValue lvalue = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            AssignmentMode mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ptr));
-            uint32_t lvalue_slot_id = QoreAOTBinaryReader::readU32(ptr);
-            auto* lvi = new QoreIRLValueInstruction(opcode, lvalue, mode);
-            lvi->lvalue_slot_id = lvalue_slot_id;
-            // LValue constructor refs the value, so deref our copy
-            lvalue.discard(nullptr);
-            inst.reset(lvi);
-            break;
-        }
-
-        case QoreIRInstGroup::Expr: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            bool has_ref_args = QoreAOTBinaryReader::readU8(ptr) != 0;
-            auto* ei = new QoreIRExprInstruction(opcode, expr);
-            ei->has_ref_args = has_ref_args;
-            // Expr constructor refs the value, so deref our copy
-            expr.discard(nullptr);
-            inst.reset(ei);
-            break;
-        }
-
-        case QoreIRInstGroup::CallDirect: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            bool has_ref_args = QoreAOTBinaryReader::readU8(ptr) != 0;
-            bool is_self_recursive = QoreAOTBinaryReader::readU8(ptr) != 0;
-            // Resolve function from the expr (FunctionCallNode stores the func pointer)
-            const QoreFunction* func = nullptr;
-            QoreProgram* func_pgm = pgm;
-            // The expr contains the FunctionCallNode we need for AOT
-            auto* ci = new QoreIRCallDirectInstruction(func, nullptr, func_pgm, expr);
-            ci->has_ref_args = has_ref_args;
-            ci->is_self_recursive = is_self_recursive;
-            expr.discard(nullptr);
-            inst.reset(ci);
-            break;
-        }
-
-        case QoreIRInstGroup::CallMethodDirect: {
-            bool has_expr = QoreAOTBinaryReader::readU8(ptr) != 0;
-            QoreValue expr;
-            if (has_expr) {
-                expr = readExpr(reader, ptr, end, error);
-                if (!error.empty()) {
-                    return nullptr;
-                }
-            }
-            const char* class_path = reader.readStringRef(ptr);
-            const char* method_name = reader.readStringRef(ptr);
-            bool has_ref_args = QoreAOTBinaryReader::readU8(ptr) != 0;
-
-            const QoreMethod* method = nullptr;
-            const QoreClass* qc = nullptr;
-            if (class_path && *class_path) {
-                qc = findAOTClassByPath(pgm, class_path, true);
-                if (qc && method_name && *method_name) {
-                    method = qc->findMethod(method_name);
-                    if (!method) {
-                        method = findAOTStaticMethod(qc, method_name);
-                    }
-                }
-            }
-            auto* ci = new QoreIRCallMethodDirectInstruction(method, qc, nullptr, expr);
-            ci->has_ref_args = has_ref_args;
-            if (has_expr) {
-                expr.discard(nullptr);
-            }
-            inst.reset(ci);
-            break;
-        }
-
-        case QoreIRInstGroup::InvokeMethodDirect: {
-            bool has_expr = QoreAOTBinaryReader::readU8(ptr) != 0;
-            QoreValue expr;
-            if (has_expr) {
-                expr = readExpr(reader, ptr, end, error);
-                if (!error.empty()) {
-                    return nullptr;
-                }
-            }
-            const char* class_path = reader.readStringRef(ptr);
-            const char* method_name = reader.readStringRef(ptr);
-            bool has_ref_args = QoreAOTBinaryReader::readU8(ptr) != 0;
-            uint16_t normal_idx = QoreAOTBinaryReader::readU16(ptr);
-            uint16_t exception_idx = QoreAOTBinaryReader::readU16(ptr);
-
-            const QoreMethod* method = nullptr;
-            const QoreClass* qc = nullptr;
-            if (class_path && *class_path) {
-                qc = findAOTClassByPath(pgm, class_path, true);
-                if (qc && method_name && *method_name) {
-                    method = qc->findMethod(method_name);
-                    if (!method) {
-                        method = findAOTStaticMethod(qc, method_name);
-                    }
-                }
-            }
-            auto* ci = new QoreIRInvokeMethodDirectInstruction(method, qc, nullptr,
-                resolveBlock(normal_idx), resolveBlock(exception_idx), expr);
-            ci->has_ref_args = has_ref_args;
-            if (has_expr) {
-                expr.discard(nullptr);
-            }
-            inst.reset(ci);
-            break;
-        }
-
-        case QoreIRInstGroup::CallStaticDirect: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            const char* class_path = reader.readStringRef(ptr);
-            const char* method_name = reader.readStringRef(ptr);
-            bool has_ref_args = QoreAOTBinaryReader::readU8(ptr) != 0;
-
-            const QoreMethod* method = nullptr;
-            if (class_path && *class_path) {
-                const QoreClass* qc = findAOTClassByPath(pgm, class_path, false);
-                if (qc && method_name && *method_name) {
-                    method = findAOTStaticMethod(qc, method_name);
-                }
-            }
-            auto* ci = new QoreIRCallStaticDirectInstruction(method, nullptr, expr);
-            ci->has_ref_args = has_ref_args;
-            expr.discard(nullptr);
-            inst.reset(ci);
-            break;
-        }
-
-        case QoreIRInstGroup::DotEvalMethodDirect: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            const char* class_path = reader.readStringRef(ptr);
-            AOTEncodedMethodRef method_ref(reader.readStringRef(ptr));
-            bool pseudo = QoreAOTBinaryReader::readU8(ptr) != 0;
-            bool has_ref_args = QoreAOTBinaryReader::readU8(ptr) != 0;
-            uint8_t pseudo_flags =
-                (reader.getHeader().feature_flags & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) != 0
-                    ? QoreAOTBinaryReader::readU8(ptr) : 0;
-
-            const QoreClass* qc = findAOTClassByPath(pgm, class_path, pseudo);
-            const QoreMethod* method = findAOTMethodByName(qc, method_ref.method_name);
-            const AbstractQoreFunctionVariant* variant = findAOTMethodVariantByRef(
-                pgm, method, method_ref, pseudo);
-            auto* ci = new QoreIRDotEvalMethodDirectInstruction(method, qc, variant, expr, pseudo);
-            ci->has_ref_args = has_ref_args;
-            ci->intrinsic = pseudo
-                ? qore_ir_resolve_pseudo_intrinsic(method, qc, method_ref.method_name)
-                : QoreIRIntrinsic::None;
-            ci->pseudo_base_known_string = (pseudo_flags & 0x01) != 0;
-            ci->pseudo_base_known_assigned_string = (pseudo_flags & 0x02) != 0;
-            ci->pseudo_base_safe_value_dispatch = (pseudo_flags & 0x04) != 0;
-            ci->pseudo_base_known_assigned_collection = (pseudo_flags & 0x80) != 0;
-            if (method_ref.method_name && *method_ref.method_name) {
-                ci->fallback_method_name = strdup(method_ref.method_name);
-            }
-            expr.discard(nullptr);
-            inst.reset(ci);
-            break;
-        }
-
-        case QoreIRInstGroup::InvokeDotEvalMethodDirect: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            const char* class_path = reader.readStringRef(ptr);
-            AOTEncodedMethodRef method_ref(reader.readStringRef(ptr));
-            bool pseudo = QoreAOTBinaryReader::readU8(ptr) != 0;
-            bool has_ref_args = QoreAOTBinaryReader::readU8(ptr) != 0;
-            uint8_t pseudo_flags =
-                (reader.getHeader().feature_flags & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) != 0
-                    ? QoreAOTBinaryReader::readU8(ptr) : 0;
-            uint16_t normal_idx = QoreAOTBinaryReader::readU16(ptr);
-            uint16_t exception_idx = QoreAOTBinaryReader::readU16(ptr);
-
-            const QoreClass* qc = findAOTClassByPath(pgm, class_path, pseudo);
-            const QoreMethod* method = findAOTMethodByName(qc, method_ref.method_name);
-            const AbstractQoreFunctionVariant* variant = findAOTMethodVariantByRef(
-                pgm, method, method_ref, pseudo);
-            auto* ci = new QoreIRInvokeDotEvalMethodDirectInstruction(method, qc, variant, expr,
-                pseudo, resolveBlock(normal_idx), resolveBlock(exception_idx));
-            ci->has_ref_args = has_ref_args;
-            ci->intrinsic = pseudo
-                ? qore_ir_resolve_pseudo_intrinsic(method, qc, method_ref.method_name)
-                : QoreIRIntrinsic::None;
-            ci->pseudo_base_known_string = (pseudo_flags & 0x01) != 0;
-            ci->pseudo_base_known_assigned_string = (pseudo_flags & 0x02) != 0;
-            ci->pseudo_base_safe_value_dispatch = (pseudo_flags & 0x04) != 0;
-            ci->pseudo_base_known_assigned_collection = (pseudo_flags & 0x80) != 0;
-            if (method_ref.method_name && *method_ref.method_name) {
-                ci->fallback_method_name = strdup(method_ref.method_name);
-            }
-            expr.discard(nullptr);
-            inst.reset(ci);
-            break;
-        }
-
-        case QoreIRInstGroup::Invoke: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            uint16_t invoke_opcode_raw = QoreAOTBinaryReader::readU16(ptr);
-            const char* invoke_key_name = reader.readStringRef(ptr);
-            AssignmentMode mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ptr));
-            uint16_t normal_idx = QoreAOTBinaryReader::readU16(ptr);
-            uint16_t exception_idx = QoreAOTBinaryReader::readU16(ptr);
-            auto* ii = new QoreIRInvokeInstruction(expr,
-                resolveBlock(normal_idx), resolveBlock(exception_idx));
-            ii->invoke_opcode = static_cast<QoreIROpcode>(invoke_opcode_raw);
-            ii->invoke_key_name = invoke_key_name ? invoke_key_name : "";
-            ii->mode = mode;
-            expr.discard(nullptr);
-            inst.reset(ii);
-            break;
-        }
-
-        case QoreIRInstGroup::ScopeEnter: {
-            uint32_t scope_id = QoreAOTBinaryReader::readU32(ptr);
-            inst = std::make_unique<QoreIRScopeEnterInstruction>(scope_id);
-            break;
-        }
-
-        case QoreIRInstGroup::ScopeExit: {
-            uint32_t scope_id = QoreAOTBinaryReader::readU32(ptr);
-            bool is_error = QoreAOTBinaryReader::readU8(ptr) != 0;
-            inst = std::make_unique<QoreIRScopeExitInstruction>(scope_id, is_error);
-            break;
-        }
-
-        case QoreIRInstGroup::LandingPad: {
-            uint32_t scope_depth = QoreAOTBinaryReader::readU32(ptr);
-            uint32_t try_scope_id = QoreAOTBinaryReader::readU32(ptr);
-            inst = std::make_unique<QoreIRLandingPadInstruction>(
-                static_cast<size_t>(scope_depth), try_scope_id);
-            break;
-        }
-
-        case QoreIRInstGroup::SwitchInt: {
-            auto* si = new QoreIRSwitchIntInstruction();
-            si->opcode = opcode;
-            si->switch_val = QoreIRValue(QoreAOTBinaryReader::readU32(ptr));
-            uint16_t default_idx = QoreAOTBinaryReader::readU16(ptr);
-            si->default_target = resolveBlock(default_idx);
-            uint16_t num_cases = QoreAOTBinaryReader::readU16(ptr);
-            si->cases.reserve(num_cases);
-            for (int j = 0; j < num_cases; ++j) {
-                int64_t value = QoreAOTBinaryReader::readI64(ptr);
-                uint16_t target_idx = QoreAOTBinaryReader::readU16(ptr);
-                si->cases.push_back({value, resolveBlock(target_idx)});
-            }
-            inst.reset(si);
-            break;
-        }
-
-        case QoreIRInstGroup::SwitchString: {
-            auto* si = new QoreIRSwitchStringInstruction();
-            si->opcode = opcode;
-            si->switch_val = QoreIRValue(QoreAOTBinaryReader::readU32(ptr));
-            uint16_t default_idx = QoreAOTBinaryReader::readU16(ptr);
-            si->default_target = resolveBlock(default_idx);
-            uint16_t num_cases = QoreAOTBinaryReader::readU16(ptr);
-            si->cases.reserve(num_cases);
-            for (int j = 0; j < num_cases; ++j) {
-                const char* value = reader.readStringRef(ptr);
-                uint16_t target_idx = QoreAOTBinaryReader::readU16(ptr);
-                si->cases.push_back({value ? value : "", resolveBlock(target_idx)});
-            }
-            inst.reset(si);
-            break;
-        }
-
-        case QoreIRInstGroup::Phi: {
-            auto* pi = new QoreIRPhiInstruction();
-            pi->opcode = opcode;
-            pi->value_kind = static_cast<QoreIRPhiValueKind>(QoreAOTBinaryReader::readU8(ptr));
-            uint16_t num_incoming = QoreAOTBinaryReader::readU16(ptr);
-            pi->incoming.reserve(num_incoming);
-            for (int j = 0; j < num_incoming; ++j) {
-                uint32_t val_id = QoreAOTBinaryReader::readU32(ptr);
-                uint16_t block_idx = QoreAOTBinaryReader::readU16(ptr);
-                pi->incoming.push_back({QoreIRValue(val_id), resolveBlock(block_idx)});
-            }
-            inst.reset(pi);
-            break;
-        }
-
-        case QoreIRInstGroup::Guard: {
-            auto* gi = new QoreIRGuardInstruction(opcode);
-            uint16_t deopt_idx = QoreAOTBinaryReader::readU16(ptr);
-            gi->deopt_target = resolveBlock(deopt_idx);
-            const char* type_path = reader.readStringRef(ptr);
-            gi->guard_id = QoreAOTBinaryReader::readU32(ptr);
-            if (type_path && *type_path) {
-                std::string type_error;
-                QoreAOTTypeResolver type_resolver(pgm);
-                gi->type_info = type_resolver.resolve(type_path, type_error);
-            }
-            inst.reset(gi);
-            break;
-        }
-
-        case QoreIRInstGroup::ImplicitArg: {
-            uint16_t offset = QoreAOTBinaryReader::readU16(ptr);
-            inst = std::make_unique<QoreIRImplicitArgInstruction>(static_cast<int>(offset));
-            break;
-        }
-
-        case QoreIRInstGroup::HashKeyAccess: {
-            const char* key_name = reader.readStringRef(ptr);
-            inst = std::make_unique<QoreIRHashKeyAccessInstruction>(key_name ? key_name : "", opcode);
-            break;
-        }
-
-        case QoreIRInstGroup::SelfMember: {
-            const char* member_name = reader.readStringRef(ptr);
-            auto* si = new QoreIRSelfMemberInstruction(member_name ? member_name : "");
-            si->opcode = opcode;
-            inst.reset(si);
-            break;
-        }
-
-        case QoreIRInstGroup::StaticVar: {
-            const char* var_name = reader.readStringRef(ptr);
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            // Bind the static variable info of an expression whose class resolved while it
-            // was read; a reference that stayed deferred keeps none until its class appears.
-            auto* si = new QoreIRStaticVarInstruction(qore_static_var_ref_info(expr),
-                var_name ? var_name : "", expr);
-            si->opcode = opcode;
-            expr.discard(nullptr);
-            inst.reset(si);
-            break;
-        }
-
-        case QoreIRInstGroup::NewObject: {
-            const char* class_path = reader.readStringRef(ptr);
-            const char* variant_sig = reader.readStringRef(ptr);
-            const QoreClass* qc = nullptr;
-            const AbstractQoreFunctionVariant* variant = nullptr;
-            if (class_path && *class_path) {
-                qc = qore_aot_resolve_class_ref(pgm, class_path, false);
-                if (qc && variant_sig && *variant_sig) {
-                    if (const QoreMethod* cons = qc->getConstructor()) {
-                        const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
-                        variant = findAOTVariantBySignatureText(cf, variant_sig);
-                    }
-                }
-            }
-            auto* ni = new QoreIRNewObjectInstruction(qc, variant, QoreValue(), nullptr,
-                class_path, variant_sig);
-            ni->opcode = opcode;
-            inst.reset(ni);
-            break;
-        }
-
-        case QoreIRInstGroup::LoadConst: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            auto* rcr = qore_get_runtime_constant_ref_node(expr.getInternalNode());
-            auto* lci = new QoreIRLoadConstantInstruction(rcr, expr);
-            lci->opcode = opcode;
-            expr.discard(nullptr);
-            inst.reset(lci);
-            break;
-        }
-
-        case QoreIRInstGroup::CreateClosure: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            // the closure node is the expression's, as in lowered IR: native code compiled from this IR creates the
-            // closure from it
-            auto* cci = new QoreIRCreateClosureInstruction(
-                dynamic_cast<const QoreClosureParseNode*>(expr.getInternalNode()), expr);
-            cci->opcode = opcode;
-            expr.discard(nullptr);
-            inst.reset(cci);
-            break;
-        }
-
-        case QoreIRInstGroup::CreateCallRef: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            auto* cri = new QoreIRCreateCallRefInstruction(expr);
-            cri->opcode = opcode;
-            expr.discard(nullptr);
-            inst.reset(cri);
-            break;
-        }
-
-        case QoreIRInstGroup::CreateMethodRef: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            auto* cri = new QoreIRCreateMethodRefInstruction(expr);
-            cri->opcode = opcode;
-            expr.discard(nullptr);
-            inst.reset(cri);
-            break;
-        }
-
-        case QoreIRInstGroup::CreateParseRef: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            auto* cri = new QoreIRCreateParseRefInstruction(
-                dynamic_cast<const ParseReferenceNode*>(expr.getInternalNode()), expr);
-            cri->opcode = opcode;
-            expr.discard(nullptr);
-            inst.reset(cri);
-            break;
-        }
-
-        case QoreIRInstGroup::NewHashDecl: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            auto* ni = new QoreIRNewHashDeclInstruction(
-                dynamic_cast<const NewHashDeclNode*>(expr.getInternalNode()), expr);
-            ni->opcode = opcode;
-            expr.discard(nullptr);
-            inst.reset(ni);
-            break;
-        }
-
-        case QoreIRInstGroup::NewComplexHash: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            auto* ni = new QoreIRNewComplexHashInstruction(
-                dynamic_cast<const NewComplexHashNode*>(expr.getInternalNode()), expr);
-            ni->opcode = opcode;
-            expr.discard(nullptr);
-            inst.reset(ni);
-            break;
-        }
-
-        case QoreIRInstGroup::NewComplexList: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            auto* ni = new QoreIRNewComplexListInstruction(
-                dynamic_cast<const NewComplexListNode*>(expr.getInternalNode()), expr);
-            ni->opcode = opcode;
-            expr.discard(nullptr);
-            inst.reset(ni);
-            break;
-        }
-
-        case QoreIRInstGroup::NewComplexBuffer: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            auto* ni = new QoreIRNewComplexBufferInstruction(
-                dynamic_cast<const NewComplexBufferNode*>(expr.getInternalNode()), expr);
-            ni->opcode = opcode;
-            expr.discard(nullptr);
-            inst.reset(ni);
-            break;
-        }
-
-        case QoreIRInstGroup::VrnConstruct: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            auto* vi = new QoreIRVrnConstructInstruction(
-                dynamic_cast<const VarRefNewObjectNode*>(expr.getInternalNode()), expr);
-            vi->opcode = opcode;
-            expr.discard(nullptr);
-            inst.reset(vi);
-            break;
-        }
-
-        case QoreIRInstGroup::HashKeyStore: {
-            const char* key_name = reader.readStringRef(ptr);
-            uint32_t container_slot_id = QoreAOTBinaryReader::readU32(ptr);
-            auto* hi = new QoreIRHashKeyStoreInstruction(nullptr, key_name ? key_name : "");
-            hi->opcode = opcode;
-            hi->container_slot_id = container_slot_id;
-            // Resolve container LocalVar for the COW branch; the container
-            // VarRefNode is not serialized, so container==nullptr here and the
-            // interpreter COW path must use container_lv (resolved from the slot).
-            if (slot_to_local && container_slot_id != UINT32_MAX) {
-                auto sti = slot_to_local->find(container_slot_id);
-                if (sti != slot_to_local->end()) {
-                    hi->container_lv = sti->second;
-                }
-            }
-            inst.reset(hi);
-            break;
-        }
-
-        case QoreIRInstGroup::ListIndexStore: {
-            uint32_t container_slot_id = QoreAOTBinaryReader::readU32(ptr);
-            auto* li = new QoreIRListIndexStoreInstruction(nullptr);
-            li->opcode = opcode;
-            li->container_slot_id = container_slot_id;
-            // Resolve container LocalVar for the COW branch (see HashKeyStore above).
-            if (slot_to_local && container_slot_id != UINT32_MAX) {
-                auto sti = slot_to_local->find(container_slot_id);
-                if (sti != slot_to_local->end()) {
-                    li->container_lv = sti->second;
-                }
-            }
-            inst.reset(li);
-            break;
-        }
-
-        case QoreIRInstGroup::HashKeyStoreDynamic: {
-            uint32_t container_slot_id = QoreAOTBinaryReader::readU32(ptr);
-            auto* hi = new QoreIRHashKeyStoreDynamicInstruction(nullptr);
-            hi->opcode = opcode;
-            hi->container_slot_id = container_slot_id;
-            // Resolve container LocalVar for the COW branch (see HashKeyStore above).
-            if (slot_to_local && container_slot_id != UINT32_MAX) {
-                auto sti = slot_to_local->find(container_slot_id);
-                if (sti != slot_to_local->end()) {
-                    hi->container_lv = sti->second;
-                }
-            }
-            inst.reset(hi);
-            break;
-        }
-
-        case QoreIRInstGroup::LValuePath: {
-            auto* pi = new QoreIRLValuePathInstruction(opcode);
-            pi->mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ptr));
-            pi->compound_op = static_cast<LVCompoundOp>(QoreAOTBinaryReader::readU8(ptr));
-            pi->unary_op = static_cast<LVUnaryOp>(QoreAOTBinaryReader::readU8(ptr));
-            pi->binary_mut_op = static_cast<LVBinaryMutOp>(QoreAOTBinaryReader::readU8(ptr));
-            pi->ternary_op = static_cast<LVTernaryOp>(QoreAOTBinaryReader::readU8(ptr));
-            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_LVPATH_DELETE_EXPR) != 0) {
-                if (QoreAOTBinaryReader::readU8(ptr)) {
-                    QoreValue legacy_delete_lvalue_expr = readExpr(reader, ptr, end, error);
-                    legacy_delete_lvalue_expr.discard(nullptr);
-                    if (!error.empty()) {
-                        delete pi;
-                        return nullptr;
-                    }
-                }
-            }
-            uint8_t num_steps = QoreAOTBinaryReader::readU8(ptr);
-            auto resolve_global_lvalue_root = [&](LVPathStep& step, const std::string& name) -> bool {
-                Var* var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name.c_str());
-                if (!var) {
-                    error = "cannot resolve global lvalue path root '" + name + "'";
-                    return false;
-                }
-                step.kind = var->isThreadLocal() ? LVPathStepKind::ThreadLocalVar : LVPathStepKind::GlobalVar;
-                step.name = name;
-                step.ref_ptr = var;
-                return true;
-            };
-            // Resolve a class static in the program that owns this code, so that a class private to its module
-            // can be reached; such a class never appears in the namespace of the program that loads the module,
-            // where the symbolic path below is resolved when the assignment runs.  Best-effort: the class may
-            // legitimately not be registered yet (a sibling .qo file, for example), in which case the symbolic
-            // path remains the only resolution mechanism.
-            auto resolve_static_lvalue_fallback = [&](LVPathStep& step, const std::string& name) {
-                QoreProgram* owner_pgm = local_owner_pgm ? local_owner_pgm : pgm;
-                if (!owner_pgm) {
-                    return;
-                }
-                std::string var_name;
-                step.aot_static_var_info = qore_find_static_var_by_path(*owner_pgm, name, var_name);
-            };
-            for (uint8_t i = 0; i < num_steps; ++i) {
-                LVPathStep step;
-                step.kind = static_cast<LVPathStepKind>(QoreAOTBinaryReader::readU8(ptr));
-                step.slot_id = QoreAOTBinaryReader::readU32(ptr);
-                const char* name = reader.readStringRef(ptr);
-                step.name = name ? name : "";
-                step.operand_idx = QoreAOTBinaryReader::readU32(ptr);
-                // Slice steps carry an SSA id vector (HashKeySlice /
-                // ListIndexSlice / ListRangeSlice) — matches writer's wire format.
-                if (step.kind == LVPathStepKind::HashKeySlice
-                        || step.kind == LVPathStepKind::ListIndexSlice
-                        || step.kind == LVPathStepKind::ListRangeSlice) {
-                    uint32_t num_slice_ops = QoreAOTBinaryReader::readU32(ptr);
-                    step.slice_operand_ids.reserve(num_slice_ops);
-                    for (uint32_t k = 0; k < num_slice_ops; ++k) {
-                        step.slice_operand_ids.push_back(
-                                QoreAOTBinaryReader::readU32(ptr));
-                    }
-                    // which selectors of a list of selectors are ranges (qore#5736, QORE_AOT_SLICE_RANGES_VERSION); an
-                    // older step takes each as a range, as before
-                    if (step.kind == LVPathStepKind::ListIndexSlice) {
-                        pi->slice_ranges.clear();
-                        if (reader.getHeader().version >= QORE_AOT_SLICE_RANGES_VERSION) {
-                            pi->slice_ranges.reserve(num_slice_ops);
-                            for (uint32_t k = 0; k < num_slice_ops; ++k) {
-                                pi->slice_ranges.push_back(QoreAOTBinaryReader::readU8(ptr) != 0);
-                            }
-                        } else {
-                            pi->slice_ranges.assign(num_slice_ops, true);
-                        }
-                    }
-                }
-                // Resolve local vars from AOT locals
-                if ((step.kind == LVPathStepKind::LocalVar || step.kind == LVPathStepKind::ClosureVar)
-                        && step.slot_id != UINT32_MAX && step.slot_id < ctx->num_locals) {
-                    step.ref_ptr = ctx->locals[step.slot_id];
-                }
-                // GlobalVar/ThreadLocalVar: resolve by name via program namespace
-                if ((step.kind == LVPathStepKind::GlobalVar || step.kind == LVPathStepKind::ThreadLocalVar)
-                        && !step.name.empty()) {
-                    if (!resolve_global_lvalue_root(step, step.name)) {
-                        delete pi;
-                        return nullptr;
-                    }
-                } else if (step.kind == LVPathStepKind::StaticVar && !step.name.empty()) {
-                    if (step.name.size() > 2 && step.name[0] == ':' && step.name[1] == ':') {
-                        std::string global_name = step.name.substr(2);
-                        if (!resolve_global_lvalue_root(step, global_name)) {
-                            delete pi;
-                            return nullptr;
-                        }
-                    } else {
-                        step.ref_ptr = nullptr;
-                        resolve_static_lvalue_fallback(step, step.name);
-                    }
-                }
-                pi->path.push_back(std::move(step));
-            }
-            inst.reset(pi);
-            break;
-        }
-
-        case QoreIRInstGroup::FusedAddLocal: {
-            const char* target_name = reader.readStringRef(ptr);
-            const char* source_name = reader.readStringRef(ptr);
-            uint32_t target_slot_id = QoreAOTBinaryReader::readU32(ptr);
-            uint32_t source_slot_id = QoreAOTBinaryReader::readU32(ptr);
-            bool target_ir_only = QoreAOTBinaryReader::readU8(ptr) != 0;
-            LocalVar* target_lv = resolveLocal(target_name);
-            LocalVar* source_lv = resolveLocal(source_name);
-            auto* fi = new QoreIRAddAssignLocalIntInstruction(target_lv, source_lv);
-            fi->target_slot_id = target_slot_id;
-            fi->source_slot_id = source_slot_id;
-            fi->target_ir_only = target_ir_only;
-            inst.reset(fi);
-            break;
-        }
-
-        case QoreIRInstGroup::FusedIncLocal: {
-            const char* local_name = reader.readStringRef(ptr);
-            int64_t delta = QoreAOTBinaryReader::readI64(ptr);
-            uint32_t slot_id = QoreAOTBinaryReader::readU32(ptr);
-            bool ir_only = QoreAOTBinaryReader::readU8(ptr) != 0;
-            LocalVar* lv = resolveLocal(local_name);
-            auto* fi = new QoreIRIncrementLocalIntInstruction(lv, delta);
-            fi->slot_id = slot_id;
-            fi->ir_only = ir_only;
-            inst.reset(fi);
-            break;
-        }
-
-        case QoreIRInstGroup::FusedBrLtLocal: {
-            const char* lhs_name = reader.readStringRef(ptr);
-            const char* rhs_name = reader.readStringRef(ptr);
-            uint32_t lhs_slot_id = QoreAOTBinaryReader::readU32(ptr);
-            uint32_t rhs_slot_id = QoreAOTBinaryReader::readU32(ptr);
-            uint16_t true_idx = QoreAOTBinaryReader::readU16(ptr);
-            uint16_t false_idx = QoreAOTBinaryReader::readU16(ptr);
-            LocalVar* lhs_lv = resolveLocal(lhs_name);
-            LocalVar* rhs_lv = resolveLocal(rhs_name);
-            auto* fi = new QoreIRBranchIfLtLocalIntInstruction(
-                lhs_lv, rhs_lv, resolveBlock(true_idx), resolveBlock(false_idx));
-            fi->lhs_slot_id = lhs_slot_id;
-            fi->rhs_slot_id = rhs_slot_id;
-            inst.reset(fi);
-            break;
-        }
-
-        case QoreIRInstGroup::MapHashKey: {
-            const char* key1 = reader.readStringRef(ptr);
-            const char* key2 = reader.readStringRef(ptr);
-            inst = std::make_unique<QoreIRMapHashKeyInstruction>(opcode,
-                key1 ? key1 : "", key2 ? key2 : "");
-            break;
-        }
-
-        case QoreIRInstGroup::IteratorCreate: {
-            uint32_t iterable_id = QoreAOTBinaryReader::readU32(ptr);
-            auto* ii = new QoreIRIteratorCreateInstruction(QoreIRValue(iterable_id));
-            ii->opcode = opcode;
-            inst.reset(ii);
-            break;
-        }
-
-        case QoreIRInstGroup::IteratorNext: {
-            uint32_t iterator_id = QoreAOTBinaryReader::readU32(ptr);
-            uint16_t done_idx = QoreAOTBinaryReader::readU16(ptr);
-            uint16_t continue_idx = QoreAOTBinaryReader::readU16(ptr);
-            if ((opcode == QoreIROpcode::TypedForeachNextInt
-                    || opcode == QoreIROpcode::TypedForeachNextFloat
-                    || opcode == QoreIROpcode::TypedForeachNextBool
-                    || opcode == QoreIROpcode::TypedForeachNextString)
-                    && operands.size() == 3) {
-                inst = std::make_unique<QoreIRIteratorNextInstruction>(opcode,
-                    QoreIRValue(iterator_id), operands[1], operands[2], resolveBlock(done_idx),
-                    resolveBlock(continue_idx));
-            } else {
-                auto* next = new QoreIRIteratorNextInstruction(
-                    QoreIRValue(iterator_id), resolveBlock(done_idx), resolveBlock(continue_idx));
-                next->opcode = opcode;
-                inst.reset(next);
-            }
-            // the values that it releases after the previous element (see QORE_AOT_ITERATOR_RELEASES_VERSION)
-            if (reader.getHeader().version >= QORE_AOT_ITERATOR_RELEASES_VERSION) {
-                auto* next = static_cast<QoreIRIteratorNextInstruction*>(inst.get());
-                uint16_t count = QoreAOTBinaryReader::readU16(ptr);
-                next->release_values.reserve(count);
-                for (uint16_t i = 0; i < count; ++i) {
-                    next->release_values.push_back(QoreIRValue(QoreAOTBinaryReader::readU32(ptr)));
-                }
-            }
-            break;
-        }
-
-        case QoreIRInstGroup::RefForeachInit: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
-            }
-            auto* ri = new QoreIRRefForeachInitInstruction(expr);
-            ri->opcode = opcode;
-            expr.discard(nullptr);
-            inst.reset(ri);
-            break;
-        }
-
-        case QoreIRInstGroup::OnBlockExit: {
-            obe_type_e obe_type = static_cast<obe_type_e>(QoreAOTBinaryReader::readU8(ptr));
-            uint8_t has_handler_ir = QoreAOTBinaryReader::readU8(ptr);
-            std::unique_ptr<QoreIRFunction> nested_handler;
-            if (has_handler_ir) {
-                nested_handler = deserializeIRFunction(reader, ptr, end, pgm, readExpr,
-                    &local_map, error, parent_locals_arr, num_parent_locals,
-                    nullptr, false, nullptr, local_owner_pgm);
-                if (!nested_handler) {
-                    error = "failed to deserialize nested OnBlockExit handler IR: " + error;
-                    return nullptr;
-                }
-                nested_handler->computeSlotIdsAndEmbed();
-                // the parent's variables are pre-instantiated in the handler, as its lowering marks them; without
-                // them the IR interpreter took the closure-bound variables of the function for the handler's own
-                nested_handler->restoreHandlerPreInstantiatedLocals();
-            } else {
-                error = "OnBlockExit without handler IR in deserialized context";
-                return nullptr;
-            }
-            auto* obe_inst = new QoreIROnBlockExitInstruction(obe_type, std::move(nested_handler));
-            obe_inst->opcode = opcode;
-            inst.reset(obe_inst);
-            break;
-        }
-
-        case QoreIRInstGroup::SwitchRegexMatch: {
-            const char* pattern = reader.readStringRef(ptr);
-            int64_t options = QoreAOTBinaryReader::readI64(ptr);
-            bool is_negated = QoreAOTBinaryReader::readU8(ptr) != 0;
-            ExceptionSink xsink;
-            QoreRegex* re = new QoreRegex(pattern ? pattern : "", options, &xsink);
-            if (xsink) {
-                delete re;
-                error = "failed to compile regex pattern for SwitchRegexMatch";
-                return nullptr;
-            }
-            const CaseNodeRegex* cnode = is_negated
-                ? new CaseNodeNegRegex(&loc_builtin, re, nullptr)
-                : new CaseNodeRegex(&loc_builtin, re, nullptr);
-            auto* sri = new QoreIRSwitchRegexMatchInstruction(cnode);
-            sri->opcode = opcode;
-            sri->owns_regex_case = true;
-            inst.reset(sri);
-            break;
-        }
-
-        case QoreIRInstGroup::MakeHashConstKeys: {
-            uint16_t key_count = QoreAOTBinaryReader::readU16(ptr);
-            std::vector<std::string> keys;
-            keys.reserve(key_count);
-            for (uint16_t k = 0; k < key_count; ++k) {
-                const char* key = reader.readStringRef(ptr);
-                keys.push_back(key ? key : "");
-            }
-            inst.reset(new QoreIRMakeHashConstKeysInstruction(std::move(keys)));
-            break;
-        }
-
-        case QoreIRInstGroup::SwitchCaseMatch: {
-            uint8_t has_val = QoreAOTBinaryReader::readU8(ptr);
-            QoreValue case_val;
-            if (has_val) {
-                case_val = readExpr(reader, ptr, end, error);
-                if (!error.empty()) {
-                    return nullptr;
-                }
-            }
-            // Create a CaseNode with the deserialized value expression
-            auto* cnode = new CaseNode(&loc_builtin, case_val, nullptr);
-            auto* scm = new QoreIRSwitchCaseMatchInstruction(cnode);
-            scm->owns_case_node = true;
-            inst.reset(scm);
-            break;
-        }
-
-        case QoreIRInstGroup::ListIndexAccess: {
-            inst.reset(new QoreIRListIndexAccessInstruction());
-            break;
-        }
-
-        // Summarize still holds a raw SummarizeStatement* pointer; encountering
-        // it on deserialization is a serialization error (Context is now native
-        // IR and handled via registry dispatch).
-        case QoreIRInstGroup::Summarize:
-            error = "unsupported AST-delegation instruction group " + std::to_string(group_byte);
-            return nullptr;
-
-        default:
-            error = "unsupported IR instruction group " + std::to_string(group_byte);
-            return nullptr;
-    }
-    #endif
 
     // Set base fields
     inst->result = QoreIRValue(result_id);
@@ -10169,1049 +9134,6 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
     }
 }
 
-//! Transplant BCAList (base class constructor arguments) from fallback to main constructors.
-/** Constructors are registered from slot maps (for their native AOT fn_ptr), but the
-    deserialized UserConstructorVariant has bcal=nullptr because the BCAList is not
-    serialized in the binary. Without the BCAList, constructorPrelude() cannot pass
-    arguments to base class constructors, causing RUNTIME-OVERLOAD-ERROR.
-    This function walks all classes in the main namespace and transplants the BCAList
-    from the matching fallback constructor variant where bcal is missing.
-*/
-static void transplantConstructorBCALists(
-        qore_ns_private* fallback_ns,
-        qore_ns_private* main_ns) {
-    // Process classes in this namespace
-    ClassListIterator cli(main_ns->classList);
-    while (cli.next()) {
-        QoreClass* main_qc = cli.get();
-        if (!main_qc) {
-            continue;
-        }
-        // Find matching class in fallback namespace
-        QoreClass* fb_qc = fallback_ns->classList.find(main_qc->getName());
-        if (!fb_qc) {
-            continue;
-        }
-        qore_class_private* main_priv = qore_class_private::get(*main_qc);
-        qore_class_private* fb_priv = qore_class_private::get(*fb_qc);
-
-        // Find the constructor method in the main class
-        const QoreMethod* main_mc = main_priv->parseFindLocalMethod("constructor");
-        const QoreMethod* fb_mc = fb_priv->parseFindLocalMethod("constructor");
-        if (!main_mc || !fb_mc) {
-            continue;
-        }
-        MethodFunctionBase* main_mfb = qore_method_private::get(*main_mc)->getFunction();
-        MethodFunctionBase* fb_mfb = qore_method_private::get(*fb_mc)->getFunction();
-        if (!main_mfb || !fb_mfb) {
-            continue;
-        }
-
-        // Find UserConstructorVariant in main and fallback
-        UserConstructorVariant* main_ucv = nullptr;
-        UserConstructorVariant* fb_ucv = nullptr;
-        {
-            QoreFunctionIterator vi(*main_mfb);
-            while (vi.next()) {
-                main_ucv = const_cast<UserConstructorVariant*>(
-                    dynamic_cast<const UserConstructorVariant*>(vi.getVariant()));
-                if (main_ucv) {
-                    break;
-                }
-            }
-        }
-        {
-            QoreFunctionIterator vi(*fb_mfb);
-            while (vi.next()) {
-                fb_ucv = const_cast<UserConstructorVariant*>(
-                    dynamic_cast<const UserConstructorVariant*>(vi.getVariant()));
-                if (fb_ucv) {
-                    break;
-                }
-            }
-        }
-        if (main_ucv && fb_ucv) {
-            main_ucv->transplantBCAList(fb_ucv);
-            printd(5, "AOT: transplanted BCAList for %s::constructor\n", main_qc->getName());
-        }
-    }
-
-    // Recurse into sub-namespaces
-    for (auto ni = main_ns->nsl.nsmap.begin(), ne = main_ns->nsl.nsmap.end();
-            ni != ne; ++ni) {
-        QoreNamespace* main_child = ni->second;
-        if (!main_child) {
-            continue;
-        }
-        auto fb_ni = fallback_ns->nsl.nsmap.find(ni->first);
-        if (fb_ni != fallback_ns->nsl.nsmap.end() && fb_ni->second) {
-            transplantConstructorBCALists(
-                qore_ns_private::get(*fb_ni->second),
-                qore_ns_private::get(*main_child));
-        }
-    }
-}
-
-//! Resolve a fallback-program type pointer to the target AOT program's canonical type pointer.
-using hashdecl_retarget_map_t = std::unordered_map<const TypedHashDecl*, const TypedHashDecl*>;
-
-static const QoreTypeInfo* retargetFallbackTypeInfo(QoreAOTTypeResolver& type_resolver, const QoreTypeInfo* ti,
-        const hashdecl_retarget_map_t& hashdecl_map) {
-    if (!QoreTypeInfo::hasType(ti)) {
-        return ti;
-    }
-
-    if (const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(ti)) {
-        auto hdi = hashdecl_map.find(hd);
-        if (hdi != hashdecl_map.end() && hdi->second) {
-            bool or_nothing = QoreTypeInfo::parseReturns(ti, NT_NOTHING) != QTI_NOT_EQUAL;
-            return hdi->second->getTypeInfo(or_nothing);
-        }
-    }
-
-    if (QoreTypeInfo::isReference(ti)) {
-        const QoreTypeInfo* target_ti = QoreTypeInfo::getReferenceTarget(ti);
-        const QoreTypeInfo* new_target_ti = retargetFallbackTypeInfo(type_resolver, target_ti, hashdecl_map);
-        if (new_target_ti != target_ti && QoreTypeInfo::hasType(new_target_ti)) {
-            bool or_nothing = QoreTypeInfo::parseReturns(ti, NT_NOTHING) != QTI_NOT_EQUAL;
-            return or_nothing
-                ? qore_get_complex_reference_or_nothing_type(new_target_ti)
-                : qore_get_complex_reference_type(new_target_ti);
-        }
-    }
-
-    std::string path = qore_get_aot_serializable_type_path(ti);
-    if (path.empty() || path == "no type info") {
-        return ti;
-    }
-
-    std::string error;
-    const QoreTypeInfo* resolved = type_resolver.resolve(path.c_str(), error);
-    return resolved && error.empty() ? resolved : ti;
-}
-
-static void retargetFallbackLocalVarType(LocalVar* lv, QoreAOTTypeResolver& type_resolver,
-        const hashdecl_retarget_map_t& hashdecl_map) {
-    if (!lv) {
-        return;
-    }
-
-    const QoreTypeInfo* ti = lv->getTypeInfo();
-    const QoreTypeInfo* new_ti = retargetFallbackTypeInfo(type_resolver, ti, hashdecl_map);
-    if (new_ti != ti) {
-        lv->setTypeInfo(new_ti);
-    }
-}
-
-static void retargetFallbackValueTypes(
-    QoreValue v,
-    QoreAOTTypeResolver& type_resolver,
-    const hashdecl_retarget_map_t& hashdecl_map,
-    std::unordered_set<const AbstractQoreNode*>& seen);
-
-static void retargetFallbackClosureFunctionTypes(
-    QoreFunction* func,
-    QoreAOTTypeResolver& type_resolver,
-    const hashdecl_retarget_map_t& hashdecl_map,
-    std::unordered_set<const AbstractQoreNode*>* seen_exprs = nullptr);
-
-static void retargetFallbackCallArgs(
-        const FunctionCallBase& call,
-        QoreAOTTypeResolver& type_resolver,
-        const hashdecl_retarget_map_t& hashdecl_map,
-        std::unordered_set<const AbstractQoreNode*>& seen) {
-    if (const QoreParseListNode* parse_args = call.getParseArgs()) {
-        for (const QoreValue& arg : parse_args->getValues()) {
-            retargetFallbackValueTypes(arg, type_resolver, hashdecl_map, seen);
-        }
-    }
-
-    if (const QoreListNode* args = call.getArgs()) {
-        size_t len = args->size();
-        for (size_t i = 0; i < len; ++i) {
-            retargetFallbackValueTypes(args->retrieveEntry(i), type_resolver, hashdecl_map, seen);
-        }
-    }
-}
-
-template <typename T>
-static bool retargetFallbackSingleExpressionOperator(
-        const AbstractQoreNode* node,
-        QoreAOTTypeResolver& type_resolver,
-        const hashdecl_retarget_map_t& hashdecl_map,
-        std::unordered_set<const AbstractQoreNode*>& seen) {
-    const T* op = dynamic_cast<const T*>(node);
-    if (!op) {
-        return false;
-    }
-
-    retargetFallbackValueTypes(op->getExp(), type_resolver, hashdecl_map, seen);
-    return true;
-}
-
-template <typename T>
-static bool retargetFallbackBinaryOperator(
-        const AbstractQoreNode* node,
-        QoreAOTTypeResolver& type_resolver,
-        const hashdecl_retarget_map_t& hashdecl_map,
-        std::unordered_set<const AbstractQoreNode*>& seen) {
-    const T* op = dynamic_cast<const T*>(node);
-    if (!op) {
-        return false;
-    }
-
-    retargetFallbackValueTypes(op->getLeft(), type_resolver, hashdecl_map, seen);
-    retargetFallbackValueTypes(op->getRight(), type_resolver, hashdecl_map, seen);
-    return true;
-}
-
-template <typename T, unsigned N>
-static bool retargetFallbackNOperator(
-        const AbstractQoreNode* node,
-        QoreAOTTypeResolver& type_resolver,
-        const hashdecl_retarget_map_t& hashdecl_map,
-        std::unordered_set<const AbstractQoreNode*>& seen) {
-    const T* op = dynamic_cast<const T*>(node);
-    if (!op) {
-        return false;
-    }
-
-    for (unsigned i = 0; i < N; ++i) {
-        retargetFallbackValueTypes(op->get(i), type_resolver, hashdecl_map, seen);
-    }
-    return true;
-}
-
-static void retargetFallbackStatementBlockTypes(
-        const StatementBlock* block,
-        QoreAOTTypeResolver& type_resolver,
-        const hashdecl_retarget_map_t& hashdecl_map,
-        std::unordered_set<const AbstractQoreNode*>& seen);
-
-static void retargetFallbackStatementTypes(
-        const AbstractStatement* stmt,
-        QoreAOTTypeResolver& type_resolver,
-        const hashdecl_retarget_map_t& hashdecl_map,
-        std::unordered_set<const AbstractQoreNode*>& seen) {
-    if (!stmt) {
-        return;
-    }
-
-    if (auto* block = dynamic_cast<const StatementBlock*>(stmt)) {
-        retargetFallbackStatementBlockTypes(block, type_resolver, hashdecl_map, seen);
-    } else if (auto* expr_stmt = dynamic_cast<const ExpressionStatement*>(stmt)) {
-        retargetFallbackValueTypes(expr_stmt->getExpression(), type_resolver, hashdecl_map, seen);
-    } else if (auto* return_stmt = dynamic_cast<const ReturnStatement*>(stmt)) {
-        retargetFallbackValueTypes(return_stmt->getExpression(), type_resolver, hashdecl_map, seen);
-    } else if (auto* throw_stmt = dynamic_cast<const ThrowStatement*>(stmt)) {
-        retargetFallbackValueTypes(throw_stmt->getArgs(), type_resolver, hashdecl_map, seen);
-    } else if (auto* rethrow_stmt = dynamic_cast<const RethrowStatement*>(stmt)) {
-        retargetFallbackValueTypes(rethrow_stmt->getArgs(), type_resolver, hashdecl_map, seen);
-    } else if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {
-        retargetFallbackValueTypes(if_stmt->getCond(), type_resolver, hashdecl_map, seen);
-        retargetFallbackStatementBlockTypes(if_stmt->getIfCode(), type_resolver, hashdecl_map, seen);
-        retargetFallbackStatementBlockTypes(if_stmt->getElseCode(), type_resolver, hashdecl_map, seen);
-    } else if (auto* for_stmt = dynamic_cast<const ForStatement*>(stmt)) {
-        retargetFallbackValueTypes(for_stmt->getAssignment(), type_resolver, hashdecl_map, seen);
-        retargetFallbackValueTypes(for_stmt->getCond(), type_resolver, hashdecl_map, seen);
-        retargetFallbackValueTypes(for_stmt->getIterator(), type_resolver, hashdecl_map, seen);
-        retargetFallbackStatementBlockTypes(for_stmt->getCode(), type_resolver, hashdecl_map, seen);
-    } else if (auto* while_stmt = dynamic_cast<const WhileStatement*>(stmt)) {
-        retargetFallbackValueTypes(while_stmt->getCond(), type_resolver, hashdecl_map, seen);
-        retargetFallbackStatementBlockTypes(while_stmt->getCode(), type_resolver, hashdecl_map, seen);
-    } else if (auto* try_stmt = dynamic_cast<const TryStatement*>(stmt)) {
-        retargetFallbackLocalVarType(try_stmt->getCatchVar(), type_resolver, hashdecl_map);
-        retargetFallbackStatementBlockTypes(try_stmt->getTryBlock(), type_resolver, hashdecl_map, seen);
-        retargetFallbackStatementBlockTypes(try_stmt->getCatchBlock(), type_resolver, hashdecl_map, seen);
-    } else if (auto* sw_stmt = dynamic_cast<const SwitchStatement*>(stmt)) {
-        retargetFallbackValueTypes(sw_stmt->getSwitchExp(), type_resolver, hashdecl_map, seen);
-        const CaseNode* cn = sw_stmt->getCases();
-        while (cn) {
-            retargetFallbackValueTypes(cn->val, type_resolver, hashdecl_map, seen);
-            retargetFallbackStatementBlockTypes(cn->code, type_resolver, hashdecl_map, seen);
-            cn = cn->next;
-        }
-    } else if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
-        retargetFallbackValueTypes(foreach_stmt->getVar(), type_resolver, hashdecl_map, seen);
-        retargetFallbackValueTypes(foreach_stmt->getList(), type_resolver, hashdecl_map, seen);
-        retargetFallbackStatementBlockTypes(foreach_stmt->getCode(), type_resolver, hashdecl_map, seen);
-    } else if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
-        retargetFallbackValueTypes(debug_stmt->getExpression(), type_resolver, hashdecl_map, seen);
-        retargetFallbackStatementBlockTypes(debug_stmt->getBlock(), type_resolver, hashdecl_map, seen);
-    } else if (auto* assert_stmt = dynamic_cast<const AssertStatement*>(stmt)) {
-        retargetFallbackValueTypes(assert_stmt->getCondition(), type_resolver, hashdecl_map, seen);
-        retargetFallbackValueTypes(assert_stmt->getMessage(), type_resolver, hashdecl_map, seen);
-    } else if (auto* obe_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
-        retargetFallbackStatementBlockTypes(obe_stmt->getCode(), type_resolver, hashdecl_map, seen);
-    } else if (auto* ctx_stmt = dynamic_cast<const ContextStatement*>(stmt)) {
-        retargetFallbackValueTypes(ctx_stmt->exp, type_resolver, hashdecl_map, seen);
-        retargetFallbackValueTypes(ctx_stmt->where_exp, type_resolver, hashdecl_map, seen);
-        retargetFallbackValueTypes(ctx_stmt->sort_ascending, type_resolver, hashdecl_map, seen);
-        retargetFallbackValueTypes(ctx_stmt->sort_descending, type_resolver, hashdecl_map, seen);
-        retargetFallbackStatementBlockTypes(ctx_stmt->code, type_resolver, hashdecl_map, seen);
-    }
-}
-
-static void retargetFallbackStatementBlockTypes(
-        const StatementBlock* block,
-        QoreAOTTypeResolver& type_resolver,
-        const hashdecl_retarget_map_t& hashdecl_map,
-        std::unordered_set<const AbstractQoreNode*>& seen) {
-    if (!block) {
-        return;
-    }
-
-    for (auto it = block->getStatements().begin(); it != block->getStatements().end(); ++it) {
-        retargetFallbackStatementTypes(*it, type_resolver, hashdecl_map, seen);
-    }
-}
-
-static void retargetFallbackClosureFunctionTypes(QoreFunction* func, QoreAOTTypeResolver& type_resolver,
-        const hashdecl_retarget_map_t& hashdecl_map,
-        std::unordered_set<const AbstractQoreNode*>* seen_exprs) {
-    if (!func) {
-        return;
-    }
-
-    UserClosureFunction* ucf = dynamic_cast<UserClosureFunction*>(func);
-
-    if (ucf) {
-        const QoreTypeInfo* class_ti = ucf->getClassType();
-        const QoreTypeInfo* new_class_ti = retargetFallbackTypeInfo(type_resolver, class_ti, hashdecl_map);
-        if (new_class_ti != class_ti) {
-            ucf->setClassType(new_class_ti);
-        }
-    }
-
-    std::unordered_set<const AbstractQoreNode*> local_seen;
-    std::unordered_set<const AbstractQoreNode*>& seen = seen_exprs ? *seen_exprs : local_seen;
-
-    QoreFunctionIterator vi(*func);
-    while (vi.next()) {
-        const UserVariantBase* const_uvb = vi.getVariant()->getUserVariantBase();
-        UserVariantBase* uvb = const_cast<UserVariantBase*>(const_uvb);
-        if (!uvb) {
-            continue;
-        }
-
-        UserSignature* sig = uvb->getUserSignature();
-        if (!sig) {
-            continue;
-        }
-
-        const type_vec_t& types = sig->getTypeList();
-        std::vector<const QoreTypeInfo*> param_types;
-        param_types.reserve(types.size());
-        bool changed = false;
-        for (const QoreTypeInfo* ti : types) {
-            const QoreTypeInfo* new_ti = retargetFallbackTypeInfo(type_resolver, ti, hashdecl_map);
-            changed |= new_ti != ti;
-            param_types.push_back(new_ti);
-        }
-
-        const QoreTypeInfo* ret_ti = sig->getReturnTypeInfo();
-        const QoreTypeInfo* new_ret_ti = retargetFallbackTypeInfo(type_resolver, ret_ti, hashdecl_map);
-        if (changed || new_ret_ti != ret_ti) {
-            sig->replaceResolvedTypes(new_ret_ti, std::move(param_types));
-        }
-
-        for (LocalVar* lv : sig->lv) {
-            retargetFallbackLocalVarType(lv, type_resolver, hashdecl_map);
-        }
-        retargetFallbackLocalVarType(sig->argvid, type_resolver, hashdecl_map);
-        retargetFallbackLocalVarType(sig->selfid, type_resolver, hashdecl_map);
-
-        if (uvb && uvb->getStatementBlock()) {
-            std::vector<LocalVar*> body_locals;
-            collectAllStatementLocals(uvb->getStatementBlock(), body_locals);
-            for (LocalVar* lv : body_locals) {
-                retargetFallbackLocalVarType(lv, type_resolver, hashdecl_map);
-            }
-        }
-        if (uvb && uvb->getStatementBlock()) {
-            retargetFallbackStatementBlockTypes(uvb->getStatementBlock(), type_resolver, hashdecl_map, seen);
-        }
-
-        if (uvb && uvb->hasMaterializedAOTContext()) {
-            const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
-            for (LocalVar* lv : body_locals) {
-                retargetFallbackLocalVarType(lv, type_resolver, hashdecl_map);
-            }
-        }
-    }
-
-    if (ucf) {
-        LVarSet* vlist = ucf->getVList();
-        if (vlist) {
-            for (LocalVar* lv : *vlist) {
-                retargetFallbackLocalVarType(lv, type_resolver, hashdecl_map);
-            }
-        }
-    }
-}
-
-static void retargetFallbackValueTypes(
-        QoreValue v,
-        QoreAOTTypeResolver& type_resolver,
-        const hashdecl_retarget_map_t& hashdecl_map,
-        std::unordered_set<const AbstractQoreNode*>& seen) {
-    const AbstractQoreNode* node = v.getInternalNode();
-    if (!node || !seen.insert(node).second) {
-        return;
-    }
-
-    switch (v.getType()) {
-        case NT_PARSEREFERENCE: {
-            const ParseReferenceNode* prn = v.get<const ParseReferenceNode>();
-            const QoreTypeInfo* ti = prn->getTypeInfo();
-            const QoreTypeInfo* new_ti = retargetFallbackTypeInfo(type_resolver, ti, hashdecl_map);
-            if (new_ti != ti) {
-                const_cast<ParseReferenceNode*>(prn)->setTypeInfo(new_ti);
-            }
-            retargetFallbackValueTypes(prn->getLVExp(), type_resolver, hashdecl_map, seen);
-            break;
-        }
-
-        case NT_PARSE_LIST: {
-            const QoreParseListNode* l = v.get<const QoreParseListNode>();
-            for (const QoreValue& entry : l->getValues()) {
-                retargetFallbackValueTypes(entry, type_resolver, hashdecl_map, seen);
-            }
-            break;
-        }
-
-        case NT_PARSE_HASH: {
-            const QoreParseHashNode* h = v.get<const QoreParseHashNode>();
-            for (const QoreValue& key : h->getKeys()) {
-                retargetFallbackValueTypes(key, type_resolver, hashdecl_map, seen);
-            }
-            for (const QoreValue& value : h->getValues()) {
-                retargetFallbackValueTypes(value, type_resolver, hashdecl_map, seen);
-            }
-            break;
-        }
-
-        case NT_HASH: {
-            const QoreHashNode* h = v.get<const QoreHashNode>();
-            ConstHashIterator hi(h);
-            while (hi.next()) {
-                retargetFallbackValueTypes(hi.get(), type_resolver, hashdecl_map, seen);
-            }
-            break;
-        }
-
-        case NT_LIST: {
-            const QoreListNode* l = v.get<const QoreListNode>();
-            size_t len = l->size();
-            for (size_t i = 0; i < len; ++i) {
-                retargetFallbackValueTypes(l->retrieveEntry(i), type_resolver, hashdecl_map, seen);
-            }
-            break;
-        }
-
-        case NT_RUNTIME_CLOSURE: {
-            const QoreClosureBase* cb = dynamic_cast<const QoreClosureBase*>(node);
-            if (cb) {
-                retargetFallbackClosureFunctionTypes(cb->getFunction(), type_resolver, hashdecl_map, &seen);
-            }
-            break;
-        }
-
-        case NT_CLOSURE: {
-            const QoreClosureParseNode* cn = dynamic_cast<const QoreClosureParseNode*>(node);
-            if (cn) {
-                retargetFallbackClosureFunctionTypes(cn->getFunction(), type_resolver, hashdecl_map, &seen);
-            }
-            break;
-        }
-
-        case NT_FUNCTION_CALL:
-        case NT_PROGRAM_FUNC_CALL:
-        case NT_SELF_CALL:
-        case NT_METHOD_CALL:
-        case NT_STATIC_METHOD_CALL:
-        case NT_SCOPE_REF: {
-            const AbstractFunctionCallNode* call = dynamic_cast<const AbstractFunctionCallNode*>(node);
-            if (call) {
-                retargetFallbackCallArgs(*call, type_resolver, hashdecl_map, seen);
-            }
-            break;
-        }
-
-        case NT_NEW_OBJECT: {
-            const NewObjectCallNode* call = dynamic_cast<const NewObjectCallNode*>(node);
-            if (call) {
-                retargetFallbackCallArgs(*call, type_resolver, hashdecl_map, seen);
-            }
-            break;
-        }
-
-        case NT_FUNCREFCALL: {
-            const CallReferenceCallNode* call = dynamic_cast<const CallReferenceCallNode*>(node);
-            if (call) {
-                retargetFallbackValueTypes(call->getExp(), type_resolver, hashdecl_map, seen);
-                if (const QoreParseListNode* args = call->getParseArgs()) {
-                    for (const QoreValue& arg : args->getValues()) {
-                        retargetFallbackValueTypes(arg, type_resolver, hashdecl_map, seen);
-                    }
-                }
-                if (const QoreListNode* args = call->getArgs()) {
-                    size_t len = args->size();
-                    for (size_t i = 0; i < len; ++i) {
-                        retargetFallbackValueTypes(args->retrieveEntry(i), type_resolver, hashdecl_map, seen);
-                    }
-                }
-            }
-            break;
-        }
-
-        case NT_OPERATOR: {
-            if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
-                retargetFallbackValueTypes(dot->getExpression(), type_resolver, hashdecl_map, seen);
-                if (MethodCallNode* m = dot->getMethodCall()) {
-                    retargetFallbackCallArgs(*m, type_resolver, hashdecl_map, seen);
-                }
-                break;
-            }
-            if (retargetFallbackBinaryOperator<QoreBinaryOperatorNode<>>(node, type_resolver, hashdecl_map, seen)
-                    || retargetFallbackBinaryOperator<QoreBinaryOperatorNode<LValueOperatorNode>>(
-                        node, type_resolver, hashdecl_map, seen)
-                    || retargetFallbackSingleExpressionOperator<QoreSingleExpressionOperatorNode<>>(
-                        node, type_resolver, hashdecl_map, seen)
-                    || retargetFallbackSingleExpressionOperator<QoreSingleExpressionOperatorNode<LValueOperatorNode>>(
-                        node, type_resolver, hashdecl_map, seen)
-                    || retargetFallbackSingleExpressionOperator<QoreSingleValueExpressionOperatorNode<>>(
-                        node, type_resolver, hashdecl_map, seen)
-                    || retargetFallbackSingleExpressionOperator<QoreSingleValueExpressionOperatorNode<LValueOperatorNode>>(
-                        node, type_resolver, hashdecl_map, seen)
-                    || retargetFallbackNOperator<QoreNOperatorNodeBase<3>, 3>(
-                        node, type_resolver, hashdecl_map, seen)
-                    || retargetFallbackNOperator<QoreNOperatorNodeBase<4>, 4>(
-                        node, type_resolver, hashdecl_map, seen)) {
-                break;
-            }
-            break;
-        }
-
-        default:
-            break;
-    }
-}
-
-static void retargetFallbackValueTypes(QoreValue v, QoreAOTTypeResolver& type_resolver,
-        const hashdecl_retarget_map_t& hashdecl_map) {
-    std::unordered_set<const AbstractQoreNode*> seen;
-    retargetFallbackValueTypes(v, type_resolver, hashdecl_map, seen);
-}
-
-static void collectFallbackHashDeclMappings(
-        qore_ns_private* fallback_ns,
-        qore_ns_private* main_ns,
-        hashdecl_retarget_map_t& hashdecl_map) {
-    ConstHashDeclListIterator hdi(fallback_ns->hashDeclList);
-    while (hdi.next()) {
-        const TypedHashDecl* main_hd = main_ns->hashDeclList.find(hdi.getName());
-        if (main_hd) {
-            hashdecl_map[hdi.get()] = main_hd;
-        }
-    }
-
-    for (auto ni = main_ns->nsl.nsmap.begin(), ne = main_ns->nsl.nsmap.end(); ni != ne; ++ni) {
-        QoreNamespace* main_child = ni->second;
-        auto fb_ni = fallback_ns->nsl.nsmap.find(ni->first);
-        if (fb_ni != fallback_ns->nsl.nsmap.end() && fb_ni->second) {
-            collectFallbackHashDeclMappings(
-                qore_ns_private::get(*fb_ni->second),
-                qore_ns_private::get(*main_child),
-                hashdecl_map);
-        }
-    }
-}
-
-//! Transplant unserialized closure values from fallback-parsed classes to main classes.
-/** During AOT serialization, closure/code values are written as VT_NOTHING because
-    they can't be serialized. This affects both class constants (ConstantEntry::val)
-    and member default value expressions (QoreMemberInfo::exp). After fallback source
-    parsing, the fallback program has properly initialized values. This function copies
-    those to the main program's classes so they are available at runtime.
-*/
-static void transplantClassClosureValues(
-        qore_ns_private* fallback_ns,
-        qore_ns_private* main_ns,
-        QoreProgram* main_pgm,
-        QoreAOTTypeResolver* shared_type_resolver = nullptr,
-        hashdecl_retarget_map_t* shared_hashdecl_map = nullptr) {
-    QoreAOTTypeResolver local_type_resolver(main_pgm);
-    QoreAOTTypeResolver& type_resolver = shared_type_resolver ? *shared_type_resolver : local_type_resolver;
-    hashdecl_retarget_map_t local_hashdecl_map;
-    if (!shared_hashdecl_map) {
-        collectFallbackHashDeclMappings(fallback_ns, main_ns, local_hashdecl_map);
-    }
-    hashdecl_retarget_map_t& hashdecl_map = shared_hashdecl_map ? *shared_hashdecl_map : local_hashdecl_map;
-
-    // Process classes in this namespace
-    ClassListIterator cli(main_ns->classList);
-    while (cli.next()) {
-        QoreClass* main_qc = cli.get();
-        if (!main_qc) {
-            continue;
-        }
-        qore_class_private* main_priv = qore_class_private::get(*main_qc);
-
-        // Find matching class in fallback namespace
-        QoreClass* fb_qc = fallback_ns->classList.find(main_qc->getName());
-        if (!fb_qc) {
-            continue;
-        }
-        qore_class_private* fb_priv = qore_class_private::get(*fb_qc);
-
-        // Iterate through main class constants looking for NOTHING values
-        ConstConstantListIterator main_ci(main_priv->constlist);
-        while (main_ci.next()) {
-            const ConstantEntry* main_ce = main_ci.getEntry();
-            if (!main_ce->isUser() || !main_ce->getValue().isNothing()) {
-                continue;  // skip system constants and non-NOTHING values
-            }
-
-            // Find corresponding constant in fallback class
-            const ConstantEntry* fb_ce = fb_priv->constlist.findEntry(main_ce->getName());
-            if (!fb_ce || fb_ce->getValue().isNothing()) {
-                continue;  // no fallback value available
-            }
-
-            // Transplant: set the main constant's value from the fallback constant.
-            // The fallback program lives until after the main program finishes running,
-            // so the referenced values (closures, etc.) remain valid.
-            //
-            // Use setRuntimeValue() to properly populate both val AND saved_val
-            // and clear aot_shell_pending — otherwise any RuntimeConstantRefNode
-            // still pointing at this entry (from a sibling constant's expression
-            // tree compiled into an AOT-deserialized init function) would read
-            // saved_val (still NOTHING) and raise AOT-PENDING-CONSTANT even
-            // though the visible val holds the correct transplanted value.
-            ConstantEntry* writable_ce = const_cast<ConstantEntry*>(main_ce);
-            ExceptionSink txs;
-            QoreValue fb_val = fb_ce->getReferencedValue();
-            retargetFallbackValueTypes(fb_val, type_resolver, hashdecl_map);
-            // setRuntimeValue() also marks the entry initialized, under the lock that orders it with copies
-            writable_ce->setRuntimeValue(fb_val, &txs);
-            if (txs.isException()) {
-                txs.clear();
-            }
-            printd(5, "AOT: transplanted constant '%s::%s' from fallback\n",
-                main_qc->getName(), main_ce->getName());
-        }
-
-        // Transplant member default value expressions (closures can't be serialized).
-        // The member `exp` field stores the initialization expression evaluated at
-        // object construction time. For closures, writeValue() serializes them as
-        // VT_NOTHING. Copy the fallback's expression so member initialization works.
-        for (auto& mi : main_priv->members.member_list) {
-            if (!mi.second->local()) {
-                continue;  // only transplant locally-defined members
-            }
-            if (!mi.second->exp.isNothing()) {
-                continue;  // already has a valid default expression
-            }
-
-            // Find corresponding member in fallback class
-            QoreMemberInfo* fb_mi = fb_priv->members.find(mi.first);
-            if (!fb_mi || fb_mi->exp.isNothing()) {
-                continue;  // no fallback expression available
-            }
-
-            // Transplant: copy the expression reference from the fallback member.
-            // The expression is a parse tree node owned by the fallback program,
-            // which outlives the main program, so the pointer remains valid.
-            // We use refSelf() to get a referenced copy of the expression value.
-            retargetFallbackValueTypes(fb_mi->exp, type_resolver, hashdecl_map);
-            mi.second->exp = fb_mi->exp.refSelf();
-            qore_class_private::get(*main_qc)->member_init_code.store(-1, std::memory_order_relaxed);
-            printd(5, "AOT: transplanted member default '%s::%s' from fallback\n",
-                main_qc->getName(), mi.first);
-        }
-
-        // Transplant static variable values from the fallback program.
-        // The fallback program's parseCommitRuntimeInit() has already evaluated
-        // the init expressions (e.g., "Class::forName('NullDataProvider')"), so
-        // we copy the evaluated values directly rather than the expressions
-        // (which would fail to evaluate in the main program's context).
-        for (auto& vi : main_priv->vars.member_list) {
-            if (vi.second->eval_init) {
-                continue;  // already initialized
-            }
-
-            // Find corresponding static var in fallback class
-            QoreVarInfo* fb_vi = fb_priv->vars.find(vi.first);
-            if (!fb_vi || !fb_vi->eval_init) {
-                continue;  // fallback var not evaluated yet
-            }
-
-            // Read the evaluated value from the fallback static var
-            QoreValue fb_val = fb_vi->val.getValue();
-            if (fb_val.isNothing()) {
-                // Even if the value is NOTHING, mark as initialized to prevent
-                // re-evaluation of a missing init expression
-                vi.second->eval_init = true;
-                continue;
-            }
-
-            // Assign the evaluated value to the main static var
-            QoreValue fb_ref = fb_val.refSelf();
-            retargetFallbackValueTypes(fb_ref, type_resolver, hashdecl_map);
-            discard(vi.second->assignInit(fb_ref), nullptr);
-            vi.second->eval_init = true;
-            printd(5, "AOT: transplanted static var value '%s::%s' from fallback\n",
-                main_qc->getName(), vi.first);
-        }
-    }
-
-    // Transplant namespace-level constants with NOTHING values (e.g., object constants
-    // like "public const EpochIntToDateType = new EpochIntToDateType()" that can't be
-    // serialized in the binary format because writeValue() doesn't support NT_OBJECT).
-    ConstConstantListIterator ns_ci(main_ns->constant);
-    while (ns_ci.next()) {
-        const ConstantEntry* main_ce = ns_ci.getEntry();
-        if (!main_ce->isUser() || !main_ce->getValue().isNothing()) {
-            continue;  // skip system constants and non-NOTHING values
-        }
-
-        // Find corresponding constant in fallback namespace
-        ConstantEntry* fb_ce = fallback_ns->constant.findEntry(main_ce->getName());
-        if (!fb_ce || fb_ce->getValue().isNothing()) {
-            continue;  // no fallback value available
-        }
-
-        // Transplant through setRuntimeValue() so pending AOT shells have both
-        // val and saved_val populated and aot_shell_pending cleared.
-        ConstantEntry* writable_ce = const_cast<ConstantEntry*>(main_ce);
-        ExceptionSink txs;
-        QoreValue fb_val = fb_ce->getReferencedValue();
-        retargetFallbackValueTypes(fb_val, type_resolver, hashdecl_map);
-        writable_ce->setRuntimeValue(fb_val, &txs);
-        if (txs.isException()) {
-            txs.clear();
-        }
-        printd(5, "AOT: transplanted namespace constant '%s::%s' from fallback\n",
-            main_ns->name.c_str(), main_ce->getName());
-    }
-
-    // Recurse into sub-namespaces
-    for (auto ni = main_ns->nsl.nsmap.begin(), ne = main_ns->nsl.nsmap.end();
-            ni != ne; ++ni) {
-        QoreNamespace* main_child = ni->second;
-        if (!main_child) {
-            continue;
-        }
-        auto fb_ni = fallback_ns->nsl.nsmap.find(ni->first);
-        if (fb_ni != fallback_ns->nsl.nsmap.end() && fb_ni->second) {
-            transplantClassClosureValues(
-                qore_ns_private::get(*fb_ni->second),
-                qore_ns_private::get(*main_child), main_pgm, &type_resolver, &hashdecl_map);
-        }
-    }
-}
-
-//! Build contexts from fallback AST variants but register on main program's variants.
-/** Used in V2 mode when slot map registration fails (e.g., functions whose metadata
-    can't be resolved without the full AST). Walks the fallback namespace to find
-    variants with bodies, builds contexts via IR re-lowering, then registers the
-    compiled function pointer + context on the main program's matching variant.
-*/
-static void registerFallbackFunctionsOnMainVariants(
-        qore_ns_private* fallback_ns,
-        qore_ns_private* main_ns,
-        QoreProgram* main_pgm,
-        const std::unordered_map<std::string, const QoreAOTFunc*>& func_map,
-        int& registered) {
-    // Helper lambda: find UserVariantBase in a namespace's function by name
-    auto findMainVariant = [&](const char* fname) -> UserVariantBase* {
-        for (auto fi = main_ns->func_list.begin(), fe2 = main_ns->func_list.end();
-                fi != fe2; ++fi) {
-            FunctionEntry* fe_entry = fi->second;
-            QoreFunction* func = fe_entry->getFunction();
-            if (func && strcmp(fname, func->getName()) == 0) {
-                QoreFunctionIterator vi(*func);
-                while (vi.next()) {
-                    UserVariantBase* uvb = const_cast<UserVariantBase*>(
-                        dynamic_cast<const UserVariantBase*>(vi.getVariant()));
-                    if (uvb) {
-                        return uvb;
-                    }
-                }
-            }
-        }
-        return nullptr;
-    };
-    QoreAOTTypeResolver type_resolver(main_pgm);
-
-    // Walk functions in fallback namespace
-    for (auto i = fallback_ns->func_list.begin(), e = fallback_ns->func_list.end(); i != e; ++i) {
-        FunctionEntry* fe = i->second;
-        QoreFunction* func = fe->getFunction();
-        if (!func) {
-            continue;
-        }
-
-        QoreFunctionIterator vit(*func);
-        while (vit.next()) {
-            const AbstractQoreFunctionVariant* variant = vit.getVariant();
-            UserVariantBase* fb_uvb = const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
-            if (!fb_uvb || !fb_uvb->hasBody()) {
-                continue;
-            }
-
-            const char* fname = func->getName();
-            std::string function_name = getAOTQualifiedFunctionName(fallback_ns, fname);
-            std::string variant_key = getVariantKey(function_name.c_str(), variant);
-            auto it = func_map.find(variant_key);
-            if (it == func_map.end()) {
-                continue;
-            }
-
-            const QoreAOTFunc* aot_func = it->second;
-            // Build context from fallback variant's AST (gives consistent LocalVar*)
-            QoreAOTContext* ctx = buildContextForVariant(fb_uvb, function_name.c_str(), main_pgm, *aot_func);
-            if (!ctx) {
-                printd(1, "AOT v2: failed to build fallback context for '%s'\n", variant_key.c_str());
-                continue;
-            }
-
-            // Find matching variant in MAIN program and register there
-            UserVariantBase* main_uvb = findMainVariant(fname);
-            if (main_uvb) {
-                // Swap main variant's parameter LocalVar* with fallback's so the calling
-                // convention instantiates fallback LocalVar* on the thread-local stack.
-                // This ensures the compiled AOT code AND on_exit/on_success/on_error handler
-                // AST bodies (which reference fallback LocalVar*) both find the same variables.
-                UserSignature* main_sig = main_uvb->getUserSignature();
-                UserSignature* fb_sig = fb_uvb->getUserSignature();
-                if (main_sig && fb_sig && main_sig->lv.size() == fb_sig->lv.size()) {
-                    for (size_t pi = 0; pi < main_sig->lv.size(); ++pi) {
-                        main_sig->lv[pi] = fb_sig->lv[pi];
-                    }
-                    main_sig->argvid = fb_sig->argvid;
-                    main_sig->selfid = fb_sig->selfid;
-                }
-                main_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx, aot_func->body_loc);
-                ++registered;
-                printd(2, "AOT v2: registered '%s' from fallback (on main variant)\n",
-                    variant_key.c_str());
-            } else {
-                // No main variant found — register on fallback variant
-                // This happens when the function was defined only in fallback source
-                fb_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx, aot_func->body_loc);
-                ++registered;
-                printd(2, "AOT v2: registered '%s' from fallback (on fallback variant)\n",
-                    variant_key.c_str());
-            }
-        }
-    }
-
-    // Walk classes in fallback namespace
-    ClassListIterator cli(fallback_ns->classList);
-    while (cli.next()) {
-        QoreClass* qc = cli.get();
-        if (!qc) {
-            continue;
-        }
-        qore_class_private* qcp = qore_class_private::get(*qc);
-
-        // Use namespace-qualified class path to match compiler's naming convention
-        const char* class_path = qc->getPath();
-        if (class_path[0] == ':' && class_path[1] == ':') {
-            class_path += 2;
-        }
-
-        if (qcp->sys) {
-            continue;
-        }
-
-        auto processMethod = [&](QoreMethod* meth) {
-            if (!meth->isUser()) {
-                return;
-            }
-            qore_method_private* mp = qore_method_private::get(*meth);
-            MethodFunctionBase* mfb = mp->getFunction();
-
-            QoreFunctionIterator vit(*mfb);
-            while (vit.next()) {
-                const AbstractQoreFunctionVariant* variant = vit.getVariant();
-                UserVariantBase* fb_uvb =
-                    const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
-                if (!fb_uvb || !fb_uvb->hasBody()) {
-                    continue;
-                }
-
-                std::string method_name = std::string(class_path) + "::"
-                    + (meth->isStatic() ? "_static_" : "")
-                    + meth->getName();
-                std::string variant_key = getVariantKey(method_name.c_str(), variant);
-                auto it = func_map.find(variant_key);
-                if (it == func_map.end()) {
-                    continue;
-                }
-
-                const QoreAOTFunc* aot_func = it->second;
-                QoreAOTContext* ctx = buildContextForVariant(fb_uvb, method_name.c_str(),
-                    main_pgm, *aot_func);
-                if (!ctx) {
-                    printd(1, "AOT v2: failed to build fallback context for '%s'\n",
-                        variant_key.c_str());
-                    continue;
-                }
-
-                // Find matching method variant in MAIN program
-                qore_program_private* main_pp = qore_program_private::get(*main_pgm);
-                const QoreClass* main_qc = qore_root_ns_private::runtimeFindClass(
-                    *main_pp->RootNS, class_path, LexicalSemanticPolicy{});
-                UserVariantBase* main_uvb = nullptr;
-                if (main_qc) {
-                    qore_class_private* main_qcp = qore_class_private::get(
-                        *const_cast<QoreClass*>(main_qc));
-                    // Look up on the same side (static/instance) as the
-                    // variant being registered — a class with both an instance
-                    // and static method of the same name would otherwise
-                    // always resolve to the instance one.
-                    const QoreMethod* main_m = meth->isStatic()
-                        ? main_qcp->parseFindLocalStaticMethod(meth->getName())
-                        : main_qcp->parseFindLocalMethod(meth->getName());
-                    if (main_m) {
-                        // Extract target signature from variant_key to match the
-                        // correct overloaded variant in the main program
-                        std::string target_sig;
-                        {
-                            size_t p = variant_key.find('(');
-                            if (p != std::string::npos) {
-                                target_sig = normalizeTypePaths(variant_key.substr(p));
-                            } else {
-                                target_sig = "()";
-                            }
-                        }
-                        MethodFunctionBase* main_mfb =
-                            qore_method_private::get(*main_m)->getFunction();
-                        QoreFunctionIterator mvi(*main_mfb);
-                        while (mvi.next()) {
-                            const AbstractQoreFunctionVariant* mv = mvi.getVariant();
-                            auto* candidate = const_cast<UserVariantBase*>(
-                                dynamic_cast<const UserVariantBase*>(mv));
-                            if (!candidate) {
-                                continue;
-                            }
-                            // Build signature for this variant
-                            std::string var_sig("(");
-                            AbstractFunctionSignature* msig = mv->getSignature();
-                            if (msig) {
-                                const type_vec_t& types = msig->getTypeList();
-                                for (size_t ti = 0; ti < types.size(); ++ti) {
-                                    if (ti > 0) {
-                                        var_sig.append(",");
-                                    }
-                                    var_sig.append(qore_get_aot_serializable_type_path(types[ti]));
-                                }
-                            }
-                            var_sig.append(")");
-                            if (aotVariantSignatureMatches(mv, target_sig, &type_resolver, class_path)) {
-                                main_uvb = candidate;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (main_uvb) {
-                    // Swap parameter LocalVar* (same pattern as functions above)
-                    UserSignature* main_sig = main_uvb->getUserSignature();
-                    UserSignature* fb_sig = fb_uvb->getUserSignature();
-                    if (main_sig && fb_sig && main_sig->lv.size() == fb_sig->lv.size()) {
-                        for (size_t pi = 0; pi < main_sig->lv.size(); ++pi) {
-                            main_sig->lv[pi] = fb_sig->lv[pi];
-                        }
-                        main_sig->argvid = fb_sig->argvid;
-                        main_sig->selfid = fb_sig->selfid;
-                    }
-                    // For constructors: transplant BCAList from fallback variant
-                    // The main variant was deserialized without BCA (base class constructor
-                    // arguments). The fallback source parse creates proper BCAList.
-                    // constructorPrelude() needs the BCAList to call parent constructors.
-                    if (strcmp(meth->getName(), "constructor") == 0 && main_qc) {
-                        // Transplant BCAList: find UserConstructorVariant in both
-                        // main and fallback constructor methods.
-                        UserConstructorVariant* main_ucv = nullptr;
-                        UserConstructorVariant* fb_ucv = nullptr;
-                        qore_class_private* mqcp = qore_class_private::get(
-                            *const_cast<QoreClass*>(main_qc));
-                        const QoreMethod* mc = mqcp->parseFindLocalMethod("constructor");
-                        if (mc) {
-                            MethodFunctionBase* mmfb =
-                                qore_method_private::get(*mc)->getFunction();
-                            QoreFunctionIterator mvi(*mmfb);
-                            while (mvi.next()) {
-                                main_ucv = const_cast<UserConstructorVariant*>(
-                                    dynamic_cast<const UserConstructorVariant*>(
-                                        mvi.getVariant()));
-                                if (main_ucv) {
-                                    break;
-                                }
-                            }
-                        }
-                        {
-                            QoreFunctionIterator fvi(*mfb);
-                            while (fvi.next()) {
-                                fb_ucv = const_cast<UserConstructorVariant*>(
-                                    dynamic_cast<const UserConstructorVariant*>(
-                                        fvi.getVariant()));
-                                if (fb_ucv) {
-                                    break;
-                                }
-                            }
-                        }
-                        if (main_ucv && fb_ucv) {
-                            main_ucv->transplantBCAList(fb_ucv);
-                        }
-                    }
-                    main_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx, aot_func->body_loc);
-                    ++registered;
-                    printd(2, "AOT v2: registered '%s' from fallback (on main variant)\n",
-                        variant_key.c_str());
-                } else {
-                    fb_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx, aot_func->body_loc);
-                    ++registered;
-                    printd(2, "AOT v2: registered '%s' from fallback (on fallback variant)\n",
-                        variant_key.c_str());
-                }
-            }
-        };
-
-        for (auto mi = qcp->hm.begin(), me = qcp->hm.end(); mi != me; ++mi) {
-            processMethod(mi->second);
-        }
-        for (auto mi = qcp->shm.begin(), me = qcp->shm.end(); mi != me; ++mi) {
-            processMethod(mi->second);
-        }
-    }
-
-    // Walk child namespaces recursively
-    for (auto ni = fallback_ns->nsl.nsmap.begin(), ne = fallback_ns->nsl.nsmap.end();
-            ni != ne; ++ni) {
-        QoreNamespace* child_ns = ni->second;
-        if (child_ns) {
-            // Find matching child namespace in main program
-            auto main_ni = main_ns->nsl.nsmap.find(ni->first);
-            if (main_ni != main_ns->nsl.nsmap.end() && main_ni->second) {
-                registerFallbackFunctionsOnMainVariants(
-                    qore_ns_private::get(*child_ns),
-                    qore_ns_private::get(*main_ni->second),
-                    main_pgm, func_map, registered);
-            } else {
-                // No matching main namespace — register on fallback variants
-                registerAOTFunctionsInNamespace(
-                    qore_ns_private::get(*child_ns), main_pgm, func_map, registered);
-            }
-        }
-    }
-}
-
 extern "C" DLLEXPORT int qore_aot_run(
     int argc, char** argv,
     const char* source, int source_len,
@@ -11422,7 +9344,8 @@ static int executeInitFunctions(QoreProgram* pgm,
     const char* mod_path,
     bool write_shadow,
     ExceptionSink* failure_sink,
-    bool script_load = false);
+    bool script_load = false,
+    bool* module_init_failed = nullptr);
 static void preInitStaticVarsInProgram(QoreProgram* pgm);
 
 static std::string makeAOTRegistrationFailureMessage(const char* label,
@@ -11580,9 +9503,41 @@ static bool aotRequiredDepUnavailable(const char* dep) {
     return !QMM.findModule(dep);
 }
 
+//! why a required dependency failed to load
+enum class AOTDepLoadFailure {
+    //! a circular or in-progress dependency, registered in the module map and resolved later
+    TOLERATED,
+    //! not registered: the module could not be loaded
+    UNAVAILABLE,
+    //! registered, but its initialization failed (its init closure raised an exception): the module stays registered
+    //! for the declarations that its failed load created, and cannot be used (qore#6217)
+    INIT_FAILED,
+};
+
+//! Returns why a required dependency whose load failed is not available, or TOLERATED (see aotRequiredDepUnavailable())
+static AOTDepLoadFailure aotRequiredDepFailure(const char* dep) {
+    QoreAbstractModule* mi = QMM.findModule(dep);
+    if (!mi) {
+        return AOTDepLoadFailure::UNAVAILABLE;
+    }
+    return mi->isInitFailed() ? AOTDepLoadFailure::INIT_FAILED : AOTDepLoadFailure::TOLERATED;
+}
+
+//! Returns the exception of a dependency load as "ERR: desc" for a message, or an empty string
+static std::string aotDepLoadExceptionText(ExceptionSink& xsink) {
+    if (!xsink.isException()) {
+        return std::string();
+    }
+    QoreStringValueHelper err(xsink.getExceptionErr());
+    QoreStringValueHelper desc(xsink.getExceptionDesc());
+    return std::string(err->c_str()) + ": " + desc->c_str();
+}
+
 struct AOTDependencyLoadResult {
     std::string dependency;
     bool cancelled = false;
+    //! the exception of the initialization of \a dependency, if it failed (qore#6217)
+    std::string init_error;
 
     explicit operator bool() const {
         return dependency.empty() && !cancelled;
@@ -11621,14 +9576,24 @@ static AOTDependencyLoadResult aotLoadModuleDependencies(ExceptionSink& xsink,
             if (rc >= 0 && !xsink) {
                 continue;
             }
-            xsink.clear();
-            if (aotRequiredDepUnavailable(dep.c_str())) {
+            AOTDepLoadFailure failure = aotRequiredDepFailure(dep.c_str());
+            // the first dependency that cannot be used fails the module; the other dependencies are loaded, and
+            // their initialization runs, before it fails, as in the interpreter, which loads the other modules that
+            // a module requires (qore#6217)
+            if (failure != AOTDepLoadFailure::TOLERATED && result.dependency.empty()) {
+                if (failure == AOTDepLoadFailure::INIT_FAILED) {
+                    // a module whose initialization failed cannot be used
+                    result.init_error = aotDepLoadExceptionText(xsink);
+                    if (result.init_error.empty()) {
+                        result.init_error = "its initialization failed";
+                    }
+                }
                 result.dependency = dep;
-                return false;
             }
+            xsink.clear();
             // A circular/in-progress dependency is registered in the module map and is resolved later.
         }
-        return true;
+        return result.dependency.empty();
     };
 
     if (!imports_present || force_legacy_imports) {
@@ -11744,17 +9709,34 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                     if (dep_rc < 0 || xsink.isException()) {
                         printd(2, "AOT v2: dependency '%s' load error (rc=%d)\n",
                             dep.c_str(), dep_rc);
-                        xsink.clear();
+                        if (aotRequiredDepFailure(dep.c_str()) == AOTDepLoadFailure::INIT_FAILED) {
+                            // the initialization of the module failed: its exception is reported and the
+                            // program fails, as in the interpreter (qore#6217)
+                            if (!xsink.isException()) {
+                                xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which "
+                                    "the AOT-compiled program (%s) requires, failed", dep.c_str(),
+                                    (label && *label) ? label : "<unknown path>");
+                            }
+                            xsink.handleExceptions();
+                            // the other dependencies are loaded, and their initialization runs, before the program
+                            // fails, as in the interpreter, which loads the other modules of the program
+                            dep_unavailable = true;
+                            continue;
+                        }
                         if (aotRequiredDepUnavailable(dep.c_str())) {
+                            // the dependency's own load exception is reported with the error (qore#6217)
                             xsink.raiseException("AOT-ERROR",
                                 "the AOT-compiled program (%s) requires module '%s', which could not "
                                 "be loaded; the program was AOT-compiled against '%s' (its compiled "
                                 "code references that module's symbols) and cannot be loaded without it",
                                 (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
                             xsink.handleExceptions();
+                            // the other dependencies are loaded, and their initialization runs, before the program
+                            // fails, as in the interpreter, which loads the other modules of the program
                             dep_unavailable = true;
-                            break;
+                            continue;
                         }
+                        xsink.clear();
                     }
                 }
             }
@@ -11903,9 +9885,16 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                         // the initializers are the program's own code: they run with its parse options, as when
                         // the program is parsed, not with those in effect when it is loaded (qore#6189)
                         LoadTimeParseOptionsHelper init_poh((*qpgm)->getParseOptions());
+                        // the init closure of a module of the executable that raises an exception fails the
+                        // executable, as the interpreter fails the program (qore#6217)
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
-                            /*write_shadow=*/true, /*failure_sink=*/nullptr, /*script_load=*/true);
+                            /*write_shadow=*/true, /*failure_sink=*/&xsink, /*script_load=*/true);
+                    }
+                    if (xsink.isException()) {
+                        xsink.handleExceptions();
+                        rc = 2;
+                        break;
                     }
                 }
             }
@@ -12025,9 +10014,12 @@ static int executeInitFunctions(QoreProgram* pgm,
     const char* mod_path,
     bool write_shadow,
     ExceptionSink* failure_sink,
-    bool script_load);
+    bool script_load,
+    bool* module_init_failed);
 
 struct AotModuleState {
+    //! true if the module's init closure raised an exception: its initialization is not run again (qore#6217)
+    bool init_failed = false;
     QoreProgram* pgm = nullptr;
     const QoreAOTFunc* funcs = nullptr;
     int num_funcs = 0;
@@ -12771,6 +10763,19 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     }
     qore_program_private* target_pp = qore_program_private::get(*tpgm);
 
+    // a module whose init closure raised an exception is not initialized again, which would run the closure again
+    // (qore#6217); a load through the module manager reports it before, this covers the other paths
+    {
+        AutoLocker al(get_aot_module_state_lock());
+        auto sit = aot_module_map.find(mod_name);
+        if (sit != aot_module_map.end() && sit->second.init_failed) {
+            result.attempted = true;
+            result.hard_error = true;
+            result.error = "the initialization of the module failed on a prior attempt";
+            return result;
+        }
+    }
+
     const QoreAOTFunc* init_funcs = nullptr;
     int init_num_funcs = 0;
     QoreProgram* init_ctx_pgm = nullptr;
@@ -13219,10 +11224,25 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
         // built with them above, not with those of the code that imports it or that is being parsed when it is
         // loaded (qore#6189)
         LoadTimeParseOptionsHelper exec_poh(init_ctx_pgm->getParseOptions());
+        bool module_init_failed = false;
         int failed = executeInitFunctions(tpgm, init_func_contexts,
             pending_descriptors, mod_name.c_str(), shadow_pgm,
             mod_path.empty() ? nullptr : mod_path.c_str(),
-            write_shadow, &xsink);
+            write_shadow, &xsink, false, &module_init_failed);
+        if (module_init_failed) {
+            // the module's init closure raised an exception: the module stays registered but cannot be used, as a
+            // source module whose initialization failed (qore#6217); it is a hard error, so its initialization is not
+            // retried, which would run the closure again
+            QMM.setModuleInitFailed(mod_name.c_str());
+            {
+                AutoLocker aot_state_al(get_aot_module_state_lock());
+                auto it = aot_module_map.find(mod_name);
+                if (it != aot_module_map.end()) {
+                    it->second.init_failed = true;
+                }
+            }
+            return finish(false, true);
+        }
         return finish(failed == 0);
     }
 
@@ -13242,7 +11262,8 @@ static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm,
             AutoLocker aot_state_al(get_aot_module_state_lock());
             for (const auto& entry : aot_module_map) {
                 const AotModuleState& state = entry.second;
-                if (state.init_descriptors && !state.init_descriptors->empty()
+                // a module whose init closure raised an exception is not initialized again (qore#6217)
+                if (!state.init_failed && state.init_descriptors && !state.init_descriptors->empty()
                         && (state.init_reader || state.metadata)
                         && target_pp->merged_aot_modules.find(entry.first)
                             != target_pp->merged_aot_modules.end()
@@ -13575,17 +11596,34 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     if (dep_rc < 0 || xsink.isException()) {
                         printd(2, "AOT v3: dependency '%s' load error (rc=%d)\n",
                             dep.c_str(), dep_rc);
-                        xsink.clear();
+                        if (aotRequiredDepFailure(dep.c_str()) == AOTDepLoadFailure::INIT_FAILED) {
+                            // the initialization of the module failed: its exception is reported and the
+                            // program fails, as in the interpreter (qore#6217)
+                            if (!xsink.isException()) {
+                                xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which "
+                                    "the AOT-compiled program (%s) requires, failed", dep.c_str(),
+                                    (label && *label) ? label : "<unknown path>");
+                            }
+                            xsink.handleExceptions();
+                            // the other dependencies are loaded, and their initialization runs, before the program
+                            // fails, as in the interpreter, which loads the other modules of the program
+                            dep_unavailable_v3 = true;
+                            continue;
+                        }
                         if (aotRequiredDepUnavailable(dep.c_str())) {
+                            // the dependency's own load exception is reported with the error (qore#6217)
                             xsink.raiseException("AOT-ERROR",
                                 "the AOT-compiled program (%s) requires module '%s', which could not "
                                 "be loaded; the program was AOT-compiled against '%s' (its compiled "
                                 "code references that module's symbols) and cannot be loaded without it",
                                 (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
                             xsink.handleExceptions();
+                            // the other dependencies are loaded, and their initialization runs, before the program
+                            // fails, as in the interpreter, which loads the other modules of the program
                             dep_unavailable_v3 = true;
-                            break;
+                            continue;
                         }
+                        xsink.clear();
                     }
                 }
             }
@@ -13626,7 +11664,6 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
         }
 
         // Register pre-compiled function pointers
-        QoreProgram* fallback_pgm = nullptr;
         if (num_functions > 0 && functions) {
             std::unordered_map<std::string, const QoreAOTFunc*> func_map;
             const QoreAOTFunc* toplevel_func = nullptr;
@@ -13737,9 +11774,16 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                         // the initializers are the program's own code: they run with its parse options, as when
                         // the program is parsed, not with those in effect when it is loaded (qore#6189)
                         LoadTimeParseOptionsHelper init_poh((*qpgm)->getParseOptions());
+                        // the init closure of a module of the executable that raises an exception fails the
+                        // executable, as the interpreter fails the program (qore#6217)
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
-                            /*write_shadow=*/true, /*failure_sink=*/nullptr, /*script_load=*/true);
+                            /*write_shadow=*/true, /*failure_sink=*/&xsink, /*script_load=*/true);
+                    }
+                    if (xsink.isException()) {
+                        xsink.handleExceptions();
+                        rc = 2;
+                        break;
                     }
                 }
             }
@@ -13910,27 +11954,49 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // (via ModuleLoadMapHelper), so we can safely load dependencies here.
     std::vector<std::string> reexport_deps;
     std::vector<std::string> deps = extractDependencies(source, source_len, &reexport_deps);
+    // the error of the first dependency that cannot be used, which fails the module after the other dependencies are
+    // loaded and their initialization runs, as in the interpreter, which loads the other modules that a module
+    // requires (qore#6217)
+    SimpleRefHolder<QoreStringNode> dep_err;
     for (const std::string& dep : deps) {
         // Try to load the module (it may already be loaded, which is fine)
         int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
         if (rc < 0 || xsink) {
+            AOTDepLoadFailure failure = aotRequiredDepFailure(dep.c_str());
+            if (failure == AOTDepLoadFailure::INIT_FAILED) {
+                // a module whose initialization failed cannot be used (qore#6217)
+                std::string init_error = aotDepLoadExceptionText(xsink);
+                xsink.clear();
+                if (!dep_err) {
+                    dep_err = new QoreStringNodeMaker("AOT module '%s' (%s) requires module '%s', "
+                        "whose initialization failed (%s)", mod_name ? mod_name : "<unknown>",
+                        (label && *label) ? label : "<unknown path>", dep.c_str(),
+                        init_error.empty() ? "its initialization failed" : init_error.c_str());
+                }
+                continue;
+            }
             xsink.clear();
             // A genuinely-missing dependency is a hard error (this init path runs with the
             // module-loading mutex unlocked, so use the locking lookup); only a circular/in-progress
             // dependency, still registered in the module map, is tolerated.
-            if (aotRequiredDepUnavailable(dep.c_str())) {
-                QoreStringNode* err = new QoreStringNodeMaker(
-                    "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
-                    "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
-                    "and cannot be loaded without it",
-                    mod_name ? mod_name : "<unknown>",
-                    (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
-                local_pgm->waitForTerminationAndDeref(nullptr);
-                return err;
+            if (failure == AOTDepLoadFailure::UNAVAILABLE) {
+                if (!dep_err) {
+                    dep_err = new QoreStringNodeMaker(
+                        "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
+                        "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
+                        "and cannot be loaded without it",
+                        mod_name ? mod_name : "<unknown>",
+                        (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                }
+                continue;
             }
             // Circular dependency or other in-progress load - tolerate and continue.
             // The types might be resolved later when the requiring script is parsed.
         }
+    }
+    if (dep_err) {
+        local_pgm->waitForTerminationAndDeref(nullptr);
+        return dep_err.release();
     }
 
     // Set up module context for the parser (must be QoreUserModuleDefContextHelper
@@ -14780,6 +12846,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         if (load_result.cancelled) {
             err = new QoreStringNodeMaker("AOT module '%s' (%s) dependency loading was cancelled",
                 mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>");
+        } else if (!load_result.init_error.empty()) {
+            err = new QoreStringNodeMaker("AOT module '%s' (%s) requires module '%s', whose initialization "
+                "failed (%s)", mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>",
+                load_result.dependency.c_str(), load_result.init_error.c_str());
         } else {
             err = new QoreStringNodeMaker(
                 "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
@@ -15622,7 +13692,8 @@ static int executeInitFunctions(
         const char* mod_path,
         bool write_shadow,
         ExceptionSink* failure_sink,
-        bool script_load) {
+        bool script_load,
+        bool* module_init_failed) {
     if (exec_infos.empty() || descriptors.empty()) {
         return 0;
     }
@@ -15735,7 +13806,8 @@ static int executeInitFunctions(
     // initMembers), so keep the bridge for nested parse-context callers.
     thread_ensure_local_program_data();
 
-    int executed = 0;
+    // only the debug log reads it
+    [[maybe_unused]] int executed = 0;
     int failed = 0;
 
     // Execute in two passes so the module init closure (MODULE_INIT) runs
@@ -16039,8 +14111,15 @@ static int executeInitFunctions(
             printd(5, "AOT init: '%s' raised exception: %s: %s%s\n",
                 desc.name.c_str(), err_cstr, desc_cstr,
                 is_pending ? " (will retry)" : "");
+            if (run_module_init && desc.target_type == AOTCompiledInitFunc::MODULE_INIT && !is_pending
+                && module_init_failed) {
+                // the module's init closure raised an exception: the module's initialization failed and is not run
+                // again (qore#6217)
+                *module_init_failed = true;
+            }
             if (failure_sink && !*failure_sink && run_module_init) {
-                failure_sink->raiseException(err_cstr, "%s", desc_cstr);
+                // the whole exception, with its location and call stack (qore#6217)
+                failure_sink->assimilate(xsink);
             }
             xsink.clear();
             if (!run_module_init) {
@@ -16337,13 +14416,16 @@ static int executeInitFunctions(
                 printd(0, "AOT init: '%s' remained unresolved after %d rounds; last exception: %s: %s%s\n",
                     descriptors[di].name.c_str(), 32, last_error[di].c_str(), last_desc[di].c_str(),
                     last_error_pending[di] ? " (pending)" : "");
-                if (failure_sink && !*failure_sink) {
+                // a script load reports only the failures of module init closures: a constant or variable of a
+                // script whose initializer did not complete gets a recovery record below, and its first read runs
+                // the initializer again, raising its exception there (qore#6217)
+                if (failure_sink && !*failure_sink && !script_load) {
                     failure_sink->raiseException(last_error[di].c_str(), "%s", last_desc[di].c_str());
                 }
             } else {
                 printd(0, "AOT init: '%s' remained pending after %d rounds\n",
                     descriptors[di].name.c_str(), 32);
-                if (failure_sink && !*failure_sink) {
+                if (failure_sink && !*failure_sink && !script_load) {
                     failure_sink->raiseException("AOT-INIT-ERROR",
                         "AOT initializer '%s' remained pending after %d rounds",
                         descriptors[di].name.c_str(), 32);
@@ -16829,6 +14911,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         if (load_result.cancelled) {
             err = new QoreStringNodeMaker("AOT module '%s' (%s) dependency loading was cancelled",
                 mod_name ? mod_name : "<unknown>", module_context_desc.c_str());
+        } else if (!load_result.init_error.empty()) {
+            err = new QoreStringNodeMaker("AOT module '%s' (%s) requires module '%s', whose initialization "
+                "failed (%s)", mod_name ? mod_name : "<unknown>", module_context_desc.c_str(),
+                load_result.dependency.c_str(), load_result.init_error.c_str());
         } else {
             err = new QoreStringNodeMaker(
                 "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
@@ -17313,11 +15399,18 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
                 // the initializers are the script's own code: they run with its parse options, not with those of
                 // the host code that registers it (qore#6189)
                 LoadTimeParseOptionsHelper init_poh(tpgm->getParseOptions());
+                // the init closure of a module of the script that raises an exception fails the registration, as
+                // the interpreter fails the program (qore#6217)
+                ExceptionSink init_xsink;
                 executeInitFunctions(tpgm, init_func_contexts,
                     init_descriptors, label ? label : "<script>",
                     /*shadow_pgm=*/nullptr, /*mod_path=*/nullptr,
-                    /*write_shadow=*/true, /*failure_sink=*/nullptr,
+                    /*write_shadow=*/true, /*failure_sink=*/&init_xsink,
                     /*script_load=*/true);
+                if (init_xsink.isException()) {
+                    init_xsink.handleExceptions();
+                    return 7;
+                }
             }
         }
     }
@@ -17403,6 +15496,9 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
             printd(2, "qore_aot_script_register(%s): loading %d dependencies\n",
                 label ? label : "<script>", (int)deps.size());
             size_t dep_cancel_i = 0;
+            // true if a dependency could not be loaded or its initialization failed: the other dependencies are
+            // loaded, and their initialization runs, before the script fails, as in the interpreter
+            bool dep_failed = false;
             for (const std::string& dep : deps) {
                 if (dep_cancel_i && !(dep_cancel_i % 100)
                         && qore_check_cancel(&xsink, "AOT script dependency load")) {
@@ -17413,19 +15509,38 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                 if (dep_rc < 0 || xsink.isException()) {
                     printd(2, "qore_aot_script_register(%s): dependency '%s' load error "
                         "(rc=%d)\n", label ? label : "<script>", dep.c_str(), dep_rc);
-                    xsink.clear();
+                    if (aotRequiredDepFailure(dep.c_str()) == AOTDepLoadFailure::INIT_FAILED) {
+                        // the initialization of the module failed: its exception is reported and the script
+                        // fails, as in the interpreter (qore#6217)
+                        if (!xsink.isException()) {
+                            xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which the "
+                                "AOT-compiled script (%s) requires, failed", dep.c_str(),
+                                label ? label : "<script>");
+                        }
+                        xsink.handleExceptions();
+                        dep_failed = true;
+                        ++dep_cancel_i;
+                        continue;
+                    }
                     if (aotRequiredDepUnavailable(dep.c_str())) {
+                        // the dependency's own load exception is reported with the error (qore#6217)
                         xsink.raiseException("AOT-ERROR",
                             "the AOT-compiled script (%s) requires module '%s', which could not be "
                             "loaded; the script was AOT-compiled against '%s' (its compiled code "
                             "references that module's symbols) and cannot be loaded without it",
                             label ? label : "<script>", dep.c_str(), dep.c_str());
                         xsink.handleExceptions();
-                        return 7;
+                        dep_failed = true;
+                        ++dep_cancel_i;
+                        continue;
                     }
+                    xsink.clear();
                     // else: circular/in-progress dependency (still registered) - tolerate.
                 }
                 ++dep_cancel_i;
+            }
+            if (dep_failed) {
+                return 7;
             }
         }
     }
@@ -17524,14 +15639,21 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                         // the initializers are the script's own code: they run with its parse options, not with
                         // those of the host code that registers it (qore#6189)
                         LoadTimeParseOptionsHelper init_poh(tpgm->getParseOptions());
+                        // the init closure of a module of the script that raises an exception fails the
+                        // registration, as the interpreter fails the program (qore#6217)
+                        ExceptionSink init_xsink;
                         executeInitFunctions(tpgm, init_func_contexts,
                             init_descriptors,
                             label ? label : "<script>",
                             /*shadow_pgm=*/nullptr,
                             /*mod_path=*/nullptr,
                             /*write_shadow=*/true,
-                            /*failure_sink=*/nullptr,
-                    /*script_load=*/true);
+                            /*failure_sink=*/&init_xsink,
+                            /*script_load=*/true);
+                        if (init_xsink.isException()) {
+                            init_xsink.handleExceptions();
+                            return 7;
+                        }
                     }
                 }
             } else {
@@ -17684,6 +15806,9 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
     // Mirrors qore_aot_run_v2 / qore_aot_module_init_v3.
     {
         size_t dep_cancel_i = 0;
+        // true if a dependency could not be loaded or its initialization failed: the other dependencies are loaded, and
+        // their initialization runs, before the scripts fail, as in the interpreter
+        bool dep_failed = false;
         for (auto& d : batch->deferred) {
             if (d.native_only) {
                 continue;
@@ -17708,22 +15833,41 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                     if (dep_rc < 0 || xsink.isException()) {
                         printd(2, "qore_aot_script_end_batch(%s): dependency '%s' load "
                             "error (rc=%d)\n", d.label.c_str(), dep.c_str(), dep_rc);
-                        xsink.clear();
+                        if (aotRequiredDepFailure(dep.c_str()) == AOTDepLoadFailure::INIT_FAILED) {
+                            // the initialization of the module failed: its exception is reported and the
+                            // script fails, as in the interpreter (qore#6217)
+                            if (!xsink.isException()) {
+                                xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which "
+                                    "the AOT-compiled script (%s) requires, failed", dep.c_str(),
+                                    d.label.c_str());
+                            }
+                            xsink.handleExceptions();
+                            dep_failed = true;
+                            ++dep_load_i;
+                            continue;
+                        }
                         if (aotRequiredDepUnavailable(dep.c_str())) {
+                            // the dependency's own load exception is reported with the error (qore#6217)
                             xsink.raiseException("AOT-ERROR",
                                 "the AOT-compiled script (%s) requires module '%s', which could not be "
                                 "loaded; the script was AOT-compiled against '%s' (its compiled code "
                                 "references that module's symbols) and cannot be loaded without it",
                                 d.label.c_str(), dep.c_str(), dep.c_str());
                             xsink.handleExceptions();
-                            return 13;
+                            dep_failed = true;
+                            ++dep_load_i;
+                            continue;
                         }
+                        xsink.clear();
                         // else: circular/in-progress dependency (still registered) - tolerate.
                     }
                     ++dep_load_i;
                 }
             }
             ++dep_cancel_i;
+        }
+        if (dep_failed) {
+            return 13;
         }
     }
 
@@ -17886,15 +16030,22 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                 // the initializers are the script's own code: they run with its parse options, not with those of
                 // the host code that registers it (qore#6189)
                 LoadTimeParseOptionsHelper init_poh(tpgm->getParseOptions());
+                // the init closure of a module of the script that raises an exception fails the batch, as the
+                // interpreter fails the program (qore#6217)
+                ExceptionSink init_xsink;
                 executeInitFunctions(tpgm, batch_init_contexts,
                     batch_init_descriptors, "<script-batch>",
                     /*shadow_pgm=*/nullptr,
                     /*mod_path=*/nullptr,
                     /*write_shadow=*/true,
-                    /*failure_sink=*/nullptr,
+                    /*failure_sink=*/&init_xsink,
                     /*script_load=*/true);
                 if (time_on) {
                     us_init += now_us() - t1;
+                }
+                if (init_xsink.isException()) {
+                    init_xsink.handleExceptions();
+                    return 7;
                 }
             }
         }

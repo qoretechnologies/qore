@@ -696,6 +696,18 @@ public:
         return findModuleUnlocked(name);
     }
 
+    //! Marks a registered module whose initialization failed (an AOT module, registered before it is initialized)
+    /** The module stays registered, but a later load reports the failure, and code that requires it fails
+        (qore#6217)
+    */
+    DLLLOCAL void setModuleInitFailed(const char* name) {
+        AutoLocker al(mutex);
+        QoreAbstractModule* mi = findModuleUnlocked(name);
+        if (mi) {
+            mi->setInitFailed();
+        }
+    }
+
     //! Sets the parse option mask applied to every user module loaded from now on; see QoreModuleParseOptionMask
     /** @return 0 for OK, -1 if an exception was raised for an invalid mask
     */

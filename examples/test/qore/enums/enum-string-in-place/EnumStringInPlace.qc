@@ -217,7 +217,7 @@ class EnumStringInPlaceBase inherits QUnit::Test {
     private {
         string qore_bin;
         string libqore_dir;
-        string qcc_bin;
+        *string qcc_bin;
         #! the description of each operation
         hash<string, string> op_desc;
         #! matches the operation that ends the name of a check
@@ -230,20 +230,10 @@ class EnumStringInPlaceBase inherits QUnit::Test {
 
     constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
         self.part = part;
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
-        # a qore run from the PATH has no directory in its name; its library and qcc are found next to it
-        if (qore_bin !~ /\//) {
-            foreach string dir in ((ENV.PATH ?? "").split(":")) {
-                if (dir && is_executable(dir + "/" + qore_bin)) {
-                    qore_bin = dir + "/" + qore_bin;
-                    break;
-                }
-            }
-        }
+        # the interpreter and qcc come from TestInterpreter.qm: a compiled test must not run itself
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
-            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
-                : dirname(qore_bin) + DirSep + "qcc");
+        qcc_bin = TestInterpreter::qcc_compiler();
         op_desc = map {$1.op: $1.desc}, Ops;
         op_regex = "^(.+)-(" + (map $1.op, Ops).join("|") + ")$";
 
@@ -280,8 +270,8 @@ class EnumStringInPlaceBase inherits QUnit::Test {
     }
 
     testCompiledProgram() {
-        if (!is_file(qcc_bin)) {
-            testSkip(sprintf("no qcc binary at %y", qcc_bin));
+        if (!qcc_bin || !is_file(qcc_bin)) {
+            testSkip(sprintf("no qcc binary found (%y)", qcc_bin));
         }
         TmpDir tmp("qore-enum-string-in-place-");
         foreach int level in (0, 3) {
