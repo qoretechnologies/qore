@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/qore_program_private.h"
@@ -243,7 +244,11 @@ QoreValue QoreFoldlOperatorNode::doFold(bool fwd, bool& needs_deref, ExceptionSi
         args->push(result.release(), xsink);
         args->push(iv.takeReferencedValue(), xsink);
         ArgvContextHelper argv_helper(args, xsink);
-        result = left.eval(xsink);
+        {
+            // the temporaries of an element are released at its end, before the next element (qore#6288)
+            QoreStatementTempScope element_temps(xsink);
+            result = left.eval(xsink);
+        }
         if (*xsink) {
             return QoreValue();
         }

@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/qore_program_private.h"
@@ -216,7 +217,7 @@ QoreValue QoreHashMapSelectOperatorNode::evalCommon(bool& needs_deref, Exception
         // a single value is the operator's only element: $# is 0, as for a list of one element (qore#5690)
         ImplicitElementHelper eh(0);
         SingleArgvContextHelper argv_helper(arg_lst.takeReferencedValue(), xsink);
-        ValueEvalOptimizedRefHolder result(e[3], xsink);
+        QoreScopedEvalHolder result(e[3], true, xsink);
         if (*xsink || !(Lexical ? semantic_policy.getAsBool(*result) : LexicalSemanticPolicy::getAsBoolDefault(*result)))
             return QoreValue();
 
@@ -258,7 +259,7 @@ QoreValue QoreHashMapSelectOperatorNode::evalCommon(bool& needs_deref, Exception
             ImplicitElementHelper eh(li.index());
             SingleArgvContextHelper argv_helper(li.getReferencedValue(), xsink);
 
-            ValueEvalOptimizedRefHolder result(e[3], xsink);
+            QoreScopedEvalHolder result(e[3], true, xsink);
             if (*xsink)
                 return QoreValue();
 
@@ -266,7 +267,8 @@ QoreValue QoreHashMapSelectOperatorNode::evalCommon(bool& needs_deref, Exception
                 continue;
 
             {
-                ValueEvalOptimizedRefHolder ekey(e[0], xsink);
+                // the temporaries of an element's key, value and predicate are released when each is evaluated (qore#6288)
+                QoreScopedEvalHolder ekey(e[0], true, xsink);
                 if (*xsink)
                     return QoreValue();
 
@@ -275,7 +277,7 @@ QoreValue QoreHashMapSelectOperatorNode::evalCommon(bool& needs_deref, Exception
                 if (*xsink)
                     return QoreValue();
 
-                ValueEvalOptimizedRefHolder val(e[1], xsink);
+                QoreScopedEvalHolder val(e[1], true, xsink);
                 if (*xsink)
                     return QoreValue();
 
@@ -344,7 +346,7 @@ QoreValue QoreHashMapSelectOperatorNode::mapIterator(AbstractIteratorHelper& h, 
         // check if value can be mapped
         SingleArgvContextHelper argv_helper(iv.release(), xsink);
 
-        ValueEvalOptimizedRefHolder result(e[3], xsink);
+        QoreScopedEvalHolder result(e[3], true, xsink);
         if (*xsink)
             return QoreValue();
 
@@ -352,7 +354,8 @@ QoreValue QoreHashMapSelectOperatorNode::mapIterator(AbstractIteratorHelper& h, 
             continue;
 
         {
-            ValueEvalOptimizedRefHolder ekey(e[0], xsink);
+            // the temporaries of an element's key, value and predicate are released when each is evaluated (qore#6288)
+            QoreScopedEvalHolder ekey(e[0], true, xsink);
             if (*xsink)
                 return QoreValue();
 
@@ -361,7 +364,7 @@ QoreValue QoreHashMapSelectOperatorNode::mapIterator(AbstractIteratorHelper& h, 
             if (*xsink)
                 return QoreValue();
 
-            ValueEvalOptimizedRefHolder val(e[1], xsink);
+            QoreScopedEvalHolder val(e[1], true, xsink);
             if (*xsink)
                 return QoreValue();
 

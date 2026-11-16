@@ -41,20 +41,23 @@ class MapStageTempDtorExceptionTest inherits QUnit::Test {
 
     astReference() {
         list<string> lines = getAst().split("\n");
-        foreach string line in ("top list: DTOR-l1,DTOR-l2", "top hash: DTOR-h1,DTOR-h2", "top foldl: DTOR-f2,DTOR-f3",
-                "top select: DTOR-s1,DTOR-s2", "top middle: DTOR-m", "top single: DTOR-o1",
-                "function list: \"DTOR-l1,DTOR-l2\"", "leaves list: DTOR-l1,DTOR-l2") {
+        # the temporaries of an element are released at its end (qore#6288), so the destructor of the first element's
+        # raises the exception before the next element, and the try statement catches it
+        foreach string line in ("top list: DTOR-l1", "top hash: DTOR-h1", "top foldl: DTOR-f2",
+                "top select: DTOR-s1", "top middle: DTOR-m", "top single: DTOR-o1",
+                "function list: \"DTOR-l1\"", "leaves list: DTOR-l1") {
             assertTrue((select lines, $1 == line).size() > 0, line);
         }
         assertFalse(getAst() =~ /LOOP|none/, getAst());
         # the temporaries of the elements are released before the catch blocks run
         assertRegex("~p1\n~p2\norder map-select: caught ERR\n~q1\n~q2\norder map: caught ERR\n", getAst());
-        foreach string line in ("top adjacent-list: DTOR-al1,DTOR-al2", "top fold-adjacent: DTOR-fa2,DTOR-fa3",
-                "top map-over-select: DTOR-mo1,DTOR-mo2", "top hash-3-keys: DTOR-h31,DTOR-h32",
-                "top nested-size: DTOR-ns1,DTOR-ns2,DTOR-ns1,DTOR-ns2", "top complex-list: DTOR-cl1,DTOR-cl2",
-                "top fold-complex: DTOR-fc2,DTOR-fc3", "top fold-object: DTOR-ac2,DTOR-ac3",
-                "leaves nested-size: DTOR-ns1,DTOR-ns2,DTOR-ns1,DTOR-ns2", "leaves complex-list: DTOR-cl1,DTOR-cl2",
-                "leaves fold-complex: DTOR-fc2,DTOR-fc3", "leaves fold-object: DTOR-ac2,DTOR-ac3") {
+        # an element's inner map raises the exceptions of its two elements, chained
+        foreach string line in ("top adjacent-list: DTOR-al1", "top fold-adjacent: DTOR-fa2",
+                "top map-over-select: DTOR-mo1", "top hash-3-keys: DTOR-h31",
+                "top nested-size: DTOR-ns1,DTOR-ns2", "top complex-list: DTOR-cl1",
+                "top fold-complex: DTOR-fc2", "top fold-object: DTOR-ac2",
+                "leaves nested-size: DTOR-ns1,DTOR-ns2", "leaves complex-list: DTOR-cl1",
+                "leaves fold-complex: DTOR-fc2", "leaves fold-object: DTOR-ac2") {
             assertTrue((select lines, $1 == line).size() > 0, line);
         }
     }

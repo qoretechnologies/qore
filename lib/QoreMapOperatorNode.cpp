@@ -349,7 +349,7 @@ bool QoreFunctionalMapListOperator::getNextImpl(ValueOptionalRefHolder& val, Exc
     SingleArgvContextHelper argv_helper(getReferencedValue(), xsink);
     // when the value of the map is not used, each element is a statement of its own, as in the other
     // execution modes
-    QoreScopedEvalHolder tval(map->left, !map->needsReturnValue(), xsink);
+    QoreScopedEvalHolder tval(map->left, true, xsink);
     if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
@@ -369,7 +369,7 @@ bool QoreFunctionalMapSingleValueOperator::getNextImpl(ValueOptionalRefHolder& v
     v.clear();
     // when the value of the map is not used, each element is a statement of its own, as in the other
     // execution modes
-    QoreScopedEvalHolder tval(map->left, !map->needsReturnValue(), xsink);
+    QoreScopedEvalHolder tval(map->left, true, xsink);
     if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
@@ -394,7 +394,7 @@ bool QoreFunctionalMapIteratorOperator::getNextImpl(ValueOptionalRefHolder& val,
     SingleArgvContextHelper argv_helper(iv.release(), xsink);
     // when the value of the map is not used, each element is a statement of its own, as in the other
     // execution modes
-    QoreScopedEvalHolder tval(map->left, !map->needsReturnValue(), xsink);
+    QoreScopedEvalHolder tval(map->left, true, xsink);
     if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
@@ -413,7 +413,7 @@ bool QoreFunctionalMapOperator::getNextImpl(ValueOptionalRefHolder& val, Excepti
     SingleArgvContextHelper argv_helper(iv.takeReferencedValue(), xsink);
     // when the value of the map is not used, each element is a statement of its own, as in the other
     // execution modes
-    QoreScopedEvalHolder tval(map->left, !map->needsReturnValue(), xsink);
+    QoreScopedEvalHolder tval(map->left, true, xsink);
     if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);

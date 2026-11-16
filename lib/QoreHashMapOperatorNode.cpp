@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/qore_program_private.h"
@@ -263,7 +264,8 @@ QoreValue QoreHashMapOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
             SingleArgvContextHelper argv_helper(li.getReferencedValue(), xsink);
 
             {
-                ValueEvalOptimizedRefHolder ekey(e[0], xsink);
+                // the temporaries of an element's key, value and predicate are released when each is evaluated (qore#6288)
+                QoreScopedEvalHolder ekey(e[0], true, xsink);
                 if (*xsink)
                     return QoreValue();
 
@@ -272,7 +274,7 @@ QoreValue QoreHashMapOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
                 if (*xsink)
                     return QoreValue();
 
-                ValueEvalOptimizedRefHolder val(e[1], xsink);
+                QoreScopedEvalHolder val(e[1], true, xsink);
                 if (*xsink)
                     return QoreValue();
 
@@ -343,7 +345,8 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
         SingleArgvContextHelper argv_helper(iv.release(), xsink);
 
         {
-            ValueEvalOptimizedRefHolder ekey(e[0], xsink);
+            // the temporaries of an element's key, value and predicate are released when each is evaluated (qore#6288)
+            QoreScopedEvalHolder ekey(e[0], true, xsink);
             if (*xsink)
                 return QoreValue();
 
@@ -352,7 +355,7 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
             if (*xsink)
                 return QoreValue();
 
-            ValueEvalOptimizedRefHolder val(e[1], xsink);
+            QoreScopedEvalHolder val(e[1], true, xsink);
             if (*xsink)
                 return QoreValue();
 

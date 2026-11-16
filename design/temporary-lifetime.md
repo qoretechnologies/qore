@@ -60,18 +60,17 @@ computed, before the code that follows runs.
 | operand of a change to a container: assignment to a member or element, compound assignment (`+=` ...) except to a variable of a type without references, `push`, `unshift` | `QoreMutationOperandHolder` | `lowerMutationOperand()` |
 | key or index of an lvalue | `LValueHelper::doHashObjLValue()`, `doListLValue()` | `lowerExpressionInTempScope()` |
 | expression of a `map` or the map expression of a map-select whose value is not used (each element) | `QoreScopedEvalHolder` | per-iteration `PushTempMark` / `DiscardTemps` |
+| each element's expression of a `map` or map-select whose value is used, condition of a `select` or map-select, expression of `foldl` and `foldr`, key, value and condition of a hash `map`, stage of a fused pipeline or streaming operator (the value is kept; qore#6288) | `QoreScopedEvalHolder` (`QoreStatementTempScope` for the fold expression) | `lowerExpressionInTempScope()` (`DiscardTempsKeep`), only when the expression can create a temporary besides its value |
 | expression of a `background` operator, in the new thread | `op_background_thread()` | the same (the thread evaluates the expression) |
 | default value of a parameter, initializer of a class member, of a static class variable and of a hashdecl member, which the callee or the code that creates the object or hash evaluates while the caller's statement runs | `QoreScopedEvalHolder` (`CodeEvaluationHelper::prepareDefaultArgs()`, `qore_class_private::initMember()`, the static variable initializer, `typed_hash_decl_private`) | evaluated without the caller's temp scope |
 
-An expression evaluated again within the same statement - the expression of a `map` whose value is used, of a
-`select`, of `foldl`, also when a `foreach` statement gets the elements of a `map` one by one - keeps one temporary
-per expression: the one from the previous element is released when the next one is created (the IR interpreter
-overwrites the value slot of the instruction; native code overwrites the cleanup slot), so a loop never accumulates
-temporaries; the last one is released at the end of the statement.  An expression that raises an exception creates no
-temporary, so the previous element's stays until the statement's temporaries are released, after the operator's
-values: the IR interpreter sets no value for an instruction that raises, and native code sets the cleanup slot of an
-IR invoke at the start of its normal continuation (`QoreIRToLLVM::getInvokeResultDeferBlock()`), which costs the
-normal path nothing; before, an exception released the previous element's temporary first (qore#5830).  The blocks
+The expressions that a functional operator evaluates for each element are statements of their own (qore#6288): the
+temporaries of an element are released when its value has been computed, before the operator appends it, tests it
+or goes on with the next element, in every execution mode, so a `map (new C($1)).get(), l` destroys each object
+right after its `get()` call.  Before, an expression evaluated again within the same statement - the expression of a
+`map` whose value is used, of a `select`, of `foldl` - kept one temporary per expression, released when the next
+element's replaced it.  An expression that raises an exception releases the temporaries that it created before the
+exception, as any statement does.  The blocks
 that a functional operator's lowering creates for the code after its loop are laid out after the blocks of its body
 (`qore_ir_move_loop_exit_blocks()`): they hold the end of the statement, and native code, which closes a temp scope
 in the order of the blocks, otherwise left the temporaries of the body to the enclosing statement, which released

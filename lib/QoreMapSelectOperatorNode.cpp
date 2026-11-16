@@ -319,7 +319,8 @@ bool QoreFunctionalMapSelectListOperator<StrictBoolean>::getNextImpl(ValueOption
         SingleArgvContextHelper argv_helper(getReferencedValue(), xsink);
 
         // check if value can be mapped
-        ValueEvalOptimizedRefHolder result(map->e[2], xsink);
+        // the temporaries of an element's predicate are released at its end (qore#6288)
+        QoreScopedEvalHolder result(map->e[2], true, xsink);
         if (*xsink)
             return false;
         if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -327,7 +328,7 @@ bool QoreFunctionalMapSelectListOperator<StrictBoolean>::getNextImpl(ValueOption
 
         // when the value of the map is not used, each element is a statement of its own, as in the other
         // execution modes
-        QoreScopedEvalHolder tval(map->e[0], !map->needsReturnValue(), xsink);
+        QoreScopedEvalHolder tval(map->e[0], true, xsink);
         if (!*xsink && map->ref_rv) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);
@@ -350,7 +351,8 @@ bool QoreFunctionalMapSelectSingleValueOperator<StrictBoolean>::getNextImpl(Valu
     v.clear();
 
     // check if value can be mapped
-    ValueEvalOptimizedRefHolder result(map->e[2], xsink);
+    // the temporaries of an element's predicate are released at its end (qore#6288)
+        QoreScopedEvalHolder result(map->e[2], true, xsink);
     if (*xsink)
         return false;
     if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -358,7 +360,7 @@ bool QoreFunctionalMapSelectSingleValueOperator<StrictBoolean>::getNextImpl(Valu
 
     // when the value of the map is not used, each element is a statement of its own, as in the other
         // execution modes
-        QoreScopedEvalHolder tval(map->e[0], !map->needsReturnValue(), xsink);
+        QoreScopedEvalHolder tval(map->e[0], true, xsink);
     if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
@@ -385,7 +387,8 @@ bool QoreFunctionalMapSelectIteratorOperator<StrictBoolean>::getNextImpl(ValueOp
         SingleArgvContextHelper argv_helper(iv.release(), xsink);
 
         // check if value can be mapped
-        ValueEvalOptimizedRefHolder result(map->e[2], xsink);
+        // the temporaries of an element's predicate are released at its end (qore#6288)
+        QoreScopedEvalHolder result(map->e[2], true, xsink);
         if (*xsink)
             return false;
         if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -393,7 +396,7 @@ bool QoreFunctionalMapSelectIteratorOperator<StrictBoolean>::getNextImpl(ValueOp
 
         // when the value of the map is not used, each element is a statement of its own, as in the other
         // execution modes
-        QoreScopedEvalHolder tval(map->e[0], !map->needsReturnValue(), xsink);
+        QoreScopedEvalHolder tval(map->e[0], true, xsink);
         if (!*xsink && map->ref_rv) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);
@@ -418,7 +421,8 @@ bool QoreFunctionalMapSelectOperator<StrictBoolean>::getNextImpl(ValueOptionalRe
         SingleArgvContextHelper argv_helper(iv.takeReferencedValue(), xsink);
 
         // check if value can be mapped
-        ValueEvalOptimizedRefHolder result(map->e[2], xsink);
+        // the temporaries of an element's predicate are released at its end (qore#6288)
+        QoreScopedEvalHolder result(map->e[2], true, xsink);
         if (*xsink)
             return false;
         if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -426,7 +430,7 @@ bool QoreFunctionalMapSelectOperator<StrictBoolean>::getNextImpl(ValueOptionalRe
 
         // when the value of the map is not used, each element is a statement of its own, as in the other
         // execution modes
-        QoreScopedEvalHolder tval(map->e[0], !map->needsReturnValue(), xsink);
+        QoreScopedEvalHolder tval(map->e[0], true, xsink);
         if (!*xsink && map->ref_rv) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);

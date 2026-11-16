@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/qore_program_private.h"
@@ -280,7 +281,8 @@ bool QoreFunctionalSelectListOperator<StrictBoolean>::getNextImpl(ValueOptionalR
         SingleArgvContextHelper argv_helper(getReferencedValue(), xsink);
 
         // check if value can be selected
-        ValueEvalOptimizedRefHolder result(select->right, xsink);
+        // the temporaries of an element's condition are released at its end (qore#6288)
+        QoreScopedEvalHolder result(select->right, true, xsink);
         if (*xsink)
             return false;
         if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -305,7 +307,8 @@ bool QoreFunctionalSelectSingleValueOperator<StrictBoolean>::getNextImpl(ValueOp
     SingleArgvContextHelper argv_helper(v.refSelf(), xsink);
 
     // check if value can be selected
-    ValueEvalOptimizedRefHolder result(select->right, xsink);
+    // the temporaries of an element's condition are released at its end (qore#6288)
+        QoreScopedEvalHolder result(select->right, true, xsink);
     if (*xsink)
         return false;
     if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -335,7 +338,8 @@ bool QoreFunctionalSelectIteratorOperator<StrictBoolean>::getNextImpl(ValueOptio
         // setup the implicit argument
         SingleArgvContextHelper argv_helper(iv->refSelf(), xsink);
         // check if value can be selected
-        ValueEvalOptimizedRefHolder result(select->right, xsink);
+        // the temporaries of an element's condition are released at its end (qore#6288)
+        QoreScopedEvalHolder result(select->right, true, xsink);
         if (*xsink)
             return false;
         if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -362,7 +366,8 @@ bool QoreFunctionalSelectOperator<StrictBoolean>::getNextImpl(ValueOptionalRefHo
         // setup the implicit argument
         SingleArgvContextHelper argv_helper(iv->refSelf(), xsink);
         // check if value can be selected
-        ValueEvalOptimizedRefHolder result(select->right, xsink);
+        // the temporaries of an element's condition are released at its end (qore#6288)
+        QoreScopedEvalHolder result(select->right, true, xsink);
         if (*xsink)
             return false;
         if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
