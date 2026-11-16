@@ -72,9 +72,9 @@ QoreObject* qore_get_async_io_logger_object() {
     return nullptr;
 }
 
-void qore_async_io_log_v(int level, const char* fmt, va_list args) {
+bool qore_async_io_log_v(int level, const char* fmt, va_list args) {
     if (!qore_async_io_any_logger()) {
-        return;
+        return false;
     }
     QoreLoggerBridge* lgr;
     {
@@ -86,14 +86,13 @@ void qore_async_io_log_v(int level, const char* fmt, va_list args) {
     }
     if (!lgr) {
         // no global async I/O logger: use the global controller's logger, if it has one
-        qore_async_io_controller_log_v(level, fmt, args);
-        return;
+        return qore_async_io_controller_log_v(level, fmt, args);
     }
     // Check level outside lock (calls Qore method)
     if (!lgr->isEnabledFor(level)) {
         ExceptionSink xsink;
         lgr->deref(&xsink);
-        return;
+        return true;
     }
     // Format and log.  QoreString::vsprintf returns -1 (no retry) when its
     // buffer is too small; re-copy the va_list and retry until it fits.
@@ -116,6 +115,7 @@ void qore_async_io_log_v(int level, const char* fmt, va_list args) {
     if (xsink) {
         xsink.clear();
     }
+    return true;
 }
 
 void qore_async_io_log(int level, const char* fmt, ...) {

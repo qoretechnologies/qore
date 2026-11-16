@@ -2420,24 +2420,21 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             const char* owner = async_item.owner.empty() ? "-" : async_item.owner.c_str();
             const char* key = async_item.key.empty() ? "-" : async_item.key.c_str();
             const char* stream_key = async_item.stream_key.empty() ? "-" : async_item.stream_key.c_str();
-            // Use the controller's logger if available; fall back to stderr
-            if (ctrl) {
-                ctrl->log(QORE_LOG_LEVEL_ERROR,
-                    "QoreCallDispatcher::workerLoop() %s exception: %s: %s "
-                    "(type=%s class=%s owner=%s key=%s stream_key=%s)",
-                    method_name ? method_name : "unknown",
-                    *err_str ? err_str->c_str() : "?",
-                    *desc_str ? desc_str->c_str() : "?",
-                    type_name, class_name, owner, key, stream_key);
+            // the exception is logged at the error level; without a logger it is reported on stderr as an unhandled
+            // exception, as one raised by a task (submitTask()) or a background thread is, so that the failure of a
+            // callback is never silent (qore#6275)
+            bool logged = ctrl && ctrl->log(QORE_LOG_LEVEL_ERROR,
+                "QoreCallDispatcher::workerLoop() %s exception: %s: %s "
+                "(type=%s class=%s owner=%s key=%s stream_key=%s)",
+                method_name ? method_name : "unknown",
+                *err_str ? err_str->c_str() : "?",
+                *desc_str ? desc_str->c_str() : "?",
+                type_name, class_name, owner, key, stream_key);
+            if (logged) {
+                work_xsink.clear();
             } else {
-                fprintf(stderr, "QoreCallDispatcher::workerLoop() %s exception: %s: %s "
-                    "(type=%s class=%s owner=%s key=%s stream_key=%s)\n",
-                    method_name ? method_name : "unknown",
-                    *err_str ? err_str->c_str() : "?",
-                    *desc_str ? desc_str->c_str() : "?",
-                    type_name, class_name, owner, key, stream_key);
+                work_xsink.handleExceptions();
             }
-            work_xsink.clear();
         }
 
         // NOTE: cb_worker_guard stays set through this cleanup section (it is
@@ -2572,16 +2569,15 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (*xsink) {
             QoreStringValueHelper err(xsink->getExceptionErr());
             QoreStringValueHelper desc(xsink->getExceptionDesc());
-            if (ctrl) {
-                ctrl->log(QORE_LOG_LEVEL_ERROR, "QoreCallDispatcher::workerLoop() discarding an exception "
-                    "left pending by %s cleanup: %s: %s", getDispatchTypeName(async_item.type),
-                    *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+            // without a logger, reported on stderr as an unhandled exception, as an exception of the work item is
+            bool logged = ctrl && ctrl->log(QORE_LOG_LEVEL_ERROR, "QoreCallDispatcher::workerLoop() discarding "
+                "an exception left pending by %s cleanup: %s: %s", getDispatchTypeName(async_item.type),
+                *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+            if (logged) {
+                xsink->clear();
             } else {
-                fprintf(stderr, "QoreCallDispatcher::workerLoop() discarding an exception left pending by "
-                    "%s cleanup: %s: %s\n", getDispatchTypeName(async_item.type),
-                    *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+                xsink->handleExceptions();
             }
-            xsink->clear();
         }
     }
 }
@@ -9840,10 +9836,10 @@ void AsyncIoControllerPriv::waitCancel(const std::string& key) {
     }
 }
 
-void AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
+bool AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
     // no logger can take the message: no lock is taken (see qore_async_io_logger_count)
     if (!qore_async_io_any_logger()) {
-        return;
+        return false;
     }
     va_list args;
     va_start(args, fmt);
@@ -9852,9 +9848,10 @@ void AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
     if (!logged) {
         // No per-controller logger — delegate to global async I/O logger (outside lock)
         va_start(args, fmt);
-        qore_async_io_log_v(level, fmt, args);
+        logged = qore_async_io_log_v(level, fmt, args);
         va_end(args);
     }
+    return logged;
 }
 
 bool AsyncIoControllerPriv::logOwnV(int level, const char* fmt, va_list args) const {

@@ -2506,7 +2506,10 @@ private:
     DLLLOCAL void waitCancel(const std::string& key);
 
     //! Log a message (acquires lock to snapshot logger — must NOT be called with lock held)
-    DLLLOCAL void log(int level, const char* fmt, ...) const;
+    /** @return false if there is no logger to take the message (neither the controller's own logger nor a global
+        one); a logger that is not enabled for the level counts as taking it
+    */
+    DLLLOCAL bool log(int level, const char* fmt, ...) const;
 
 public:
     //! Logs a message with this controller's own logger only (acquires lock — must NOT be called with lock held)

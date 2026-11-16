@@ -1,0 +1,209 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child qore processes started without an execution mode
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+
+%exec-class AsyncIoCallbackExceptionStderrTest
+
+#! An exception raised by a callback that the AsyncIoController runs is never silent (qore#6275)
+/** With a logger (the controller's or the async I/O logger), the exception is logged at the error level; without
+    one, it is reported on the standard error output as an unhandled exception, as one raised by a task
+    (submitTask()) is.  Each check runs a child process whose dispatcher has a single callback worker: the work item
+    that raises the exception schedules the work item that ends the script, which therefore runs only after the
+    exception of the first one has been reported.
+*/
+class AsyncIoCallbackExceptionStderrTest inherits QUnit::Test {
+    private {
+        #! The child script; its argument selects the callback that raises the exception and the logger
+        const ChildScript = "%%new-style
+%%require-types
+%%strict-args
+%%prepend-module-path \"%s\"
+%%requires Logger
+
+class Thrower {
+    destructor() {
+        throw \"CLEANUP-ERR\", \"from the destructor\";
+    }
+
+    noop() {
+    }
+}
+
+# returns a timer closure that holds the only reference to a Thrower: the object is destroyed when the dispatcher
+# releases the closure after it has run
+code sub make_cleanup_cb(Queue q, Queue gate) {
+    Thrower t();
+    return sub () {
+        # waits until the main thread has released its reference to the closure
+        gate.get();
+        t.noop();
+        AsyncIoController::addTimerDelay(0s, sub () { q.push(1); });
+    };
+}
+
+Logger sub stdout_logger(LoggerLevel level) {
+    Logger logger(\"cb\", level);
+    LoggerAppenderStdOut appender(\"out\", new LoggerLayoutPattern(\"LOG: %%m%%n\"));
+    appender.open();
+    logger.addAppender(appender);
+    return logger;
+}
+
+sub main() {
+    string mode = ARGV[0];
+    AsyncIoController::setMaxCallbackWorkers(1);
+    Queue q();
+    switch (mode) {
+        case \"logger\":
+        case \"cleanup-logger\":
+            AsyncIoController::setLogger(stdout_logger(LoggerLevel::getLevelInfo()));
+            break;
+        case \"global-logger\":
+            set_async_io_logger(stdout_logger(LoggerLevel::getLevelInfo()));
+            break;
+        case \"filtered-logger\":
+            AsyncIoController::setLogger(stdout_logger(LoggerLevel::getLevelFatal()));
+            break;
+    }
+    switch (mode) {
+        case \"cleanup\":
+        case \"cleanup-logger\": {
+            Queue gate();
+            AsyncIoController::addTimerDelay(0s, make_cleanup_cb(q, gate));
+            gate.push(1);
+            break;
+        }
+        case \"timer-callback\":
+            AsyncIoController::setTimerCallback(sub (auto ev) {
+                AsyncIoController::addTimerDelay(0s, sub () { q.push(1); });
+                throw \"CB-ERR\", \"from the timer callback\";
+            });
+            AsyncIoController::addTimerDelay(0s, \"timer data\");
+            break;
+        case \"task\":
+            AsyncIoController::submitTask(sub () {
+                AsyncIoController::submitTask(sub () { q.push(1); });
+                throw \"CB-ERR\", \"from the task\";
+            });
+            break;
+        default:
+            AsyncIoController::addTimerDelay(0s, sub () {
+                AsyncIoController::addTimerDelay(0s, sub () { q.push(1); });
+                throw \"CB-ERR\", \"from the timer\";
+            });
+            break;
+    }
+    # a timeout fails a child whose callbacks never end instead of leaving it waiting
+    q.get(60s);
+    print(\"done\\n\");
+}
+
+main();
+";
+    }
+
+    public {
+        TmpDir tmp;
+        string script;
+        string qore_bin;
+    }
+
+    constructor() : Test("AsyncIoCallbackExceptionStderrTest", "1.0") {
+        tmp = new TmpDir("asyncio-cb-exc-");
+        script = tmp.path + "/child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf(ChildScript, realpath(get_script_dir() + "/../../../../../qlib")));
+        f.close();
+        qore_bin = TestInterpreter::qore_interpreter();
+
+        addTestCase("a timer's exception without a logger goes to stderr", \testTimerNoLogger());
+        addTestCase("the timer callback's exception without a logger goes to stderr", \testTimerCallbackNoLogger());
+        addTestCase("an exception left by the cleanup of a work item without a logger goes to stderr",
+            \testCleanupNoLogger());
+        addTestCase("an exception left by the cleanup of a work item is logged as such", \testCleanupLogger());
+        addTestCase("a task's exception goes to stderr", \testTaskNoLogger());
+        addTestCase("a timer's exception goes to the controller's logger, not to stderr", \testControllerLogger());
+        addTestCase("a timer's exception goes to the async I/O logger, not to stderr", \testGlobalLogger());
+        addTestCase("a logger that does not log errors takes the exception: nothing goes to stderr",
+            \testFilteredLogger());
+        set_return_value(main());
+    }
+
+    #! Runs the child script in the given mode; returns its standard output and error output
+    private hash<auto> run(string mode) {
+        string err_file = sprintf("%s/%s.err", tmp.path, mode);
+        string out = backquote(sprintf("%s %s %s 2>%s", qore_bin, script, mode, err_file));
+        return {
+            "out": out,
+            "err": ReadOnlyFile::readTextFile(err_file),
+        };
+    }
+
+    #! Checks that the exception of a child without a logger appears on stderr
+    private checkStderr(string mode, string err, string desc) {
+        hash<auto> rv = run(mode);
+        assertEq("done\n", rv.out, mode + ": the script ended");
+        assertTrue(rv.err.find(err) >= 0, sprintf("%s: the exception's code is on stderr: %y", mode, rv.err));
+        assertTrue(rv.err.find(desc) >= 0, sprintf("%s: the exception's description is on stderr: %y", mode,
+            rv.err));
+    }
+
+    testTimerNoLogger() {
+        checkStderr("timer", "CB-ERR", "from the timer");
+    }
+
+    testTimerCallbackNoLogger() {
+        checkStderr("timer-callback", "CB-ERR", "from the timer callback");
+    }
+
+    testCleanupNoLogger() {
+        checkStderr("cleanup", "CLEANUP-ERR", "from the destructor");
+    }
+
+    #! the exception of the cleanup case is raised by the cleanup of the work item, not by the work item itself
+    testCleanupLogger() {
+        hash<auto> rv = run("cleanup-logger");
+        assertTrue(rv.out.find("LOG: QoreCallDispatcher::workerLoop() discarding an exception left pending by "
+            "callback cleanup: CLEANUP-ERR: from the destructor") >= 0, sprintf("the exception is logged as one of the "
+            "cleanup: %y", rv.out));
+        assertTrue(rv.out =~ /done\n$/, sprintf("the script ended: %y", rv.out));
+        assertEq(-1, rv.err.find("CLEANUP-ERR"), sprintf("the exception is not on stderr: %y", rv.err));
+    }
+
+    testTaskNoLogger() {
+        checkStderr("task", "CB-ERR", "from the task");
+    }
+
+    #! Checks that the exception of a child with a logger is logged and does not appear on stderr
+    private checkLogged(string mode) {
+        hash<auto> rv = run(mode);
+        assertTrue(rv.out.find("LOG: QoreCallDispatcher::workerLoop() callback exception: CB-ERR: from the timer")
+            >= 0, sprintf("%s: the exception is logged: %y", mode, rv.out));
+        assertTrue(rv.out =~ /done\n$/, sprintf("%s: the script ended: %y", mode, rv.out));
+        assertEq(-1, rv.err.find("CB-ERR"), sprintf("%s: the exception is not on stderr: %y", mode, rv.err));
+    }
+
+    testControllerLogger() {
+        checkLogged("logger");
+    }
+
+    testGlobalLogger() {
+        checkLogged("global-logger");
+    }
+
+    testFilteredLogger() {
+        hash<auto> rv = run("filtered-logger");
+        assertEq("done\n", rv.out, "the script ended, and the exception is not logged at the fatal level");
+        assertEq(-1, rv.err.find("CB-ERR"), sprintf("the exception is not on stderr: %y", rv.err));
+    }
+}
