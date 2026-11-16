@@ -180,7 +180,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - GenericCacheRelease: GenericCacheRelease.qr runs in child processes that set their own --exec-mode
         # - nested-callable-types (#6022): its script runs in child processes that set their own --exec-mode, and
         #   compiled with qcc
-        # - JitTeardownAtExit: JitTeardownAtExit.qr runs in child processes that set their own --exec-mode
+        # - JitTeardownAtExit-<n> (#6390): JitTeardownAtExit.qr runs in child processes that set their own --exec-mode
         # - qlib-module-domains: each module is loaded first by a restricted Program in a child process, as a loaded
         #   module is not checked again for the next Program (#5803)
         # - qlib-all-modules-load: each qlib module is loaded by a restricted Program in a child process of its own, as
@@ -315,7 +315,9 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
                                  "examples/test/qore/parser/nested-callable-types.qtest",
-                                 "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit.qtest",
+                                 "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-1.qtest",
+                                 "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-2.qtest",
+                                 "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-3.qtest",
                                  "examples/test/qore/functions/user-functional-domains/nested-module-parse.qtest",
                                  "examples/test/qore/functions/user-functional-domains/qlib-module-domains.qtest",
                                  "examples/test/qore/functions/user-functional-domains/qlib-all-modules-load.qtest",
