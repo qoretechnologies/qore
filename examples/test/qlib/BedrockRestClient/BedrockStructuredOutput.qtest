@@ -15,6 +15,7 @@
 %requires QoreLlmTypes
 %requires QoreLlmUtils
 %requires AwsRestClient
+%requires AwsEventStream
 %requires BedrockRestClient
 
 %requires json
@@ -29,11 +30,47 @@ class CannedConverseHandler inherits AbstractHttpRequestHandler {
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path =~ /\/converse-stream$/) {
+            last_body = parse_json(body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body);
+            return makeResponse({"Content-Type": "application/vnd.amazon.eventstream"}, 200, streamFrames());
+        }
         if (cx.raw_path !~ /\/converse$/) {
             return makeResponse(404, "unknown path: " + cx.raw_path);
         }
         last_body = parse_json(body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body);
         return makeResponse({"Content-Type": MimeTypeJson}, 200, make_json(response));
+    }
+
+    #! the ConverseStream events of the canned response: text and tool input in fragments
+    private binary streamFrames() {
+        binary frames = event("messageStart", {"role": "assistant"});
+        int index = 0;
+        foreach hash<auto> block in (response.output.message.content) {
+            if (exists block.text) {
+                frames += event("contentBlockDelta", {"contentBlockIndex": index,
+                    "delta": {"text": block.text.substr(0, 4)}});
+                frames += event("contentBlockDelta", {"contentBlockIndex": index,
+                    "delta": {"text": block.text.substr(4)}});
+            } else if (block.toolUse) {
+                frames += event("contentBlockStart", {"contentBlockIndex": index,
+                    "start": {"toolUse": block.toolUse - "input"}});
+                string args = make_json(block.toolUse.input);
+                # fragments that are not JSON on their own
+                for (int i = 0; i < args.size(); i += 5) {
+                    frames += event("contentBlockDelta", {"contentBlockIndex": index,
+                        "delta": {"toolUse": {"input": args.substr(i, 5)}}});
+                }
+            }
+            frames += event("contentBlockStop", {"contentBlockIndex": index++});
+        }
+        frames += event("messageStop", {"stopReason": response.stopReason});
+        frames += event("metadata", {"usage": response.usage});
+        return frames;
+    }
+
+    private static binary event(string name, hash<auto> value) {
+        return AwsEventStreamEncoder::encode({":message-type": "event", ":event-type": name,
+            ":content-type": MimeTypeJson}, binary(make_json(value)));
     }
 }
 
@@ -83,6 +120,9 @@ class BedrockStructuredOutputTest inherits QUnit::Test {
         addTestCase("tool route: a model without native structured output", \toolRouteTest());
         addTestCase("tool route: a schema Bedrock cannot take as it is", \toolRouteSchemaTest());
         addTestCase("an OpenAI response_format is routed to the structured output", \responseFormatTest());
+        addTestCase("streamed tool route: the tool's input is streamed as content", \streamToolRouteTest());
+        addTestCase("streamed native route: unchanged", \streamNativeTest());
+        addTestCase("streamed tool route: a caller's tool stays a tool call", \streamCallerToolTest());
         set_return_value(main());
     }
 
@@ -180,6 +220,70 @@ class BedrockStructuredOutputTest inherits QUnit::Test {
         # no response_format in the Converse body; the schema is the request's output schema
         assertEq({}, body_options);
         assertEq(Schema, options.output_schema);
+    }
+
+    streamToolRouteTest() {
+        handler.response = ToolResponse;
+        hash<auto> r = stream("eu.amazon.nova-pro-v1:0");
+        # the deltas concatenate to the JSON of the answer; the text before the tool call is not part of it
+        assertEq(Answer, parse_json(r.content));
+        assertEq((), r.tool_names, "no tool-call event of the structured-output tool");
+        assertEq("end_turn", r.stop_reason);
+        assertTrue(r.deltas > 1, "the answer is streamed in fragments");
+        assertTrue(r.done);
+    }
+
+    streamNativeTest() {
+        handler.response = TextResponse;
+        hash<auto> r = stream("eu.anthropic.claude-opus-5-5");
+        assertEq(Answer, parse_json(r.content));
+        assertEq((), r.tool_names);
+        assertEq("end_turn", r.stop_reason);
+        assertTrue(exists handler.last_body.outputConfig);
+    }
+
+    streamCallerToolTest() {
+        handler.response = {
+            "output": {"message": {"role": "assistant", "content": (
+                {"toolUse": {"toolUseId": "t0", "name": "lookup", "input": {"q": "x"}}},
+                {"toolUse": {"toolUseId": "t1", "name": "structured_output", "input": Answer}},
+            )}},
+            "stopReason": "tool_use",
+            "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+        };
+        hash<auto> r = stream("eu.amazon.nova-pro-v1:0", (<QoreLlmUtils::ToolDefinition>{"name": "lookup",
+            "description": "looks up", "parameters": {"type": "object", "properties": {}}},));
+        # the caller's tool call is delivered as a tool call (with its input), the answer as content
+        assertEq(("lookup",), r.tool_names);
+        assertEq({"q": "x"}, parse_json(r.tool_args));
+        assertEq(Answer, parse_json(r.content));
+        assertEq("tool_use", r.stop_reason, "the caller's tool call is still to be answered, as with chat()");
+    }
+
+    #! streams a request with the output schema and collects the content, tool calls and stop reason of its events
+    private hash<auto> stream(string model, *list<hash<QoreLlmUtils::ToolDefinition>> tools) {
+        hash<auto> rv = {"content": "", "tool_names": (), "tool_args": "", "deltas": 0, "done": False};
+        newProvider(model).chatStream((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "terrible service"},),
+            sub (hash<QoreLlmUtils::ChatStreamEvent> e) {
+                if (e.done) {
+                    rv.done = True;
+                    return;
+                }
+                if (exists e.delta) {
+                    rv.content += e.delta;
+                    ++rv.deltas;
+                }
+                if (*string name = e.raw.contentBlockStart.start.toolUse.name) {
+                    rv.tool_names += name;
+                }
+                if (exists e.raw.contentBlockDelta.delta.toolUse.input) {
+                    rv.tool_args += e.raw.contentBlockDelta.delta.toolUse.input;
+                }
+                if (*string stop = e.raw.messageStop.stopReason) {
+                    rv.stop_reason = stop;
+                }
+            }, tools, <QoreLlmUtils::LlmRequestOptions>{"output_schema": Schema});
+        return rv;
     }
 
     private checkNative(hash<auto> body) {

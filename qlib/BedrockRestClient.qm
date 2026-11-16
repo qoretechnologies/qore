@@ -646,8 +646,8 @@ public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
       is dropped), the schema is the input schema of a single tool,
       @ref BedrockRestClient::StructuredOutputToolName "StructuredOutputToolName", with \c toolChoice auto (Claude
       Opus 5.5 refuses a forced tool choice with HTTP 400), and the model is told to answer by calling it; the input
-      of that tool call is returned as the JSON content of the answer, not as a tool call.  A streamed answer
-      (@ref chatStream()) delivers that tool call as tool-call events.
+      of that tool call is returned as the JSON content of the answer, not as a tool call; a streamed answer
+      (@ref chatStream()) delivers it as text deltas as they arrive (see @ref streamStructuredOutput()).
 */
 public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     public {
@@ -719,6 +719,9 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         ensureRestClient();
         hash<auto> body = buildConverseBody(messages, tools, opts);
+        # on the structured-output tool route, the tool's input is streamed as content (see streamStructuredOutput())
+        *string structured_tool = getStructuredOutputTool(opts.output_schema, opts);
+        hash<auto> structured_state = {};
         *BedrockEventStream stream;
         bool stopped = False;
         checkRequestCancelled(opts);
@@ -758,6 +761,13 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             if (exists raw.contentBlockDelta.delta.text) {
                 event.delta = raw.contentBlockDelta.delta.text;
             }
+            if (structured_tool) {
+                foreach hash<QoreLlmUtils::ChatStreamEvent> e in (BedrockLlmProvider::streamStructuredOutput(
+                        structured_tool, \structured_state, event)) {
+                    deliverStreamEvent(callback, e, opts);
+                }
+                continue;
+            }
             deliverStreamEvent(callback, event, opts);
         }
         if (!stopped) {
@@ -765,6 +775,66 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         }
         stream.close();
         deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{"done": True}, opts);
+    }
+
+    #! Returns the stream events to deliver for a native event on the structured-output tool route
+    /** On the tool route (see @ref bedrock_structured_output), the answer is the input of the
+        @ref BedrockRestClient::StructuredOutputToolName "structured-output tool", as with @ref chat(), so it is
+        streamed as content, not as a tool call:
+        - the tool's \c contentBlockStart is not delivered, and each of its \c toolUse input deltas, a fragment of the
+          JSON of its input, is delivered as a text delta (\c contentBlockDelta \c delta.text and
+          @ref QoreLlmUtils::ChatStreamEvent::delta "ChatStreamEvent::delta") as it arrives, so the deltas
+          concatenate to the JSON of the answer;
+        - text before the tool call is held, as the answer of the tool route is the tool's input alone: it is dropped
+          when the tool call starts, and delivered before the \c messageStop when the model does not call the tool;
+        - the \c messageStop of a turn that called no other tool reports \c end_turn instead of \c tool_use, as
+          @ref chat() does; the calls of the caller's own tools are delivered as tool calls, unchanged
+
+        @param structured_tool the name of the structured-output tool
+        @param state the state of the stream, kept by the caller between events
+        @param event the event of the native stream
+
+        @return the events to deliver, in order
+    */
+    static list<hash<QoreLlmUtils::ChatStreamEvent>> streamStructuredOutput(string structured_tool,
+            reference<hash<auto>> state, hash<QoreLlmUtils::ChatStreamEvent> event) {
+        hash<auto> raw = event.raw ?? {};
+        # the start of the structured-output tool call: the held text is not part of the answer
+        if (raw.contentBlockStart.start.toolUse.name == structured_tool) {
+            state.index = raw.contentBlockStart.contentBlockIndex;
+            remove state.held;
+            return ();
+        }
+        if (raw.contentBlockStart.start.toolUse.typeCode() == NT_HASH) {
+            state.other_tool = True;
+        }
+        # a fragment of the tool's input: delivered as text
+        if (exists state.index && raw.contentBlockDelta.contentBlockIndex == state.index
+                && raw.contentBlockDelta.delta.toolUse.typeCode() == NT_HASH) {
+            string json = raw.contentBlockDelta.delta.toolUse.input ?? "";
+            hash<auto> text_raw = (raw - "contentBlockDelta") + {
+                "contentBlockDelta": {"contentBlockIndex": state.index, "delta": {"text": json}},
+            };
+            return (event + <QoreLlmUtils::ChatStreamEvent>{"raw": text_raw, "delta": json},);
+        }
+        # text before the tool call is held until it is known whether the tool is called
+        if (!exists state.index && exists raw.contentBlockDelta.delta.text) {
+            if (!state.held) {
+                state.held = ();
+            }
+            state.held += event;
+            return ();
+        }
+        if (exists raw.messageStop) {
+            list<hash<QoreLlmUtils::ChatStreamEvent>> rv = state.held ?? ();
+            remove state.held;
+            if (exists state.index && !state.other_tool && raw.messageStop.stopReason == "tool_use") {
+                raw.messageStop.stopReason = "end_turn";
+                event.raw = raw;
+            }
+            return rv + (event,);
+        }
+        return (event,);
     }
 
     #! Updates OpenAI stream state from a native Converse stream event
