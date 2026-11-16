@@ -4185,7 +4185,7 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
         }
 
         // check functionality flags to see if the variant is accessible
-        if (int64 denied = qore_get_variant_denied_domains(*i, ppo, nullptr, ::getProgram())) {
+        if ([[maybe_unused]] int64 denied = qore_get_variant_denied_domains(*i, ppo, nullptr, ::getProgram())) {
             printd(5, "QoreFunction::runtimeGetCallVariants() this: %p, skip functionality, denied: 0x%llx\n",
                 this, (unsigned long long)denied);
             continue;
@@ -8557,7 +8557,7 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
     // Claim-then-publish; see setCachedIR() for why the winner's body is never replaced.
     // The ir_lower_once flag serialises lowerings against each other but gives no edge to
     // setCachedIR(), which publishes without holding it, so the CAS is what makes this safe.
-    const int num_guards = func->num_guards;
+    [[maybe_unused]] const int num_guards = func->num_guards;
     const IRContextFlags flags = getIRContextFlags(func.get());
     QoreIRFunction* expected = nullptr;
     if (cached_ir.compare_exchange_strong(expected, func.get(),
@@ -9049,7 +9049,7 @@ void UserVariantBase::attemptJITCompilation() const {
         if (q_env_is_set("QORE_BATCH_DEBUG")) {
             printd(5, "BATCH: '%s' enqueued with %d callees:",
                 ir->name.c_str(), (int)callees.size());
-            for (const auto& c : callees) {
+            for ([[maybe_unused]] const auto& c : callees) {
                 printd(5, " %s%s", c.ir_func->name.c_str(),
                     c.approach_b_eligible ? "(B)" : "");
             }
