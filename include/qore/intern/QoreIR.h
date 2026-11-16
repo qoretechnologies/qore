@@ -2582,11 +2582,7 @@ public:
 };
 
 //! Fused add-assign for two typed int locals: target += source
-/** Replaces LoadLocal(target) + LoadLocal(source) + AddAssignInt + StoreLocal(target); the target's type stores the
-    integer as it is (int or softint, never an enum, which takes the lvalue path).  The instruction has the handler of
-    an enclosing try block as its exception target: the read of the source and the change of the target, made by a
-    runtime helper for a variable on the runtime stack, can raise an exception
-*/
+//! Replaces LoadLocal(target) + LoadLocal(source) + AddAssignInt + StoreLocal(target)
 class QoreIRAddAssignLocalIntInstruction : public QoreIRInstruction {
 public:
     QORE_IR_INST_CLASS(AddAssignLocalInt)
@@ -2607,11 +2603,7 @@ public:
 };
 
 //! Fused increment for typed int local: local += delta (constant int)
-/** Replaces LoadLocal + ConstInt(delta) + AddAssignInt + StoreLocal; the local's type stores the integer as it is
-    (int or softint, never an enum, which takes the lvalue path).  The instruction has the handler of an enclosing
-    try block as its exception target: the change, made by a runtime helper for a variable on the runtime stack or a
-    closure-bound variable, can raise an exception
-*/
+//! Replaces LoadLocal + ConstInt(delta) + AddAssignInt + StoreLocal
 class QoreIRIncrementLocalIntInstruction : public QoreIRInstruction {
 public:
     QORE_IR_INST_CLASS(IncrementLocalInt)
