@@ -7762,7 +7762,29 @@ namespace {
             // Program's thread entry handler, and then the Program's thread initialization code; if the entry handler
             // fails, the thread runs none of the Program's code
             ThreadEntryHandlerFrame entry_frame;
-            bool entered = !entry_frame.enter(btp->pgm, &xsink);
+            bool entered;
+            try {
+                entered = !entry_frame.enter(btp->pgm, &xsink);
+            } catch (std::exception& e) {
+                // a C++ exception (std::bad_alloc) fails the start as a Qore exception of the entry handler does: the
+                // frame has been left without the exit handler, and the thread runs none of the Program's code; it
+                // is reported as ProgramThreadCountContextHelper::set() reports it (issues #6233, #6255)
+                entered = false;
+                if (!xsink) {
+                    try {
+                        if (entry_frame.handlerFailedWithCppException()) {
+                            xsink.raiseException("THREAD-ENTRY-HANDLER-ERROR", "the Program's thread entry handler "
+                                "could not be completed: out of memory or an internal error (%s)", e.what());
+                        } else {
+                            xsink.raiseException("PROGRAM-ENTRY-ERROR", "the thread could not enter Program " QLLD
+                                ": out of memory or an internal error (%s)", (int64)btp->pgm->getProgramId(),
+                                e.what());
+                        }
+                    } catch (...) {
+                        // nothing more can be recorded
+                    }
+                }
+            }
             if (entered) {
                 // the code's exceptions do not end the thread; they are handled here, as they always were
                 qore_program_private::doThreadInit(*btp->pgm, nullptr);
