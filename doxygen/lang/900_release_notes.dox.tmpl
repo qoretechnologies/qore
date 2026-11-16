@@ -2645,6 +2645,9 @@
       @ref Qore::StringOutputStream::getData() "StringOutputStream::getData()" ignoring the constructor's encoding
     - fixed @ref Qore::TransformOutputStream "TransformOutputStream" and
       @ref Qore::TransformInputStream "TransformInputStream" holding back decompressed output that exceeds one buffer
+    - the @ref yamlintro "yaml" module's @ref Qore::YAML::parse_yaml() "parse_yaml()" parsed a string in another
+      encoding than UTF-8 as UTF-8, which raised a parse error; it is converted to UTF-8
+      (<a href="https://github.com/qoretechnologies/qore/issues/872">issue 872</a>)
     - fixed @ref Qore::Socket::readServerSentEvent() "Socket::readServerSentEvent()" with a content encoding
       returning only the first event of a compressed stream and rejecting the \c deflate, \c x-deflate, \c x-gzip and
       \c x-bzip2 HTTP content codings
