@@ -209,6 +209,60 @@ string sub get_synonym_sql(hash<auto> row) {
     return sql;
 }
 
+#! the Oracle objects whose create statements are PL/SQL units, which sqlplus runs at a line with a single "/"
+const OraclePlsqlUnits = {
+    "trigger": True,
+    "procedure": True,
+    "function": True,
+    "package": True,
+    "type": True,
+};
+
+#! returns True if the database is an Oracle database (the oracle driver, or another driver connected to Oracle)
+bool sub is_oracle(object db) {
+    if (db.getDriverName() == "oracle") {
+        return True;
+    }
+    try {
+        return db.getDatasource().getDriverRealName() =~ /^oracle/i;
+    } catch () {
+    }
+    return False;
+}
+
+#! returns the DDL statements of an object as the text of an SQL script
+/** On Oracle, a PL/SQL unit (a trigger, procedure, function, package, package body, type or type body) ends with a
+    line with a single \c "/", which sqlplus needs to run it, and every statement is on lines of its own; otherwise
+    the statements are joined and end with \c ";" as before (issue #1735)
+
+    @param ddl a statement or a list of statements
+    @param oracle if the statements are for Oracle
+*/
+string sub get_ddl_text(softlist<auto> ddl, bool oracle) {
+    if (!oracle) {
+        string str;
+        map str += $1, ddl;
+        if (str.substr(-1) != ";") {
+            str += ";";
+        }
+        return str;
+    }
+    list<string> l = ();
+    foreach string stmt in (ddl) {
+        trim stmt;
+        if (stmt !~ /;$/) {
+            stmt += ";";
+        }
+        # the type of object that the statement creates
+        *string obj = (stmt =~ x/^create\s+(?:or\s+replace\s+)?(?:(?:non)?editionable\s+)?([a-z]+)\b/i)[0];
+        if (obj && OraclePlsqlUnits{obj.lwr()}) {
+            stmt += "\n/";
+        }
+        l += stmt;
+    }
+    return l.join("\n");
+}
+
 string sub get_regex(string str) {
     str =~ s/\./\\./g;
     str =~ s/\?/./g;
@@ -260,6 +314,8 @@ class DumpObjects {
         code m_synonym_info;
         #! writes a line of output
         code m_output;
+        #! if the database is Oracle
+        bool m_oracle;
     }
 
     #! dumps the DDL of the given objects (\c "type:name" or \c "type:all")
@@ -275,6 +331,7 @@ class DumpObjects {
         m_db = db;
         m_copt = copt;
         m_output = output ?? sub (string line) { printf("%s\n", line); };
+        m_oracle = is_oracle(db);
         m_synonym_info = synonym_info ?? *hash<auto> sub (string name) {
             # a synonym is listed in lower case unless the native_case option is used
             AbstractDatasource ds = m_db.getDatasource();
@@ -344,21 +401,15 @@ class DumpObjects {
                 throw sprintf("%s-ERROR", type.upr()), sprintf("%s %s does not exist or is not accessible to this "
                     "user", type, name);
             }
-            ret = call_object_method(o, DUMP_OBJECTS{type}.sql, m_copt);
+            # on Oracle, a table's statements are formatted one by one, so that its triggers end with "/"
+            string meth = (m_oracle && type == "tables") ? "getCreateSql" : DUMP_OBJECTS{type}.sql;
+            ret = call_object_method(o, meth, m_copt);
         }
         string singular = type;
         singular =~ s/s$//;
         m_output(sprintf("-- %s %s %s", color.dim("DDL of"), color.dim(singular), color.key(name)));
-        string str;
-        # unfortunately it can be list or string
-        if (ret.typeCode() == NT_LIST) {
-            foreach string i in (ret)
-                str += i;
-        } else
-            str = ret;
-        if (str.substr(-1) != ";")
-            str += ";";
-        m_output(str);
+        # the create SQL can be a string or a list of strings
+        m_output(get_ddl_text(ret, m_oracle));
     }
 
  } # class DumpObjects

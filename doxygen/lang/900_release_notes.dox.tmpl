@@ -2523,6 +2523,9 @@
     - fixed \c sqlutil \c --dump with \c synonyms, which failed with \c METHOD-DOES-NOT-EXIST: an Oracle synonym is
       dumped as a <tt>create or replace synonym</tt> statement made from the catalog
       (<a href="https://github.com/qoretechnologies/qore/issues/1734">issue 1734</a>)
+    - fixed \c sqlutil \c --dump on Oracle, whose SQL scripts could not be run with \c sqlplus: a trigger, procedure,
+      function, package or type now ends with a line with a single \c "/", and every statement of a table or package
+      is on lines of its own (<a href="https://github.com/qoretechnologies/qore/issues/1735">issue 1735</a>)
     - fixed a crash when a file included with @ref include "%include" ends inside a literal or a block comment
     - fixed \c getEncoding() of @ref Qore::StringInputStream "StringInputStream",
       @ref Qore::StringOutputStream "StringOutputStream", @ref Qore::FileOutputStream "FileOutputStream" and
