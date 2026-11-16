@@ -11006,7 +11006,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // interpreter continues after the statement (#5825).
     auto unwindForException = [&func, &block, &ip, &values, &frame, &scope_stack, &releaseScopeTemps, &fireScopeExits,
             &dbgReportException, &dbgReportEnclosing, &dbgHandlerStatements, &dbgHandlerProgram, &dbgFunctionExit,
-            &debug_active, xsink, cleanup_log]() QORE_IR_LAMBDA_NOINLINE {
+            &debug_active, can_debug, tlpd, xsink, cleanup_log]() QORE_IR_LAMBDA_NOINLINE {
+        // a debugger attached while the instruction that raised the exception ran, as in a call, gets the events of
+        // the handlers that the exception runs, as with the AST interpreter and native code
+        if (can_debug) {
+            debug_active = tlpd->runtimeCheck();
+        }
         // the value of a return that the exception interrupted is kept until the locals of the frame are released
         // (SlotCacheCleanup), as the AST interpreter keeps the value of a return until the function ends; taken before
         // the temps of any scope are released, which hold it (#5920)
