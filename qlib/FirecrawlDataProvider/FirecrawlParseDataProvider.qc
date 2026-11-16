@@ -103,7 +103,7 @@ public class FirecrawlParseDataProvider inherits FirecrawlDataProviderBase {
             ? file.content
             : binary(parse_base64_string(file.content));
 
-        string boundary = replace(make_base64_string(string(now_us())), "=", "");
+        string boundary = MultiPartMessage::getBoundary();
         binary body = binary();
         body += binary(sprintf("--%s\r\nContent-Disposition: form-data; name=\"file\"; "
             "filename=\"%s\"\r\nContent-Type: %s\r\n\r\n",
