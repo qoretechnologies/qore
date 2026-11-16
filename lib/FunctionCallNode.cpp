@@ -1682,8 +1682,8 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
                         StaticMethodCallNode* smcn = qore_make_function_call<StaticMethodCallNode>(getSemanticPolicy(), loc, m, takeParseArgs());
                         // the explicit type arguments of the call go to the method call (qore#5818)
                         smcn->moveExplicitTypeArgsFrom(*this);
-                        // issue #5769: the receiver of an implicit call to a static method of a generic base class
-                        smcn->setReceiverTypeInfo(implicit_self_call_receiver(m, qore_class_private::get(*qc)));
+                        // the receiver of an implicit call to a static method of a generic class is set by
+                        // parseInitImpl() (issue #5769, qore#6186)
                         val = smcn;
                         deref();
                         return parse_init_value(val, parse_context);
@@ -1709,8 +1709,8 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
                 StaticMethodCallNode* smcn = qore_make_function_call<StaticMethodCallNode>(getSemanticPolicy(), loc, m, takeParseArgs());
                 // the explicit type arguments of the call go to the method call (qore#5818)
                 smcn->moveExplicitTypeArgsFrom(*this);
-                // issue #5769: the receiver of an implicit call to a static method of a generic base class
-                smcn->setReceiverTypeInfo(implicit_self_call_receiver(m, class_ctx));
+                // the receiver of an implicit call to a static method of a generic class is set by
+                // parseInitImpl() (issue #5769, qore#6186)
                 val = smcn;
                 deref();
                 return parse_init_value(val, parse_context);
@@ -2186,6 +2186,8 @@ std::string StaticMethodCallNode::getClassPath() const {
 
 int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     int err = 0;
+    // the class that the call names (C::m()), if it has no type arguments
+    const QoreClass* scope_cls = nullptr;
     if (!method) {
         assert(!parse_context.typeInfo);
         bool abr = parse_check_parse_option(PO_ALLOW_BARE_REFS);
@@ -2461,6 +2463,9 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             return parse_init_value(val, parse_context);
         }
 
+        if (!parameterized_receiver) {
+            scope_cls = qc;
+        }
         delete scope;
         scope = nullptr;
     } else {
@@ -2475,6 +2480,13 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 
     assert(method->isStatic());
 
+    // the receiver of a call that names no type arguments of the method's generic class (qore#6186)
+    bool current_receiver = false;
+    if (!receiver_type_info) {
+        receiver_type_info = qore_class_private::parseGetStaticCallReceiverTypeInfo(*method, scope_cls,
+            parse_get_class_priv(), current_receiver);
+    }
+
     std::string receiver_inference_call_desc = "static method call '";
     receiver_inference_call_desc += method->getClass()->getNamespacePath(false);
     receiver_inference_call_desc += "::";
@@ -2484,7 +2496,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     // the arguments are bound by name at run time when the variants that could be selected name their parameters
     // differently (see StaticMethodCallNode::evalNamed())
     allow_runtime_arg_names = true;
-    if (parseArgs(parse_context, qore_method_private::get(*method)->getFunction(), nullptr, true,
+    if (parseArgs(parse_context, qore_method_private::get(*method)->getFunction(), nullptr, !current_receiver,
             receiver_inference_call_desc.c_str()) && !err) {
         err = -1;
     }

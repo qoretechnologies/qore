@@ -35601,7 +35601,8 @@ class ExprTreeSerializer {
         if (auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STATIC_METH_REF));
             const QoreMethod* method = scr->getMethod();
-            const QoreClass* qc = method ? method->getClass() : nullptr;
+            // the class that the reference names (qore#6285)
+            const QoreClass* qc = scr->getScopeClass();
             writeStr(qore_aot_encode_class_ref(qc));
             writeStr(method ? method->getName() : "");
             writeU16(0);
@@ -36792,7 +36793,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)) {
         id.kind = AOTExprKind::STATIC_METHOD_REF;
         const QoreMethod* method = scr->getMethod();
-        const QoreClass* qc = method ? method->getClass() : nullptr;
+        // the class that the reference names (qore#6285)
+        const QoreClass* qc = scr->getScopeClass();
         id.ref1 = qore_aot_encode_class_ref(qc);
         id.ref2 = method ? method->getName() : "";
         return id;

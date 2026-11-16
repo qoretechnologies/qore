@@ -1235,6 +1235,14 @@ protected:
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx);
 
+    //! substitutes the type parameters of the code making the call in the call's explicit receiver
+    /** The receiver of a static method call in generic code can have the type parameters of the code making the call
+        (B<U>::m() in sub f<U>(), G<T>::m() or m() in a method of G<T>), which are those of the running instantiation of
+        that code, current when the call starts (qore#6308); out of line, so that the calls without an explicit
+        receiver keep their code
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE void substituteCallerReceiverTypeParams();
+
     //! the call entry; LexicalInvocation: a legacy AST call with a non-default semantic policy; NAMED: a named call
     //! whose variant is resolved at run time by parameter name (arg_names is set)
     template <bool LexicalInvocation, bool NAMED = false>
@@ -2867,6 +2875,17 @@ public:
             const qore_class_private* class_ctx, int& err, const QoreTypeInfo* expected_type_info,
             bool infer_from_args, const type_vec_t* explicit_type_args = nullptr,
             const char* call_desc = nullptr) const;
+
+    //! Returns the receiver of a call of a static method of a generic class made at run time without one
+    /** The type arguments of the class are inferred from the types of the values of the arguments, as
+        parseInferClassReceiverTypeInfo() infers them from the types of the arguments of a call G::m(...): for a call
+        through a call reference \\G::m() or with call_static_method("G", "m", ...) (qore#6285); the type parameters
+        that no argument binds take their defaults; nullptr is returned if they cannot be inferred, and the call's
+        variant search then raises the error
+
+        @param args the arguments of the call
+    */
+    DLLLOCAL const QoreTypeInfo* runtimeInferClassReceiverTypeInfo(const QoreListNode* args) const;
 
     // returns true if there are no uncommitted parse variants in the function
     DLLLOCAL bool pendingEmpty() const {

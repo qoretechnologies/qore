@@ -1,0 +1,250 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of qcc executables and of a qcc-compiled module
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class GenericStaticCallTypeParamsTest
+
+#! A static method of a generic class called without type arguments of the class binds the class's type parameters in
+#! every mode (qore#6186, qore#6285, qore#6308, qore#6256)
+/** A static method of a generic class called through a class that inherits a specialization of it (H::id(1) for
+    H inherits G<float>) ran with the type parameter unbound, as did a call reference to it (\\H::id()) or a dynamic
+    call (call_static_method("H", "id", 1)), which raised RUNTIME-OVERLOAD-ERROR; a raw reference (\\G::id()) could
+    not be called.  A call B<U>::m() in a generic function sub f<U>() did not bind T to the function's type argument,
+    and in qcc-compiled code a top-level call of a static method of a specialization could run the code of another
+    specialization of the method (Q<string>::id() at the top level with Q<float>::id() in a function).
+
+    The probes (generic-static-call-type-params/probes.q) call static methods through specializations, subclasses of
+    them, subclass chains (HH inherits HK inherits K<float>), a generic class between (KLI inherits KL<int> inherits
+    G<list<int>>), with a bounded type parameter, in the class and its subclasses (implicit, G::m() and through
+    objects), static generic methods with type parameters of their own (with a bound), call references and dynamic
+    calls through each, from generic functions and closures in them, in background threads and in four threads at
+    the same time, with non-generic controls.  They run in each execution mode in a child process, with tiered
+    execution at the IR tier and promoted to native code, as qcc-compiled executables (-O0, -O3) with top-level calls,
+    and in a qcc-compiled module (-O0, -O3) loaded by a child in each execution mode.
+*/
+class GenericStaticCallTypeParamsTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the result of each probe
+        const Expected = (
+            "G<float>::id: 1.0 float",
+            "H::id: 1.0 float",
+            "H::wrap: [1.0] list<float>",
+            "H::type: \"list<float>\" string",
+            "H2::id: RUNTIME-OVERLOAD-ERROR",
+            "G<string>::id: RUNTIME-OVERLOAD-ERROR",
+            "H.viaClass: 1.0 float",
+            "H.viaBase: 1.0 float",
+            "H.implicit: 1.0 float",
+            "H.instViaBase: 1.0 float",
+            "H.instImplicit: 1.0 float",
+            "H.implicitId: 1.0 float",
+            "H.explicitId: 1.0 float",
+            "H.implicitType: \"list<float>\" string",
+            "H.instId: 1.0 float",
+            "G<float>.implicitId: 1.0 float",
+            "G<float>.explicitId: 1.0 float",
+            "G<int>.implicitType: \"list<int>\" string",
+            "G<float>.instId: 1.0 float",
+            "H::gen: \"\\\"a\\\" 1.0 list<float>\" string",
+            "G<float>::gen: \"\\\"a\\\" 1.0 list<float>\" string",
+            "H::gen<string>: \"\\\"a\\\" 1.0 list<float>\" string",
+            "H::bnd: \"2 1.0 list<int>\" string",
+            "ref H::gen: \"\\\"a\\\" 1.0 list<float>\" string",
+            "HK::id: 1.0 float",
+            "HH::id: 1.0 float",
+            "HH::type: \"list<float>\" string",
+            "KL<int>::id: [1] list<int>",
+            "KLI::id: [1] list<int>",
+            "KLI::type: \"list<list<int>>\" string",
+            "KLI.viaBase: [1] list<int>",
+            "KL<string>.viaBase: [\"a\"] list<string>",
+            "HB::id: 1.0 float",
+            "HB::type: \"list<float>\" string",
+            "ref H::id: 1.0 float",
+            "ref HH::id: 1.0 float",
+            "ref G::id: 1 integer",
+            "ref G::wrap: [1] list<int>",
+            "ref GB::id: 1 integer",
+            "call_static_method H: 1.0 float",
+            "call_static_method KLI: [1] list<int>",
+            "call_static_method G: 1 integer",
+            "call_static_method_args H: 1.0 float",
+            "get_call_reference H: 1.0 float",
+            "G<float>.refId: 1.0 float",
+            "G<float>.makeRef: 1.0 float",
+            "G<float>.dynId: 1.0 float",
+            "H.refBase: 1.0 float",
+            "H.makeBaseRef: 1.0 float",
+            "H4.refBase: \"s\" string",
+            "dyn_helper: 1 integer",
+            "GO<string>.dynHelper: \"integer\" string",
+            "GO::f: \"v2 list<int>\" string",
+            "ref GO::f v1: \"v1 list<float>\" string",
+            "ref GO::f v2: \"v2 list<int>\" string",
+            "call_static_method GO: \"v2 list<string>\" string",
+            "s1<int>: \"list<int>\" string",
+            "s3<string>: \"False\" string",
+            "s3<int>: \"True\" string",
+            "s4<int>: \"list<int>\" string",
+            "s5<string>: \"list<list<string>>\" string",
+            "B<float>::sd: \"list<float>\" string",
+            "background H::id: 1.0 float",
+            "background s1<int>: \"list<int>\" string",
+            "threads: \"ok\" string",
+            "NN::id: 2 integer",
+            "ref NN::id: 2 integer",
+            "call_static_method NN: 2 integer",
+        );
+
+        #! the top-level calls of the program and their results (qore#6256)
+        const TopLevel = "
+auto top1 = Q<string>::id(\"s\");
+printf(\"top Q<string>::id: %y %s\\n\", top1, top1.fullType());
+auto top2 = HQ::id(\"s\");
+printf(\"top HQ::id: %y %s\\n\", top2, top2.fullType());
+auto top3 = H::id(1);
+printf(\"top H::id: %y %s\\n\", top3, top3.fullType());
+auto top4 = s1<int>();
+printf(\"top s1<int>: %y %s\\n\", top4, top4.fullType());
+";
+        const TopLevelExpected = "top Q<string>::id: \"s\" string
+top HQ::id: \"s\" string
+top H::id: 1.0 float
+top s1<int>: \"list<int>\" string
+";
+
+        #! the header of the module that the probes are compiled in
+        const ModuleHeader = "%modern
+module GenericStaticCallTypeParams {
+    version = \"1.0\";
+    desc = \"generic static call type parameter test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+";
+
+        #! the child that loads the compiled module and runs its probes
+        const ModuleChild = "%modern
+%requires GenericStaticCallTypeParams
+for (int i = 0; i < 4; ++i) {
+    map printf(\"%d: %s\\n\", i, $1), probes();
+}
+printf(\"%s\\n\", basename(get_module_hash().GenericStaticCallTypeParams.filename));
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        #! the output of the probes
+        string expected;
+    }
+
+    constructor() : QUnit::Test("GenericStaticCallTypeParams", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        for (int i = 0; i < 4; ++i) {
+            map expected += sprintf("%d: %s\n", i, $1), Expected;
+        }
+
+        addTestCase("interpreted and compiled programs", \testModes());
+        addTestCase("compiled module", \testModule());
+        set_return_value(main());
+    }
+
+    string getProbes() {
+        return ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "generic-static-call-type-params" + DirSep
+            + "probes.q");
+    }
+
+    #! writes a program that runs the probes four times after its top-level calls
+    string writeProgram(string dir, string name) {
+        string file = dir + DirSep + name;
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(getProbes() + TopLevel + "\nfor (int i = 0; i < 4; ++i) {\n    map printf(\"%d: %s\\n\", i, $1), "
+            "probes();\n}\n");
+        f.close();
+        return file;
+    }
+
+    testModes() {
+        TmpDir tmp("qore-generic-static-call-type-params-");
+        string file = writeProgram(tmp.path, "prog.q");
+        string want = TopLevelExpected + expected;
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=2 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(want, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        assertEq(want, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), "tiered, IR tier");
+        assertEq(want, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(want, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                libqore_dir, exe)), "qcc " + opt);
+            assertEq(want, backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe)), "qcc " + opt + ", JIT");
+        }
+    }
+
+    testModule() {
+        TmpDir tmp("qore-generic-static-call-type-params-module-");
+        string src = tmp.path + DirSep + "GenericStaticCallTypeParams.qm";
+        string qmod = tmp.path + DirSep + "GenericStaticCallTypeParams.qmod";
+        string child = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(child, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ModuleChild);
+        f.close();
+
+        # the probes are exported by the module
+        string probes = getProbes();
+        string decl = "\nlist<string> sub probes() {";
+        assertTrue(probes.find(decl) >= 0, "the probes are declared as expected");
+        probes = replace(probes, decl, "\npublic list<string> sub probes() {");
+
+        foreach string opt in (("-O0", "-O3")) {
+            f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(ModuleHeader + probes);
+            f.close();
+            if (is_file(qmod)) {
+                unlink(qmod);
+            }
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+                "QORE_MODULE_DIR=%s %s %s --module --strip-source -o %s %s 2>&1", libqore_dir, libqore_dir,
+                libqore_dir, tmp.path, qcc_bin, opt, qmod, src));
+            assertTrue(is_file(qmod), sprintf("qcc %s compiled the module: %s", opt, out));
+            # the child must load the compiled module: there is no source to fall back to
+            unlink(src);
+
+            foreach string mode in (ExecModes) {
+                out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=2 LD_LIBRARY_PATH=%s "
+                    "DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s 2>&1", libqore_dir,
+                    libqore_dir, tmp.path, qore_bin, mode, child));
+                assertEq(expected + "GenericStaticCallTypeParams.qmod\n", out, sprintf("module %s, %s", opt, mode));
+            }
+        }
+    }
+}

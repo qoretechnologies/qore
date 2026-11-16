@@ -4475,8 +4475,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ref1 = reader.readStringRef(ptr);   // class_path
                 ref2 = reader.readStringRef(ptr);   // method_name
                 const QoreMethod* method = nullptr;
+                const QoreClass* qc = nullptr;
                 if (ref1 && *ref1) {
-                    const QoreClass* qc = findAOTClassByPath(pgm, ref1, false);
+                    qc = findAOTClassByPath(pgm, ref1, false);
                     if (qc && ref2 && *ref2) {
                         method = findAOTStaticMethod(qc, ref2);
                         if (!method) {
@@ -4486,7 +4487,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 if (method) {
                     ctx->exprs[i] = toBitsNB(QoreValue(
-                        new LocalStaticMethodCallReferenceNode(&loc_builtin, method)));
+                        new LocalStaticMethodCallReferenceNode(&loc_builtin, method, qc)));
                 } else {
                     printd(0, "AOT v2: cannot resolve static method ref '%s::%s'\n",
                         ref1 ? ref1 : "", ref2 ? ref2 : "");
@@ -4699,7 +4700,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                             if (ref3 && *ref3) {
                                 QoreAOTTypeResolver type_resolver(pgm);
                                 std::string type_error;
-                                receiver_type_info = type_resolver.resolve(ref3, type_error);
+                                // the receiver of a call in a generic function can have its type parameters
+                                // (B<U>::m() in sub f<U>()), which only the function's signature resolves (qore#6308)
+                                receiver_type_info = type_resolver.resolveForSignature(ref3, type_error,
+                                    qore_aot_get_type_param_owner());
                                 if (!receiver_type_info || !type_error.empty()) {
                                     if (trace_slot_reg) {
                                         fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] STATIC_METHOD_CALL cannot "

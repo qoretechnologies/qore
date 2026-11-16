@@ -227,6 +227,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   under valgrind
         # - float-int-conversion (#6181): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - generic-static-call-type-params (#6186, #6285, #6308, #6256): its probes run in child processes that set
+        #   their own --exec-mode, in qcc executables and in a qcc-compiled module
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
@@ -244,6 +246,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/relative-date-multiply.qtest",
                                  "examples/test/qore/functions/generic-call-parse-type.qtest",
                                  "examples/test/qore/classes/generic-method-hashdecl-paths.qtest",
+                                 "examples/test/qore/classes/generic-static-call-type-params.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",

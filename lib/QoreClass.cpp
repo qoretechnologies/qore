@@ -4039,6 +4039,50 @@ const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(con
     return raw_target_fallback;
 }
 
+const QoreTypeInfo* qore_class_private::getStaticCallReceiverTypeInfo(const QoreMethod& m) const {
+    const QoreClass* mcls = m.getClass();
+    if (hasTypeParams() || !mcls || !mcls->hasTypeParameters()) {
+        return nullptr;
+    }
+    return getConcreteParameterizedBaseTypeInfo(mcls, false);
+}
+
+const QoreTypeInfo* qore_class_private::parseGetStaticCallReceiverTypeInfo(const QoreMethod& m,
+        const QoreClass* scope_cls, const qore_class_private* class_ctx, bool& current_receiver) {
+    current_receiver = false;
+    const QoreClass* mcls = m.getClass();
+    if (!mcls || !mcls->hasTypeParameters()) {
+        return nullptr;
+    }
+    // a class without type parameters names the specialization that it inherits
+    if (scope_cls) {
+        const qore_class_private* scope = qore_class_private::get(*scope_cls);
+        if (!scope->hasTypeParams()) {
+            return scope->getStaticCallReceiverTypeInfo(m);
+        }
+    }
+    // a generic class named outside of its hierarchy: the type arguments are inferred from the arguments
+    ClassAccess access;
+    if (!class_ctx || (scope_cls && !class_ctx->parseCheckHierarchy(scope_cls, access))) {
+        return nullptr;
+    }
+    if (!class_ctx->hasTypeParams()) {
+        return class_ctx->getStaticCallReceiverTypeInfo(m);
+    }
+    current_receiver = true;
+    // in a generic class, the receiver is the class with its own type parameters (G<T>) or the specialization of the
+    // method's class that it inherits with them (G<list<X>> in K<X> inherits G<list<X>>), whose type parameters are
+    // those of the running instantiation when the call is made (see CodeEvaluationHelper::initImpl())
+    type_vec_t own_params;
+    own_params.reserve(class_ctx->type_params.size());
+    for (size_t i = 0, e = class_ctx->type_params.size(); i < e; ++i) {
+        own_params.push_back(qore_get_type_parameter_type(class_ctx->cls, i, class_ctx->type_params[i].name.c_str()));
+    }
+    const QoreParameterizedClassTypeInfo* self = QoreTypeInfo::getParameterizedClassType(
+        class_ctx->cls->getTypeInfo(own_params));
+    return self ? class_ctx->getParameterizedBaseTypeInfo(self, mcls) : nullptr;
+}
+
 void QoreClass::addParameterizedBuiltinVirtualBaseClass(const QoreTypeInfo* typeInfo) {
     const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo);
     assert(pti);

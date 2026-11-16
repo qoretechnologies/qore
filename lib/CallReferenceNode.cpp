@@ -1226,6 +1226,77 @@ int UnresolvedCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& par
     return val.getInternalNode() == this ? -1 : 0;
 }
 
+LocalStaticMethodCallReferenceNode::LocalStaticMethodCallReferenceNode(const QoreProgramLocation* loc,
+        const QoreMethod* n_method, const QoreClass* n_scope_cls) : ResolvedCallReferenceNodeIntern(loc, true),
+        method(n_method),
+        scope_cls(n_scope_cls && n_method && n_scope_cls != n_method->getClass() ? n_scope_cls : nullptr) {
+    if (scope_cls) {
+        receiver_type_info = qore_class_private::get(*scope_cls)->getStaticCallReceiverTypeInfo(*method);
+    }
+}
+
+const QoreTypeInfo* LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo(const QoreMethod& m,
+        const QoreClass* scope_cls, const qore_class_private* code_class) {
+    const QoreClass* mcls = m.getClass();
+    if (!mcls || !mcls->hasTypeParameters()) {
+        return nullptr;
+    }
+    if (scope_cls) {
+        if (const QoreTypeInfo* rv = qore_class_private::get(*scope_cls)->getStaticCallReceiverTypeInfo(m)) {
+            return rv;
+        }
+    }
+    // in the code of a class that is or inherits the method's class, the receiver of the running instantiation of
+    // the code: the specialization of the method's class that it is or inherits (as a call in the class's code is
+    // bound at parse time; see qore_class_private::parseGetStaticCallReceiverTypeInfo())
+    ClassAccess access;
+    if (!code_class || !code_class->getClass(*qore_class_private::get(*mcls), access)) {
+        return nullptr;
+    }
+    const QoreTypeInfo* current = runtime_get_receiver_type_info();
+    if (!current) {
+        return nullptr;
+    }
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(current)) {
+        return qore_class_private::get(*pti->getBaseClass())->getParameterizedBaseTypeInfo(pti, mcls);
+    }
+    const QoreClass* current_cls = QoreTypeInfo::getUniqueReturnClass(current);
+    return current_cls ? qore_class_private::get(*current_cls)->getStaticCallReceiverTypeInfo(m) : nullptr;
+}
+
+const QoreTypeInfo* LocalStaticMethodCallReferenceNode::getCallReceiverTypeInfo(const QoreMethod& m,
+        const QoreTypeInfo* receiver_type_info, const QoreListNode* args) {
+    if (receiver_type_info) {
+        return receiver_type_info;
+    }
+    const QoreClass* mcls = m.getClass();
+    if (!mcls || !mcls->hasTypeParameters()) {
+        return nullptr;
+    }
+    return qore_method_private::get(m)->getFunction()->runtimeInferClassReceiverTypeInfo(args);
+}
+
+const QoreTypeInfo* LocalStaticMethodCallReferenceNode::getCallReceiverTypeInfo(const QoreMethod& m,
+        const QoreTypeInfo* receiver_type_info, const QoreListNode*& args,
+        QoreListNodeEvalOptionalRefHolder& eval_args, ExceptionSink* xsink) {
+    if (receiver_type_info) {
+        return receiver_type_info;
+    }
+    const QoreClass* mcls = m.getClass();
+    if (!mcls || !mcls->hasTypeParameters()) {
+        return nullptr;
+    }
+    // the type arguments are inferred from the values of the arguments
+    if (args && args->needs_eval()) {
+        eval_args.assignEval(args);
+        if (*xsink) {
+            return nullptr;
+        }
+        args = *eval_args;
+    }
+    return qore_method_private::get(m)->getFunction()->runtimeInferClassReceiverTypeInfo(args);
+}
+
 // evalImpl(): return value requires a deref(xsink) if not 0
 QoreValue LocalStaticMethodCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
@@ -1236,7 +1307,8 @@ QoreValue LocalStaticMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& 
     assert(needs_deref);
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : ::getProgram();
     const qore_class_private* cls = rc.getClass() ? rc.getClass() : runtime_get_class();
-    return new StaticMethodCallReferenceNode(loc, method, call_pgm, cls);
+    return new StaticMethodCallReferenceNode(loc, method, call_pgm, cls,
+        receiver_type_info ? receiver_type_info : getRuntimeReceiverTypeInfo(*method, nullptr, cls));
 }
 
 QoreValue LocalStaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
@@ -1244,7 +1316,12 @@ QoreValue LocalStaticMethodCallReferenceNode::dispatchValue(const QoreListNode* 
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    return qore_method_private::eval(*method, xsink, rc, nullptr, args);
+    QoreListNodeEvalOptionalRefHolder eval_args(xsink);
+    const QoreTypeInfo* rti = getCallReceiverTypeInfo(*method, receiver_type_info, args, eval_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_method_private::eval(*method, xsink, rc, nullptr, args, nullptr, nullptr, rti);
 }
 
 QoreValue LocalStaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
@@ -1252,7 +1329,8 @@ QoreValue LocalStaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* arg
     RuntimeConfig& rc = rc_get_current_ref();
     // as dispatchValue(): the call runs with the permissions of the context that created the reference
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    return qore_method_private::evalGivenArgs(*method, xsink, rc, nullptr, args);
+    return qore_method_private::evalStaticGivenArgs(*method, xsink, rc, args, nullptr, nullptr,
+        getCallReceiverTypeInfo(*method, receiver_type_info, args));
 }
 
 QoreValue LocalStaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
@@ -1261,7 +1339,12 @@ QoreValue LocalStaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* 
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    return qore_method_private::evalNamed(*method, xsink, rc, nullptr, args, false, nullptr, nullptr, nullptr,
+    QoreListNodeEvalOptionalRefHolder eval_args(xsink);
+    const QoreTypeInfo* rti = getCallReceiverTypeInfo(*method, receiver_type_info, args, eval_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_method_private::evalNamed(*method, xsink, rc, nullptr, args, false, nullptr, rti, nullptr,
         arg_names, policy);
 }
 
@@ -1271,14 +1354,19 @@ QoreValue LocalStaticMethodCallReferenceNode::dispatchLexicalValue(const QoreLis
     RuntimeConfig& rc = rc_get_current_ref();
     // Compatibility semantics do not change the permissions of the reference's creator.
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    return qore_method_private::eval(policy, *method, xsink, rc, nullptr, args);
+    QoreListNodeEvalOptionalRefHolder eval_args(xsink);
+    const QoreTypeInfo* rti = getCallReceiverTypeInfo(*method, receiver_type_info, args, eval_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_method_private::eval(policy, *method, xsink, rc, nullptr, args, nullptr, nullptr, rti);
 }
 
 bool LocalStaticMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
     const LocalStaticMethodCallReferenceNode* vc = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(v);
     //printd(5, "LocalStaticMethodCallReferenceNode::is_equal_hard() %p == %p (%p %s)\n", uf, vc ? vc->uf : 0, v,
     //  v ? v->getTypeName() : "n/a");
-    return vc && method == vc->method;
+    return vc && method == vc->method && receiver_type_info == vc->receiver_type_info;
 }
 
 QoreFunction* LocalStaticMethodCallReferenceNode::getFunction() const {
@@ -1341,8 +1429,10 @@ bool LocalMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, Exce
 }
 
 StaticMethodCallReferenceNode::StaticMethodCallReferenceNode(const QoreProgramLocation* loc,
-        const QoreMethod* n_method, QoreProgram* n_pgm, const qore_class_private* n_class_ctx)
+        const QoreMethod* n_method, QoreProgram* n_pgm, const qore_class_private* n_class_ctx,
+        const QoreTypeInfo* n_receiver_type_info)
         : LocalStaticMethodCallReferenceNode(loc, n_method, false), pgm(n_pgm), class_ctx(n_class_ctx) {
+    receiver_type_info = n_receiver_type_info;
     captureCreatorParseOptions();
     assert(pgm);
     //printd(5, "StaticMethodCallReferenceNode::StaticMethodCallReferenceNode() this: %p %s::%s()\n", this,
@@ -1371,7 +1461,12 @@ QoreValue StaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args,
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     // issue #4964: do not set object or class context until arguments are evaluated
     // do not set pgm context here before evaluating args
-    return qore_method_private::eval(*method, xsink, rc, nullptr, args, class_ctx, pgm);
+    QoreListNodeEvalOptionalRefHolder eval_args(xsink);
+    const QoreTypeInfo* rti = getCallReceiverTypeInfo(*method, receiver_type_info, args, eval_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_method_private::eval(*method, xsink, rc, nullptr, args, class_ctx, pgm, rti);
 }
 
 QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
@@ -1379,7 +1474,8 @@ QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, Ex
     RuntimeConfig& rc = rc_get_current_ref();
     // as dispatchValue(): the call runs with the permissions of the context that created the reference
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    return qore_method_private::evalGivenArgs(*method, xsink, rc, nullptr, args, class_ctx, pgm);
+    return qore_method_private::evalStaticGivenArgs(*method, xsink, rc, args, class_ctx, pgm,
+        getCallReceiverTypeInfo(*method, receiver_type_info, args));
 }
 
 QoreValue StaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
@@ -1388,7 +1484,12 @@ QoreValue StaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args,
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    return qore_method_private::evalNamed(*method, xsink, rc, nullptr, args, false, class_ctx, nullptr, nullptr,
+    QoreListNodeEvalOptionalRefHolder eval_args(xsink);
+    const QoreTypeInfo* rti = getCallReceiverTypeInfo(*method, receiver_type_info, args, eval_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_method_private::evalNamed(*method, xsink, rc, nullptr, args, false, class_ctx, rti, nullptr,
         arg_names, policy, pgm);
 }
 
@@ -1400,7 +1501,12 @@ QoreValue StaticMethodCallReferenceNode::dispatchLexicalValue(const QoreListNode
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     // issue #4964: do not set object or class context until arguments are evaluated
     // do not set pgm context here before evaluating args
-    return qore_method_private::eval(policy, *method, xsink, rc, nullptr, args, class_ctx, pgm);
+    QoreListNodeEvalOptionalRefHolder eval_args(xsink);
+    const QoreTypeInfo* rti = getCallReceiverTypeInfo(*method, receiver_type_info, args, eval_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_method_private::eval(policy, *method, xsink, rc, nullptr, args, class_ctx, pgm, rti);
 }
 
 DeferredStaticMethodCallReferenceNode::DeferredStaticMethodCallReferenceNode(const QoreProgramLocation* loc,
@@ -1459,7 +1565,8 @@ ResolvedCallReferenceNode* DeferredStaticMethodCallReferenceNode::resolve(Runtim
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : pgm;
     const qore_class_private* cls = rc.getClass() ? rc.getClass() : runtime_get_class();
     if (method->isStatic()) {
-        return new StaticMethodCallReferenceNode(loc, method, call_pgm, cls);
+        return new StaticMethodCallReferenceNode(loc, method, call_pgm, cls,
+            LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo(*method, qc, cls));
     }
 
     QoreObject* obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
@@ -1766,9 +1873,25 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
 
     //printd(5, "UnresolvedStaticMethodCallReferenceNode::parseInit() got %s::%s() static: %d\n",
     //  qm->getClass()->getName(), qm->getName(), qm->isStatic());
-    val = qm->isStatic()
-        ? new LocalStaticMethodCallReferenceNode(loc, qm)
-        : new LocalMethodCallReferenceNode(loc, qm);
+    if (qm->isStatic()) {
+        // a reference to a static method of a generic class through a class that inherits a specialization of it
+        // calls it with the type arguments of the specialization, also through the generic class in the code of a
+        // class that inherits it, whose class the reference then names (qore#6285)
+        // (only if the name resolves to the same method in it, as the class is all that compiled code records of
+        // the reference)
+        const qore_class_private* code_class = parse_get_class_priv();
+        bool current_receiver;
+        const QoreClass* ref_cls = qc;
+        if (qore_class_private::parseGetStaticCallReceiverTypeInfo(*qm, qc, code_class, current_receiver)
+                && qore_class_private::get(*qc)->hasTypeParams()
+                && const_cast<qore_class_private*>(code_class)->parseFindStaticMethod(scope->getIdentifier(),
+                    code_class) == qm) {
+            ref_cls = code_class->cls;
+        }
+        val = new LocalStaticMethodCallReferenceNode(loc, qm, ref_cls);
+    } else {
+        val = new LocalMethodCallReferenceNode(loc, qm);
+    }
     deref();
     return 0;
 }

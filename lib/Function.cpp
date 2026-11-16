@@ -1629,6 +1629,15 @@ static int check_sandbox_uncontrolled_api(const QoreFunction* func, const Abstra
 thread_local bool qore_dbg_runtime_chosen_variant = false;
 #endif
 
+void CodeEvaluationHelper::substituteCallerReceiverTypeParams() {
+    assert(receiver_type_info);
+    // the type's cached flag decides it after its first test
+    if (receiver_type_info->getContainsTypeParameterCache()
+            && qore_type_contains_type_parameter(receiver_type_info)) {
+        receiver_type_info = qore_substitute_type_params_if_needed(receiver_type_info);
+    }
+}
+
 template <bool LexicalInvocation, bool NAMED>
 QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, bool is_copy, const qore_class_private* cctx,
@@ -1645,7 +1654,10 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 
     // the callee's receiver is made current after the variant search below (qore#5892)
-    if (!receiver_type_info && self) {
+    if (receiver_type_info) {
+        // out of line, so that the calls without a receiver keep their code (qore#6308)
+        substituteCallerReceiverTypeParams();
+    } else if (self) {
         receiver_type_info = qore_get_object_receiver_type_info(self);
     }
 
@@ -3986,6 +3998,82 @@ const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProg
     }
 
     return best.type_info;
+}
+
+const QoreTypeInfo* QoreFunction::runtimeInferClassReceiverTypeInfo(const QoreListNode* args) const {
+    const QoreClass* cls = getClass();
+    if (!cls || !cls->hasTypeParameters()) {
+        return nullptr;
+    }
+    const qore_class_private* cp = qore_class_private::get(*cls);
+    size_t count = cls->getTypeParameterCount();
+    if (cp->rawConstructionDefaultsToAuto()) {
+        type_vec_t raw_args(count, autoTypeInfo);
+        return cls->getTypeInfo(raw_args);
+    }
+
+    size_t nargs = args ? args->size() : 0;
+    type_vec_t arg_types;
+    arg_types.reserve(nargs);
+    for (size_t i = 0; i < nargs; ++i) {
+        arg_types.push_back(args->retrieveEntry(i).getFullTypeInfo());
+    }
+
+    // the first variant whose parameters bind the type parameters to the types of the arguments and then accept the
+    // arguments; the variant search of the call selects the variant
+    for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
+        AbstractFunctionSignature* sig = (*i)->getSignature();
+        if (nargs > sig->numParams() && !(*i)->hasVarargs()) {
+            continue;
+        }
+        type_vec_t bindings(count, nullptr);
+        bool ok = true;
+        for (unsigned pi = 0, pe = sig->numParams(); pi < pe && pi < nargs; ++pi) {
+            const QoreTypeInfo* actual = arg_types[pi];
+            if (!actual || !QoreTypeInfo::hasType(actual)) {
+                continue;
+            }
+            if (!qore_infer_class_type_args_from_type(cls, sig->getParamTypeInfo(pi), actual, bindings)) {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok) {
+            continue;
+        }
+        for (size_t ti = 0; ti < count; ++ti) {
+            if (!bindings[ti]) {
+                const char* default_type = cls->getTypeParameterDefaultType(ti);
+                bindings[ti] = default_type ? qore_get_type_from_string_intern(default_type) : nullptr;
+                if (!bindings[ti]) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (!qore_class_type_arg_satisfies_bound(cp->getTypeParamBoundTypeInfo(ti), bindings[ti])) {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok) {
+            continue;
+        }
+        const QoreTypeInfo* receiver = cls->getTypeInfo(bindings);
+        for (unsigned pi = 0, pe = sig->numParams(); pi < pe && pi < nargs; ++pi) {
+            const QoreTypeInfo* param = qore_substitute_type_params_if_needed(sig->getParamTypeInfo(pi), receiver,
+                nullptr);
+            // a parameter with a type parameter of the method is checked by the call
+            if (!qore_type_contains_type_parameter(param)
+                    && QoreTypeInfo::runtimeAcceptsValue(param, args->retrieveEntry(pi)) == QTI_NOT_EQUAL) {
+                ok = false;
+                break;
+            }
+        }
+        if (ok) {
+            return receiver;
+        }
+    }
+    return nullptr;
 }
 
 //! Returns true if a noop variant is skipped at run time for a caller with the given parse options
