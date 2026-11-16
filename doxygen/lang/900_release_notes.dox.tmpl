@@ -605,10 +605,10 @@
     set; see @ref modern "%modern".
 
     @par Compatibility Parse Options Refused Under \%modern
-    Parse directives and options that change the meaning of code, such as @ref no-negative-offsets "%no-negative-offsets" and
-    the \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect, nor can
-    @ref modern "%modern" be set while one of them is in effect; legacy code that needs them is parsed without
-    @ref modern "%modern" (see @ref modern_option_consistency).
+    Options that change the meaning of code, such as @ref no-negative-offsets "%no-negative-offsets" and the
+    \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect, nor with it in the same code; a
+    \c %%modern directive resets one that the application set through the API as a default for legacy code (see
+    @ref modern_option_consistency).
 
     @par Unassigned Local Variable Values Rejected Under \%modern
     @ref modern "%modern" implies @ref strict-parse-errors "%strict-parse-errors", so a local variable that cannot

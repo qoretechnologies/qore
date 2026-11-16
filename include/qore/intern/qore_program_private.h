@@ -698,6 +698,15 @@ public:
     //! refused (checkDisableParseOptions()); protected by po_mutex
     QoreParseOptions locked_restrictions;
 
+    //! the compatibility options that %modern does not allow that were in effect when the options were locked with
+    //! QoreProgram::lockOptions(); %modern does not reset them (issue #6382); protected by po_mutex
+    QoreParseOptions locked_compat;
+
+    //! the compatibility options that %modern does not allow that parse directives set for the whole Program and that
+    //! are still in effect; %modern does not reset them (getModernResetOptions(), issue #6382); changed and read with
+    //! the write lock of the options held
+    QoreParseOptions directive_compat;
+
     //! serializes the changes of the parse options that are checked against the lock (po_locked and
     //! locked_restrictions) with the changes of the lock, so that a check and the change that it allows are one step;
     //! a leaf lock: no other lock is taken while it is held, except the write lock of the parse options
@@ -1348,7 +1357,11 @@ public:
             const char* what, ExceptionSink* xsink);
 
     //! Raises the parse exception for a parse directive that %modern does not allow; see getModernConflict()
-    DLLLOCAL int parseCheckModernConflict(const QoreProgramLocation* loc, const QoreParseOptions& po, bool set);
+    /** @param reset the compatibility options that %modern resets with the directive (see
+        qore_program_private::getModernResetOptions()); they are no conflict
+    */
+    DLLLOCAL int parseCheckModernConflict(const QoreProgramLocation* loc, const QoreParseOptions& po, bool set,
+            const QoreParseOptions& reset = QoreParseOptions());
 
     //! Raises an exception if the options of a new Program request a compatibility option that %modern does not allow
     /** The Program has %modern from the options given or from its parent (issue #5682)
@@ -1504,6 +1517,8 @@ public:
     DLLLOCAL void replaceParseOptionsIntern(const QoreParseOptions& po) {
         // the execution mode follows the options; another change must not come between them
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
+        // the options are the API's from now on
+        directive_compat = QoreParseOptions();
         pwo.parse_options = withImplications(po);
         syncExecModeWithParseOptions();
     }
@@ -1575,10 +1590,12 @@ public:
     //! \a restrictions, which restrictForCreator() returned, cannot be disabled
     DLLLOCAL static void lockCreatorRestrictions(QoreProgram& pgm, const QoreParseOptions& restrictions);
 
-    DLLLOCAL void setParseOptionsIntern(const QoreParseOptions& po) {
+    //! sets \a po in the Program's own options, without the compatibility options \a reset that %modern resets
+    DLLLOCAL void setParseOptionsIntern(const QoreParseOptions& po,
+            const QoreParseOptions& reset = QoreParseOptions()) {
         // the execution mode follows the options; another change must not come between them
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
-        pwo.parse_options = withImplications(pwo.parse_options.loadShared() | po);
+        pwo.parse_options = withImplications((pwo.parse_options.loadShared() & ~reset) | po);
         syncExecModeWithParseOptions();
     }
 
@@ -3899,6 +3916,7 @@ public:
     DLLLOCAL void disableParseOptionsIntern(const QoreParseOptions& po) {
         // the execution mode follows the options; another change must not come between them
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
+        directive_compat &= ~po;
         pwo.parse_options = withImplications(pwo.parse_options.loadShared() & ~po);
         syncExecModeWithParseOptions();
     }
@@ -4033,21 +4051,28 @@ public:
         return 0;
     }
 
-    //! a parse directive sets options
-    /** In a file with %push-parse-options and in a module header, the directive changes the scoped options of the
+    //! a parse directive, or native code during a parse (QoreProgram::parseSetParseOptions()), sets options
+    /** In a file with %push-parse-options and in a module header, the change is made in the scoped options of the
         file or header, which end with it, and which only the parsing thread sees (issue #6207); otherwise it changes
         the Program's own options.  The checks are made against the options in effect for the parse.
+
+        @param directive true for a parse directive of the code: a %modern directive resets the compatibility options
+        that the host application set through the API, and the compatibility options that a directive sets are the
+        code's own (issue #6382); native code changes the options as the API does
     */
-    DLLLOCAL int parseSetParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
-        return parseChangeParseOptions(loc, po, true);
+    DLLLOCAL int parseSetParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po,
+            bool directive = false) {
+        return parseChangeParseOptions(loc, po, true, directive);
     }
 
-    //! a parse directive disables options; see parseSetParseOptions()
-    DLLLOCAL int parseDisableParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
-        return parseChangeParseOptions(loc, po, false);
+    //! a parse directive, or native code during a parse, disables options; see parseSetParseOptions()
+    DLLLOCAL int parseDisableParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po,
+            bool directive = false) {
+        return parseChangeParseOptions(loc, po, false, directive);
     }
 
-    DLLLOCAL int parseChangeParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po, bool set) {
+    DLLLOCAL int parseChangeParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po, bool set,
+            bool directive) {
         // the scoped options that the directive changes, if any
         ParseOptionsOverlayFrame* frame = q_parse_overlay_find_delta(&pwo.parse_options);
         {
@@ -4061,10 +4086,12 @@ public:
                 parse_error(*loc, "parse options have been locked on this program object");
                 return -1;
             }
-            if (parseCheckModernConflict(loc, po, set)) {
+            // %modern resets the compatibility options that the host application set through the API (issue #6382)
+            QoreParseOptions reset = set && directive ? getModernResetOptions(po, frame) : QoreParseOptions();
+            if (parseCheckModernConflict(loc, po, set, reset)) {
                 return -1;
             }
-            if (changeIfNotLocked(po, set, frame)) {
+            if (changeIfNotLocked(po, set, frame, reset, directive)) {
                 parse_error(*loc, "parse options have been locked on this program object");
                 return -1;
             }
@@ -4072,9 +4099,52 @@ public:
 #ifdef DEBUG
         if (frame && frame->kind == ParseOptionsOverlayFrame::PUSHED_FILE) {
             qore_dbg_parse_scope_begin(pgm, "push");
+        } else if (!frame) {
+            // a directive has changed the Program's own options
+            qore_dbg_parse_scope_begin(pgm, "directive");
         }
 #endif
         return 0;
+    }
+
+    //! returns the compatibility options that a parse directive that sets \a po resets (issue #6382)
+    /** A compatibility option that %modern does not allow and that the host application set through the API (when the
+        Program was created, with Program::setParseOptions() from any thread before or during the parse, on the
+        command line) is a default for legacy code: a %modern directive resets it, so that the code has the
+        semantics of %modern.  An option that a parse directive set and that is still in effect is the code's own, and
+        so is an option that was in effect when the options were locked (QoreProgram::lockOptions()): %modern is
+        refused then (parseCheckModernConflict()), as it is with a directive that sets a compatibility option itself.
+        The write lock of the options must be held.
+
+        @param po the options that the directive sets
+        @param frame the scoped options that the directive changes, if any
+
+        @return the options to reset, or no options if none can or must be reset
+    */
+    DLLLOCAL QoreParseOptions getModernResetOptions(const QoreParseOptions& po,
+            const ParseOptionsOverlayFrame* frame) {
+        // only %modern itself resets them: a directive that completes %modern with options that the host application
+        // set is refused, as the code did not ask for %modern
+        if (!isModern(po) || (po & modernIncompatibleOptions())) {
+            return QoreParseOptions();
+        }
+        QoreParseOptions current = pwo.parse_options.load();
+        QoreParseOptions conflict = current & modernIncompatibleOptions();
+        if (!conflict) {
+            return QoreParseOptions();
+        }
+        QoreParseOptions own = directive_compat;
+        if (frame) {
+            own |= frame->directive_compat;
+        }
+        if (conflict & own) {
+            return QoreParseOptions();
+        }
+        std::lock_guard<std::mutex> po_guard(po_mutex);
+        if ((conflict & locked_compat) || checkDisableParseOptions(conflict)) {
+            return QoreParseOptions();
+        }
+        return conflict;
     }
 
     //! returns true if setting (\a set) or disabling \a po is refused by the lock of the parse options
@@ -4089,8 +4159,11 @@ public:
 
         @param frame the scoped options of the current thread that the change is made in (a file with
         %push-parse-options or a module header), or nullptr to change the Program's own options
+        @param reset the compatibility options that %modern resets with the change (see getModernResetOptions())
+        @param directive true if a parse directive makes the change
     */
-    DLLLOCAL bool changeIfNotLocked(const QoreParseOptions& po, bool set, ParseOptionsOverlayFrame* frame = nullptr) {
+    DLLLOCAL bool changeIfNotLocked(const QoreParseOptions& po, bool set, ParseOptionsOverlayFrame* frame = nullptr,
+            const QoreParseOptions& reset = QoreParseOptions(), bool directive = false) {
         // the write lock before po_mutex (see po_mutex); the callers hold it already
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
         std::lock_guard<std::mutex> po_guard(po_mutex);
@@ -4099,11 +4172,19 @@ public:
         }
         if (frame) {
             QoreParseOptions before = frame->view(pwo.parse_options.loadShared());
-            frame->applyChange(before, withImplications(set ? (before | po) : (before & ~po)), po, set);
+            frame->applyChange(before, withImplications(set ? ((before & ~reset) | po) : (before & ~po)), po, set);
+            if (!set) {
+                frame->directive_compat &= ~po;
+            } else if (directive) {
+                frame->directive_compat |= po & modernIncompatibleOptions();
+            }
             return false;
         }
         if (set) {
-            setParseOptionsIntern(po);
+            setParseOptionsIntern(po, reset);
+            if (directive) {
+                directive_compat |= po & modernIncompatibleOptions();
+            }
         } else {
             disableParseOptionsIntern(po);
         }
@@ -4553,9 +4634,11 @@ public:
         if (enclosing) {
             frame.add = enclosing->add;
             frame.remove = enclosing->remove;
+            frame.directive_compat = enclosing->directive_compat;
         } else {
             frame.add = QoreParseOptions();
             frame.remove = QoreParseOptions();
+            frame.directive_compat = QoreParseOptions();
         }
         frame.base = pwo.parse_options.loadShared();
         frame.link(pwo.parse_options);
@@ -5666,6 +5749,8 @@ public:
     DLLLOCAL static QoreParseOptions forceReplaceParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
         std::lock_guard<std::recursive_mutex> lg(pgm.priv->pwo.parse_options.writeLock());
         QoreParseOptions rv = pgm.priv->pwo.parse_options.loadShared();
+        // the options that a directive set and that the replacement keeps are still the code's own (issue #6382)
+        pgm.priv->directive_compat &= po;
         pgm.priv->pwo.parse_options = withImplications(po);
         pgm.priv->syncExecModeWithParseOptions();
         return rv;

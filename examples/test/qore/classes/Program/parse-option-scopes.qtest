@@ -33,6 +33,7 @@ public class ParseOptionScopesTest inherits QUnit::Test {
         addTestCase("module header options are not visible to other threads", \headerVisibilityTest());
         addTestCase("%lock-options in a file with %push-parse-options", \pushLockTest());
         addTestCase("%modern set for the Program while a legacy file's options are in effect", \pushModernTest());
+        addTestCase("%modern conflicts", \modernConflictTest());
         addTestCase("fork()", \forkTest());
         set_return_value(main());
     }
@@ -189,6 +190,52 @@ public class ParseOptionScopesTest inherits QUnit::Test {
             assertTrue(opts.contains(opt), opt);
         }
         assertEq(0, call_function("dbg_parse_scope_count", p));
+    }
+
+    #! a compatibility option that another thread sets through the API during the parse is a default, which an
+    #! in-source %modern resets (issue #6382); a change through the API that conflicts with %modern is refused
+    modernConflictTest() {
+        skipWithoutGate();
+        # another thread sets a compatibility option for the Program while its source is parsed, before the source's
+        # %modern: the option is a default set through the API, which %modern resets without an error
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        call_function("dbg_arm_parse_scope_gate", p, "directive", PO_BROKEN_RANGE, 0, False);
+        p.parse("%require-types\n%modern\nint sub f() { return 1; }\n", "modern-reset");
+        hash<auto> r = call_function("dbg_parse_scope_gate_result");
+        assertTrue(r.fired);
+        assertEq(NOTHING, r.other_error);
+        assertTrue(p.getFullParseOptions().hasAll(PO_MODERN));
+        assertFalse(p.getFullParseOptions().hasAny(PO_BROKEN_RANGE));
+        assertEq(1, p.callFunction("f"));
+
+        # the source has %modern, which the Program has when a statement parsed before it is initialized with its own
+        # legacy options: a compatibility option that another thread sets through the API then is refused, as for any
+        # Program with %modern, and the Program keeps %modern
+        p = new Program(PO_NO_CHILD_PO_RESTRICTIONS);
+        call_function("dbg_arm_parse_scope_gate", p, "statement", PO_BROKEN_RANGE, 0, False);
+        p.parse("sub f() { my int $x = 1; $x += 1; }\n%modern\n", "modern-target");
+        r = call_function("dbg_parse_scope_gate_result");
+        assertTrue(r.fired);
+        assertTrue(r.ended);
+        assertEq("OPTION-ERROR", r.other_error);
+        assertTrue(p.getFullParseOptions().hasAll(PO_MODERN));
+        assertFalse(p.getFullParseOptions().hasAny(PO_BROKEN_RANGE));
+
+        # the source sets a compatibility option itself: %modern set through the API by another thread meanwhile is
+        # refused, and the Program keeps its options, without the options that %modern implies
+        p = new Program(PO_NO_CHILD_PO_RESTRICTIONS);
+        call_function("dbg_arm_parse_scope_gate", p, "statement", PO_MODERN, 0, False);
+        p.parse("sub f() { my int $x = 1; $x += 1; }\n%broken-range\n", "legacy-target");
+        r = call_function("dbg_parse_scope_gate_result");
+        assertTrue(r.fired);
+        assertTrue(r.ended);
+        assertEq("OPTION-ERROR", r.other_error);
+        assertTrue(p.getFullParseOptions().hasAny(PO_BROKEN_RANGE));
+        assertFalse(p.getFullParseOptions().hasAll(PO_MODERN));
+        list<string> opts = p.getFullParseOptions().toStringList();
+        foreach string opt in ("no-summarize", "streaming-any", "negative-offsets", "strict-parse-errors") {
+            assertFalse(opts.contains(opt), opt);
+        }
     }
 
     forkTest() {

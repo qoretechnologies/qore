@@ -18243,11 +18243,11 @@ void qore_dbg_parse_scope_end(QoreProgram* pgm, const char* kind) {
     parse_scope_gate.ended = true;
 }
 
-//! Debug-only: stops a parse when the next scoped options of a kind are in effect (issues #6175, #6207)
+//! Debug-only: stops a parse when the next scoped options of a kind are in effect (issues #6175, #6207, #6382)
 /** When scoped options of the Program (any Program if \a pgm is NOTHING) of the kind given are in effect
     (\c "statement": the options of a statement while it is initialized, \c "push": the options of a file with
     \%push-parse-options once one of its directives has changed them, \c "header": the restrictions of a module
-    header), another thread reads the options of the Program as Program::getParseOptions() does and as a call
+    header; or \c "directive": a parse directive has changed the Program's own options), another thread reads the options of the Program as Program::getParseOptions() does and as a call
     entering the Program does, and then sets the options \a set_options with Program::setParseOptions() and disables
     the warnings \a disable_warnings; the parse goes on once it has.  With \a observer, the parse waits then until
     dbg_parse_scope_gate_continue() is called by a thread that dbg_parse_scope_gate_wait() released.

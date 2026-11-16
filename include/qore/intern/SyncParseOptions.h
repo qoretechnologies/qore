@@ -93,6 +93,11 @@ struct ParseOptionsOverlayFrame {
         a change for the whole Program made later would make (see view())
     */
     QoreParseOptions base;
+    //! other frames: the compatibility options that %modern does not allow that parse directives set in the frame
+    /** With the ones that directives set for the whole Program, they are the code's own: %modern does not reset them
+        (see qore_program_private::getModernResetOptions(); issue #6382)
+    */
+    QoreParseOptions directive_compat;
 
     DLLLOCAL explicit ParseOptionsOverlayFrame(Kind kind) : kind(kind) {
     }

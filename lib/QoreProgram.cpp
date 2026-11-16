@@ -4195,7 +4195,12 @@ void QoreProgram::lockOptions() {
     std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     std::lock_guard<std::mutex> po_guard(priv->po_mutex);
     // the restrictions in effect for the caller: in a file with %push-parse-options, the file's own ones
-    priv->locked_restrictions |= priv->pwo.parse_options.load() & ~QoreParseOptions::POSITIVE_OPTIONS;
+    QoreParseOptions current = priv->pwo.parse_options.load();
+    priv->locked_restrictions |= current & ~QoreParseOptions::POSITIVE_OPTIONS;
+    // the Program's own compatibility options are locked as well: %modern does not reset them (issue #6382); those of
+    // a file with %push-parse-options end with it
+    priv->locked_compat |= priv->pwo.parse_options.loadShared()
+        & qore_program_private_base::modernIncompatibleOptions();
     priv->po_locked = true;
     // the restrictions that a file with %push-parse-options locks are kept after it: they are the Program's own from
     // now on (issue #6207)
@@ -4417,17 +4422,18 @@ int qore_program_private_base::checkModernConflict(const QoreParseOptions& curre
 }
 
 int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocation* loc, const QoreParseOptions& po,
-        bool set) {
-    QoreParseOptions conflict = getModernConflict(pwo.parse_options, po, set);
+        bool set, const QoreParseOptions& reset) {
+    QoreParseOptions current = pwo.parse_options.load() & ~reset;
+    QoreParseOptions conflict = getModernConflict(current, po, set);
     if (!conflict) {
         return 0;
     }
     QoreStringNode* desc = new QoreStringNode;
     if (set) {
-        describeModernSetConflict(pwo.parse_options, po, conflict, "used", *desc);
+        describeModernSetConflict(current, po, conflict, "used", *desc);
         // %modern is complete only with the restrictions that a module parse option mask added to the Program of the
         // module: the error names them, as the user did not write %modern (issue #5682)
-        QoreParseOptions all = pwo.parse_options | po;
+        QoreParseOptions all = current | po;
         if (module_mask_added && isModern(all) && !isModern(all & ~module_mask_added)) {
             desc->concat("; %modern is complete only with ");
             describeParseOptions(module_mask_added, *desc);
@@ -4435,7 +4441,7 @@ int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocatio
                 "load_module_masked())");
             desc->concat("; remove the option, or load the module with a mask that does not add them");
         } else {
-            desc->concat(isModern(pwo.parse_options)
+            desc->concat(isModern(current)
                 ? "; remove the directive, or parse the code without %modern (as a .q file, or after %old-style)"
                 : "; remove the option, or parse the code without %modern");
         }
@@ -4445,7 +4451,7 @@ int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocatio
         describeParseOptions(conflict, *desc);
         desc->concat(" and guarantees a consistent set of parse options");
         // %modern is complete only with the restrictions that a module parse option mask added (see above)
-        if (module_mask_added && isModern(pwo.parse_options) && !isModern(pwo.parse_options & ~module_mask_added)) {
+        if (module_mask_added && isModern(current) && !isModern(current & ~module_mask_added)) {
             desc->concat("; %modern is complete only with ");
             describeParseOptions(module_mask_added, *desc);
             desc->concat(", which the module parse option mask adds (see set_module_parse_option_mask() and "
@@ -4469,6 +4475,10 @@ int qore_program_private::checkModernSourceDefault(const QoreParseOptions& curre
     describeModernSourceDefaultConflict(filename, conflict, *desc);
     xsink->raiseException("PARSE-OPTION-ERROR", desc);
     return -1;
+}
+
+QoreParseOptions qore_aot_merge_parse_options(const QoreParseOptions& final, const QoreParseOptions& base) {
+    return final | (base & ~qore_program_private_base::modernIncompatibleOptions());
 }
 
 bool qore_check_modern_parse_options(const QoreParseOptions& po, std::string& error) {
