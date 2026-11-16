@@ -93,20 +93,56 @@ public class CMakeBuildTest inherits QUnit::Test {
         *int build_jobs;
         #! the directory for the temporary directories of the test cases, once determined
         *string cmake_tmp_base;
+        #! why the package configuration of the Qore under test cannot be used, if it cannot
+        *string qore_package_error;
+        #! True once the package configuration was checked against the Qore under test (see checkQorePackage())
+        bool qore_package_checked;
     }
 
-    #! Finds the Qore under test and the cmake in the PATH
+    #! Finds the Qore under test, the package configuration (QoreConfig.cmake) that belongs to it, and the cmake in the
+    #! PATH
+    /** The cases always build against the Qore under test, never against another one that CMake would find on its
+        own (an installed one), so its package configuration is derived from it: a qore in a build tree (the build
+        directory given by \c QORE_BUILD_DIR, or the directory of the qore binary when it has a \c CMakeCache.txt)
+        uses the build tree's \c cmake/QoreConfig.cmake, and an installed qore the configuration installed with it,
+        in \c <prefix>/lib/cmake/Qore, \c <prefix>/lib64/cmake/Qore or \c <prefix>/lib/<multiarch>/cmake/Qore, where
+        \c <prefix> is the parent of the directory of the binary; without it, every case fails with the reason (see
+        setUp(), which also checks that the configuration is that of the Qore under test)
+    */
     constructor(string name, string version, reference<list<string>> p_argv) : QUnit::Test(name, version, \p_argv) {
         qore_bin = TestInterpreter::qore_interpreter();
         qore_build_dir = realpath(ENV.QORE_BUILD_DIR ?? ENV.QORE_LIBDIR
             ?? (ENV.LIBQORE_BINARY ? dirname(ENV.LIBQORE_BINARY) : dirname(qore_bin)));
-        qore_dir = qore_build_dir + "/cmake";
-        if (!is_file(qore_dir + "/QoreConfig.cmake")
-                && is_file(qore_dir + "/Qore/QoreConfig.cmake")) {
-            qore_dir += "/Qore";
-        }
-        if (!is_file(qore_dir + "/QoreConfig.cmake")) {
-            qore_dir = NOTHING;
+        string bin_dir = dirname(realpath(qore_bin));
+        *string tree_dir = ENV.QORE_BUILD_DIR
+            ? realpath(ENV.QORE_BUILD_DIR)
+            : (is_file(bin_dir + "/CMakeCache.txt") ? bin_dir : NOTHING);
+        if (tree_dir) {
+            foreach string dir in ((tree_dir + "/cmake", tree_dir + "/cmake/Qore")) {
+                if (is_file(dir + "/QoreConfig.cmake")) {
+                    qore_dir = dir;
+                    break;
+                }
+            }
+            if (!qore_dir) {
+                qore_package_error = sprintf("%s/cmake/QoreConfig.cmake does not exist in the build tree of the "
+                    "Qore under test (%s): build the tree completely (its configure step writes it)", tree_dir,
+                    qore_bin);
+            }
+        } else {
+            string prefix = dirname(bin_dir);
+            list<string> dirs = (prefix + "/lib/cmake/Qore", prefix + "/lib64/cmake/Qore")
+                + (map $1, sort(glob(prefix + "/lib/*/cmake/Qore")));
+            foreach string dir in (dirs) {
+                if (is_file(dir + "/QoreConfig.cmake")) {
+                    qore_dir = dir;
+                    break;
+                }
+            }
+            if (!qore_dir) {
+                qore_package_error = sprintf("no QoreConfig.cmake is installed with the Qore under test (%s): "
+                    "looked in %s", qore_bin, dirs.join(", "));
+            }
         }
         string cmake_path = trim(backquote("command -v cmake 2>/dev/null || true"));
         if (cmake_path) {
@@ -123,6 +159,74 @@ public class CMakeBuildTest inherits QUnit::Test {
             testSkip("cmake is not in the PATH; these tests build CMake projects with it: run them with the PATH "
                 "that has the cmake this qore was built with");
         }
+        if (!qore_package_checked) {
+            qore_package_checked = True;
+            if (!qore_package_error) {
+                qore_package_error = checkQorePackage();
+            }
+        }
+        if (qore_package_error) {
+            fail(qore_package_error);
+        }
+    }
+
+    #! Checks that the package configuration of the cases is that of the Qore under test
+    /** A small project configured with it reports what it found, which must be the Qore under test: the
+        configuration directory, the version of the qore binary, the qore binary itself and, where the process maps
+        show it (/proc/self/maps), the libqore that the binary loads
+
+        @return the reason the configuration is not that of the Qore under test, or nothing if it is
+    */
+    private *string checkQorePackage() {
+        TmpDir tmp("qore-cmake-package-", NOTHING, cmakeTmpBase());
+        string src_dir = tmp.path + "/src";
+        mkdir(src_dir);
+        File f();
+        f.open2(src_dir + "/CMakeLists.txt", O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("cmake_minimum_required(VERSION 3.16)\n"
+            "project(qore_package_probe CXX)\n"
+            "find_package(Qore REQUIRED)\n"
+            "file(WRITE \"${CMAKE_BINARY_DIR}/qore-package.txt\" \"dir=${Qore_DIR}\\nversion=${Qore_VERSION}\\n"
+            "executable=${QORE_EXECUTABLE}\\nlibrary=${QORE_LIBRARY}\\n\")\n");
+        f.close();
+        string build_dir = tmp.path + "/build";
+        string out = run(sprintf("%s -S %s -B %s -DQore_DIR=%s", shellQuote(cmake), shellQuote(src_dir),
+            shellQuote(build_dir), shellQuote(qore_dir)));
+        if (!is_file(build_dir + "/qore-package.txt")) {
+            return sprintf("the package configuration of the Qore under test (%s) cannot be used: %s", qore_dir, out);
+        }
+        hash<string, string> found = {};
+        foreach string line in (ReadOnlyFile::readTextFile(build_dir + "/qore-package.txt").split("\n")) {
+            *list<*string> kv = (line =~ x/^([a-z]+)=(.*)$/);
+            if (kv) {
+                found{kv[0]} = kv[1];
+            }
+        }
+        list<string> errors = ();
+        if (!found.dir || realpath(found.dir) != realpath(qore_dir)) {
+            errors += sprintf("Qore_DIR is %y, not %y", found.dir, qore_dir);
+        }
+        string bin_version = trim(run(sprintf("%s -e 'printf(\"%%s\", Qore::VersionString);'",
+            shellQuote(qore_bin))));
+        if (found.version != bin_version) {
+            errors += sprintf("Qore_VERSION is %y, but the qore binary is version %y", found.version, bin_version);
+        }
+        if (!found.executable || !is_file(found.executable)
+                || realpath(found.executable) != realpath(qore_bin)) {
+            errors += sprintf("QORE_EXECUTABLE is %y, not %y", found.executable, realpath(qore_bin));
+        }
+        if (is_file("/proc/self/maps")) {
+            string maps = run(sprintf("%s -e 'print(ReadOnlyFile::readTextFile(\"/proc/self/maps\"));'",
+                shellQuote(qore_bin)));
+            *string lib = (maps =~ x/(\/\S*libqore[^\/\s]*)$/m)[0];
+            if (!lib || !found.library || !is_file(found.library) || realpath(found.library) != realpath(lib)) {
+                errors += sprintf("QORE_LIBRARY is %y, but the qore binary loads %y", found.library, lib);
+            }
+        }
+        return errors
+            ? sprintf("the package configuration %y is not that of the Qore under test (%s): %s", qore_dir,
+                qore_bin, errors.join("; "))
+            : NOTHING;
     }
 
     private string run(string cmd) {
