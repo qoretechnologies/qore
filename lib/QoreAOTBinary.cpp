@@ -14592,6 +14592,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         };
         constexpr size_t u16_max = std::numeric_limits<uint16_t>::max();
         constexpr size_t u8_max = std::numeric_limits<uint8_t>::max();
+        constexpr size_t u32_max = std::numeric_limits<uint32_t>::max();
         if (!checkCount(std::max<size_t>(func.num_locals, func.slot_ids.locals.size()), u16_max,
                     "local variable slots")
                 || !checkCount(std::max<size_t>(func.num_globals, func.slot_ids.globals.size()), u16_max,
@@ -14602,7 +14603,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 || !checkCount(func.slot_ids.regex_cases.size(), u16_max, "regex case slots")
                 || !checkCount(func.slot_ids.body_locals.size(), u16_max, "body local slots")
                 || !checkCount(std::max<size_t>(func.num_lv_path_insts, func.slot_ids.lv_path_insts.size()),
-                    u8_max, "lvalue path instructions (counting those of its handler functions)")) {
+                    u32_max, "lvalue path instructions (counting those of its handler functions)")) {
             return false;
         }
 
@@ -14616,6 +14617,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         writer.writeU16(static_cast<uint16_t>(func.slot_ids.body_locals.size()));
         writer.writeU8(func.slot_ids.has_unsupported_exprs ? 1 : 0);
         writer.writeU8(static_cast<uint8_t>(func.num_lv_path_insts)); // was: padding byte
+        // the full count follows: a function can have more than 255 LValuePath instructions (#6127)
+        writer.writeU32(static_cast<uint32_t>(func.num_lv_path_insts));
         traceEntryOffset("after header");
 
         // Local slot entries (in slot order)
@@ -15479,6 +15482,16 @@ static const char* aotTestFailIRSerialization() {
     return name && *name ? name : nullptr;
 }
 
+QoreAOTSharedHandlerTable*& QoreAOTSharedHandlerTable::current() {
+    static thread_local QoreAOTSharedHandlerTable* table = nullptr;
+    return table;
+}
+
+bool& QoreAOTSharedHandlerTable::nested() {
+    static thread_local bool nested = false;
+    return nested;
+}
+
 //! Returns the maximum number of basic blocks of a serialized IR function
 /** Block references are u16 indices, with 0xFFFF meaning no block; the QORE_AOT_TEST_MAX_IR_BLOCKS environment
     variable can only lower the limit, for tests of the check
@@ -15498,6 +15511,8 @@ static size_t aotMaxIRBlocks() {
 
 bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
         const AOTExprWriteFunc& writeExpr) {
+    // the handler functions written in the IR of the function (#6087)
+    QoreAOTSharedHandlerScope shared_handler_scope;
     if (const char* fail_name = aotTestFailIRSerialization()) {
         if (strstr(func.name.c_str(), fail_name)) {
             qoreAOTSetExprSerializationError("serialization of IR function '" + func.name

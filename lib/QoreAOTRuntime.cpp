@@ -3452,7 +3452,9 @@ static QoreAOTContext* buildContextFromSlotMap(
 
     // Read the per-function slot map header
     // Format: name_ref(u32), num_locals(u16), num_globals(u16), num_exprs(u16),
-    //         num_stmts(u16), num_regex_cases(u16), num_body_locals(u16), has_unsupported(u8), padding(u8)
+    //         num_stmts(u16), num_regex_cases(u16), num_body_locals(u16), has_unsupported(u8),
+    //         num_lv_path_insts(u8: the low byte of the count, ignored from QORE_AOT_SHARED_HANDLER_VERSION),
+    //         num_lv_path_insts(u32, from QORE_AOT_SHARED_HANDLER_VERSION, #6127)
     // Note: caller has already positioned ptr after the 4-byte entry-size prefix
     /*const char* func_name =*/ reader.readStringRef(ptr);
     uint16_t num_locals = QoreAOTBinaryReader::readU16(ptr);
@@ -3462,7 +3464,17 @@ static QoreAOTContext* buildContextFromSlotMap(
     uint16_t num_regex_cases = QoreAOTBinaryReader::readU16(ptr);
     uint16_t num_body_locals = QoreAOTBinaryReader::readU16(ptr);
     uint8_t has_unsupported = QoreAOTBinaryReader::readU8(ptr);
-    uint8_t num_lv_path_insts = QoreAOTBinaryReader::readU8(ptr); // was: padding byte
+    // the low byte of the count of LValuePath instructions, followed by the full count since the format of shared
+    // handler functions (#6127)
+    int num_lv_path_insts = QoreAOTBinaryReader::readU8(ptr); // was: padding byte
+    if (reader.getHeader().version >= QORE_AOT_SHARED_HANDLER_VERSION) {
+        const uint8_t* count_end = entry_end ? entry_end : end;
+        if (!count_end || count_end < ptr || static_cast<size_t>(count_end - ptr) < sizeof(uint32_t)) {
+            setBuildError("slot map entry ends before its count of LValuePath instructions");
+            return nullptr;
+        }
+        num_lv_path_insts = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
+    }
     int aot_num_regex_cases = qore_aot_func_num_regex_cases(aot_func);
     printd(5, "AOT buildCtx '%s': num_lv_path=%d (from binary)\n", name, num_lv_path_insts);
     QoreEnvironmentValue trace_slot_reg_env_holder("QORE_AOT_TRACE_SLOT_REG");
@@ -3471,7 +3483,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         && (!*trace_slot_reg_env || (name && std::strstr(name, trace_slot_reg_env)));
     if (trace_slot_reg) {
         fprintf(stderr, "[aot-slot-reg] buildCtx '%s': binary(locals=%u globals=%u exprs=%u stmts=%u "
-            "regex=%u body_locals=%u lvpath=%u unsupported=%u) func(locals=%d globals=%d exprs=%d "
+            "regex=%u body_locals=%u lvpath=%d unsupported=%u) func(locals=%d globals=%d exprs=%d "
             "stmts=%d regex=%d)\n", name, num_locals, num_globals, num_exprs, num_stmts,
             num_regex_cases, num_body_locals, num_lv_path_insts, has_unsupported,
             aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts,
@@ -7225,6 +7237,8 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         ExceptionSink* cancel_xsink,
         const std::vector<LocalVar*>* enclosing_body_locals,
         const std::unordered_map<uint32_t, LocalVar*>* container_slot_locals) {
+    // the handler functions read in the IR of the function (#6087)
+    QoreAOTSharedHandlerScope shared_handler_scope;
     const uint8_t* func_start = ptr;
     auto remaining = [&ptr, end]() -> size_t {
         return end >= ptr ? static_cast<size_t>(end - ptr) : 0;
@@ -7927,8 +7941,10 @@ QoreAOTContext* qore_aot_materialize_lazy_function_context(
         return nullptr;
     }
     const uint8_t* entry_end = ptr + entry_size;
-    // name_ref + six slot counts + unsupported/lvalue-path bytes
-    if (entry_size < sizeof(uint32_t) + 6 * sizeof(uint16_t) + 2) {
+    // name_ref + six slot counts + unsupported/lvalue-path bytes, and the u32 count of LValuePath instructions from
+    // QORE_AOT_SHARED_HANDLER_VERSION (#6127)
+    if (entry_size < sizeof(uint32_t) + 6 * sizeof(uint16_t) + 2
+            + (reader.getHeader().version >= QORE_AOT_SHARED_HANDLER_VERSION ? sizeof(uint32_t) : 0)) {
         error = "serialized function slot entry has a truncated header";
         return nullptr;
     }

@@ -3130,7 +3130,8 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
 
         uint16_t num_locals = 0, num_globals = 0, num_exprs = 0, num_stmts = 0;
         uint16_t num_regex = 0, num_body_locals = 0;
-        uint8_t has_unsupported = 0, num_lv_paths = 0;
+        uint8_t has_unsupported = 0, num_lv_paths8 = 0;
+        uint32_t num_lv_paths = 0;
         if (!dump_read_u16(p, entry_end, num_locals)
                 || !dump_read_u16(p, entry_end, num_globals)
                 || !dump_read_u16(p, entry_end, num_exprs)
@@ -3138,10 +3139,16 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
                 || !dump_read_u16(p, entry_end, num_regex)
                 || !dump_read_u16(p, entry_end, num_body_locals)
                 || !dump_read_u8(p, entry_end, has_unsupported)
-                || !dump_read_u8(p, entry_end, num_lv_paths)) {
+                || !dump_read_u8(p, entry_end, num_lv_paths8)
+                || (reader.getHeader().version >= QORE_AOT_SHARED_HANDLER_VERSION
+                    && !dump_read_u32(p, entry_end, num_lv_paths))) {
             ++summary.malformed_entries;
             p = entry_start + 4 + entry_size;
             continue;
+        }
+        if (reader.getHeader().version < QORE_AOT_SHARED_HANDLER_VERSION) {
+            // the low byte of the count only (#6127)
+            num_lv_paths = num_lv_paths8;
         }
 
         summary.local_slots += num_locals;
@@ -9677,7 +9684,9 @@ static bool collect_blob_top_level_local_uses(const QoreAOTBinaryReader& reader,
         // the unsupported-expression flag and the LValuePath count
         if (!dump_skip_string_ref(reader, p, entry_end, &fname)
                 || !dump_read_u16(p, entry_end, num_locals)
-                || !dump_skip_bytes(p, entry_end, 5 * sizeof(uint16_t) + 2 * sizeof(uint8_t))) {
+                || !dump_skip_bytes(p, entry_end, 5 * sizeof(uint16_t) + 2 * sizeof(uint8_t)
+                    // the u32 count of LValuePath instructions (#6127)
+                    + (reader.getHeader().version >= QORE_AOT_SHARED_HANDLER_VERSION ? sizeof(uint32_t) : 0))) {
             error = "malformed SLOT_MAPS entry " + std::to_string(f) + " in '" + object + "'";
             return false;
         }
