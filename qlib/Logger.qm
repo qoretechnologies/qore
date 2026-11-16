@@ -1398,9 +1398,12 @@ public class LoggerSearchUtil {
     }
 
     #! returns a v3 cursor: where the next call resumes in the given source (issue #5856)
-    /** @param byte_offset forward: the start of the next line to scan; backward: the end of the next line to scan
+    /** @param sources the sources of the search, in the order that they are searched
+        @param source_idx the index in \a sources of the source where the next call resumes
+        @param byte_offset forward: the start of the next line to scan; backward: the end of the next line to scan
         (just after its terminator); -1: the end of the source (backward) for a source not read yet
         @param line_index the index of that line; -1 if it is not known yet (the last line of a source not read yet)
+        @param direction the direction of the search, \c "forward" or \c "backward"; the next call must have the same
         @param read_bytes the bytes read to make the identity of a source not read yet are added
         @param reader the reader of the source, if it is open
     */

@@ -1,0 +1,370 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  program-entry-failure.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+# the Programs of the test have a top-level local variable, which %modern does not allow
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires cppapiuser
+
+%exec-class ProgramEntryFailureTest
+
+#! an allocation that fails while C++ code enters another Program leaves the thread as it was (issue #6198)
+/** The entry (ProgramThreadCountContextHelper, used by QoreExternalProgramContextHelper, Program::callFunction() and
+    the other cross-Program calls) switches the thread's current Program and takes the Program's thread count before
+    steps that allocate.  A std::bad_alloc thrown by one of them propagates from the helper's constructor, whose
+    destructor does not run: the entry must restore the thread itself (its current Program, its local data and its
+    context chain) and release the thread count, or the thread would keep running in the Program it never entered and
+    deleting the Program would wait for the count forever.
+
+    dbg_fail_next_program_entry() (debug builds only) makes the next step of an entry at a given site fail (several
+    sites can be armed, each fails once);
+    ProgramContextProbe::enterProgram() (the cppapiuser test module) enters a Program with
+    QoreExternalProgramContextHelper, catches std::bad_alloc and reports what the entry left.
+*/
+class ProgramEntryFailureTest inherits QUnit::Test {
+    public {
+        #! the steps of the entry at which the allocation fails, with their names (qore_dbg_program_entry_site_e)
+        const Sites = {
+            "the switch of the current Program": 0,
+            "the allocation of the thread's local data": 1,
+            "the record of the Program in the thread": 2,
+            "the instantiation of the top-level local variables": 3,
+            "the instantiation of a top-level local variable after the first": 4,
+            "the steps after the switch of the thread's context": 5,
+        };
+
+        #! the steps of an entry into a Program with thread entry handlers (qore_dbg_program_entry_site_e)
+        const EntryHandler = 6;
+        const ExitHandler = 7;
+        const Entered = 8;
+
+        #! thread entry handlers that count their runs, as code of the Program that they are set for
+        const HandlerSource = "
+our *int enters;
+our *int exits;
+our *list<string> tokens;
+# makes the next run of the exit handler raise an exception
+our *bool exit_throws;
+sub set_exit_throws() { exit_throws = True; }
+list<code> sub handlers() {
+    return (
+        string sub () { ++enters; return \"token\"; },
+        sub (string token) {
+            ++exits;
+            tokens += token;
+            if (exit_throws) {
+                exit_throws = False;
+                throw \"EXIT-ERROR\", \"the exit handler failed\";
+            }
+        },
+    );
+}
+";
+
+        #! a Program that counts the runs of its thread initialization code and starts a thread that calls back into it
+        /** The background thread runs the thread initialization code when it starts; its call of a closure of the
+            Program through another Program enters the Program again, which must not run it again
+        */
+        const ThreadInitSource = "
+our *int inits;
+sub init() { inits = (inits ?? 0) + 1; }
+sub setup() { set_thread_init(\\init()); }
+int sub run(Program other) {
+    int before = inits ?? 0;
+    Queue q();
+    background sub () {
+        other.callFunction(\"call\", sub () {});
+        q.push(True);
+    }();
+    q.get();
+    return (inits ?? 0) - before;
+}
+";
+    }
+
+    constructor() : QUnit::Test("program-entry-failure", "1.0") {
+        addTestCase("an entry without a failure enters the Program", \entryTest());
+        addTestCase("a failed entry leaves the thread as it was", \failedEntryTest());
+        addTestCase("a failed entry of a parse commit leaves the thread as it was", \failedCommitTest());
+        addTestCase("a thread runs the thread initialization code of its Program once", \threadInitTest());
+        addTestCase("an entry whose entry handler fails partway runs no exit handler", \entryHandlerFailureTest());
+        addTestCase("a failed entry is undone when its exit handler fails", \exitHandlerFailureTest());
+        addTestCase("a failed entry after the entry handler runs the exit handler", \enteredFailureTest());
+        addTestCase("a failed entry is undone when its exit handler raises an exception",
+            \exitHandlerExceptionTest());
+        addTestCase("an entry is left when its exit handler fails", \exitFailureTest());
+        set_return_value(main());
+    }
+
+    #! returns a Program with a function and top-level local variables to instantiate, and the given code
+    private static Program makeProgram(string extra = "") {
+        Program p(PO_NEW_STYLE);
+        # top-level local variables (their declarations are instantiated for each thread that enters the Program);
+        # the function reads both, so an instantiation resumed after a failure must have made the second
+        p.parse("*int x; *int y; int sub one() { return (x ?? 1) + (y ?? 0); }\n" + extra, "program-entry-failure");
+        return p;
+    }
+
+    entryTest() {
+        Program p = makeProgram();
+        hash<auto> r = ProgramContextProbe::enterProgram(p);
+        assertEq({"caught": False, "entered": True, "restored": True}, r, "the probe enters the Program");
+        assertEq(1, p.callFunction("one"));
+    }
+
+    failedEntryTest() {
+        if (!exists_function("dbg_fail_next_program_entry")) {
+            testSkip("dbg_fail_next_program_entry() is only available in debug builds");
+        }
+        foreach hash<auto> i in (Sites.pairIterator()) {
+            # a new Program for each step, entered in a thread that has not entered it before: the thread's local data
+            # is allocated and the top-level variables instantiated on the first entry of a thread (the Program's
+            # parse in this thread made this thread's data already)
+            Program p = makeProgram();
+            Queue q();
+            background sub () {
+                hash<auto> rv;
+                try {
+                    call_function("dbg_fail_next_program_entry", i.value);
+                    on_exit {
+                        # disarmed if the step was not reached
+                        call_function("dbg_fail_next_program_entry", -1);
+                    }
+                    rv.failed = ProgramContextProbe::enterProgram(p);
+                    # the thread can enter the Program afterwards, and its code runs with its own local data
+                    rv.call = p.callFunction("one");
+                    rv.again = ProgramContextProbe::enterProgram(p);
+                } catch (hash<ExceptionInfo> ex) {
+                    rv.err = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                q.push(rv);
+            }();
+            hash<auto> r = q.get(60s);
+            assertEq(NOTHING, r.err, i.key + ": no exception");
+            assertTrue(r.failed.caught, i.key + ": the allocation failed");
+            assertFalse(r.failed.entered, i.key + ": the Program was not entered");
+            assertTrue(r.failed.restored, i.key + ": the thread is back in the calling Program");
+            assertEq(1, r.call, i.key + ": the Program is entered after the failure");
+            assertEq({"caught": False, "entered": True, "restored": True}, r.again,
+                i.key + ": the probe enters the Program after the failure");
+            # the failed entry released the Program's thread count: deleting the Program does not wait for it
+            delete p;
+            assertEq(NOTHING, p, i.key + ": the Program was deleted");
+        }
+    }
+
+    failedCommitTest() {
+        if (!exists_function("dbg_fail_next_program_entry")) {
+            testSkip("dbg_fail_next_program_entry() is only available in debug builds");
+        }
+        # the steps that the entry of a parse commit makes (ProgramRuntimeParseCommitContextHelper): the thread's
+        # local data and its record in the thread, made on the thread's first entry
+        foreach hash<auto> i in (Sites.pairIterator()) {
+            if (i.value != 1 && i.value != 2) {
+                continue;
+            }
+            # a Program without code: its code is parsed and committed only from the thread below
+            Program p(PO_NEW_STYLE);
+            Queue q();
+            background sub () {
+                hash<auto> rv;
+                try {
+                    call_function("dbg_fail_next_program_entry", i.value);
+                    on_exit {
+                        call_function("dbg_fail_next_program_entry", -1);
+                    }
+                    rv.failed = ProgramContextProbe::commitProgram(p, "int sub two() { return 2; }");
+                    # the Program is unlocked: code is committed in it afterwards
+                    rv.again = ProgramContextProbe::commitProgram(p, "int sub three() { return 3; }");
+                    rv.call = p.callFunction("three");
+                } catch (hash<ExceptionInfo> ex) {
+                    rv.err = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                q.push(rv);
+            }();
+            hash<auto> r = q.get(60s);
+            assertEq(NOTHING, r.err, i.key + ": no exception");
+            assertTrue(r.failed.caught, i.key + ": the allocation failed");
+            assertTrue(r.failed.restored, i.key + ": the thread is back in the calling Program");
+            assertEq({"caught": False, "entered": True, "restored": True}, r.again,
+                i.key + ": code is committed after the failure");
+            assertEq(3, r.call, i.key + ": the committed code runs");
+            delete p;
+            assertEq(NOTHING, p, i.key + ": the Program was deleted");
+        }
+    }
+
+    #! enters a new Program with thread entry handlers in a new thread, with the given steps armed to fail
+    /** @return a hash with the keys \c failed (the probe's report of the failed entry), \c enters and \c exits (the
+        runs of the handlers until then), \c again (the probe's report of an entry afterwards), \c exits_again (the
+        runs of the exit handler after it), \c tokens (the values the exit handlers got), \c deleted (True if the
+        Program was deleted) and \c err (an exception)
+    */
+    private hash<auto> enterWithHandlers(list<int> sites, bool exit_throws = False) {
+        # the handlers are code of the Program itself, so that they enter no other Program (an entry would reach the
+        # armed steps); they count their runs in the Program's global variables
+        Program p = makeProgram(HandlerSource);
+        if (exit_throws) {
+            # set before the handlers, so that the call runs none of them
+            p.callFunction("set_exit_throws");
+        }
+        list<code> handlers = p.callFunction("handlers");
+        p.setThreadEntryHandler(handlers[0], handlers[1]);
+        Queue q();
+        background sub () {
+            hash<auto> rv;
+            try {
+                map call_function("dbg_fail_next_program_entry", $1), sites;
+                on_exit {
+                    # disarms the steps that were not reached
+                    call_function("dbg_fail_next_program_entry", -1);
+                }
+                rv.failed = ProgramContextProbe::enterProgram(p);
+                rv.enters = p.getGlobalVariable("enters") ?? 0;
+                rv.exits = p.getGlobalVariable("exits") ?? 0;
+                rv.again = ProgramContextProbe::enterProgram(p);
+                rv.exits_again = p.getGlobalVariable("exits") ?? 0;
+                rv.tokens = p.getGlobalVariable("tokens");
+            } catch (hash<ExceptionInfo> ex) {
+                rv.err = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            q.push(rv);
+        }();
+        hash<auto> r = q.get(60s);
+        # the failed entry released the Program's thread count: deleting the Program does not wait for it; a thread
+        # left in the Program would make the deletion wait forever, so it is only made when the thread was restored
+        if (r.failed.restored) {
+            delete p;
+            r.deleted = !exists p;
+        }
+        return r;
+    }
+
+    entryHandlerFailureTest() {
+        if (!exists_function("dbg_fail_next_program_entry")) {
+            testSkip("dbg_fail_next_program_entry() is only available in debug builds");
+        }
+        # the entry handler ran, and the step after it fails: the entry fails as if the handler had failed
+        hash<auto> r = enterWithHandlers((EntryHandler,));
+        assertEq(NOTHING, r.err, "no exception");
+        assertTrue(r.failed.caught, "the allocation failed");
+        assertFalse(r.failed.entered, "the Program was not entered");
+        assertTrue(r.failed.restored, "the thread is back in the calling Program");
+        assertEq(1, r.enters, "the entry handler ran");
+        assertEq(0, r.exits, "no exit handler ran for the failed entry");
+        assertEq({"caught": False, "entered": True, "restored": True}, r.again, "the Program is entered afterwards");
+        assertEq(1, r.exits_again, "the exit handler ran for the entry afterwards");
+        assertEq(("token",), r.tokens, "the exit handler got the value of its own entry");
+        assertTrue(r.deleted, "the Program was deleted");
+    }
+
+    exitHandlerFailureTest() {
+        if (!exists_function("dbg_fail_next_program_entry")) {
+            testSkip("dbg_fail_next_program_entry() is only available in debug builds");
+        }
+        # a step after the entry handler fails, and the exit handler that undoing the entry runs fails as well: the
+        # undo completes, and the second failure is reported as an exception of the entry instead of escaping
+        hash<auto> r = enterWithHandlers((Entered, ExitHandler));
+        assertEq(NOTHING, r.err, "no exception");
+        assertTrue(r.failed.caught, "the allocation failed");
+        assertFalse(r.failed.entered, "the Program was not entered");
+        assertTrue(r.failed.restored, "the thread is back in the calling Program");
+        assertEq("THREAD-ENTRY-HANDLER-ERROR", r.failed.error, "the failure of the exit handler is reported");
+        assertEq(1, r.enters, "the entry handler ran");
+        assertEq(0, r.exits, "the exit handler failed before its code ran");
+        assertEq({"caught": False, "entered": True, "restored": True}, r.again, "the Program is entered afterwards");
+        assertEq(1, r.exits_again, "the exit handler ran for the entry afterwards");
+        assertTrue(r.deleted, "the Program was deleted");
+    }
+
+    enteredFailureTest() {
+        if (!exists_function("dbg_fail_next_program_entry")) {
+            testSkip("dbg_fail_next_program_entry() is only available in debug builds");
+        }
+        # a step after the entry handler fails: the undo of the entry runs the exit handler that pairs with it
+        hash<auto> r = enterWithHandlers((Entered,));
+        assertEq(NOTHING, r.err, "no exception");
+        assertTrue(r.failed.caught, "the allocation failed");
+        assertFalse(r.failed.entered, "the Program was not entered");
+        assertTrue(r.failed.restored, "the thread is back in the calling Program");
+        assertEq(NOTHING, r.failed.error, "no exception from the handlers");
+        assertEq(1, r.enters, "the entry handler ran");
+        assertEq(1, r.exits, "the exit handler ran when the entry was undone");
+        assertEq({"caught": False, "entered": True, "restored": True}, r.again, "the Program is entered afterwards");
+        assertEq(2, r.exits_again, "the exit handler ran for the entry afterwards");
+        assertEq(("token", "token"), r.tokens, "each exit handler got the value of its entry");
+        assertTrue(r.deleted, "the Program was deleted");
+    }
+
+    exitHandlerExceptionTest() {
+        if (!exists_function("dbg_fail_next_program_entry")) {
+            testSkip("dbg_fail_next_program_entry() is only available in debug builds");
+        }
+        # a step after the entry handler fails, and the exit handler that undoing the entry runs raises a Qore
+        # exception: the undo completes, and the exception is reported as an exception of the entry
+        hash<auto> r = enterWithHandlers((Entered,), True);
+        assertEq(NOTHING, r.err, "no exception");
+        assertTrue(r.failed.caught, "the allocation failed");
+        assertFalse(r.failed.entered, "the Program was not entered");
+        assertTrue(r.failed.restored, "the thread is back in the calling Program");
+        assertEq("EXIT-ERROR", r.failed.error, "the exception of the exit handler is reported");
+        assertEq(1, r.enters, "the entry handler ran");
+        assertEq(1, r.exits, "the exit handler ran when the entry was undone");
+        assertEq({"caught": False, "entered": True, "restored": True}, r.again, "the Program is entered afterwards");
+        assertEq(2, r.exits_again, "the exit handler ran for the entry afterwards");
+        assertTrue(r.deleted, "the Program was deleted");
+    }
+
+    exitFailureTest() {
+        if (!exists_function("dbg_fail_next_program_entry")) {
+            testSkip("dbg_fail_next_program_entry() is only available in debug builds");
+        }
+        # the entry succeeds, and the exit handler fails when the entry ends normally: the Program is left, and the
+        # failure is reported as an exception
+        hash<auto> r = enterWithHandlers((ExitHandler,));
+        assertEq(NOTHING, r.err, "no exception");
+        assertFalse(r.failed.caught, "no allocation failed in the entry");
+        assertTrue(r.failed.entered, "the Program was entered");
+        assertTrue(r.failed.restored, "the thread is back in the calling Program");
+        assertEq("THREAD-ENTRY-HANDLER-ERROR", r.failed.error, "the failure of the exit handler is reported");
+        assertEq(1, r.enters, "the entry handler ran");
+        assertEq(0, r.exits, "the exit handler failed before its code ran");
+        assertEq({"caught": False, "entered": True, "restored": True}, r.again, "the Program is entered afterwards");
+        assertEq(1, r.exits_again, "the exit handler ran for the entry afterwards");
+        assertTrue(r.deleted, "the Program was deleted");
+    }
+
+    threadInitTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse(ThreadInitSource, "program-entry-thread-init");
+        Program other(PO_NEW_STYLE);
+        other.parse("sub call(code c) { c(); }", "program-entry-other");
+        p.callFunction("setup");
+        assertEq(1, p.callFunction("run", other), "the thread initialization code ran once in the new thread");
+    }
+}

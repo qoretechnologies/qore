@@ -65,6 +65,7 @@ class EnumLvalueModificationTest inherits QUnit::Test {
                 " value\", b: 1}",
             "container-chomp": "[\"a line of text\", \"a long string value that is not short\", 1] {a: \"a line of"
                 " text\", b: 1}",
+            "container-short": "[\"ab\", \"ab\"] {a: \" ab \", b: \"ab\"} {a: \"ab\", b: \"ab\"}",
             "object-members": "\"a long string value that is not shortx\" \"a long string value that is not"
                 " shorty\" 12345678901234567891.25 8",
             "object-method": "a LONG string value that is not short-m",
@@ -78,7 +79,7 @@ class EnumLvalueModificationTest inherits QUnit::Test {
             "global": "\"a long string value that is not shortx\" 12345678901234567891.25",
             "loop": "0",
             "members": "[\"42\", \"a long string value that is not short\", \"  padded value  \", \"a line of"
-                " text\\n\", 1.5, 12345678901234567890.25, 0.5, 2.5, 1, 7]",
+                " text\\n\", \" ab \", \"ab\\n\", 1.5, 12345678901234567890.25, 0.5, 2.5, 1, 7]",
         };
     }
 

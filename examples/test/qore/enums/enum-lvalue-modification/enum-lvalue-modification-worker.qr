@@ -14,6 +14,8 @@ enum ES : string {
     Long = "a long string value that is not short",
     Padded = "  padded value  ",
     Line = "a line of text\n",
+    PadShort = " ab ",
+    LineShort = "ab\n",
 }
 
 enum EN : number {
@@ -312,6 +314,20 @@ hash<string, string> sub check() {
         r."container-chomp" = sprintf("%y %y", l, h);
     }
 
+    {
+        # short string enum values (held inline) in containers
+        list<auto> l = (ES::PadShort, ES::LineShort);
+        hash<auto> h = {"a": ES::PadShort, "b": ES::LineShort};
+        hash<auto> m = {};
+        m.a = ES::PadShort;
+        m.b = ES::LineShort;
+        trim l;
+        chomp h;
+        trim m.a;
+        chomp m.b;
+        r."container-short" = sprintf("%y %y %y", l, h, m);
+    }
+
     # object members
     {
         Holder o();
@@ -403,8 +419,8 @@ hash<string, string> sub check() {
         r."loop" = sprintf("%d", bad);
     }
 
-    r.members = replace(sprintf("%y", (ES::Short, ES::Long, ES::Padded, ES::Line, EN::Small, EN::Big, EF::Half,
-        EF::Big, EI::One, EI::Seven)), "\n", "\\n");
+    r.members = replace(sprintf("%y", (ES::Short, ES::Long, ES::Padded, ES::Line, ES::PadShort, ES::LineShort,
+        EN::Small, EN::Big, EF::Half, EF::Big, EI::One, EI::Seven)), "\n", "\\n");
     return r;
 }
 
