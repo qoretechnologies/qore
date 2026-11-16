@@ -167,6 +167,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # the tests that run their checks in default-mode child processes without the harness:
         # - AOTConstantImportStale (#5798) and AOTDumpInfoPendingConstants (#5799): their checks run qcc and the
         #   programs and modules it compiles in child processes
+        # - AOTDumpInfoFindCallRef (#6235): its checks run qcc --dump-info in child processes
         # - AOTInstanceOfTypePath (#5976): its checks run an AOT-compiled module and the same module's source in the
         #   AST interpreter in child processes
         # - AOTModuleDelClosure (#6015): its checks compile modules and scripts with qcc and run the interpreter and the
@@ -221,11 +222,31 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   and in qcc executables
         # - generic-method-hashdecl-paths (#5720, #5661): its probes run in child processes that set their own
         #   --exec-mode, in qcc executables and in a qcc-compiled module
+        # - hashdecl-member-default-typeparam (#6240): its probes run in child processes that set their own
+        #   --exec-mode, in qcc executables and in a qcc-compiled module
+        # - hashdecl-default-closure-typeparam (#6269): its probes run in child processes that set their own
+        #   --exec-mode, in qcc executables and in a qcc-compiled module
+        # - declaration-initializer-scope (#6268): its scripts run in child processes that set their own --exec-mode
+        #   and in qcc executables
         # - AOTInitParseOptions (#6189): its checks run in child processes that set their own --exec-mode and in qcc
         #   executables
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
         #   under valgrind
         # - float-int-conversion (#6181): its probes run in child processes that set their own --exec-mode and in qcc
+        #   executables
+        # - AOTModuleInitException (#6217): its checks run in child processes of the interpreter and of qcc
+        #   executables
+        # - deleted-object-generic-variant (#6152): its probes run in child processes that set their own --exec-mode
+        #   and in qcc executables
+        # - deleted-object-overload (#6159): its probes run in child processes that set their own --exec-mode and in
+        #   qcc executables
+        # - background-runtime-parse-options (#6208): its checks run in child processes that set their own --exec-mode
+        #   and in qcc executables
+        # - deferred-callback-runtime-parse-options (#6208): its checks run in child processes that set their own
+        #   execution modes
+        # - unhandled-exception-report: its checks run in child processes without an execution mode, whose threads
+        #   raise unhandled exceptions at the same time
+        # - float-conversion-edges (#6212): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
         # - JITFinalizeCancellation (#6305): its checks run in child processes that set their own --exec-mode and arm
         #   a debug hook in them
@@ -234,12 +255,18 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
+                                 "examples/test/ir/AOTDumpInfoFindCallRef.qtest",
+                                 "examples/test/ir/AOTModuleInitException.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/classes/deleted-program-types.qtest",
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
                                  "examples/test/qore/classes/explicit-type-param-method-call.qtest",
+                                 "examples/test/qore/classes/deleted-object-generic-variant.qtest",
+                                 "examples/test/qore/classes/deleted-object-overload.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",
                                  "examples/test/qore/operators/float-int-conversion.qtest",
+                                 "examples/test/qore/threads/unhandled-exception-report.qtest",
+                                 "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",
@@ -247,6 +274,11 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/relative-date-multiply.qtest",
                                  "examples/test/qore/functions/generic-call-parse-type.qtest",
                                  "examples/test/qore/classes/generic-method-hashdecl-paths.qtest",
+                                 "examples/test/qore/misc/hashdecl-member-default-typeparam.qtest",
+                                 "examples/test/qore/threads/background-runtime-parse-options.qtest",
+                                 "examples/test/qore/threads/deferred-callback-runtime-parse-options.qtest",
+                                 "examples/test/qore/misc/hashdecl-default-closure-typeparam.qtest",
+                                 "examples/test/qore/misc/declaration-initializer-scope.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",

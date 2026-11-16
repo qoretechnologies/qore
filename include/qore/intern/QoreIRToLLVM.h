@@ -597,6 +597,10 @@ private:
     // delay destruction or force copy-on-write.
     std::vector<llvm::AllocaInst*> preinstantiated_entry_cleanup_allocas;
     std::unordered_map<const void*, llvm::AllocaInst*> preinstantiated_entry_cleanup_by_local;
+    //! the parameters that take their arguments over and that the normal entry took from their runtime variables
+    //! (qore_rt_take_param()), with their LocalVar and the cleanup slot that owns the value (issue #5958): a function
+    //! that can deoptimize takes none (the deoptimization exit asserts it)
+    std::vector<std::pair<LocalVar*, llvm::AllocaInst*>> taken_param_cleanups;
 
     // Allocas for fast entry param locals (Approach B).
     // At exit, the current alloca value is loaded and decref'd.  StoreLocal
@@ -1080,6 +1084,12 @@ private:
         @return the value loaded, with a reference for the cache
     */
     llvm::Value* emitLocalCacheLoad(const void* key, llvm::IRBuilder<>& b, llvm::Module& module);
+    //! As emitLocalCacheLoad() for a parameter that takes its argument over: the runtime variable's reference is
+    //! released, so that the value loaded holds the only reference that the call gave (qore_rt_take_param())
+    llvm::Value* emitParamTake(const void* key, llvm::IRBuilder<>& b, llvm::Module& module);
+    //! Returns true if the call \a inst gives the callee the cleanup slot of an argument (buildArgCleanupArray()):
+    //! such a call does not call the fast entry of a callee whose parameter takes its argument over (issue #5958)
+    bool callGivesArgs(const QoreIRInstruction* inst) const;
 
     //! Emits the read of a local with a reference flag: the cached value, or the referenced value if it is a reference
     /** The referenced value is read only when the flag is set (qore_rt_read_reference_local()); it is owned and kept,
@@ -2258,8 +2268,14 @@ private:
     // block-entry → dbgSyntheticBlockStep) or DebugStatement (synthetic=false,
     // per-statement → dbgStep) instruction.  Gated by an inline attached-debugger check so
     // non-debug JIT execution pays at most one predictable not-taken branch.  No-op in AOT mode.
+    // \a folded_host is the operation that keeps the step event \a inst (qore_ir_folded_debug_step()), whose
+    // location the runtime location is when the hook runs: the hook then makes the event in the statement's location,
+    // as the hook of a DebugStatement instruction does, and gives the operation its own location back if it starts on
+    // another line.
     void emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_func,
-            const QoreIRInstruction* inst, bool synthetic);
+            const QoreIRInstruction* inst, bool synthetic, const QoreIRInstruction* folded_host = nullptr);
+    //! Stores \a loc as the runtime location of the frame, without the line check of emitRuntimeLocationUpdate()
+    void emitRuntimeLocationStore(const QoreProgramLocation* loc);
 
     // Get or create the per-function JIT deopt block.
     // On guard failure, branches here to set the thread-local deopt flag
@@ -2691,6 +2707,9 @@ private:
     llvm::Value* emitAnyUnaryFastPath(bool is_minus, int opcode,
             const QoreIRInstruction* inst,
             llvm::Value* operand, llvm::Function* llvm_func, llvm::Module& module);
+
+    //! returns true if an operand of the comparison can be a buffer, whose comparison gives a buffer (qore#6160)
+    bool comparisonOperandsMayBeBuffers(const QoreIRInstruction* inst) const;
 
     // Emit inline LLVM fast-path for CmpAny (spaceship operator).
     // Type-checks operands for int+int and float+float, falls back to qore_rt_comparison_op.

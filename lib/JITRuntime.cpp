@@ -129,7 +129,14 @@
 // JITRuntimeGivenArgs.cpp compiles this file with QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT defined, outside the single
 // compilation unit, for the code of the calls that give the references of their temporary arguments to the callee
 // (the CONSUME instantiations of the fast call executors, issue #5882): it leaves out what that code does not use,
-// which "#ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT" encloses; a helper that it starts to use must be taken out of them
+// which "#ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT" encloses; a helper that it starts to use must be taken out of them.
+// Its definitions are enclosed by "#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_DEFS", which only it defines.
+// JITRuntimeTakeOver.cpp compiles this file with QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT and QORE_JIT_RUNTIME_TAKE_OVER_UNIT
+// defined, in a unit of its own as well, for the calls that give their arguments to a callee found at run time,
+// whose parameters take them over (issue #5958): its definitions are enclosed by
+// "#ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT", and the code of the single compilation unit that it shares by
+// "#if !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT) || defined(QORE_JIT_RUNTIME_TAKE_OVER_UNIT)"; so neither the code of
+// the single compilation unit nor that of JITRuntimeGivenArgs.cpp changes
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_check_stack", reinterpret_cast<void*>(&qore_rt_check_stack) },
@@ -222,6 +229,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_make_weak_value", reinterpret_cast<void*>(&qore_rt_make_weak_value) },
     { "qore_rt_make_opaque_value", reinterpret_cast<void*>(&qore_rt_make_opaque_value) },
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
+    { "qore_rt_take_param", reinterpret_cast<void*>(&qore_rt_take_param) },
+    { "qore_rt_take_param_aot", reinterpret_cast<void*>(&qore_rt_take_param_aot) },
     { "qore_rt_load_local_raw", reinterpret_cast<void*>(&qore_rt_load_local_raw) },
     { "qore_rt_value_is_reference", reinterpret_cast<void*>(&qore_rt_value_is_reference) },
     { "qore_rt_strip_any_param", reinterpret_cast<void*>(&qore_rt_strip_any_param) },
@@ -602,6 +611,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_pop_native_function_context_v1", reinterpret_cast<void*>(&qore_rt_pop_native_function_context_v1) },
     { "qore_rt_call_fast_with_target", reinterpret_cast<void*>(&qore_rt_call_fast_with_target) },
     { "qore_rt_call_with_args", reinterpret_cast<void*>(&qore_rt_call_with_args) },
+    { "qore_rt_call_with_args_consume_args", reinterpret_cast<void*>(&qore_rt_call_with_args_consume_args) },
     { "qore_rt_call_function_with_base",
         reinterpret_cast<void*>(&qore_rt_call_function_with_base) },
     { "qore_rt_call_function_with_base_aot",
@@ -6870,31 +6880,33 @@ static inline __attribute__((always_inline)) QoreStringNode* qore_rt_to_string_c
     }
 }
 
-bool qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink) {
+int qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink) {
     switch (kind) {
         case QORE_RT_BUILTIN_CONVERSION_STRING: {
             QoreStringNode* str = qore_rt_to_string_checked_intern(val, xsink);
             if (!str) {
-                return false;
+                return 0;
             }
             rv = str;
-            return true;
+            return 2;
         }
         case QORE_RT_BUILTIN_CONVERSION_INT: {
             int64_t i;
             if (!qore_rt_to_int_checked_intern(val, i, xsink)) {
-                return false;
+                return 0;
             }
             rv = i;
-            return true;
+            // an int above 48 bits is held in a node
+            return rv.isInt() ? 1 : 2;
         }
         default: {
             double f;
             if (!qore_rt_to_float_checked_intern(val, f, xsink)) {
-                return false;
+                return 0;
             }
             rv = f;
-            return true;
+            // a negative NaN and a double in the tag-collision range are held in a node
+            return rv.isFloat() ? 1 : 2;
         }
     }
 }
@@ -11064,11 +11076,30 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_add_typed(uint64_t left, uint64_t r
     return toBits(QoreValue(result));
 }
 
+//! Appends a value that is not a string to a string local as its string (issue #6266)
+/** The value is converted to the string that doPlusEqualsOnLValue() appends for it (its string representation, in the
+    same encoding), made once as a string node (QoreStringNodeValueHelper), and the string is appended by \a append, a
+    call of a string append helper with the string as its right operand; a value that is not a string is never the
+    string appended to, so the helper's alias check is unaffected
+*/
+template <typename Append>
+static __attribute__((noinline)) uint64_t qore_rt_string_append_converted(QoreValue right, ExceptionSink* xsink,
+        Append append) {
+    ReferenceHolder<QoreStringNode> right_node(QoreStringNodeValueHelper(right).getReferencedValue(), xsink);
+    return append(toBits(QoreValue(*right_node)));
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
         uint64_t left_bits, uint64_t right_bits, ExceptionSink* xsink) {
     QoreValue left = fromBits(left_bits);
     QoreValue right = fromBits(right_bits);
     if (left.isNullOrNothing()) {
+        // a value of another type than string is appended as its string
+        if (!right.isNullOrNothing() && right.getType() != NT_STRING) {
+            return qore_rt_string_append_converted(right, xsink, [left_bits, xsink](uint64_t converted) {
+                return qore_rt_string_append_cow(left_bits, converted, xsink);
+            });
+        }
         return toBits(right.refSelf());
     }
     if (left.getType() != NT_STRING) {
@@ -11079,7 +11110,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
         return toBits(left.refSelf());
     }
     if (right.getType() != NT_STRING) {
-        return toBits(QoreValue());
+        // a value of another type is appended as its string, as doPlusEqualsOnLValue() appends it
+        return qore_rt_string_append_converted(right, xsink, [left_bits, xsink](uint64_t converted) {
+            return qore_rt_string_append_cow(left_bits, converted, xsink);
+        });
     }
 
     QoreStringValueHelper right_string(right);
@@ -11112,6 +11146,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
     QoreValue left = fromBits(left_bits);
     QoreValue right = fromBits(right_bits);
     if (left.isNullOrNothing()) {
+        // a value of another type than string is appended as its string
+        if (!right.isNullOrNothing() && right.getType() != NT_STRING) {
+            return qore_rt_string_append_converted(right, xsink, [owner, cache, xsink](uint64_t converted) {
+                return qore_rt_string_append_local_cow(owner, cache, converted, xsink);
+            });
+        }
         uint64_t result_bits = toBits(right.refSelf());
         *owner = result_bits;
         *cache = result_bits;
@@ -11125,7 +11165,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
         return left_bits;
     }
     if (right.getType() != NT_STRING) {
-        return toBits(QoreValue());
+        // a value of another type is appended as its string, as doPlusEqualsOnLValue() appends it
+        return qore_rt_string_append_converted(right, xsink, [owner, cache, xsink](uint64_t converted) {
+            return qore_rt_string_append_local_cow(owner, cache, converted, xsink);
+        });
     }
 
     QoreStringValueHelper right_string(right);
@@ -11751,7 +11794,7 @@ extern "C" DLLEXPORT int32_t qore_rt_switch_string_case_lookup_noguard_v2(
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QorePseudoMethods.h"
 
-#ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+#if !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT) || defined(QORE_JIT_RUNTIME_TAKE_OVER_UNIT)
 static bool qore_rt_dot_eval_preserve_raw_base(const QoreValue& base) {
     switch (base.getType()) {
         case NT_WEAKREF:
@@ -11762,6 +11805,9 @@ static bool qore_rt_dot_eval_preserve_raw_base(const QoreValue& base) {
             return false;
     }
 }
+#endif
+
+#ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base(uint64_t expr_bits, uint64_t base_bits, ExceptionSink* xsink) {
     QoreValue expr = fromBits(expr_bits);
@@ -11791,6 +11837,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base(uint64_t expr_bits, uin
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 // --- Call with pre-evaluated args helper ---
+
+static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
+#ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
+//! as qore_rt_call_with_args(), for a call that gives the references of its temporary arguments (\a arg_cleanups) to
+//! the callee, whose parameters take them over (issues #5882, #5958): a call made through its expression in JIT code,
+//! such as a call of a method of self
+extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_consume_args(uint64_t expr_bits,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    return qore_rt_call_with_args_impl(expr_bits, args, arg_cleanups, nargs, xsink);
+}
+#endif
 
 static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
@@ -13569,7 +13628,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
     return toBits(qore_release_value_with_exception(val, xsink));
 }
 
-#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_DEFS
 //! qore_rt_call_fast() for a call that gives the references of its temporary arguments to the callee
 /** Defined in JITRuntimeGivenArgs.cpp, which compiles the code of these calls (the CONSUME instantiations) outside the
     single compilation unit, so that it does not change how the code of the calls that give nothing is compiled
@@ -13867,7 +13926,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t execClosureDirect_t(const QoreClosureB
     return toBits(qore_release_value_with_exception(val, xsink));
 }
 
-#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_DEFS
 //! defined in JITRuntimeGivenArgs.cpp (see qore_rt_call_fast_consume_impl())
 DLLLOCAL uint64_t execClosureDirectConsume(const QoreClosureBase* cb, const UserVariantBase* uvb,
         int nargs, const uint64_t* args, ExceptionSink* xsink, uint64_t** arg_cleanups) {
@@ -14142,7 +14201,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
     return toBits(qore_release_value_with_exception(val, xsink));
 }
 
-#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_DEFS
 //! defined in JITRuntimeGivenArgs.cpp (see qore_rt_call_fast_consume_impl())
 DLLLOCAL uint64_t qore_rt_call_fast_with_target_consume_impl(uint64_t (*target_fn)(ExceptionSink*),
         const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups, int nargs,
@@ -14372,7 +14431,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_self_recursive_t(const Ab
     return toBits(qore_release_value_with_exception(val, xsink));
 }
 
-#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_DEFS
 //! defined in JITRuntimeGivenArgs.cpp (see qore_rt_call_fast_consume_impl())
 DLLLOCAL uint64_t qore_rt_call_self_recursive_consume_impl(const AbstractQoreFunctionVariant* variant,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
@@ -14826,7 +14885,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_method_fast_impl_t(const 
     return toBits(qore_release_value_with_exception(val, xsink));
 }
 
-#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_DEFS
 //! defined in JITRuntimeGivenArgs.cpp (see qore_rt_call_fast_consume_impl())
 DLLLOCAL uint64_t qore_rt_call_method_fast_consume_impl(const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups,
@@ -19162,7 +19221,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
         "qore_rt_call_direct_aot", "function", "missing pre-resolved direct call target");
 }
 
-#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_DEFS
 //! defined in JITRuntimeGivenArgs.cpp (see qore_rt_call_fast_consume_impl())
 DLLLOCAL uint64_t qore_rt_call_direct_aot_consume_impl(QoreAOTContext* ctx, int32_t slot,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
@@ -20755,6 +20814,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot_consume_args(
 // fall back to name-based lookup.
 // Try fast dispatch for a user method with cached JIT function on a matching object
 // Returns true if the fast path was taken, false if caller should use the slow path
+//! makes a call that gives its arguments (\a arg_cleanups) of a method of an object of another class than the one
+//! resolved, which dispatch_method_on_object() would make by name, so that the method found takes the arguments over
+//! (issue #5958); returns false for any other call, which the caller makes; defined in JITRuntimeTakeOver.cpp
+DLLLOCAL bool qore_rt_try_dispatch_method_given_by_name(QoreObject* o, const QoreMethod* method, const QoreClass* qc,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result);
+
 template <bool CONSUME>
 static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
@@ -21036,7 +21101,7 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
     return true;
 }
 
-#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_DEFS
 //! defined in JITRuntimeGivenArgs.cpp (see qore_rt_call_fast_consume_impl())
 DLLLOCAL bool try_dispatch_method_fast_consume(QoreObject* o, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
@@ -21063,11 +21128,45 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     }
     return try_dispatch_method_fast_t<false>(o, method, qc, variant, args, arg_cleanups, nargs, xsink, result);
 }
+#endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
+#if !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT) || defined(QORE_JIT_RUNTIME_TAKE_OVER_UNIT)
 //! returns true if the classes are the same class, which a copy of a class in another Program is
 static bool qore_rt_same_class(const QoreClass* a, const QoreClass* b) {
     return a == b || (a && b && a->getID() == b->getID());
 }
+#endif
+
+#ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
+// documented above
+DLLLOCAL bool qore_rt_try_dispatch_method_given_by_name(QoreObject* o, const QoreMethod* method, const QoreClass* qc,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result) {
+    // the calls that dispatch_method_on_object() makes by name: of a method that is not static and not copy(), of an
+    // object of another class than the one resolved and than the method's
+    if (method->isStatic() || qore_rt_same_class(o->getClass(), qc)
+            || qore_rt_same_class(o->getClass(), method->getClass()) || !strcmp(method->getName(), "copy")) {
+        return false;
+    }
+    // as the slow path of qore_rt_dot_eval_method_direct_impl() and dispatch_method_on_object() make it, but with the
+    // method found taking the values of the argument list, which holds the last references of the arguments, over
+    ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+    if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
+        result = toBits(QoreValue());
+        return true;
+    }
+    const qore_class_private* class_ctx = runtime_get_class();
+    // checked against the committed hierarchy, as in MethodCallNode::exec()
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
+        class_ctx = nullptr;
+    }
+    RuntimeConfig& rc = rc_get_current_ref();
+    const qore_class_private* priv = qore_class_private::get(*o->getClass());
+    result = toBits(priv->evalMethodGivenArgs(o, method->getName(), *arg_list, class_ctx, rc, xsink, nullptr));
+    return true;
+}
+#endif
+
+#ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
@@ -21132,6 +21231,10 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation);
 
+//! makes a method call on a value; CONSUME: the call gives its arguments (\a arg_cleanups): a method of an object of
+//! another class than the one resolved is found by name and takes them over (issue #5958), a test that the code
+//! instantiated for the calls that give nothing does not make
+template <bool CONSUME>
 static uint64_t qore_rt_dot_eval_method_direct_impl(uint64_t base_bits, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
@@ -21171,6 +21274,14 @@ static uint64_t qore_rt_dot_eval_method_direct_impl(uint64_t base_bits, const Qo
                     && try_dispatch_method_fast(o, method, qc, variant, args, arg_cleanups, nargs, xsink, result)) {
                 return result;
             }
+            // a call that gives its arguments of a method of another class, found by name, takes them over
+            if constexpr (CONSUME) {
+                if (arg_cleanups && !explicit_type_param_instantiation
+                        && qore_rt_try_dispatch_method_given_by_name(o, method, qc, args, arg_cleanups, nargs, xsink,
+                            result)) {
+                    return result;
+                }
+            }
             ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
             if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
                 return toBits(QoreValue());
@@ -21186,6 +21297,14 @@ static uint64_t qore_rt_dot_eval_method_direct_impl(uint64_t base_bits, const Qo
             if (!explicit_type_param_instantiation
                     && try_dispatch_method_fast(o, method, qc, variant, args, arg_cleanups, nargs, xsink, result)) {
                 return result;
+            }
+            // a call that gives its arguments of a method of another class, found by name, takes them over
+            if constexpr (CONSUME) {
+                if (arg_cleanups && !explicit_type_param_instantiation
+                        && qore_rt_try_dispatch_method_given_by_name(o, method, qc, args, arg_cleanups, nargs, xsink,
+                            result)) {
+                    return result;
+                }
             }
             ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
             if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
@@ -21231,7 +21350,7 @@ static uint64_t qore_rt_dot_eval_method_direct_impl(uint64_t base_bits, const Qo
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct(uint64_t base_bits, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
-    return qore_rt_dot_eval_method_direct_impl(base_bits, method, qc, variant,
+    return qore_rt_dot_eval_method_direct_impl<false>(base_bits, method, qc, variant,
         args, nullptr, nargs, xsink, nullptr);
 }
 
@@ -21239,7 +21358,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_with_inst(uint64_t 
         const QoreMethod* method, const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         uint64_t* args, int nargs, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
         ExceptionSink* xsink) {
-    return qore_rt_dot_eval_method_direct_impl(base_bits, method, qc, variant,
+    return qore_rt_dot_eval_method_direct_impl<false>(base_bits, method, qc, variant,
         args, nullptr, nargs, xsink, explicit_type_param_instantiation);
 }
 
@@ -21247,7 +21366,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_consume_args(uint64
         const QoreMethod* method, const QoreClass* qc,
         const AbstractQoreFunctionVariant* variant, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
-    return qore_rt_dot_eval_method_direct_impl(base_bits, method, qc, variant,
+    return qore_rt_dot_eval_method_direct_impl<true>(base_bits, method, qc, variant,
         args, arg_cleanups, nargs, xsink, nullptr);
 }
 
@@ -21255,10 +21374,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_with_inst_consume_a
         const QoreMethod* method, const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         uint64_t* args, uint64_t** arg_cleanups, int nargs,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, ExceptionSink* xsink) {
-    return qore_rt_dot_eval_method_direct_impl(base_bits, method, qc, variant,
+    return qore_rt_dot_eval_method_direct_impl<true>(base_bits, method, qc, variant,
         args, arg_cleanups, nargs, xsink, explicit_type_param_instantiation);
 }
 
+#endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+
+#ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
+// the pseudo-method calls and the calls by name below, compiled in this unit for the calls that give their arguments,
+// whose callee takes them over (see qore_rt_dot_eval_pseudo_method_direct_given())
+static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_name,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation);
+#endif
+
+#if !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT) || defined(QORE_JIT_RUNTIME_TAKE_OVER_UNIT)
 static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
@@ -21319,7 +21449,19 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
     }
     return toBits(qore_class_private::evalPseudoMethod(qc, method, variant, base, *arg_list, rc, xsink));
 }
+#endif
 
+#ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
+// documented in QoreJITIncludes.h
+DLLLOCAL uint64_t qore_rt_dot_eval_pseudo_method_direct_given(uint64_t base_bits, const QoreMethod* method,
+        const QoreClass* qc, const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups,
+        int nargs, ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation) {
+    return qore_rt_dot_eval_pseudo_method_direct_impl(base_bits, method, qc, variant, args, arg_cleanups, nargs,
+        xsink, explicit_type_param_instantiation);
+}
+#endif
+
+#ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct(uint64_t base_bits,
         const QoreMethod* method, const QoreClass* qc,
         const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs,
@@ -21340,8 +21482,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct_consume_args
         uint64_t base_bits, const QoreMethod* method, const QoreClass* qc,
         const AbstractQoreFunctionVariant* variant, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
-    return qore_rt_dot_eval_pseudo_method_direct_impl(base_bits, method, qc,
-        variant, args, arg_cleanups, nargs, xsink);
+    return qore_rt_dot_eval_pseudo_method_direct_given(base_bits, method, qc,
+        variant, args, arg_cleanups, nargs, xsink, nullptr);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct_with_inst_consume_args(
@@ -21349,12 +21491,35 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct_with_inst_co
         const AbstractQoreFunctionVariant* variant, uint64_t* args,
         uint64_t** arg_cleanups, int nargs,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, ExceptionSink* xsink) {
-    return qore_rt_dot_eval_pseudo_method_direct_impl(base_bits, method, qc,
+    return qore_rt_dot_eval_pseudo_method_direct_given(base_bits, method, qc,
         variant, args, arg_cleanups, nargs, xsink, explicit_type_param_instantiation);
 }
+#endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
+#ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
+//! calls a call reference with an argument list that holds the last references of the arguments that the call gave
+//! (see clearConsumedArgCleanups()), which the parameters of a closure or of a reference to user code take over, as the
+//! AST interpreter's call moves its evaluated arguments into the parameters (issues #5882, #5958)
+static QoreValue qore_rt_invoke_call_ref_given_list(const ResolvedCallReferenceNode* callref, QoreListNode* args,
+        ExceptionSink* xsink) {
+    // the call runs with the sandbox provenance of the reference: a closure's execValueTmpArgs() and invoke() apply
+    // it themselves, while the default ResolvedCallReferenceNodeIntern::execValueTmpArgs() calls execValue(), which
+    // does not, so it is applied here for that branch only, as in qore_class_eval_member_code_given_args()
+    if (callref->getType() == NT_RUNTIME_CLOSURE) {
+        return static_cast<const QoreClosureBase*>(callref)->execValueTmpArgs(args, xsink);
+    }
+    if (auto* rcr = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(callref)) {
+        QoreSandboxProvenanceHelper provenance(callref);
+        return rcr->execValueTmpArgs(args, xsink);
+    }
+    return callref->invoke(args, xsink);
+}
+#endif
+
+#if !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT) || defined(QORE_JIT_RUNTIME_TAKE_OVER_UNIT)
 // Fallback for unresolved method calls: use the pre-evaluated args
-// from LLVM with a name-based runtime method dispatch
+// from LLVM with a name-based runtime method dispatch; JITRuntimeTakeOver.cpp compiles it for the calls that give
+// their arguments (dot_eval_fallback_with_args_consume()), whose callee takes them over there
 static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_name,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation) {
@@ -21407,6 +21572,12 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
         }
         RuntimeConfig& rc = rc_get_current_ref();
         const qore_class_private* priv = qore_class_private::get(*o->getClass());
+#ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
+        // a write to a parameter of the method found then releases its argument, as in the AST interpreter
+        if (arg_cleanups && !explicit_type_param_instantiation) {
+            return toBits(priv->evalMethodGivenArgs(o, method_name, *arg_list, class_ctx, rc, xsink, nullptr));
+        }
+#endif
         return toBits(priv->evalMethod(o, method_name, *arg_list, class_ctx, rc, xsink,
             explicit_type_param_instantiation));
     }
@@ -21415,11 +21586,23 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
     if (base.getType() == NT_HASH) {
         const AbstractQoreNode* ref = check_call_ref(base.getInternalNode(), method_name);
         if (ref) {
+#ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
+            if (arg_cleanups) {
+                return toBits(qore_rt_invoke_call_ref_given_list(
+                    reinterpret_cast<const ResolvedCallReferenceNode*>(ref), *arg_list, xsink));
+            }
+#endif
             return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(*arg_list, xsink));
         }
     } else if (base.getType() == NT_WEAKREF_HASH) {
         const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), method_name);
         if (ref) {
+#ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
+            if (arg_cleanups) {
+                return toBits(qore_rt_invoke_call_ref_given_list(
+                    reinterpret_cast<const ResolvedCallReferenceNode*>(ref), *arg_list, xsink));
+            }
+#endif
             return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(*arg_list, xsink));
         }
     }
@@ -21427,6 +21610,26 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
     // For non-objects, use pseudo-class lookup
     return toBits(pseudo_classes_eval(base, method_name, *arg_list, xsink));
 }
+#endif
+
+#ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
+// documented in QoreJITIncludes.h
+DLLLOCAL uint64_t qore_rt_eval_method_given_args(const qore_class_private* object_class, QoreObject* object,
+        const char* method_name, QoreListNode* args, const qore_class_private* class_ctx, ExceptionSink* xsink) {
+    return toBits(object_class->evalMethodGivenArgs(object, method_name, args, class_ctx, rc_get_current_ref(), xsink,
+        nullptr));
+}
+
+// documented in QoreJITIncludes.h
+DLLLOCAL uint64_t dot_eval_fallback_with_args_consume(QoreValue base, const char* method_name,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation) {
+    return dot_eval_fallback_with_args(base, method_name, args, arg_cleanups, nargs, xsink,
+        explicit_type_param_instantiation);
+}
+#endif
+
+#ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 DLLLOCAL uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_name,
         uint64_t* args, int nargs, ExceptionSink* xsink,
@@ -21455,14 +21658,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_by_name_consume_args(uint6
         const char* method_name, uint64_t* args, uint64_t** arg_cleanups, int nargs,
         ExceptionSink* xsink) {
     QoreValue base = fromBits(base_bits);
-    return dot_eval_fallback_with_args(base, method_name, args, arg_cleanups, nargs, xsink);
+    return dot_eval_fallback_with_args_consume(base, method_name, args, arg_cleanups, nargs, xsink, nullptr);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_by_name_with_inst_consume_args(uint64_t base_bits,
         const char* method_name, uint64_t* args, uint64_t** arg_cleanups, int nargs,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, ExceptionSink* xsink) {
     QoreValue base = fromBits(base_bits);
-    return dot_eval_fallback_with_args(base, method_name, args, arg_cleanups, nargs, xsink,
+    return dot_eval_fallback_with_args_consume(base, method_name, args, arg_cleanups, nargs, xsink,
         explicit_type_param_instantiation);
 }
 
@@ -21750,7 +21953,13 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
             class_ctx, rc_get_current_ref(), xsink,
             explicit_type_param_instantiation));
     }
+    // a call that gave the references of its temporary arguments (the argument list holds them now) calls the method
+    // found, or the code that a member holds, with them, whose parameters take them over: a write to a parameter then
+    // releases its argument, as in the AST interpreter (issue #5958)
     if (!cacheable) {
+        if (arg_cleanups && !explicit_type_param_instantiation) {
+            return qore_rt_eval_method_given_args(object_class, object, method_name, *arg_list, class_ctx, xsink);
+        }
         return toBits(object_class->evalMethod(object, method_name, *arg_list,
             class_ctx, rc_get_current_ref(), xsink,
             explicit_type_param_instantiation));
@@ -21761,6 +21970,9 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
         return toBits(QoreValue());
     }
     if (!method) {
+        if (arg_cleanups && !explicit_type_param_instantiation) {
+            return qore_rt_eval_method_given_args(object_class, object, method_name, *arg_list, class_ctx, xsink);
+        }
         return toBits(object_class->evalMethod(object, method_name, *arg_list,
             class_ctx, rc_get_current_ref(), xsink,
             explicit_type_param_instantiation));
@@ -21821,7 +22033,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext*
         return target.is_pseudo
             ? qore_rt_dot_eval_pseudo_method_direct_impl(base_bits, target.method, target.qc,
                 target.variant, args, nullptr, nargs, xsink, explicit_inst)
-            : qore_rt_dot_eval_method_direct_impl(base_bits, target.method, target.qc,
+            : qore_rt_dot_eval_method_direct_impl<false>(base_bits, target.method, target.qc,
                 target.variant, args, nullptr, nargs, xsink, explicit_inst);
     }
     // Pre-resolved with name but no method pointer — use name-based dispatch
@@ -22330,13 +22542,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot_consume_args(Qo
     }
     if (target.method) {
         return target.is_pseudo
-            ? qore_rt_dot_eval_pseudo_method_direct_impl(base_bits, target.method,
+            ? qore_rt_dot_eval_pseudo_method_direct_given(base_bits, target.method,
                 target.qc, target.variant, args, arg_cleanups, nargs, xsink, explicit_inst)
-            : qore_rt_dot_eval_method_direct_impl(base_bits, target.method,
+            : qore_rt_dot_eval_method_direct_impl<true>(base_bits, target.method,
                 target.qc, target.variant, args, arg_cleanups, nargs, xsink, explicit_inst);
     }
     if (target.method_name) {
-        return dot_eval_fallback_with_args(base, target.method_name, args,
+        return dot_eval_fallback_with_args_consume(base, target.method_name, args,
             arg_cleanups, nargs, xsink, explicit_inst);
     }
 
@@ -22559,7 +22771,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_static_method_direct_impl
     return toBits(qore_release_value_with_exception(val, xsink));
 }
 
-#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_DEFS
 //! defined in JITRuntimeGivenArgs.cpp (see qore_rt_call_fast_consume_impl())
 DLLLOCAL uint64_t qore_rt_call_static_method_direct_consume_impl(const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, uint64_t* args,
@@ -24772,3 +24984,32 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_mod_any_throwing
     return result;
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+
+#ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
+// documented in JITRuntime.h
+/** Called by the normal entry of native code for a parameter that takes its argument over and has IR storage (see
+    design/param-take-over.md): the value is moved out of the runtime variable with one lookup of the variable, so
+    that the entry's cleanup slot holds the only reference that the call gave and a write to the parameter releases a
+    temporary argument, as in the AST interpreter.  A variable that holds a reference, a weak reference, a static
+    assignment or a value that is not a node is read as qore_rt_load_local() reads it and keeps its value
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_take_param(LocalVar* var, ExceptionSink* xsink) {
+    if (var && !var->closureUse()) {
+        LocalVarValue* lvv = thread_try_find_lvar(var);
+        if (lvv && lvv->val.assigned && !lvv->val.static_assignment && lvv->val.type == QV_Node && lvv->val.v.n) {
+            qore_type_t t = lvv->val.v.n->getType();
+            if (t != NT_REFERENCE && t != NT_WEAKREF && t != NT_WEAKREF_HASH && t != NT_WEAKREF_LIST) {
+                return toBits(lvv->val.removeValue(false));
+            }
+        }
+    }
+    return qore_rt_load_local(var, xsink);
+}
+
+// documented in JITRuntime.h
+extern "C" DLLEXPORT uint64_t qore_rt_take_param_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_take_param(ctx->locals[idx], xsink);
+}
+
+#endif // QORE_JIT_RUNTIME_TAKE_OVER_UNIT

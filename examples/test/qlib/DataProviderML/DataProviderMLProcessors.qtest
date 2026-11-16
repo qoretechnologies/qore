@@ -24,10 +24,6 @@
 %modern
 %enable-all-warnings
 
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ocr"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/tokenizer"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/dataframe"
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
@@ -39,9 +35,7 @@
 %requires QoreOnnxExport
 %requires DataProviderML
 
-%try-module dataframe
-%define NoDataFrame
-%endtry
+%requires dataframe
 
 %exec-class DataProviderMLProcessorsTest
 
@@ -632,10 +626,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     iforestDataFrameFlushShape() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         DataProviderML::QoreIsolationForestProcessor proc({
             "fields": "x,y",
             "window_size": 10,
@@ -963,10 +953,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     kmeansDataFrameFlushShape() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         DataProviderML::QoreKMeansProcessor proc({
             "fields": "x,y",
             "window_size": 10,
@@ -987,10 +973,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     kmeansBufferColumnsDataFrameInputFields() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         DataProviderML::QoreKMeansProcessor proc({
             "fields": "x,y",
             "window_size": 4,
@@ -1109,10 +1091,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     pcaDataFrameFlushShape() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         DataProviderML::QorePCAProcessor proc({
             "fields": "x,y",
             "window_size": 10,
@@ -1132,10 +1110,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     pcaBufferColumnsDataFrameInputFields() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         DataProviderML::QorePCAProcessor proc({
             "fields": "x,y",
             "window_size": 4,
@@ -2867,9 +2841,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     onnxModelDeviceBindingSandbox() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipOnnx()) {
             return;
         }
@@ -2900,13 +2871,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
                     "the default sandbox is refused device binding");
             }
         }
-%endif
     }
 
     onnxModelDeviceBindingDiagnostics() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipOnnx()) {
             return;
         }
@@ -2993,7 +2960,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         hash<auto> fb_db = fallback_proc.getDiagnostics().device_binding;
         assertTrue(fb_db.transfers.host_outputs >= 1, "host-fallback outputs should be host outputs");
         assertEq(0, fb_db.transfers.device_outputs, "host fallback must not produce device outputs");
-%endif
     }
 
     onnxModelFlushPartial() {
@@ -3020,9 +2986,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     onnxModelDataFrameTensorPath() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipOnnx()) {
             return;
         }
@@ -3043,13 +3006,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq(5, outputs.lsize());
         assertFloat(3.0, outputs[0].Y, 1e-5);
         assertFloat(11.0, outputs[4].Y, 1e-5);
-%endif
     }
 
     onnxModelDataFrameMultiColumnTensorPath() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipSklearnOnnx()) {
             return;
         }
@@ -3075,13 +3034,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         ML::Tensor probabilities = result.probabilities;
         assertEq((3, 3), probabilities.getShape());
         assertEq("buffer<float32>", probabilities.getBuffer().fullType());
-%endif
     }
 
     onnxModelDataFrameVectorColumnOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipSklearnOnnx()) {
             return;
         }
@@ -3117,13 +3072,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         for (int i = 0; i < 3; ++i) {
             assertFloat(1.0, p0[i].toFloat() + p1[i].toFloat() + p2[i].toFloat(), 1e-5);
         }
-%endif
     }
 
     onnxModelSelectedOutputColumns() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipSklearnOnnx()) {
             return;
         }
@@ -3159,13 +3110,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         for (int i = 0; i < 3; ++i) {
             assertFloat(1.0, p0[i].toFloat() + p1[i].toFloat() + p2[i].toFloat(), 1e-5);
         }
-%endif
     }
 
     onnxModelDataFrameColumnOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipOnnx()) {
             return;
         }
@@ -3196,13 +3143,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "single-window compact tensor path should run through reusable I/O binding once");
         assertEq(("Y",), diagnostics.io_binding.bound_outputs,
             "reusable I/O binding should bind model outputs for compact tensor path");
-%endif
     }
 
     onnxModelDataFramePartialColumnOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipOnnx()) {
             return;
         }
@@ -3225,13 +3168,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         list<auto> outputs = result.getColumn("Y");
         assertFloat(3.0, outputs[0], 1e-5);
         assertFloat(7.0, outputs[2], 1e-5);
-%endif
     }
 
     onnxModelDataFrameRemainderColumnOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipOnnx()) {
             return;
         }
@@ -3255,13 +3194,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq(7, outputs.lsize());
         assertFloat(3.0, outputs[0], 1e-5);
         assertFloat(15.0, outputs[6], 1e-5);
-%endif
     }
 
     onnxModelDataFrameTensorOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipOnnx()) {
             return;
         }
@@ -3283,13 +3218,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         list<auto> outputs = output.toList();
         assertFloat(3.0, outputs[0][0], 1e-5);
         assertFloat(11.0, outputs[4][0], 1e-5);
-%endif
     }
 
     onnxModelInputMapColumnOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipOnnx()) {
             return;
         }
@@ -3312,13 +3243,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         list<auto> outputs = result.getColumn("Y");
         assertFloat(3.0, outputs[0], 1e-5);
         assertFloat(15.0, outputs[6], 1e-5);
-%endif
     }
 
     onnxModelInputMapPartialColumnOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipOnnx()) {
             return;
         }
@@ -3341,13 +3268,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         list<auto> outputs = result.getColumn("Y");
         assertFloat(3.0, outputs[0], 1e-5);
         assertFloat(7.0, outputs[2], 1e-5);
-%endif
     }
 
     onnxModelRealMultiInputColumnOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipMultiInputOnnx()) {
             return;
         }
@@ -3372,7 +3295,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertFloat(6.0, outputs[0], 1e-5);
         assertFloat(12.0, outputs[1], 1e-5);
         assertFloat(18.0, outputs[2], 1e-5);
-%endif
     }
 
     onnxModelInputMapFlush() {
@@ -3506,10 +3428,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     stdScalerDataFrameShape() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         DataProviderML::QoreStandardScalerProcessor proc({
             "fields": "x,y",
             "window_size": 3,
@@ -3545,10 +3463,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     stdScalerBufferColumnsDataFrameInputFields() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         DataProviderML::QoreStandardScalerProcessor proc({
             "fields": "x,y",
             "window_size": 3,
@@ -3638,10 +3552,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     mmScalerDataFrameShape() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         DataProviderML::QoreMinMaxScalerProcessor proc({
             "fields": "x,y",
             "window_size": 3,
@@ -4534,9 +4444,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     registryModelOnnxSequenceClassificationPlanOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipSklearnOnnx()) {
             return;
         }
@@ -4588,7 +4495,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(results[0].prediction.hasKey("scores"));
         assertTrue(results[0].prediction.raw_outputs.hasKey("label"));
         assertTrue(results[0].prediction.raw_outputs.hasKey("probabilities"));
-%endif
     }
 
     registryModelOnnxCausalLmPlanOutput() {
@@ -4698,9 +4604,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     registryModelOnnxDataFrameTensorPath() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipOnnx()) {
             return;
         }
@@ -4749,13 +4652,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(abs(9.0 - predictions[3].Y.toFloat()) < 0.01,
             sprintf("expected fourth registry DataFrame prediction ~9.0, got %y",
                 predictions[3].Y));
-%endif
     }
 
     registryModelOnnxDataFrameMultiColumnTensorPath() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipSklearnOnnx()) {
             return;
         }
@@ -4804,13 +4703,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         ML::Tensor probabilities = result.probabilities;
         assertEq((3, 3), probabilities.getShape());
         assertEq("buffer<float32>", probabilities.getBuffer().fullType());
-%endif
     }
 
     registryModelOnnxDataFrameVectorColumnOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipSklearnOnnx()) {
             return;
         }
@@ -4870,13 +4765,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         for (int i = 0; i < 3; ++i) {
             assertFloat(1.0, p0[i].toFloat() + p1[i].toFloat() + p2[i].toFloat(), 1e-5);
         }
-%endif
     }
 
     registryModelOnnxSelectedOutputColumns() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipSklearnOnnx()) {
             return;
         }
@@ -4928,13 +4819,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq("buffer<float32>", result.getColumnBuffer("probabilities_0").fullType());
         assertEq("buffer<float32>", result.getColumnBuffer("probabilities_1").fullType());
         assertEq("buffer<float32>", result.getColumnBuffer("probabilities_2").fullType());
-%endif
     }
 
     registryModelOnnxDataFrameColumnOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipOnnx()) {
             return;
         }
@@ -4980,13 +4867,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         list<auto> outputs = result.getColumn("Y");
         assertFloat(3.0, outputs[0], 1e-5);
         assertFloat(15.0, outputs[6], 1e-5);
-%endif
     }
 
     registryModelOnnxDataFramePartialColumnOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipOnnx()) {
             return;
         }
@@ -5032,13 +4915,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         list<auto> outputs = result.getColumn("Y");
         assertFloat(3.0, outputs[0], 1e-5);
         assertFloat(7.0, outputs[2], 1e-5);
-%endif
     }
 
     registryModelOnnxDataFrameTensorOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipOnnx()) {
             return;
         }
@@ -5083,7 +4962,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         list<auto> outputs = output.toList();
         assertFloat(3.0, outputs[0][0], 1e-5);
         assertFloat(9.0, outputs[3][0], 1e-5);
-%endif
     }
 
     registryModelOnnxDeviceBindingAdapter() {
@@ -5140,9 +5018,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     registryModelOnnxInputMapColumnOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipOnnx()) {
             return;
         }
@@ -5188,13 +5063,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         list<auto> outputs = result.getColumn("Y");
         assertFloat(3.0, outputs[0], 1e-5);
         assertFloat(15.0, outputs[6], 1e-5);
-%endif
     }
 
     registryModelOnnxRealMultiInputColumnOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%else
         if (skipMultiInputOnnx()) {
             return;
         }
@@ -5242,7 +5113,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertFloat(6.0, outputs[0], 1e-5);
         assertFloat(12.0, outputs[1], 1e-5);
         assertFloat(18.0, outputs[2], 1e-5);
-%endif
     }
 
     registryModelOnnxInputMapRowOutput() {
@@ -5312,10 +5182,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     tokenizeDataFrameShape() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         if (skipTokenizerFixture()) {
             return;
         }
@@ -5398,10 +5264,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     chunkTextDataFrameShape() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         if (skipTokenizerFixture()) {
             return;
         }
@@ -5659,10 +5521,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     embedTextDataFrameOnnxShape() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         if (skipTokenEmbeddingOnnx()) {
             return;
         }
@@ -5731,10 +5589,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     embedTextDataFrameOnnxColumnOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         if (skipTokenEmbeddingOnnx()) {
             return;
         }
@@ -5808,10 +5662,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     embedTextSelectedOnnxOutput() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         if (skipTokenEmbeddingOnnx()) {
             return;
         }
@@ -5883,10 +5733,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     rerankTextDataFrameOnnxShape() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         if (skipTokenRerankerOnnx()) {
             return;
         }
@@ -6464,10 +6310,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     # ===================== TextNormalize Tests =====================
 
     textNormalizeDataFrameShape() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         DataProviderML::QoreTextNormalizeProcessor proc({
             "text_field": "body",
             "operations": ("strip_html", "collapse_whitespace", "lowercase"),
@@ -6856,10 +6698,6 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
     }
 
     schemaValidDataFrameEnrichShape() {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-        return;
-%endif
         DataProviderML::QoreSchemaValidationProcessor proc({
             "schema": {
                 "age": {"type": "int", "min": 18},
