@@ -13,7 +13,7 @@
 %exec-class AOTLValuePathCountLimitTest
 
 /*  The AOT format stored the number of lvalue path instructions of a function (counting those of its handler
-    functions) in a u8, which a function with more than 255 of them overflowed; it is a u32 from format version 40
+    functions) in a u8, which a function with more than 255 of them overflowed; it is a u32 from format version 41
     (QORE_AOT_SHARED_HANDLER_VERSION), so qcc compiles such a function and the executable runs it (qore#6127), as does
     every execution mode of the interpreter
 */
