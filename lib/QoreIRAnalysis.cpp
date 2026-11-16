@@ -29,12 +29,12 @@
 #include <qore/intern/typed_hash_decl_private.h>
 
 #include <algorithm>
-#include <optional>
 #include <bit>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <map>
+#include <optional>
 #include <unordered_set>
 
 static bool qore_ir_analysis_cancelled(size_t& count, const char* operation) {

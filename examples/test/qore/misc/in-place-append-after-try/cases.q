@@ -220,6 +220,41 @@ list<int> sub listPushInCatch(list<int> o, bool thr) {
     return l;
 }
 
+#! an object whose destructor throws, so that the store that releases it raises in the middle of a block
+class Thrower {
+    destructor() {
+        throw "DTOR";
+    }
+}
+
+# the store that releases the object throws in the middle of the block, after the shared value was assigned and
+# before the fresh one: the state at the end of the block (fresh) is not the state that the handler sees
+list<int> sub dtorList(list<int> o) {
+    list<int> l = ();
+    auto x = new Thrower();
+    try {
+        l = o;
+        x = 1;
+        l = ();
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    push l, 9;
+    return l;
+}
+
+string sub dtorString(string t) {
+    string s = "abc";
+    auto x = new Thrower();
+    try {
+        s = t;
+        x = 1;
+        s = "fresh";
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    s += "p";
+    return s;
+}
+
 # the type of a value that the catch block changes
 string sub catchChangesType(bool thr) {
     auto x = "str";
@@ -352,6 +387,10 @@ foreach bool thr in ((True, False)) {
     t = src(); printf("twoThrowPoints|%y|first => %y | %y\n", thr, twoThrowPoints(t, thr, False), t);
     t = src(); printf("twoThrowPoints|%y|second => %y | %y\n", thr, twoThrowPoints(t, False, thr), t);
 }
+list<int> dtor_o = lsrc();
+printf("dtorList => %y | %y\n", dtorList(dtor_o), dtor_o);
+string dtor_t = src();
+printf("dtorString => %y | %y\n", dtorString(dtor_t), dtor_t);
 printf("appendAroundTry => %y\n", appendAroundTry(6));
 printf("pushAroundTry => %y\n", pushAroundTry(6));
 printf("plainBuilder => %d\n", plainBuilder(1000).size());

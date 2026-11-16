@@ -52,13 +52,15 @@ class InPlaceAppendAfterTryTest inherits QUnit::Test {
             "catchAssignsConditionally|True|False => \"abck\" | \"TU\"",
             "twoThrowPoints|True|first => \"TUp\" | \"TU\"",
             "twoThrowPoints|True|second => \"freshp\" | \"TU\"",
+            "dtorList => [1, 2, 9] | [1, 2]",
+            "dtorString => \"TUp\" | \"TU\"",
             "appendAroundTry => \"abababababab/-1\"",
             "plainBuilder => 2000",
             "plainListBuilder => 1000",
         );
 
         #! the number of lines that cases.q prints
-        const LineCount = 40;
+        const LineCount = 42;
 
         #! the functions whose appends must stay in place: (function, statistic, count)
         const InPlace = (
@@ -76,8 +78,10 @@ class InPlaceAppendAfterTryTest inherits QUnit::Test {
             ("rethrowFromCatch", "inplace-string"),
             ("throwBetweenAssignments", "inplace-string"),
             ("twoThrowPoints", "inplace-string"),
+            ("dtorString", "inplace-string"),
             ("listCatchAssign", "inplace-push"),
             ("listPushInCatch", "inplace-push"),
+            ("dtorList", "inplace-push"),
         );
     }
 
