@@ -1077,6 +1077,10 @@ static bool qpp_line_starts_with_statement_keyword(const std::string& line) {
     }
     for (const char* k : keywords) {
         if (e == strlen(k) && !line.compare(0, e, k)) {
+            // "enum<...>" and "union<...>" are %Qore types, as in a return type
+            if ((!strcmp(k, "enum") || !strcmp(k, "union")) && e < line.size() && line[e] == '<') {
+                return false;
+            }
             return true;
         }
     }
@@ -1107,7 +1111,15 @@ static bool qpp_line_is_qore_declaration(const std::string& orig_line) {
         return false;
     }
     size_t paren = line.find('(');
-    if (paren == std::string::npos || line.find_first_of("={}:", 0) < paren) {
+    if (paren == std::string::npos || line.find_first_of("={}", 0) < paren) {
+        return false;
+    }
+    // a ':' before the '(' is a label or an initializer list, unless it is a scope ("Qore::Xml::XmlDoc name(")
+    for (size_t i = line.find(':'); i != std::string::npos && i < paren; i = line.find(':', i + 1)) {
+        if (i + 1 < line.size() && line[i + 1] == ':') {
+            ++i;
+            continue;
+        }
         return false;
     }
     // the name before '('
