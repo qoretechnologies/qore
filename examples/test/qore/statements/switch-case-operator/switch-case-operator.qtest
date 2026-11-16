@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the comparison of a switch case with an operator
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SwitchCaseOperatorTest
+
+#! qore#6252: a switch case with an operator matches as the operator does in the condition of an if statement
+/** <tt>case OP x:</tt> matches when <tt>value OP x</tt> is true as the condition of an \c if statement: a buffer
+    compared elementwise gives a buffer, which is true when it is not empty; the AST interpreter compared it as a
+    scalar.  The script next to the test compares each case operator with the if statement for values of many types,
+    with typed and untyped switch values; it runs in every execution mode, on the IR tier and as AOT executables, and
+    its output must be that of the AST interpreter.
+*/
+class SwitchCaseOperatorTest inherits QUnit::Test {
+    public {
+        #! the scripts that run in every execution mode: generated pairs of a switch case and an if statement
+        #! (gen-cases.py), and switch cases in other statement forms
+        const Scripts = ("cases", "extra");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("switch case operator", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        addTestCase("strict boolean semantics", \strictTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        assertTrue(astOutput("extra") =~ /\nmismatches: 0\n$/, "extra: " + astOutput("extra"));
+        string out = astOutput("cases");
+        # every case matches as the if statement does
+        assertTrue(out =~ /\nmismatches: 0\n$/, "mismatches: " + (out =~ x/\nmismatches: ([0-9]+)/)[0]);
+        # a buffer compared elementwise is true when it is not empty, also when its elements are all False
+        assertTrue(out =~ /\nauto\[16\] > 1: 1 1\n/, "buffer > 1");
+        assertTrue(out =~ /\nauto\[17\] > 1: 1 1\n/, "buffer of zeros > 1");
+        assertTrue(out =~ /\nauto\[18\] > 1: 0 0\n/, "empty buffer > 1");
+        assertTrue(out =~ /\nauto\[17\] == 0: 1 1\n/, "buffer of zeros == 0");
+        assertTrue(out =~ /\nbuf\[0\] < 1: 1 1\n/, "typed buffer < 1");
+        # scalars
+        assertTrue(out =~ /\nauto\[2\] > 1: 1 1\n/, "2 > 1");
+        assertTrue(out =~ /^auto\[0\] > 1: 0 0\n/, "0 > 1");
+        assertTrue(out =~ /\nauto\[4\] == 1.5: 1 1\n/, "1.5 == 1.5");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        foreach string script in (Scripts) {
+            string exp = astOutput(script);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                    scriptPath(script))), script + ": " + mode);
+            }
+            assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+                scriptPath(script))), script + ": " + ExecModeHarness::IRTierName);
+        }
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("switch-case-operator-aot-");
+        foreach string script in (Scripts) {
+            string exp = astOutput(script);
+            foreach string opt in ("-O0", "-O3") {
+                string exe = sprintf("%s/%s%s", dir.path, script, opt);
+                string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe,
+                    scriptPath(script)));
+                assertTrue(is_file(exe), sprintf("%s %s: qcc compiles the script: %s", script, opt, out));
+                assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), script + ": AOT " + opt);
+            }
+        }
+    }
+
+    #! a case with == under strict boolean semantics, which only the AST interpreter runs (it cannot be combined
+    #! with %modern, which compiled code needs)
+    private strictTest() {
+        string out = astOutput("strict");
+        assertTrue(out =~ /\nmismatches: 0\n$/, out);
+        # True == True and an empty string == ""
+        assertTrue(out =~ /^strict 0: 1 1 0 0 /, out);
+    }
+
+    private string scriptPath(string script) {
+        return get_script_dir() + "/" + script + ".q";
+    }
+
+    #! the output of a script with the AST interpreter
+    private string astOutput(string script) {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath(script)));
+    }
+}

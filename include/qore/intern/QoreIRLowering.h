@@ -923,6 +923,12 @@ private:
     bool handover_try_active = false;
     //! the value of the return of handover_try_active; invalid for a return without a value
     QoreIRValue handover_try_value;
+    //! the value of the switch statement whose case with an operator is being lowered: the value of the
+    //! QoreSwitchValueOperatorNode in the case's comparison (qore#6252)
+    QoreIRValue switch_case_value;
+    //! the switch expression whose value is switch_case_value: the guaranteed type of the switch value in the case's
+    //! comparison is that of the expression (qore#6252)
+    QoreValue switch_case_expr;
     //! the handler body that lowerHandlerAtExit() lowers inline next: its block gets an exception path of its own for
     //! its locals (see lowerStatementBlock(), #6002)
     const StatementBlock* inline_handler_block = nullptr;

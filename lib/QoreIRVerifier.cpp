@@ -45,6 +45,7 @@
 #include <qore/intern/QoreOperatorNode.h>
 #include <qore/intern/QoreExtractOperatorNode.h>
 #include <qore/intern/QoreSpliceOperatorNode.h>
+#include <qore/intern/CaseNodeWithOperator.h>
 #include <qore/intern/FindNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/QoreDotEvalOperatorNode.h>
@@ -871,6 +872,11 @@ static void collectLocalsFromExpr(const QoreValue& expr,
         return;
     }
 
+    // the value of the switch statement in the comparison of a switch case reads no local (qore#6252)
+    if (dynamic_cast<const QoreSwitchValueOperatorNode*>(node)) {
+        return;
+    }
+
     // Dot eval operator (method call on object): left.method()
     if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         collectLocalsFromExpr(dot->getExpression(), ast_locals, unknown_node_found, ref_created);
@@ -1098,6 +1104,10 @@ static void collectLocalSlotsFromExpr(const QoreValue& expr,
         collectLocalSlotsFromExpr(ext->getOffset(), locals, seen);
         collectLocalSlotsFromExpr(ext->getLength(), locals, seen);
         collectLocalSlotsFromExpr(ext->getNewValue(), locals, seen);
+        return;
+    }
+    // the value of the switch statement in the comparison of a switch case has no operands (qore#6252)
+    if (dynamic_cast<const QoreSwitchValueOperatorNode*>(node)) {
         return;
     }
     if (auto* spl = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {

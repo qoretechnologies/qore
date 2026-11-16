@@ -147,35 +147,57 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreLogicalEqualsOperatorNode::evalCommon(bo
     if (*xsink)
         return QoreValue();
 
-    if (qore_buffer_binary_op_applies(*l, *r)) {
-        return qore_buffer_binary_op(*l, *r,
+    return evalValuesCommon<StrictBoolean>(*l, *r, xsink);
+}
+
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreLogicalEqualsOperatorNode::evalValuesCommon(const QoreValue& l,
+        const QoreValue& r, ExceptionSink* xsink) const {
+    if (qore_buffer_binary_op_applies(l, r)) {
+        return qore_buffer_binary_op(l, r,
             invertFallbackResult() ? QoreBufferBinaryOperation::NotEqual : QoreBufferBinaryOperation::Equal, xsink);
     }
 
-    if (qore_plugin_value_may_have_operation(*l) || qore_plugin_value_may_have_operation(*r)) {
+    if (qore_plugin_value_may_have_operation(l) || qore_plugin_value_may_have_operation(r)) {
         bool plugin_matched = false;
         QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), getPluginOperationName(),
-            QorePluginHelperAbi::BinaryValue, *l, *r, plugin_matched, xsink);
+            QorePluginHelperAbi::BinaryValue, l, r, plugin_matched, xsink);
         if (*xsink || plugin_matched) {
             return plugin_result;
         }
     }
 
+    return evalScalarsCommon<StrictBoolean>(l, r, xsink);
+}
+
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreLogicalEqualsOperatorNode::evalScalarsCommon(const QoreValue& l,
+        const QoreValue& r, ExceptionSink* xsink) const {
     bool result;
     if (pfunc == &QoreLogicalEqualsOperatorNode::floatSoftEqual) {
-        result = l->getAsFloat() == r->getAsFloat();
+        result = l.getAsFloat() == r.getAsFloat();
     } else if (pfunc == &QoreLogicalEqualsOperatorNode::bigIntSoftEqual) {
-        result = l->getAsBigInt() == r->getAsBigInt();
+        result = l.getAsBigInt() == r.getAsBigInt();
     } else if (pfunc == &QoreLogicalEqualsOperatorNode::boolSoftEqual) {
-        result = LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*l) == LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*r);
+        result = LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(l)
+            == LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(r);
     } else {
         if constexpr (StrictBoolean) {
-            result = softEqualLexical(*l, *r, xsink, getSemanticPolicy());
+            result = softEqualLexical(l, r, xsink, getSemanticPolicy());
         } else {
-            result = softEqual(*l, *r, xsink);
+            result = softEqual(l, r, xsink);
         }
     }
     return invertFallbackResult() ? !result : result;
+}
+
+QoreValue QoreLogicalEqualsOperatorNode::evalValues(const QoreValue& l, const QoreValue& r, bool strict_boolean,
+        ExceptionSink* xsink) const {
+    // a buffer and a plugin value are nodes: two inline values are compared as scalars
+    if (!l.isPointer() && !r.isPointer()) {
+        return strict_boolean ? evalScalarsCommon<true>(l, r, xsink) : evalScalarsCommon<false>(l, r, xsink);
+    }
+    return strict_boolean ? evalValuesCommon<true>(l, r, xsink) : evalValuesCommon<false>(l, r, xsink);
 }
 
 int QoreLogicalEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
