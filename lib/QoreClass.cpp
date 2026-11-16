@@ -1921,6 +1921,43 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
     if (!info.exp.isNothing()) {
         // set runtime location
         QoreProgramLocationHelper l(info.loc);
+        // the initializer runs with the parse options of the code that declares the member, as the code of a method
+        // runs with those of its declaration (with the override of a call of module code applied), not with those
+        // in effect when the object is created, which can differ: those of the Program, which a file with
+        // %push-parse-options does not keep, or of the code that creates the object (qore#6292); both the thread's
+        // options and those of the thread-local RuntimeConfig, which the AST interpreter reads, are set, only when they
+        // differ, as objects are created often
+        struct MemberInitParseOptionsHelper {
+            bool swapped = false;
+            const AbstractStatement* old_stmt = nullptr;
+            const QoreProgramLocation* old_loc = nullptr;
+            QoreParseOptions old_po;
+            RuntimeConfig* rc = nullptr;
+            QoreParseOptions old_rc_po;
+
+            DLLLOCAL MemberInitParseOptionsHelper(const QoreMemberInfo& info) {
+                if (!info.has_decl_po) {
+                    return;
+                }
+                RuntimeConfig& trc = rc_get_tls_ref();
+                if (runtime_get_parse_options() == info.decl_pwo.parse_options && trc.getParseOptions() == info.decl_pwo.parse_options) {
+                    return;
+                }
+                swap_runtime_parse_options(info.decl_pwo.parse_options, old_stmt, old_loc, old_po);
+                rc = &trc;
+                old_rc_po = rc->getParseOptions();
+                rc->setParseOptions(info.decl_pwo.parse_options);
+                swapped = true;
+            }
+
+            DLLLOCAL ~MemberInitParseOptionsHelper() {
+                if (!swapped) {
+                    return;
+                }
+                rc->setParseOptions(old_rc_po);
+                update_runtime_statement_location(old_stmt, old_loc, old_po);
+            }
+        } init_po(info);
         // the initializer is evaluated as a statement of its own: a value that it reads or creates is not a
         // temporary of the statement that creates the object (see design/temporary-lifetime.md)
         QoreScopedEvalHolder val(info.exp, true, xsink);
@@ -9129,6 +9166,12 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
     if (exp) {
         printd(5, "QoreMemberInfo::parseInit() this: %p '%s' s'%s' %d\n", this, name, exp.getFullTypeName(),
             exp.getType());
+        // the initializer is initialized with the parse options and warnings of its declaration, as a constant's is:
+        // the class can be initialized when they are no longer in effect (a file with %push-parse-options) (qore#6292)
+        std::optional<ParseWarnHelper> pwh;
+        if (has_decl_po) {
+            pwh.emplace(decl_pwo);
+        }
         QoreParseContext parse_context(&selfid);
         if (parse_init_value(exp, parse_context) && !err) {
             err = -1;
@@ -9183,6 +9226,12 @@ int QoreVarInfo::parseInit(const char* name) {
     val.set(typeInfo);
 
     if (exp) {
+        // the initializer is initialized with the parse options and warnings of its declaration, as a constant's is:
+        // the class can be initialized when they are no longer in effect (a file with %push-parse-options) (qore#6292)
+        std::optional<ParseWarnHelper> pwh;
+        if (has_decl_po) {
+            pwh.emplace(decl_pwo);
+        }
         QoreParseContext parse_context;
         if (parse_init_value(exp, parse_context) && !err) {
             err = -1;
@@ -9285,8 +9334,8 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink, bool defer_pen
         std::optional<LoadTimeParseOptionsHelper> init_po;
         std::optional<StaticVarInitRcParseOptionsHelper> init_rc_po;
         if (has_decl_po) {
-            init_po.emplace(decl_po);
-            init_rc_po.emplace(rc_get_tls_ref(), decl_po);
+            init_po.emplace(decl_pwo.parse_options);
+            init_rc_po.emplace(rc_get_tls_ref(), decl_pwo.parse_options);
         }
         // the initializer is evaluated as a statement of its own (see design/temporary-lifetime.md)
         QoreScopedEvalHolder val(exp, true, &init_xsink);

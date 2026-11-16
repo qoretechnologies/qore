@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class MemberInitParseOptionsTest
+
+#! Member and static variable initializers are initialized and run with the parse options of their declaration
+/** A file with %push-parse-options keeps its options for itself only: the class is initialized, and its objects are
+    created, when they are no longer in effect.  The initializers of its members (qore#6292) and of its static
+    variables (qore#6273) were initialized and ran with the options of the Program after the file, so that a negative
+    index gave no value (RUNTIME-TYPE-ERROR for a typed member) and a range with negative offsets gave an empty list.
+*/
+class MemberInitParseOptionsTest inherits QUnit::Test {
+    public {
+        #! a %modern file with its own options: members and static variables with negative offsets, and the same
+        #! expressions in a function
+        const ModernFile = "%push-parse-options
+%modern
+list<int> sub getl() { return (1, 2, 3); }
+class M {
+    public {
+        int a = getl()[-1];
+        list<int> r = getl()[-2..-1];
+        bool strict = (Program::getCallerCapabilityMask(0) & PO_STRICT_ARGS) != 0;
+        static int sa = getl()[-1];
+        static list<int> sr = getl()[-2..-1];
+    }
+}
+hash<auto> sub modern_new() {
+    M m();
+    return {\"a\": m.a, \"r\": m.r, \"strict\": m.strict, \"sa\": M::sa, \"sr\": M::sr, \"fn\": getl()[-2..-1]};
+}
+";
+
+        #! a legacy file parsed after it into the same Program, which creates an object of the class
+        const LegacyFile = "hash sub legacy_new() {
+    my $m = new M();
+    return (\"a\": $m.a, \"r\": $m.r, \"strict\": $m.strict);
+}
+";
+
+        #! the values that the declaration's options give
+        const Expected = {
+            "a": 3,
+            "r": (2, 3),
+            "strict": True,
+        };
+    }
+
+    constructor() : QUnit::Test("MemberInitParseOptionsTest", "1.0", \ARGV) {
+        addTestCase("initializers with the options of their declaration in every execution mode", \initTest());
+        set_return_value(main());
+    }
+
+    initTest() {
+        # a Program created at run time takes the execution mode that it is given
+        foreach hash<auto> mode in ({"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED}.pairIterator()) {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parsePending(ModernFile, "modern");
+            p.parsePending(LegacyFile, "legacy");
+            p.parseCommit();
+            p.setExecMode(mode.value);
+            hash<auto> h = p.callFunction("modern_new");
+            assertEq(Expected, h{"a", "r", "strict"}, mode.key + ": an object created by the declaring file's code");
+            assertEq(h.fn, h.r, mode.key + ": the member's range has the value that the function computes");
+            assertEq({"sa": 3, "sr": (2, 3)}, h{"sa", "sr"}, mode.key + ": the static variables");
+            assertEq(Expected, p.callFunction("legacy_new"), mode.key + ": an object created by legacy code");
+        }
+    }
+}

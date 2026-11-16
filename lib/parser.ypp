@@ -1634,6 +1634,10 @@ public:
         LexicalSemanticPolicy policy;
         LexicalParsePolicyHelper::capture(policy);
         mi->bindInitializationPolicy(policy, true);
+        // the initializer runs with the parse options of the declaration, as a function does (qore#6292)
+        if (QoreProgram* pgm = getProgram()) {
+            mi->bindDeclarationParseOptions(qore_program_private::getParseWarnOptions(pgm));
+        }
         if (!(mi && mi->parseHasTypeInfo()) && parse_check_parse_option(PO_REQUIRE_TYPES))
             parse_error(*mi->loc, "member '%s' declared without type information, but parse options require type information for all declarations", name);
     }
@@ -1732,7 +1736,7 @@ struct ClassVarInfo : public MemberInfo {
         vi->bindInitializationPolicy(policy);
         // the initializer runs with the parse options of the declaration, as a constant's does (qore#6205)
         if (QoreProgram* pgm = getProgram()) {
-            vi->bindDeclarationParseOptions(qore_program_private::getParseWarnOptions(pgm).parse_options);
+            vi->bindDeclarationParseOptions(qore_program_private::getParseWarnOptions(pgm));
         }
         if (!(vi && vi->parseHasTypeInfo()) && parse_check_parse_option(PO_REQUIRE_TYPES)) {
             parse_error(*vi->loc, "class static variable '%s' declared without type information, but parse options "
