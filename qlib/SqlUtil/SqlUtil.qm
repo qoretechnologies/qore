@@ -3702,10 +3702,34 @@ sql: select 1 as as_int,1.2 as as_float,3.2 as as_numeric,to_timestamp('20150421
         return make_cop(COP_LOWER, column);
     }
 
-    #! returns a @ref ColumnOperatorInfo hash for the \c "distinct" operator with the given argument; returns distinct column values
+    #! returns a @ref ColumnOperatorInfo hash for the \c "distinct" operator with the given argument; returns distinct rows
     /** @par Example:
         @code{.py}
-*list<auto> rows = table.selectRows(("columns": ("id", cop_distinct("name")), "where": ("type": "user")));
+# select distinct name from table where type = 'user'
+*list<auto> rows = table.selectRows({"columns": (cop_distinct("name"),), "where": {"type": "user"}});
+        @endcode
+
+        The operator puts the SQL \c DISTINCT keyword before its column, and \c DISTINCT applies to the whole row that
+        the query selects, not only to that column: with other columns, the query returns the distinct combinations
+        of the values of all its columns.  For example, given the following rows:
+
+        |!name|!id
+        |\c A|\c 0
+        |\c A|\c 1
+        |\c A|\c 0
+
+        the following query returns two rows, <tt>A, 0</tt> and <tt>A, 1</tt>, and not one row per name:
+        @code{.py}
+# select distinct name, id from table
+*list<auto> rows = table.selectRows({"columns": (cop_distinct("name"), "id")});
+        @endcode
+
+        As \c DISTINCT is a keyword of the whole select list, the operator must be the first column of the
+        @ref select_option_columns "columns" option; after another column, it makes invalid SQL.  To count the distinct
+        values of one column, give the operator to @ref cop_count(), which makes <tt>count(distinct column)</tt>:
+        @code{.py}
+# select count(distinct name) as names from table
+*hash<auto> row = table.selectRow({"columns": (cop_as(cop_count(cop_distinct("name")), "names"),)});
         @endcode
 
         @param column the column specification for the column (string name or dot notation for use in joins)
