@@ -241,10 +241,8 @@ struct qore_list_private {
     DLLLOCAL int checkValNativeImpl(ValueHolder& holder, const QoreTypeInfo* vtype, ExceptionSink* xsink) const {
         if (complexTypeInfo) {
             const QoreTypeInfo* vti = QoreTypeInfo::getUniqueReturnComplexList(complexTypeInfo);
-            // an enum value is converted by a list of its base type, whose type is a superset of the enum's type
-            // (qore#6274)
-            if (QoreTypeInfo::hasType(vti) && (holder->isEnum()
-                    || !QoreTypeInfo::superSetOf(vti, vtype ? vtype : holder->getTypeInfo()))) {
+            if (QoreTypeInfo::hasType(vti)
+                    && !QoreTypeInfo::superSetOf(vti, vtype ? vtype : holder->getTypeInfo())) {
                 QoreValue v(holder.release());
                 // the outcome must reflect only this conversion; see ScopedTypeCheckSink.  Without this, a caller
                 // with a long-lived sink silently drops elements after an unrelated error
@@ -274,10 +272,8 @@ struct qore_list_private {
             LexicalSemanticPolicy policy) const {
         if (complexTypeInfo) {
             const QoreTypeInfo* vti = QoreTypeInfo::getUniqueReturnComplexList(complexTypeInfo);
-            // an enum value is converted by a list of its base type, whose type is a superset of the enum's type
-            // (qore#6274)
-            if (QoreTypeInfo::hasType(vti) && (holder->isEnum()
-                    || !QoreTypeInfo::superSetOf(vti, vtype ? vtype : holder->getTypeInfo()))) {
+            if (QoreTypeInfo::hasType(vti)
+                    && !QoreTypeInfo::superSetOf(vti, vtype ? vtype : holder->getTypeInfo())) {
                 QoreValue v(holder.release());
                 // the outcome must reflect only this conversion; see ScopedTypeCheckSink.  Without this, a caller
                 // with a long-lived sink silently drops elements after an unrelated error
