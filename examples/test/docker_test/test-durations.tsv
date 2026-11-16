@@ -2387,7 +2387,7 @@ examples/test/qore/operators/compound-assignment-declared-type/compound-assignme
 examples/test/qore/operators/compound-assignment-narrowed-type/compound-assignment-narrowed-type.qtest	3.0	3.0	5.0	4.0	4.0	-	-	5.0	4.0	2.0
 examples/test/qore/operators/compound-assignment-never-assignable/compound-assignment-never-assignable.qtest	14.0	7.0	12.0	12.0	9.0	-	-	7.0	10.0	8.0
 examples/test/qore/operators/compound-assignment-nothing-union/compound-assignment-nothing-union.qtest	33.0	17.0	-	-	-	-	-	-	30.0	20.0
-examples/test/qore/operators/compound-assignment-or-nothing-plain/CompoundAssignmentOrNothingPlain-1.qtest	2.3	1.7	-	-	-	-	-	-	4.6	1.7
+examples/test/qore/operators/compound-assignment-or-nothing-plain/CompoundAssignmentOrNothingPlain-1.qtest	3.2	2.4	-	-	-	-	-	-	6.4	2.4
 examples/test/qore/operators/compound-assignment-or-nothing-plain/CompoundAssignmentOrNothingPlain-10.qtest	15.1	11.1	-	-	-	-	-	-	30.3	11.0
 examples/test/qore/operators/compound-assignment-or-nothing-plain/CompoundAssignmentOrNothingPlain-11.qtest	14.6	10.7	-	-	-	-	-	-	29.3	10.6
 examples/test/qore/operators/compound-assignment-or-nothing-plain/CompoundAssignmentOrNothingPlain-12.qtest	11.3	8.3	-	-	-	-	-	-	22.8	8.2
