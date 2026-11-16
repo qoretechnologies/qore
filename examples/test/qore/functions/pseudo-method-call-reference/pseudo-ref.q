@@ -34,6 +34,20 @@ class Mem {
     }
 }
 
+#! has a member that holds no code named like a pseudo-method
+class IntMem {
+    public {
+        int hasCallableMethod = 1;
+    }
+}
+
+#! has a code member named like a pseudo-method that holds no value
+class NoCodeMem {
+    public {
+        *code hasCallableMethod;
+    }
+}
+
 #! makes references to pseudo-methods that depend on the class context
 class K {
     private int pm() {
@@ -199,6 +213,17 @@ tryit("named arguments to a pseudo-method of an object, reference", auto sub () 
 });
 tryit("named arguments to a code member named like a pseudo-method, reference", auto sub () {
     return (\mem.className())(x: 1);
+});
+# a member that holds no code leaves the call to the pseudo-method
+IntMem im();
+tryit("named arguments, member holding no code, direct call", auto sub () { return im.hasCallableMethod(method: "x"); });
+tryit("named arguments, member holding no code, reference", auto sub () {
+    return (\im.hasCallableMethod())(method: "x");
+});
+NoCodeMem ncm();
+tryit("member holding no value, reference", auto sub () { return (\ncm.hasCallableMethod())("x"); });
+tryit("named arguments, member holding no value, reference", auto sub () {
+    return (\ncm.hasCallableMethod())(method: "x");
 });
 string hw = "hello world";
 tryit("named arguments, direct call", auto sub () { return hw.substr(start: 6); });

@@ -49,6 +49,10 @@ class context of a direct call: "typed ok; auto ok"
 named arguments to a pseudo-method of an object, direct call: False
 named arguments to a pseudo-method of an object, reference: False
 named arguments to a code member named like a pseudo-method, reference: NAMED-CALL-NOT-SUPPORTED: cannot call Mem::className() with named arguments: it is a member of the class, whose code takes the arguments of the call by position
+named arguments, member holding no code, direct call: False
+named arguments, member holding no code, reference: False
+member holding no value, reference: False
+named arguments, member holding no value, reference: False
 named arguments, direct call: "world"
 named arguments, reference: "world"
 list held by the reference: 2

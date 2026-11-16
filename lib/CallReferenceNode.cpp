@@ -1011,6 +1011,29 @@ QoreFunction* RunTimePseudoMethodReferenceNode::getFunction() const {
     return m ? qore_method_private::get(*m)->getFunction() : nullptr;
 }
 
+//! returns true if the object has a member of the name, accessible in the class context, that holds code, which a call
+//! of the name calls when the class has no method of the name (see qore_class_private::checkMethodForEval())
+static bool qore_object_member_holds_code(const qore_class_private* cls, QoreObject* obj, const char* name,
+        const qore_class_private* class_ctx) {
+    const QoreMemberInfo* mi = cls->runtimeGetMemberInfo(name, class_ctx);
+    if (!mi) {
+        return false;
+    }
+    const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
+    qore_object_private* obj_priv = qore_object_private::get(*obj);
+    QoreAutoVarRWReadLocker al(obj_priv->rml);
+    if (obj_priv->status == OS_DELETED) {
+        return false;
+    }
+    const QoreHashNode* odata = member_class_ctx ? obj_priv->getInternalData(member_class_ctx) : obj_priv->data;
+    if (!odata) {
+        return false;
+    }
+    bool exists = false;
+    QoreValue mv = qore_hash_private::get(*odata)->getKeyValueExistenceIntern(name, exists);
+    return exists && (mv.getType() == NT_FUNCREF || mv.getType() == NT_RUNTIME_CLOSURE);
+}
+
 template <typename F>
 QoreValue RunTimeObjectMethodReferenceNode::evalInContext(F f) const {
     // a direct call of a pseudo-method runs in the class context of its code: a call through the reference runs in
@@ -1113,9 +1136,10 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchNamed(const QoreListNode* ar
         return QoreValue();
     }
     if (!m) {
-        // a member of the name is called before a pseudo-method by a positional call (qore_eval_missing_method()); a
-        // named call of a member holding code is refused, as for a direct call (issue #995)
-        if (cls->runtimeGetMemberInfo(method.c_str(), qc)) {
+        // a member of the name holding code is called before a pseudo-method by a positional call
+        // (qore_eval_missing_method()); a named call of it is refused, as for a direct call; a member holding no code
+        // leaves the call to the pseudo-method (issue #995)
+        if (qore_object_member_holds_code(cls, obj, method.c_str(), qc)) {
             xsink->raiseException("NAMED-CALL-NOT-SUPPORTED", "cannot call %s::%s() with named arguments: it is a "
                 "member of the class, whose code takes the arguments of the call by position", obj->getClassName(),
                 method.c_str());
