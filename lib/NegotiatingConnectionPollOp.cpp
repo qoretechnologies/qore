@@ -544,6 +544,15 @@ void NegotiatingHttpClientConnection::onAlpnDecided(std::string alpn) {
 HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
         int max_concurrent_streams, HttpClientConnectionManagerBase* mgr,
         ExceptionSink* xsink) {
+    // the hand-over is a call on the connection: a close waits for it (drainInFlight()) and then finds it taken over,
+    // or, once it has invalidated the connection, refuses it; without the guard a close that began after the checks
+    // below cancelled the socket while it was handed over (qore#6303)
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot hand over the negotiating connection: it has been closed");
+        return nullptr;
+    }
     if (taken_over) {
         xsink->raiseException("HTTPCLIENT-NEGOTIATE-ERROR",
             "negotiating connection has already been taken over");
@@ -568,6 +577,10 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
             "negotiating connection has no socket to hand off");
         return nullptr;
     }
+#ifdef DEBUG
+    // tests hold the hand-over here, with the method guard held, to order it with a close of the connection
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::Takeover);
+#endif
 
     // The I/O controller has finalized the neg poll op (DECIDED →
     // goalReached returns true, needsCloseOnComplete returns false).

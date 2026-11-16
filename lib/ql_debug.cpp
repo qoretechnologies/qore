@@ -22763,7 +22763,10 @@ bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point) {
     calls on it are refused) and is not closed yet; \c "submit-failed": the submit of a request on a ready connection
     raised an exception, which is about to be classified; \c "finalize": HTTPClient::startPollSendRecv() found an
     ALPN-negotiating connection ready and is about to hand it over to a concrete connection (while it is armed, the
-    request waits for its connection to be ready first)
+    request waits for its connection to be ready first); \c "takeover": the hand-over of an ALPN-negotiating connection
+    checked the connection and holds its method guard; \c "drain-wait": the close of an HTTP client connection has to
+    wait for a call in flight (with a release Counter of 0, it only reports it); \c "swap": a negotiating connection was
+    handed over, and the connection manager is about to replace it in its pool with the connection that took it over
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
 
@@ -22780,6 +22783,12 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::SubmitFailed);
     } else if (!strcmp(name->c_str(), "finalize")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::Finalize);
+    } else if (!strcmp(name->c_str(), "takeover")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Takeover);
+    } else if (!strcmp(name->c_str(), "drain-wait")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::DrainWait);
+    } else if (!strcmp(name->c_str(), "swap")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Swap);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();

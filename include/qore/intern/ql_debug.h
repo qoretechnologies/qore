@@ -251,6 +251,15 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! over to a concrete connection); while this point is armed, the request waits for its connection to be ready
     //! first, so that it reaches the point
     Finalize,
+    //! NegotiatingHttpClientConnection::takeOver() checked the connection and holds its method guard, before it hands
+    //! the socket over to the concrete connection
+    Takeover,
+    //! HttpClientConnectionBase::drainInFlight() has to wait for a call in flight (armed with a release Counter of 0,
+    //! the point only reports that the close waits)
+    DrainWait,
+    //! HttpClientConnectionManagerBase::swapNegotiatedConnection() was given the concrete connection that took over a
+    //! negotiating connection, before it reads the negotiating connection
+    Swap,
     //! the number of hold points
     Count,
 };

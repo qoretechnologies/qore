@@ -49,6 +49,7 @@
 #include <cstdio>
 #include <cstring>
 #include "qore/intern/HttpClientDrainDebug.h"
+#include "qore/intern/ql_debug.h"
 
 #ifdef DEBUG
 std::atomic<void (*)(HttpClientConnectionBase*)> qore_http_manager_new_connection_hook{nullptr};
@@ -1104,6 +1105,10 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnecti
 HttpClientConnectionBase* HttpClientConnectionManagerBase::swapNegotiatedConnection(HttpClientConnectionBase* neg,
         HttpClientConnectionBase* concrete_conn, bool reserve_stream, ExceptionSink* xsink) {
     ReferenceHolder<HttpClientConnectionBase> concrete(concrete_conn, xsink);
+#ifdef DEBUG
+    // tests hold the swap to let a close of the client's connections complete after the hand-over
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::Swap);
+#endif
     HttpClientConnectionBase* concrete_raw = *concrete;
     const std::string key = neg->getPoolKey();
 

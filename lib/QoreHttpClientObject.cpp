@@ -9657,25 +9657,49 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
         return rv.release();
     }
 
+    // `conn` is borrowed from the pool, whose reference a close of the client's connections by another thread can
+    // release at any time (and a failed hand-over below evicts it), so this function holds a reference of its own
+    // until it returns (qore#6303); the release discards any exception, as the other releases here do
+    struct ConnRefGuard {
+        HttpClientConnectionBase* c;
+        ~ConnRefGuard() {
+            ExceptionSink rel_xsink;
+            c->deref(&rel_xsink);
+            rel_xsink.clear();
+        }
+    };
+    conn->ref();
+    ConnRefGuard conn_ref{conn};
+
+#ifdef DEBUG
+    // tests that hold the finalize have the connect wait for its connection to be ready, so that it hands the
+    // connection over itself
+    if (qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint::Finalize)) {
+        ExceptionSink ready_xsink;
+        // a hang guard only: the test's connection becomes ready
+        conn->waitForReadyOrError(60000, &ready_xsink);
+        ready_xsink.clear();
+    }
+#endif
     // If already ready, return a poll op that completes on first continuePoll
     if (conn->isReady()) {
         // Morph a transitional ALPN-negotiating connection so the pool is left
         // holding a usable connection, as the blocking acquire path did.  A
         // failure here is not fatal for a connect-only operation: the connect
         // itself succeeded, so report success and let the pool entry go.
-        //
-        // NOTE: `conn` is borrowed from the pool here (this branch takes no
-        // reference of its own), and finalizeAsyncConnection() drops the pool's
-        // reference to the transitional connection — so `conn` must not be
-        // touched again once it returns something else.
         ExceptionSink fin_xsink;
         HttpClientConnectionBase* concrete =
             mgr.finalizeAsyncConnection(conn, false, &fin_xsink);
         fin_xsink.clear();
         if (concrete) {
-            // finalizeAsyncConnection() returns an owned reference; this branch
-            // only has to give back the acquire's stream slot
-            mgr.releaseConnection(concrete);
+            // finalizeAsyncConnection() returns an owned reference; the acquire's
+            // stream slot is on `conn`: a negotiating connection that was handed
+            // over has given it back already (swapNegotiatedConnection()), and the
+            // concrete connection, which may be pooled by now, has no slot of this
+            // call to give back
+            if (concrete == conn) {
+                mgr.releaseConnection(concrete);
+            }
             ExceptionSink dx;
             concrete->deref(&dx);
             dx.clear();
@@ -9815,19 +9839,14 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
         return err_rv.release();
     }
 
-    // Keep the connection alive until the connect-mode poll op observes the
-    // final READY/CLOSED state.  The manager slot is released immediately; the
-    // poll op only holds a private ref for state/error inspection.
-    conn->ref();
+    // The manager slot is released immediately; the connect-mode poll op takes
+    // a reference of its own to observe the final READY/CLOSED state.
     mgr.releaseConnection(conn);
 
     // Create poll op — no future for connect, just notifier signaling
     QoreEventNotifier* notifier_for_op = *notifier_holder;
     ReferenceHolder<HttpClientConnMgrPollOp> poller(
         new HttpClientConnMgrPollOp(conn, notifier_for_op, mgr_holder, this, self), xsink);
-    ExceptionSink deref_xsink;
-    conn->deref(&deref_xsink);
-    deref_xsink.clear();
 
     SocketPollOperationBase* p = *poller;
     ReferenceHolder<QoreObject> rv(
