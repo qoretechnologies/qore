@@ -34,7 +34,9 @@
     would not reach the wildcard socket once it listens.  Binds without SO_REUSEADDR were refused on both systems.
 
     Every port is assigned by the system to the socket that holds it, so the tests can run at the same time as other
-    programs.
+    programs.  A port that only connections hold can still be bound by number by another program that reuses the
+    address (issue #6322); the test that binds such a port reports that program's listener as the cause instead of
+    failing.
 */
 
 %modern
@@ -42,6 +44,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires ../../../TestInterpreter.qm
+%requires ../../../PortHolder.qm
 
 %exec-class SocketSpecificBindTest
 
@@ -74,6 +77,8 @@ class SocketSpecificBindTest inherits QUnit::Test {
             "interfaces without SO_REUSEADDR", \datagramTest());
         addTestCase("a specific address without SO_REUSEADDR is refused a port held on all interfaces",
             \noReuseTest());
+        addTestCase("a port held by connections that another program binds by number is reported",
+            \takenHeldPortTest());
         set_return_value(main());
     }
 
@@ -117,7 +122,8 @@ class SocketSpecificBindTest inherits QUnit::Test {
     #! returns a port that is free in both address families and held only by connections, and their sockets
     /** A dual-stack listener on a port that the system assigns, which is free in both address families, accepts a
         connection over IPv6 and one over IPv4, and is closed; the connections hold the port in both families, so
-        that the system assigns it to no other socket and refuses binds of it without SO_REUSEADDR.
+        that the system assigns it to no other socket and refuses binds of it without SO_REUSEADDR.  Another program
+        can still bind it by number with SO_REUSEADDR and listen on it (see listenOrder()).
     */
     private static list<auto> connectionHeldPort() {
         Socket l();
@@ -217,37 +223,111 @@ class SocketSpecificBindTest inherits QUnit::Test {
             testSkip("no IPv6 loopback address");
         }
         foreach bool wildcard_first in ((True, False)) {
-            # a socket on ::1, and then a dual-stack socket on :: with the same port, which both systems allow; the
-            # port is free in both address families and held by connections, which no socket that reuses the address
-            # is refused for
+            # the port is free in both address families and held by connections, which no socket that reuses the
+            # address is refused for
             list<auto> held = SocketSpecificBindTest::connectionHeldPort();
             on_exit map $1.close(), held[1..];
-            int port = held[0];
-            list<auto> r = SocketSpecificBindTest::bindTo("::1", port, True);
-            assertEq(Bound, r[0], "the specific address is bound");
-            Socket s = r[1];
-            on_exit s.close();
-            Socket h();
-            on_exit h.close();
+            *string taken = listenOrder(held[0], wildcard_first);
+            if (taken) {
+                testSkip("%s", taken);
+            }
+        }
+    }
+
+    takenHeldPortTest() {
+        if (!ipv6) {
+            testSkip("no IPv6 loopback address");
+        }
+        # another program binds the held port by number on 127.0.0.1, reusing the address, and listens on it, as a
+        # program that restarts a server on a port that it had released does; the bind on all interfaces is then
+        # refused, and that is reported as the cause instead of a failure
+        list<auto> held = SocketSpecificBindTest::connectionHeldPort();
+        on_exit map $1.close(), held[1..];
+        int port = held[0];
+        Socket other();
+        on_exit other.close();
+        try {
+            other.bindINET("127.0.0.1", port, True, AF_INET);
+            if (other.listen()) {
+                throw "SOCKET-LISTEN-ERROR", strerror();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # this system keeps the port from a bind by number while connections hold it
+            other.close();
+            assertEq(NOTHING, listenOrder(port, True), sprintf("the held port %d is bound (%s: %s)", port, ex.err,
+                ex.desc));
+            return;
+        }
+        assertTrue(PortHolder::tcp_listeners(port).val(), sprintf("the listener on port %d is reported", port));
+        assertRegex(sprintf("another program listens on port %d", port), listenOrder(port, True) ?? "<nothing>");
+    }
+
+    #! returns why the held port could not be bound if a socket listens on it
+    /** None of the test's sockets on the port listens when this is called: a listener is another program's, which
+        bound the port by number with SO_REUSEADDR while connections held it; no socket keeps such a bind from the
+        port
+    */
+    private static *string takenBy(int port, string what) {
+        *list<string> listeners = PortHolder::tcp_listeners(port);
+        if (listeners) {
+            return sprintf("another program listens on port %d (%s), which it bound by number while the test held "
+                "the port with connections, as a program that restarts a server on a port that it had released "
+                "does; no socket keeps such a bind from the port (%s)", port, join(", ", listeners), what);
+        }
+    }
+
+    #! binds ::1 and all interfaces with the held port and checks that the socket that listens first holds it
+    /** @return why the port could not be bound if another program listens on it; a failure with no listener on the
+        port fails the test
+    */
+    private *string listenOrder(int port, bool wildcard_first) {
+        # a socket on ::1, and then a dual-stack socket on :: with the same port, which both systems allow
+        list<auto> r = SocketSpecificBindTest::bindTo("::1", port, True);
+        if (r[0] != Bound) {
+            *string taken = SocketSpecificBindTest::takenBy(port, "::1: " + r[0]);
+            if (taken) {
+                return taken;
+            }
+        }
+        assertEq(Bound, r[0], "the specific address is bound");
+        Socket s = r[1];
+        on_exit s.close();
+        Socket h();
+        on_exit h.close();
+        try {
             h.bindINET(NOTHING, port, True);  # all-interfaces: a dual-stack socket on :: shares the port with ::1
-            (Socket first, Socket second) = wildcard_first ? (h, s) : (s, h);
-            string desc = wildcard_first ? "the socket on all interfaces" : "the socket on ::1";
-            assertEq(0, first.listen(), desc + " listens first");
-            assertEq(-1, second.listen(), "the other socket cannot listen after " + desc);
-            assertEq(EADDRINUSE, errno(), "the listen is refused with EADDRINUSE after " + desc);
-            # a client of ::1 reaches the socket that listens; on macOS, a client of ::1 does not reach the socket on
-            # all interfaces while the socket on ::1 is bound
-            if (wildcard_first && PlatformOS == "Darwin") {
-                continue;
+        } catch (hash<ExceptionInfo> ex) {
+            *string taken = SocketSpecificBindTest::takenBy(port, sprintf("all interfaces: %s: %s", ex.err,
+                ex.desc));
+            if (taken) {
+                return taken;
             }
-            Socket c();
-            on_exit c.close();
-            c.connectINET("::1", port, 5s, AF_INET6);
-            *Socket a = first.accept(5s);
-            assertTrue(exists a, "the client reaches " + desc);
-            if (a) {
-                a.close();
+            rethrow;
+        }
+        (Socket first, Socket second) = wildcard_first ? (h, s) : (s, h);
+        string desc = wildcard_first ? "the socket on all interfaces" : "the socket on ::1";
+        if (first.listen()) {
+            string err = strerror();
+            *string taken = SocketSpecificBindTest::takenBy(port, "listen: " + err);
+            if (taken) {
+                return taken;
             }
+            assertTrue(False, desc + " listens first: " + err);
+        }
+        assertEq(-1, second.listen(), "the other socket cannot listen after " + desc);
+        assertEq(EADDRINUSE, errno(), "the listen is refused with EADDRINUSE after " + desc);
+        # a client of ::1 reaches the socket that listens; on macOS, a client of ::1 does not reach the socket on all
+        # interfaces while the socket on ::1 is bound
+        if (wildcard_first && PlatformOS == "Darwin") {
+            return;
+        }
+        Socket c();
+        on_exit c.close();
+        c.connectINET("::1", port, 5s, AF_INET6);
+        *Socket a = first.accept(5s);
+        assertTrue(exists a, "the client reaches " + desc);
+        if (a) {
+            a.close();
         }
     }
 
