@@ -425,33 +425,6 @@ int qore_qf_private::setNonBlockingIo(bool non_blocking, ExceptionSink* xsink) {
     return 0;
 }
 
-int qore_qf_private::readUnicode(ExceptionSink* xsink, int* n_len) const {
-    // the width of a character in any encoding is at most UCHAR_MAX bytes
-    char buf[UCHAR_MAX];
-    assert(charset->getMaxCharWidth() <= static_cast<int>(sizeof(buf)));
-    if (read(buf, 1, xsink) != 1) {
-        return -1;
-    }
-
-    int len = (int)charset->getCharLen(buf, 1);
-    if (len < 0) {
-        len = -len;
-        if (len > static_cast<int>(sizeof(buf))) {
-            return -1;
-        }
-        for (int i = 1; i < len; ++i) {
-            if (read(&buf[i], 1, xsink) != 1) {
-                return -1;
-            }
-        }
-    }
-
-    if (n_len)
-        *n_len = len;
-
-    return qore_encoding_private::get(*charset)->getUnicode(buf);
-}
-
 QoreFile::QoreFile(const QoreEncoding *cs) : priv(new qore_qf_private(cs)) {
 }
 
