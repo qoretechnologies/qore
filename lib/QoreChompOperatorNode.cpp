@@ -47,24 +47,19 @@ int QoreChompOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink*
     return 0;
 }
 
-QoreValue QoreChompOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    LValueHelper val(exp, xsink);
-    if (!val)
-        return QoreValue();
-
-    qore_type_t vtype = val.getType();
-    if (vtype != NT_LIST && vtype != NT_STRING && vtype != NT_HASH)
-        return QoreValue();
-
-    // a string enum lvalue, and a container whose type refuses a plain string in the place of an enum element, refuse
-    // the plain strings that the operation leaves (qore#6195)
-    if ((vtype != NT_STRING && qore_check_in_place_container_strings(val.getValue(), "<chomp operator>", xsink))
-            || val.ensureUnique("<chomp operator>")) {
-        return QoreValue();
+//! Chomps the string elements of the list or hash that \a val holds; returns the number of characters removed, or
+//! -1 if an exception was raised
+/** Out of line, so that the string case of QoreChompOperatorNode::evalImpl() stays as it is
+*/
+static QORE_INTERN_NOINLINE int64 qore_chomp_container(LValueHelper& val, qore_type_t vtype, ExceptionSink* xsink) {
+    // a container whose type refuses a plain string in the place of an enum element refuses the plain strings that
+    // the operation leaves: no element is changed (qore#6195)
+    if (qore_check_in_place_container_strings(val.getValue(), "<chomp operator>", xsink)) {
+        return -1;
     }
-
-    if (vtype == NT_STRING)
-        return val.getValue().get<QoreStringNode>()->chomp();
+    // note that no exception can happen here
+    val.ensureUnique();
+    assert(!*xsink);
 
     int64 count = 0;
 
@@ -97,6 +92,30 @@ QoreValue QoreChompOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
             QoreStringNode* vs = v.get<QoreStringNode>();
             count += vs->chomp();
         }
+    }
+    return count;
+}
+
+QoreValue QoreChompOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    LValueHelper val(exp, xsink);
+    if (!val)
+        return QoreValue();
+
+    qore_type_t vtype = val.getType();
+    if (vtype != NT_LIST && vtype != NT_STRING && vtype != NT_HASH)
+        return QoreValue();
+
+    if (vtype == NT_STRING) {
+        // a string enum lvalue refuses the plain string that the operation leaves (qore#6195)
+        if (val.ensureUnique("<chomp operator>")) {
+            return QoreValue();
+        }
+        return val.getValue().get<QoreStringNode>()->chomp();
+    }
+
+    int64 count = qore_chomp_container(val, vtype, xsink);
+    if (count < 0) {
+        return QoreValue();
     }
     return count;
 }
