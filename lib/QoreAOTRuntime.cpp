@@ -9479,9 +9479,79 @@ static std::string makeAOTRegistrationFailureMessage(const char* label,
     return rv;
 }
 
+//! sets the time zone that the code of an AOT image sets with %set-time-zone on the Program it is loaded into
+/** As the parser does for the directive (qore#6270): the Program's time zone is the zone that its code sets, and a
+    program whose code sets none keeps its time zone.  The image records the zone only if the parser set it, so the
+    code's own %no-locale-control (after the directive) does not apply; the directive is ignored when the restrictions
+    of the loading code have PO_NO_LOCALE_CONTROL (see \a ignore; the parser ignores the directive without an error
+    then, see QoreProgram::parseSetTimeZone())
+
+    @param ignore true if the restrictions of the loading code disallow the directive: PO_NO_LOCALE_CONTROL inherited
+    by a module's Program (the loading Program's options with the module parse option mask, before the module's own
+    domains apply), or that of the host of a script fragment; false for the main program of an executable
+    @param ignore_after_header the same for a directive that the image records after the header of a module: the
+    inherited restrictions without those that the \c domains of the header remove, as for the module's source
+*/
+static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReader& reader, const char* label,
+        std::string& error, bool ignore, bool ignore_after_header) {
+    std::string zone;
+    bool after_module_header;
+    std::string read_error;
+    if (!readTimeZone(reader, zone, after_module_header, read_error)) {
+        error = "AOT time zone metadata read error";
+        if (label && *label) {
+            error += " in ";
+            error += label;
+        }
+        error += ": " + read_error;
+        return false;
+    }
+    if (zone.empty()) {
+        return true;
+    }
+    // a directive after the header of a module is checked against the restrictions that the header's domains leave
+    if (after_module_header ? ignore_after_header : ignore) {
+        return true;
+    }
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    ExceptionSink xsink;
+    if (pp->setTimeZoneDirective(zone.c_str(), &xsink)) {
+        error = "AOT time zone '";
+        error += zone;
+        error += "' cannot be set";
+        if (label && *label) {
+            error += " in ";
+            error += label;
+        }
+        QoreValue ex_desc = xsink.getExceptionDesc();
+        if (ex_desc.getType() == NT_STRING) {
+            QoreStringValueHelper desc_str(ex_desc);
+            if (desc_str->c_str() && *desc_str->c_str()) {
+                error += ": ";
+                error += desc_str->c_str();
+            }
+        }
+        xsink.clear();
+        return false;
+    }
+    return true;
+}
+
+//! replays the directives of an AOT image on the Program it is loaded into
+/** @param ignore_time_zone true if the restrictions of the loading code disallow the time zone that the image sets
+    (see applyAOTTimeZoneToProgram())
+    @param ignore_time_zone_after_header the same for a directive that follows the header of a module, with the
+    restrictions that the header's domains leave; -1 if it is the same as \a ignore_time_zone
+*/
 static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
         const QoreAOTBinaryReader& reader,
-        const char* label, std::string& error) {
+        const char* label, std::string& error, bool ignore_time_zone = false,
+        int ignore_time_zone_after_header = -1) {
+    // the directives of the image also set the Program's time zone (qore#6270)
+    if (!applyAOTTimeZoneToProgram(pgm, reader, label, error, ignore_time_zone,
+            ignore_time_zone_after_header < 0 ? ignore_time_zone : static_cast<bool>(ignore_time_zone_after_header))) {
+        return false;
+    }
     std::vector<AOTModuleCommand> commands;
     std::string read_error;
     if (!readModuleCommands(reader, commands, read_error)) {
@@ -9553,7 +9623,7 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
 
 static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
         const uint8_t* metadata, uint32_t metadata_len,
-        const char* label, std::string& error) {
+        const char* label, std::string& error, bool ignore_time_zone = false) {
     QoreAOTBinaryReader reader;
     std::string read_error;
     if (!reader.open(metadata, metadata_len, read_error)) {
@@ -9565,7 +9635,7 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
         error += ": " + read_error;
         return false;
     }
-    return applyAOTModuleCommandsToProgram(pgm, reader, label, error);
+    return applyAOTModuleCommandsToProgram(pgm, reader, label, error, ignore_time_zone);
 }
 
 //! Decide whether a recorded AOT dependency that failed to load is genuinely unavailable.
@@ -12948,8 +13018,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
 
     {
         std::string cmd_error;
+        QoreProgram* loader_pgm = aot_module_init_loader_pgm ? aot_module_init_loader_pgm : parent_pgm;
         if (!applyAOTModuleCommandsToProgram(local_pgm, metadata,
-                static_cast<uint32_t>(metadata_len), label, cmd_error)) {
+                static_cast<uint32_t>(metadata_len), label, cmd_error,
+                loader_pgm && (qore_program_private::get(*loader_pgm)->pwo.parse_options & PO_NO_LOCALE_CONTROL))) {
             QoreStringNode* err = new QoreStringNodeMaker(
                 "AOT module-command replay error for module '%s' (%s): %s",
                 mod_name ? mod_name : "<unknown>",
@@ -14916,6 +14988,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             QMM.getLoadParseOptionMask()) & ~QoreParseOptions(PO_ENABLE_DEBUG);
     }
     parse_options |= inherited_po;
+    // the time zone that the module sets is ignored if its Program inherits PO_NO_LOCALE_CONTROL, as the parser ignores
+    // the directive in a source module (qore#6270)
+    const bool inherited_no_locale_control = static_cast<bool>(inherited_po & PO_NO_LOCALE_CONTROL);
 
     // Use a local variable for the program being created (see qore_aot_module_init
     // for explanation of nested init overwrite issue)
@@ -15035,7 +15110,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
     {
         std::string cmd_error;
-        if (!applyAOTModuleCommandsToProgram(local_pgm, metadata_reader, module_context_path, cmd_error)) {
+        // a directive after the module header has the restrictions that the header's domains leave, as in its source
+        if (!applyAOTModuleCommandsToProgram(local_pgm, metadata_reader, module_context_path, cmd_error,
+                inherited_no_locale_control, static_cast<bool>(inherited_po & PO_NO_LOCALE_CONTROL))) {
             QoreStringNode* err = new QoreStringNodeMaker(
                 "AOT module-command replay error for module '%s' (%s): %s",
                 mod_name ? mod_name : "<unknown>",
@@ -15658,7 +15735,8 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
     {
         std::string cmd_error;
         if (!applyAOTModuleCommandsToProgram(tpgm, metadata,
-                static_cast<uint32_t>(metadata_len), label, cmd_error)) {
+                static_cast<uint32_t>(metadata_len), label, cmd_error,
+                static_cast<bool>(qore_program_private::get(*tpgm)->pwo.parse_options & PO_NO_LOCALE_CONTROL))) {
             fprintf(stderr, "qore_aot_script_register(%s): "
                 "module-command replay failed: %s\n",
                 label ? label : "<script>", cmd_error.c_str());
@@ -15971,7 +16049,8 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             std::string cmd_error;
             if (!applyAOTModuleCommandsToProgram(tpgm, d.metadata,
                     static_cast<uint32_t>(d.metadata_len),
-                    d.label.c_str(), cmd_error)) {
+                    d.label.c_str(), cmd_error,
+                    static_cast<bool>(qore_program_private::get(*tpgm)->pwo.parse_options & PO_NO_LOCALE_CONTROL))) {
                 fprintf(stderr, "qore_aot_script_end_batch(%s): "
                     "module-command replay failed: %s\n",
                     d.label.c_str(), cmd_error.c_str());

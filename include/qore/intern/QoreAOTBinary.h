@@ -548,6 +548,8 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        command as a string ref) is written natively, so that a default argument with one that is not folded at
 //!        parse time can be written (qore#6229, qore#6302); the earlier formats have no such expressions, and a reader
 //!        of them refuses the kinds
+//!      - an optional TIME_ZONE section (34) records the time zone that the code sets with %set-time-zone and whether
+//!        its directive follows the header of a module (qore#6270)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -756,6 +758,8 @@ enum class QoreAOTSectionType : uint16_t {
     UNRUN_TOP_LEVEL_CODE = 31,  //!< Optional top-level statements of a script fragment's sources that never run
     FUNCTIONAL_DOMAIN    = 32,  //!< The functional domains the code uses (u64 lo + u64 hi); absent if none
     MODULE_DOMAINS       = 33,  //!< The functional domains a user module declares in its header (u64); absent if none
+    TIME_ZONE            = 34,  //!< The time zone set with `%set-time-zone` (StringRef, then u8: 1 if the directive
+                                //!< follows the header of a module); absent if none (qore#6270)
 };
 
 //! Symbol kinds written to the optional SYMBOL_INDEX section.
@@ -2280,6 +2284,17 @@ void serializeModuleDomains(QoreAOTBinaryWriter& writer, int64 dom);
 
 //! Read the functional domains recorded in the MODULE_DOMAINS section; QDOM_DEFAULT if there is no such section
 bool readModuleDomains(const QoreAOTBinaryReader& reader, int64& dom, std::string& error);
+
+//! Serialize the time zone that the code sets with `%set-time-zone` (the directive's argument: a region name or a UTC
+//! offset) into the TIME_ZONE section, with \a after_module_header true if the directive follows the header of a
+//! module, whose \c domains can have removed the restriction the loader checks it against; nothing is written if
+//! \a zone is empty (qore#6270)
+void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header);
+
+//! Read the time zone recorded in the TIME_ZONE section and whether its directive follows the header of a module;
+//! an empty zone if there is no such section
+bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, bool& after_module_header,
+        std::string& error);
 
 //! Serialize producer/build metadata into the BUILD_INFO binary section.
 /** Wire format: u32 count, then count x (StringRef key, StringRef value).

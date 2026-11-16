@@ -1079,6 +1079,16 @@ public:
     // time zone setting for the program
     const AbstractQoreZoneInfo* TZ;
 
+    //! the argument of the last %set-time-zone directive (a region name or a UTC offset), or empty if none
+    /** qcc records it in the AOT image, whose loader sets the time zone of the Program with it (qore#6270)
+    */
+    std::string time_zone_directive;
+    //! true if the %set-time-zone directive recorded in \c time_zone_directive follows the header of a user module,
+    //! whose declared domains have then removed the restrictions they relieve (qore#6270)
+    bool time_zone_after_module_header = false;
+    //! true once the header of a user module has been parsed (QoreUserModuleDefContextHelper::close())
+    bool module_header_closed = false;
+
     // lock serializing changes to sandbox_manager with the lookups that take a reference to it
     QoreThreadLock sm_lock;
 
@@ -4027,16 +4037,36 @@ public:
             return;
         }
 
-        const AbstractQoreZoneInfo *tz = (*zone == '-' || *zone == '+') ? QTZM.findCreateOffsetZone(zone, &xsink) : QTZM.findLoadRegion(zone, &xsink);
-        if (xsink) {
-            assert(!tz);
+        if (setTimeZoneDirective(zone, &xsink)) {
             mergeParseException(xsink);
             return;
+        }
+        // an AOT image records where the directive is, as its loader checks it against the restrictions in effect
+        // there (qore#6270)
+        time_zone_after_module_header = module_header_closed;
+    }
+
+    //! sets the time zone of the Program as the %set-time-zone directive with the given argument does
+    /** @param zone a region name or a UTC offset (starting with \c + or \c -)
+        @param xsink for the exception if the zone cannot be found or created
+
+        @return 0 for OK, -1 if an exception was raised (the time zone is unchanged)
+
+        Also used by the AOT loader for the directive recorded in an AOT image (qore#6270)
+    */
+    DLLLOCAL int setTimeZoneDirective(const char* zone, ExceptionSink* xsink) {
+        const AbstractQoreZoneInfo *tz = (*zone == '-' || *zone == '+') ? QTZM.findCreateOffsetZone(zone, xsink)
+            : QTZM.findLoadRegion(zone, xsink);
+        if (*xsink) {
+            assert(!tz);
+            return -1;
         }
         // note that tz may be NULL in case the offset is UTC (ie 0)
         assert(tz || ((*zone == '-' || *zone == '+')));
 
         TZ = tz;
+        time_zone_directive = zone;
+        return 0;
     }
 
     DLLLOCAL void makeParseException(const QoreProgramLocation& loc, const char* err, QoreStringNode* desc,
