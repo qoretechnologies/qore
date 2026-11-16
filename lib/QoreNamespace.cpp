@@ -4379,17 +4379,50 @@ int qore_ns_private::parseAddPendingEnum(const QoreProgramLocation* loc, const N
 
 int qore_ns_private::parseAddMethodToClass(const QoreProgramLocation* loc, const NamedScope& mname,
         MethodVariantBase* qcmethod, bool static_flag) {
-   std::unique_ptr<MethodVariantBase> v(qcmethod);
+    std::unique_ptr<MethodVariantBase> v(qcmethod);
+    assert(mname.size() > 1);
 
-   unsigned m = 0;
-   QoreClass* oc = mname.size() > 2 ? parseMatchScopedClassWithMethod(mname, m) : parseFindLocalClass(mname[0]);
-   if (!oc) {
-      parse_error(*loc, "cannot find class for to add method '%s' in namespace '%s'", mname.ostr, name.c_str());
-      return -1;
-   }
+    // a root-anchored path ("::NS::C::m") would name a class outside of this namespace, which is not part of the
+    // namespace tree yet
+    if (!*mname[0]) {
+        parse_error(*loc, "out-of-line method '%s()' in namespace '%s::' cannot have a class path anchored at the root "
+            "namespace; give the class path relative to the namespace or define the method outside of it",
+            mname.ostr, name.c_str());
+        return -1;
+    }
 
-   qore_class_private::addUserMethod(*oc, mname.getIdentifier(), v.release(), static_flag);
-   return 0;
+    // the class path is relative to this namespace, as with the scoped functions and constants declared in a
+    // namespace: "C::m" is a method of class C of this namespace, "I::C::m" one of class C of its child namespace I
+    // (issue #6340)
+    QoreNamespace* fns = ns;
+    unsigned i = 0;
+    for (; i < (mname.size() - 2); ++i) {
+        if (!(fns = fns->priv->parseFindLocalNamespace(mname[i]))) {
+            break;
+        }
+    }
+    QoreClass* oc = fns ? fns->priv->findLoadClass(mname[mname.size() - 2]) : nullptr;
+
+    // a path that starts with the name of this namespace is also accepted, for compatibility
+    if (!oc && mname.size() > 2 && name == mname[0]) {
+        unsigned m = 0;
+        oc = parseMatchScopedClassWithMethod(mname, m);
+    }
+
+    if (!oc) {
+        if (!fns) {
+            parse_error(*loc, "cannot find namespace '%s::' in '%s()' as a child of namespace '%s::'", mname[i],
+                mname.ostr, name.c_str());
+        } else {
+            std::string cpath(mname.ostr, strlen(mname.ostr) - strlen(mname.getIdentifier()) - 2);
+            parse_error(*loc, "cannot find class '%s' for method '%s()' in namespace '%s::'", cpath.c_str(),
+                mname.ostr, name.c_str());
+        }
+        return -1;
+    }
+
+    qore_class_private::addUserMethod(*oc, mname.getIdentifier(), v.release(), static_flag);
+    return 0;
 }
 
 void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, QoreModuleContext& qmc) const {
