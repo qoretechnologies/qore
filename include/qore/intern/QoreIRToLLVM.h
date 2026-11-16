@@ -797,6 +797,10 @@ private:
     // discard.temps must not clear them while the local alloca still borrows
     // their owned reference.
     std::unordered_set<llvm::Value*> persistent_cleanup_allocas;
+    //! The function-lifetime slots of the results of the slow paths of the unary operations (see
+    //! emitAnyUnaryFastPath()), which hold NOTHING unless the slow path ran: an exit releases them only if they hold a
+    //! value (issue #6132)
+    std::unordered_set<llvm::Value*> unary_result_slots;
     // Map from local key (LocalVar* as void*) to invoke-result cleanup allocas
     // that hold references to values stored in this local.  Used by
     // UninstantiateLocal to clear cleanup allocas when block-scoped locals
