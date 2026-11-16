@@ -9360,12 +9360,14 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         if (!*xsink) {
             return false;
         }
-        QoreStringValueHelper err(xsink->getExceptionErr());
-        if (!strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR")) {
-            // a connection that another thread is closing (closeConnection() invalidates it before it closes it,
-            // and refuses the submit meanwhile) is reported like a closed one (#5814)
-            return conn->isClosed() || conn->isInvalidated();
+        // the submit failed on a connection that is closed or that another thread is closing (closeConnection()
+        // invalidates it before it closes it, and refuses new calls meanwhile, also the read of its error below): the
+        // connection was closed after it was found ready, whatever the error of the submit (#5814, qore#6111: the
+        // stored error that the submit raised could no longer be matched once the connection was invalidated)
+        if (conn->isClosed() || conn->isInvalidated()) {
+            return true;
         }
+        QoreStringValueHelper err(xsink->getExceptionErr());
         ExceptionSink info_xsink;
         ReferenceHolder<QoreHashNode> err_info(conn->getReferencedErrorInfo(), &info_xsink);
         if (!err_info) {
@@ -9446,6 +9448,12 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
 #endif
         int64_t stream_id = conn->submitRequestWithAction(method, msgpath,
             *nh, data, size, action, xsink);
+#ifdef DEBUG
+        // tests hold a failed submit to order it with a close that invalidates the connection
+        if (*xsink) {
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::SubmitFailed);
+        }
+#endif
         if (closed_submit_error()) {
             // the server closed the connection after it was found ready (the I/O thread marked it closed in the
             // meantime): reported like a connection found closed above

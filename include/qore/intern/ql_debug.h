@@ -244,6 +244,11 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     Submit,
     //! an HTTP/1 or HTTP/2 client connection's closeConnection() has invalidated it and is about to close it
     CloseAfterInvalidate,
+    //! HTTPClient::startPollSendRecv() submitted the request on a ready connection, the submit raised an exception, and
+    //! the error is about to be classified (whether it is reported through the poll operation)
+    SubmitFailed,
+    //! the number of hold points
+    Count,
 };
 
 //! holds the calling thread at the given point if dbg_http_hold_at() armed it (one-shot)

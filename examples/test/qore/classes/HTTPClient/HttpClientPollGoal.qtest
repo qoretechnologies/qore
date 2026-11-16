@@ -123,6 +123,8 @@ class HttpClientPollGoalTest inherits QUnit::Test {
             "fails in its poll operation", \testFailedBeforeMarkedClosed());
         addTestCase("a request on a connection that another thread is closing fails in its poll operation",
             \testConcurrentClose());
+        addTestCase("a request whose submit found the connection closed and that is invalidated before the error is "
+            "classified fails in its poll operation", \testSubmitFailedThenInvalidated());
         addTestCase("a request on a multiplexed connection that another request closes is not closed a second time",
             \testConcurrentCloseMultiplexed());
         set_return_value(main());
@@ -291,6 +293,84 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         # reported as the poll operations report a disconnect
         assertEq("SOCKET-NOT-OPEN", result.ex.err, "the request fails in its poll operation");
         assertFalse(spop.goalReached(), "a request that failed has not reached its goal");
+    }
+
+    #! The server closes a pooled keep-alive connection and the submit of the next request finds it closed (it raises
+    #! the error that the connection's poll operation stored); then another thread closes the client's connections,
+    #! which invalidates the connection (new calls on it are refused, also the read of its error) before the error of
+    #! the submit is classified: the error is reported by the poll operation instead of being raised by
+    #! startPollSendRecv() (qore#6111: the error was matched with the connection's error only, which the invalidated
+    #! connection no longer gave)
+    testSubmitFailedThenInvalidated() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hooks that order the close and the submit are only in debug builds");
+        }
+        OneShotServer srv("keep");
+        on_exit srv.stop();
+        on_exit if (srv.close_now.getCount()) {
+            srv.close_now.dec();
+        }
+        HTTPClient hc({"url": "http://127.0.0.1:" + srv.port});
+        # the first request leaves a ready keep-alive connection in the pool
+        assertEq(200, hc.send(NOTHING, "GET", "/first").status_code);
+
+        Counter marked_closed(1);
+        Counter failed_reached(1);
+        Counter failed_release(1);
+        Counter close_reached(1);
+        Counter close_release(1);
+        # registered before the hooks are armed, so that a failure while arming them leaves none armed
+        on_exit {
+            call_function("dbg_http_hold_clear");
+            call_function("dbg_http_submit_after_close_clear");
+            if (failed_release.getCount()) {
+                failed_release.dec();
+            }
+            if (close_release.getCount()) {
+                close_release.dec();
+            }
+        }
+        # the server closes the connection when the submit is reached, and the submit is made once the I/O thread
+        # marked the connection closed: the submit raises the error that its poll operation stored
+        call_function("dbg_http_submit_after_close", srv.close_now, marked_closed);
+        # the failed submit is held before its error is classified, and the close once it invalidated the connection
+        call_function("dbg_http_hold_at", "submit-failed", failed_reached, failed_release);
+        call_function("dbg_http_hold_at", "close", close_reached, close_release);
+
+        Counter submitted(1);
+        *AbstractPollOperation spop;
+        *hash<ExceptionInfo> start_ex;
+        background sub () {
+            on_exit submitted.dec();
+            try {
+                spop = hc.startPollSendRecv("GET", "/closed");
+            } catch (hash<ExceptionInfo> ex) {
+                start_ex = ex;
+            }
+        }();
+        assertEq(0, failed_reached.waitForZero(HangGuard), "the submit found the connection closed");
+
+        Counter closed(1);
+        background sub () {
+            on_exit closed.dec();
+            hc.disconnect();
+        }();
+        assertEq(0, close_reached.waitForZero(HangGuard), "the close invalidated the connection");
+
+        # the error of the submit is classified while the connection is invalidated
+        failed_release.dec();
+        assertEq(0, submitted.waitForZero(HangGuard), "startPollSendRecv() returned");
+        assertNothing(start_ex, sprintf("startPollSendRecv() raised no exception (%s: %s)", start_ex.err ?? "-",
+            start_ex.desc ?? "-"));
+        # the close completes
+        close_release.dec();
+        assertEq(0, closed.waitForZero(HangGuard), "the close completed");
+
+        if (spop) {
+            hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
+            assertTrue(exists result.ex, "the request fails in its poll operation");
+            assertFalse(spop.goalReached(), "a request that failed has not reached its goal");
+        }
     }
 
     #! A streaming request on a pooled HTTP/2 connection is aborted, which closes the connection (without taking it
