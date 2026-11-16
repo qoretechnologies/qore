@@ -4585,6 +4585,34 @@ endif()
         add_dependencies(docs-lang-final docs-mongodb)
     endif()
 
+    # Tag files imported by each bundled native module's final documentation pass: the modules whose pages the
+    # module's documentation links to (see qore_bundled_module_two_phase_docs()); importing every module's tag
+    # file instead copies all their symbols into the module's search index (#6350).  A missing entry is only a
+    # Doxygen warning in the module's final pass (nothing fails; the reference renders as plain text): add the
+    # module here, do not widen the set.  A name that is not a module fails the configure.  Like
+    # QORE_DOC_EXTRA_MODULES_<mod> for user modules, these are the documentation references.
+    set(QORE_DOC_REFERENCE_MODULES_astparser Qdx QoreApiMetadata QoreCodeFormat)
+    set(QORE_DOC_REFERENCE_MODULES_avro AvroUtil DataProvider)
+    set(QORE_DOC_REFERENCE_MODULES_dataframe DataProvider DataProviderDataFrame SqlUtil ml)
+    set(QORE_DOC_REFERENCE_MODULES_i18n ParseOptions Util)
+    set(QORE_DOC_REFERENCE_MODULES_json A2aClient A2aClientDataProvider A2aServerHandler AgUi Connect DataProvider
+        FhirRestClient FhirRestDataProvider HttpClientIo HttpServerUtil JsonFileDataProvider JsonLd JsonPatch
+        JsonRpcClientIo JsonRpcConnection JsonRpcHandler McpClient McpClientDataProvider McpServerHandler
+        NdjsonDataProvider OneRecordClient OneRecordServerHandler QUnit Schema dataframe)
+    set(QORE_DOC_REFERENCE_MODULES_krb5 Krb5Util)
+    set(QORE_DOC_REFERENCE_MODULES_linenoise DebugLinenoiseCmdLine QoreHistory)
+    set(QORE_DOC_REFERENCE_MODULES_logger_bin Logger Util)
+    set(QORE_DOC_REFERENCE_MODULES_ml DataProvider DataProviderML QoreMLUtils QoreModelRegistry QoreOnnxExport
+        QoreOnnxTools QoreRagUtils QoreTokenizerUtils dataframe tokenizer)
+    set(QORE_DOC_REFERENCE_MODULES_mongodb MongoDbDataProvider)
+    set(QORE_DOC_REFERENCE_MODULES_ocr QoreOcrUtils)
+    set(QORE_DOC_REFERENCE_MODULES_protobuf Connect QoreOnnxExport Schema)
+    set(QORE_DOC_REFERENCE_MODULES_reflection ConnectionProvider DataProvider QoreApiMetadata)
+    set(QORE_DOC_REFERENCE_MODULES_tokenizer DataProviderML QoreTokenizerUtils ml)
+    set(QORE_DOC_REFERENCE_MODULES_yaml Connect ConnectDataProvider DataProvider DataStreamClient
+        DataStreamClientIo DataStreamRequestHandler DataStreamUtil HttpClientIo HttpServerUtil RestClient Schema
+        YamlDocumentDataProvider YamlRpcClient YamlRpcClientIo YamlRpcHandler YamlSchema YamlTagHandler)
+
     # Native module landing pages link back into qlib. Keep their final rendering
     # behind all initial indexes, and keep the shared language index immutable.
     qore_bundled_module_two_phase_docs(

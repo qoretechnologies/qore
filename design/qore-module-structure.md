@@ -406,9 +406,16 @@ into user module symbols:
    concurrent readers see complete, immutable indexes.
 
 Bundled Qore binary modules use `qore_bundled_module_two_phase_docs()` after all
-native and qlib documentation targets are registered. Their final passes import
-every available bundled native and qlib index. The language final pass also keeps
-its initial tag file unchanged.
+native and qlib documentation targets are registered. A native module's final
+pass imports only the indexes listed in `QORE_DOC_REFERENCE_MODULES_<module>` (set
+in `CMakeLists.txt`: the user modules that link to the module's pages and the
+modules its pages `@ref`), because Doxygen copies every symbol of every imported
+tag file into the importing module's search data (about 38 MB per module when all
+were imported, #6350). A missing entry is only a Doxygen warning in the final
+pass (nothing fails; the reference renders as plain text): add the module to the
+list when the final pass reports an unresolved reference; do not import every
+index. A name that is neither a bundled module nor a user module fails configure. The language final pass also
+keeps its initial tag file unchanged.
 
 #### Preferred: `qore_binary_module_two_phase_docs()` macro
 

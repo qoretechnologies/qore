@@ -4385,8 +4385,24 @@ MACRO (QORE_BINARY_MODULE_TWO_PHASE_DOCS _binary_module _user_modules)
 ENDMACRO (QORE_BINARY_MODULE_TWO_PHASE_DOCS)
 
 # Called after all bundled native and user documentation targets are registered.
-# User modules already import the initial native indexes; native final passes
-# import every user/native index, including documentation-only reverse links.
+# User modules already import the initial native indexes. A native module's final
+# pass imports only the tag files of the modules its documentation references,
+# listed in QORE_DOC_REFERENCE_MODULES_<module> (native or user module names: for
+# example user modules that link back to the native module's landing page and
+# the peers its pages @ref); a module without the variable imports no peer tags.
+# Importing every index would copy the symbols of all of them into the module's
+# own search data (about 38 MB per module) and its namespace lists. A missing entry
+# is only a Doxygen warning in the final pass (WARN_IF_DOC_ERROR = YES): nothing
+# fails and the reference renders as plain text, so check the warnings after
+# changing a module's documentation.
+# This is the native-module counterpart of QORE_DOC_EXTRA_MODULES_<module> (user
+# modules: the %requires closure plus these documentation-only extras): the
+# listed modules are the documentation-only references, but a native module has no
+# %requires closure, so the list is its complete peer set.
+# A listed name must be a module passed in _binary_modules or _user_modules, else
+# configure fails (a typo would otherwise silently drop the tag). The one
+# exception is a name in _binary_modules that is not built in this configuration
+# (an optional module such as mongodb), which is skipped.
 function(QORE_BUNDLED_MODULE_TWO_PHASE_DOCS _binary_modules _user_modules)
     if (NOT DOXYGEN_FOUND)
         return()
@@ -4404,14 +4420,24 @@ function(QORE_BUNDLED_MODULE_TWO_PHASE_DOCS _binary_modules _user_modules)
     endforeach()
     foreach(_module IN LISTS _binaries)
         set(_tags "")
-        foreach(_peer IN LISTS _binaries)
-            if (NOT "${_peer}" STREQUAL "${_module}")
+        foreach(_peer IN LISTS QORE_DOC_REFERENCE_MODULES_${_module})
+            if ("${_peer}" STREQUAL "${_module}")
+                message(FATAL_ERROR
+                    "QORE_DOC_REFERENCE_MODULES_${_module} lists the module itself")
+            endif()
+            list(FIND _binaries "${_peer}" _binary_index)
+            list(FIND _user_modules "${_peer}" _user_index)
+            list(FIND _binary_modules "${_peer}" _declared_index)
+            if (NOT _binary_index EQUAL -1)
                 string(APPEND _tags
                     " \"${CMAKE_BINARY_DIR}/modules/${_peer}/${_peer}.tag=../../${_peer}/html\"")
+            elseif (NOT _user_index EQUAL -1)
+                string(APPEND _tags " \"${CMAKE_BINARY_DIR}/${_peer}.tag=../../${_peer}/html\"")
+            elseif (_declared_index EQUAL -1)
+                message(FATAL_ERROR
+                    "QORE_DOC_REFERENCE_MODULES_${_module} lists \"${_peer}\", which is neither a "
+                    "bundled binary module nor a user module")
             endif()
-        endforeach()
-        foreach(_peer IN LISTS _user_modules)
-            string(APPEND _tags " \"${CMAKE_BINARY_DIR}/${_peer}.tag=../../${_peer}/html\"")
         endforeach()
         _qore_add_module_doc_final_pass(docs-${_module}
             "${CMAKE_BINARY_DIR}/modules/${_module}/Doxyfile"
