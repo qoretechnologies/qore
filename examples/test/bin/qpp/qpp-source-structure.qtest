@@ -369,6 +369,32 @@ int TestCls::get8() [flags=CONSTANT] {
             assertRegex("TestCls_get8", r.cpp_text, what + ": the method after them is bound");
         }
 
+        # a doc comment after a line comment ending in a backslash is read by qpp: in C++ it is a comment either way
+        foreach string end in ("", "  ") {
+            r = runQpp(FuncGroupStart + "// path C:\\" + end + "
+//! a test function
+/**
+ */
+int t_spliced(int a) {
+    return a + 1;
+}
+" + GroupEnd);
+            assertSucceeded(r, "a function in a group after a line comment ending in a backslash");
+            assertRegex("t_spliced", r.cpp_text, "the function after the line comment is bound");
+
+            r = runQpp(ClassStart + "
+// see C:\\" + end + "
+//! documented
+/** doc
+*/
+int TestCls::get9() [flags=CONSTANT] {
+    return 1;
+}
+");
+            assertSucceeded(r, "a method after a line comment ending in a backslash");
+            assertRegex("TestCls_get9", r.cpp_text, "the method after the line comment is bound");
+        }
+
         # a method in a raw string literal is copied as it is
         r = runQpp(ClassStart + "
 static const char* s3 = R\"(

@@ -1487,25 +1487,37 @@ static bool qpp_line_is_qore_constant(const std::string& line) {
 */
 class QppCopiedCodeState {
 public:
-    //! returns true if the next line is not compiled code: in a comment, a raw string literal, a literal or comment
-    //! continued with a backslash at the end of a line, or disabled code
+    //! returns true if the next line is not compiled code: in a block comment, a raw string literal or disabled code
+    /** a line that a backslash joins to a line comment or a literal is not: qpp reads its own lines ("//!") there
+    */
     bool inactive() const {
         return inText() || if0_depth;
     }
 
-    //! returns true if the next line is in a comment, a raw string literal, or a literal or comment continued with a
-    //! backslash at the end of a line: a '#' there is not a directive
+    //! returns true if the next line is in a block comment or a raw string literal: a '#' there is not a directive
     bool inText() const {
-        return in_block_comment || !raw_close.empty() || spliced_comment || spliced_literal;
+        return in_block_comment || !raw_close.empty();
+    }
+
+    //! a line that qpp reads itself (a doc comment): a line comment or a literal continued from the line before ends
+    void endSplice() {
+        spliced_comment = false;
+        spliced_literal = 0;
+        escape_pending = false;
     }
 
     //! updates the state with a line of C++ code
     void text(const std::string& line) {
         size_t i = 0;
-        // a line comment continued from the line before (a backslash at its end)
+        // a line comment continued from the line before (a backslash at its end); a line that is a line comment
+        // itself is read as one
         if (spliced_comment) {
-            spliced_comment = spliced(line);
-            return;
+            size_t f = line.find_first_not_of(" \t");
+            if (f == std::string::npos || line.compare(f, 2, "//")) {
+                spliced_comment = spliced(line);
+                return;
+            }
+            spliced_comment = false;
         }
         // a string or character literal continued from the line before; its first character can be escaped by a
         // backslash before the one that joined the lines
@@ -5468,6 +5480,8 @@ public:
 
             if (!line.compare(0, 3, "//!")) {
                 checkBuf(buf);
+                // qpp reads the doc comment
+                copied.endSplice();
 
                 // check for block comment
                 std::string cdoc = line;
@@ -8796,6 +8810,8 @@ protected:
             }
 
             if (!str.compare(0, 3, "//!")) {
+                // qpp reads the doc comment
+                copied.endSplice();
                 if (!str.compare(0, 14, "//! @qppinit: ")) {
                     str.erase(0, 14);
                     log(LL_DEBUG, "got qppinit: %s", str.c_str());
