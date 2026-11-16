@@ -394,7 +394,7 @@ string sub outer(int n) {
     try {
         return prop(n);
     } catch (hash<ExceptionInfo> ex) {
-        log += \"E\";
+        log += \"<caught>\";
     }
     return \"e\";
 }
@@ -447,7 +447,7 @@ for (int c = 0; c < 3; ++c) {
         writeFile(src, getExceptionScript());
         string expected = getExpected(src);
         # the exception leaves the function before the second reassignment in two of the three calls
-        assertEq(2, expected.split("E").size() - 1, "the exception is caught twice");
+        assertEq(2, expected.split("<caught>").size() - 1, "the exception is caught twice");
         foreach string mode in (Modes) {
             assertEq(expected, runMode(src, mode), "exception: " + mode);
         }

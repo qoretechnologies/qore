@@ -37026,17 +37026,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction(cah->helper_name, helper_ft);
             llvm::CallInst* result = builder->CreateCall(helper,
                     {aot_ctx_arg, xsink_arg});
-            // the references of this function's reload storage to the values of the locals that the helper shares
-            // are released before the call, and the locals reloaded right after it, so that a value that the helper
-            // replaces is released at its assignment (qore#6300; see finalizeHandlerSites())
-            // Outlined function-body helpers execute with this function's
-            // runtime frame and can assign shared (non-IR-only) locals
-            // through the TLS stack — mark all reloadable local allocas
-            // stale (no-op for init-expression helpers, which reference no
-            // locals).
+            // Outlined function-body helpers execute with this function's runtime frame and can assign shared
+            // (non-IR-only) locals through the TLS stack, so all reloadable local caches are marked stale after the
+            // call (no-op for init-expression helpers, which reference no locals).  The reload storage of the
+            // helper's shared locals is also released before the call and the locals reloaded after it, so that a
+            // value that the helper replaces is released at its assignment (qore#6300; see
+            // finalizeHandlerSites()); the reloads go after the epoch bump emitted here, so that they leave the
+            // caches fresh and a later read does not reload them again.
             reloadAllLocalsFromRuntime(module, llvm_func);
-            // the eager reloads of the released locals go after the epoch bump above, so that they leave the caches
-            // fresh and a later read does not reload them again
             recordHelperSite(result, cah->shared_locals, &builder->GetInsertBlock()->back());
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
