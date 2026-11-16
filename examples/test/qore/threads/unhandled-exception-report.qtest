@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in a child process of its own binary started without an execution mode
+# test-platform: macos - concurrent writes of threads to standard error and the lock of the stdio stream
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class UnhandledExceptionReportTest
+
+#! The report of an unhandled exception is written whole
+/** The report of an unhandled exception was written in parts (a part for each field of the exception and each
+    element of its call stack), so that the output that other threads wrote to standard error meanwhile, such as
+    the trace of a native compilation (QORE_JIT_TIMING) or the report of the exception of another thread, came
+    between the parts of its lines.  The worker has many threads raise an unhandled exception at the same time;
+    each report must be the lines of its own exception, in order.
+*/
+class UnhandledExceptionReportTest inherits QUnit::Test {
+    public {
+        const Threads = 32;
+        const Runs = 5;
+
+        #! the first line of a report
+        const FirstLine = "^unhandled QORE User exception thrown in TID [0-9]+ at [^()]*\\([^()]*\\) in thr\\(\\) "
+            "\\([^()]*worker\\.q:[0-9]+ \\(Qore user code\\)\\)$";
+
+        #! the line of the exception of a report
+        const ExceptionLine = "^REPORT-([0-9]+): the description of the exception of thread ([0-9]+)$";
+    }
+
+    private {
+        string qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        string worker = get_script_dir() + "/unhandled-exception-report/worker.q";
+    }
+
+    constructor() : Test("UnhandledExceptionReportTest", "1.0", \ARGV) {
+        addTestCase("the reports of concurrent unhandled exceptions are not mixed", \testConcurrentReports());
+        set_return_value(main());
+    }
+
+    testConcurrentReports() {
+        for (int run = 0; run < Runs; ++run) {
+            string out = backquote(sprintf("%s -b %s %d 2>&1", qore_bin, worker, Threads));
+            checkReports(out, run);
+        }
+    }
+
+    #! checks that the output holds the report of the exception of every thread, each one as its own lines in order
+    private checkReports(string out, int run) {
+        list<string> lines = out.split("\n");
+        if (lines && lines.last() == "") {
+            pop lines;
+        }
+        hash<string, bool> seen = {};
+        int i = 0;
+        while (i < lines.size()) {
+            string label = sprintf("run %d, line %d", run, i + 1);
+            if (!assertTrue(regex(lines[i], FirstLine), label + ": the first line of a report: " + lines[i])) {
+                return;
+            }
+            if (!assertTrue(i + 4 < lines.size(), label + ": the report has five lines")) {
+                return;
+            }
+            *list<*string> e = regex_extract(lines[i + 1], ExceptionLine);
+            if (!assertTrue(exists e && e[0] == e[1], label + ": the exception: " + lines[i + 1])) {
+                return;
+            }
+            assertEq("call stack:", lines[i + 2], label);
+            assertRegex("^  2: thr\\(\\) \\([^()]*worker\\.q:[0-9]+ \\(Qore user code\\)\\)$", lines[i + 3], label);
+            assertEq("  1: *thread start*", lines[i + 4], label);
+            assertFalse(seen{e[0]}, label + ": one report for each thread");
+            seen{e[0]} = True;
+            i += 5;
+        }
+        assertEq(Threads, seen.size(), sprintf("run %d: the report of every thread", run));
+    }
+}
