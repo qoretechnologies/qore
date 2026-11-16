@@ -1164,6 +1164,16 @@ static std::string qpp_line_method_class(const std::string& orig_line) {
 //! returns the line with its comments, string literals and character literals replaced by spaces
 /** a comment that starts in the line ends at its end; a digit separator ("1'000") is not a character literal
 */
+//! returns true if the "'" at \a i is a digit separator ("1'000"): the word before it is a number
+static bool qpp_is_digit_separator(const std::string& line, size_t i) {
+    size_t start = i;
+    while (start > 0 && (isalnum(static_cast<unsigned char>(line[start - 1])) || line[start - 1] == '_'
+            || line[start - 1] == '\'')) {
+        --start;
+    }
+    return start < i && isdigit(static_cast<unsigned char>(line[start]));
+}
+
 static std::string qpp_strip_comments_and_literals(const std::string& line) {
     std::string rv = line;
     for (size_t i = 0; i < rv.size(); ++i) {
@@ -1184,7 +1194,7 @@ static std::string qpp_strip_comments_and_literals(const std::string& line) {
             i = e - 1;
             continue;
         }
-        if (c == '"' || (c == '\'' && !(i && isalnum(static_cast<unsigned char>(rv[i - 1]))))) {
+        if (c == '"' || (c == '\'' && !qpp_is_digit_separator(rv, i))) {
             size_t j = i + 1;
             for (; j < rv.size() && rv[j] != c; ++j) {
                 if (rv[j] == '\\') {
@@ -1284,12 +1294,27 @@ static bool qpp_line_has_qpp_only_syntax(const std::string& orig_line) {
             }
         }
     }
-    // attributes after the parameters: ") [" or ")["
-    size_t close = line.rfind(')');
-    if (close != std::string::npos && close > paren) {
-        size_t i = line.find_first_not_of(" \t", close + 1);
-        if (i != std::string::npos && line[i] == '[' && (i + 1 >= line.size() || line[i + 1] != '[')) {
-            return true;
+    // attributes after the parameters: ") [" or ")[" after the ')' that closes the parameter list of the name, with
+    // an attribute name ("[flags=...]", "[dom=...]"), not an array type ("-> int(&)[3]") or a C++ attribute ("[[")
+    {
+        int depth = 0;
+        size_t close = std::string::npos;
+        for (size_t i = paren; i < line.size(); ++i) {
+            if (line[i] == '(') {
+                ++depth;
+            } else if (line[i] == ')' && !--depth) {
+                close = i;
+                break;
+            }
+        }
+        if (close != std::string::npos) {
+            size_t i = line.find_first_not_of(" \t", close + 1);
+            if (i != std::string::npos && line[i] == '[') {
+                size_t j = line.find_first_not_of(" \t", i + 1);
+                if (j != std::string::npos && (isalpha(static_cast<unsigned char>(line[j])) || line[j] == '_')) {
+                    return true;
+                }
+            }
         }
     }
     // a type that only Qore has, in a type position: the word followed by a name
@@ -1371,7 +1396,7 @@ public:
                 continue;
             }
             // a literal; not a digit separator ("1'000")
-            if (c == '"' || (c == '\'' && !(i && isalnum(static_cast<unsigned char>(line[i - 1]))))) {
+            if (c == '"' || (c == '\'' && !qpp_is_digit_separator(line, i))) {
                 // skip the literal
                 for (++i; i < line.size() && line[i] != c; ++i) {
                     if (line[i] == '\\') {

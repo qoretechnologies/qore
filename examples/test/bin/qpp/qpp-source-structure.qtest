@@ -534,6 +534,15 @@ int TestCls::f(int a) // (a) [see note]
 }
 int TestCls::g(const char* s = \"*string x(\") {
 }
+auto TestCls::table() -> int(&)[3] {
+}
+int TestCls::sub(int a)[[deprecated]] {
+}
+static wchar_t quote_char() { return L'\"'; } /* old code:
+int TestCls::old(softint a) {
+}
+*/
+// don't: int TestCls::prose(softint a) {
 ");
         assertSucceeded(r, "methods of a C++ class");
         assertRegex("vector<int>::iterator TestCls::end\\(\\) \\{", r.cpp_text);
@@ -545,6 +554,8 @@ int TestCls::g(const char* s = \"*string x(\") {
 int t_helper(int a) /* softint */ {
 }
 DECLARE(softint)
+static auto get_table() -> int(&)[3] {
+}
 int v = get(a,
 *get_ptr(a,
     b));
