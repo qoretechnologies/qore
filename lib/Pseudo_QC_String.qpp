@@ -163,7 +163,7 @@ int len = str.length();
     @endcode
 
     @note
-    - this operation has <i>O(n)</i> complexity if the string has a multi-byte @ref character_encoding "character encoding", otherwise it is <i>O(1)</i>
+    - this operation has <i>O(n)</i> complexity if the string has a multi-byte @ref character_encoding "character encoding", otherwise it is <i>O(1)</i>; a UTF-8 string remembers the length of the ASCII text at its start, so for a UTF-8 string that only holds ASCII text it is <i>O(1)</i> after the first call, and for any other UTF-8 string it is linear in the number of bytes after the ASCII text at its start
     - equivalent to @ref Qore::length(softstring)
 
     @see
@@ -343,7 +343,9 @@ int <string>::find(softstring substring, softint offset = 0) [const;flags=RET_VA
 /** The \a offset argument and the return value are in character positions; byte offsets may differ from the character offsets with multi-byte @ref character_encoding "character encodings".
 
     @param substring the substring to find in \a str; if the @ref character_encoding "character encoding" of this string does not match \a str, then it will be converted to <em>str</em>'s @ref character_encoding "character encoding" before processing
-    @param offset the starting character position for the search, -1 means start from the end of the string
+    @param offset the starting character position for the search, -1 means start from the end of the string;
+    the substring is found when it lies within the characters from the start of the string up to and including the
+    character at this position, in every @ref character_encoding "character encoding"
 
     @return the character position of a substring within a string, -1 is returned if the substring is not found
 
@@ -1460,7 +1462,8 @@ int uc = str.getUnicode(0);
 
     @param offset the offset in characters in the string; negative numbers give offsets from the end of the string
 
-    @return the Unicode code for the given character offset in the string
+    @return the Unicode code for the given character offset in the string; 0 for an offset at or after the end of the
+    string, in every @ref character_encoding "character encoding"
 
     @since %Qore 0.8.8
 */

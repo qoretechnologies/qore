@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - realpath and symbolic links, libqore.dylib names, DYLD_LIBRARY_PATH and SIP with env(1)
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../QoreBuildTree.qm
+
+%exec-class QoreBuildTreeTest
+
+#! Tests how QoreBuildTree.qm finds the qore under test and its build tree
+/** The paths are resolved when the module is loaded, so a test that changes its working directory still finds them;
+    the child processes run chdir-child.q, which changes its working directory before it asks
+*/
+public class QoreBuildTreeTest inherits QUnit::Test {
+    public {
+        #! the env(1) options that remove the interpreter that the test runner configures, so that a child takes the
+        #! qore that runs it (see TestInterpreter::qore_interpreter())
+        const NoInterpreterEnv = "-u QORE_BIN -u QORE_BINARY -u QORE_EXECUTABLE";
+    }
+
+    private {
+        #! the build tree of the qore that runs this test, if it runs from one
+        *string build;
+        #! the child script
+        string child = realpath(get_script_dir() + "/chdir-child.q");
+    }
+
+    constructor() : Test("QoreBuildTree", "1.0") {
+        build = QoreBuildTree::build_dir();
+        addTestCase("the paths after a change of the working directory", \afterChdir());
+        addTestCase("a relative qore path", \relativeQore());
+        addTestCase("a relative LIBQORE_BINARY", \relativeLibqore());
+        addTestCase("a relative QORE_BINARY", \relativeQoreBinary());
+        addTestCase("a qore outside a build tree", \outsideBuildTree());
+        addTestCase("the source tree of a build tree", \sourceDir());
+        set_return_value(main());
+    }
+
+    afterChdir() {
+        requireBuild();
+        string qore = QoreBuildTree::qore_executable();
+        assertTrue(absolute_path(qore), qore);
+        list<string> candidates = QoreBuildTree::candidates();
+        string cwd = getcwd();
+        on_exit chdir(cwd);
+        TmpDir tmp("qore-build-tree-");
+        assertEq(0, chdir(tmp.path));
+        assertEq(build, QoreBuildTree::build_dir(), "build_dir() after chdir()");
+        assertEq(qore, QoreBuildTree::qore_executable(), "qore_executable() after chdir()");
+        assertEq(candidates, QoreBuildTree::candidates(), "candidates() after chdir()");
+        assertTrue(QoreBuildTree::is_build_dir(build));
+        assertFalse(QoreBuildTree::is_build_dir(tmp.path));
+    }
+
+    #! a qore started with a path relative to the working directory, which the child then changes
+    relativeQore() {
+        requireBuild();
+        TmpDir tmp("qore-build-tree-");
+        hash<string, string> out = runChild(build, NoInterpreterEnv + " -u LIBQORE_BINARY -u QORE_LIBDIR", "./qore",
+            tmp.path);
+        assertEq(build + "/qore", out.qore);
+        assertEq(build, out.build);
+        assertEq(build, out.candidates);
+    }
+
+    #! a qore outside the build tree, with a LIBQORE_BINARY relative to the working directory that the child changes
+    relativeLibqore() {
+        requireBuild();
+        TmpDir tmp("qore-build-tree-");
+        string qore = tmp.path + "/qore";
+        copyQore(qore);
+        string lib = is_file(build + "/libqore.so") ? "libqore.so" : "libqore.dylib";
+        hash<string, string> out = runChild(dirname(build), NoInterpreterEnv + " -u QORE_LIBDIR LIBQORE_BINARY="
+            + quote(basename(build) + "/" + lib), qore, tmp.path);
+        assertEq(realpath(qore), out.qore);
+        assertEq(build, out.build);
+        assertEq(realpath(tmp.path) + ":" + build, out.candidates);
+    }
+
+    #! the interpreter that the test runner configures, relative to the working directory that the child changes
+    relativeQoreBinary() {
+        requireBuild();
+        TmpDir tmp("qore-build-tree-");
+        hash<string, string> out = runChild(dirname(build), NoInterpreterEnv + " -u LIBQORE_BINARY -u QORE_LIBDIR "
+            "QORE_BINARY=" + quote(basename(build) + "/qore"), build + "/qore", tmp.path);
+        assertEq(build + "/qore", out.qore);
+        assertEq(build, out.build);
+        assertEq(build, out.candidates);
+    }
+
+    outsideBuildTree() {
+        requireBuild();
+        TmpDir tmp("qore-build-tree-");
+        string qore = tmp.path + "/qore";
+        copyQore(qore);
+        hash<string, string> out = runChild(tmp.path, NoInterpreterEnv + " -u LIBQORE_BINARY -u QORE_LIBDIR", qore,
+            tmp.path);
+        assertEq(realpath(qore), out.qore);
+        assertEq("NOTHING", out.build);
+        assertEq(realpath(tmp.path), out.candidates);
+    }
+
+    sourceDir() {
+        TmpDir tmp("qore-build-tree-");
+        string fake = tmp.path + "/build";
+        string src = tmp.path + "/src";
+        mkdir(fake);
+        mkdir(src);
+        assertEq(NOTHING, QoreBuildTree::source_dir(fake), "no CMakeCache.txt");
+        File f();
+        f.open2(fake + "/CMakeCache.txt", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("# comment\nCMAKE_BUILD_TYPE:STRING=Debug\nCMAKE_HOME_DIRECTORY:INTERNAL=" + src
+            + "\nCMAKE_INSTALL_PREFIX:PATH=/usr/local\n");
+        f.close();
+        assertEq(realpath(src), QoreBuildTree::source_dir(fake));
+        rmdir(src);
+        assertEq(NOTHING, QoreBuildTree::source_dir(fake), "a source directory that does not exist");
+        if (build) {
+            *string tree = QoreBuildTree::source_dir(build);
+            assertTrue(is_file(tree + "/include/qore/Qore.h"), sprintf("source tree %y of %y", tree, build));
+        }
+    }
+
+    #! skips the test case if the qore under test does not run from a build tree
+    private requireBuild() {
+        if (!build) {
+            testSkip(QoreBuildTree::no_build_dir_message());
+        }
+    }
+
+    #! copies the qore under test outside its build tree, keeping its mode; it finds libqore in the library path
+    private copyQore(string path) {
+        copy_file(QoreBuildTree::qore_executable(), path);
+        assertTrue(is_executable(path), path);
+    }
+
+    #! runs the child script and returns its name=value lines
+    /** @param cwd the working directory that the child starts in
+        @param env the options and variables for env(1) (the library path is set by env, after the shell and env
+        itself, as macOS drops it for the system binaries)
+        @param qore the qore that runs the child
+        @param dir the directory that the child changes to
+    */
+    private hash<string, string> runChild(string cwd, string env, string qore, string dir) {
+        string cmd = sprintf("cd %s && env %s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug %s %s 2>&1",
+            quote(cwd), env, quote(build), quote(build), quote(qore), quote(child), quote(dir));
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, out);
+        hash<string, string> h = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([a-z]+)=(.*)$/);
+            if (parts) {
+                h{parts[0]} = parts[1];
+            } else if (line.val()) {
+                fail(sprintf("unexpected child output: %y", out));
+            }
+        }
+        return h;
+    }
+
+    #! quotes a value for the shell
+    private static string quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

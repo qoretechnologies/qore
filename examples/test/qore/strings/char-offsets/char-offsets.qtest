@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - IBM037, Shift_JIS, UTF-32 and UCS-2 characters decoded with the system iconv
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CharOffsetsTest
+
+#! Regression test for issue #6246: character offsets in UTF-16 and other multi-byte encodings
+/** <string>::getUnicode() at or after the end of a string did not give 0 in every encoding, and rindex()
+    and <string>::rfind() searched a multi-byte string only up to the first byte of the character at the search
+    position, so a match at that position was not found; a negative position before the start gave other results
+    in a multi-byte encoding than in a single-byte one with rindex(), index() and their pseudo-methods.
+
+    CharOffsets.q checks these functions for texts in UTF-8, ISO-8859-1, IBM037, Shift_JIS, UTF-16, UTF-32 and UCS-2
+    at every offset against a reference implementation over the text's code points, and for strings with invalid or
+    truncated characters; its output must be the one in CharOffsets.expected in every execution mode, on the IR tier
+    and in programs compiled with qcc -O0 and -O3.  The native executable qore-char-offsets-test
+    (char_offsets.cpp) checks the C++ API: QoreString::getUnicodePoint() and
+    QoreString::getUnicodePointFromBytePos() at and after the end, and QoreString::concat() with character positions
+    and lengths.
+
+    To check that no byte after a string is read, run the fixture and the native executable under valgrind:
+    @verbatim
+QORE_PCRE2_NO_JIT=1 valgrind --leak-check=full qore -b --exec-mode=ir --enable-debug CharOffsets.q
+valgrind --leak-check=full qore-char-offsets-test
+    @endverbatim
+*/
+class CharOffsetsTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/CharOffsets.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/CharOffsets.expected");
+    }
+
+    constructor() : QUnit::Test("character offsets in multi-byte encodings", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+        addTestCase("native C++ API", \native());
+
+        set_return_value(main());
+    }
+
+    private native() {
+        string native = ENV.QORE_CHAR_OFFSETS_TEST ?? dirname(qore_bin) + "/qore-char-offsets-test";
+        if (!is_file(native)) {
+            testSkip("the native character offset test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote(shellQuote(native) + " 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertTrue(output.startsWith("PASS: "), output);
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/char-offsets";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

@@ -32,6 +32,7 @@
 %requires FsUtil
 %requires Util
 %requires QUnit
+%requires ../../QoreBuildTree.qm
 
 public class DocumentTableTests inherits QUnit::Test {
     private {
@@ -59,13 +60,11 @@ public class DocumentTableTests inherits QUnit::Test {
         set_return_value(main());
     }
 
-    #! Returns the path to a built qpp binary, or @ref nothing if none can be found
+    #! Returns the qpp of the build tree of the qore under test, or @ref nothing if there is none
     private *string findQpp() {
-        foreach string dir in (("build", "build-debug")) {
-            string path = normalize_dir(get_script_dir() + "/../../../../" + dir + "/qpp");
-            if (is_executable(path)) {
-                return path;
-            }
+        *string build = QoreBuildTree::build_dir();
+        if (build && is_executable(build + "/qpp")) {
+            return build + "/qpp";
         }
     }
 

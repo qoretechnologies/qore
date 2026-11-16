@@ -6,13 +6,14 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class AOTHashdeclConstantDefaultsTest
 
 class AOTHashdeclConstantDefaultsTest inherits QUnit::Test {
     private {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
     }
 
     constructor() : QUnit::Test("AOTHashdeclConstantDefaultsTest", "1.0", \ARGV) {
