@@ -7,15 +7,18 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires ../../ExecModeHarness.qm
 %exec-class AsciiStringIndexTest
 
 #! character offsets of ASCII text in UTF-8 strings (issue #6138)
 class AsciiStringIndexTest inherits QUnit::Test {
     private {
-        string binary = ENV.QORE_BINARY ?? QORE_ARGV[0];
-        # QORE_BINARY can be the Debug/Release selector script; native tools belong beside the running binary.
-        string tools_dir = dirname(QORE_ARGV[0]);
+        string binary = TestInterpreter::qore_interpreter();
+        # QORE_BINARY can be the Debug/Release selector script; native tools belong beside the running interpreter
+        # (a compiled test has none: then beside the interpreter that it runs)
+        string tools_dir = dirname(TestInterpreter::running_compiled() ? TestInterpreter::qore_interpreter()
+            : TestInterpreter::own_executable());
         string source = get_script_dir() + "/ascii-string-index.q";
         string scan_source = get_script_dir() + "/ascii-string-index-scan.q";
 
