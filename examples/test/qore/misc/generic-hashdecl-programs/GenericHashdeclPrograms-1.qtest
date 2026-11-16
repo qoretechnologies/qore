@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - JIT code generation and qcc AOT compilation and linking of generic hashdecl code
 # Copyright (c) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 #
