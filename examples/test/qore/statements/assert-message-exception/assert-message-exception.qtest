@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the exception edge of an @assert message
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class AssertMessageExceptionTest
+
+#! Tests that an exception raised while the message of a failed @assert is made is handled in every execution mode
+/** The IR makes the message of a failed @assert with a Sprintf instruction, which had no exception target: an
+    exception raised by the formatting (ENCODING-CONVERSION-ERROR for an argument that cannot be converted to the
+    format's encoding) left the function instead of going to the handler of the try block around the @assert.  A
+    message that is not formatted was converted with a "%s" format, which raised that error for a string that the AST
+    interpreter keeps in its own encoding; a list was formatted as one argument, and any other value was converted as
+    a format's argument is, not as the AST interpreter converts it (ex: 1 for True, nothing for a hash, NOTHING and
+    NULL) (qore#6197).  The worker's output must be that of the AST interpreter in every execution mode and as a
+    qcc-compiled executable.
+*/
+class AssertMessageExceptionTest inherits QUnit::Test {
+    public {
+        #! the output of each round of the worker
+        const Expected = (
+            "format arg: caught ENCODING-CONVERSION-ERROR",
+            "format arg ok: caught ASSERTION-ERROR",
+            "plain message: caught ASSERTION-ERROR",
+            "list message: caught ASSERTION-ERROR: a 1",
+            "int message: caught ASSERTION-ERROR: 2",
+            "bool message: caught ASSERTION-ERROR: True",
+            "hash message: caught ASSERTION-ERROR: hash: (1 member)",
+            "  a : 1",
+            "nothing message: caught ASSERTION-ERROR: <NOTHING>",
+            "null message: caught ASSERTION-ERROR: <NULL>",
+            "date message: caught ASSERTION-ERROR: 2026-01-02 03:04:05.000000 Fri +00:00 (UTC)",
+            "float message: caught ASSERTION-ERROR: 1.5",
+            "format arg loop: 0:ENCODING-CONVERSION-ERROR 1:ENCODING-CONVERSION-ERROR",
+            "format arg out: escaped ENCODING-CONVERSION-ERROR",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+        #! the output expected from the worker
+        list<string> expected = ();
+    }
+
+    constructor() : QUnit::Test("AssertMessageException", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        # a qore run from the PATH has no directory in its name; its library and qcc are found next to it
+        if (qore_bin !~ /\//) {
+            foreach string dir in ((ENV.PATH ?? "").split(":")) {
+                if (dir && is_executable(dir + "/" + qore_bin)) {
+                    qore_bin = dir + "/" + qore_bin;
+                    break;
+                }
+            }
+        }
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        worker = get_script_dir() + DirSep + "assert-message-exception-worker.q";
+
+        # the worker runs every case in three rounds
+        for (int i = 0; i < 3; ++i) {
+            expected += sprintf("round %d", i);
+            expected += Expected;
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b "
+                "--enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, worker)));
+        }
+        checkOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b "
+            "--enable-debug --exec-mode=tiered %s", libqore_dir, libqore_dir, qore_bin, worker)));
+    }
+
+    testCompiled() {
+        if (!is_file(qcc_bin)) {
+            testSkip(sprintf("no qcc binary at %y", qcc_bin));
+        }
+        TmpDir tmp("qore-assert-message-exception-");
+        foreach int level in (0, 3) {
+            string exe = sprintf("%s%sworker-O%d", tmp.path, DirSep, level);
+            # the @assert statements are compiled with the PO_ENABLE_DEBUG parse option, as --enable-debug gives it
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s --parse-option=PO_ENABLE_DEBUG -O%d -o %s %s 2>&1",
+                libqore_dir, qcc_bin, level, exe, worker));
+            assertTrue(is_file(exe), sprintf("compiled the executable at -O%d: %s", level, out));
+            checkOutput(sprintf("executable -O%d", level), ExecModeHarness::run_any(sprintf(
+                "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b", libqore_dir, libqore_dir, exe)));
+        }
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(expected, lines, label + ": " + out);
+    }
+}

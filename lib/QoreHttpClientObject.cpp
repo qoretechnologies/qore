@@ -1841,6 +1841,14 @@ struct qore_httpclient_priv {
     DLLLOCAL QoreObject* startPollConnectConnMgr(ExceptionSink* xsink, QoreObject* self,
             QoreHttpClientObject* client);
 
+    //! Returns a poll operation that reports the error of a failed connection acquire, with the given goal
+    /** The I/O errors of a request are reported by its poll operation, never raised by the start* call: a new
+        connection can fail (its connect is refused, or the server closes it) before the connection manager reserves
+        it, and the acquire then raises the connection's error (qore#6111).
+    */
+    DLLLOCAL QoreObject* deferredAcquireErrorPollOp(ExceptionSink& acquire_xsink, const char* goal, QoreObject* self,
+            ExceptionSink* xsink);
+
     DLLLOCAL QoreObject* startPollSendRecv(ExceptionSink* xsink, QoreObject* self, QoreHttpClientObject* client,
             const QoreString* method, const QoreString* path, const AbstractQoreNode* data_save, const void* data,
             size_t size, const QoreHashNode* headers, const QoreEncoding* enc = nullptr) {
@@ -9227,10 +9235,14 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         return nullptr;
     }
     HttpClientConnectionManagerBase& mgr = *mgr_holder;
+    // the acquire can fail for a new connection whose connect is refused, or that the server closes, before the
+    // manager reserves it: the error is reported through the poll operation, as for a connection found closed below,
+    // and as startPollConnect() does (qore#6111)
+    ExceptionSink acquire_xsink;
     HttpClientConnectionBase* conn = mgr.acquireConnectionAsyncRef(scheme,
-        this_connection.host.c_str(), this_connection.port, xsink);
-    if (!conn || *xsink) {
-        return nullptr;
+        this_connection.host.c_str(), this_connection.port, &acquire_xsink);
+    if (!conn || acquire_xsink) {
+        return deferredAcquireErrorPollOp(acquire_xsink, "received", self, xsink);
     }
     // A strong ref for the duration of this function, taken by the acquire
     // while the pool held the connection (qore#6303).  The pool holds
@@ -9570,6 +9582,60 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     return rv.release();
 }
 
+QoreObject* qore_httpclient_priv::deferredAcquireErrorPollOp(ExceptionSink& acquire_xsink, const char* goal,
+        QoreObject* self, ExceptionSink* xsink) {
+    // an event that is not an exception (such as a thread exit) is not deferred
+    if (acquire_xsink && !acquire_xsink.isException()) {
+        xsink->assimilate(acquire_xsink);
+        return nullptr;
+    }
+    // Extract error info for deferred raising
+    std::string err_str = "SOCKET-CONNECT-ERROR";
+    std::string desc_str = "connection failed";
+    if (acquire_xsink.isException()) {
+        QoreValue err_val = acquire_xsink.getExceptionErr();
+        QoreValue desc_val = acquire_xsink.getExceptionDesc();
+        if (err_val.getType() == NT_STRING) {
+            QoreStringValueHelper err(err_val);
+            err_str = err->c_str();
+        }
+        if (desc_val.getType() == NT_STRING) {
+            QoreStringValueHelper desc(desc_val);
+            desc_str = desc->c_str();
+        }
+    }
+    acquire_xsink.clear();
+
+    ReferenceHolder<QoreEventNotifier> notifier_holder(
+        new QoreEventNotifier(xsink), xsink);
+    if (*xsink || !notifier_holder->isValid()) {
+        return nullptr;
+    }
+    notifier_holder->notify();
+
+    QoreEventNotifier* notifier_raw = *notifier_holder;
+    notifier_raw->ref();
+    ReferenceHolder<QoreObject> notifier_obj(
+        new QoreObject(QC_EVENTNOTIFIER, getProgram(), notifier_raw), xsink);
+
+    // Create poll op with deferred error — constructor refs notifier,
+    // holder will deref its own ref on scope exit
+    QoreEventNotifier* notifier_for_op = *notifier_holder;
+    ReferenceHolder<HttpClientConnMgrPollOp> poller(
+        new HttpClientConnMgrPollOp(err_str.c_str(), desc_str.c_str(),
+            notifier_for_op, this, self), xsink);
+
+    SocketPollOperationBase* p = *poller;
+    ReferenceHolder<QoreObject> rv(
+        new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
+    if (!*xsink) {
+        p->setSelf(*rv);
+        rv->setValue("sock", notifier_obj.release(), xsink);
+        rv->setValue("goal", new QoreStringNode(goal), xsink);
+    }
+    return rv.release();
+}
+
 QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, QoreObject* self,
         QoreHttpClientObject* client) {
     SocketSyncPoll::assertNotOnIoThread("HTTPClient", "startPollConnect", xsink);
@@ -9593,51 +9659,7 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
     HttpClientConnectionBase* conn = mgr.acquireConnectionAsyncRef(scheme,
         this_connection.host.c_str(), this_connection.port, &connect_xsink);
     if (!conn || connect_xsink) {
-        // Extract error info for deferred raising
-        std::string err_str = "SOCKET-CONNECT-ERROR";
-        std::string desc_str = "connection failed";
-        if (connect_xsink.isException()) {
-            QoreValue err_val = connect_xsink.getExceptionErr();
-            QoreValue desc_val = connect_xsink.getExceptionDesc();
-            if (err_val.getType() == NT_STRING) {
-                QoreStringValueHelper err(err_val);
-                err_str = err->c_str();
-            }
-            if (desc_val.getType() == NT_STRING) {
-                QoreStringValueHelper desc(desc_val);
-                desc_str = desc->c_str();
-            }
-        }
-        connect_xsink.clear();
-
-        ReferenceHolder<QoreEventNotifier> notifier_holder(
-            new QoreEventNotifier(xsink), xsink);
-        if (*xsink || !notifier_holder->isValid()) {
-            return nullptr;
-        }
-        notifier_holder->notify();
-
-        QoreEventNotifier* notifier_raw = *notifier_holder;
-        notifier_raw->ref();
-        ReferenceHolder<QoreObject> notifier_obj(
-            new QoreObject(QC_EVENTNOTIFIER, getProgram(), notifier_raw), xsink);
-
-        // Create poll op with deferred error — constructor refs notifier,
-        // holder will deref its own ref on scope exit
-        QoreEventNotifier* notifier_for_op = *notifier_holder;
-        ReferenceHolder<HttpClientConnMgrPollOp> poller(
-            new HttpClientConnMgrPollOp(err_str.c_str(), desc_str.c_str(),
-                notifier_for_op, this, self), xsink);
-
-        SocketPollOperationBase* p = *poller;
-        ReferenceHolder<QoreObject> rv(
-            new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
-        if (!*xsink) {
-            p->setSelf(*rv);
-            rv->setValue("sock", notifier_obj.release(), xsink);
-            rv->setValue("goal", new QoreStringNode("connect"), xsink);
-        }
-        return rv.release();
+        return deferredAcquireErrorPollOp(connect_xsink, "connect", self, xsink);
     }
 
     // the acquire returned a reference of this function, taken while the pool held the connection: a close of the

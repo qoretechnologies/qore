@@ -89,6 +89,7 @@
 #include "qore/intern/ScopedObjectCallNode.h"
 #include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/StaticClassVarRefNode.h"
+#include "qore/intern/BackquoteNode.h"
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
@@ -3452,7 +3453,9 @@ static QoreAOTContext* buildContextFromSlotMap(
 
     // Read the per-function slot map header
     // Format: name_ref(u32), num_locals(u16), num_globals(u16), num_exprs(u16),
-    //         num_stmts(u16), num_regex_cases(u16), num_body_locals(u16), has_unsupported(u8), padding(u8)
+    //         num_stmts(u16), num_regex_cases(u16), num_body_locals(u16), has_unsupported(u8),
+    //         num_lv_path_insts(u8: the low byte of the count, ignored from QORE_AOT_SHARED_HANDLER_VERSION),
+    //         num_lv_path_insts(u32, from QORE_AOT_SHARED_HANDLER_VERSION, #6127)
     // Note: caller has already positioned ptr after the 4-byte entry-size prefix
     /*const char* func_name =*/ reader.readStringRef(ptr);
     uint16_t num_locals = QoreAOTBinaryReader::readU16(ptr);
@@ -3462,7 +3465,17 @@ static QoreAOTContext* buildContextFromSlotMap(
     uint16_t num_regex_cases = QoreAOTBinaryReader::readU16(ptr);
     uint16_t num_body_locals = QoreAOTBinaryReader::readU16(ptr);
     uint8_t has_unsupported = QoreAOTBinaryReader::readU8(ptr);
-    uint8_t num_lv_path_insts = QoreAOTBinaryReader::readU8(ptr); // was: padding byte
+    // the low byte of the count of LValuePath instructions, followed by the full count since the format of shared
+    // handler functions (#6127)
+    int num_lv_path_insts = QoreAOTBinaryReader::readU8(ptr); // was: padding byte
+    if (reader.getHeader().version >= QORE_AOT_SHARED_HANDLER_VERSION) {
+        const uint8_t* count_end = entry_end ? entry_end : end;
+        if (!count_end || count_end < ptr || static_cast<size_t>(count_end - ptr) < sizeof(uint32_t)) {
+            setBuildError("slot map entry ends before its count of LValuePath instructions");
+            return nullptr;
+        }
+        num_lv_path_insts = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
+    }
     int aot_num_regex_cases = qore_aot_func_num_regex_cases(aot_func);
     printd(5, "AOT buildCtx '%s': num_lv_path=%d (from binary)\n", name, num_lv_path_insts);
     QoreEnvironmentValue trace_slot_reg_env_holder("QORE_AOT_TRACE_SLOT_REG");
@@ -3471,7 +3484,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         && (!*trace_slot_reg_env || (name && std::strstr(name, trace_slot_reg_env)));
     if (trace_slot_reg) {
         fprintf(stderr, "[aot-slot-reg] buildCtx '%s': binary(locals=%u globals=%u exprs=%u stmts=%u "
-            "regex=%u body_locals=%u lvpath=%u unsupported=%u) func(locals=%d globals=%d exprs=%d "
+            "regex=%u body_locals=%u lvpath=%d unsupported=%u) func(locals=%d globals=%d exprs=%d "
             "stmts=%d regex=%d)\n", name, num_locals, num_globals, num_exprs, num_stmts,
             num_regex_cases, num_body_locals, num_lv_path_insts, has_unsupported,
             aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts,
@@ -5666,6 +5679,59 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
+            case AOTExprKind::UNARY_PLUS: {
+                std::string operand_err;
+                QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
+                if (!operand_err.empty()) {
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreUnaryPlusOperatorNode(&loc_builtin, operand)));
+                }
+                continue;
+            }
+            case AOTExprKind::BIT_NOT: {
+                std::string operand_err;
+                QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
+                if (!operand_err.empty()) {
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreBinaryNotOperatorNode(&loc_builtin, operand)));
+                }
+                continue;
+            }
+            case AOTExprKind::BACKQUOTE: {
+                const char* cmd = reader.readStringRef(ptr);
+                ctx->exprs[i] = toBitsNB(QoreValue(new BackquoteNode(&loc_builtin, strdup(cmd ? cmd : ""))));
+                continue;
+            }
+            case AOTExprKind::LOG_CMP:
+            case AOTExprKind::LIST_ASSIGN: {
+                std::string left_err;
+                QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
+                std::string right_err;
+                QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
+                if (!left_err.empty() || !right_err.empty()
+                        || (kind == AOTExprKind::LIST_ASSIGN && left.getType() != NT_PARSE_LIST)) {
+                    left.discard(nullptr);
+                    right.discard(nullptr);
+                    has_unsupported = true;
+                } else if (kind == AOTExprKind::LOG_CMP) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreLogicalComparisonOperatorNode(&loc_builtin, left, right)));
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreListAssignmentOperatorNode(&loc_builtin, left, right)));
+                }
+                continue;
+            }
             case AOTExprKind::QUESTION: {
                 std::string cond_err;
                 QoreValue cond = readOneExpr(reader, ptr, end, cond_err, pgm,
@@ -7225,6 +7291,8 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         ExceptionSink* cancel_xsink,
         const std::vector<LocalVar*>* enclosing_body_locals,
         const std::unordered_map<uint32_t, LocalVar*>* container_slot_locals) {
+    // the handler functions read in the IR of the function (#6087)
+    QoreAOTSharedHandlerScope shared_handler_scope;
     const uint8_t* func_start = ptr;
     auto remaining = [&ptr, end]() -> size_t {
         return end >= ptr ? static_cast<size_t>(end - ptr) : 0;
@@ -7927,8 +7995,10 @@ QoreAOTContext* qore_aot_materialize_lazy_function_context(
         return nullptr;
     }
     const uint8_t* entry_end = ptr + entry_size;
-    // name_ref + six slot counts + unsupported/lvalue-path bytes
-    if (entry_size < sizeof(uint32_t) + 6 * sizeof(uint16_t) + 2) {
+    // name_ref + six slot counts + unsupported/lvalue-path bytes, and the u32 count of LValuePath instructions from
+    // QORE_AOT_SHARED_HANDLER_VERSION (#6127)
+    if (entry_size < sizeof(uint32_t) + 6 * sizeof(uint16_t) + 2
+            + (reader.getHeader().version >= QORE_AOT_SHARED_HANDLER_VERSION ? sizeof(uint32_t) : 0)) {
         error = "serialized function slot entry has a truncated header";
         return nullptr;
     }
@@ -9409,9 +9479,79 @@ static std::string makeAOTRegistrationFailureMessage(const char* label,
     return rv;
 }
 
+//! sets the time zone that the code of an AOT image sets with %set-time-zone on the Program it is loaded into
+/** As the parser does for the directive (qore#6270): the Program's time zone is the zone that its code sets, and a
+    program whose code sets none keeps its time zone.  The image records the zone only if the parser set it, so the
+    code's own %no-locale-control (after the directive) does not apply; the directive is ignored when the restrictions
+    of the loading code have PO_NO_LOCALE_CONTROL (see \a ignore; the parser ignores the directive without an error
+    then, see QoreProgram::parseSetTimeZone())
+
+    @param ignore true if the restrictions of the loading code disallow the directive: PO_NO_LOCALE_CONTROL inherited
+    by a module's Program (the loading Program's options with the module parse option mask, before the module's own
+    domains apply), or that of the host of a script fragment; false for the main program of an executable
+    @param ignore_after_header the same for a directive that the image records after the header of a module: the
+    inherited restrictions without those that the \c domains of the header remove, as for the module's source
+*/
+static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReader& reader, const char* label,
+        std::string& error, bool ignore, bool ignore_after_header) {
+    std::string zone;
+    bool after_module_header;
+    std::string read_error;
+    if (!readTimeZone(reader, zone, after_module_header, read_error)) {
+        error = "AOT time zone metadata read error";
+        if (label && *label) {
+            error += " in ";
+            error += label;
+        }
+        error += ": " + read_error;
+        return false;
+    }
+    if (zone.empty()) {
+        return true;
+    }
+    // a directive after the header of a module is checked against the restrictions that the header's domains leave
+    if (after_module_header ? ignore_after_header : ignore) {
+        return true;
+    }
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    ExceptionSink xsink;
+    if (pp->setTimeZoneDirective(zone.c_str(), &xsink)) {
+        error = "AOT time zone '";
+        error += zone;
+        error += "' cannot be set";
+        if (label && *label) {
+            error += " in ";
+            error += label;
+        }
+        QoreValue ex_desc = xsink.getExceptionDesc();
+        if (ex_desc.getType() == NT_STRING) {
+            QoreStringValueHelper desc_str(ex_desc);
+            if (desc_str->c_str() && *desc_str->c_str()) {
+                error += ": ";
+                error += desc_str->c_str();
+            }
+        }
+        xsink.clear();
+        return false;
+    }
+    return true;
+}
+
+//! replays the directives of an AOT image on the Program it is loaded into
+/** @param ignore_time_zone true if the restrictions of the loading code disallow the time zone that the image sets
+    (see applyAOTTimeZoneToProgram())
+    @param ignore_time_zone_after_header the same for a directive that follows the header of a module, with the
+    restrictions that the header's domains leave; -1 if it is the same as \a ignore_time_zone
+*/
 static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
         const QoreAOTBinaryReader& reader,
-        const char* label, std::string& error) {
+        const char* label, std::string& error, bool ignore_time_zone = false,
+        int ignore_time_zone_after_header = -1) {
+    // the directives of the image also set the Program's time zone (qore#6270)
+    if (!applyAOTTimeZoneToProgram(pgm, reader, label, error, ignore_time_zone,
+            ignore_time_zone_after_header < 0 ? ignore_time_zone : static_cast<bool>(ignore_time_zone_after_header))) {
+        return false;
+    }
     std::vector<AOTModuleCommand> commands;
     std::string read_error;
     if (!readModuleCommands(reader, commands, read_error)) {
@@ -9483,7 +9623,7 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
 
 static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
         const uint8_t* metadata, uint32_t metadata_len,
-        const char* label, std::string& error) {
+        const char* label, std::string& error, bool ignore_time_zone = false) {
     QoreAOTBinaryReader reader;
     std::string read_error;
     if (!reader.open(metadata, metadata_len, read_error)) {
@@ -9495,7 +9635,7 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
         error += ": " + read_error;
         return false;
     }
-    return applyAOTModuleCommandsToProgram(pgm, reader, label, error);
+    return applyAOTModuleCommandsToProgram(pgm, reader, label, error, ignore_time_zone);
 }
 
 //! Decide whether a recorded AOT dependency that failed to load is genuinely unavailable.
@@ -12878,8 +13018,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
 
     {
         std::string cmd_error;
+        QoreProgram* loader_pgm = aot_module_init_loader_pgm ? aot_module_init_loader_pgm : parent_pgm;
         if (!applyAOTModuleCommandsToProgram(local_pgm, metadata,
-                static_cast<uint32_t>(metadata_len), label, cmd_error)) {
+                static_cast<uint32_t>(metadata_len), label, cmd_error,
+                loader_pgm && (qore_program_private::get(*loader_pgm)->pwo.parse_options & PO_NO_LOCALE_CONTROL))) {
             QoreStringNode* err = new QoreStringNodeMaker(
                 "AOT module-command replay error for module '%s' (%s): %s",
                 mod_name ? mod_name : "<unknown>",
@@ -14846,6 +14988,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             QMM.getLoadParseOptionMask()) & ~QoreParseOptions(PO_ENABLE_DEBUG);
     }
     parse_options |= inherited_po;
+    // the time zone that the module sets is ignored if its Program inherits PO_NO_LOCALE_CONTROL, as the parser ignores
+    // the directive in a source module (qore#6270)
+    const bool inherited_no_locale_control = static_cast<bool>(inherited_po & PO_NO_LOCALE_CONTROL);
 
     // Use a local variable for the program being created (see qore_aot_module_init
     // for explanation of nested init overwrite issue)
@@ -14965,7 +15110,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
     {
         std::string cmd_error;
-        if (!applyAOTModuleCommandsToProgram(local_pgm, metadata_reader, module_context_path, cmd_error)) {
+        // a directive after the module header has the restrictions that the header's domains leave, as in its source
+        if (!applyAOTModuleCommandsToProgram(local_pgm, metadata_reader, module_context_path, cmd_error,
+                inherited_no_locale_control, static_cast<bool>(inherited_po & PO_NO_LOCALE_CONTROL))) {
             QoreStringNode* err = new QoreStringNodeMaker(
                 "AOT module-command replay error for module '%s' (%s): %s",
                 mod_name ? mod_name : "<unknown>",
@@ -15588,7 +15735,8 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
     {
         std::string cmd_error;
         if (!applyAOTModuleCommandsToProgram(tpgm, metadata,
-                static_cast<uint32_t>(metadata_len), label, cmd_error)) {
+                static_cast<uint32_t>(metadata_len), label, cmd_error,
+                static_cast<bool>(qore_program_private::get(*tpgm)->pwo.parse_options & PO_NO_LOCALE_CONTROL))) {
             fprintf(stderr, "qore_aot_script_register(%s): "
                 "module-command replay failed: %s\n",
                 label ? label : "<script>", cmd_error.c_str());
@@ -15901,7 +16049,8 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             std::string cmd_error;
             if (!applyAOTModuleCommandsToProgram(tpgm, d.metadata,
                     static_cast<uint32_t>(d.metadata_len),
-                    d.label.c_str(), cmd_error)) {
+                    d.label.c_str(), cmd_error,
+                    static_cast<bool>(qore_program_private::get(*tpgm)->pwo.parse_options & PO_NO_LOCALE_CONTROL))) {
                 fprintf(stderr, "qore_aot_script_end_batch(%s): "
                     "module-command replay failed: %s\n",
                     d.label.c_str(), cmd_error.c_str());

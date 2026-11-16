@@ -3015,6 +3015,13 @@ if (str)
     Sets the time zone for the current program from a UTC offset (with format \c "+/-00[:00[:00]]"; \c ":" characters
     are optional) or a time zone region name (ex: \c "Europe/Prague").
 
+    A program or module compiled ahead of time with \c qcc records the time zone that its code sets, also with the
+    \c -z option of <tt>qore --compile</tt>, and sets it when it is loaded, as the directive does when its source is
+    parsed: a module's time zone is not set when the restrictions of the code loading it disallow locale control
+    (@ref Qore::PO_NO_LOCALE_CONTROL "PO_NO_LOCALE_CONTROL") where the directive is, which for a directive after the
+    header of a module whose \c domains declare the locale control domain are the restrictions that the
+    declaration leaves.
+
     <hr>
     @section strict-args %strict-args
 

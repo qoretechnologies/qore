@@ -316,8 +316,14 @@ hash<string, string> sub check() {
 
     {
         # short string enum values (held inline) in containers
-        list<auto> l = (ES::PadShort, ES::LineShort);
-        hash<auto> h = {"a": ES::PadShort, "b": ES::LineShort};
+        # the containers are built untyped: a literal of enum values alone has an enum element type, which refuses
+        # the plain strings that trim and chomp leave (qore#6195)
+        list<auto> l = ();
+        push l, ES::PadShort;
+        push l, ES::LineShort;
+        hash<auto> h = {};
+        h.a = ES::PadShort;
+        h.b = ES::LineShort;
         hash<auto> m = {};
         m.a = ES::PadShort;
         m.b = ES::LineShort;
@@ -326,6 +332,47 @@ hash<string, string> sub check() {
         trim m.a;
         chomp m.b;
         r."container-short" = sprintf("%y %y %y", l, h, m);
+    }
+
+    {
+        # a literal of enum values alone has an enum element type, which refuses the plain strings that trim and chomp
+        # would leave: they raise RUNTIME-TYPE-ERROR and leave the container and its enum values unchanged (qore#6195);
+        # a short value (held inline) and a long one in each container
+        list<string> res = ();
+        list<auto> lt = (ES::PadShort, ES::Padded);
+        try {
+            trim lt;
+            push res, "trim list: no error";
+        } catch (hash<ExceptionInfo> ex) {
+            push res, sprintf("trim list: %s: %s", ex.err, ex.desc);
+        }
+        push res, sprintf("%y %s %s", lt, lt[0].fullType(), lt[1].fullType());
+        list<auto> lc = (ES::LineShort, ES::Line);
+        try {
+            chomp lc;
+            push res, "chomp list: no error";
+        } catch (hash<ExceptionInfo> ex) {
+            push res, sprintf("chomp list: %s: %s", ex.err, ex.desc);
+        }
+        push res, sprintf("%y %s %s", lc, lc[0].fullType(), lc[1].fullType());
+        hash<auto> ht = {"a": ES::PadShort, "b": ES::Padded};
+        try {
+            trim ht;
+            push res, "trim hash: no error";
+        } catch (hash<ExceptionInfo> ex) {
+            push res, sprintf("trim hash: %s: %s", ex.err, ex.desc);
+        }
+        push res, sprintf("%y %s %s", ht, ht.a.fullType(), ht.b.fullType());
+        hash<auto> hc = {"a": ES::LineShort, "b": ES::Line};
+        try {
+            chomp hc;
+            push res, "chomp hash: no error";
+        } catch (hash<ExceptionInfo> ex) {
+            push res, sprintf("chomp hash: %s: %s", ex.err, ex.desc);
+        }
+        push res, sprintf("%y %s %s", hc, hc.a.fullType(), hc.b.fullType());
+        # the worker prints one line per check
+        r."container-literal-enum" = replace(res.join(" | "), "\n", "\\n");
     }
 
     # object members

@@ -76,6 +76,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QC_Expression.h"
 #include "qore/intern/QC_QoreParseOptions.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
@@ -17990,6 +17991,150 @@ static QoreValue f_dbg_signal_reassign_release(const QoreListNode* params, Runti
     return rv.release();
 }
 
+namespace {
+//! the gate of dbg_arm_parse_start_gate() (issue #6206)
+struct QoreDbgParseStartGate {
+    std::mutex m;
+    std::condition_variable cv;
+    //! the Program whose next parse stops; cleared when a parse reaches the gate
+    const QoreProgram* pgm = nullptr;
+    //! true if the parse fails at the gate
+    bool fail = false;
+    bool reached = false;
+    bool release = false;
+    //! set by dbg_abort_parse_start_gate() when the parse ends without reaching the gate
+    bool aborted = false;
+};
+
+QoreDbgParseStartGate parse_start_gate;
+}
+
+int qore_dbg_parse_start_gate(const QoreProgram* pgm, ExceptionSink* xsink) {
+    std::unique_lock<std::mutex> ul(parse_start_gate.m);
+    if (!parse_start_gate.pgm || parse_start_gate.pgm != pgm) {
+        return 0;
+    }
+    parse_start_gate.pgm = nullptr;
+    parse_start_gate.reached = true;
+    parse_start_gate.cv.notify_all();
+    parse_start_gate.cv.wait(ul, [] { return parse_start_gate.release; });
+    if (parse_start_gate.fail) {
+        xsink->raiseException("DBG-PARSE-START-GATE", "the parse failed at the gate armed by "
+            "dbg_arm_parse_start_gate()");
+        return -1;
+    }
+    return 0;
+}
+
+namespace {
+//! the Program whose next parse throws a C++ exception (see dbg_parse_with_cxx_exception())
+std::atomic<const QoreProgram*> parse_throw_pgm{nullptr};
+}
+
+void qore_dbg_parse_throw_point(const QoreProgram* pgm) {
+    const QoreProgram* armed = pgm;
+    if (parse_throw_pgm.compare_exchange_strong(armed, nullptr)) {
+        throw QoreStandardException("DBG-PARSE-CXX-EXCEPTION", "a C++ exception thrown by "
+            "dbg_parse_with_cxx_exception() after the parse has started");
+    }
+}
+
+//! Debug-only: parses the code in the Program, which leaves the parse with a C++ exception once it has started
+/** The exception is thrown where the parse of the code begins, after the Program has been marked as being parsed,
+    and is raised as a Qore exception (\c DBG-PARSE-CXX-EXCEPTION) when it reaches this function (issue #6206).  If
+    \a expression is True, the code is parsed as the expression of an Expression object.  DEBUG builds only.
+*/
+static QoreValue f_dbg_parse_with_cxx_exception(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    QoreStringNodeValueHelper code(get_param_value(params, 1));
+    parse_throw_pgm = *pgm;
+    // disarmed also if another exception leaves the parse
+    ON_BLOCK_EXIT([] { parse_throw_pgm = nullptr; });
+    try {
+        if (get_param_value(params, 2).getAsBool()) {
+            SimpleRefHolder<QoreStringNode> src(new QoreStringNode(*code));
+            SimpleRefHolder<QoreStringNode> label(new QoreStringNode("dbg-cxx-exception"));
+            ReferenceHolder<QoreExpression> exp(new QoreExpression(**pgm, **src, **label, xsink), xsink);
+        } else {
+            (*pgm)->parse(code->c_str(), "dbg-cxx-exception", xsink);
+        }
+    } catch (AbstractException& e) {
+        e.convert(xsink);
+    }
+    return QoreValue();
+}
+
+//! Debug-only: parses the file in the Program with QoreProgram::parseFile() (issue #6206); DEBUG builds only
+static QoreValue f_dbg_program_parse_file(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    QoreStringNodeValueHelper path(get_param_value(params, 1));
+    (*pgm)->parseFile(path->c_str(), xsink);
+    return QoreValue();
+}
+
+//! Debug-only: stops the next parse of the Program once it has started (issue #6206)
+/** The parse (Program::parse(), Program::parsePending() or Program::parseCommit()) stops after it has been marked
+    as in progress, until dbg_release_parse_start_gate() is called; dbg_wait_parse_start_gate() waits until it has
+    stopped.  If \a fail is True, the parse then fails with \c DBG-PARSE-START-GATE.  DEBUG builds only.
+*/
+static QoreValue f_dbg_arm_parse_start_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> lg(parse_start_gate.m);
+    parse_start_gate.pgm = *pgm;
+    parse_start_gate.fail = get_param_value(params, 1).getAsBool();
+    parse_start_gate.reached = false;
+    parse_start_gate.release = false;
+    parse_start_gate.aborted = false;
+    return QoreValue();
+}
+
+//! Debug-only: waits until a parse has stopped at the gate armed with dbg_arm_parse_start_gate(); DEBUG builds only
+/** @return True if a parse stopped at the gate, False if dbg_abort_parse_start_gate() was called first (the parse
+    ended without reaching it)
+*/
+static QoreValue f_dbg_wait_parse_start_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::unique_lock<std::mutex> ul(parse_start_gate.m);
+    parse_start_gate.cv.wait(ul, [] { return parse_start_gate.reached || parse_start_gate.aborted; });
+    return parse_start_gate.reached;
+}
+
+//! Debug-only: wakes dbg_wait_parse_start_gate() if no parse has stopped at the gate, and disarms it; DEBUG only
+/** Called by a test when the thread that parses ends, so that a parse that ends without reaching the gate does not
+    leave the test waiting.
+*/
+static QoreValue f_dbg_abort_parse_start_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(parse_start_gate.m);
+    parse_start_gate.pgm = nullptr;
+    parse_start_gate.aborted = true;
+    parse_start_gate.cv.notify_all();
+    return QoreValue();
+}
+
+//! Debug-only: lets the parse stopped at the gate armed with dbg_arm_parse_start_gate() go on; DEBUG builds only
+static QoreValue f_dbg_release_parse_start_gate(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(parse_start_gate.m);
+    parse_start_gate.release = true;
+    parse_start_gate.cv.notify_all();
+    return QoreValue();
+}
+
 //! Debug-only: creates a child process with fork() while another thread holds the lock of a registered fork handler
 /** The other thread takes the lock as the handler's prepare handler does, and releases it when the prepare handlers
     reach the handler, so fork() waits for it.  The child takes and releases the lock in the same way, runs the code
@@ -18122,6 +18267,114 @@ static QoreValue f_dbg_fork_while_parse_options_locked(const QoreListNode* param
         return QoreValue();
     }
     return ut_wait_child(pid);
+}
+
+namespace {
+//! the gate of dbg_arm_parse_commit_gate() (issue #6243)
+struct QoreDbgParseCommitGate {
+    std::mutex m;
+    std::condition_variable cv;
+    //! the Program whose next commit stops; cleared when a commit reaches the gate
+    const QoreProgram* pgm = nullptr;
+    //! where the commit stops (see qore_dbg_parse_commit_gate())
+    int point = 0;
+    bool reached = false;
+    bool release = false;
+    //! set by dbg_abort_parse_commit_gate() when the parse ends without reaching the gate
+    bool aborted = false;
+};
+
+QoreDbgParseCommitGate parse_commit_gate;
+}
+
+void qore_dbg_parse_commit_gate(const QoreProgram* pgm, int point) {
+    std::unique_lock<std::mutex> ul(parse_commit_gate.m);
+    if (!parse_commit_gate.pgm || parse_commit_gate.pgm != pgm || parse_commit_gate.point != point) {
+        return;
+    }
+    parse_commit_gate.pgm = nullptr;
+    parse_commit_gate.reached = true;
+    parse_commit_gate.cv.notify_all();
+    parse_commit_gate.cv.wait(ul, [] { return parse_commit_gate.release; });
+}
+
+//! Debug-only: creates a child process with fork() from the current thread (issue #6243)
+/** The child runs the code given and exits with the value it returns (99 if it raised an exception); the other
+    threads of the process do not exist in the child.  As in the other fork seams, the signal manager and the sandbox
+    watchdog are not prepared for the fork, so the code must not use signal handling, start threads or rely on time
+    limits.  DEBUG builds only.
+
+    @return the exit status of the child (-1 if it did not exit normally)
+
+    @throw DBG-FORK-ERROR fork() failed
+*/
+static QoreValue f_dbg_fork_child(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    pid_t pid = fork();
+    if (!pid) {
+        ExceptionSink child_xsink;
+        ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+        int status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+        child_xsink.clear();
+        _exit(status);
+    }
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", errno, "fork() failed");
+        return QoreValue();
+    }
+    return ut_wait_child(pid);
+}
+
+//! Debug-only: stops the next commit of a parse of the Program once it has started (issue #6243)
+/** The commit stops after the Program has been marked as committing (\a point 0), or after the new code has been
+    merged into the Program, before the deferred initialization of its closures (\a point 1), until
+    dbg_release_parse_commit_gate() is called; dbg_wait_parse_commit_gate() waits until it has stopped.  DEBUG builds
+    only.
+*/
+static QoreValue f_dbg_arm_parse_commit_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> lg(parse_commit_gate.m);
+    parse_commit_gate.pgm = *pgm;
+    parse_commit_gate.point = static_cast<int>(get_param_value(params, 1).getAsBigInt());
+    parse_commit_gate.reached = false;
+    parse_commit_gate.release = false;
+    parse_commit_gate.aborted = false;
+    return QoreValue();
+}
+
+//! Debug-only: waits until a commit has stopped at the gate armed with dbg_arm_parse_commit_gate(); DEBUG builds only
+/** @return True if a commit stopped at the gate, False if dbg_abort_parse_commit_gate() was called first
+*/
+static QoreValue f_dbg_wait_parse_commit_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::unique_lock<std::mutex> ul(parse_commit_gate.m);
+    parse_commit_gate.cv.wait(ul, [] { return parse_commit_gate.reached || parse_commit_gate.aborted; });
+    return parse_commit_gate.reached;
+}
+
+//! Debug-only: lets the commit stopped at the gate armed with dbg_arm_parse_commit_gate() go on; DEBUG builds only
+static QoreValue f_dbg_release_parse_commit_gate(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(parse_commit_gate.m);
+    parse_commit_gate.release = true;
+    parse_commit_gate.cv.notify_all();
+    return QoreValue();
+}
+
+//! Debug-only: wakes dbg_wait_parse_commit_gate() if no commit has stopped at the gate, and disarms it; DEBUG only
+/** Called by a test when the thread that parses ends, so that a parse that ends without reaching the gate does not
+    leave the test waiting.
+*/
+static QoreValue f_dbg_abort_parse_commit_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(parse_commit_gate.m);
+    parse_commit_gate.pgm = nullptr;
+    parse_commit_gate.aborted = true;
+    parse_commit_gate.cv.notify_all();
+    return QoreValue();
 }
 
 //! Debug-only: release the socket private data detached by dbg_detach_async_io_socket(), closing its fd.
@@ -21162,6 +21415,15 @@ static QoreValue f_dbg_get_lvalue_removal_allocation_count(const QoreListNode* p
     return q_get_lvalue_removal_allocation_count();
 }
 
+//! returns the number of old values of number lvalues copied by post-increments and post-decrements in this thread
+/** A post-increment or post-decrement whose value is unused copies no old value (qore#6197); tests use this to
+    verify it.
+*/
+static QoreValue f_dbg_get_number_old_value_copy_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_number_old_value_copy_count();
+}
+
 //! returns the number of objects that recursive-reference scans have entered in the current thread
 /** A scan takes the rsection of every object it enters and follows all of its references, so this reports the
     size of the graph the scans of the current thread have walked; tests use it to verify that a scan does not
@@ -23285,7 +23547,9 @@ bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point) {
     checked the connection and holds its method guard; \c "drain-wait": the close of an HTTP client connection has to
     wait for a call in flight (with a release Counter of 0, it only reports it); \c "swap": a negotiating connection was
     handed over, and the connection manager is about to replace it in its pool with the connection that took it over;
-    \c "acquired": the connection manager found a connection in its pool for a request and released the pool lock
+    \c "acquired": the connection manager found a connection in its pool for a request and released the pool lock;
+    \c "reserve-pending": a stream of a Qore-level HTTP client connection is to be reserved, before the reservation
+    lock is taken
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
 
@@ -23310,6 +23574,8 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::Swap);
     } else if (!strcmp(name->c_str(), "acquired")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::Acquired);
+    } else if (!strcmp(name->c_str(), "reserve-pending")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ReservePending);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
@@ -23481,6 +23747,50 @@ static QoreValue f_dbg_http_submit_after_close_clear(const QoreListNode* params,
     if (c) {
         c->deref(xsink);
     }
+    return QoreValue();
+}
+
+//! set by dbg_http_new_connection_wait(): the next connection that a connection manager creates waits in
+//! qore_http_manager_new_connection_hook until it is ready or its connect failed
+static std::atomic<bool> dbg_new_connection_wait_armed{false};
+
+//! the hook of dbg_http_new_connection_wait(): one-shot; it removes itself once it has run
+static void dbg_new_connection_wait_hook(HttpClientConnectionBase* conn) {
+    if (!dbg_new_connection_wait_armed.exchange(false)) {
+        return;
+    }
+    void (*self)(HttpClientConnectionBase*) = dbg_new_connection_wait_hook;
+    qore_http_manager_new_connection_hook.compare_exchange_strong(self, nullptr);
+    ExceptionSink xs;
+    // a hang guard only: the connect of the test's connection ends at once
+    conn->waitForReadyOrError(60000, &xs);
+    xs.clear();
+}
+
+//! the next connection that an HTTP client connection manager creates waits until it is ready or its connect failed,
+//! before the manager reserves its first stream (one-shot)
+/** Orders a connect that fails before the reservation of the new connection deterministically: the manager then
+    raises the connection's error from the acquire.
+
+    @throw DBG-ARGUMENT-ERROR another hook for new connections is set
+*/
+static QoreValue f_dbg_http_new_connection_wait(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    void (*expected)(HttpClientConnectionBase*) = nullptr;
+    if (!qore_http_manager_new_connection_hook.compare_exchange_strong(expected, dbg_new_connection_wait_hook)
+            && expected != dbg_new_connection_wait_hook) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_new_connection_wait(): another hook is set");
+        return QoreValue();
+    }
+    dbg_new_connection_wait_armed = true;
+    return QoreValue();
+}
+
+//! disarms dbg_http_new_connection_wait() if no connection was created
+static QoreValue f_dbg_http_new_connection_wait_clear(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    dbg_new_connection_wait_armed = false;
+    void (*self)(HttpClientConnectionBase*) = dbg_new_connection_wait_hook;
+    qore_http_manager_new_connection_hook.compare_exchange_strong(self, nullptr);
     return QoreValue();
 }
 
@@ -24592,6 +24902,17 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_detach_async_io_socket", f_dbg_detach_async_io_socket,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_fork_child", f_dbg_fork_child, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
+        codeTypeInfo, QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_arm_parse_commit_gate", f_dbg_arm_parse_commit_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "point");
+    qns.addBuiltinVariant("dbg_wait_parse_commit_gate", f_dbg_wait_parse_commit_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo);
+    qns.addBuiltinVariant("dbg_release_parse_commit_gate", f_dbg_release_parse_commit_gate, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_abort_parse_commit_gate", f_dbg_abort_parse_commit_gate, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_release_detached_async_io_sockets", f_dbg_release_detached_async_io_sockets,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_ds_arm_connection_abort", f_dbg_ds_arm_connection_abort,
@@ -24690,6 +25011,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_removal_probe_count", f_dbg_get_lvalue_removal_probe_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_number_old_value_copy_count", f_dbg_get_number_old_value_copy_count,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_object_count", f_dbg_get_scan_object_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_edge_count", f_dbg_get_scan_edge_count, QCF_NO_FLAGS,
@@ -24837,6 +25160,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "closed");
     qns.addBuiltinVariant("dbg_http_submit_after_close_clear", f_dbg_http_submit_after_close_clear, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_new_connection_wait", f_dbg_http_new_connection_wait, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_new_connection_wait_clear", f_dbg_http_new_connection_wait_clear, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http2_default_connection_window", f_dbg_http2_default_connection_window, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_http2_connection_window_updates", f_dbg_http2_connection_window_updates, QCF_NO_FLAGS,
@@ -24923,6 +25250,21 @@ void init_debug_functions(QoreNamespace& qns) {
         "name");
     qns.addBuiltinVariant("dbg_file_stream_io_flags", f_dbg_file_stream_io_flags, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
+    qns.addBuiltinVariant("dbg_parse_with_cxx_exception", f_dbg_parse_with_cxx_exception, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 3, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "code", boolTypeInfo, QORE_PARAM_NO_ARG, "expression");
+    qns.addBuiltinVariant("dbg_program_parse_file", f_dbg_program_parse_file, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo, QORE_PARAM_NO_ARG,
+        "path");
+    qns.addBuiltinVariant("dbg_arm_parse_start_gate", f_dbg_arm_parse_start_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", boolTypeInfo, QORE_PARAM_NO_ARG,
+        "fail");
+    qns.addBuiltinVariant("dbg_wait_parse_start_gate", f_dbg_wait_parse_start_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo);
+    qns.addBuiltinVariant("dbg_abort_parse_start_gate", f_dbg_abort_parse_start_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_release_parse_start_gate", f_dbg_release_parse_start_gate, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "child");

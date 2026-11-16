@@ -1,0 +1,183 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of in-place string appends and list pushes after exception handlers
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class InPlaceAppendAfterTryTest
+
+#! Tests in-place string appends and list pushes after try statements in every execution mode against the AST
+/** The IR analysis that lets <tt>s += x</tt> on a string local and <tt>push l, x</tt> on a list local modify the
+    value in place proves that the local holds a value that nothing else holds.  At the join after a try statement it
+    ignored the end of the catch block, which only exception edges reach, so a value that the catch block assigned
+    from another variable counted as the local's own, and the append modified the other variable's value as well
+    (issue #6334).
+
+    cases.q runs each case with a value that the caller still holds and prints the result and the caller's value; the
+    AST interpreter's output is the expected result, which every other execution mode and qcc-compiled executables at
+    -O0 and -O3 must give.  The IR optimization statistics show that the appends stay in place where the handlers
+    leave the local alone.
+*/
+class InPlaceAppendAfterTryTest inherits QUnit::Test {
+    public {
+        #! the lines of the AST output that the cases must give (the caller's value never changes)
+        const ExpectedAstLines = (
+            "catchAssign|True => \"TUx\" | \"TU\"",
+            "appendInCatch|True => \"TUwzq\" | \"TU\"",
+            "catchFreshThenShared|True => \"TU2\" | \"TU\"",
+            "nestedTry|True => \"TUio\" | \"TU\"",
+            "rethrowFromCatch|True => \"TUr\" | \"TU\"",
+            "onErrorAssign|True => \"TUe\" | \"TU\"",
+            "onExitAssign|True => \"TUx\" | \"TU\"",
+            "callThrows|True => \"TUc\" | \"TU\"",
+            "tryInLoop|True => \"TUbab\" | \"TU\"",
+            "throwBetweenAssignments|True => \"TUmn\" | \"TU\"",
+            "freshAfterTry|True => \"TU/200\" | \"TU\"",
+            "listCatchAssign|True => [1, 2, 9] | [1, 2]",
+            "listPushInCatch|True => [1, 2, 8, 9] | [1, 2]",
+            "catchChangesType|True => \"1:integer\"",
+            "catchAssign|False => \"defx\" | \"TU\"",
+            "throwBetweenAssignments|False => \"freshn\" | \"TU\"",
+            "listCatchAssign|False => [9] | [1, 2]",
+            "catchAssignsConditionally|True|True => \"TUk\" | \"TU\"",
+            "catchAssignsConditionally|True|False => \"abck\" | \"TU\"",
+            "twoThrowPoints|True|first => \"TUp\" | \"TU\"",
+            "twoThrowPoints|True|second => \"freshp\" | \"TU\"",
+            "dtorList => [1, 2, 9] | [1, 2]",
+            "dtorString => \"TUp\" | \"TU\"",
+            "appendAroundTry => \"abababababab/-1\"",
+            "plainBuilder => 2000",
+            "plainListBuilder => 1000",
+        );
+
+        #! the number of lines that cases.q prints
+        const LineCount = 42;
+
+        #! the functions whose appends must stay in place: (function, statistic, count)
+        const InPlace = (
+            ("plainBuilder", "inplace-string", 1),
+            ("freshAfterTry", "inplace-string", 1),
+            ("appendAroundTry", "inplace-string", 2),
+            ("plainListBuilder", "inplace-push", 1),
+            ("pushAroundTry", "inplace-push", 2),
+        );
+
+        #! the functions whose appends after a try statement must not be in place: (function, statistic)
+        const NotInPlace = (
+            ("catchAssign", "inplace-string"),
+            ("catchAssignsConditionally", "inplace-string"),
+            ("rethrowFromCatch", "inplace-string"),
+            ("throwBetweenAssignments", "inplace-string"),
+            ("twoThrowPoints", "inplace-string"),
+            ("dtorString", "inplace-string"),
+            ("listCatchAssign", "inplace-push"),
+            ("listPushInCatch", "inplace-push"),
+            ("dtorList", "inplace-push"),
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string cases;
+    }
+
+    constructor() : QUnit::Test("InPlaceAppendAfterTry", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        cases = get_script_dir() + DirSep + "cases.q";
+
+        addTestCase("every execution mode gives the AST result", \testModes());
+        addTestCase("compiled executables give the AST result", \testExecutables());
+        addTestCase("the appends stay in place where the handlers leave the local alone", \testInPlace());
+
+        set_return_value(main());
+    }
+
+    testModes() {
+        list<string> expected = runMode("ast");
+        checkAst(expected);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            compare(mode, expected, runMode(mode));
+        }
+    }
+
+    testExecutables() {
+        list<string> expected = runMode("ast");
+        checkAst(expected);
+        TmpDir tmp("qore-in-place-append-after-try-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "cases" + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s -o %s %s 2>&1",
+                libqore_dir, libqore_dir, libqore_dir, qcc_bin, opt, exe, cases));
+            assertTrue(is_file(exe), sprintf("%s compiled the executable: %s", opt, out));
+            compare("qcc " + opt, expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+                "%s", libqore_dir, libqore_dir, exe)).split("\n"));
+        }
+    }
+
+    testInPlace() {
+        string out = backquote(sprintf("QORE_IR_THRESHOLD=1 QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+            "%s -b --exec-mode=ir %s 2>&1", libqore_dir, libqore_dir, qore_bin, cases));
+        foreach list<auto> row in (InPlace) {
+            assertEq(row[2], getStat(out, row[0], row[1]), sprintf("%s: %s", row[0], row[1]));
+        }
+        foreach list<string> row in (NotInPlace) {
+            assertEq(0, getStat(out, row[0], row[1]), sprintf("%s: %s", row[0], row[1]));
+        }
+    }
+
+    #! returns the value of a statistic in the IR-OPT line of a function, or -1 if there is none
+    private int getStat(string out, string func, string stat) {
+        foreach string line in (out.split("\n")) {
+            if (line.equalPartial("IR-OPT: " + func + ":")) {
+                *list<*string> value = regex_extract(line, " " + stat + "=([0-9]+)");
+                return value ? value[0].toInt() : -1;
+            }
+        }
+        return -1;
+    }
+
+    private list<string> runMode(string mode) {
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, cases)).split("\n");
+    }
+
+    #! checks the AST output itself: every case printed its line, the caller's values never change
+    private checkAst(list<string> expected) {
+        assertEq(LineCount, (select expected, $1 =~ / => /).size(), "every case printed its line");
+        foreach string line in (ExpectedAstLines) {
+            assertEq(1, (select expected, $1 == line).size(), line);
+        }
+    }
+
+    #! compares the lines of a mode with the AST lines, reporting the first differences
+    private compare(string mode, list<string> expected, list<string> actual) {
+        list<string> diffs = ();
+        int count = 0;
+        int n = max(expected.size(), actual.size());
+        for (int i = 0; i < n; ++i) {
+            if (expected[i] !== actual[i]) {
+                ++count;
+                if (diffs.size() < 20) {
+                    diffs += sprintf("ast: %y\n%s: %y", expected[i], mode, actual[i]);
+                }
+            }
+        }
+        assertEq((), diffs, sprintf("%s: %d differences:\n%s", mode, count, diffs.join("\n")));
+    }
+}

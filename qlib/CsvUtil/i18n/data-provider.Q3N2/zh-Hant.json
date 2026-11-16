@@ -1003,10 +1003,6 @@
           "source": "A hash describing the CSV fields to output",
           "message": "描述要輸出的 CSV 欄位的雜湊"
         },
-        "app.Q3N2.action.d3JpdGU.option.ZmllbGRz.desc": {
-          "source": "A hash describing the CSV fields to output. Keys are field names, values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n- `mask`: for `date`, `int`, `float`, or `number` types, a mask that the value is written with, such as `DD.MM.YYYY`, `hh:mm AM`, `#.##0,00` or `€#,##0.00`, so that a file is written exactly as the mask describes and read back with the same mask as the same values; cannot be given with `format`; see [ValueMask](https://qoretechnologies.com/manual/qorus/current/qore/modules/ValueMask/html/index.html) for the masks\n- `timezone`: for `date` types only, the time zone region whose wall-clock time the dates of the field are written in; overrides the `timezone` option\n- `header`: the header text of the field, if not the field name",
-          "message": "描述要輸出的 CSV 欄位的雜湊。鍵為欄位名稱，值為 [欄位類型](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) 或包含以下鍵的雜湊：\n- `type`：[欄位類型字串](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`：對於 `date` 類型，為 [日期格式](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting)；對於 `int`、`float` 或 `number` 類型，為數字格式字串：*<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]（例如 `\".,3\"` = 千分位為 `.`、小數點為 `,`、小數點後 3 位）\n- `mask`：適用於 `date`、`int`、`float` 或 `number` 類型，用來寫入值的遮罩，例如 `DD.MM.YYYY`, `hh:mm AM`, `#.##0,00` 或 `€#,##0.00`，讓檔案完全依照遮罩的描述寫入，並能以相同遮罩讀回相同的值；不能與 `format` 同時指定；遮罩請參閱 [ValueMask](https://qoretechnologies.com/manual/qorus/current/qore/modules/ValueMask/html/index.html)\n- `timezone`：僅適用於 `date` 類型，欄位日期以其當地時間寫入的時區地區；優先於 `timezone` 選項\n- `header`：欄位的標頭文字（若不是欄位名稱）"
-        },
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.display_name": {
           "source": "Header Names",
           "message": "標頭名稱"
@@ -1219,10 +1215,6 @@
           "source": "A hash describing the CSV fields to output",
           "message": "描述要輸出的 CSV 欄位的雜湊"
         },
-        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZmllbGRz.desc": {
-          "source": "A hash describing the CSV fields to output. Keys are field names, values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n- `mask`: for `date`, `int`, `float`, or `number` types, a mask that the value is written with, such as `DD.MM.YYYY`, `hh:mm AM`, `#.##0,00` or `€#,##0.00`, so that a file is written exactly as the mask describes and read back with the same mask as the same values; cannot be given with `format`; see [ValueMask](https://qoretechnologies.com/manual/qorus/current/qore/modules/ValueMask/html/index.html) for the masks\n- `timezone`: for `date` types only, the time zone region whose wall-clock time the dates of the field are written in; overrides the `timezone` option\n- `header`: the header text of the field, if not the field name",
-          "message": "描述要輸出的 CSV 欄位的雜湊。鍵為欄位名稱，值為 [欄位類型](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) 或包含以下鍵的雜湊：\n- `type`：[欄位類型字串](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`：對於 `date` 類型，為 [日期格式](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting)；對於 `int`、`float` 或 `number` 類型，為數字格式字串：*<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]（例如 `\".,3\"` = 千分位為 `.`、小數點為 `,`、小數點後 3 位）\n- `mask`：適用於 `date`、`int`、`float` 或 `number` 類型，用來寫入值的遮罩，例如 `DD.MM.YYYY`, `hh:mm AM`, `#.##0,00` 或 `€#,##0.00`，讓檔案完全依照遮罩的描述寫入，並能以相同遮罩讀回相同的值；不能與 `format` 同時指定；遮罩請參閱 [ValueMask](https://qoretechnologies.com/manual/qorus/current/qore/modules/ValueMask/html/index.html)\n- `timezone`：僅適用於 `date` 類型，欄位日期以其當地時間寫入的時區地區；優先於 `timezone` 選項\n- `header`：欄位的標頭文字（若不是欄位名稱）"
-        },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "強制標頭順序"
@@ -1330,6 +1322,62 @@
         "app.Q3N2.action.d3JpdGUtZGF0YQ.option.d3JpdGVfaGVhZGVycw.desc": {
           "source": "Set to `false` to suppress the output of headers; the default is `true`, meaning to output headers if they are present",
           "message": "設為 `false` 可隱藏標頭輸出；預設值為 `true`，表示若有標頭則輸出"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZmllbGRz.desc": {
+          "source": "A hash describing the CSV fields to output. Keys are field names, values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n- `mask`: for `date`, `int`, `float`, or `number` types, a mask that the value is written with, such as `DD.MM.YYYY`, `hh:mm AM`, `#.##0,00` or `€#,##0.00`, so that a file is written exactly as the mask describes and read back with the same mask as the same values; cannot be given with `format`; see [ValueMask](https://qoretechnologies.com/manual/qorus/current/qore/modules/ValueMask/html/index.html) for the masks\n- `timezone`: for `date` types only, the time zone region whose wall-clock time the dates of the field are written in; overrides the `timezone` option\n- `header`: the header text of the field, if not the field name\n- `quote`: `true` to always quote the field, `false` to quote it only if it requires quoting; overrides `quote_types` for the field",
+          "message": "描述要輸出的 CSV 欄位的雜湊。鍵為欄位名稱，值為 [欄位類型](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) 或包含以下鍵的雜湊：\n- `type`：[欄位類型字串](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`：對於 `date` 類型，為 [日期格式](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting)；對於 `int`、`float` 或 `number` 類型，為數字格式字串：*<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]（例如 `\".,3\"` = 千分位為 `.`、小數點為 `,`、小數點後 3 位）\n- `mask`：適用於 `date`、`int`、`float` 或 `number` 類型，用來寫入值的遮罩，例如 `DD.MM.YYYY`, `hh:mm AM`, `#.##0,00` 或 `€#,##0.00`，讓檔案完全依照遮罩的描述寫入，並能以相同遮罩讀回相同的值；不能與 `format` 同時指定；遮罩請參閱 [ValueMask](https://qoretechnologies.com/manual/qorus/current/qore/modules/ValueMask/html/index.html)\n- `timezone`：僅適用於 `date` 類型，欄位日期以其當地時間寫入的時區地區；優先於 `timezone` 選項\n- `header`：欄位的標頭文字（若不是欄位名稱）\n- `quote`：`true` 表示一律為欄位加上引號，`false` 表示僅在需要時才加上引號；對該欄位優先於 `quote_types`"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfbnVsbA.display_name": {
+          "source": "Quote Empty Values",
+          "message": "空值加引號"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfbnVsbA.short_desc": {
+          "source": "Whether a field without a value is written with quotes",
+          "message": "沒有值的欄位是否以加上引號的方式寫入"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfbnVsbA.desc": {
+          "source": "Sets how a field without a value (no value or `NULL`) is written: `true` writes it as an empty quoted field (`\"\"`), and `false` as an empty field without quotes, so that it can be told apart from an empty string written with quotes (see `quote_types`).\n\nIf not set, a field without a value is written without quotes, unless `optimal_quotes` is `false`.",
+          "message": "設定沒有值的欄位（無值或 `NULL`）的寫入方式：`true` 會將其寫為加上引號的空欄位（`\"\"`），`false` 則寫為不加引號的空欄位，以便與加上引號寫入的空字串區分（請參閱 `quote_types`）。\n\n若未設定，除非 `optimal_quotes` 為 `false`，否則沒有值的欄位會以不加引號的方式寫入。"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfdHlwZXM.display_name": {
+          "source": "Quoted Field Types",
+          "message": "加引號的欄位類型"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfdHlwZXM.short_desc": {
+          "source": "The types of the fields that are always quoted",
+          "message": "一律加上引號的欄位類型"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfdHlwZXM.desc": {
+          "source": "The types of the fields that are always quoted, for example `string` to quote strings but not numbers or dates: `string`, `int`, `float`, `number`, `date`, `bool`, `binary`, `hash` or `list`.\n\nThe type of a field is the type in its field description, unless that is `string` or `*string`; then it is the type of the value.  Other fields are quoted only if they require quoting, and a field without a value is written as `quote_null` sets.  A field's `quote` attribute (`true` or `false`) overrides this option for the field.  Ignored if `optimal_quotes` is `false`.",
+          "message": "一律加上引號的欄位類型，例如 `string` 可為字串加上引號，但不為數字或日期加上引號：`string`、`int`、`float`、`number`、`date`、`bool`、`binary`、`hash` 或 `list`。\n\n欄位的類型是其欄位描述中的類型，除非該類型是 `string` 或 `*string`，此時則為值的類型。其他欄位僅在需要時才會加上引號，沒有值的欄位則依 `quote_null` 的設定寫入。欄位的 `quote` 屬性（`true` 或 `false`）對該欄位優先於此選項。若 `optimal_quotes` 為 `false`，則會忽略此選項。"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZmllbGRz.desc": {
+          "source": "A hash describing the CSV fields to output. Keys are field names, values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n- `mask`: for `date`, `int`, `float`, or `number` types, a mask that the value is written with, such as `DD.MM.YYYY`, `hh:mm AM`, `#.##0,00` or `€#,##0.00`, so that a file is written exactly as the mask describes and read back with the same mask as the same values; cannot be given with `format`; see [ValueMask](https://qoretechnologies.com/manual/qorus/current/qore/modules/ValueMask/html/index.html) for the masks\n- `timezone`: for `date` types only, the time zone region whose wall-clock time the dates of the field are written in; overrides the `timezone` option\n- `header`: the header text of the field, if not the field name\n- `quote`: `true` to always quote the field, `false` to quote it only if it requires quoting; overrides `quote_types` for the field",
+          "message": "描述要輸出的 CSV 欄位的雜湊。鍵為欄位名稱，值為 [欄位類型](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) 或包含以下鍵的雜湊：\n- `type`：[欄位類型字串](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`：對於 `date` 類型，為 [日期格式](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting)；對於 `int`、`float` 或 `number` 類型，為數字格式字串：*<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]（例如 `\".,3\"` = 千分位為 `.`、小數點為 `,`、小數點後 3 位）\n- `mask`：適用於 `date`、`int`、`float` 或 `number` 類型，用來寫入值的遮罩，例如 `DD.MM.YYYY`, `hh:mm AM`, `#.##0,00` 或 `€#,##0.00`，讓檔案完全依照遮罩的描述寫入，並能以相同遮罩讀回相同的值；不能與 `format` 同時指定；遮罩請參閱 [ValueMask](https://qoretechnologies.com/manual/qorus/current/qore/modules/ValueMask/html/index.html)\n- `timezone`：僅適用於 `date` 類型，欄位日期以其當地時間寫入的時區地區；優先於 `timezone` 選項\n- `header`：欄位的標頭文字（若不是欄位名稱）\n- `quote`：`true` 表示一律為欄位加上引號，`false` 表示僅在需要時才加上引號；對該欄位優先於 `quote_types`"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGVfbnVsbA.display_name": {
+          "source": "Quote Empty Values",
+          "message": "空值加引號"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGVfbnVsbA.short_desc": {
+          "source": "Whether a field without a value is written with quotes",
+          "message": "沒有值的欄位是否以加上引號的方式寫入"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGVfbnVsbA.desc": {
+          "source": "Sets how a field without a value (no value or `NULL`) is written: `true` writes it as an empty quoted field (`\"\"`), and `false` as an empty field without quotes, so that it can be told apart from an empty string written with quotes (see `quote_types`).\n\nIf not set, a field without a value is written without quotes, unless `optimal_quotes` is `false`.",
+          "message": "設定沒有值的欄位（無值或 `NULL`）的寫入方式：`true` 會將其寫為加上引號的空欄位（`\"\"`），`false` 則寫為不加引號的空欄位，以便與加上引號寫入的空字串區分（請參閱 `quote_types`）。\n\n若未設定，除非 `optimal_quotes` 為 `false`，否則沒有值的欄位會以不加引號的方式寫入。"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGVfdHlwZXM.display_name": {
+          "source": "Quoted Field Types",
+          "message": "加引號的欄位類型"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGVfdHlwZXM.short_desc": {
+          "source": "The types of the fields that are always quoted",
+          "message": "一律加上引號的欄位類型"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGVfdHlwZXM.desc": {
+          "source": "The types of the fields that are always quoted, for example `string` to quote strings but not numbers or dates: `string`, `int`, `float`, `number`, `date`, `bool`, `binary`, `hash` or `list`.\n\nThe type of a field is the type in its field description, unless that is `string` or `*string`; then it is the type of the value.  Other fields are quoted only if they require quoting, and a field without a value is written as `quote_null` sets.  A field's `quote` attribute (`true` or `false`) overrides this option for the field.  Ignored if `optimal_quotes` is `false`.",
+          "message": "一律加上引號的欄位類型，例如 `string` 可為字串加上引號，但不為數字或日期加上引號：`string`、`int`、`float`、`number`、`date`、`bool`、`binary`、`hash` 或 `list`。\n\n欄位的類型是其欄位描述中的類型，除非該類型是 `string` 或 `*string`，此時則為值的類型。其他欄位僅在需要時才會加上引號，沒有值的欄位則依 `quote_null` 的設定寫入。欄位的 `quote` 屬性（`true` 或 `false`）對該欄位優先於此選項。若 `optimal_quotes` 為 `false`，則會忽略此選項。"
         }
       }
     }

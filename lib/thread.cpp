@@ -4942,8 +4942,10 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
                 return;
             }
             // try to increment thread count
+            // a refused entry (the Program is deleted or parsed) runs none of the Program's code
             if (pp->incThreadCount(td->tid, xsink)) {
                 printd(5, "ProgramThreadCountContextHelper::set() failed\n");
+                failed = true;
                 return;
             }
             thread_count_incremented = true;
