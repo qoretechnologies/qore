@@ -1878,6 +1878,216 @@ static void ut_cond_wait_cancel_in_window(UnitTestCounters& c) {
 }
 #endif
 
+#ifdef DEBUG
+namespace {
+//! State for ut_parse_lock_sinkless_cycle_window(); see there; protected by lck
+struct ParseLockWindowTest {
+    QoreThreadLock lck;
+    QoreCondition cond;
+    QoreProgram* p = nullptr;
+    QoreProgram* q = nullptr;
+    //! true to hold A before its wait is registered for a wakeup, false to hold it after its last check
+    bool before_registration;
+    //! the TID of the thread that waits with an exception sink (A), and of the one that waits without one (B)
+    int a_tid = 0;
+    int b_tid = 0;
+    //! set by A just before it waits for Q's parse lock, so that the hook holds only that wait
+    bool armed = false;
+    bool b_holds_q = false;
+    bool in_window = false;
+    bool go_b = false;
+    bool release_a = false;
+    bool a_done = false;
+    bool b_done = false;
+    int a_rc = 0;
+    std::string a_err;
+    int b_rc = -1;
+
+    DLLLOCAL ParseLockWindowTest(bool before_registration) : before_registration(before_registration) {
+    }
+
+    //! waits up to 10 seconds for a predicate; lck is held
+    template <typename P>
+    bool waitFor(P pred) {
+        int64 deadline_us = q_get_monotonic_us() + 10000000;
+        while (!pred()) {
+            int64 remaining_us = deadline_us - q_get_monotonic_us();
+            if (remaining_us <= 0) {
+                return false;
+            }
+            cond.wait2(&lck, (remaining_us + 999) / 1000);
+        }
+        return true;
+    }
+};
+
+std::atomic<ParseLockWindowTest*> parse_lock_window_test{nullptr};
+
+//! Holds A in the phase of its wait that the test chose, until released
+void parse_lock_window_hold(bool before_registration) {
+    ParseLockWindowTest* t = parse_lock_window_test.load();
+    if (!t) {
+        return;
+    }
+    AutoLocker al(t->lck);
+    if (q_gettid() != t->a_tid || !t->armed || t->before_registration != before_registration) {
+        return;
+    }
+    t->armed = false;
+    t->in_window = true;
+    t->cond.broadcast();
+    // bounded, so that a failure cannot hold the thread for ever
+    t->waitFor([t] () { return t->release_a; });
+}
+
+//! Called before A's wait is registered for a wakeup, after A has checked for a cycle when it entered the graph
+void parse_lock_register_hook() {
+    parse_lock_window_hold(true);
+}
+
+//! Called after A's wait is registered and its last check for a cycle, before A blocks
+void parse_lock_window_hook() {
+    parse_lock_window_hold(false);
+}
+
+//! A: holds P's parse lock, and then waits, with an exception sink, for Q's, which B holds
+void parse_lock_window_a(ExceptionSink* xsink, void* arg) {
+    ParseLockWindowTest* t = static_cast<ParseLockWindowTest*>(arg);
+    qore_program_private::lockParsing(*t->p, xsink);
+    {
+        AutoLocker al(t->lck);
+        t->a_tid = q_gettid();
+        t->cond.broadcast();
+        t->waitFor([t] () { return t->b_holds_q; });
+        t->armed = true;
+    }
+    ExceptionSink wait_xsink;
+    int rc = qore_program_private::lockParsing(*t->q, &wait_xsink);
+    std::string err;
+    if (wait_xsink) {
+        QoreValue e = wait_xsink.getExceptionErr();
+        if (e.getType() == NT_STRING) {
+            err = e.get<const QoreStringNode>()->c_str();
+        }
+        wait_xsink.clear();
+    }
+    if (!rc) {
+        qore_program_private::unlockParsing(*t->q, xsink);
+    }
+    qore_program_private::unlockParsing(*t->p, xsink);
+    AutoLocker al(t->lck);
+    t->a_rc = rc;
+    t->a_err = err;
+    t->a_done = true;
+    t->cond.broadcast();
+}
+
+//! B: holds Q's parse lock, and then waits, without an exception sink, for P's, which closes the cycle
+void parse_lock_window_b(ExceptionSink* xsink, void* arg) {
+    ParseLockWindowTest* t = static_cast<ParseLockWindowTest*>(arg);
+    qore_program_private::lockParsing(*t->q, xsink);
+    {
+        AutoLocker al(t->lck);
+        t->b_tid = q_gettid();
+        t->b_holds_q = true;
+        t->cond.broadcast();
+        t->waitFor([t] () { return t->go_b; });
+    }
+    int rc = qore_program_private::lockParsing(*t->p, nullptr);
+    if (!rc) {
+        qore_program_private::unlockParsing(*t->p, xsink);
+    }
+    qore_program_private::unlockParsing(*t->q, xsink);
+    AutoLocker al(t->lck);
+    t->b_rc = rc;
+    t->b_done = true;
+    t->cond.broadcast();
+}
+
+//! runs one case of ut_parse_lock_sinkless_cycle_window(); see there
+void ut_parse_lock_sinkless_cycle_case(UnitTestCounters& c, bool before_registration) {
+    const char* phase = before_registration ? "before registration" : "after the last check";
+    // on the heap: if a thread does not end, the state and the Programs are leaked, as the thread still uses them
+    ParseLockWindowTest* t = new ParseLockWindowTest(before_registration);
+    t->p = new QoreProgram(QoreParseOptions(PO_DEFAULT));
+    t->q = new QoreProgram(QoreParseOptions(PO_DEFAULT));
+    parse_lock_window_test = t;
+    qore_cond_wait_register_hook = parse_lock_register_hook;
+    qore_cond_wait_window_hook = parse_lock_window_hook;
+    ExceptionSink xsink;
+    int a_tid = q_start_thread(&xsink, parse_lock_window_a, t);
+    int b_tid = a_tid < 0 ? -1 : q_start_thread(&xsink, parse_lock_window_b, t);
+    UT_ASSERT(c, a_tid >= 0 && b_tid >= 0, "the threads start");
+    bool ended = true;
+    if (a_tid >= 0 && b_tid < 0) {
+        // A gets Q's lock, as B does not hold it, without the hook: it is held only in a wait
+        AutoLocker al(t->lck);
+        ended = t->waitFor([t] () { return t->a_done; });
+    } else if (a_tid >= 0) {
+        SafeLocker sl(t->lck);
+        bool in_window = t->waitFor([t] () { return t->in_window; });
+        UT_ASSERT(c, in_window, phase);
+        t->go_b = true;
+        t->cond.broadcast();
+        sl.unlock();
+        // B closes the cycle and wakes A in the same critical section in which it is registered
+        int64 deadline_us = q_get_monotonic_us() + 10000000;
+        bool registered;
+        while (!(registered = qore_program_private::dbgParseWaitRegistered(b_tid))
+                && q_get_monotonic_us() < deadline_us) {
+            qore_usleep(1000);
+        }
+        UT_ASSERT(c, registered, "B waits for P's lock");
+        sl.lock();
+        t->release_a = true;
+        t->cond.broadcast();
+        bool a_done = t->waitFor([t] () { return t->a_done; });
+        if (!a_done) {
+            printf("  parse lock cycle closed %s: A's wait did not end\n", phase);
+            // ends A's wait, which is cancellable, so that the test can end
+            sl.unlock();
+            qore_cancel_thread(a_tid, "parse lock window test");
+            sl.lock();
+            ended = t->waitFor([t] () { return t->a_done; });
+        }
+        UT_ASSERT(c, a_done, "A's wait ends: the wakeup by B is not lost");
+        bool b_done = t->waitFor([t] () { return t->b_done; });
+        UT_ASSERT(c, b_done, "B gets P's lock once A has released it");
+        ended = ended && b_done;
+        UT_ASSERT_EQ(c, -1, t->a_rc, "A's wait is refused");
+        UT_ASSERT(c, t->a_err == "PROGRAM-ERROR", "A's wait is refused with PROGRAM-ERROR");
+        UT_ASSERT_EQ(c, 0, t->b_rc, "B's wait gets the lock");
+    }
+    qore_cond_wait_window_hook = nullptr;
+    qore_cond_wait_register_hook = nullptr;
+    parse_lock_window_test = nullptr;
+    xsink.clear();
+    if (!ended) {
+        printf("  parse lock cycle closed %s: a thread did not end; its state is leaked\n", phase);
+        return;
+    }
+    t->p->waitForTerminationAndDeref(&xsink);
+    t->q->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "the Programs are deleted without an exception");
+    xsink.clear();
+    delete t;
+}
+}
+
+//! A wait without an exception sink that closes a cycle of parse lock waits makes a wait of the cycle refused
+/** Thread A holds P's parse lock and waits for Q's with an exception sink; thread B holds Q's lock and then waits for
+    P's without one, which cannot be refused (issue #5693).  B closes the cycle while a hook holds A, in each phase of
+    its wait: before the wait is registered for a wakeup (B's wakeup finds nothing to wake, so A's check before it
+    blocks must see the cycle), and after its last check, before it blocks (B's wakeup is handed to the condition
+    waker thread, which wakes A once it blocks).  A must be refused with \c PROGRAM-ERROR either way, and B then gets
+    P's lock.
+*/
+static void ut_parse_lock_sinkless_cycle_window(UnitTestCounters& c) {
+    ut_parse_lock_sinkless_cycle_case(c, true);
+    ut_parse_lock_sinkless_cycle_case(c, false);
+}
+#endif
+
 //! Minimal RObject for the deterministic garbage collection scan generation test
 /** Nothing about this object participates in a cycle: it exists only to count how often the scanner
     walks it and to expose the scan generation it maintains.
@@ -19667,6 +19877,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoStoppingThreadTest::run(c);
     AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);
+    ut_parse_lock_sinkless_cycle_window(c);
     ut_fork_waits_for_lock_holders(c);
     ut_fork_signal_block_waiter(c);
     ut_fork_jit_compile_in_progress(c);

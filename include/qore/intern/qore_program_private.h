@@ -534,6 +534,12 @@ public:
     // thread with the parse lock; atomic because parsingLocked() reads it without plock,
     // while lockParsing()/unlockParsing() write it under plock
     std::atomic_int parse_tid{-1};
+    //! the threads registered in the graph of parse lock waits as waiting for this Program's parse lock
+    /** Written with plock and the lock of the graph held (see waitForParseLock()); while it is not 0, parse_tid is
+        written with the lock of the graph held as well (setParseTidIntern()), so that the cycle check, which holds
+        only that lock, reads a stable owner
+    */
+    unsigned parse_lock_waiters = 0;
 
     // file name and unique string storage
     cstr_vector_t str_vec;
@@ -2189,7 +2195,7 @@ public:
             return 1;
         }
         ++parse_count;
-        parse_tid = tid;
+        setParseTidIntern(tid);
         return 0;
     }
 
@@ -2502,6 +2508,11 @@ public:
         initialization, rather than for this whole window: arbitrary module initialization code runs under parse
         ownership, and holding the namespace write lock across it deadlocks against any thread that
         must resolve a name here while this thread waits for it.
+
+        If another thread holds the lock, see waitForParseLock(): with \a xsink, the wait is refused when it would
+        close a cycle of parse lock waits, and a cancellation request or program interrupt ends it.
+
+        @return 0 if the lock was taken, -1 if not; an exception is raised then if \a xsink is not nullptr
     */
     DLLLOCAL int lockParsing(ExceptionSink* xsink) {
         int tid = q_gettid();
@@ -2512,10 +2523,8 @@ public:
         // waits for parse ownership inverts that order and can deadlock startup
         assert(parse_tid == tid || !qore_root_ns_private::threadHoldsRuntimeNamespaceReadLock());
 
-        while (parse_tid != -1 && parse_tid != tid && !ptid) {
-            ++thread_waiting;
-            pcond.wait(plock);
-            --thread_waiting;
+        if (parse_tid != -1 && parse_tid != tid && !ptid && waitForParseLock(tid, xsink)) {
+            return -1;
         }
 
         if (ptid && ptid != q_gettid()) {
@@ -2529,7 +2538,7 @@ public:
         //printd(5, "qore_program_private::lockParsing() this: %p ptid: %d thread_count: %d parse_count: %d -> %d\n",
         //  this, ptid, thread_count, parse_count, parse_count + 1);
         ++parse_count;
-        parse_tid = tid;
+        setParseTidIntern(tid);
         return 0;
     }
 
@@ -2549,7 +2558,7 @@ public:
         assert(parse_count > 0);
         unsigned derefs = 0;
         if (!(--parse_count)) {
-            parse_tid = -1;
+            setParseTidIntern(-1);
             if (thread_waiting) {
                 pcond.broadcast();
             }
@@ -2563,6 +2572,70 @@ public:
     DLLLOCAL bool parsingLocked() const {
         return parse_tid == q_gettid();
     }
+
+    //! Waits for the parse lock that another thread holds; called by lockParsing() with plock held
+    /** While it waits, the thread is registered in the process-wide graph of parse lock waits, which records the
+        Program whose parse lock each waiting thread waits for; with the owner of each Program's parse lock, it gives
+        the chain of the threads that this wait depends on.  If the chain leads back to the current thread, which
+        holds a parse lock that the chain waits for (two Programs whose commits run code that parses code in each
+        other's Program, for example: qore#5693), no thread of the cycle could ever go on, so the wait is refused
+        with \c PROGRAM-ERROR instead; a wait that does not close a cycle is never refused, also when the owner of
+        the lock waits for another parse lock itself.
+
+        With \a xsink, the wait is a cancellation point: a cancellation request or program interrupt ends it with an
+        exception (see QoreCondition::waitWithInterrupt()).  Without \a xsink (internal waits, such as a method
+        lookup in the current Program, and the waits of binary modules' parse context helpers), nothing can be
+        reported: the wait is neither refused nor ended.  It is registered, so that the waits of other threads see
+        the cycles that it is part of, and when it closes a cycle itself, the waits of the cycle that can be refused
+        are: each one checks the cycle after it is registered for a wakeup and before it blocks, and the blocked ones
+        are woken (wakeParseWaitCycleIntern()) to check it.  A cycle whose waits all lack an exception sink is not
+        detected.  Deferred cancellation affects only the wakeup: a wait made while cancellation is deferred
+        (qore_is_cancel_deferred(); not the deferral of a trusted class's destructor, whose waits are registered for
+        a wakeup and woken) is not registered for one, so it still checks the cycle when it is registered in the
+        graph and before it blocks, but is not woken for a cycle that a wait without an exception sink closes while
+        it is blocked.
+
+        A refusal can be conservative: a wait in the chain that is about to end anyway (a cancellation is pending,
+        or its Program is being deleted) still counts.
+
+        @return 0 if the lock is free or the Program is being deleted (lockParsing() then checks ptid), -1 if the wait
+        was refused or ended with an exception in \a xsink
+    */
+    DLLLOCAL int waitForParseLock(int tid, ExceptionSink* xsink);
+
+    //! Sets the thread that holds the parse lock; called with plock held
+    /** While threads are registered as waiting for the lock, the owner is written with the lock of the graph of
+        parse lock waits held as well (see waitForParseLock())
+    */
+    DLLLOCAL void setParseTidIntern(int tid) {
+        if (parse_tid == tid) {
+            return;
+        }
+        if (parse_lock_waiters) {
+            setParseTidWithWaitersIntern(tid);
+        } else {
+            parse_tid = tid;
+        }
+    }
+
+    //! Sets the thread that holds the parse lock with the lock of the graph of parse lock waits held
+    DLLLOCAL void setParseTidWithWaitersIntern(int tid);
+
+    //! Returns true if a wait of the given thread for this Program's parse lock would close a cycle of waits
+    /** Called with plock and the lock of the graph of parse lock waits held
+    */
+    DLLLOCAL bool parseWaitClosesCycleIntern(int tid) const;
+
+    //! Wakes the waits of the cycle that a wait of the given thread for this Program's parse lock closes
+    /** Called for a wait without an exception sink, which cannot be refused, with plock and the lock of the graph of
+        parse lock waits held; the waits of the cycle that can be refused check the cycle again when woken
+    */
+    DLLLOCAL void wakeParseWaitCycleIntern(int tid) const;
+
+#ifdef DEBUG
+    //! returns true if the given thread is registered in the graph of parse lock waits; for tests
+    DLLLOCAL static bool dbgParseWaitRegistered(int tid);
+#endif
 
     //! returns true if the given thread, which is the current thread, holds the parse lock
     DLLLOCAL bool parsingLocked(int tid) const {

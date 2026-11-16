@@ -546,6 +546,193 @@ qore_program_private::programid_to_program_map_t qore_program_private::programid
 QoreRWLock qore_program_private::lck_programMap;
 qore_program_id_t qore_program_private::programIdCounter = 1;
 
+namespace {
+//! the lock of the graph of parse lock waits (qore#5693); taken after a Program's plock, never before one
+QoreThreadLock parse_wait_lock;
+//! the graph of parse lock waits: the Program whose parse lock each thread waits for, by TID; under parse_wait_lock
+/** An entry is set and cleared by its own thread in qore_program_private::waitForParseLock(), which the Program's
+    caller keeps alive while it runs
+*/
+qore_program_private* parse_waits[MAX_QORE_THREADS];
+}
+
+namespace {
+//! The entry of a waiting thread in the graph of parse lock waits; removed at the latest when it goes out of scope
+/** Added and removed with the Program's plock and parse_wait_lock held; the destructor runs with plock held (see
+    qore_program_private::waitForParseLock()), so that no exception can leave the entry of a thread that no longer
+    waits in the graph
+*/
+class ParseWaitEntry {
+public:
+    DLLLOCAL ParseWaitEntry(qore_program_private* pp, int tid) : pp(pp), tid(tid) {
+    }
+
+    DLLLOCAL ~ParseWaitEntry() {
+        if (added) {
+            AutoLocker al(parse_wait_lock);
+            removeIntern();
+        }
+    }
+
+    //! adds the entry; parse_wait_lock is held
+    DLLLOCAL void addIntern() {
+        assert(!added && !parse_waits[tid]);
+        parse_waits[tid] = pp;
+        ++pp->parse_lock_waiters;
+        added = true;
+    }
+
+    //! removes the entry if it was added; parse_wait_lock is held
+    DLLLOCAL void removeIntern() {
+        if (added) {
+            assert(parse_waits[tid] == pp);
+            parse_waits[tid] = nullptr;
+            assert(pp->parse_lock_waiters);
+            --pp->parse_lock_waiters;
+            added = false;
+        }
+    }
+
+    DLLLOCAL bool isAdded() const {
+        return added;
+    }
+
+private:
+    qore_program_private* pp;
+    int tid;
+    bool added = false;
+};
+}
+
+//! raises the exception for a parse lock wait that would close a cycle of waits
+static void raise_parse_wait_cycle(ExceptionSink* xsink, int owner, int tid) {
+    xsink->raiseException("PROGRAM-ERROR", "cannot wait for the parse lock of the Program, which is held by TID %d: "
+        "that thread waits, directly or through other threads, for a parse lock that this thread (TID %d) holds, so "
+        "the wait would never end", owner, tid);
+}
+
+int qore_program_private::waitForParseLock(int tid, ExceptionSink* xsink) {
+    // a thread unknown to Qore cannot be registered, nor be part of a cycle that a registered thread sees
+    ParseWaitEntry entry(this, tid);
+    if (tid >= 0 && tid < MAX_QORE_THREADS) {
+        bool refuse = false;
+        {
+            AutoLocker al(parse_wait_lock);
+            // the cycle is complete only once its last wait is registered, so the thread that would close it sees it
+            if (parseWaitClosesCycleIntern(tid)) {
+                if (xsink) {
+                    refuse = true;
+                } else {
+                    // a wait without an exception sink cannot be refused: its entry is added in this critical
+                    // section, so the waits of the cycle that can be refused see the cycle when they check it before
+                    // they block, and those that are blocked already are woken to check it (see below)
+                    wakeParseWaitCycleIntern(tid);
+                }
+            }
+            if (!refuse) {
+                entry.addIntern();
+            }
+        }
+        // the exception is raised without the lock of the graph: it reads the locations of the call stack, which
+        // locks the Programs of the stack
+        if (refuse) {
+            raise_parse_wait_cycle(xsink, parse_tid, tid);
+            return -1;
+        }
+    }
+
+    //! what the check made before each block needs
+    struct CycleCheck {
+        qore_program_private* pp;
+        int tid;
+        ParseWaitEntry* entry;
+        bool cycle;
+    } check = {this, tid, &entry, false};
+    // called with plock held after the wait is registered for a wakeup and before the thread blocks: a wait without
+    // an exception sink that closes a cycle later either is seen here or wakes this one (see
+    // QoreCondition::waitWithInterrupt()); a wait that sees the cycle leaves the graph in the same critical section,
+    // so that the other waits of the cycle find it broken and only this one is refused
+    auto before_block = [] (void* arg) -> int {
+        CycleCheck* c = static_cast<CycleCheck*>(arg);
+        AutoLocker al(parse_wait_lock);
+        if (!c->pp->parseWaitClosesCycleIntern(c->tid)) {
+            return 0;
+        }
+        c->entry->removeIntern();
+        c->cycle = true;
+        return 1;
+    };
+
+    int rc = 0;
+    while (parse_tid != -1 && parse_tid != tid && !ptid) {
+        ++thread_waiting;
+        if (xsink) {
+            // a cancellation point; see "Condition waits" in design/cooperative-cancellation.md
+            if (pcond.waitWithInterrupt(plock, xsink, "parse lock wait", entry.isAdded() ? +before_block : nullptr,
+                    &check) == QORE_COND_RESULT_INTERRUPTED) {
+                rc = -1;
+            }
+        } else {
+            pcond.wait(plock);
+        }
+        --thread_waiting;
+        if (check.cycle) {
+            raise_parse_wait_cycle(xsink, parse_tid, tid);
+            rc = -1;
+        }
+        if (rc) {
+            break;
+        }
+    }
+    return rc;
+}
+
+void qore_program_private::wakeParseWaitCycleIntern(int tid) const {
+    // the chain is a cycle back to this thread (see parseWaitClosesCycleIntern()); each thread in it but this one
+    // waits.  Waking never blocks (see QoreThreadList::wakeCondWaiter()); a wait that is not registered for a wakeup
+    // (it has no exception sink, or waits while cancellation is deferred) is not woken
+    int owner = parse_tid;
+    for (unsigned i = 0; i < MAX_QORE_THREADS && owner != tid; ++i) {
+        assert(owner >= 0 && owner < MAX_QORE_THREADS && parse_waits[owner]);
+        thread_list.wakeCondWaiter(owner, true);
+        owner = parse_waits[owner]->parse_tid;
+    }
+}
+
+#ifdef DEBUG
+bool qore_program_private::dbgParseWaitRegistered(int tid) {
+    AutoLocker al(parse_wait_lock);
+    return tid >= 0 && tid < MAX_QORE_THREADS && parse_waits[tid];
+}
+#endif
+
+void qore_program_private::setParseTidWithWaitersIntern(int tid) {
+    AutoLocker al(parse_wait_lock);
+    parse_tid = tid;
+}
+
+bool qore_program_private::parseWaitClosesCycleIntern(int tid) const {
+    // the owner of this Program's lock is stable under plock; that of each Program in the chain is stable under
+    // parse_wait_lock, as a thread waits for it (see setParseTidIntern()).  The chain is followed at most once
+    // through every thread: a cycle that does not include this thread (closed by waits without an exception sink,
+    // which are not refused) ends it as well
+    int owner = parse_tid;
+    for (unsigned i = 0; i < MAX_QORE_THREADS; ++i) {
+        if (owner == tid) {
+            return true;
+        }
+        if (owner < 0 || owner >= MAX_QORE_THREADS) {
+            return false;
+        }
+        const qore_program_private* next = parse_waits[owner];
+        if (!next) {
+            return false;
+        }
+        owner = next->parse_tid;
+    }
+    return false;
+}
+
 void qore_program_private::clearRemainingPrograms() {
     // the Programs are cleared one at a time, oldest first, and the registry is scanned again after each one: a
     // Program that an older one holds (a child Program in a global variable of its parent, for example) is cleared
@@ -629,6 +816,8 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
         parse_count = 0;
         parse_tid = -1;
     }
+    // the threads that waited for the parse lock do not exist in the child (see fixupAllAfterFork())
+    parse_lock_waiters = 0;
     tlock.reinitAfterFork();
     tcond.reinitAfterFork();
     twaiting = 0;
@@ -653,6 +842,10 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
 }
 
 void qore_program_private::fixupAllAfterFork(int tid, ThreadProgramData* tpd) {
+    // the graph of parse lock waits: only the forking thread exists in the child, and it was not waiting; a thread of
+    // the parent could hold its lock
+    parse_wait_lock.reinitAfterFork();
+    std::fill(std::begin(parse_waits), std::end(parse_waits), nullptr);
     // all instances, also those whose last reference has been released and that are being destroyed
     for (QoreProgram* p : qore_program_set) {
         qore_program_private::get(*p)->fixupAfterFork(tid, tpd);
