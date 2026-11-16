@@ -566,7 +566,6 @@ static bool write_expr_self_method_call(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* call = qore_get_self_function_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
-        const QoreMethod* method = call->getMethod();
         const QoreClass* qc = call->getRecordedClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
         ctx.writer.writeStringRef(class_ref.c_str());

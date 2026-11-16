@@ -168,7 +168,8 @@ static void clampPollTimeoutToDeadline(QoreHashNode* poll_info, int64_t deadline
     }
 }
 
-//! Log and clear a readPacketBatch exception (shared by batch recv helpers)
+#ifdef __linux__
+//! Log and clear a readPacketBatch exception (shared by the recvmmsg() batch recv helpers, which only Linux has)
 static void logBatchError(ExceptionSink* xsink, QuicSession* target, int batch_count) {
     QoreStringValueHelper err_str(xsink->getExceptionErr());
     QoreStringValueHelper desc_str(xsink->getExceptionDesc());
@@ -181,6 +182,7 @@ static void logBatchError(ExceptionSink* xsink, QuicSession* target, int batch_c
         *desc_str ? desc_str->c_str() : "unknown");
     xsink->clear();
 }
+#endif
 
 //! Batch-receive and dispatch QUIC packets via recvmmsg (Linux) or recvmsg (other).
 /** Receives all available packets from the socket and dispatches them to their
@@ -433,7 +435,8 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
         path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&src_addr);
         path.remote.addrlen = src_addrlen;
 
-        int rv = target->readPacket(recv_buf, static_cast<size_t>(nread), path, xsink);
+        // an error is reported in xsink
+        target->readPacket(recv_buf, static_cast<size_t>(nread), path, xsink);
         if (*xsink) {
             // Log exception details and continue; a single session error should not
             // stop the server from receiving packets for other sessions

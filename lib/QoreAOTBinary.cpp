@@ -12908,7 +12908,6 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     // SelfFunctionCallNode: method call on self
     if (auto* call = qore_get_self_function_call_node(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
-        const QoreMethod* method = call->getMethod();
         const QoreClass* qc = call->getRecordedClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
         writer.writeStringRef(class_ref.c_str());
