@@ -2006,8 +2006,11 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
     printd(5, "qore_class_private::initMember() this: %p '%s::%s' initializing '%s::%s' member_class_ctx: %p'\n",
         this, name.c_str(), member_name, member_class_ctx ? member_class_ctx->name.c_str() : "<self>", member_name,
         member_class_ctx);
+    // the slot already has a value when another declaration of the member in the same storage has an initializer
+    // that ran before this one: a parent class's declaration that the class declares again, or another parent
+    // class's declaration (qore#6411); the declarations are initialized in the order of the list, so the last one with
+    // an initializer gives the value, and its initializer can read the value of the earlier one
     QoreValue& v = qore_object_private::get(o)->getMemberValueRefForInitialization(member_name, member_class_ctx);
-    assert(v.isNothing());
     if (!info.exp.isNothing()) {
         // set runtime location
         QoreProgramLocationHelper l(info.loc);
@@ -2073,12 +2076,25 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
                 return -1;
             }
         }
+        // the value of an earlier declaration, if any, is replaced; it is released after the new value is stored.  No
+        // recursive-reference repair is needed before the release, as an assignment that replaces a value makes:
+        // the object is being constructed, and its constructor holds it
+        QoreValue old = v;
         v = val.takeReferencedValue();
         //printd(5, " + val: %d (%s)\n", v.getType() == NT_INT ? (int)v.getAsBigInt() : 0, v.getTypeName());
         if (needs_scan(v)) {
             qore_object_private::incScanCount(o, 1);
             if (!need_scan) {
                 need_scan = true;
+            }
+        }
+        if (!old.isNothing()) {
+            if (needs_scan(old)) {
+                qore_object_private::incScanCount(o, -1);
+            }
+            old.discard(xsink);
+            if (*xsink) {
+                return -1;
             }
         }
     }
