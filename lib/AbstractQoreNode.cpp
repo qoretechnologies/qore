@@ -1201,14 +1201,15 @@ int64 get_ms_zero(const QoreValue& n) {
 }
 
 // a call reference needs a scan if the node it holds does: a sandbox-bound callback, or the value of a reference to a
-// pseudo-method (issue #995); out of line, so that needs_scan() stays small enough to be inlined in needs_scan(const
-// QoreValue&), which the storing of every value calls
+// pseudo-method (issue #995); out of line, as it is rare
 static __attribute__((noinline, cold)) bool needs_scan_call_reference(const AbstractQoreNode* n) {
     const AbstractQoreNode* held = qore_get_call_reference_scan_node(n);
     return held && needs_scan(held);
 }
 
-bool needs_scan(const AbstractQoreNode* n) {
+//! the test of needs_scan(), inlined in both of its overloads: needs_scan(const QoreValue&) is called for every value
+//! stored, and a call to the node overload there costs instructions in every container write (issue #995)
+static inline __attribute__((always_inline)) bool needs_scan_intern(const AbstractQoreNode* n) {
     if (!n)
         return false;
 
@@ -1224,13 +1225,17 @@ bool needs_scan(const AbstractQoreNode* n) {
     return false;
 }
 
+bool needs_scan(const AbstractQoreNode* n) {
+    return needs_scan_intern(n);
+}
+
 bool needs_scan(const QoreValue& v) {
     // an opaque reference is a strong reference the collector does not follow; it is transparent
     // to every other consumer, so the tag is the only thing that distinguishes it here
     if (v.isOpaque()) {
         return false;
     }
-    return needs_scan(v.getInternalNode());
+    return needs_scan_intern(v.getInternalNode());
 }
 
 void inc_container_obj(const AbstractQoreNode* n, int dt) {
