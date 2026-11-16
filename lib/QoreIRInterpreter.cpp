@@ -3775,19 +3775,25 @@ static inline __attribute__((always_inline)) QoreStringNode* qore_ir_value_to_st
 //! ToFloatChecked; issue #5660)
 /** Out of line: the conversion code is not part of the function that interprets every opcode
 
-    @return true with the result in \a res, false if the builtin raised an exception
+    @return 0 if the builtin raised an exception, 1 with the result in \a res, 2 with the result in \a res if it holds
+    a reference that the caller must release: a string, and an int above 48 bits, a negative NaN or a double in the
+    tag-collision range (about -2.2e307 to -8.7e307), which a node holds
+    (issue #6211; the caller only tests the code, so that the test adds no code to its hot paths)
 */
-static __attribute__((noinline)) bool qore_ir_checked_conversion(int kind, QoreValue val, QoreValue& res,
+static __attribute__((noinline)) int qore_ir_checked_conversion(int kind, QoreValue val, QoreValue& res,
         ExceptionSink* xsink) {
     if (kind == QORE_RT_BUILTIN_CONVERSION_STRING) {
         // as the unchecked string conversion does, with the check of the type
         QoreStringNode* str = qore_ir_value_to_string_node_checked(val, val.getType());
         if (str) {
             res = str;
-            return true;
+            return 2;
         }
         // any other type: the builtin raises its error, or converts a type that is not handled here
-        return qore_rt_builtin_conversion_call(kind, val, res, xsink);
+        if (!qore_rt_builtin_conversion_call(kind, val, res, xsink)) {
+            return 0;
+        }
+        return res.needsRef() ? 2 : 1;
     }
     return qore_rt_builtin_conversion_checked(kind, val, res, xsink);
 }
@@ -17371,7 +17377,8 @@ load_local_done:
                         : QORE_RT_BUILTIN_CONVERSION_FLOAT);
                 QoreValue res;
                 // out of line, so that the conversions add no code to this function's hot paths
-                if (!qore_ir_checked_conversion(kind, getIRValue(values, inst->operands[0]), res, xsink)) {
+                int rc = qore_ir_checked_conversion(kind, getIRValue(values, inst->operands[0]), res, xsink);
+                if (!rc) {
                     if (inst->exception_target) {
                         cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
                         prev_block = block;
@@ -17382,7 +17389,8 @@ load_local_done:
                     return returnAfterUnhandledException();
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (kind == QORE_RT_BUILTIN_CONVERSION_STRING) {
+                // a string, and an int or float that a node holds (issue #6211)
+                if (rc > 1) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;

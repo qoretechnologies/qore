@@ -6841,31 +6841,33 @@ static inline __attribute__((always_inline)) QoreStringNode* qore_rt_to_string_c
     }
 }
 
-bool qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink) {
+int qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink) {
     switch (kind) {
         case QORE_RT_BUILTIN_CONVERSION_STRING: {
             QoreStringNode* str = qore_rt_to_string_checked_intern(val, xsink);
             if (!str) {
-                return false;
+                return 0;
             }
             rv = str;
-            return true;
+            return 2;
         }
         case QORE_RT_BUILTIN_CONVERSION_INT: {
             int64_t i;
             if (!qore_rt_to_int_checked_intern(val, i, xsink)) {
-                return false;
+                return 0;
             }
             rv = i;
-            return true;
+            // an int above 48 bits is held in a node
+            return rv.isInt() ? 1 : 2;
         }
         default: {
             double f;
             if (!qore_rt_to_float_checked_intern(val, f, xsink)) {
-                return false;
+                return 0;
             }
             rv = f;
-            return true;
+            // a negative NaN and a double in the tag-collision range are held in a node
+            return rv.isFloat() ? 1 : 2;
         }
     }
 }
