@@ -9,7 +9,7 @@
 enum ES : string { X = "x", Y = "yy", N = "12" }
 enum EN : number { N1 = 1.5n, N2 = 2.5n }
 enum EI : int { One = 1, Two = 2 }
-enum EL : string { Long = "a string value longer than an inline short string" }
+enum EL : string { Long = "a string value longer than an inline short string", S = "s" }
 enum EU : string { U = "äöü" }
 
 hashdecl HS {
@@ -146,6 +146,8 @@ auto sub fLongSize(EL e) { return e.size(); }
 auto sub fLongEmpty(EL e) { return e.empty(); }
 auto sub fLongLocal(EL e) { string s = e; return s; }
 auto sub fLongHashValueSize(hash<string, string> h) { return h.a.size(); }
+# appends of string enum values (with a long and with a short base) to a string variable
+string sub fAppendEnum(EL e) { string s = EL::Long; s += EL::Long; s += e; return s; }
 
 # values that keep their enum type
 auto sub fEnumLocal(ES e) { ES c = e; return c; }
@@ -272,3 +274,4 @@ run("long value size()", auto sub () { return fLongSize(EL::Long); });
 run("long value empty()", auto sub () { return fLongEmpty(EL::Long); });
 run("long value string local", auto sub () { return fLongLocal(EL::Long); });
 run("long value hash value size()", auto sub () { return fLongHashValueSize({"a": EL::Long}); });
+run("appends of long and short values", auto sub () { return map fAppendEnum($1), (EL::Long, EL::S); });

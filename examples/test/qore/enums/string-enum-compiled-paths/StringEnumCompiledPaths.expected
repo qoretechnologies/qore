@@ -87,3 +87,4 @@ long value size(): integer 49
 long value empty(): bool False
 long value string local: string "a string value longer than an inline short string"
 long value hash value size(): integer 49
+appends of long and short values: ["string", "string"] ["a string value longer than an inline short stringa string value longer than an inline short stringa string value longer than an inline short string", "a string value longer than an inline short stringa string value longer than an inline short strings"]
