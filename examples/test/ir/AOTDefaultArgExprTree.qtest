@@ -118,11 +118,21 @@ public int sub fnested(auto d = -(+(-getDelay().durationSeconds()))) {
     return d;
 }
 
+# an int too large for an immediate value is a node: the unary plus must not return it borrowed from the scope of
+# the call's default arguments (qore#5712)
+auto sub bigi(int i) {
+    return (1 << 62) + i;
+}
+
+public int sub fbig(auto x = +bigi(7)) {
+    return x;
+}
+
 public string sub verify() {
     C c();
     string rv = sprintf(\"%d\", fdefault());
-    if (c.mdefault() != fdefault() || fnested() != fdefault()) {
-        rv = sprintf(\"%d %d %d\", fdefault(), c.mdefault(), fnested());
+    if (c.mdefault() != fdefault() || fnested() != fdefault() || fbig() != 4611686018427387911) {
+        rv = sprintf(\"%d %d %d %d\", fdefault(), c.mdefault(), fnested(), fbig());
     }
     return rv;
 }
