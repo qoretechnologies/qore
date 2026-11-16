@@ -555,6 +555,19 @@ the frame's exits) is gone.
   NOTHING, unless its declared return type requires a value: its path then raises the error of a missing return
   value, as the AST interpreter does.  A call replaced by a summary runs no code of the callee, so no request can be
   made in it.
+  - The readers of the facts that the restriction clears: in native code of a JIT batch, `known_not_nothing_values`
+    of the result of a CallClosureDirect of an immediate closure, which lets `fastEntryArgumentKnownNotNothing()`
+    leave out the NOTHING check of an argument of a callee's fast entry; every other reader is AOT only, or reads
+    facts that the restriction does not change (the native return kinds need a declared type that rejects NOTHING).
+  - The restriction is defensive: no case found fails without it (facts_closure_caller in debugger-step-flow, an
+    immediately called closure literal and a closure whose returning on_exit handler is lowered inline in a path all
+    match AST in jit and tiered with the restriction disabled).
+  - The forwarding summaries of `qore_ir_resolve_batch_function_summaries()`, which a JIT batch computes before the
+    restriction (`boxed_return_param` and the `never_returns_nothing` that its composition sets), escape nothing:
+    they need a returned parameter that rejects NOTHING whose type is the declared return type, of the function and of
+    each callee it forwards through, so the path of each raises the error of a missing return value.
+  - `boxed_return_param` is not cleared: code generation reads it only in AOT compilation
+    (`qore_ir_fold_boxed_return_param_calls()`), whose native code has no paths.
 - **Size of the paths.**  Every step event has paths, so their code must grow with the function, not with the
   product of its statements and anything else:
   - the return paths share the release of the locals of the blocks at the bottom of the cleanup stack (the Lvars and
@@ -573,7 +586,17 @@ the frame's exits) is gone.
     path blocks) changes no lowering state of the code, and the marks and the SSA cleanups are restored after each run
     of path blocks; a path's UninstantiateLocal leaves the cleanup allocas of a block-scoped local for the code's own
     exit of the block;
-  - only the outermost path resets the budget of the handlers lowered inline (`DebugFlowPathLowering`).
+  - only the outermost path resets the budget of the handlers lowered inline (`DebugFlowPathLowering`);
+  - the requests of an event whose path is the same (a break or a continue that no loop or switch statement takes is
+    a return) share its entry block (`makeDebugFlowEntries()`, `QoreIRDebugFlowTargets::targets()` gives each block
+    once), and in a handler lowered inline those that end at the same block share the path and the end;
+  - a path leaves a scope none of whose handlers runs at its position (its on_exit statements come later in the
+    block) as a return statement there does, without running handlers out of line; and the native code of a path
+    runs the handlers of a scope with the table-driven helpers (qore#6110) whatever the size of the function, as the
+    code that publishes and reloads each local inline is as long as the function has locals.  Before, the function
+    of `JITLargeFunctionBlocks` testHandlerBudget with 25 and 50 catch blocks was 1.79 and 1.84 times the size of the
+    same function without step events with the inline handler code (develop: 1.07 and 1.05), and its JIT compile
+    took 1.8 times as long as on develop (`DebugFlowPathCode.qtest` handlerPathSize).
 - **AOT outlining.**  Outlined code is AOT native code only, which takes no requests, so the outliner sets the paths
   aside while it outlines a function and puts them back with `undo()` (design/aot-function-outlining.md, decision 11);
   the debug IR, and format v41, are unchanged.

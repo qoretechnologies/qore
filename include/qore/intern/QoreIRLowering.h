@@ -837,18 +837,31 @@ private:
         QoreIRBasicBlock* break_path = nullptr;
         QoreIRBasicBlock* continue_path = nullptr;
         QoreIRBasicBlock* return_path = nullptr;
+        //! in the body of a handler lowered inline (InlineHandlerFlow::segment): the end of the handler that the path
+        //! of each request (RC_RETURN, RC_BREAK, RC_CONTINUE) branches to, or nullptr for the path of a loop or a
+        //! switch statement of the body; the requests that end at the same block share the path
+        QoreIRBasicBlock* handler_end[3] = {};
     };
     //! Gives the step event \a dbg the paths of a debugger's return, break and continue requests at the current
     //! lowering position (QoreIRDebugStatementInstruction::flow, issues #6200 and #6201)
-    /** Each request gets a block of its own for the event, which branches to the code of the request that the step
-        events of \a segment share (lowerDebugFlowPath()): that of a return statement without a value, or of a break
-        or a continue statement to its target (findLoopJumpTarget()), or of the return if there is none, as with the
-        AST interpreter.  The events of a handler's statements get no paths: the frame that runs the handler takes
+    /** Each path gets a block of its own for the event (makeDebugFlowEntries()), which branches to the code of the
+        request that the step events of \a segment share (lowerDebugFlowPath()): that of a return statement without a
+        value, or of a break or a continue statement to its target (findLoopJumpTarget()), or of the return if there
+        is none, as with the AST interpreter.  The events of a handler's statements get no paths: the frame that runs the handler takes
         their requests.  Only called for the step events of code with them (QoreIRFunction::source_dpgm_addr or
         QoreIRFunction::emit_debug_statements).
     */
     bool setDebugFlowTargets(QoreIRDebugStatementInstruction* dbg, DebugFlowSegment& segment,
             const QoreProgramLocation* loc, std::string& error);
+    //! Sets the targets of \a flow to the entry blocks of the paths of a debugger's requests, one for each path: the
+    //! requests whose path is the same (a break or a continue that no loop or switch statement takes is a return)
+    //! share the block; returns false if a block cannot be created
+    /** An entry block is a single branch to its path, so that the edge from the event has the state of the function
+        at the event as its input in the analyses of the IR (QoreIRDebugFlowTargets::targets())
+    */
+    bool makeDebugFlowEntries(QoreIRDebugFlowTargets& flow, QoreIRBasicBlock* break_path,
+            QoreIRBasicBlock* continue_path, QoreIRBasicBlock* return_path, const char* break_name,
+            const char* continue_name, const char* return_name, const QoreProgramLocation* loc);
     //! Lowers the code of a debugger's request \a rc (RC_RETURN, RC_BREAK or RC_CONTINUE, with the target \a jt)
     //! at the current lowering position into blocks of its own (QoreIRBasicBlock::debug_flow), as a return statement
     //! without a value (lowerReturnWithoutValue()) or the jump of a break or a continue statement there

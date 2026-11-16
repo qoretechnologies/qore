@@ -5065,8 +5065,22 @@ bool QoreIRLowering::setDebugFlowTargets(QoreIRDebugStatementInstruction* dbg, D
     if (!get_path(RC_BREAK, segment.break_path) || !get_path(RC_CONTINUE, segment.continue_path)) {
         return false;
     }
-    // the block of the event for each request: the edge from the event has the state of the function at the event
-    // as its input in the analyses of the IR, and a Phi at the shared path tells the events apart
+    // the block of the event for each path: the edge from the event has the state of the function at the event as its
+    // input in the analyses of the IR, and a Phi at the shared path tells the events apart
+    auto flow = std::make_unique<QoreIRDebugFlowTargets>();
+    if (!makeDebugFlowEntries(*flow, segment.break_path, segment.continue_path, segment.return_path,
+            "debug.flow.break.entry", "debug.flow.continue.entry", "debug.flow.return.entry", loc)) {
+        error = "IR builder failed to create the block of a debugger flow request";
+        return false;
+    }
+    dbg->flow = std::move(flow);
+    return true;
+}
+
+bool QoreIRLowering::makeDebugFlowEntries(QoreIRDebugFlowTargets& flow, QoreIRBasicBlock* break_path,
+        QoreIRBasicBlock* continue_path, QoreIRBasicBlock* return_path, const char* break_name,
+        const char* continue_name, const char* return_name, const QoreProgramLocation* loc) {
+    assert(break_path && continue_path && return_path);
     auto make_entry = [&](QoreIRBasicBlock* path, const char* name) -> QoreIRBasicBlock* {
         QoreIRBasicBlock* entry = createBlock(name);
         if (!entry) {
@@ -5079,23 +5093,28 @@ bool QoreIRLowering::setDebugFlowTargets(QoreIRDebugStatementInstruction* dbg, D
         entry->instructions.push_back(std::move(br));
         return entry;
     };
-    auto flow = std::make_unique<QoreIRDebugFlowTargets>();
-    flow->break_target = make_entry(segment.break_path, "debug.flow.break.entry");
-    flow->continue_target = make_entry(segment.continue_path, "debug.flow.continue.entry");
-    flow->return_target = make_entry(segment.return_path, "debug.flow.return.entry");
-    if (!flow->break_target || !flow->continue_target || !flow->return_target) {
-        error = "IR builder failed to create the block of a debugger flow request";
-        return false;
-    }
-    dbg->flow = std::move(flow);
-    return true;
+    // the requests whose code is the same share the entry block: a break or a continue that no loop or switch
+    // statement takes is a return
+    flow.break_target = make_entry(break_path, break_name);
+    flow.continue_target = continue_path == break_path ? flow.break_target : make_entry(continue_path, continue_name);
+    flow.return_target = return_path == break_path ? flow.break_target
+        : (return_path == continue_path ? flow.continue_target : make_entry(return_path, return_name));
+    return flow.break_target && flow.continue_target && flow.return_target;
 }
 
 bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction* dbg,
         const QoreProgramLocation* loc, std::string& error) {
     const InlineHandlerFlow hf = inline_handler_flow_stack.back();
+    // the index of the handler's entry: lowering a path can lower handlers inline, which pushes on
+    // inline_handler_flow_stack and can reallocate it
+    const size_t hf_index = inline_handler_flow_stack.size() - 1;
     QoreIRFunction* func = builder.getFunction();
-    auto make_path = [&](int rc) -> QoreIRBasicBlock* {
+    // the index of the request in DebugFlowSegment::handler_end
+    auto end_index = [](int rc) -> size_t {
+        return rc == RC_RETURN ? 0 : (rc == RC_BREAK ? 1 : 2);
+    };
+    auto make_path = [&](int rc, QoreIRBasicBlock*& path_end) -> QoreIRBasicBlock* {
+        path_end = nullptr;
         // a loop or a switch statement of the body
         if (rc != RC_RETURN) {
             LoopJumpTarget jt = findLoopJumpTarget(rc == RC_BREAK);
@@ -5114,6 +5133,19 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
         QoreIRBasicBlock* end = getInlineHandlerFlowEnd(rc, error);
         if (!end) {
             return nullptr;
+        }
+        path_end = end;
+        // the requests that end at the same block share the code: the requests of a handler that is not the last of
+        // its exit, and those whose paths after the handler are the same (getInlineHandlerFlowEnd())
+        {
+            const DebugFlowSegment& segment = inline_handler_flow_stack[hf_index].segment;
+            for (int other : {RC_RETURN, RC_BREAK, RC_CONTINUE}) {
+                QoreIRBasicBlock* other_path = other == RC_RETURN ? segment.return_path
+                    : (other == RC_BREAK ? segment.break_path : segment.continue_path);
+                if (other != rc && other_path && segment.handler_end[end_index(other)] == end) {
+                    return other_path;
+                }
+            }
         }
         QoreIRBasicBlock* saved_block = builder.getBlock();
         const size_t first_block = func->blocks.size();
@@ -5143,20 +5175,7 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
         }
         return path;
     };
-    auto make_entry = [&](QoreIRBasicBlock* path) -> QoreIRBasicBlock* {
-        QoreIRBasicBlock* entry = createBlock("debug.flow.handler.entry");
-        if (!entry) {
-            return nullptr;
-        }
-        entry->debug_flow = true;
-        auto br = std::make_unique<QoreIRBranchInstruction>();
-        br->target = path;
-        br->loc = loc;
-        entry->instructions.push_back(std::move(br));
-        return entry;
-    };
     // the segment of the event in the body: the cleanups of a path depend only on this state
-    const size_t hf_index = inline_handler_flow_stack.size() - 1;
     {
         DebugFlowSegment& segment = inline_handler_flow_stack[hf_index].segment;
         const size_t cleanup_depth = cleanup_stack.size();
@@ -5178,7 +5197,7 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
             segment.exception_target = exception_target;
         }
     }
-    auto flow = std::make_unique<QoreIRDebugFlowTargets>();
+    QoreIRBasicBlock* paths[3] = {};
     for (int rc : {RC_RETURN, RC_BREAK, RC_CONTINUE}) {
         // lowering a path can lower handlers inline, which pushes on inline_handler_flow_stack: the cache is read
         // and written by its index
@@ -5188,18 +5207,26 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
                 : (rc == RC_BREAK ? segment.break_path : segment.continue_path);
         };
         QoreIRBasicBlock* path = cached();
-        if (!path && (path = make_path(rc))) {
-            cached() = path;
+        if (!path) {
+            QoreIRBasicBlock* path_end = nullptr;
+            if ((path = make_path(rc, path_end))) {
+                cached() = path;
+                inline_handler_flow_stack[hf_index].segment.handler_end[end_index(rc)] = path_end;
+            }
         }
-        QoreIRBasicBlock* entry = path ? make_entry(path) : nullptr;
-        if (!entry) {
+        if (!path) {
             if (error.empty()) {
                 error = "IR builder failed to create the block of a debugger flow request";
             }
             return false;
         }
-        (rc == RC_RETURN ? flow->return_target : (rc == RC_BREAK ? flow->break_target : flow->continue_target))
-            = entry;
+        paths[end_index(rc)] = path;
+    }
+    auto flow = std::make_unique<QoreIRDebugFlowTargets>();
+    if (!makeDebugFlowEntries(*flow, paths[1], paths[2], paths[0], "debug.flow.handler.entry",
+            "debug.flow.handler.entry", "debug.flow.handler.entry", loc)) {
+        error = "IR builder failed to create the block of a debugger flow request";
+        return false;
     }
     dbg->flow = std::move(flow);
     return true;
@@ -5216,23 +5243,9 @@ bool QoreIRLowering::setScopeExitFlowTargets(QoreIRScopeExitInstruction* se, siz
         return false;
     }
     const QoreProgramLocation* loc = cleanup_stack[scope_entry].loc;
-    auto make_entry = [&](QoreIRBasicBlock* path, const char* name) -> QoreIRBasicBlock* {
-        QoreIRBasicBlock* block = createBlock(name);
-        if (!block) {
-            return nullptr;
-        }
-        block->debug_flow = true;
-        auto br = std::make_unique<QoreIRBranchInstruction>();
-        br->target = path;
-        br->loc = loc;
-        block->instructions.push_back(std::move(br));
-        return block;
-    };
     auto flow = std::make_unique<QoreIRDebugFlowTargets>();
-    flow->break_target = make_entry(paths->break_path, "debug.flow.scope.break.entry");
-    flow->continue_target = make_entry(paths->continue_path, "debug.flow.scope.continue.entry");
-    flow->return_target = make_entry(paths->return_path, "debug.flow.scope.return.entry");
-    if (!flow->break_target || !flow->continue_target || !flow->return_target) {
+    if (!makeDebugFlowEntries(*flow, paths->break_path, paths->continue_path, paths->return_path,
+            "debug.flow.scope.break.entry", "debug.flow.scope.continue.entry", "debug.flow.scope.return.entry", loc)) {
         error = "IR builder failed to create the block of a debugger flow request";
         return false;
     }
@@ -5414,7 +5427,9 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 }
 
                 // the paths of a debugger's flow requests run the handlers out of line, unless one of them can
-                // return (see CF_HANDLERS_OUT_OF_LINE)
+                // return (see CF_HANDLERS_OUT_OF_LINE); a scope none of whose handlers runs here (none is registered
+                // at this position, as its on_exit statements come later in the block, or none runs on this exit) is
+                // left as a return statement here leaves it, with no handler to run and so no request to take
                 if (!protected_scope && (flags & CF_HANDLERS_OUT_OF_LINE)) {
                     size_t out_of_line_end = block_handlers.size();
                     for (size_t j = i; j < cleanup_stack.size(); ++j) {
@@ -5423,10 +5438,19 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                             break;
                         }
                     }
+                    bool runs = false;
                     bool may_return = false;
                     for (size_t h = entry.handler_start; h < out_of_line_end && !may_return; ++h) {
-                        may_return = shouldRunHandler(block_handlers[h], is_error)
-                            && qore_ir_block_may_return(block_handlers[h].code);
+                        if (shouldRunHandler(block_handlers[h], is_error)) {
+                            runs = true;
+                            may_return = qore_ir_block_may_return(block_handlers[h].code);
+                        }
+                    }
+                    if (!runs) {
+                        // what lowerHandlersAtExit() lowers for a scope none of whose handlers runs: the scope is
+                        // left and its registrations dropped
+                        builder.createScopeExit(entry.scope_id, is_error, entry.loc, /*inline_lowered=*/true);
+                        break;
                     }
                     if (!may_return) {
                         auto* se_inst = builder.createScopeExit(entry.scope_id, is_error, entry.loc,
@@ -6276,6 +6300,17 @@ QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEnd(int rc, std::string& e
     }
     QoreIRBasicBlock* scope_path = rc == RC_RETURN ? paths->return_path
         : (rc == RC_BREAK ? paths->break_path : paths->continue_path);
+    // the requests whose paths after the handler are the same (a break or a continue that no loop or switch
+    // statement takes is a return) share the end
+    for (QoreIRBasicBlock* other : inline_handler_flow_stack[hf_index].request_end) {
+        if (other && !other->instructions.empty()) {
+            const auto* br = qore_ir_inst_cast<const QoreIRBranchInstruction*>(other->instructions.back().get());
+            if (br && br->target == scope_path) {
+                inline_handler_flow_stack[hf_index].request_end[end_index] = other;
+                return other;
+            }
+        }
+    }
     QoreIRBasicBlock* end = createBlock("debug.flow.handler.end");
     if (!end) {
         error = "IR builder failed to create the block of a debugger flow request";

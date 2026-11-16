@@ -1631,9 +1631,13 @@ struct QoreIRDebugFlowTargets {
         return rc == 1 ? return_target : (rc == 2 ? break_target : (rc == 3 ? continue_target : nullptr));
     }
 
-    //! returns the paths, some of which can be nullptr
+    //! returns the entry blocks of the paths, each one once, some of which can be nullptr
+    /** The requests of an event whose code is the same (a break or a continue that no loop or switch statement takes
+        is a return) share an entry block: it is given for the first of them, and nullptr for the others
+    */
     std::array<QoreIRBasicBlock*, 3> targets() const {
-        return {break_target, continue_target, return_target};
+        return {break_target, continue_target != break_target ? continue_target : nullptr,
+            return_target != break_target && return_target != continue_target ? return_target : nullptr};
     }
 
     //! returns true if the path of the request \a rc returns from the function: the return, and a break or a continue

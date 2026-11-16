@@ -1865,6 +1865,8 @@ private:
     struct HandlerSite {
         llvm::CallInst* call;
         bool reload;
+        //! true if the site uses the table-driven helpers (obe_table_mode when it was recorded)
+        bool table;
     };
     std::vector<HandlerSite> handler_sites;
 

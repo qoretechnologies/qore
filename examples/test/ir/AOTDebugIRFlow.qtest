@@ -92,8 +92,11 @@ class AOTDebugIRFlowTest inherits QUnit::Test {
     }
 
     #! the debug IR of a function with the paths of a debugger's requests is the same with and without outlining
-    /** A function that may be outlined is optimized as such (aotFunctionBodyMayBeOutlined()), so the IR is compared
-        with that of the same optimization without the transform (QORE_AOT_OUTLINE_FN=analyze)
+    /** A function that may be outlined is optimized as such (aotFunctionBodyMayBeOutlined(): its outline regions are
+        preserved, so its constant CSE differs), so its debug IR differs from that of the same function compiled with
+        outlining off for that reason alone, which is not compared; the IR is compared with that of the same
+        optimization without the transform (QORE_AOT_OUTLINE_FN=analyze), which differs only if outlining leaves
+        something of the transform in it (design/aot-function-outlining.md, decision 11)
     */
     testDebugIR() {
         list<string> plain = dumpDebugIR("QORE_AOT_OUTLINE_FN=analyze " + OutlineEnv);

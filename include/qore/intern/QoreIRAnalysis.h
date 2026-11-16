@@ -50,7 +50,8 @@ static inline bool qore_ir_is_exception_only_release(const QoreIRInstruction& in
 /** Each edge leaves the block from inside it, not at its end: \a visitor gets the position of the edge, the index of
     the instruction before which it leaves (that of a step event, or the one after a ScopeExit, see
     qore_ir_debug_flow_after()), and the block that the request enters, which has the block as its only predecessor.
-    Each target is visited once: each request has an entry block of its own.
+    Each target is visited once: each path of an event has an entry block of its own, which the requests of the event
+    with that path share (QoreIRDebugFlowTargets::targets()).
 */
 template <typename F>
 void qore_ir_visit_debug_flow_targets(const QoreIRBasicBlock& block, F&& visitor) {
@@ -310,7 +311,7 @@ struct QoreIRFunctionEffectSummary {
     //! without a value, which the code of the function never does if \a never_returns_nothing is set; the path raises
     //! the error of a missing return value instead where the declared return type requires a value (#6201)
     /** A caller compiled to native code by the JIT, whose callee takes the path, relies on \a never_returns_nothing
-        only where the callee's declared return type requires a value (qore_ir_callee_return_facts_hold())
+        only where the callee's declared return type requires a value (qore_ir_restrict_debug_flow_return_facts())
     */
     bool debug_flow_returns_nothing = false;
     //! True for parameters whose value is only observed during the call.

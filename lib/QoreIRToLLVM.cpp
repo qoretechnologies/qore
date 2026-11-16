@@ -4684,7 +4684,7 @@ bool QoreIRToLLVM::releasesReloadStorageForHandlers(const void* key) const {
 
 void QoreIRToLLVM::recordHandlerSite(llvm::CallInst* call, bool reload) {
     if (has_on_block_exit_handlers) {
-        handler_sites.push_back({call, reload});
+        handler_sites.push_back({call, reload, obe_table_mode});
     }
 }
 
@@ -4707,7 +4707,7 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
     llvm::IRBuilderBase::InsertPointGuard insert_point_guard(*builder);
     for (const HandlerSite& site : sites) {
         builder->SetInsertPoint(site.call);
-        std::vector<const void*> released = obe_table_mode ? releaseLocalReloadStorageViaTable(module)
+        std::vector<const void*> released = site.table ? releaseLocalReloadStorageViaTable(module)
             : releaseLocalReloadStorage(module);
         if (!site.reload || released.empty()) {
             continue;
@@ -4723,7 +4723,7 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
         } else {
             builder->SetInsertPoint(site.call->getParent());
         }
-        if (obe_table_mode) {
+        if (site.table) {
             // the locals that have an owner are reloaded by one call (qore#6110)
             std::vector<uint32_t> entries;
             for (const void* key : released) {
@@ -37097,11 +37097,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // emitOnBlockExitExec())
                     llvm::BasicBlock* skip_bb = builder->GetInsertBlock();
                     llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, saved_count);
-                    publishLocalsForHandlers(module);
-                    // the locals whose reload storage is released before the handlers run are reloaded right after
-                    // them (see finalizeHandlerSites())
-                    recordHandlerSite(emitOnBlockExitHoldCall(module, saved_count,
-                        !qore_ir_exception_reaches_catch(inst->exception_target)), true);
+                    {
+                        // the path of a debugger's request runs its handlers with the table-driven helpers (qore#6110),
+                        // whose code does not grow with the locals: it is cold, and its handlers run in it only, so
+                        // the code of the paths of a function with many handlers and locals grows with the function
+                        // (#6201)
+                        struct ObeTableModeScope {
+                            bool& mode;
+                            const bool saved;
+                            ObeTableModeScope(bool& mode, bool set) : mode(mode), saved(mode) {
+                                mode = mode || set;
+                            }
+                            ~ObeTableModeScope() {
+                                mode = saved;
+                            }
+                        } table_mode(obe_table_mode, lowering_debug_flow_block);
+                        publishLocalsForHandlers(module);
+                        // the locals whose reload storage is released before the handlers run are reloaded right
+                        // after them (see finalizeHandlerSites())
+                        recordHandlerSite(emitOnBlockExitHoldCall(module, saved_count,
+                            !qore_ir_exception_reaches_catch(inst->exception_target)), true);
+                    }
                     // a debugger's request that the last handler run ended with (#6201)
                     llvm::Value* handler_flow = nullptr;
                     llvm::BasicBlock* run_end_bb = nullptr;

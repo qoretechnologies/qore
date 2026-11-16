@@ -2477,7 +2477,7 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
                 debug_flow_sources.resize(blocks.size());
             }
             DebugFlowSource& source = debug_flow_sources[it->second];
-            // each request has an entry block of its own (QoreIRVerifier)
+            // each path of an event has an entry block of its own (QoreIRVerifier)
             assert(source.block == SIZE_MAX);
             source.block = block_id;
             source.index = index;
