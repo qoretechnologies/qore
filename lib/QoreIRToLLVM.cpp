@@ -38634,6 +38634,20 @@ llvm::Value* QoreIRToLLVM::emitAnyArithFastPath(llvm::Instruction::BinaryOps int
     return phi;
 }
 
+bool QoreIRToLLVM::comparisonOperandsMayBeBuffers(const QoreIRInstruction* inst) const {
+    if (!inst) {
+        return true;
+    }
+    for (const QoreIRValue& operand : inst->operands) {
+        const QoreIRValueFacts* facts = current_ir_func ? current_ir_func->getValueFacts(operand) : nullptr;
+        if (!facts || !facts->type_info
+                || QoreTypeInfo::parseReturns(facts->type_info, NT_BUFFER) != QTI_NOT_EQUAL) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Phase 5b: Emit inline LLVM fast-path for .any comparisons.
 // Checks int-vs-int and float-vs-float for native comparison, then boxes result as bool.
 // Falls back to qore_rt_comparison_op for mixed types.
@@ -38695,8 +38709,35 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
     llvm::Value* slow_result = emitMaybeInvoke(helper, helper_throwing,
             {opcode_val, lhs, rhs, xsink_arg}, module, llvm_func, inst);
     if (native_result) {
-        slow_result = builder->CreateICmpEQ(slow_result,
-                llvm::ConstantInt::get(i64_type, VAL_TRUE));
+        if (comparisonOperandsMayBeBuffers(inst)) {
+            // the comparison of a buffer gives the buffer of the elementwise comparison, which is converted as a
+            // boolean consumer converts it, and released (qore#6160); other operands give a boolean
+            llvm::Value* is_true = builder->CreateICmpEQ(slow_result, llvm::ConstantInt::get(i64_type, VAL_TRUE));
+            llvm::Value* is_bool = builder->CreateOr(is_true,
+                builder->CreateICmpEQ(slow_result, llvm::ConstantInt::get(i64_type, VAL_FALSE)));
+            llvm::BasicBlock* bool_bb = builder->GetInsertBlock();
+            llvm::BasicBlock* value_bb = llvm::BasicBlock::Create(ctx, "cmp_slow_value", llvm_func);
+            llvm::BasicBlock* done_bb = llvm::BasicBlock::Create(ctx, "cmp_slow_done", llvm_func);
+            builder->CreateCondBr(is_bool, done_bb, value_bb);
+            builder->SetInsertPoint(value_bb);
+            auto to_bool = module.getOrInsertFunction("qore_rt_to_bool",
+                llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* value_bool = builder->CreateICmpNE(builder->CreateCall(to_bool, {slow_result}),
+                llvm::ConstantInt::get(i64_type, 0));
+            auto decref = module.getOrInsertFunction("qore_rt_decref",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            builder->CreateCall(decref, {slow_result, xsink_arg});
+            builder->CreateBr(done_bb);
+            llvm::BasicBlock* value_end = builder->GetInsertBlock();
+            builder->SetInsertPoint(done_bb);
+            llvm::PHINode* bool_result = builder->CreatePHI(i1_type, 2);
+            bool_result->addIncoming(is_true, bool_bb);
+            bool_result->addIncoming(value_bool, value_end);
+            slow_result = bool_result;
+        } else {
+            slow_result = builder->CreateICmpEQ(slow_result,
+                    llvm::ConstantInt::get(i64_type, VAL_TRUE));
+        }
     }
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();

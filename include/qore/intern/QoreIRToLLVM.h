@@ -2653,6 +2653,9 @@ private:
             const QoreIRInstruction* inst,
             llvm::Value* operand, llvm::Function* llvm_func, llvm::Module& module);
 
+    //! returns true if an operand of the comparison can be a buffer, whose comparison gives a buffer (qore#6160)
+    bool comparisonOperandsMayBeBuffers(const QoreIRInstruction* inst) const;
+
     // Emit inline LLVM fast-path for CmpAny (spaceship operator).
     // Type-checks operands for int+int and float+float, falls back to qore_rt_comparison_op.
     // Returns boxed int (-1, 0, or 1).

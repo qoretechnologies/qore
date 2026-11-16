@@ -17274,7 +17274,20 @@ load_local_done:
                 ++ip;
                 break;
             }
-            case QoreIROpcode::ToBool:
+            case QoreIROpcode::ToBool: {
+                // a boolean is its own conversion: the comparison that is the condition of a statement, converted
+                // before the statement's temporaries are released (qore#6160), is one
+                if (!inst->operands.empty()) {
+                    QoreValue val = getIRValue(values, inst->operands[0]);
+                    if (val.isBool()) {
+                        // the slot of a ToBool only ever holds a boolean, which needs no release
+                        setValueSlotDirect(values, inst->result.id, val);
+                        ++ip;
+                        break;
+                    }
+                }
+                [[fallthrough]];
+            }
             case QoreIROpcode::ToInt:
             case QoreIROpcode::ToFloat:
             case QoreIROpcode::Not:

@@ -627,7 +627,47 @@ static bool statementMayCreateNodeTemp(const AbstractStatement* stmt) {
     return true;
 }
 
+static bool comparisonMayGiveBuffer(const QoreValue& val);
+
+//! returns true if an operand of a comparison can have a buffer value (or has no type), so that the comparison can
+//! give a buffer, the result of the elementwise comparison, which the parser does not type (qore#6160); an operand
+//! that is itself such a comparison (`(b > x) == True`) is typed bool
+static bool comparisonOperandMayBeBuffer(const QoreValue& operand) {
+    const QoreTypeInfo* type_info = getExprTypeInfo(operand);
+    return !type_info || QoreTypeInfo::parseReturns(type_info, NT_BUFFER) != QTI_NOT_EQUAL
+        || comparisonMayGiveBuffer(operand);
+}
+
+//! returns true for a comparison whose value can be a buffer although its parse type is bool (qore#6160)
+/** A ?: gives the value of one of its branches, so it gives such a value when a branch can, and the parser types it
+    as bool when both branches are
+*/
+static bool comparisonMayGiveBuffer(const QoreValue& val) {
+    const AbstractQoreNode* node = val.getInternalNode();
+    if (auto* q = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {
+        return comparisonMayGiveBuffer(q->get(1)) || comparisonMayGiveBuffer(q->get(2));
+    }
+    const QoreBinaryOperatorNode<>* cmp = nullptr;
+    if (auto* eq = dynamic_cast<const QoreLogicalEqualsOperatorNode*>(node)) {
+        cmp = eq;
+    } else if (auto* lt = dynamic_cast<const QoreLogicalLessThanOperatorNode*>(node)) {
+        cmp = lt;
+    } else if (auto* le = dynamic_cast<const QoreLogicalLessThanOrEqualsOperatorNode*>(node)) {
+        cmp = le;
+    } else if (auto* gt = dynamic_cast<const QoreLogicalGreaterThanOperatorNode*>(node)) {
+        cmp = gt;
+    } else if (auto* ge = dynamic_cast<const QoreLogicalGreaterThanOrEqualsOperatorNode*>(node)) {
+        cmp = ge;
+    }
+    return cmp && (comparisonOperandMayBeBuffer(cmp->getLeft()) || comparisonOperandMayBeBuffer(cmp->getRight()));
+}
+
 static bool conditionValueSurvivesDiscardTemps(const QoreValue& val) {
+    // a comparison with an operand that can be a buffer gives the buffer of the elementwise comparison, a temporary
+    // that discard.temps frees, although the parser types the comparison as bool (qore#6160)
+    if (comparisonMayGiveBuffer(val)) {
+        return false;
+    }
     // A condition value survives the discard.temps emitted just before the
     // branch only if it can never be a refcounted heap temporary that
     // discard.temps would free.  Integers are deliberately excluded here even
