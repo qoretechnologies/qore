@@ -396,7 +396,8 @@ examples/test/ir/MixedModeReference.qtest	0.0	0.0	-	0.0	0.0	-	-	0.0	0.0	0.0
 examples/test/ir/ModuleClassMethodContext.qtest	5.0	3.0	-	-	-	-	-	-	4.0	3.0
 examples/test/ir/ModuleExecutionContext.qtest	2.0	1.0	-	-	-	-	-	-	2.0	1.0
 examples/test/ir/ModuleFactoryInheritedOptions.qtest	6.0	5.0	-	-	-	-	-	-	3.0	5.0
-examples/test/ir/ModuleOwnProgramState.qtest	106.0	67.0	-	-	-	-	-	-	71.0	67.0
+examples/test/ir/ModuleOwnProgramState-1.qtest	94.3	58.6	-	-	-	-	-	-	102.8	54.4
+examples/test/ir/ModuleOwnProgramState-2.qtest	16.6	10.3	-	-	-	-	-	-	18.1	9.6
 examples/test/ir/ModuleOwnedAsync.qtest	60.0	21.0	-	-	-	-	-	-	32.0	23.0
 examples/test/ir/ModuleParseOptionMask.qtest	7.0	7.0	-	-	-	-	-	-	5.0	7.0
 examples/test/ir/NanBoxDoubleTagCollision.qtest	11.0	8.0	-	-	-	-	-	-	19.0	7.0
