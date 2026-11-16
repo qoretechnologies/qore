@@ -1055,12 +1055,18 @@ public:
     DLLEXPORT qore_offset_t index(const QoreString& needle, qore_offset_t pos, ExceptionSink* xsink) const;
 
     //! returns the byte position of a substring within the string or -1 if not found
+    /** a negative \a pos is an offset from the end of the string; one before the start of the string is the start
+    */
     DLLEXPORT qore_offset_t bindex(const QoreString& needle, qore_offset_t pos = 0) const;
 
     //! returns the byte position of a substring within the string or -1 if not found
+    /** a negative \a pos is an offset from the end of the string; one before the start of the string is the start
+    */
     DLLEXPORT qore_offset_t bindex(const char* needle, qore_offset_t pos = 0) const;
 
     //! returns the byte position of a substring within the string or -1 if not found
+    /** a negative \a pos is an offset from the end of the string; one before the start of the string is the start
+    */
     DLLEXPORT qore_offset_t bindex(const std::string& needle, qore_offset_t pos = 0) const;
 
     //! returns the character position of a substring searching in reverse from a given position or -1 if not found
@@ -1073,12 +1079,21 @@ public:
     DLLEXPORT qore_offset_t rindex(const QoreString& needle, qore_offset_t pos, ExceptionSink* xsink) const;
 
     //! returns the byte position of a substring within the string searching in reverse from a given position or -1 if not found
+    /** the substring is found when it lies within the bytes up to and including \a pos; a negative \a pos is an
+        offset from the end of the string (-1 = the last byte)
+    */
     DLLEXPORT qore_offset_t brindex(const QoreString& needle, qore_offset_t pos = -1) const;
 
     //! returns the byte position of a substring within the string searching in reverse from a given position or -1 if not found
+    /** the substring is found when it lies within the bytes up to and including \a pos; a negative \a pos is an
+        offset from the end of the string (-1 = the last byte)
+    */
     DLLEXPORT qore_offset_t brindex(const char* needle, qore_offset_t pos = -1) const;
 
     //! returns the byte position of a substring within the string searching in reverse from a given position or -1 if not found
+    /** the substring is found when it lies within the bytes up to and including \a pos; a negative \a pos is an
+        offset from the end of the string (-1 = the last byte)
+    */
     DLLEXPORT qore_offset_t brindex(const std::string& needle, qore_offset_t pos = -1) const;
 
     //! returns the byte position of a character (byte) within the string or -1 if not found

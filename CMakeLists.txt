@@ -2872,6 +2872,10 @@ add_executable(qore-char-offsets-test examples/test/qore/strings/char-offsets/ch
 target_include_directories(qore-char-offsets-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-char-offsets-test PRIVATE libqore)
+add_executable(qore-byte-offsets-test examples/test/qore/strings/byte-offsets/byte_offsets.cpp)
+target_include_directories(qore-byte-offsets-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-byte-offsets-test PRIVATE libqore)
 add_executable(qore-number-round-trip-test EXCLUDE_FROM_ALL
     examples/test/qore/vars/number_round_trip.cpp)
 target_include_directories(qore-number-round-trip-test PRIVATE

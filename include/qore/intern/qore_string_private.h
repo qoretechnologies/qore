@@ -272,21 +272,26 @@ public:
     }
 
     // NOTE: this is purely byte oriented - no character semantics here
+    // returns the first byte position at or after pos of any of the bytes in str, like rfindAny() searching forwards
     DLLLOCAL qore_offset_t findAny(const char* str, qore_offset_t pos = 0) {
         if (pos < 0) {
             pos = len + pos;
             if (pos < 0) {
                 pos = 0;
             }
-        } else if (pos > 0 && pos > (qore_offset_t)len) {
+        } else if (pos >= (qore_offset_t)len) {
             return -1;
         }
         const char* b = effective_buf();
-        const char* p;
-        if (!(p = strstr(b + pos, str))) {
-            return -1;
+        // the search covers the string's bytes only (it can contain null bytes), not its terminator
+        for (const char* p = b + pos, * e = b + len; p < e; ++p) {
+            for (const char* t = str; *t; ++t) {
+                if (*p == *t) {
+                    return (qore_offset_t)(p - b);
+                }
+            }
         }
-        return (qore_offset_t)(p - b);
+        return -1;
     }
 
     // NOTE: this is purely byte oriented - no character semantics here
@@ -713,7 +718,8 @@ public:
         if (!needle.strlen()) {
             return emptyNeedleIndex(pos, len);
         }
-        if (needle.strlen() + pos > len)
+        // a negative position is an offset from the end, which bindex(const char*, ...) resolves
+        if (pos >= 0 && needle.strlen() + pos > len)
             return -1;
 
         return bindex(needle.c_str(), pos, needle.size());
@@ -723,7 +729,8 @@ public:
         if (needle.empty()) {
             return emptyNeedleIndex(pos, len);
         }
-        if (needle.size() + pos > len)
+        // a negative position is an offset from the end, which bindex(const char*, ...) resolves
+        if (pos >= 0 && needle.size() + pos > len)
             return -1;
 
         return bindex(needle.c_str(), pos, needle.size());
@@ -888,7 +895,8 @@ public:
             return -1;
         }
 
-        if (needle_len + (len - pos) > len) {
+        // the match lies in the bytes up to and including pos, as with rindex()
+        if (needle_len > (size_t)pos + 1) {
             return -1;
         }
 

@@ -793,6 +793,14 @@
     first byte of that character, so their results change for valid UTF-8 (and other multi-byte) text when that
     character is not one byte (ex: <tt>rindex("aézaéb", "é", 4)</tt> is 4, not 1) (issue #6246).
 
+    @par brindex() Finds a Match That Ends at the Search Position, bindex() Takes Negative Positions
+    @ref Qore::brindex() "brindex()" finds a match that lies within the bytes up to and including the search
+    position, as @ref Qore::rindex() "rindex()" does with characters; it did not find a match that ends at the
+    position (ex: <tt>brindex("abc", "ab", 1)</tt> is 0, not -1).  @ref Qore::bindex() "bindex()" (and
+    \c QoreString::bindex() and \c QoreString::find() with a \c std::string in the C++ API) searches from a
+    negative position as an offset from the end, or from the start before it, as @ref Qore::index() "index()" does;
+    it gave -1 for every negative position (ex: <tt>bindex("abc", "c", -1)</tt> is 2, not -1) (issue #6271).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Module Commands Know the Restrictions of the Code That Issues Them
     A binary module's command handler gets the effective restrictions of the issuing code, not those of the target
@@ -1907,6 +1915,10 @@
       UTF-16, UTF-32 or UCS-2 (potential information disclosure) (issue #6246)
     - @ref <string>::getUnicode() "<string>::getUnicode()" returns 0 at and after the end of a string in IBM037 and
       Shift_JIS, as in the other encodings; it raised \c INVALID-ENCODING (issue #6246)
+    - @ref Qore::brindex() "brindex()" finds a match that ends at the search position, and
+      @ref Qore::bindex() "bindex()" with a negative position searches from that offset from the end (or from the
+      start) instead of giving -1; in the C++ API, \c QoreString::findAny() finds any of the given bytes, as
+      documented, instead of the whole string (issue #6271)
     - @ref Qore::rindex() "rindex()" and @ref <string>::rfind() "<string>::rfind()" also find a match at the search
       position when its character is not one byte, so results change for valid UTF-8 text (ex:
       <tt>rindex("aézaéb", "é", 4)</tt> is 4, not 1), and a negative position before the start gives the results of
