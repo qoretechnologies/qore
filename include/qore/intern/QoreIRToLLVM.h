@@ -51,6 +51,7 @@ class FunctionEntry;
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/TargetParser/Triple.h>
 
 class QoreIRFunction;
 struct QoreJITObjectLayout;
@@ -86,6 +87,17 @@ public:
     //! Remove decref calls whose value is proven to be NOTHING.
     //! @return the number of calls removed
     static size_t pruneNoopDecrefs(llvm::Module& module);
+
+    //! Expands the scalar llvm.fptosi.sat.i64.f64 calls of createFloatToInt() for an x86-64 target
+    /** Called on the optimized module before code generation (JIT and AOT).  On x86-64 the saturating conversion
+        costs six instructions more than cvttsd2si, which gives 0x8000000000000000 for every value that does not fit
+        an int64 and for NaN: the call is replaced by cvttsd2si and a compare with that value, with the call kept in a
+        cold block taken only then (where it also gives the right result for -2^63).  Other targets keep the call
+        (AArch64: one fcvtzs).  Run after the optimization passes, so that they do not merge the cold block back.
+
+        @return the number of conversions expanded (issue #6181)
+    */
+    static size_t expandFloatToIntForTarget(llvm::Module& module, const llvm::Triple& triple);
 
     //! Enable AOT mode with the given slot map.
     //! When set, process-specific opcodes emit _aot helper calls with slot indices
@@ -233,6 +245,9 @@ private:
     //! the current object (NaN-boxed), read at the start of the function by the first check of a call through self
     //! (QoreIROpcode::CheckCallTarget with no operand, issue #5823); null until then
     llvm::Value* current_self_bits = nullptr;
+    //! the call whose check of its target (QoreIRInstruction::fused_call_check) is being lowered, whose arguments the
+    //! check after them passes to its helper (issue #5824); null otherwise
+    const QoreIRInstruction* fused_check_call = nullptr;
     bool aot_direct_closure_fast_entry = true;
 
     // Deferred exception checking for code proven not to observe exceptions before
@@ -664,25 +679,39 @@ private:
     bool holding_return_values = false;
     //! Returns true if \a alloca_ptr is the cleanup alloca of one of return_value_ids
     bool isReturnValueAlloca(llvm::Value* alloca_ptr) const;
-    //! the slot that keeps the value that a handler run out of line while an exception leaves its block returned
-    //! (#5992)
-    /** The value replaces the value of the return that the exception interrupted, as in the AST interpreter: the
-        runtime keeps it here (qore_rt_exec_on_block_exit_hold()), the code after the handlers releases the values of
-        return_value_ids when it did (see handler_return_hold_sites), and the slot is released with them, after the
-        locals of an exit on an exception or at the catch block of a try statement of the function.  Created at the
-        entry of a function with handlers.
+    //! the slot that keeps the value that a handler run out of line while an exception or a thread_exit leaves its
+    //! block hands over (QoreIROpcode::HandlerReturn, #5992, #6074)
+    /** The value replaces the value of the return that the unwind interrupted, as in the AST interpreter: the runtime
+        keeps it here (qore_rt_exec_on_block_exit_hold()) and releases the values of the interrupted return at the
+        first hand-over (see handler_return_hold_sites), and the slot is released after the locals of an exit on an
+        exception or at the catch block of a try statement of the function.  Created at the entry of a function with
+        handlers.
     */
     llvm::Value* handler_return_hold = nullptr;
-    //! the calls that run handlers out of line with handler_return_hold, after which the values of return_value_ids
-    //! are released if a handler's value replaced them (see finalizeHandlerReturnHoldSites())
-    std::vector<llvm::CallInst*> handler_return_hold_sites;
+    //! true if the function is the body of a handler compiled as a function of its own: the handlers of its blocks
+    //! run out of line with qore_rt_exec_on_block_exit_forward() (#6074)
+    bool handler_function = false;
+    //! A call that runs handlers out of line with handler_return_hold, and the returns whose values the first
+    //! hand-over of a handler replaces (see finalizeHandlerReturnHoldSites())
+    struct HandlerReturnHoldSite {
+        llvm::CallInst* call;
+        //! the values of the returns of the try block of the try statement that catches the exception
+        //! (QoreIRFunction::catch_interrupted_returns), or nullptr for those of the function (return_value_ids)
+        const std::vector<uint32_t>* try_returns;
+    };
+    //! the calls that run handlers out of line with handler_return_hold whose handlers replace the value of an
+    //! interrupted return
+    std::vector<HandlerReturnHoldSite> handler_return_hold_sites;
     //! Emits the call that runs the handlers registered since \a saved_count out of line with handler_return_hold
-    /** @param release_returns true if the values of the function's returns are released after the call when a
-        handler's value was kept: false where a try statement of the function can catch the exception
+    /** @param release_returns true if the first hand-over of a handler replaces the values of the function's returns:
+        false where a try statement of the function can catch the exception, where it replaces those of the try
+        block's returns, \a try_returns
+        @param try_returns see HandlerReturnHoldSite::try_returns
     */
-    llvm::CallInst* emitOnBlockExitHoldCall(llvm::Module& module, llvm::Value* saved_count, bool release_returns);
-    //! Releases the values of return_value_ids after each call of handler_return_hold_sites that kept a handler's
-    //! value, now that their cleanup allocas are known
+    llvm::CallInst* emitOnBlockExitHoldCall(llvm::Module& module, llvm::Value* saved_count, bool release_returns,
+            const std::vector<uint32_t>* try_returns = nullptr);
+    //! Gives each call of handler_return_hold_sites the slots of the values of the returns that the first hand-over
+    //! of its handlers replaces and releases, now that their cleanup allocas are known
     void finalizeHandlerReturnHoldSites(llvm::Module& module);
     //! the blocks at the start of the catch paths of try statements that release the values of the returns of their
     //! try blocks (QoreIRFunction::catch_interrupted_returns), filled once the function is lowered, as the catch
@@ -1613,6 +1642,14 @@ private:
     llvm::Value* emitCallTargetFastTest(const QoreIRExprInstruction* check, uint64_t call_bits, llvm::Value* target,
         llvm::Module& module, llvm::Function* llvm_func);
 
+    //! Emits the call of the helper of QoreIROpcode::CheckCallTarget that makes the check when the fast test did not
+    //! decide it; the check after the arguments of a call (QoreIRExprInstruction::check_after_args) passes the call's
+    //! arguments (fused_check_call), with which the helper resolves the variant whose error it raises (issue #5824)
+    /** @return false if an operand could not be lowered (@a error is set)
+    */
+    bool emitCallTargetCheckHelper(const QoreIRExprInstruction* check, uint64_t call_bits, int32_t slot,
+        llvm::Value* target, llvm::Module& module, llvm::Function* llvm_func, std::string& error);
+
     // Inline qore_rt_ref - reference count a value if it's a node
     // Returns the value unchanged if not a node, or qore_rt_refself result if node
     llvm::Value* emitHelperRef(llvm::Module& module, llvm::Value* val);
@@ -1620,6 +1657,14 @@ private:
     // Ensure a value is a native int64_t for typed int operations.
     // Handles: native i64 (pass through), NaN-boxed INT48 or big int (runtime conversion).
     llvm::Value* ensureIntType(llvm::Value* val, uint32_t value_id);
+
+    //! Converts a native float to a native int as q_float_to_int64() does: truncated, saturated, NaN gives 0
+    /** An out-of-range value gives poison with fptosi; llvm.fptosi.sat gives the rule of q_float_to_int64() in the
+        JIT and AOT code and adds no block, so it can be emitted anywhere (also for a PHI's incoming value); for an
+        x86-64 target, expandFloatToIntForTarget() turns it into cvttsd2si and a cold branch after the optimization
+        passes (issue #6181)
+    */
+    llvm::Value* createFloatToInt(llvm::Value* val);
 
     llvm::Value* getCachedStableConversion(
         uint32_t value_id, const NativeConversionCache& cache) const;
@@ -2400,7 +2445,7 @@ private:
         @return the native function, or nullptr if an error was raised
     */
     llvm::Function* lowerNestedFunction(const QoreIRFunction& func, const std::string& name, llvm::Module& module,
-            std::string& error);
+            std::string& error, bool handler = false);
 
     // Phase 5b: Try to emit a specialized list index access instead of qore_rt_invoke_expr.
     // Returns true if specialized code was emitted, false to fall through to generic path.

@@ -43,13 +43,15 @@ public class FoldedDebugStepDensityTest inherits QUnit::Test {
         const ProbeOverhead = 6;
         const DebugStatementOverhead = 2;
 
-        #! statements that lower to one fused local int operation (a post-increment statement lowers to more, as it
-        #! keeps the value before the increment)
+        #! statements that lower to one fused local int operation (a post-increment or post-decrement statement,
+        #! whose value is unused, lowers as the pre form: qore#6199)
         const FusedStatements = {
             "add-constant": "total += 1;",
             "subtract-constant": "total -= 1;",
             "pre-increment": "++total;",
             "pre-decrement": "--total;",
+            "post-increment": "total++;",
+            "post-decrement": "total--;",
         };
 
         #! the function of the Program that the debugger steps; the lines tagged "### <tag>" are its statements
@@ -90,9 +92,9 @@ public class FoldedDebugStepDensityTest inherits QUnit::Test {
 ";
 
         #! the statements of work() and those of them whose step events its fused local int operations keep: total +=
-        #! 10, total += step and ++total; total++ keeps the value before the increment and is not one operation
+        #! 10, total += step, total++ (its value is unused, so that it lowers as ++total: qore#6199) and ++total
         const WorkStatements = 11;
-        const WorkFoldedStatements = 3;
+        const WorkFoldedStatements = 4;
 
         #! the debugger's script: it parses the target Program from a file and calls work() in it
         /** @par Arguments
@@ -365,7 +367,7 @@ printf("CALLLINES:%y\n", dbg.call_lines);
     testStepEvents() {
         hash<string, int> tags = tagLines();
         # the steps after the attach at i == 2: the rest of the iteration, the next one and the detach; the folded
-        # statements (+= of a constant and of a local, ++total) step as the others
+        # statements (+= of a constant and of a local, total++ and ++total) step as the others
         list<int> expected = map tags{$1}, ("add_constant", "add_local", "increment", "pre_increment", "if",
             "add_constant", "add_local", "increment", "pre_increment", "detach");
         hash<string, hash<auto>> res = runSteps("folded", "steps", 0);

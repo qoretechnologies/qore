@@ -44,6 +44,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <functional>
+#include <limits>
 #include <list>
 #include <map>
 #include <set>
@@ -306,6 +307,52 @@ typedef std::vector<std::string> name_vec_t;
 
 //! 64bit integer type, cannot use int64_t here since it breaks the API on some 64-bit systems due to equivalence between long int and int
 typedef long long int64;
+
+#if defined(__GNUC__) && defined(__x86_64__)
+// internal: the saturated result of q_float_to_int64() for a value that cvttsd2si cannot convert; out of line and
+// cold, so that the conversion adds only a compare and a branch to the code that it is inlined into
+__attribute__((noinline, cold)) inline int64 q_float_to_int64_unconverted(double f) {
+    // -2^63 converts to the smallest int, as a value lower than it
+    return f > 0 ? (std::numeric_limits<int64>::max)() : (f < 0 ? (std::numeric_limits<int64>::min)() : 0);
+}
+#endif
+
+//! converts a float to an int as %Qore converts a float or number value to an int
+/** The value is truncated toward zero; a value greater than the largest int gives the largest int
+    (9223372036854775807), a value lower than the smallest int gives the smallest int (-9223372036854775808), and NaN
+    gives 0.  This is the rule of the conversion of a number value (\c mpfr_get_sj()) and of \c llvm.fptosi.sat; a C++
+    cast of such a value to an integer type is undefined behavior.
+
+    A value in the range costs one comparison more than a cast on x86-64 and nothing more on AArch64.
+
+    @since %Qore 3.0
+*/
+inline int64 q_float_to_int64(double f) {
+#if defined(__GNUC__) && defined(__x86_64__)
+    if (!__builtin_constant_p(f)) {
+        int64 rv;
+        // cvttsd2si gives the "integer indefinite" value 0x8000000000000000 for NaN and a value out of the range
+        // (AT&T and Intel operand orders, for code compiled with -masm=intel)
+        __asm__("{cvttsd2si %1, %0|cvttsd2si %0, %1}" : "=r" (rv) : "x" (f));
+        if (__builtin_expect(rv != (std::numeric_limits<int64>::min)(), 1)) {
+            return rv;
+        }
+        return q_float_to_int64_unconverted(f);
+    }
+#elif defined(__GNUC__) && defined(__aarch64__)
+    if (!__builtin_constant_p(f)) {
+        int64 rv;
+        // fcvtzs saturates and gives 0 for NaN
+        __asm__("fcvtzs %x0, %d1" : "=r" (rv) : "w" (f));
+        return rv;
+    }
+#endif
+    if (f >= -9223372036854775808.0 && f < 9223372036854775808.0) {
+        return static_cast<int64>(f);
+    }
+    // the parentheses keep the min() and max() macros of windows.h out
+    return f > 0 ? (std::numeric_limits<int64>::max)() : (f < 0 ? (std::numeric_limits<int64>::min)() : 0);
+}
 
 //! runtime code execution flags
 typedef uint64_t q_rt_flags_t;

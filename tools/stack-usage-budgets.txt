@@ -45,7 +45,15 @@
 #   debug:   ir function 4940 (1675) -> 5023 (1648), method 6316 (1309) -> 6393 (1293),
 #            static method 4917 (1684) -> 4993 (1657)
 # (1.0-1.6% of the depth; the AST recursions do not change)
-4320 QoreIRInterpreter::execute
+# #6074 (the handler hand-over, HandlerReturn) adds 32 B: 4192 B measured on batch R (4160 B), so 4192 + the 160 B
+# margin.  Measured with recursion-frame-budget.qtest on Alpine (musl, GCC 15.2, x86_64), bytes per level (depth at
+# 8 MB), batch R 8a1ac4346b -> with #6074:
+#   release: ir function 5023 (1648) -> 5059 (1637), method 6017 (1375) -> 6043 (1368),
+#            static method 4975 (1663) -> 5011 (1652)
+#   debug:   ir function 5011 (1653) -> 5023 (1648), method 6393 (1293) -> 6423 (1289),
+#            static method 4975 (1663) -> 4993 (1657)
+# (0.4-0.8% of the depth; the AST recursions do not change; at least 67 B to the test's budgets)
+4352 QoreIRInterpreter::execute
 928 tryExecuteInterpreterInlineIRFunction
 880 tryExecuteInterpreterInlineIRStaticMethod
 96 evalAndRef
