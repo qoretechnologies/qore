@@ -89,6 +89,12 @@ This generalizes the existing Phase 1.5 init-expression outliner
    never after its own name: a
    helper-named dispatch was never defined, and every executable or module
    with a closure call in an outlined region failed to link (qore#6310).
+   A function nested in the one being lowered (an `on_exit`, `on_success`
+   or `on_error` handler body, `handler_<n>@<function>`, or a background
+   helper) shares its parent's slot tables, so its lowering takes the
+   parent's owner (`QoreIRToLLVM::getAOTSymbolOwner()`); it named the
+   dispatch functions after itself, and a closure called in a handler
+   failed to link with or without outlining (qore#6339).
    The init-expression outliner sets the owner on its helpers too, which
    has no effect yet: init functions never get their closure dispatch
    functions defined (`compileAOTClosureBodiesForOwner()` runs only for

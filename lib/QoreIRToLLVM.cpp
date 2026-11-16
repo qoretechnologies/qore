@@ -13252,6 +13252,8 @@ llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, co
         // the nested function shares the AOT context of the function being lowered: its slot tables
         nested_lowering.setAOTMode(aot_slots);
         nested_lowering.setAOTDirectClosureFastEntry(aot_direct_closure_fast_entry);
+        // and its slot symbols, such as the dispatch functions of its closures (qore#6339)
+        nested_lowering.aot_symbol_owner = getAOTSymbolOwner();
     }
     if (active_di_builder && di_cu) {
         nested_lowering.setSharedDebugInfo(active_di_builder, di_cu);
@@ -31293,7 +31295,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         dispatch_return_type, param_types, false);
                     // named after the owner of the slot map: an outlined helper's closure dispatch is defined
                     // with its coordinator's closure bodies (qore#6310)
-                    std::string dispatch_name = current_ir_func->getAOTSymbolOwner()
+                    std::string dispatch_name = getAOTSymbolOwner()
                         + (guarded_stored_closure
                             ? "_closure_native_guarded_dispatch_"
                             : "_closure_native_dispatch_")
@@ -31565,7 +31567,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 && qore_ir_fast_entry_operands_need_no_binding(call_gives_args, variant,
                                     closure_call->expr, current_ir_func, inst->operands,
                                     1, nargs)) {
-                            std::string dispatch_name = current_ir_func->getAOTSymbolOwner()
+                            std::string dispatch_name = getAOTSymbolOwner()
                                 + "_closure_dispatch_" + std::to_string(slot);
                             helper = module.getOrInsertFunction(dispatch_name, ft);
                         }

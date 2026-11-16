@@ -15,7 +15,8 @@
 
 %exec-class AOTOutlinedClosureTest
 
-#! A closure created in an outlined region of a function is called through a dispatch function that is defined (qore#6310)
+#! A closure created in an outlined region or a handler is called through a dispatch function that is defined
+#! (qore#6310, qore#6339)
 /** qcc outlines regions of a large function (over \c QORE_AOT_OUTLINE_FN_MIN_INSTS IR instructions, 3000 by default,
     or \c QORE_AOT_OUTLINE_FN_MIN_BLOCKS blocks) into helpers that use the slot map of the function (the coordinator).
     A closure that a helper creates and calls is called through a dispatch function that is defined with the closure
@@ -31,7 +32,8 @@
     outlined regions create closures without captures that return native values, closures that capture locals of the
     region, several closures stored in locals, closures returned to the caller that share a captured local, and nested
     closures, and for float and bool closures of a helper whose sibling fails to lower, after which the function is
-    lowered un-outlined.  It checks with the IR dump of qcc that the closures are created in the helpers.
+    lowered un-outlined, and for closures called in \c on_exit, \c on_success and \c on_error handlers, with and
+    without outlining (qore#6339).  It checks with the IR dump of qcc that the closures are created in the helpers.
 */
 class AOTOutlinedClosureTest inherits QUnit::Test {
     public {
@@ -70,6 +72,7 @@ class AOTOutlinedClosureTest inherits QUnit::Test {
         addTestCase("the minimal function of the issue with forced thresholds", \testMinimal());
         addTestCase("captures, several, returned and nested closures in outlined regions", \testForms());
         addTestCase("float and bool closures of a helper that fails to lower", \testHelperFailure());
+        addTestCase("closures in on_exit, on_success and on_error handlers", \testHandlers());
         set_return_value(main());
     }
 
@@ -467,12 +470,114 @@ printf(\"rv:%y\\n\", f(2));
         string expected = getExpected(src, "^rv:\\[1\\.5, True, 42, 3, 4, 0\\]\n$");
         foreach string opt in (OptLevels) {
             string exe = src + opt;
-            string out = compile(src, exe, opt, ForceEnv + " QORE_AOT_DUMP_IR=1 QORE_AOT_TEST_FAIL_LOWERING=_outline_1");
+            string out = compile(src, exe, opt, ForceEnv
+                + " QORE_AOT_DUMP_IR=1 QORE_AOT_TEST_FAIL_LOWERING=_outline_1");
             assertTrue(outlined(out, "f"), opt + ": f outlined");
             assertTrue(helperCreatesClosure(getClosureHelpers(out), "f"), opt + ": a helper of f creates a closure");
             assertRegex("AOT-OUTLINE-FN: helper 'f_[^']*_outline_1' lowering failed", out,
                 opt + ": the second helper fails to lower");
             assertEq(expected, runExe(exe), "helper failure: qcc " + opt);
+        }
+    }
+
+    #! Returns a script whose functions call closures in their on_exit, on_success and on_error handlers
+    /** \c f has the handlers in its function block and in a nested block, \c g in the block of a try statement, which
+        forced thresholds outline into a helper.  The handler bodies are lowered as functions of their own
+        (\c handler_<n>\@<function>) that share the slot tables of the function, whose closure bodies define the
+        dispatch functions (qore#6339)
+    */
+    private static string getHandlersScript() {
+        return "%modern
+
+string log;
+
+int sub f(int n) {
+    int r = 0;
+    on_exit {
+        log += sprintf(\"x%d\", (int sub () { return 1; })());
+    }
+    on_success {
+        log += sprintf(\"s%d\", (int sub (int x) { return x * 2; })(n));
+    }
+    on_error {
+        log += sprintf(\"e%s\", (string sub () { return \"rr\"; })());
+    }
+    {
+        int k = n + 1;
+        on_exit {
+            log += sprintf(\"k%d\", (int sub () { return k; })());
+        }
+        r += k;
+    }
+    log += \"a\";
+    if (n > 1) {
+        throw \"X\";
+    }
+    log += \"b\";
+    return r + n;
+}
+
+# the handlers in a block of a try statement, which an outlined region can contain
+int sub g(int n) {
+    int r = n;
+    log += \"g\";
+    try {
+        on_exit {
+            log += sprintf(\"X%d\", (int sub () { return 2; })());
+        }
+        on_success {
+            log += sprintf(\"S%d\", (int sub (int x) { return x + 10; })(n));
+        }
+        on_error {
+            log += sprintf(\"E%s\", (string sub () { return \"RR\"; })());
+        }
+        r += 5;
+        if (n > 1) {
+            throw \"Y\";
+        }
+        r += 1;
+    } catch (hash<ExceptionInfo> ex) {
+        log += \"c\";
+    }
+    log += \"h\";
+    return r;
+}
+
+for (int c = 0; c < 3; ++c) {
+    log = \"\";
+    int v = -1;
+    try {
+        v = g(c) + f(c);
+    } catch (hash<ExceptionInfo> ex) {
+        log += \"<\" + ex.err + \">\";
+    }
+    printf(\"rv%d:%d %s\\n\", c, v, log);
+}
+";
+    }
+
+    #! Closures called in handlers link and run, with and without outlining (qore#6339)
+    /** The handler functions named the dispatch functions of their closures after themselves
+        (<tt>handler_<n>\@<function>_closure_native_dispatch_<slot></tt>), which were never defined: qcc failed to link
+        the program even without outlining
+    */
+    testHandlers() {
+        TmpDir dir("qore-aot-outline-closure-");
+        string src = join_paths(dir.path, "handlers.qr");
+        writeFile(src, getHandlersScript());
+        string expected = getExpected(src, "^(rv[0-2]:[^\n]+\n){3}$");
+        # every handler runs: on_success in the first two calls, on_error in the third
+        assertRegex("\nrv1:10 gS11X2hk2abs2x1\n", expected, "the on_exit and on_success handlers call their closures");
+        assertRegex("\nrv2:-1 gERRX2chk3aerrx1<X>\n", expected, "the on_error handlers call their closures");
+        foreach string opt in (OptLevels) {
+            foreach hash<auto> i in ({"what": "not outlined", "env": "QORE_AOT_OUTLINE_FN=0"},
+                    {"what": "forced outlining", "env": ForceEnv}) {
+                string exe = src + opt + (i.env == ForceEnv ? "-outlined" : "");
+                string out = compile(src, exe, opt, i.env);
+                # the handlers of f leave every region of f by an exception edge; g's try statement is outlined
+                assertEq(i.env == ForceEnv, outlined(out, "g"), sprintf("handlers, %s %s: g outlined", i.what, opt));
+                assertEq(expected, runExe(exe), sprintf("handlers, %s: qcc %s", i.what, opt));
+            }
         }
     }
 }
