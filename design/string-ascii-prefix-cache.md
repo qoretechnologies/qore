@@ -113,7 +113,11 @@ would have covered, and it is faster than that walk. Cancellation stays at the s
   not the cache; valid and invalid UTF-8; and threads that read new strings at once;
 - `ascii-string-index.q` in every execution mode: the mutators of the language, compared with the same text in
   UTF-16LE, text that is not valid UTF-8, and threads;
-- `ascii-string-index-timing.q` in every execution mode: reading every character of a 200,000 character ASCII string
-  forwards, with `length()` in the loop condition, and backwards takes less than a second, or, on a slow build or
-  machine, at most 8 times as long as the same loops over a quarter of the characters (about 4 for linear loops and
-  16 for quadratic ones).
+- `ascii-string-index-scan.q` in every execution mode (debug builds): it counts the bytes that the character offset
+  functions walk or scan (`dbg_get_string_scan_bytes()`, `qore_dbg_string_scan_bytes`).  Reading every character of
+  a 50,000 and a 200,000 character ASCII string forwards, with `length()` in the loop condition, and backwards scans
+  at most twice the length of the string (a quadratic loop walks about n * n / 2 bytes); a read at offset 1,000,
+  10,000 or 100,000 of a string whose ASCII text is known, and its `length()`, scan nothing.  With the cache disabled
+  (`dbg_set_ascii_prefix_cache()`), the code walks from the start of the string as before the change, and a read at a
+  later offset walks more by the difference, which shows that the counter sees an O(i) walk.  The test is
+  deterministic: it asserts on counts, not on time.

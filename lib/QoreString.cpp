@@ -3794,6 +3794,11 @@ void qore_string_private::dec_view_parent() {
     view_offset = 0;
 }
 
+#ifdef DEBUG
+thread_local int64 qore_dbg_string_scan_bytes = 0;
+std::atomic<bool> qore_dbg_ascii_prefix_disabled{false};
+#endif
+
 size_t qore_string_private::extendAsciiPrefix(const char* b, size_t prefix, size_t need) const {
     assert(prefix < len);
     assert(prefix < need);
@@ -3817,6 +3822,7 @@ size_t qore_string_private::extendAsciiPrefix(const char* b, size_t prefix, size
     while (i < end && static_cast<unsigned char>(b[i]) < 0x80) {
         ++i;
     }
+    QORE_DBG_STRING_SCAN(i - prefix);
     if (i > prefix) {
         // the string can be shared with other threads that read it, and that publish the same value
         std::atomic_ref<size_t>(asciiPrefixStorage()).store(i, std::memory_order_relaxed);

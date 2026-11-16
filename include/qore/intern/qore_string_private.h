@@ -78,6 +78,23 @@ struct qore_char_boundary {
     }
 };
 
+#ifdef DEBUG
+//! the number of bytes that the character offset functions of UTF-8 strings have walked or scanned in this thread
+//! (debug builds)
+/** For tests that check that a character offset in the ASCII text at the start of a string is O(1) (issue #6138); see
+    dbg_get_string_scan_bytes(); counted per thread, so that the walks of other threads do not change a measurement
+*/
+DLLLOCAL extern thread_local int64 qore_dbg_string_scan_bytes;
+//! disables the ASCII prefix cache of UTF-8 strings: every character offset is walked from the start (debug builds)
+/** see dbg_set_ascii_prefix_cache()
+*/
+DLLLOCAL extern std::atomic<bool> qore_dbg_ascii_prefix_disabled;
+//! adds to qore_dbg_string_scan_bytes
+#define QORE_DBG_STRING_SCAN(n) (qore_dbg_string_scan_bytes += static_cast<int64>(n))
+#else
+#define QORE_DBG_STRING_SCAN(n)
+#endif
+
 struct qore_string_private {
 public:
     size_t len = 0;
@@ -188,6 +205,11 @@ public:
         The result is the first offset with a byte >= 0x80, the length of the string, or a value >= \a need
     */
     DLLLOCAL size_t getAsciiPrefix(const char* b, size_t need) const {
+#ifdef DEBUG
+        if (qore_dbg_ascii_prefix_disabled.load(std::memory_order_relaxed)) {
+            return 0;
+        }
+#endif
         size_t prefix = getAsciiPrefix();
 #ifndef NDEBUG
         checkAsciiPrefix(b, prefix);
@@ -223,7 +245,9 @@ public:
         size_t need = chars < len - start ? start + chars : len;
         size_t prefix = getAsciiPrefix(b, need);
         if (start > prefix) {
-            return QCS_UTF8->getByteLen(b + start, b + len, chars, invalid);
+            size_t rc = QCS_UTF8->getByteLen(b + start, b + len, chars, invalid);
+            QORE_DBG_STRING_SCAN(rc);
+            return rc;
         }
         // the characters from start to the end of the prefix are single bytes
         size_t ascii = prefix - start;
@@ -231,7 +255,9 @@ public:
             invalid = false;
             return chars;
         }
-        return ascii + QCS_UTF8->getByteLen(b + prefix, b + len, chars - ascii, invalid);
+        size_t rc = QCS_UTF8->getByteLen(b + prefix, b + len, chars - ascii, invalid);
+        QORE_DBG_STRING_SCAN(rc);
+        return ascii + rc;
     }
 
     //! As getByteLenFrom(), raising an \c INVALID-ENCODING exception and returning 0 if the string is not valid
@@ -260,12 +286,14 @@ public:
         assert(start <= len);
         size_t prefix = getAsciiPrefix(b, len);
         if (start > prefix) {
+            QORE_DBG_STRING_SCAN(len - start);
             return QCS_UTF8->getLength(b + start, b + len, invalid);
         }
         if (prefix == len) {
             invalid = false;
             return len - start;
         }
+        QORE_DBG_STRING_SCAN(len - prefix);
         return (prefix - start) + QCS_UTF8->getLength(b + prefix, b + len, invalid);
     }
 
@@ -298,6 +326,7 @@ public:
             return end;
         }
         bool invalid;
+        QORE_DBG_STRING_SCAN(end - prefix);
         size_t rc = QCS_UTF8->getCharPos(b + prefix, b + end, invalid);
         if (invalid) {
             raiseInvalidEncoding(xsink);

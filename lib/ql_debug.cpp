@@ -23606,6 +23606,22 @@ static QoreValue f_dbg_env_read_race_result(const QoreListNode* params, RuntimeC
 #endif
 
 #ifdef DEBUG
+//! Returns the number of bytes that the character offset functions of UTF-8 strings have walked or scanned in the
+//! current thread
+/** Tests that a character offset in the ASCII text at the start of a UTF-8 string is O(1) (issue #6138)
+*/
+static QoreValue f_dbg_get_string_scan_bytes(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_string_scan_bytes;
+}
+
+//! Enables or disables the ASCII prefix cache of UTF-8 strings; returns the previous setting
+/** With the cache disabled, every character offset is walked from the start of the string, as before issue #6138
+*/
+static QoreValue f_dbg_set_ascii_prefix_cache(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    bool enable = get_param_value(params, 0).getAsBool();
+    return !qore_dbg_ascii_prefix_disabled.exchange(!enable, std::memory_order_relaxed);
+}
+
 //! Makes the next count sandbox call budget recordings fail as if no memory could be allocated
 /** Tests the fail-closed path of the sandbox limits (see design/sandbox-resource-limits.md)
 */
@@ -23701,6 +23717,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_string_scan_bytes", f_dbg_get_string_scan_bytes, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_set_ascii_prefix_cache", f_dbg_set_ascii_prefix_cache, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "enable");
     qns.addBuiltinVariant("dbg_sandbox_fail_next_budgets", f_dbg_sandbox_fail_next_budgets,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
