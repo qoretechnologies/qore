@@ -344,6 +344,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_EncodingConversionOutputStream.qpp
     lib/QC_StreamPipe.qpp
     lib/QC_Digest.qpp
+    lib/QC_WebSocketCloseRecord.qpp
     lib/QC_PipeInputStream.qpp
     lib/QC_PipeOutputStream.qpp
     lib/QC_StreamWriter.qpp
@@ -2429,6 +2430,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_FileOutputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StreamPipe.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Digest.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_WebSocketCloseRecord.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_PipeInputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_PipeOutputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StreamWriter.cpp\"

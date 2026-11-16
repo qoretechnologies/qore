@@ -41,6 +41,7 @@
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/QC_HttpFastRoutes.h"
+#include "qore/intern/WebSocketCloseRecord.h"
 #include "qore/QoreSSLCertificate.h"
 #include "qore/QoreSSLPrivateKey.h"
 
@@ -8022,6 +8023,39 @@ int Socket::sendHttp2StreamWebSocketClose(int stream_id, binary frame, softbool 
     return s->sendHttp2StreamWebSocketClose((int32_t)stream_id, frame, (bool)end_stream, xsink);
 }
 
+//! Returns the record of the close frame of a WebSocket connection on a server-side HTTP/2 stream
+/** The session sets the record when it buffers a close frame on the stream (see
+    @ref sendHttp2StreamWebSocketClose()), either the one of the stream's WebSocket frame state or the
+    application's; the record can be read after the stream or the session has ended, when the session does not answer
+    for the stream any more.  The stream context of a WebSocket connection takes the record when it is created (see
+    @ref AsyncSocketIo::AbstractStreamContext::isWebSocketCloseSent() "AbstractStreamContext::isWebSocketCloseSent()").
+
+    The record of a stream is created when the stream's WebSocket frame state is registered by the I/O controller;
+    the socket keeps the records of its session after the session ends, until the next one ends.
+
+    @param stream_id the HTTP/2 stream ID
+
+    @return the read-only record of the stream, or @ref nothing if the stream has no WebSocket frame state
+
+    @par Example:
+    @code{.py}
+*WebSocketCloseRecord rec = sock.getHttp2StreamWebSocketCloseRecord(stream_id);
+    @endcode
+
+    @note the record reveals only whether a close frame was sent on a stream of this socket; like the other methods
+    of this class, this method is not available to a program without network access
+    (@ref Qore::PO_NO_NETWORK "PO_NO_NETWORK")
+
+    @since %Qore 3.0
+*/
+*WebSocketCloseRecord Socket::getHttp2StreamWebSocketCloseRecord(int stream_id) [flags=NAMED_ARGS] {
+    WebSocketCloseRecordRef rec = qore_socket_object_get_h2_ws_close_record(s, (int32_t)stream_id);
+    if (!rec) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_WEBSOCKETCLOSERECORD, getProgram(), rec.refSelf());
+}
+
 //! Sends HTTP/2 trailer headers on a server-side stream
 /** Copies caller-owned data and delegates trailer submission to the async I/O
     controller.
@@ -9283,6 +9317,51 @@ int Socket::submitQuicStreamWebSocketClose(int session_id, int stream_id, binary
     }
     return s->submitQuicStreamWebSocketClose(session_id, stream_id, frame->getPtr(), frame->size(),
         (bool)end_stream, xsink);
+}
+
+//! Returns the record of the close frame of a WebSocket connection on an HTTP/3 stream of a QUIC session
+/** The session sets the record when it stages a close frame on the stream (see
+    @ref submitQuicStreamWebSocketClose()), either the one of the stream's WebSocket frame state or the
+    application's; the record can be read after the stream or the session has ended, when the session does not answer
+    for the stream any more.  The stream context of a WebSocket connection takes the record when it is created (see
+    @ref AsyncSocketIo::AbstractStreamContext::isWebSocketCloseSent() "AbstractStreamContext::isWebSocketCloseSent()").
+
+    The record of a stream is created when the stream's WebSocket frame state is registered by the I/O controller and
+    kept for the life of the QUIC session; a stream context holds its own reference, which outlives the session.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+
+    @return the read-only record of the stream, or @ref nothing if no QUIC session with the given ID is active or the
+    stream has no WebSocket frame state
+
+    @throw QUIC-ERROR invalid session or stream ID
+
+    @par Example:
+    @code{.py}
+*WebSocketCloseRecord rec = sock.getQuicStreamWebSocketCloseRecord(session_id, stream_id);
+    @endcode
+
+    @note the record reveals only whether a close frame was sent on a stream of this socket; like the other methods
+    of this class, this method is not available to a program without network access
+    (@ref Qore::PO_NO_NETWORK "PO_NO_NETWORK")
+
+    @since %Qore 3.0
+*/
+*WebSocketCloseRecord Socket::getQuicStreamWebSocketCloseRecord(int session_id, int stream_id) [flags=NAMED_ARGS] {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    WebSocketCloseRecordRef rec = qore_socket_object_get_quic_ws_close_record(s, session_id, stream_id);
+    if (!rec) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_WEBSOCKETCLOSERECORD, getProgram(), rec.refSelf());
 }
 
 //! Sends body data on a streaming HTTP/3 response
