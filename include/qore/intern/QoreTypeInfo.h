@@ -1146,6 +1146,23 @@ public:
         return parseReturns(ti, t) == QTI_IDENT && !getReturnEnum(ti) && !getTypeParameterSourceType(ti);
     }
 
+    //! returns true if any of the types that the type returns is an enum, also one that is not its first (a union)
+    /** getReturnEnum() gives only the enum of the first return type: a union whose enum is another member (ex:
+        union<string, E>) returns the members of the enum as well, and accepts no plain value of its base type that
+        another member does not accept (qore#6259); see isPlainType()
+    */
+    DLLLOCAL static bool returnsEnum(const QoreTypeInfo* ti) {
+        if (!hasType(ti)) {
+            return false;
+        }
+        for (auto& i : ti->return_vec) {
+            if (i.spec.getEnum()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getComplexHashValueType(const QoreTypeInfo* ti);
 
