@@ -30,44 +30,61 @@
 class GenericFunctionLocalObjectTypeTest inherits QUnit::Test {
     private {
         string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
-        string fixture = get_script_dir() + "/local-object.q";
-        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/local-object.expected");
+
+        #! the fixture programs: local-object-debug.q runs its cases with a debugger attached, which makes a qcc
+        #! program read the IR of its functions from the AOT image
+        const Programs = ("local-object", "local-object-debug");
     }
 
     constructor() : QUnit::Test("generic class objects constructed in generic functions with their type parameters",
             "1.0", \ARGV) {
-        foreach string mode in (ExecModeHarness::ExecModes) {
-            string execution_mode = mode;
-            addTestCase("execution mode " + mode, sub () {
-                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
-            });
+        foreach string name in (Programs) {
+            string program_name = name;
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                string execution_mode = mode;
+                addTestCase(program_name + ": execution mode " + mode, sub () {
+                    assertEq(expected(program_name), ExecModeHarness::run(command(program_name, execution_mode)));
+                });
+            }
+            # a program with a debugger attached runs on the AST interpreter in the interpreter modes, so it has no IR
+            # tier run
+            if (program_name != "local-object-debug") {
+                addTestCase(program_name + ": IR tier", sub () {
+                    assertEq(expected(program_name), ExecModeHarness::run_ir_tier(command(program_name, "tiered")));
+                });
+            }
+            addTestCase(program_name + ": qcc -O0", sub () { checkQcc(program_name, 0); });
+            addTestCase(program_name + ": qcc -O3", sub () { checkQcc(program_name, 3); });
         }
-        addTestCase("IR tier", sub () {
-            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
-        });
-        addTestCase("qcc -O0", sub () { checkQcc(0); });
-        addTestCase("qcc -O3", sub () { checkQcc(3); });
 
         set_return_value(main());
     }
 
-    private string command(string mode) {
-        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    private static string fixture(string name) {
+        return get_script_dir() + "/" + name + ".q";
+    }
+
+    private static string expected(string name) {
+        return ReadOnlyFile::readTextFile(get_script_dir() + "/" + name + ".expected");
+    }
+
+    private string command(string name, string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture(name)));
     }
 
     #! compiles the fixture with qcc and compares the output of the program
-    private checkQcc(int opt) {
+    private checkQcc(string name, int opt) {
         string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
         if (!is_file(qcc_bin)) {
             qcc_bin = "qcc";
         }
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
-        string program = dir + "/generic-function-local-object-type";
+        string program = dir + "/" + name;
         string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
-            shellQuote(fixture)));
+            shellQuote(fixture(name))));
         assertTrue(is_file(program), "the fixture compiled: " + output);
-        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+        assertEq(expected(name), backquote(shellQuote(program) + " 2>&1"));
     }
 
     private static string shellQuote(string value) {

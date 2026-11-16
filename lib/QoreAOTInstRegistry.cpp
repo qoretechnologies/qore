@@ -1029,7 +1029,7 @@ static std::unique_ptr<QoreIRInstruction> readTypedBase(
     if (type_path && *type_path) {
         std::string type_error;
         QoreAOTTypeResolver type_resolver(ctx.pgm);
-        inst->element_type = type_resolver.resolve(type_path, type_error);
+        inst->element_type = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
         if (!inst->element_type) {
             ctx.error = std::string("cannot resolve instruction element type '") + type_path
                 + "': " + type_error;
@@ -2728,7 +2728,7 @@ static std::unique_ptr<QoreIRInstruction> readGuard(
     if (type_path && *type_path) {
         std::string type_error;
         QoreAOTTypeResolver type_resolver(ctx.pgm);
-        gi->type_info = type_resolver.resolve(type_path, type_error);
+        gi->type_info = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
     }
     gi->result = QoreIRValue(result_id);
     gi->operands = operands;
@@ -4008,7 +4008,7 @@ static std::unique_ptr<QoreIRInstruction> readMakeHashConstKeys(
     if (type_path && *type_path) {
         std::string type_error;
         QoreAOTTypeResolver type_resolver(ctx.pgm);
-        inst->typeInfo = type_resolver.resolve(type_path, type_error);
+        inst->typeInfo = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
         if (!inst->typeInfo) {
             ctx.error = "cannot resolve MakeHashConstKeys type '" + std::string(type_path) + "': " + type_error;
             return nullptr;
@@ -4457,7 +4457,7 @@ static std::unique_ptr<QoreIRInstruction> readMakeList(
     if (type_path && *type_path) {
         std::string type_error;
         QoreAOTTypeResolver type_resolver(ctx.pgm);
-        inst->typeInfo = type_resolver.resolve(type_path, type_error);
+        inst->typeInfo = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
         if (!inst->typeInfo) {
             ctx.error = "cannot resolve MakeList type '" + std::string(type_path) + "': " + type_error;
             return nullptr;
@@ -4494,7 +4494,7 @@ static std::unique_ptr<QoreIRInstruction> readMakeHash(
     if (type_path && *type_path) {
         std::string type_error;
         QoreAOTTypeResolver type_resolver(ctx.pgm);
-        inst->typeInfo = type_resolver.resolve(type_path, type_error);
+        inst->typeInfo = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
         if (!inst->typeInfo) {
             ctx.error = "cannot resolve MakeHash type '" + std::string(type_path) + "': " + type_error;
             return nullptr;
