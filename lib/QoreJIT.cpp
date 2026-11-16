@@ -3738,7 +3738,7 @@ void QoreJIT::dbgExitIfAbandonedCompileHeld() noexcept {
     // the names of the hold points, as dbg_hold_bg_compile() takes them
     static const char* const hold_point_names[] = {"lowering", "llvm", "commit", "install"};
     static_assert(sizeof(hold_point_names) / sizeof(hold_point_names[0])
-        == static_cast<size_t>(BgCompileHoldPoint::Install) + 1, "a hold point has no name");
+        == static_cast<size_t>(BgCompileHoldPoint::Count), "a hold point has no name");
     const char* point = static_cast<size_t>(held_at) < sizeof(hold_point_names) / sizeof(hold_point_names[0])
         ? hold_point_names[held_at] : "unknown";
     // the compile stays held, so the join would never return and the process would hang without a sign of why: a

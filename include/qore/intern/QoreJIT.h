@@ -772,6 +772,8 @@ public:
         Commit,
         //! in the installing phase, before the result is published to the variants
         Install,
+        //! the number of hold points: not a hold point; it stays last (the sizes of the tables indexed by a hold point)
+        Count,
     };
 
     //! Returns the process-wide JIT
@@ -1406,7 +1408,7 @@ private:
     //! by bg_queue_mutex
     DbgFinishAbandoned dbg_finish_abandoned = DbgFinishAbandoned::None;
     //! for each hold point, the function whose compile stops there, all if empty; protected by bg_queue_mutex
-    std::string dbg_bg_hold_func[static_cast<int>(BgCompileHoldPoint::Install) + 1];
+    std::string dbg_bg_hold_func[static_cast<int>(BgCompileHoldPoint::Count)];
     //! the name of the in-progress compile's root function up to the "@"; protected by bg_queue_mutex
     std::string dbg_bg_in_progress_func;
 
