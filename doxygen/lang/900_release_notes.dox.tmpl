@@ -206,11 +206,11 @@
     \c PARSE-COMMAND-ERROR or \c RUNTIME-COMMAND-ERROR by a module that has not set \c QoreModuleInfo::cmd_caller_aware
     (see @ref qore_modules); unrestricted code is not affected.
 
-    @par The Implicit Index Is Unset Outside the Code of Its Operator
-    An @ref implicit_index "implicit index" (<tt>$#</tt>) in a function, method or closure called from the code of a
-    map, select or other iterating operator or of a foreach statement, in a fold expression (also one in the code of
-    such an operator or statement), or at the top level gives @ref nothing instead of an enclosing index, and a typed
-    use of it there (<tt>int i = $#;</tt>, <tt>"s" + $#</tt>) is a parse error.
+    @par The Implicit Index Is a Parse Error Outside the Code of Its Operator
+    An @ref implicit_index "implicit index" (<tt>$#</tt>) outside the code that a map, select or other iterating
+    operator or a foreach statement runs for each element (as in a while loop, a function, method or closure body, a
+    fold expression or top-level code) is a parse error in every execution mode, instead of giving the caller's
+    index or \c 0.
 
     @par An Operator over a Single Value Gives It the Implicit Index 0
     A @ref map "map", @ref select "select" or @ref hmap "hash map" over a single value (not a list or an iterator) gives

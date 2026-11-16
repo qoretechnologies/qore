@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the implicit index of operators and foreach statements
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or qcc
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ImplicitIndexOutsideTest
+
+#! issue #803: the implicit index ($#) outside the code that sets it is a parse error
+/** \c $# is set only in the code that a foreach statement or the map, select, map-select, hash map, hash map-select
+    and streaming predicate operators run for each element; anywhere else (a while, for or do-while loop, a context
+    statement, a function, method or closure body also when called or defined in that code, a fold expression, the
+    iterated expression of an operator or foreach statement, a default argument, a member, constant or variable
+    initializer, top-level code, also after a loop has ended) it is refused with \c IMPLICIT-INDEX-NOT-ALLOWED when
+    the code is parsed, in every execution mode and by qcc.  Before, it was accepted and gave NOTHING (in 2.2.1: the
+    index of the caller or 0).
+
+    implicit-index-valid.q uses \c $# in every construct that sets it; the AST interpreter's output must be the
+    expected one, and every other execution mode, the IR tier and AOT executables compiled with -O0 and -O3 must give
+    the same.
+*/
+class ImplicitIndexOutsideTest inherits QUnit::Test {
+    public {
+        #! scripts that use $# outside the code that sets it; each would print "RAN" if it were accepted
+        const Invalid = {
+            "top level": "printf(\"RAN %y\\n\", $#);\n",
+            "typed top level": "int i = $#;\nprintf(\"RAN %y\\n\", i);\n",
+            "after foreach": "foreach int i in ((1, 2)) {}\nprintf(\"RAN %y\\n\", $#);\n",
+            "after foreach in function": "sub f() { foreach int i in ((1, 2)) {} printf(\"RAN %y\\n\", $#); }\nf();\n",
+            "while": "int i = 0;\nwhile (i++ < 2) { printf(\"RAN %y\\n\", $#); }\n",
+            "for": "for (int i = 0; i < 2; ++i) { printf(\"RAN %y\\n\", $#); }\n",
+            "do while": "int i = 0;\ndo { printf(\"RAN %y\\n\", $#); } while (++i < 2);\n",
+            "context": "hash h = {\"a\": (1, 2)};\ncontext (h) { printf(\"RAN %y\\n\", $#); }\n",
+            "function": "sub f() { printf(\"RAN %y\\n\", $#); }\nf();\n",
+            "function called from map": "auto sub f() { return $#; }\nprintf(\"RAN %y\\n\", map f(), (1, 2));\n",
+            "method": "class C { m() { printf(\"RAN %y\\n\", $#); } }\nC c();\nc.m();\n",
+            "static method": "class C { static m() { printf(\"RAN %y\\n\", $#); } }\nC::m();\n",
+            "constructor": "class C { constructor() { printf(\"RAN %y\\n\", $#); } }\nC c();\n",
+            "closure": "code c = sub () { printf(\"RAN %y\\n\", $#); };\nc();\n",
+            "closure called from map": "code c = auto sub () { return $#; };\nprintf(\"RAN %y\\n\", map c(), (1, 2));\n",
+            "closure defined in map": "printf(\"RAN %y\\n\", map (auto sub () { return $#; })(), (1, 2));\n",
+            "closure defined in foreach": "foreach int i in ((1, 2)) {\n    (sub () { printf(\"RAN %y\\n\", $#); })();\n}\n",
+            "foldl": "printf(\"RAN %y\\n\", foldl $1 + $#, (1, 2));\n",
+            "foldr": "printf(\"RAN %y\\n\", foldr $1 + $#, (1, 2));\n",
+            "foldl in map": "printf(\"RAN %y\\n\", map (foldl $1 + $#, (1, 2)), (1, 2));\n",
+            "foldl in foreach": "foreach int i in ((1, 2)) {\n    printf(\"RAN %y\\n\", foldl $1 + $#, (1, 2));\n}\n",
+            "map source": "printf(\"RAN %y\\n\", map $1, (1, $#));\n",
+            "select source": "printf(\"RAN %y\\n\", select (1, $#), True);\n",
+            "foreach source": "foreach auto i in ((1, $#)) { printf(\"RAN %y\\n\", i); }\n",
+            "streaming source": "printf(\"RAN %y\\n\", (count True, (1, $#)));\n",
+            "default argument": "sub f(auto a = $#) { printf(\"RAN %y\\n\", a); }\nf();\n",
+            "member initializer": "class C { public { auto a = $#; } }\nC c();\nprintf(\"RAN %y\\n\", c.a);\n",
+            "static member initializer": "class C { public { static auto a = $#; } }\nprintf(\"RAN %y\\n\", C::a);\n",
+            "class constant": "class C { const A = $#; }\nprintf(\"RAN %y\\n\", C::A);\n",
+            "constant": "const A = $#;\nprintf(\"RAN %y\\n\", A);\n",
+            "global variable": "our auto g = $#;\nprintf(\"RAN %y\\n\", g);\n",
+            "on_exit in function": "sub f() { on_exit { printf(\"RAN %y\\n\", $#); } }\nf();\n",
+            "background": "background printf(\"RAN %y\\n\", $#);\n",
+        };
+
+        #! the output of implicit-index-valid.q
+        const Expected = (
+            "foreach [\"a\", 0, \"b\", 1, \"c\", 2]",
+            "foreach nested [\"a\", 0, 7, \"a\", 1, 8, 0, \"b\", 0, 7, \"b\", 1, 8, 1, \"c\", 0, 7, \"c\", 1, 8, 2]",
+            "loops in foreach [0, 0, 0, 0, 1, 1, 10, 100, \"sw\", 1, 2, 2, 20, 200, \"catch\", 2]",
+            "on_exit in foreach [\"a\", \"exit\", 0, \"b\", \"exit\", 1, \"c\", \"exit\", 2]",
+            "map [0, 1, 2]",
+            "map-select [0, 4]",
+            "select [\"a\", \"c\"]",
+            "hash map {a: 0, b: 1, c: 2}",
+            "hash map key {a0: \"a\", b1: \"b\", c2: \"c\"}",
+            "hash map-select {b: 1, c: 2}",
+            "first \"b\"",
+            "any True",
+            "all True",
+            "count 2",
+            "takewhile [\"a\", \"b\"]",
+            "takeuntil [\"a\", \"b\"]",
+            "single 0",
+            "map nested [[0, 1], [0, 1], [0, 1]]",
+            "map nested outer source [[0, 0], [1, 1], [2, 2]]",
+            "closure own foreach in map [[5, 7], [5, 7], [5, 7]]",
+            "closure arg in map [0, 1, 2]",
+            "closure own map in map [[0, 1], [0, 1], [0, 1]]",
+            "fold source in map [10, 11, 12]",
+            "map in fold 3",
+            "function [0, 10, 20]",
+            "method [0, \"a\", 1, \"b\", 2, \"c\"]",
+            "static method [0, 1, 2]",
+            "closure [0, 1, 2]",
+            "top [0, 1]",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("implicit index outside", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/implicit-index-valid.q";
+
+        addTestCase("refused in every mode", \invalidModesTest());
+        addTestCase("refused by qcc", \invalidQccTest());
+        addTestCase("valid AST interpreter", \validAstTest());
+        addTestCase("valid execution modes", \validModesTest());
+        addTestCase("valid AOT executable -O0", \validAotTest(), "-O0");
+        addTestCase("valid AOT executable -O3", \validAotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    #! each invalid script is refused at parse time in every execution mode
+    private invalidModesTest() {
+        TmpDir dir("implicit-index-outside-");
+        foreach hash<auto> i in (Invalid.pairIterator()) {
+            string path = writeScript(dir.path, i.key, i.value);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s --exec-mode=%s %s",
+                    env, qore_bin, mode, path));
+                checkRefused(r, sprintf("%s (%s)", i.key, mode));
+            }
+        }
+    }
+
+    #! qcc refuses each invalid script when it parses it
+    private invalidQccTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("implicit-index-outside-qcc-");
+        foreach hash<auto> i in (Invalid.pairIterator()) {
+            string path = writeScript(dir.path, i.key, i.value);
+            string exe = path + ".bin";
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -O0 -o %s %s", env,
+                qcc_bin, exe, path));
+            checkRefused(r, i.key + " (qcc)");
+            assertFalse(is_file(exe), i.key + " (qcc): no executable");
+        }
+    }
+
+    #! checks that a run refused the script with IMPLICIT-INDEX-NOT-ALLOWED and ran none of it
+    private checkRefused(hash<ExecModeHarness::ModeRunResult> r, string label) {
+        assertNeq(0, r.rc, label + ": exit code");
+        assertRegex("IMPLICIT-INDEX-NOT-ALLOWED", r.out, label + ": error");
+        assertEq(False, r.stdout =~ /RAN/, label + ": nothing ran");
+    }
+
+    #! writes an invalid script and returns its path
+    private string writeScript(string dir, string name, string code) {
+        string path = sprintf("%s/%s.q", dir, replace(name, " ", "-"));
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n" + code);
+        f.close();
+        return path;
+    }
+
+    #! checks the output of the AST interpreter, which the other modes must give
+    private validAstTest() {
+        list<string> lines = select ast().split("\n"), $1;
+        assertEq(Expected, lines);
+    }
+
+    #! runs the valid script in every execution mode and on the IR tier
+    private validModesTest() {
+        string exp = ast();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, script)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the valid script with qcc and checks that the executable gives the output of the AST interpreter
+    private validAotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("implicit-index-valid-aot-");
+        string exe = dir.path + "/implicit-index-valid";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        assertEq(ast(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+
+    #! returns the output of the valid script with the AST interpreter
+    private string ast() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, script));
+    }
+}

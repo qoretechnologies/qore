@@ -14,12 +14,12 @@
 %exec-class ImplicitElementScopeTest
 
 #! issue #5690: the implicit index ($#) belongs to the operator or foreach statement whose per-element code encloses it
-/** In a function, method, closure or call reference called from the per-element code of map, select, map-select,
-    hash map, hash map-select, the streaming predicates or a foreach statement, \c $# is unset (NOTHING), as it is in a
-    fold (also one nested in that code) and at the top level; an operator in the called code gives its own elements their index, and the caller's
-    \c $# is the same after the call.  An operator over a single value gives it the index 0.  Before, the AST
-    interpreter gave the called code the caller's index and the compiled modes 0, and a single value the enclosing
-    index.
+/** An operator in a function, method or closure called from the per-element code of map, select, map-select,
+    hash map, hash map-select, the streaming predicates or a foreach statement gives its own elements their index, and
+    the caller's \c $# is the same after the call; an operator over a single value gives it the index 0.  Before, the
+    AST interpreter gave the called code the caller's index and the compiled modes 0, and a single value the enclosing
+    index.  A \c $# in the called code itself, in a fold expression or at the top level is a parse error (qore#803,
+    see ../implicit-index-outside).
 
     implicit-element-scope.q prints the values; the AST interpreter's output must be the expected one, and every other
     execution mode, the IR tier and AOT executables compiled with -O0 and -O3 must give the same.
@@ -28,31 +28,12 @@ class ImplicitElementScopeTest inherits QUnit::Test {
     public {
         #! the output of the script
         const Expected = (
-            "top null",
-            "map fn [null, null, null]",
-            "map method [null, null, null]",
-            "map static [null, null, null]",
-            "map closure [null, null, null]",
-            "map closure in body [null, null, null]",
-            "map call ref [null, null, null]",
-            "map method ref [null, null, null]",
-            "select fn [\"a\", \"b\", \"c\"]",
-            "map-select fn [null, null, null]",
-            "map-select pred fn [\"a\", \"b\", \"c\"]",
-            "hash map fn {a: null, b: null, c: null}",
-            "hash map-select fn {a: null, b: null, c: null}",
-            "first fn \"a\"",
-            "any fn False",
-            "all fn True",
-            "count fn 3",
-            "takewhile fn [\"a\", \"b\", \"c\"]",
-            "takeuntil fn [\"a\", \"b\", \"c\"]",
-            "fused fn [null, null]",
-            "foreach fn [\"a\", 0, null, \"b\", 1, null, \"c\", 2, null]",
             "map single in fn [0, 0, 0]",
             "map nested in fn [[0, 1], [0, 1], [0, 1]]",
-            "map foreach in fn [[0, null, 1, null], [0, null, 1, null], [0, null, 1, null]]",
-            "after call [[null, 0, [0, 1], 0], [null, 1, [0, 1], 1], [null, 2, [0, 1], 2]]",
+            "map foreach in fn [[0, 1], [0, 1], [0, 1]]",
+            "select nested in fn [\"a\", \"b\", \"c\"]",
+            "after call [[0, [0, 1], 0, [0, 1], 0], [1, [0, 1], 1, [0, 1], 1], [2, [0, 1], 2, [0, 1], 2]]",
+            "foreach after call [\"a\", 0, [0, 1], 0, \"b\", 1, [0, 1], 1, \"c\", 2, [0, 1], 2]",
             "own [0, 1, 2]",
             "own select [\"a\", \"c\"]",
             "own map-select [0, 2]",
@@ -63,18 +44,8 @@ class ImplicitElementScopeTest inherits QUnit::Test {
             "single map-select 0",
             "single hash map {s: 0}",
             "single in map [0, 0, 0]",
-            "fold \"a--\"",
-            "foldr \"c--\"",
-            "fold in map [101, 101, 101]",
-            "foldr in map [102, 102, 102]",
-            "fold in select [\"a\", \"b\", \"c\"]",
-            "fold in map-select [101, 101]",
-            "fold in hash map {a: 101, b: 101, c: 101}",
-            "fold in fused [101, 101]",
-            "fold in foreach [\"a\", 101, \"b\", 101, \"c\", 101]",
             "fold source in map [10, 11, 12]",
             "map in fold 3",
-            "function null",
             "fn args [\"x\", \"y\"]",
         );
     }
