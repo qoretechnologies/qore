@@ -61,6 +61,18 @@ class HttpServerContentTypeCharsetTest inherits QUnit::Test {
                 },
             },
             {
+                # nothing but a charset parameter: the Content-Type is kept, and there is no media type
+                "content-type": ";charset=utf-8",
+                "body": "json",
+                "expected": {
+                    "content-type": ";charset=utf-8",
+                    "orig-content-type": ";charset=utf-8",
+                    "charset": "utf-8",
+                    "body-content-type": NOTHING,
+                    "body": "{\"a\":1}",
+                },
+            },
+            {
                 # JSON is UTF-8 whatever the charset parameter says (RFC 8259); without one, the charset reported is
                 # the encoding that the body is read in
                 "content-type": "application/json",
@@ -99,6 +111,9 @@ class HttpServerContentTypeCharsetTest inherits QUnit::Test {
         # a binary type is read in the assumed encoding
         assertEq(<HttpContentTypeInfo>{"charset": "ISO-8859-1", "body_content_type": MimeTypeOctetStream},
             get_http_content_type_info(MimeTypeOctetStream));
+        # a value in another encoding is read in UTF-8
+        assertEq(<HttpContentTypeInfo>{"charset": "utf-8", "body_content_type": "text/plain"},
+            get_http_content_type_info(convert_encoding("text/plain;charset=utf-8", "UTF-16LE")));
         # only a charset parameter: no media type is left
         hash<HttpContentTypeInfo> info = get_http_content_type_info(";charset=utf-8");
         assertEq("utf-8", info.charset);

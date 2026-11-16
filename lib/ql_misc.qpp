@@ -1742,8 +1742,12 @@ hash<HttpContentTypeInfo> info = get_http_content_type_info("application/json;ch
     @since %Qore 3.0
 */
 hash<HttpContentTypeInfo> get_http_content_type_info(string content_type, string assumed_encoding = "ISO-8859-1") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    QoreHttpContentTypeInfo cti = qore_get_http_content_type_info(content_type->c_str(),
-        QEM.findCreate(assumed_encoding));
+    // the rule reads the bytes of the field value, which the servers have in UTF-8 or ASCII
+    TempEncodingHelper ct(content_type, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreHttpContentTypeInfo cti = qore_get_http_content_type_info(ct->c_str(), QEM.findCreate(assumed_encoding));
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclHttpContentTypeInfo, xsink), xsink);
     rv->setKeyValue("charset", new QoreStringNode(cti.charset.c_str(), cti.charset.size(), QCS_DEFAULT), xsink);
     if (cti.has_body_content_type) {
