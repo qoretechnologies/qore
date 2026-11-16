@@ -43,8 +43,9 @@ increases it by one more.  With a level from 0 (critical messages only) to 4
 .B \-v3
 or
 .BR \-\-verbose=3 ,
-set it.  The default level is 2, which reports the files written.  Any other
-level is an error.
+set it; the level follows the option without a space, as an argument after a
+space is an input file.  The default level is 2, which reports the files
+written.  Any other level is an error.
 .TP
 .BR \-h , " \-\-help"
 Show all available options.
@@ -75,15 +76,29 @@ comment and a
 .B /** */
 comment.
 .PP
-Any other text is C++ code that is copied into the generated source.  A
-function or constant with a
+Any other text is C++ code that is copied into the generated source, such as
+the methods of a C++ class with the name of a class of the file.  A function or
+constant with a
 .B //!
-comment outside a group, and a method of a class of the file without one, are
-errors: C++ code takes a
+comment outside a group is an error: C++ code takes a
 .B //
 or
 .B /* */
-comment.
+comment.  A constant without a type in a group, and a function in a group or a
+method of a class of the file whose signature C++ does not accept (a
+pseudo-class such as
+.BR <list>:: ,
+attributes such as
+.BR [flags=CONSTANT] ,
+an or-nothing return type such as
+.BR *string ,
+or a type such as
+.BR softint ),
+without a
+.B //!
+comment, are errors.  Text in a block comment or an
+.B #if 0
+block is copied as it is.
 .SH EXIT STATUS
 .B qpp
 reports problems on standard error as errors or warnings.  An error means that

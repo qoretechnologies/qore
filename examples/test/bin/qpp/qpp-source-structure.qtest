@@ -14,7 +14,9 @@
 /** - issue #219: a function or a constant with a doc comment outside a group was dropped with its documentation, and
       the build went on without it; it is now an error, and other code after a doc comment is kept
     - issue #1686: a method of a class of the file without a doc comment was copied into the C++ code as it was; it is
-      now an error; "-v" took the next argument as its level, and "-vv" set the level to 0
+      now an error when its signature is not C++ (a pseudo-class, attributes, an or-nothing return type or a type that
+      only %Qore has), as a C++ signature is the method of a C++ class (the class of the private data, which often has
+      the name of the class); "-v" took the next argument as its level, and "-vv" set the level to 0
     - issue #2290: the bindings of a group's constants had no source location of their own, so the compiler's errors
       for a constant's value named the wrong line
 */
@@ -74,8 +76,19 @@ const ConstOne = 1;
         addTestCase("documented method is bound", \testDocumentedMethod());
         addTestCase("method in a block comment is copied", \testMethodInBlockComment());
         addTestCase("method of a C++ class is copied", \testMethodOfCppClass());
+        addTestCase("undocumented group members fail", \testUndocumentedGroupMembers());
+        addTestCase("function without a return type outside a group fails", \testFunctionWithoutReturnType());
+        addTestCase("constant with :: outside a group fails", \testConstantWithScopeOutsideGroup());
+        addTestCase("undocumented pseudo-class method fails", \testUndocumentedPseudoMethod());
+        addTestCase("undocumented method with a scoped return type fails", \testUndocumentedScopedReturnType());
+        addTestCase("undocumented method before its class fails", \testUndocumentedMethodBeforeClass());
+        addTestCase("code in '#if 0' is copied", \testIfZero());
+        addTestCase("statements are not methods", \testStatementsNotMethods());
+        addTestCase("doc comments in a block comment are copied", \testDocCommentInBlockComment());
+        addTestCase("error line of a last line without a newline", \testLastLineWithoutNewline());
         addTestCase("every error is reported in one run", \testAllErrorsReported());
         addTestCase("constants have their own line markers", \testConstantLineMarkers());
+        addTestCase("group text has the line of its first line", \testGroupTextLineMarkers());
         addTestCase("verbosity options", \testVerbosity());
         addTestCase("invalid verbosity levels fail", \testInvalidVerbosity());
         addTestCase("help text describes -v", \testHelp());
@@ -233,13 +246,25 @@ static int module_value = 42;
     testUndocumentedMethod() {
         # issue #1686: a method without a doc comment was copied into the C++ code as it was
         hash<auto> r = runQpp(ClassStart + "
-int TestCls::get() {
+int TestCls::get() [flags=CONSTANT] {
     return 1;
 }
 ");
         assertFailed(r, "undocumented method");
-        assertRegex("structtest\\.qpp:6: 'int TestCls::get\\(\\) \\{': a method of class 'TestCls' must have a "
-            "leading doc comment", r.out, "the error names the line and the class");
+        assertRegex("structtest\\.qpp:6: 'int TestCls::get\\(\\) \\[flags=CONSTANT\\] \\{': a method of class "
+            "'TestCls' must have a leading doc comment", r.out, "the error names the line and the class");
+
+        # a C++ signature is a method of a C++ class with the name of the class, such as the class of its private data
+        r = runQpp(ClassStart + "
+TestCls::TestCls(const QoreStringNode* s) : str(s) {
+}
+
+bool TestCls::next(ExceptionSink* xsink) {
+    return true;
+}
+");
+        assertSucceeded(r, "methods of a C++ class with the name of the class");
+        assertRegex("bool TestCls::next\\(ExceptionSink\\* xsink\\) \\{", r.cpp_text, "the methods are copied");
     }
 
     testUndocumentedMethodForms() {
@@ -247,12 +272,13 @@ int TestCls::get() {
     return 1;
 }
 "), $1), (
-            "TestCls::constructor() {",
+            "TestCls::constructor() [dom=PROCESS] {",
             "nothing TestCls::run(int a) {",
             "*string TestCls::name() {",
-            "hash<auto> TestCls::info(*hash<auto> opts) {",
-            "static int TestCls::count() {",
-            "private int TestCls::priv() {",
+            "hash<auto> TestCls::info(softlist opts) {",
+            "static int TestCls::count() [flags=CONSTANT] {",
+            "private int TestCls::priv()[flags=CONSTANT] {",
+            "int TestCls::conv(softint i, softstring s) {",
         );
     }
 
@@ -273,27 +299,28 @@ int TestCls::get() {
         # the form of the disabled Socket::startPollReadServerSentEvent() in QC_Socket.qpp
         hash<auto> r = runQpp(ClassStart + "
 /*
-int TestCls::get() {
+int TestCls::get() [flags=CONSTANT] {
     return 1;
 }
 */
+// int TestCls::commented() [flags=CONSTANT] {
 /* a one-line comment */ static int after_comment = 1;
 const char* str = \"/*\";
 int x = 1; // /*
 ");
         assertSucceeded(r, "method in a block comment");
-        assertRegex("int TestCls::get\\(\\) \\{", r.cpp_text, "the commented method is copied");
+        assertRegex("int TestCls::get\\(\\) \\[flags=CONSTANT\\] \\{", r.cpp_text, "the commented method is copied");
 
         # a comment start in a string or a line comment does not hide a method
         r = runQpp(ClassStart + "
 const char* str = \"/*\";
 int x = 1; // /*
-int TestCls::get() {
+int TestCls::get() [flags=CONSTANT] {
     return 1;
 }
 ");
         assertFailed(r, "undocumented method after a comment start in a string and a line comment");
-        assertRegex("'int TestCls::get\\(\\) \\{'", r.out);
+        assertRegex("'int TestCls::get\\(\\) \\[flags=CONSTANT\\] \\{'", r.out);
     }
 
     testMethodOfCppClass() {
@@ -309,25 +336,201 @@ void ns::helper() {
         assertRegex("int Helper::get\\(\\) \\{", r.cpp_text, "the method is copied");
     }
 
+    testUndocumentedGroupMembers() {
+        # issue #1686: a group member without a doc comment was copied into the C++ code as it was
+        hash<auto> r = runQpp(ConstGroupStart + "//! one
+const One = 1;
+const Two = 2;
+" + GroupEnd);
+        assertFailed(r, "constant without a doc comment");
+        assertRegex("structtest\\.qpp:7: 'const Two = 2;': a constant or a function in a group must have a leading "
+            "doc comment", r.out);
+
+        r = runQpp(FuncGroupStart + "int t_nodoc(softint a) {
+    return a;
+}
+" + GroupEnd);
+        assertFailed(r, "function without a doc comment");
+        assertRegex("structtest\\.qpp:5: 'int t_nodoc\\(softint a\\) \\{': a constant or a function in a group",
+            r.out);
+
+        r = runQpp(FuncGroupStart + "t_noret(int a) [flags=CONSTANT] {
+    return a;
+}
+" + GroupEnd);
+        assertFailed(r, "function without a return type and a doc comment");
+
+        # C++ code in a group is kept: a helper function and a C++ constant (with a type)
+        r = runQpp(FuncGroupStart + "static void parallel_helper(ExceptionSink* xsink) {
+}
+const char* const_text = \"text\";
+static int helper_value = 1;
+// a comment: int f(int a) {
+/*
+int t_commented(int a) {
+*/
+" + Function + GroupEnd);
+        assertSucceeded(r, "C++ code in a group");
+        assertRegex("static void parallel_helper\\(ExceptionSink\\* xsink\\) \\{", r.cpp_text);
+        assertRegex("const char\\* const_text", r.cpp_text);
+        assertRegex("static int helper_value = 1;", r.cpp_text);
+        assertRegex("int t_commented\\(int a\\) \\{", r.cpp_text, "the commented function is copied");
+    }
+
+    testFunctionWithoutReturnType() {
+        # a group accepts a function without a return type
+        hash<auto> r = runQpp("//! a function
+/**
+*/
+t_func2(int a) {
+    return a;
+}
+");
+        assertFailed(r, "function without a return type outside a group");
+        assertRegex("structtest\\.qpp:4: 't_func2\\(int a\\) \\{': a Qore function or constant", r.out);
+    }
+
+    testConstantWithScopeOutsideGroup() {
+        # was taken for a method
+        hash<auto> r = runQpp("//! a constant
+/**
+*/
+const X = Foo::Bar;
+");
+        assertFailed(r, "constant with :: outside a group");
+        assertRegex("structtest\\.qpp:4: 'const X = Foo::Bar;': a Qore function or constant", r.out);
+    }
+
+    testUndocumentedPseudoMethod() {
+        # the form of the methods of QC_Pseudo*.qpp
+        hash<auto> r = runQpp("//! a pseudo-class
+/** a pseudo-class
+*/
+qclass <tpc> [];
+
+int <tpc>::size() {
+    return 0;
+}
+");
+        assertFailed(r, "undocumented pseudo-class method");
+        assertRegex("structtest\\.qpp:6: 'int <tpc>::size\\(\\) \\{': a method of class '<tpc>' must have a "
+            "leading doc comment", r.out);
+    }
+
+    testUndocumentedScopedReturnType() {
+        map assertFailed(runQpp(ClassStart + $1 + "
+    return 1;
+}
+"), $1), (
+            "Qore::Foo TestCls::m1() [flags=CONSTANT] {",
+            "std::string TestCls::m2() [flags=CONSTANT] {",
+            "hash<string, int> TestCls::m3(softint i) {",
+        );
+    }
+
+    testUndocumentedMethodBeforeClass() {
+        hash<auto> r = runQpp("int TestCls::early() [flags=CONSTANT] {
+    return 1;
+}
+
+" + ClassStart);
+        assertFailed(r, "undocumented method before its class");
+        assertRegex("structtest\\.qpp:1: 'int TestCls::early\\(\\) \\[flags=CONSTANT\\] \\{': a method of class "
+            "'TestCls'", r.out);
+    }
+
+    testIfZero() {
+        hash<auto> r = runQpp(ClassStart + "
+#if 0
+int TestCls::disabled() [flags=CONSTANT] {
+#ifdef NESTED
+    return 1;
+#endif
+}
+//! a doc comment
+/**
+*/
+int t_disabled(int a) {
+}
+#endif
+");
+        assertSucceeded(r, "code in '#if 0'");
+        assertRegex("int TestCls::disabled\\(\\) \\[flags=CONSTANT\\] \\{", r.cpp_text,
+            "the disabled method is copied");
+
+        # after the '#endif', a method is checked again
+        r = runQpp(ClassStart + "
+#if 0
+#endif
+int TestCls::enabled() [flags=CONSTANT] {
+    return 1;
+}
+");
+        assertFailed(r, "undocumented method after '#if 0' ... '#endif'");
+
+        # '#else' of '#if 0' is compiled
+        r = runQpp(ClassStart + "
+#if 0
+#else
+int TestCls::enabled() [flags=CONSTANT] {
+    return 1;
+}
+#endif
+");
+        assertFailed(r, "undocumented method in the '#else' of '#if 0'");
+    }
+
+    testStatementsNotMethods() {
+        hash<auto> r = runQpp(ClassStart + "
+static void helper() {
+TestCls::foo(1);
+return TestCls::bar(2);
+}
+");
+        assertSucceeded(r, "statements at column 0");
+        assertRegex("TestCls::foo\\(1\\);", r.cpp_text);
+    }
+
+    testDocCommentInBlockComment() {
+        hash<auto> r = runQpp("/*
+//! a commented-out function
+/**
+*/
+int t_old(int a) {
+    return a;
+}
+*/
+");
+        assertSucceeded(r, "doc comment in a block comment");
+        assertRegex("int t_old\\(int a\\) \\{", r.cpp_text, "the commented text is copied");
+    }
+
+    testLastLineWithoutNewline() {
+        hash<auto> r = runQpp(ClassStart + "
+*int TestCls::last() {");
+        assertFailed(r, "last line without a newline");
+        assertRegex("structtest\\.qpp:6: '\\*int TestCls::last\\(\\) \\{'", r.out, "the error has the line of the method");
+    }
+
     testAllErrorsReported() {
         hash<auto> r = runQpp("//! a constant
 /**
 */
 const Stray = 1;
 " + ClassStart + "
-int TestCls::first() {
+int TestCls::first() [flags=CONSTANT] {
     return 1;
 }
 
-int TestCls::second() {
+*string TestCls::second() {
     return 2;
 }
 ");
         assertFailed(r, "three errors");
         assertEq(3, countErrors(r.out), "every error is reported: " + r.out);
         assertRegex("'const Stray = 1;'", r.out);
-        assertRegex("'int TestCls::first\\(\\) \\{'", r.out);
-        assertRegex("'int TestCls::second\\(\\) \\{'", r.out);
+        assertRegex("'int TestCls::first\\(\\) \\[flags=CONSTANT\\] \\{'", r.out);
+        assertRegex("'\\*string TestCls::second\\(\\) \\{'", r.out);
         assertRegex("3 errors found", r.out);
     }
 
@@ -368,6 +571,57 @@ const ConstThree =
         assertEq(3, found, "the three constants are bound");
     }
 
+    testGroupTextLineMarkers() {
+        # issue #2290: a group's text has the location of its first line
+        string source = ConstGroupStart + "//! the first constant
+const ConstOne = 1;
+
+#ifdef HAVE_SOMETHING_UNDEFINED
+//! a conditional constant
+const ConstTwo = 2;
+#endif
+//! a runtime constant
+const ConstThree = qore_runtime((bool)1, (bool)0);
+" + GroupEnd;
+        hash<auto> r = runQpp(source);
+        assertSucceeded(r, "group with text");
+
+        list<string> src_lines = source.split("\n");
+        list<string> cpp_lines = r.cpp_text.split("\n");
+        int found = 0;
+        for (int i = 1; i < cpp_lines.size(); ++i) {
+            if (cpp_lines[i] !~ /^#ifdef HAVE_SOMETHING_UNDEFINED/) {
+                continue;
+            }
+            ++found;
+            # the text starts at the line of the nearest marker before it
+            int m = i - 1;
+            while (m >= 0 && cpp_lines[m] !~ /^# [0-9]+ "/) {
+                --m;
+            }
+            assertTrue(m >= 0, "the text is preceded by a line marker");
+            *list<*string> loc = (cpp_lines[m] =~ x/^# ([0-9]+) "(.*)"$/);
+            assertEq("#ifdef HAVE_SOMETHING_UNDEFINED", src_lines[loc[0].toInt() - 1 + (i - m - 1)],
+                sprintf("the marker gives the line of the text (marker %y, %d line(s) before)", cpp_lines[m],
+                    i - m));
+        }
+        assertEq(1, found, "the text is written once");
+
+        # a runtime constant's binding has its line too
+        found = 0;
+        for (int i = 1; i < cpp_lines.size(); ++i) {
+            if (cpp_lines[i] !~ /qore_ns_add_runtime_constant\(ns, "Qore", "ConstThree"/) {
+                continue;
+            }
+            ++found;
+            *list<*string> loc = (cpp_lines[i - 1] =~ x/^# ([0-9]+) "(.*)"$/);
+            assertEq(2, loc.size(), sprintf("the runtime constant is preceded by a line marker: %y",
+                cpp_lines[i - 1]));
+            assertRegex("^const ConstThree =", src_lines[loc[0].toInt() - 1]);
+        }
+        assertEq(1, found, "the runtime constant is bound");
+    }
+
     testVerbosity() {
         # LL_DEBUG (4) logs every source line read ("<line>: <text>"); the default level (2) logs the files written
         string debug_line = "DEBUG: 2: /\\*\\* @defgroup";
@@ -382,6 +636,7 @@ const ConstThree =
             "--verbose": {"debug": False, "info": True},
             "-v0": {"debug": False, "info": False},
             "--verbose=0": {"debug": False, "info": False},
+            "-v -v -v -v": {"debug": True, "info": True},
         };
         foreach hash<auto> c in (cases.pairIterator()) {
             hash<auto> r = runQpp(Valid, c.key ? (c.key,) : NOTHING);
@@ -401,10 +656,12 @@ const ConstThree =
     }
 
     testInvalidVerbosity() {
-        foreach string opt in ("-vx", "-v9", "-v-1", "--verbose=x", "--verbose=5", "-v3x", "-vvx") {
+        # "-vv..." is the short option only, and the long option's level is not empty
+        foreach string opt in ("-vx", "-v9", "-v-1", "--verbose=x", "--verbose=5", "-v3x", "-vvx", "--verbose=",
+                "--verbose=vv") {
             hash<auto> r = runQpp(Valid, (opt,));
             assertFailed(r, opt);
-            assertRegex("invalid verbosity level '[^']+'; expecting an integer from 0 to 4", r.out, opt);
+            assertRegex("invalid verbosity level '[^']*'; expecting an integer from 0 to 4", r.out, opt);
         }
     }
 
