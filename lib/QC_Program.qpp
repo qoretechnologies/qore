@@ -44,6 +44,7 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QC_SandboxManager.h"
 #include "qore/ParseOptionMap.h"
+#include "qore/intern/ql_debug.h"
 
 #include "qore/intern/ModuleInfo.h"
 extern QoreModuleManager QMM;
@@ -1678,10 +1679,18 @@ Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
         ? qore_program_private::restrictForCreator(creator, QoreParseOptions(parse_options), restrictions,
             restricted)
         : QoreParseOptions(parse_options);
-    if (qore_program_private::checkNewProgramModernOptions(independent ? nullptr : creator, po, xsink)) {
+    // the parent's options are read once: the %modern check and the options that the child inherits use the same
+    // value, also if they change meanwhile (issue #6176)
+    QoreProgram* parent = independent ? nullptr : creator;
+    QoreParseOptions parent_po = parent ? qore_program_private::readParseOptions(*parent) : QoreParseOptions();
+    if (qore_program_private::checkNewProgramModernOptions(parent, parent_po, po, xsink)) {
         return;
     }
-    QoreProgram* pgm = new QoreProgram(independent ? nullptr : creator, po);
+#ifdef DEBUG
+    // tests hold the creation here to change the parent's options after the check
+    qore_dbg_child_program_create_hold();
+#endif
+    QoreProgram* pgm = new QoreProgram(parent, po, false, nullptr, parent ? &parent_po : nullptr);
     //pgm->registerQoreObject(self, xsink);
     assert(!xsink->isEvent());
     program_set_independent_creator(*pgm, independent, restricted, restrictions);
@@ -1725,10 +1734,18 @@ Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool ind
     QoreParseOptions po = independent
         ? qore_program_private::restrictForCreator(creator, parse_options->get(), restrictions, restricted)
         : parse_options->get();
-    if (qore_program_private::checkNewProgramModernOptions(independent ? nullptr : creator, po, xsink)) {
+    // the parent's options are read once: the %modern check and the options that the child inherits use the same
+    // value, also if they change meanwhile (issue #6176)
+    QoreProgram* parent = independent ? nullptr : creator;
+    QoreParseOptions parent_po = parent ? qore_program_private::readParseOptions(*parent) : QoreParseOptions();
+    if (qore_program_private::checkNewProgramModernOptions(parent, parent_po, po, xsink)) {
         return;
     }
-    QoreProgram* pgm = new QoreProgram(independent ? nullptr : creator, po);
+#ifdef DEBUG
+    // tests hold the creation here to change the parent's options after the check
+    qore_dbg_child_program_create_hold();
+#endif
+    QoreProgram* pgm = new QoreProgram(parent, po, false, nullptr, parent ? &parent_po : nullptr);
     assert(!xsink->isEvent());
     program_set_independent_creator(*pgm, independent, restricted, restrictions);
     // the code of a Program that sandboxed code creates is sandboxed, although the Program has no manager of its own;
