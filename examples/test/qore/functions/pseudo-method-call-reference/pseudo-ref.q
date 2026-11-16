@@ -51,6 +51,10 @@ class K {
     bool callInside(code c) {
         return c("pm");
     }
+
+    bool callInside2(code c) {
+        return c(method: "pm");
+    }
 }
 
 #! a cycle through a reference to a pseudo-method of a hash that holds the object
@@ -169,7 +173,30 @@ tryit("class context, direct call", auto sub () { return k.hcmDirect(); });
 tryit("class context, reference made in the class", auto sub () { return k.hcmRef()("pm"); });
 tryit("class context, reference made outside the class", auto sub () { return k.callInside(\k.hasCallableMethod()); });
 
+# a direct call of a pseudo-method on an object of an unrelated class keeps the class context of its code
+class RB {
+    pub() {}
+}
+class RA {
+    private static spriv() {}
+
+    static string run(RB b, auto ab) {
+        string r = "";
+        try { b.getCallReference("RA::spriv"); r += "typed ok; "; } catch (hash<ExceptionInfo> ex) { r += "typed " + ex.err + "; "; }
+        try { ab.getCallReference("RA::spriv"); r += "auto ok"; } catch (hash<ExceptionInfo> ex) { r += "auto " + ex.err; }
+        return r;
+    }
+}
+RB rb();
+tryit("class context of a direct call", auto sub () { return RA::run(rb, rb); });
+
 # named arguments
+tryit("named arguments to a pseudo-method of an object, direct call", auto sub () {
+    return k.hasCallableMethod(method: "pm");
+});
+tryit("named arguments to a pseudo-method of an object, reference", auto sub () {
+    return k.callInside2(\k.hasCallableMethod());
+});
 string hw = "hello world";
 tryit("named arguments, direct call", auto sub () { return hw.substr(start: 6); });
 tryit("named arguments, reference", auto sub () { return (\hw.substr())(start: 6); });

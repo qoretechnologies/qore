@@ -497,8 +497,13 @@ public:
     */
     DLLLOCAL int checkObject(ExceptionSink* xsink) const;
 
+    //! creates the reference
+    /** @param n_missing true if the class of the object has no method of the name, so that a call runs a member
+        holding code or a pseudo-method of objects (issue #995): such a call runs in the class context of the code
+        that made the reference
+    */
     DLLLOCAL RunTimeObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
-            const char* n_method);
+            const char* n_method, bool n_missing = false);
 
     DLLLOCAL virtual QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const;
     DLLLOCAL QoreValue dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
@@ -528,6 +533,8 @@ private:
     QoreObject* obj;
     std::string method;
     const qore_class_private* qc;
+    //! true if the reference was made for a method that the object's class does not have (issue #995)
+    bool missing;
     //! the Program of the code that created the reference, or nullptr if there was none, with PGM_WEAK_REF set if
     //! the reference holds a weak reference to it
     /** A call runs the method as a direct call in this Program would: called from another Program, the method runs
@@ -540,6 +547,11 @@ private:
     static constexpr uintptr_t PGM_WEAK_REF = 1;
 
     DLLLOCAL virtual ~RunTimeObjectMethodReferenceNode();
+
+    //! evaluates \a f in the class context of the code that made the reference if it was made for a method that the
+    //! object's class does not have, where a pseudo-method that depends on the class context runs (issue #995)
+    template <typename F>
+    DLLLOCAL QoreValue evalInContext(F f) const;
 };
 
 //! a run-time call reference to a pseudo-method of a value that is not an object (issue #995): \c \\l.size() for a

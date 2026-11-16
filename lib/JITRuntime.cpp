@@ -4880,7 +4880,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
             // ParseObjectMethodReferenceNode::makeReferenceForClass()
             if (qore_object_has_pseudo_or_member_method(qore_class_private::get(*obj_class), method_name,
                     runtime_get_class())) {
-                return toBits(QoreValue(new RunTimeObjectMethodReferenceNode(&loc_builtin, obj, method_name)));
+                return toBits(QoreValue(new RunTimeObjectMethodReferenceNode(&loc_builtin, obj, method_name, true)));
             }
             xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR",
                 "cannot resolve reference to %s::%s(): unknown method", obj->getClassName(), method_name);

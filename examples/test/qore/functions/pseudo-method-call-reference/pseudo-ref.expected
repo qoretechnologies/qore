@@ -45,6 +45,9 @@ object code member, reference: "member"
 class context, direct call: True
 class context, reference made in the class: True
 class context, reference made outside the class: False
+class context of a direct call: "typed ok; auto ok"
+named arguments to a pseudo-method of an object, direct call: False
+named arguments to a pseudo-method of an object, reference: False
 named arguments, direct call: "world"
 named arguments, reference: "world"
 list held by the reference: 2
