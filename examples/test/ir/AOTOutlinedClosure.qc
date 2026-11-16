@@ -337,14 +337,23 @@ for (int c = 0; c < 3; ++c) {
         return False;
     }
 
-    #! Returns the symbols of the executable \a exe listed by nm, or NOTHING if there is no nm
+    #! Returns the symbols of the executable \a exe listed by nm, or NOTHING if there is no nm or it lists none
+    /** The symbol checks are skipped then, with a message: a stripped executable lists no symbols
+    */
     private *string getSymbols(string exe) {
-        if (!trim(`command -v nm 2>/dev/null`)) {
+        *string nm = trim(`command -v nm 2>/dev/null`);
+        if (!nm) {
+            printf("%s: no nm in the PATH; the symbol checks are skipped\n", exe);
             return NOTHING;
         }
         int rc;
-        string out = backquote(sprintf("nm %s 2>&1", exe), \rc);
-        assertEq(0, rc, sprintf("nm %s: exit status", exe));
+        string out = backquote(sprintf("'%s' '%s' 2>&1", replace(nm, "'", "'\\''"), replace(exe, "'", "'\\''")),
+            \rc);
+        assertEq(0, rc, sprintf("nm %s: exit status (output: %y)", exe, out));
+        if (!rc && out !~ /\S/) {
+            printf("%s: nm lists no symbols; the symbol checks are skipped\n", exe);
+            return NOTHING;
+        }
         return out;
     }
 
@@ -602,7 +611,7 @@ for (int c = 0; c < 3; ++c) {
                 # the handler functions of g's try block are nested in the helper: <helper>_obe_<n>
                 *string syms = getSymbols(exe);
                 if (syms) {
-                    assertEq(outline, syms =~ /g_[A-Za-z0-9_]*_outline_[0-9]+_obe_[0-9]/,
+                    assertEq(outline, syms =~ /[ _]g_int__h[0-9a-f]+_outline_[0-9]+_obe_[0-9]/,
                         sprintf("handlers, %s %s: a handler function of g is nested in a helper", i.what, opt));
                 }
                 assertEq(expected, runExe(exe), sprintf("handlers, %s: qcc %s", i.what, opt));

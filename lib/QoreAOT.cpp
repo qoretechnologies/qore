@@ -5027,11 +5027,9 @@ static void aotEraseOutlinedFunctions(llvm::Module& module, const std::vector<AO
         f->dropAllReferences();
     }
     for (llvm::Function* f : erase) {
-        if (!f->use_empty()) {
-            f->replaceAllUsesWith(llvm::PoisonValue::get(f->getType()));
-        }
-        // detach the subprogram first, as an incompletely lowered function does (no orphan debug metadata)
-        f->setSubprogram(nullptr);
+        // only the erased functions call or take the address of each other; dropAllReferences() also cleared the
+        // function's metadata, its subprogram included
+        assert(f->use_empty());
         f->eraseFromParent();
     }
     aotEraseUnusedClosureDispatchDecls(module, owner);

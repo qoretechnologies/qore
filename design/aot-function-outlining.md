@@ -120,6 +120,10 @@ This generalizes the existing Phase 1.5 init-expression outliner
    own ABI (a `double` or `i1` result for a float or bool closure), and
    a call site whose dispatch function is already declared with another
    ABI fails the lowering instead of emitting a mismatched call.
+   The erase of the failed coordinator's own nested functions has no
+   test: `QORE_AOT_TEST_FAIL_LOWERING` fails a function before it emits
+   any nested function, and it would fail the un-outlined retry of the
+   coordinator too, as the retry has the coordinator's name.
 
    Closure creation is allowed in regions on purpose: generated giant
    functions use closures (`map` with a closure, callbacks), and keeping
