@@ -1910,8 +1910,7 @@ module MyBaseExtension {
     A child module's namespace is <b>not</b> imported into any @ref Qore::Program "Program" object; only its
     initialization code runs.  Code that needs the child's classes must load the child explicitly.
 
-    A child declaration is optional, so a child does not fail the declaring module's load, except where it cannot be
-    loaded within the stack of the loading thread (see below).  A child that is not
+    A child declaration is optional, so no child ever fails the declaring module's load.  A child that is not
     installed is silently ignored, and a child that is installed but cannot be loaded (due to a parse error, an error
     in its initialization code, or a version mismatch) is skipped, leaving the declaring module fully usable without
     it.  Because an extension that silently disappears is a deployment problem in its own right, a child that could
@@ -1924,17 +1923,6 @@ module MyBaseExtension {
     A child that could not be loaded is not tried again in the same process: a module load failure is deterministic,
     so retrying it on every load of the parent would only repeat the cost and the diagnostic.  An extension fixed on
     disk is therefore picked up the next time the program is started.
-
-    A child that cannot be loaded within the stack of the loading thread is not a broken child: the outcome depends on
-    the thread, not on what is installed.  The declaring module's load fails with the error, and the child stays
-    pending, so that a load in a thread with enough stack attaches it.  This is a child whose parse raises
-    \c PARSE-STACK-LIMIT-EXCEEDED, or whose initialization raises \c STACK-LIMIT-EXCEEDED in a thread whose stack is
-    smaller than the default thread stack size (see get_default_thread_stack_size() and @ref parse_nesting_limit).  A
-    child whose initialization exceeds the stack of the primary thread or of a thread whose total stack size is at
-    least the default size fails as any other broken child does, on the assumption that the child has a bug.  The
-    rule compares the total size of the thread's stack, not the stack that remains, so a correct child can also fail
-    this way where its parent is loaded deep in such a thread, with a reduced default size, or in a small primary
-    thread (see @ref parse_nesting_limit).
 
     Attachment status can be queried with get_module_hash(), which reports each declared child module under the
     \c "child-modules" key of the declaring module's entry:
@@ -1949,7 +1937,7 @@ printf("%N\n", get_module_hash().MyBase."child-modules");
     |\c "absent"|the child module is not installed; this is not an error
     |\c "failed"|the child module is installed but could not be loaded; the declaring module is loaded without it, and the child's own error is reported in the \c "err" and \c "desc" keys
     |\c "skipped"|the child module was not loaded because module loading is not allowed in the declaring module's @ref Qore::Program "Program" object; the reason is reported in the \c "desc" key
-    |\c "pending"|the attachment has not been attempted yet, or the child could not be loaded within the stack of the loading thread, which failed the declaring module's load; a later load attaches it
+    |\c "pending"|the attachment has not been attempted yet
 
     @since %Qore 3.0
 

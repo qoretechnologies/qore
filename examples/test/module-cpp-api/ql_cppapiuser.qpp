@@ -366,19 +366,6 @@ string cpp_api_reverse(string str) [flags=RET_VALUE_ONLY] {
     return api->reverse(*str, xsink);
 }
 
-//! loads a module into the current Program as a binary module's code does, with ModuleManager::parseLoadModule()
-/** The load is a parse-time module load without a directive location; a parse stack error that it raises is
-    located at the directive of the enclosing module load, if any (issue #6047)
-
-    @param name the module to load
-
-    @return the error of the load, or NOTHING if the module was loaded
-*/
-*string cpp_api_parse_load_module(string name) [dom=MODULES] {
-    QoreStringNode* err = ModuleManager::parseLoadModule(name->c_str(), getProgram());
-    return err ? QoreValue(err) : QoreValue();
-}
-
 //! adds each element of \a vals to an opaque counter handle owned by the cppapitest module
 /** Exercises an opaque handle crossing the module boundary with the explicit \c ref and \c deref
     members of the API struct.

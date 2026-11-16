@@ -579,31 +579,12 @@ bool qore_has_debug() {
 #endif
 }
 
-int parse_raise_stack_error(const QoreProgramLocation* loc) {
-    parseException(loc ? *loc : loc_builtin, QORE_PARSE_STACK_ERR, new QoreStringNode(QORE_PARSE_STACK_DESC));
-    return -1;
-}
-
-const QoreException* qore_find_thread_stack_error(const ExceptionSink& xsink) {
-    // a run-time stack error depends on the thread only in a thread whose total stack size is smaller than the default
-    // thread stack size; with at least that much stack, the code that exceeded it is assumed to have a bug
-    bool small_stack = q_thread_stack_smaller_than_default();
-    for (const QoreException* e = qore_es_private::get(xsink)->head; e; e = e->next) {
-        // the error code can be an inline short string, which has no QoreStringNode
-        QoreStringDataHelper err(e->err);
-        if (!err) {
-            continue;
-        }
-        if (!strcmp(err.c_str(), QORE_PARSE_STACK_ERR)
-                || (small_stack && !strcmp(err.c_str(), "STACK-LIMIT-EXCEEDED"))) {
-            return e;
-        }
+int parse_check_stack(const QoreProgramLocation* loc) {
+    if (!q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
+        return 0;
     }
-    return nullptr;
-}
-
-bool qore_has_thread_stack_error(const ExceptionSink& xsink) {
-    return qore_find_thread_stack_error(xsink) != nullptr;
+    parse_error(loc ? *loc : loc_builtin, "the code is nested too deeply to be parsed within the stack of this thread");
+    return -1;
 }
 
 #ifndef NDEBUG
@@ -651,29 +632,6 @@ private:
 };
 }
 
-//! Raises the parse error for an expression that parse_init_value() cannot initialize in the thread's stack
-/** The node is not parse-initialized, so it must not stay where the code containing it continues its own parse
-    initialization: that code would use it as an initialized expression (the values of a hash that has no value types,
-    a variable reference that is not resolved; issue #6047).  The parse has failed, and the expression is replaced
-    with NOTHING of no known type.
-
-    Out of line, so that it does not add to the code of parse_init_value() on its path for every expression
-
-    @return -1
-*/
-static QORE_INTERN_NOINLINE int parse_init_value_stack_exceeded(AbstractQoreNode* n, QoreValue& val,
-        QoreParseContext& parse_context) {
-    const ParseNode* pn = dynamic_cast<const ParseNode*>(n);
-    int rc = parse_raise_stack_error(pn ? pn->loc : nullptr);
-    {
-        ParseExceptionSink xsink;
-        val.discard(*xsink);
-        val = QoreValue();
-    }
-    parse_context.typeInfo = nullptr;
-    return rc;
-}
-
 int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
     parse_context.analysis.clear();
     if (val.hasNode()) {
@@ -681,7 +639,8 @@ int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
         //printd(5, "parse_init_value() n: %p '%s'\n", n, get_type_name(n));
         // parse initialization recurses with the nesting of the code: it stops while enough stack remains
         if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
-            return parse_init_value_stack_exceeded(n, val, parse_context);
+            const ParseNode* pn = dynamic_cast<const ParseNode*>(n);
+            return parse_check_stack(pn ? pn->loc : nullptr);
         }
         // every nested expression is parse-initialized here, one level deeper than the expression containing it, so
         // flagging the nodes at every QORE_EVAL_STACK_CHECK_INTERVAL'th level makes the evaluation of any chain of

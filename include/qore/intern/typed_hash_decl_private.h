@@ -34,7 +34,6 @@
 #define _QORE_INTERN_TYPED_HASH_DECL_PRIVATE_H
 
 #include "qore/intern/QoreClassIntern.h"
-#include "qore/intern/QoreDeferredRelease.h"
 
 #include <algorithm>
 #include <functional>
@@ -389,9 +388,18 @@ public:
     DLLLOCAL int parseCheckMemberAccess(const QoreProgramLocation* loc, const char* mem,
             const QoreTypeInfo*& memberTypeInfo, int pflag) const;
 
-    //! Calls the function for each member declared in this hashdecl itself; see forEachMember()
+    //! Calls the function for each member, including inherited members, parent members first
+    /** @param f called with the member name and info; returning non-zero stops the iteration
+
+        @return the non-zero value returned by \a f, or 0 if every member was visited
+    */
     template <typename F>
-    DLLLOCAL int forEachLocalMember(F& f) const {
+    DLLLOCAL int forEachMember(F&& f) const {
+        if (parentHashDecl) {
+            if (int rc = get(*parentHashDecl)->forEachMember(f)) {
+                return rc;
+            }
+        }
         for (auto& i : members.member_list) {
             if (int rc = f(i.first, i.second)) {
                 return rc;
@@ -400,39 +408,13 @@ public:
         return 0;
     }
 
-    //! Calls the function for each member, including inherited members, parent members first
-    /** The chain of parents is walked iteratively, as it can be as long as the code declares it (issue #6047)
-
-        @param f called with the member name and info; returning non-zero stops the iteration
-
-        @return the non-zero value returned by \a f, or 0 if every member was visited
-    */
-    template <typename F>
-    DLLLOCAL int forEachMember(F&& f) const {
-        if (!parentHashDecl) {
-            return forEachLocalMember(f);
-        }
-        std::vector<const typed_hash_decl_private*> chain;
-        for (const typed_hash_decl_private* p = this; p;
-                p = p->parentHashDecl ? get(*p->parentHashDecl) : nullptr) {
-            chain.push_back(p);
-        }
-        for (auto i = chain.rbegin(), e = chain.rend(); i != e; ++i) {
-            if (int rc = (*i)->forEachLocalMember(f)) {
-                return rc;
-            }
-        }
-        return 0;
-    }
-
-    //! Returns the member, which can be inherited, or nullptr if there is none
-    /** The chain of parents is walked iteratively (see forEachMember()) */
     DLLLOCAL const HashDeclMemberInfo* findMember(const char* m) const {
-        for (const typed_hash_decl_private* p = this; p;
-                p = p->parentHashDecl ? get(*p->parentHashDecl) : nullptr) {
-            if (const HashDeclMemberInfo* mi = p->members.find(m)) {
-                return mi;
-            }
+        const HashDeclMemberInfo* mi = members.find(m);
+        if (mi) {
+            return mi;
+        }
+        if (parentHashDecl) {
+            return get(*parentHashDecl)->findMember(m);
         }
         return nullptr;
     }
@@ -508,14 +490,12 @@ public:
         return hd ? hd->getTypeInfo(or_nothing) : nullptr;
     }
 
-    //! Returns true if the hashdecl has the member, which can be inherited
-    /** The chain of parents is walked iteratively (see forEachMember()) */
     DLLLOCAL bool hasMember(const char* name) const {
-        for (const typed_hash_decl_private* p = this; p;
-                p = p->parentHashDecl ? get(*p->parentHashDecl) : nullptr) {
-            if (p->members.inList(name)) {
-                return true;
-            }
+        if (members.inList(name)) {
+            return true;
+        }
+        if (parentHashDecl) {
+            return get(*parentHashDecl)->hasMember(name);
         }
         return false;
     }
@@ -789,9 +769,7 @@ public:
 
     DLLLOCAL void releaseParentHashDecl() {
         if (parentHashDecl) {
-            // the release of the parent can release its own parent in turn: a long chain of inheritance is released
-            // with a bounded recursion (issue #6047)
-            qore_release_parent_hashdecl(const_cast<typed_hash_decl_private*>(get(*parentHashDecl)));
+            const_cast<typed_hash_decl_private*>(get(*parentHashDecl))->deref();
             parentHashDecl = nullptr;
         }
     }

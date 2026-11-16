@@ -37,8 +37,6 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/AbstractStatement.h"
 #include "qore/intern/QoreDeferredRelease.h"
-#include "qore/intern/QoreClassIntern.h"
-#include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/BackgroundLValueRootNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
@@ -1052,10 +1050,6 @@ struct DeferredRelease {
         SimpleNode,
         //! a statement: it is deleted
         Statement,
-        //! a subclass's reference to a base class (a QoreClass handle): it is released
-        BaseClass,
-        //! a hashdecl's reference to its parent hashdecl: it is released
-        ParentHashDecl,
     };
 
     void* ptr;
@@ -1098,12 +1092,6 @@ public:
                 break;
             case DeferredRelease::Kind::Statement:
                 delete static_cast<AbstractStatement*>(r.ptr);
-                break;
-            case DeferredRelease::Kind::BaseClass:
-                qore_class_private::derefClass(*static_cast<QoreClass*>(r.ptr), false, false, false);
-                break;
-            case DeferredRelease::Kind::ParentHashDecl:
-                static_cast<typed_hash_decl_private*>(r.ptr)->deref();
                 break;
         }
     }
@@ -1188,14 +1176,6 @@ void qore_delete_statement(AbstractStatement* statement) {
     if (statement) {
         release(DeferredRelease{statement, DeferredRelease::Kind::Statement}, nullptr);
     }
-}
-
-void qore_release_base_class(QoreClass* qc) {
-    release(DeferredRelease{qc, DeferredRelease::Kind::BaseClass}, nullptr);
-}
-
-void qore_release_parent_hashdecl(typed_hash_decl_private* parent) {
-    release(DeferredRelease{parent, DeferredRelease::Kind::ParentHashDecl}, nullptr);
 }
 
 QoreValue SimpleValueQoreNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
