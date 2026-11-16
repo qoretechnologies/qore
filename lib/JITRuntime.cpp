@@ -14289,8 +14289,59 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target_consume_args(uint64_
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
+//! makes a self-recursive call of a function whose native code was removed while the recursion runs
+/** UserVariantBase::attemptJITRecompilation() removes the installed native code of a function while it recompiles
+    it, so a native frame of the function that is already running can make a recursive call meanwhile.  The call is
+    made as an AST call of the function makes it: CodeEvaluationHelper binds the parameters, which take the arguments
+    over, and passes only the arguments that the signature does not declare as the implicit argument list; the body
+    then runs on the function's current tier.  The variant's body alone (UserVariantBase::evalTiered()) expects the
+    parameters to have been bound (qore#6317).
+
+    Outside of qore_rt_call_self_recursive_t(), whose frame and code are on the path of every native self-recursive
+    call.
+
+    @param arg_cleanups see qore_rt_call_fast_t()
+*/
+template <bool CONSUME>
+static QORE_INTERN_NOINLINE uint64_t qore_rt_call_self_recursive_fallback(const AbstractQoreFunctionVariant* variant,
+        const UserVariantBase* uvb, uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
+    if (nargs > 0) {
+        qore_list_private* priv = qore_list_private::get(**arg_list);
+        priv->reserve(nargs);
+        for (int i = 0; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.needsRef()) {
+                val.refSelf();
+            }
+            priv->pushIntern(val);
+        }
+    }
+    if constexpr (CONSUME) {
+        // the argument list holds the last references of the arguments that the caller gave to the call, which the
+        // parameters take over, so they are released in the callee's frame
+        if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
+            return toBits(QoreValue());
+        }
+    }
+    // a self-recursive call is a call of a function (CallDirect), whose variant knows the function since it was parsed
+    const QoreFunction* func = uvb->getSourceFunction();
+    if (!func) {
+        xsink->raiseException("JIT-ERROR", "the native code of %s() was removed during a recursive call of it, "
+            "and its function is unknown", uvb->getCallName().c_str());
+        return toBits(QoreValue());
+    }
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreProgram* call_pgm = rc.getProgram();
+    if (!call_pgm) {
+        call_pgm = getProgram();
+    }
+    return toBits(func->evalFunctionTmpArgs(variant, *arg_list, call_pgm, rc, xsink));
+}
+
 //! Self-recursive call helper: sets up params, argv, body locals, and deopt handling
-/** Falls back to evalTiered slow path if JIT function was invalidated by recompilation.
+/** Falls back to a call made as an AST call makes it if the native code of the function was removed while it is
+    recompiled (see qore_rt_call_self_recursive_fallback()).
 
     @param arg_cleanups see qore_rt_call_fast_t()
 */
@@ -14315,35 +14366,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_self_recursive_t(const Ab
 
     // Fall back to slow path if JIT function was invalidated by recompilation
     if (!uvb->hasCachedFunction()) {
-        // Build QoreListNode from NaN-boxed args and call through evalTiered
-        ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
-        if (nargs > 0) {
-            qore_list_private* priv = qore_list_private::get(**arg_list);
-            priv->reserve(nargs);
-            for (int i = 0; i < nargs; ++i) {
-                QoreValue val = fromBits(args[i]);
-                if (val.needsRef()) {
-                    val.refSelf();
-                }
-                priv->pushIntern(val);
-            }
-        }
-        if constexpr (CONSUME) {
-            // the argument list holds references of its own
-            if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
-                return toBits(QoreValue());
-            }
-        }
-        // evalTiered() pushes no call stack frame (an AST call's CodeEvaluationHelper does), so the frame of the call
-        // is pushed here
-        QoreNativeCallStackLocation frame(get_thread_data_for_native_calls(), uvb->getCallName(),
-            uvb->getStatementBlock());
-        QoreValue result = uvb->callTieredPublic(uvb->getCallName().c_str(), arg_list, nullptr, xsink);
-        if constexpr (CONSUME) {
-            // an argument list that the call did not take over is released in the frame of the call
-            arg_list = nullptr;
-        }
-        return toBits(result);
+        return qore_rt_call_self_recursive_fallback<CONSUME>(variant, uvb, args, arg_cleanups, nargs, xsink);
     }
 
     const UserSignature* sig = uvb->getUserSignature();
