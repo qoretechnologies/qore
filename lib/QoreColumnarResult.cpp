@@ -5158,13 +5158,15 @@ QoreHashNode* QoreColumnarResult::toColumnHash(ExceptionSink* xsink) const {
 /** Only called from the temporal branch of toMaterializedColumnHash() — caller
     has already verified \c column.schema is temporal and \c column.data is a
     \c buffer<int64>.  Null entries (returned by getReferencedEntry() when the
-    underlying buffer slot is NULL) round-trip as NOTHING.
+    underlying buffer slot is NULL) round-trip as NOTHING, in a \c list<*date> for a nullable column.
 */
 static QoreListNode* columnar_buffer_int64_to_date_list(
         const QoreColumnarResult::Column& column, ExceptionSink* xsink) {
     const QoreBufferNode* buffer = column.data.get<const QoreBufferNode>();
     const size_t n = buffer->size();
-    ReferenceHolder<QoreListNode> out(new QoreListNode(dateTypeInfo), xsink);
+    // a column with nullable elements can hold nulls, which a list<date> cannot (qore#6218)
+    ReferenceHolder<QoreListNode> out(new QoreListNode(buffer->hasNullableElements() || column.schema.nullable
+        ? qore_get_or_nothing_type(dateTypeInfo) : dateTypeInfo), xsink);
     const AbstractQoreZoneInfo* zone = currentTZ();
     const bool is_relative = (column.schema.kind == QoreColumnarTypeKind::Duration);
     for (size_t r = 0; r < n; ++r) {

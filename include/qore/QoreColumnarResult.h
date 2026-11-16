@@ -225,7 +225,8 @@ public:
 
     //! Returns a hash of column values with native Qore typing restored.
     /** Like \c toColumnHash() but every temporal column is materialized into a
-        \c list<date> with the result's current timezone applied; non-temporal
+        \c list<date> (\c list<*date> with NOTHING for each null for a nullable
+        column) with the result's current timezone applied; non-temporal
         columns pass through with no copy.  Use this only when the consumer
         requires native typing (e.g., assembling rows for a downstream API that
         cannot accept \c buffer<int64> microsecond payloads); prefer
