@@ -2509,7 +2509,8 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 return -1;
             }
             if (sveccnt > 0 || stream_id >= 0) {
-                size_t vec_total = 0;
+                // only the traces read it
+                [[maybe_unused]] size_t vec_total = 0;
                 for (nghttp3_ssize i = 0; i < sveccnt; ++i) {
                     vec_total += vec[i].len;
                 }

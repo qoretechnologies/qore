@@ -1361,7 +1361,8 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
         // First, collect data from nghttp2; drain until it reports no more data.
         // We intentionally loop until nghttp2_session_mem_send* returns 0 to avoid
         // relying on nghttp2_session_want_write() as a loop condition.
-        size_t total_collected = 0;
+        // only the debug log reads it
+        [[maybe_unused]] size_t total_collected = 0;
         // set when collection stopped at the high-water mark with output left in nghttp2
         bool capped = false;
         while (true) {

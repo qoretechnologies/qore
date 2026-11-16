@@ -13798,7 +13798,8 @@ static int executeInitFunctions(
     // initMembers), so keep the bridge for nested parse-context callers.
     thread_ensure_local_program_data();
 
-    int executed = 0;
+    // only the debug log reads it
+    [[maybe_unused]] int executed = 0;
     int failed = 0;
 
     // Execute in two passes so the module init closure (MODULE_INIT) runs
