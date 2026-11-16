@@ -38,7 +38,8 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         addPartCase(2, "module initialization that recurses without end", \runawayInitCheck());
         addPartCase(2, "module initialization deeper than a small stack", \deepInitCheck());
         addPartCase(2, "the end of the fixture with a background JIT compile in LLVM", \abandonedCompileExitCheck());
-        addPartCase(2, "exit() with a background JIT compile held in LLVM", \abandonedCompilePlainExitCheck());
+        addPartCase(2, "a return from main() after qore_cleanup() with a JIT compile held in LLVM",
+            \abandonedCompilePlainExitCheck());
         set_return_value(main());
     }
 
@@ -670,41 +671,38 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         }
     }
 
-    #! The fixture ends cleanly when the library abandons a background JIT compile that is still in LLVM
-    /** The module code that the fixture loads is %modern, so its functions are compiled in the background, and a
-        compile that is still in LLVM when qore_cleanup() stops the compiler is abandoned: exit() would destroy the
-        static objects of LLVM under it (a SIGSEGV in LLVM's instruction selection at the end of a deepInitCheck()
-        run, with no output, as stdout is a pipe), so the fixture ends with qore_fork_child_quick_exit() after
-        qore_cleanup(), as an embedding program must.  A test hook of a debug library holds the compile of a module
-        function in LLVM until the end of the process; without the quick exit, the atexit() handler of the library
-        would wait for it forever, so the debug library ends the process with status 86 and a message on stderr
-        instead (QoreJIT::dbgExitIfAbandonedCompileHeld(), issue #6296; see abandonedCompilePlainExitCheck()).
+    #! The fixture ends cleanly with qore_fork_child_quick_exit() after a background JIT compile was held in LLVM
+    /** The module code that the fixture loads is %modern, so its functions are compiled in the background.  A test hook
+        of a debug library holds the compile of a module function in LLVM until the end; qore_cleanup() lets it go and
+        waits for it (issue #6296), and the fixture then ends with qore_fork_child_quick_exit(), as the qore program
+        does.
     */
     private abandonedCompileExitCheck() {
         int status;
         string output = runHeldCompileFixture("qore-parse-stack-jit-exit-", False, \status);
-        # a fixture that ends with exit() instead of qore_fork_child_quick_exit() exits with 86 and says why
         assertEq(-1, output.find("abandoned compile held at debug hold point"), output);
         assertEq(0, status, output);
         # the output is written before the process ends; the compile was held (the sum of i * 4 for i < 10, twice)
-        assertEq("parsed 360", (output =~ x/([^\n]*)\n$/)[0], output);
+        assertTrue(output =~ /^parsed 360$/m, output);
     }
 
-    #! A process that ends with exit() while a test hook holds the abandoned compile ends with status 86 and says why
-    /** The fixture returns from main() after qore_cleanup() without qore_fork_child_quick_exit() (--plain-exit): the
-        join of the compile thread in the atexit() handler of the library would never return, so the debug library
-        writes why to stderr and ends the process with _exit(86) (QoreJIT::dbgExitIfAbandonedCompileHeld(), issue
-        #6296).  If that check stopped firing, the fixture would wait in the join for good: nothing in the process can
-        then tell a join that ends from one that does not without a timer, so the time limit of run_tests.sh for the
-        test is what ends it then, and the test fails.
+    #! A process returns from main() after qore_cleanup() while a background JIT compile was held in LLVM (issue #6296)
+    /** The fixture returns from main() after qore_cleanup() without qore_fork_child_quick_exit() (--plain-exit).  Before
+        the fix, qore_cleanup() left the compile in LLVM, and exit() destroyed LLVM's static objects under it (a crash
+        in LLVM with the output of the process lost); with the test hook, the join of the compile thread in the atexit()
+        handler of the library never returned, and the debug library ended the process with status 86
+        (QoreJIT::dbgExitIfAbandonedCompileHeld()).  qore_cleanup() now lets the held compile go and waits for it, so
+        the process ends normally with its output.
     */
     private abandonedCompilePlainExitCheck() {
         int status;
         string output = runHeldCompileFixture("qore-parse-stack-jit-plain-exit-", True, \status);
-        assertEq(86, status, output);
-        assertRegex("QORE-DEBUG: exit\\(\\) with an abandoned compile held at debug hold point \"llvm\": end with "
-            "qore_fork_child_quick_exit\\(\\) after qore_cleanup\\(\\)", output);
-        # the result was written before the process ended (the standard I/O streams are flushed)
+        assertEq(-1, output.find("abandoned compile held at debug hold point"), output);
+        assertEq(0, status, output);
+        # qore_cleanup() waited for the compile before it released the JIT
+        assertTrue(output.find("[BG-JIT] released the JIT in shutdown() after the abandoned compile ended") >= 0,
+            output);
+        # the output is written before the process ends; the compile was held (the sum of i * 4 for i < 10, twice)
         assertTrue(output =~ /^parsed 360$/m, output);
     }
 
@@ -739,7 +737,9 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         writeFile(source, "%requires HoldJit\nint sub run() { return HoldJit::start(); }\n");
         # functions are compiled in the background at their first call
         int rc;
+        # QORE_JIT_TIMING reports where the JIT is released
         string output = backquote("env -u QORE_JIT_SYNC_COMPILE QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            "QORE_JIT_TIMING=1 "
             "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_MODULE_DIR="
             + quote(mdir) + " " + quote(exe) + (plain_exit ? " --plain-exit" : "") + " --source " + quote(source)
             + " 8192 2>&1", \rc);
