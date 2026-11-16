@@ -1433,6 +1433,9 @@
         lines (<a href="https://github.com/qoretechnologies/qore/issues/6139">issue 6139</a>)
       - a parsed message without a \c Subject or a \c From header can be serialized; it raised
         \c RUNTIME-OVERLOAD-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6267">issue 6267</a>)
+      - a message with an 8-bit part in a single-byte charset (ex: ISO-8859-15) is parsed and the part is decoded
+        with its charset; the parse failed with \c INVALID-ENCODING
+        (<a href="https://github.com/qoretechnologies/qore/issues/114">issue 114</a>)
       - see @ref mailmessage_v1_5_1 for all changes
 
     - @ref mapperintro "Mapper" module
@@ -1474,6 +1477,11 @@
       - the template tables of a schema description read the default schema once for all tables instead of reading
         the catalog three times per table (<a href="https://github.com/qoretechnologies/qore/issues/5584">issue
         5584</a>)
+
+    - @ref pop3clientintro "Pop3Client" module
+      - a line of a message that starts with \c "." is returned without the \c "." that the server adds before it
+        (RFC 1939 section 3) (<a href="https://github.com/qoretechnologies/qore/issues/6319">issue 6319</a>)
+      - see @ref pop3client_v2_1 for all changes
 
     - @ref providerindexintro "ProviderIndex" module
       - indexes can be built with worker processes, which

@@ -201,8 +201,11 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
       was encoded; one space was dropped before every encoded word after the first, and an encoded word was decoded
       wherever the same word appeared
     - @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" decodes a text part written as it is
-      (\c 7bit, \c 8bit or \c binary) in the charset that it declares; it was decoded in the default encoding, so
-      text in another charset was not converted
+      (\c 7bit, \c 8bit or \c binary) in the charset that it declares, with its type in any case (ex:
+      \c "TEXT/PLAIN"); it was decoded in the default encoding, so text in another charset was not converted
+    - @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" finds the \c boundary parameter of a
+      nested multipart part in any case (RFC 2045 section 5.1); a part with \c "BOUNDARY=" could not be parsed
+      (<a href="https://github.com/qoretechnologies/qore/issues/114">issue 114</a>)
     - the \c charset parameter of a \c Content-Type value is read without the parameters after it; with
       \c "text/plain; charset=ISO-8859-1; format=flowed", the charset was \c "ISO-8859-1; format=flowed", which
       names no character encoding
@@ -2422,16 +2425,19 @@ hash: (2 members)
 
                     # decode the part's body
                     pstr = mime_decode_transfer_data(pstr, pcte, pct, True);
-                    if (pstr.typeCode() == NT_BINARY && pct =~ /text/) {
+                    if (pstr.typeCode() == NT_BINARY && pct =~ /text/i) {
                         # the text is in the charset that the part declares; it was taken as text in the default
-                        # encoding, so text in another charset written as it is (8bit) was not converted
+                        # encoding, so text in another charset written as it is (8bit) was not converted; the type
+                        # is matched in any case, as are the parameter names (RFC 2045 section 5.1): a part of type
+                        # "TEXT/PLAIN" was returned as binary data (issue #114)
                         *string charset = mime_get_charset(pct);
                         pstr = charset ? binary_to_string(pstr, charset) : binary_to_string(pstr);
                     }
 
                     # see if the part has parts itself
                     if (pct =~ /multipart\//i) {
-                        *string part_boundary = (pct =~ x/[Bb]oundary="?([^"]+)"?/)[0];
+                        # the parameter name is matched in any case (RFC 2045 section 5.1; issue #114)
+                        *string part_boundary = (pct =~ x/boundary="?([^"]+)"?/i)[0];
                         if (!exists part_boundary)
                             throw "MULTIPART-PARSEBODY-ERROR", sprintf("cannot parse part %d Content-Type: %y; could "
                                 "not find message boundary", pnum, pct);
