@@ -2410,6 +2410,22 @@ if (x || y)
     refused for it as well (ex: <tt>*string s; s -= 1;</tt>, whose message is
     <tt>lvalue has type '*string', but the -= operator will assign it an integer value</tt>).
 
+    @note Whether the result can be accepted is decided from the types of the lvalue and of the operand that are
+    known at parse time, in every execution mode and with every set of parse options, as for the
+    @ref assignment_operator "assignment operator"; a result that the lvalue's type may accept (an lvalue of type
+    @ref auto_type "auto", a union type that includes it, a soft type that converts it, such as \c softint for a
+    date, or an operand whose type is not known or that may have no value) is checked at run time and refused with
+    \c RUNTIME-TYPE-ERROR; ex:
+    - <tt>int i = 1; i *= 2h;</tt>, <tt>float f = 1.0; f *= 2h;</tt>: \c *= with an operand of type \c date assigns
+      a @ref relative_dates "relative date" (see @ref multiply_equals_operator "*="): parse errors
+    - <tt>int i = 1; i -= 2h;</tt>: \c -= with an operand of type \c date on an \c int lvalue assigns a date (see
+      @ref minus_equals_operator "-="): a parse error
+    - <tt>date d = 2h; d /= 2;</tt>, <tt>union&lt;date, string&gt; u = 2h; u /= 2;</tt>: \c /= assigns an integer,
+      float or number value, never a date (see @ref divide_equals_operator "/="): parse errors
+    - <tt>softint i = 1; i *= 2h;</tt>, <tt>auto a; a *= 2h;</tt>, <tt>union&lt;int, date&gt; u = 1; u *= 2h;</tt>,
+      and <tt>int i = 1; i *= d;</tt> with <tt>*date d</tt> or a \c d of type @ref auto_type "auto": valid; the
+      result is checked at run time
+
     @anchor list_assignment
     @note A list assignment (<tt>(a, b) = (1, 2)</tt>) assigns the elements of its right-hand side to its lvalues in
     order and returns its right-hand side, with the type of the right-hand side (ex: <tt>list&lt;int&gt;</tt> for
@@ -2581,7 +2597,7 @@ if (x || y)
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object"), \a expression (@ref string_type "string")|the hash key represented by \a expression will be removed from the \a lvalue
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object"), \a expression (@ref list_type "list")|each element in the list will be converted to a string (if necessary) and the key represented by each string will be removed from the hash or object
     |\a lvalue (@ref nothing), \a expression (any type)|a hash lvalue is left with no value; otherwise, if the \a lvalue's type, or for an or-nothing lvalue (ex: \c *int) its plain type, has a default value, the \a lvalue first takes that value and is processed as above (ex: <tt>int i; i -= 0;</tt> gives 0); otherwise the negated \a expression will be assigned to \a lvalue; an \a expression with no value leaves the \a lvalue unchanged
-    |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer (if necessary), and the \a expression will be evaluated and converted to an integer (if necessary), and then the result will be subtracted from the \a lvalue; for an lvalue of an int type and a date \a expression, the \a lvalue is assigned the result of <tt>lvalue - expression</tt>, a date, which an \c int or \c *int lvalue (including an int member of a typed hash) refuses with \c RUNTIME-TYPE-ERROR and a \c softint lvalue converts to an int; a \c timeout lvalue subtracts the date in milliseconds
+    |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer (if necessary), and the \a expression will be evaluated and converted to an integer (if necessary), and then the result will be subtracted from the \a lvalue; for an lvalue of an int type and a date \a expression, the \a lvalue is assigned the result of <tt>lvalue - expression</tt>, a date, which an \c int or \c *int lvalue (including an int member of a typed hash) refuses (a parse error if the \a expression has type \c date, see @ref compound_assignment_parse_checks "parse-time checks", otherwise \c RUNTIME-TYPE-ERROR) and a \c softint lvalue converts to an int; a \c timeout lvalue subtracts the date in milliseconds
 
     @note A union type has no default value (see @ref compound_assignment_union_nothing "+="): an or-nothing union with
     no value is assigned the negated \a expression, which the union must accept, or \c RUNTIME-TYPE-ERROR is raised;
@@ -2665,7 +2681,7 @@ if (x || y)
 
     <b>Arguments Processed by *=</b>
     |!Argument|!Processing
-    |@ref date_type "date"|If the \a lvalue or the \a expression is a @ref date_type "date", the \a lvalue is assigned <tt>lvalue * expression</tt>, a @ref relative_dates "relative date" (see @ref relative_date_multiplication), which the \a lvalue's type must accept
+    |@ref date_type "date"|If the \a lvalue or the \a expression is a @ref date_type "date", the \a lvalue is assigned <tt>lvalue * expression</tt>, a @ref relative_dates "relative date" (see @ref relative_date_multiplication), which the \a lvalue's type must accept; an \a expression of type \c date on an \a lvalue whose type never accepts a date (ex: \c int, \c *int, \c float) is a parse error (see @ref compound_assignment_parse_checks "parse-time checks")
     |All other types|The type precedence from highest to lowest is @ref number "number", @ref float "float" float, and @ref integer "int", other types are converted to @ref integer "int". The \a expression will be evaluated and multiplied by the \a lvalue, and the result will be saved to the \a lvalue.
 
     @throw INVALID-DATE a component of a @ref relative_dates "relative date" product does not fit a signed 32-bit
@@ -2688,7 +2704,7 @@ if (x || y)
 
     <b>Arguments Processed by /=</b>
     |!Argument|!Processing
-    |All|The type precedence from highest to lowest is @ref number "number", @ref float "float", and @ref integer "int", other types are converted to @ref integer "int"; the \a expression will be evaluated and used to divide the \a lvalue, and the result will be saved to the \a lvalue, as by the @ref division_operator "divide operator".
+    |All|The type precedence from highest to lowest is @ref number "number", @ref float "float", and @ref integer "int", other types are converted to @ref integer "int"; the \a expression will be evaluated and used to divide the \a lvalue, and the result will be saved to the \a lvalue, as by the @ref division_operator "divide operator"; a @ref date_type "date" \a lvalue is converted to an @ref integer "int" like the other types, so the result is never a date, and \c /= on an \a lvalue whose type accepts no integer, float or number value (ex: \c date, \c *date) is a parse error (see @ref compound_assignment_parse_checks "parse-time checks")
 
     @throw DIVISION-BY-ZERO If the divisor expression evaluates to zero, this exception is thrown
 
