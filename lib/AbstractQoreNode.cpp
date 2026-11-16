@@ -1200,6 +1200,14 @@ int64 get_ms_zero(const QoreValue& n) {
     return n.getAsBigInt();
 }
 
+// a call reference needs a scan if the node it holds does: a sandbox-bound callback, or the value of a reference to a
+// pseudo-method (issue #995); out of line, so that needs_scan() stays small enough to be inlined in needs_scan(const
+// QoreValue&), which the storing of every value calls
+static __attribute__((noinline, cold)) bool needs_scan_call_reference(const AbstractQoreNode* n) {
+    const AbstractQoreNode* held = qore_get_call_reference_scan_node(n);
+    return held && needs_scan(held);
+}
+
 bool needs_scan(const AbstractQoreNode* n) {
     if (!n)
         return false;
@@ -1209,11 +1217,7 @@ bool needs_scan(const AbstractQoreNode* n) {
         case NT_HASH: return qore_hash_private::getScanCount(*static_cast<const QoreHashNode*>(n)) ? true : false;
         case NT_OBJECT: return true;
         case NT_RUNTIME_CLOSURE: return static_cast<const QoreClosureBase*>(n)->needsScan();
-        case NT_FUNCREF: {
-            // a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)
-            const AbstractQoreNode* held = qore_get_call_reference_scan_node(n);
-            return held && needs_scan(held);
-        }
+        case NT_FUNCREF: return needs_scan_call_reference(n);
         case NT_REFERENCE: return lvalue_ref::get(static_cast<const ReferenceNode*>(n))->needsScan();
     }
 
