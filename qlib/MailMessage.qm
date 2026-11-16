@@ -76,6 +76,10 @@ msg.addTO("My Best Friend <you@friend.com>");
     @section mailmessage_relnotes MailMessage Release Notes
 
     @subsection mailmessage_v1_5_1 MailMessage 1.5.1
+    - The multipart boundary of a message (@ref MailMessage::Message::mpboundary "Message::mpboundary") is random,
+      and another one is used when a part of the message contains it; it was made from the current time, so the
+      messages created in the same second had the same boundary
+      (<a href="https://github.com/qoretechnologies/qore/issues/6307">issue 6307</a>)
     - Added the @ref MailMessage::ContentEncoding "ContentEncoding" enum for content transfer encodings; the
       encoding constants @ref MailMessage::EncDefault "EncDefault", @ref MailMessage::EncNone "EncNone",
       @ref MailMessage::EncBase64 "EncBase64" and @ref MailMessage::EncQuotedPrintable "EncQuotedPrintable" are
@@ -644,8 +648,11 @@ public class Message {
     #! @endcond
 
     public {
-        #! create a different multipart boundary string every time based on the current time
-        string mpboundary = replace(make_base64_string(string(now_us())), "=", "");
+        #! the boundary of the multipart message: 144 random bits from @ref Qore::get_random_bytes()
+        /** when a part of the message contains it, the message is serialized with another random boundary (see
+            @ref Mime::MultiPartMessage "MultiPartMessage")
+        */
+        string mpboundary = make_base64_string(get_random_bytes(18));
     }
 
     #! creates a Message object from the arguments given

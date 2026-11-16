@@ -58,6 +58,7 @@ public class Main inherits QUnit::Test {
         addTestCase("Test recipients with a separate display name (issue #6134)", \testNameAddressRecipients(),
             NOTHING);
         addTestCase("Test quoted local part duplicates (issue #6134)", \testQuotedLocalPartDuplicates(), NOTHING);
+        addTestCase("Test multipart boundary (issue #6307)", \testBoundary(), NOTHING);
 
         set_return_value(main());
     }
@@ -2196,5 +2197,42 @@ lorem ipsum\r
                 printf("%s: %d addresses in %y\n", i.key, l.size(), elapsed);
             }
         }
+    }
+
+    # issue #6307: the multipart boundary of a message is random, and another one is used when a part of the message
+    # contains it (RFC 2046 section 5.1.1)
+    testBoundary() {
+        # a message attached to another one with the same boundary (as messages created in the same second had)
+        Message m1(Sender, Subject);
+        Message m2(Sender, Subject);
+        m1.addTO(To);
+        m1.setBody("body one");
+        m1.attach("one.txt", MimeTypeText, "attachment one");
+        string fwd = m1.serialize();
+        m2.mpboundary = m1.mpboundary;
+        m2.addTO(To);
+        m2.setBody("body two");
+        m2.attach("fwd.eml", "message/rfc822", fwd, ContentEncoding::QuotedPrintable);
+        m2.attach("two.txt", MimeTypeText, "attachment two");
+        Message p(m2.serialize());
+        assertEq("body two", p.getBody());
+        list<Attachment> atts = p.getAttachments();
+        assertEq(("fwd.eml", "two.txt"), (map $1.getName(), atts));
+        # the quoted-printable attachment is decoded with LF line breaks
+        assertEq(replace(fwd, "\r\n", "\n"), replace(atts[0].getData(), "\r\n", "\n"));
+        assertEq("attachment two", atts[1].getData());
+
+        # a message body that contains the boundary
+        Message m3(Sender, Subject);
+        m3.addTO(To);
+        m3.setBody("text\r\n--" + m3.mpboundary + "\r\nContent-Type: text/plain\r\n\r\nsplit",
+            ContentEncoding::QuotedPrintable);
+        m3.attach("three.txt", MimeTypeText, "attachment three");
+        p = new Message(m3.serialize());
+        assertEq(replace(m3.getBody(), "\r\n", "\n"), replace(p.getBody(), "\r\n", "\n"));
+        assertEq(("three.txt",), (map $1.getName(), p.getAttachments()));
+
+        # messages created at the same time have different boundaries
+        assertNeq((new Message(Sender, Subject)).mpboundary, (new Message(Sender, Subject)).mpboundary);
     }
 }

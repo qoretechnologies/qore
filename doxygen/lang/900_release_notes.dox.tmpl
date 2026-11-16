@@ -1396,6 +1396,12 @@
       - the connection URL is not generated automatically and must be supplied by the user
       - see @ref Mewsrestclientv1_0_1 for all changes
 
+    - @ref mimeintro "Mime" module
+      - multipart boundaries, also those of the @ref mailmessageintro "MailMessage" module, are random and are
+        replaced when a part contains them; they were made from the current time and were not checked against the
+        parts (<a href="https://github.com/qoretechnologies/qore/issues/6307">issue 6307</a>)
+      - see @ref mime_1_9 for all changes
+
     - @ref openaidataproviderintro "OpenAiDataProvider" module
       - the \c transcribe-audio action and the Conversations API, replacing the deprecated Assistants API
       - see @ref openaidataprovider_v1_7 for all changes

@@ -484,17 +484,12 @@ string path = GenericApiCallProvider::appendQueryArgs("/contacts", {"email": "a+
         a recognizable marker. Avoids <tt>/</tt> and <tt>+</tt> (which standard base64 produces and which are in
         RFC 2045 tspecials, requiring the parameter value to be quoted) and <tt>=</tt> (used for padding).
 
-        Includes 16 bytes of entropy from @c rand() so concurrent calls within the same microsecond
-        don't collide on the timestamp alone — a boundary collision between two interleaved
-        multipart uploads on the same connection would let one upload's body terminate the other's
-        envelope. The timestamp is folded in for human-readable debuggability.
+        The boundary is made of 16 random bytes from @ref Qore::get_random_bytes(), the generator of the crypto
+        library, so that it cannot be predicted or repeated: a boundary that occurs in a part would let the part
+        end the multipart body.
     */
     static string generateMultipartBoundary() {
-        binary entropy = binary();
-        for (int i = 0; i < 16; ++i) {
-            entropy += chr(rand() % 256);
-        }
-        string raw = make_base64_string(binary(string(now_us())) + entropy);
+        string raw = make_base64_string(get_random_bytes(16));
         # base64url-safe normalisation: strip padding, replace +/ with -_
         return "----QoreGenericApiCall" + replace(replace(replace(raw, "=", ""), "/", "_"), "+", "-");
     }
