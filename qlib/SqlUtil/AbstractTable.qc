@@ -6922,6 +6922,8 @@ int dcnt = table.delCommit(("name": name));
 
         @return the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @see delete(*hash)
@@ -6973,6 +6975,8 @@ int dcnt = table.del(("name": name));
 
         @return the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @see delCommit(*hash)
@@ -7011,6 +7015,8 @@ hash<SqlResultInfo> info = table.delWithInfo({"name": name});
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
 
         @return a hash where the \c result key is the count of rows deleted
+
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
 
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
@@ -7320,6 +7326,8 @@ int dcnt = table.delDpqlCommit('@status == "inactive"');
 
         @return the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
@@ -7367,6 +7375,8 @@ int dcnt = table.delDpql('@status == "inactive"');
 
         @return the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
@@ -7400,6 +7410,8 @@ int dcnt = table.delDpql('@status == "inactive"');
 
         @return a hash where the \c result key is the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
@@ -7417,7 +7429,27 @@ int dcnt = table.delDpql('@status == "inactive"');
         return del(cond, \sql);
     }
 
+    #! checks the options of an update or a delete, which are @ref SqlDataCallbackOptions
+    /** @param op the operation, for the error message: \c "update" or \c "delete"
+        @param opt the options
+
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
+        @since %SqlUtil 3.11.0
+    */
+    private validateDataOptionsIntern(string op, reference<*hash<auto>> opt) {
+        # issue #757: the "returning" option was silently ignored, as were other unknown options
+        if (exists opt.returning) {
+            throw "OPTION-ERROR", sprintf("%s: the \"returning\" option is not supported with %s; it is supported "
+                "only with insert", getDesc(), op);
+        }
+        if (opt) {
+            validateOptionsIntern("OPTION-ERROR", getSqlDataCallbackOptions(), \opt);
+        }
+    }
+
     private int delIntern(*hash<auto> cond, *reference<string> sql, *hash<auto> opt, *reference<softlist<auto>> args) {
+        validateDataOptionsIntern("delete", \opt);
         # make query
         sql = sprintf("delete from %s", getSqlName());
         if (cond) {
@@ -7443,6 +7475,7 @@ int ucnt = table.updateCommit(("id": id), ("name": name));
         @return the count of rows updated
 
         @throw UPDATE-ERROR the set hash is empty
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @see update()
@@ -7497,6 +7530,7 @@ int ucnt = table.update(("id": id), ("name": name));
         @return the count of rows updated
 
         @throw UPDATE-ERROR the set hash is empty
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @see updateCommit()
@@ -7541,6 +7575,7 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         @return an info hash where the \c result key is assigned to the count of rows updated
 
         @throw UPDATE-ERROR the set hash is empty
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @since SqlUtil 1.7
@@ -7700,6 +7735,7 @@ int ucnt = table.updateDpqlCommit({"counter": "@counter + 1"}, '@status == "acti
 
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw UPDATE-ERROR the set hash is empty or invalid
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
 
@@ -7756,6 +7792,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw UPDATE-ERROR the set hash is empty or invalid
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
 
@@ -7796,6 +7833,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw UPDATE-ERROR the set hash is empty or invalid
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
 
@@ -7894,6 +7932,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
     private int updateIntern(hash<auto> set, *hash<auto> cond, *reference<string> sql, *hash<auto> opt,
             *reference<softlist<auto>> args) {
+        validateDataOptionsIntern("update", \opt);
         hash<SqlCommandInfo> update_hash = getUpdateSql(set, cond);
         sql = update_hash.sql;
         args = update_hash.args;
