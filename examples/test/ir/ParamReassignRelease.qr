@@ -1,0 +1,1289 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# the script of ParamReassignRelease.qtest: a parameter's write releases the value that the caller passed and no
+# longer holds, as in the AST interpreter, whose parameter takes the caller's temporary argument over
+%modern
+class T {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+# parameters of every kind assigned a new value: the object that the caller passed is destroyed at the assignment
+sub cls(T k) {
+    printf("cls in %s\n", k.n);
+    k = new T(k.n + "-r");
+    printf("cls out %s\n", k.n);
+}
+sub obj(object k) {
+    printf("obj in %s\n", k.n);
+    k = new T(k.n + "-r");
+    printf("obj out %s\n", k.n);
+}
+sub untyped(auto k) {
+    printf("auto in %s\n", k.n);
+    k = new T(k.n + "-r");
+    printf("auto out %s\n", k.n);
+}
+sub optional(*T k) {
+    printf("opt in %s\n", k.n);
+    k = NOTHING;
+    printf("opt out\n");
+}
+sub hsh(hash<auto> h) {
+    printf("hash in %s\n", h.o.n);
+    h = {"o": new T(h.o.n + "-r")};
+    printf("hash out %s\n", h.o.n);
+}
+sub lst(list<auto> l) {
+    printf("list in %s\n", l[0].n);
+    l = (new T(l[0].n + "-r"),);
+    printf("list out %s\n", l[0].n);
+}
+sub typed_hash(hash<string, T> h) {
+    printf("thash in %s\n", h.o.n);
+    h = {"o": new T(h.o.n + "-r")};
+    printf("thash out %s\n", h.o.n);
+}
+# an element of a container parameter assigned or removed
+sub elem(hash<auto> h, list<auto> l) {
+    h.o = new T(h.o.n + "-e");
+    printf("elem hash %s\n", h.o.n);
+    l[0] = new T(l[0].n + "-e");
+    printf("elem list %s\n", l[0].n);
+    remove h.o;
+    printf("elem out\n");
+}
+# native scalar parameters with a reassigned object parameter
+int sub scalars(int i, float f, bool b, string s, T k) {
+    printf("scalars in %s\n", k.n);
+    k = new T(k.n + "-r");
+    i += 1;
+    f += 1.0;
+    b = !b;
+    s += "x";
+    printf("scalars out %s %d %g %y %s\n", k.n, i, f, b, s);
+    return i;
+}
+# native scalar parameters reassigned: a function with a fast entry
+int sub scalar_only(int i, string s) {
+    i = i * 2;
+    s = s + "x";
+    return i + s.size();
+}
+# a function with a fast entry that only reads its object parameter: the object lives until the call returns
+int sub read_only(T k, int i) {
+    printf("read only %s %d\n", k.n, i);
+    return i + 1;
+}
+# a parameter reassigned twice: the value it owns is destroyed at the second assignment
+sub twice(T k) {
+    k = new T(k.n + "-1");
+    printf("twice mid %s\n", k.n);
+    k = new T(k.n + "-2");
+    printf("twice out %s\n", k.n);
+}
+# reassignment in a loop and in a conditional
+sub loop(T k, int n) {
+    for (int i = 0; i < n; ++i) {
+        k = new T(sprintf("%s-l%d", k.n, i));
+        printf("loop %d %s\n", i, k.n);
+    }
+    printf("loop out %s\n", k.n);
+}
+sub cond(T k, bool b) {
+    if (b) {
+        k = new T(k.n + "-c");
+        printf("cond yes %s\n", k.n);
+    } else {
+        printf("cond no %s\n", k.n);
+    }
+    printf("cond out %s\n", k.n);
+}
+sub foreach_param(list<T> l) {
+    foreach T t in (l) {
+        printf("each %s\n", t.n);
+    }
+    l = ();
+    printf("each out\n");
+}
+# reference parameters: the assignment replaces the referenced value
+sub ref(reference<T> k) {
+    printf("ref in %s\n", k.n);
+    k = new T(k.n + "-r");
+    printf("ref out %s\n", k.n);
+}
+sub ref_auto(reference k) {
+    k = new T(k.n + "-r");
+    printf("ref auto out %s\n", k.n);
+}
+# a parameter returned after it is reassigned, removed, assigned before an exception
+T sub ret(T k) {
+    k = new T(k.n + "-r");
+    return k;
+}
+sub clear(T k) {
+    remove k;
+    printf("clear out\n");
+}
+sub throws(T k) {
+    k = new T(k.n + "-t");
+    printf("throws %s\n", k.n);
+    throw "ERR", k.n;
+}
+# default and excess arguments
+sub with_default(T k, int i = 1) {
+    k = new T(sprintf("%s-d%d", k.n, i));
+    printf("default out %s\n", k.n);
+}
+sub with_varargs(T k, ...) {
+    k = new T(sprintf("%s-v%d", k.n, argv.size()));
+    printf("varargs out %s\n", k.n);
+}
+# a recursive call
+sub recurse(T k, int n) {
+    k = new T(sprintf("%s-%d", k.n, n));
+    printf("recurse %s\n", k.n);
+    if (n) {
+        recurse(new T("rec" + (n - 1)), n - 1);
+    }
+    printf("recurse out %s\n", k.n);
+}
+class C {
+    public { T m; }
+    constructor(T k) {
+        k = new T(k.n + "-ctor");
+        m = k;
+        printf("ctor out %s\n", m.n);
+    }
+    meth(T k) {
+        k = new T(k.n + "-m");
+        printf("meth out %s\n", k.n);
+    }
+    self_call() {
+        meth(new T("self"));
+    }
+    static stat(T k) {
+        k = new T(k.n + "-s");
+        printf("stat out %s\n", k.n);
+    }
+}
+final class F {
+    meth(T k) {
+        k = new T(k.n + "-f");
+        printf("final out %s\n", k.n);
+    }
+}
+# issue #5701: an optional parameter cleared by the callee
+sub clr(*T p) {
+    p = NOTHING;
+    printf("after clear\n");
+}
+# a callee that the IR interpreter does not run inline: a reference argument, an on_exit block
+sub clr_ref(*T p, reference<int> r) {
+    p = NOTHING;
+    r = 1;
+    printf("after clear ref\n");
+}
+sub clr_on_exit(*T p) {
+    on_exit printf("on_exit clr\n");
+    p = NOTHING;
+    printf("after clear on_exit\n");
+}
+# parameters that are never written: the arguments are released in the AST interpreter's order when the call returns
+sub two_read(T a, T b) {
+    T l("two-local");
+    printf("two read %s %s\n", a.n, b.n);
+}
+sub va_read(T a, ...) {
+    printf("va read %s %d\n", a.n, argv.size());
+}
+sub read_on_exit(T a) {
+    on_exit printf("read on_exit %s\n", a.n);
+    T l("roe-local");
+}
+# a native leaf: no parameter holds the argument, which the caller releases when the call returns
+int sub leaf_size(string s) {
+    return s.size();
+}
+string sub name_of(T k) {
+    return k.n;
+}
+class D {
+    clr(*T p) {
+        p = NOTHING;
+        printf("after clear meth\n");
+    }
+    static sclr(*T p) {
+        p = NOTHING;
+        printf("after clear static\n");
+    }
+    two_read(T a, T b) {
+        printf("two read meth %s %s\n", a.n, b.n);
+    }
+    static stwo_read(T a, T b) {
+        printf("two read static %s %s\n", a.n, b.n);
+    }
+}
+sub clr_two(*T p, *T q) {
+    p = NOTHING;
+    printf("after clear two p\n");
+    q = NOTHING;
+    printf("after clear two q\n");
+}
+sub clr_va(*T p, ...) {
+    p = NOTHING;
+    argv = ();
+    printf("after clear va\n");
+}
+# call sites that the IR interpreter runs inline until the callees are compiled (tiered execution with a low JIT
+# threshold), and then calls through the runtime
+sub inline_then_call() {
+    for (int i = 0; i < 30; ++i) {
+        clr(new T("itc" + i));
+        two_read(new T("itca" + i), new T("itcb" + i));
+    }
+}
+# method and static method call references (the reference's call takes its argument over)
+class K {
+    public { string tag; }
+    constructor(string tag) { self.tag = tag; }
+    m(*T p) {
+        p = NOTHING;
+        printf("after m %s\n", tag);
+    }
+    static s(*T p) {
+        p = NOTHING;
+        printf("after s\n");
+    }
+    # a reference to a method of the object made in the class
+    code self_ref() {
+        return \m();
+    }
+}
+sub ref_calls(string sfx) {
+    K k("k" + sfx);
+    code mr = \k.m();
+    mr(new T("mref" + sfx));
+    code sr = \K::s();
+    sr(new T("sref" + sfx));
+    code lr = k.self_ref();
+    lr(new T("lref" + sfx));
+    call_function(mr, new T("cfm" + sfx));
+    call_function_args(sr, (new T("cfa" + sfx),));
+}
+# writes that the IR does not record: in a closure that captures the parameter, while a closure captures it, through
+# a reference passed to a callee
+sub cap(*T p) {
+    code c = sub () { p = NOTHING; };
+    c();
+    printf("after cap\n");
+}
+sub held(*T p) {
+    code c = auto sub () { return p; };
+    p = NOTHING;
+    printf("after held %y\n", c());
+}
+sub setnull(reference<*T> r) {
+    r = NOTHING;
+}
+sub byref(*T p) {
+    setnull(\p);
+    printf("after byref\n");
+}
+# a callee that writes its parameter called with a local that the caller keeps: nothing is taken over
+sub write_kept(*T p) {
+    p = NOTHING;
+    printf("after write kept\n");
+}
+sub kept_local() {
+    T t("kept");
+    write_kept(t);
+    printf("kept %s\n", t.n);
+}
+# calls through call_function(), call_function_args(), background, map, select, foldl
+sub clr_q(*T p, Queue q) {
+    p = NOTHING;
+    printf("after clear bg\n");
+    q.push(1);
+}
+int sub clr_ret(*T p, int i) {
+    p = NOTHING;
+    printf("after clear %d\n", i);
+    return i;
+}
+# a value taken out of an lvalue, and the result of a slice, are temporaries as well
+sub lv_clear(*T k, string tag) {
+    k = NOTHING;
+    printf("after write %s\n", tag);
+}
+
+sub lv_clear_list(*list<auto> l, string tag) {
+    l = NOTHING;
+    printf("after write %s\n", tag);
+}
+
+sub lv_clear_hash(*hash<auto> h, string tag) {
+    h = NOTHING;
+    printf("after write %s\n", tag);
+}
+
+list<auto> sub lv_mkl(string name) {
+    return (new T(name),);
+}
+
+hash<auto> sub lv_mkh(string name) {
+    return {"a": new T(name), "b": 1};
+}
+
+our *T lv_gt;
+our list<auto> lv_gl;
+
+class LvMembers {
+    public {
+        *T mt;
+        list<auto> ml;
+    }
+
+    run() {
+        mt = new T("lv-m-rm");
+        lv_clear(remove mt, "lv-m-rm");
+        ml = (new T("lv-m-sh"),);
+        lv_clear(shift ml, "lv-m-sh");
+        ml = (new T("lv-m-pp"),);
+        lv_clear(pop ml, "lv-m-pp");
+        ml = (new T("lv-m-ex"),);
+        lv_clear_list((extract ml, 0, 1), "lv-m-ex");
+    }
+}
+
+sub lvalue_results() {
+    {
+        *T v = new T("lv-rm");
+        lv_clear(remove v, "lv-rm");
+    }
+    {
+        list<auto> l = (new T("lv-sh"),);
+        lv_clear(shift l, "lv-sh");
+    }
+    {
+        list<auto> l = (new T("lv-pp"),);
+        lv_clear(pop l, "lv-pp");
+    }
+    {
+        list<auto> l = (new T("lv-ex"),);
+        lv_clear_list((extract l, 0, 1), "lv-ex");
+    }
+    {
+        hash<auto> h = {"o": new T("lv-he")};
+        lv_clear(remove h.o, "lv-he");
+    }
+    try {
+        *T v = new T("lv-try-rm");
+        lv_clear(remove v, "lv-try-rm");
+        list<auto> l = (new T("lv-try-sh"),);
+        lv_clear(shift l, "lv-try-sh");
+    } catch () {
+    }
+    lv_gt = new T("lv-g-rm");
+    lv_clear(remove lv_gt, "lv-g-rm");
+    lv_gl = (new T("lv-g-sh"),);
+    lv_clear(shift lv_gl, "lv-g-sh");
+    lv_gl = (new T("lv-g-pp"),);
+    lv_clear(pop lv_gl, "lv-g-pp");
+    lv_gl = (new T("lv-g-ex"),);
+    lv_clear_list((extract lv_gl, 0, 1), "lv-g-ex");
+    LvMembers members();
+    members.run();
+    lv_clear_list(lv_mkl("lv-sl")[0..0], "lv-sl");
+    lv_clear_list(lv_mkl("lv-sel")[0, 0], "lv-sel");
+    lv_clear_hash(lv_mkh("lv-hs"){"a", "b"}, "lv-hs");
+    try {
+        lv_clear_list(lv_mkl("lv-try-sl")[0..0], "lv-try-sl");
+    } catch () {
+    }
+}
+
+# the method that runs is found from the object's class at run time
+class DynWrites {
+    m(*T k, string tag) {
+        k = NOTHING;
+        printf("after write %s\n", tag);
+    }
+
+    n(*hash<auto> h, string tag) {
+        h = NOTHING;
+        printf("after write %s\n", tag);
+    }
+
+    nine(int a, int b, int c, int d, int e, int f, int g, int h, *T k, string tag) {
+        k = NOTHING;
+        printf("after write %s\n", tag);
+    }
+}
+
+class DynReads {
+    m(*T k, string tag) {
+        printf("read %s\n", tag);
+    }
+}
+
+class DynBase {
+    m(*T k, string tag) {
+        printf("base read %s\n", tag);
+    }
+
+    viaSelf(string tag) {
+        self.m(new T(tag), tag);
+    }
+}
+
+class DynOverride inherits DynBase {
+    m(*T k, string tag) {
+        k = NOTHING;
+        printf("after write %s\n", tag);
+    }
+}
+
+class DynBaseWrites {
+    m(*T k, string tag) {
+        k = NOTHING;
+        printf("after write %s\n", tag);
+    }
+}
+
+class DynOverrideReads inherits DynBaseWrites {
+    m(*T k, string tag) {
+        printf("override read %s\n", tag);
+    }
+}
+
+class DynMemberCode {
+    public {
+        code f = sub (*T k, string tag) {
+            k = NOTHING;
+            printf("after write %s\n", tag);
+        };
+    }
+}
+
+sub dyn_base(DynBase b, string tag) {
+    b.m(new T(tag), tag);
+}
+
+sub dyn_base_writes(DynBaseWrites b, string tag) {
+    b.m(new T(tag), tag);
+}
+
+sub dyn_base_try(DynBase b, string tag) {
+    try {
+        b.m(new T(tag), tag);
+    } catch () {
+    }
+}
+
+sub dyn_auto(auto o, string tag) {
+    o.m(new T(tag), tag);
+}
+
+sub dyn_auto_try(auto o, string tag) {
+    try {
+        o.m(new T(tag), tag);
+    } catch () {
+    }
+}
+
+sub dyn_object(object o, string tag) {
+    o.m(new T(tag), tag);
+}
+
+# a static method of a generic class and a function with explicit type arguments called through call references
+class GenRefBox<X> {
+    private { X v; }
+    constructor(X v) { self.v = v; }
+    static string id(*X x, string tag) {
+        x = NOTHING;
+        printf("after write %s\n", tag);
+        return tag;
+    }
+}
+
+class GenRefTBox inherits GenRefBox<T> {
+    constructor(T t) : GenRefBox(t) {}
+
+    string refCall(string tag) {
+        code f = \id();
+        return f(new T(tag), tag);
+    }
+}
+
+string sub gen_ref_fn<Y>(*Y y, string tag) {
+    y = NOTHING;
+    printf("after write %s\n", tag);
+    return tag;
+}
+
+sub generic_refs() {
+    GenRefTBox b(new T("gen-box"));
+    printf("returned %s\n", b.refCall("gen-static"));
+    code g = \gen_ref_fn<T>();
+    printf("returned %s\n", g(new T("gen-fn"), "gen-fn"));
+}
+
+# a closure call in a try block, a variable read that the statement writes later, a call site whose receiver's class
+# changes, calls with more temporary arguments than a small buffer, and an exception raised by a later argument
+our *T rw_global;
+
+class RwBase {
+    m(*T k, auto x, string tag) {
+        k = NOTHING;
+        printf("after write %s\n", tag);
+    }
+
+    static s(*T k, auto x, string tag) {
+        k = NOTHING;
+        printf("after write %s\n", tag);
+    }
+
+    nine(*T a, *T b, *T c, *T d, *T e, *T f, *T g, *T h, *T i, string tag) {
+        a = NOTHING;
+        i = NOTHING;
+        printf("after write %s\n", tag);
+    }
+
+    static snine(*T a, *T b, *T c, *T d, *T e, *T f, *T g, *T h, *T i, string tag) {
+        a = NOTHING;
+        i = NOTHING;
+        printf("after write %s\n", tag);
+    }
+}
+
+# an object whose destructor throws: the write that destroys it raises the exception
+class TThrow inherits T {
+    constructor(string n) : T(n) {
+    }
+
+    destructor() {
+        throw "DTOR-ERROR", n;
+    }
+}
+
+int sub rw_setg() {
+    rw_global = NOTHING;
+    return 1;
+}
+
+class RwOverride inherits RwBase {
+    m(*T k, auto x, string tag) {
+        k = NOTHING;
+        printf("after write %s\n", tag);
+    }
+}
+
+class RwReads {
+    m(*T k, auto x, string tag) {
+        printf("read %s\n", tag);
+    }
+}
+
+sub rw_fn(*T k, auto x, string tag) {
+    k = NOTHING;
+    printf("after write %s\n", tag);
+}
+
+sub rw_nine(*T a, *T b, *T c, *T d, *T e, *T f, *T g, *T h, *T i, string tag) {
+    a = NOTHING;
+    i = NOTHING;
+    printf("after write %s\n", tag);
+}
+
+string sub rw_boom(string tag) {
+    throw "RW-BOOM", tag;
+}
+
+# parameters written only in a handler, which runs while an exception leaves the function (qore#6004)
+sub hw(T p, auto v, hash<auto> hh, list<auto> ll) {
+    on_exit {
+        printf("hw handler %s\n", p.n);
+        p = new T("hw-p2");
+        v = new T("hw-v2");
+        hh = {};
+        ll = ();
+        printf("hw handler after\n");
+    }
+    throw "HW";
+}
+
+sub hw_error(*T p) {
+    on_error {
+        p = NOTHING;
+        printf("hw-error handler after\n");
+    }
+    throw "HW";
+}
+
+sub hw_ok(*T p) {
+    on_exit {
+        p = NOTHING;
+        printf("hw-ok handler after\n");
+    }
+}
+
+class HwC {
+    m(*T p) {
+        on_exit {
+            p = NOTHING;
+            printf("hw-m handler after\n");
+        }
+        throw "HW";
+    }
+}
+
+sub hw_nested() {
+    hw_error(new T("hw-nested"));
+}
+
+sub handler_writes() {
+    try {
+        hw(new T("hw-p"), new T("hw-v"), {"k": new T("hw-hk")}, (new T("hw-l0"),));
+    } catch () {
+    }
+    try {
+        hw_error(new T("hw-error"));
+    } catch () {
+    }
+    try {
+        hw_ok(new T("hw-ok"));
+    } catch () {
+    }
+    HwC c();
+    try {
+        c.m(new T("hw-m"));
+    } catch () {
+    }
+    # the call is not in a try block of its own function
+    try {
+        hw_nested();
+    } catch () {
+    }
+}
+
+sub more_shapes() {
+    try {
+        code cl = sub (*T k, string tag) {
+            k = NOTHING;
+            printf("after write %s\n", tag);
+        };
+        cl(new T("try-closure"), "try-closure");
+    } catch () {
+    }
+    RwBase c();
+    {
+        *T o = new T("rw-local");
+        c.m(o, o = NOTHING, "rw-local");
+    }
+    rw_global = new T("rw-global");
+    c.m(rw_global, rw_global = NOTHING, "rw-global");
+    {
+        *T o = new T("rw-closure");
+        code cl = sub () { auto z = o; };
+        c.m(o, o = NOTHING, "rw-closure");
+    }
+    {
+        RwBase d = new RwOverride();
+        *T o = new T("rw-override");
+        d.m(o, o = NOTHING, "rw-override");
+    }
+    {
+        auto u = new RwBase();
+        *T o = new T("rw-untyped");
+        u.m(o, o = NOTHING, "rw-untyped");
+    }
+    {
+        *T o = new T("rw-fn");
+        rw_fn(o, o = NOTHING, "rw-fn");
+        *T so = new T("rw-static");
+        RwBase::s(so, so = NOTHING, "rw-static");
+    }
+    # one call site, receivers of classes whose methods write or read their parameter
+    foreach object recv in ((new RwBase(), new RwReads(), new RwOverride(), new RwReads())) {
+        recv.m(new T("poly" + $#), NOTHING, "poly" + $#);
+    }
+    rw_nine(new T("nine-a"), new T("nine-b"), new T("nine-c"), new T("nine-d"), new T("nine-e"), new T("nine-f"),
+        new T("nine-g"), new T("nine-h"), new T("nine-i"), "nine");
+    c.nine(new T("mnine-a"), new T("mnine-b"), new T("mnine-c"), new T("mnine-d"), new T("mnine-e"),
+        new T("mnine-f"), new T("mnine-g"), new T("mnine-h"), new T("mnine-i"), "mnine");
+    try {
+        rw_fn(new T("ex-later"), rw_boom("ex-later"), "ex-later");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s\n", ex.desc);
+    }
+    try {
+        c.m(new T("ex-later-m"), rw_boom("ex-later-m"), "ex-later-m");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s\n", ex.desc);
+    }
+    # a static method in a try block, with one and nine temporary arguments
+    try {
+        RwBase::s(new T("try-static"), NOTHING, "try-static");
+        RwBase::snine(new T("try-snine-a"), new T("try-snine-b"), new T("try-snine-c"), new T("try-snine-d"),
+            new T("try-snine-e"), new T("try-snine-f"), new T("try-snine-g"), new T("try-snine-h"),
+            new T("try-snine-i"), "try-snine");
+    } catch () {
+    }
+    # the exception of the destructor that the parameter's write runs is raised at the write
+    try {
+        RwBase::s(new TThrow("try-static-throw"), NOTHING, "try-static-throw");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s %s\n", ex.err, ex.desc);
+    }
+    # a read of a variable that a later argument writes: through a closure, through a function, in another block
+    {
+        *T o = new T("rw-clr");
+        code clr = int sub () { o = NOTHING; return 1; };
+        c.m(o, clr(), "rw-clr");
+    }
+    rw_global = new T("rw-setg");
+    c.m(rw_global, rw_setg(), "rw-setg");
+    {
+        *T o = new T("rw-cond");
+        bool t = True;
+        c.m(o, t ? (o = NOTHING) : 1, "rw-cond");
+    }
+}
+
+# calls with more temporary arguments than the cells of a call on the stack hold (16)
+sub rw_seventeen(*T a, *T b, *T c, *T d, *T e, *T f, *T g, *T h, *T i, *T j, *T k, *T l, *T m, *T n, *T o, *T p,
+        *T q, string tag) {
+    a = NOTHING;
+    q = NOTHING;
+    printf("after write %s\n", tag);
+}
+
+class RwSeventeen {
+    m(*T a, *T b, *T c, *T d, *T e, *T f, *T g, *T h, *T i, *T j, *T k, *T l, *T m, *T n, *T o, *T p, *T q,
+            string tag) {
+        a = NOTHING;
+        q = NOTHING;
+        printf("after write %s\n", tag);
+    }
+}
+
+sub seventeen_calls() {
+    rw_seventeen(new T("s17-a"), new T("s17-b"), new T("s17-c"), new T("s17-d"), new T("s17-e"), new T("s17-f"),
+        new T("s17-g"), new T("s17-h"), new T("s17-i"), new T("s17-j"), new T("s17-k"), new T("s17-l"),
+        new T("s17-m"), new T("s17-n"), new T("s17-o"), new T("s17-p"), new T("s17-q"), "s17");
+    RwSeventeen c();
+    c.m(new T("m17-a"), new T("m17-b"), new T("m17-c"), new T("m17-d"), new T("m17-e"), new T("m17-f"),
+        new T("m17-g"), new T("m17-h"), new T("m17-i"), new T("m17-j"), new T("m17-k"), new T("m17-l"),
+        new T("m17-m"), new T("m17-n"), new T("m17-o"), new T("m17-p"), new T("m17-q"), "m17");
+    code cl = sub (*T a, *T b, *T c, *T d, *T e, *T f, *T g, *T h, *T i, *T j, *T k, *T l, *T m, *T n, *T o, *T p,
+            *T q, string tag) {
+        a = NOTHING;
+        q = NOTHING;
+        printf("after write %s\n", tag);
+    };
+    cl(new T("c17-a"), new T("c17-b"), new T("c17-c"), new T("c17-d"), new T("c17-e"), new T("c17-f"),
+        new T("c17-g"), new T("c17-h"), new T("c17-i"), new T("c17-j"), new T("c17-k"), new T("c17-l"),
+        new T("c17-m"), new T("c17-n"), new T("c17-o"), new T("c17-p"), new T("c17-q"), "c17");
+    try {
+        rw_seventeen(new T("t17-a"), new T("t17-b"), new T("t17-c"), new T("t17-d"), new T("t17-e"),
+            new T("t17-f"), new T("t17-g"), new T("t17-h"), new T("t17-i"), new T("t17-j"), new T("t17-k"),
+            new T("t17-l"), new T("t17-m"), new T("t17-n"), new T("t17-o"), new T("t17-p"), new T("t17-q"), "t17");
+    } catch () {
+    }
+}
+
+# call references and a closure created in another Program, which run in the Program that created them (the
+# pgm_ctx paths of the calls); their callees write their parameter
+const CrossProgramCode = "
+sub xp_write(auto k, string tag) {
+    k = NOTHING;
+    printf(\"after write %s\\n\", tag);
+}
+code sub xp_fref() {
+    return \\xp_write();
+}
+code sub xp_closure() {
+    return sub (auto k, string tag) {
+        k = NOTHING;
+        printf(\"after write %s\\n\", tag);
+    };
+}
+class XpC {
+    m(auto k, string tag) {
+        k = NOTHING;
+        printf(\"after write %s\\n\", tag);
+    }
+    static s(auto k, string tag) {
+        k = NOTHING;
+        printf(\"after write %s\\n\", tag);
+    }
+}
+# a method call reference does not keep its object alive
+our XpC xp_obj = new XpC();
+code sub xp_mref() {
+    return \\xp_obj.m();
+}
+code sub xp_sref() {
+    return \\XpC::s();
+}
+";
+
+sub cross_program() {
+    Program p(PO_NEW_STYLE);
+    p.parse(CrossProgramCode, "cross-program");
+    # initializes xp_obj
+    p.run();
+    code fr = p.callFunction("xp_fref");
+    fr(new T("xp-fref"), "xp-fref");
+    code cl = p.callFunction("xp_closure");
+    cl(new T("xp-closure"), "xp-closure");
+    code mr = p.callFunction("xp_mref");
+    mr(new T("xp-mref"), "xp-mref");
+    code sr = p.callFunction("xp_sref");
+    sr(new T("xp-sref"), "xp-sref");
+    try {
+        fr(new T("xp-try-fref"), "xp-try-fref");
+        cl(new T("xp-try-closure"), "xp-try-closure");
+    } catch () {
+    }
+}
+
+# issue #6055: native code gives a call's temporary arguments to the parameters: an assignment to the parameter
+# destroys the argument (an exception that its destructor raises is raised at the assignment), and on an exception
+# the arguments are released in the AST interpreter's order; issue #6053: call_function() of a method call reference
+# releases the temporary argument before the call's value
+our list<string> own_log = ();
+class OwnT {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { own_log += "~" + n; }
+}
+class OwnP {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { own_log += "~" + n; throw "PX"; }
+}
+class OwnD {
+    destructor() { throw "DX"; }
+}
+class OwnC {
+    auto m(OwnT p) { return new OwnT("t"); }
+    auto g2(OwnT a, OwnT b) {
+        OwnD dd();
+        return 1;
+    }
+}
+auto sub own_fn(any t) {
+    t = NOTHING;
+    own_log += "fn-body";
+    return 1;
+}
+auto sub own_g2(OwnT a, OwnT b) {
+    OwnD dd();
+    return 1;
+}
+sub own_run(string k, code c) {
+    own_log = ();
+    try {
+        c();
+    } catch (hash<ExceptionInfo> ex) {
+        own_log += "caught:" + ex.err;
+    }
+    map printf("own-%s %s\n", k, $1), own_log;
+}
+# a callee that takes its temporary argument over, called with another type than the calls before it: a guard of its
+# code that fails cannot give the call back to its caller, which no longer holds the argument
+auto sub own_guarded(*OwnT p, auto x) {
+    p = NOTHING;
+    own_log += "body";
+    return x + 1;
+}
+# excess arguments of a function that does not use argv, in its first call, which compiles it with a low JIT
+# threshold: argv holds them until the function exits
+sub va_excess(T a, ...) {
+    printf("va excess in %s\n", a.n);
+}
+sub va_excess_call() {
+    va_excess(new T("vea"), "x", new T("veb"));
+    printf("va excess after\n");
+}
+sub ownership_calls() {
+    va_excess_call();
+    for (int i = 0; i < 200; ++i) {
+        own_guarded(NOTHING, i);
+    }
+    own_run("guard-float", sub () { own_guarded(new OwnT("p"), 1.5); });
+    own_run("guard-string", sub () { own_guarded(new OwnT("p"), "s"); });
+    for (int i = 0; i < 3; ++i) {
+        own_run("fn", sub () { own_fn(new OwnP("p")); });
+        own_run("g2", sub () { own_g2(new OwnT("a"), new OwnT("b")); });
+        OwnC o();
+        own_run("mr", sub () { call_function(\o.m(), new OwnT("a")); });
+        own_run("g2m", sub () { o.g2(new OwnT("a"), new OwnT("b")); });
+        own_run("g2t", sub () {
+            try {
+                own_g2(new OwnT("a"), new OwnT("b"));
+            } catch (hash<ExceptionInfo> ex) {
+                own_log += "inner:" + ex.err;
+            }
+        });
+    }
+}
+
+sub dynamic_dispatch() {
+    {
+        auto o = new DynWrites();
+        o.m(new T("dyn-local"), "dyn-local");
+    }
+    dyn_auto(new DynWrites(), "dyn-auto");
+    dyn_auto(new DynReads(), "dyn-auto-read");
+    dyn_auto(new DynWrites(), "dyn-auto2");
+    dyn_auto_try(new DynWrites(), "dyn-auto-try");
+    dyn_object(new DynWrites(), "dyn-obj");
+    map $1.m(new T("dyn-map" + $#), "dyn-map" + $#), (new DynWrites(), new DynReads());
+    # an override that writes, through a base class whose method does not; and the reverse
+    dyn_base(new DynOverride(), "dyn-ov");
+    dyn_base(new DynBase(), "dyn-ov-base");
+    dyn_base_writes(new DynOverrideReads(), "dyn-ovr");
+    dyn_base_writes(new DynBaseWrites(), "dyn-ovr-base");
+    dyn_base_try(new DynOverride(), "dyn-ov-try");
+    {
+        DynOverride d();
+        d.viaSelf("dyn-self");
+    }
+    {
+        DynWrites w();
+        w.n({"o": new T("dyn-hl")}, "dyn-hl");
+        *T v = new T("dyn-rm");
+        w.m(remove v, "dyn-rm");
+        w.nine(1, 2, 3, 4, 5, 6, 7, 8, new T("dyn-nine"), "dyn-nine");
+    }
+    {
+        auto a = new DynWrites();
+        a.n({"o": new T("dyn-ahl")}, "dyn-ahl");
+        a.nine(1, 2, 3, 4, 5, 6, 7, 8, new T("dyn-anine"), "dyn-anine");
+    }
+    {
+        hash<auto> h = {"f": sub (*T k, string tag) { k = NOTHING; printf("after write %s\n", tag); }};
+        h.f(new T("dyn-hc"), "dyn-hc");
+    }
+    {
+        DynMemberCode c();
+        c.f(new T("dyn-mc"), "dyn-mc");
+        auto ac = new DynMemberCode();
+        ac.f(new T("dyn-amc"), "dyn-amc");
+    }
+}
+
+sub functional() {
+    call_function(\clr(), new T("cf"));
+    call_function_args(\clr(), (new T("cfargs"),));
+    Queue q();
+    background clr_q(new T("bg"), q);
+    q.get();
+    list<int> l = map clr_ret(new T("map" + $1), $1), (1, 2);
+    printf("map %y\n", l);
+    l = select (1, 2), clr_ret(new T("sel" + $1), $1) == 2;
+    printf("select %y\n", l);
+    int f = foldl $1 + clr_ret(new T("fold" + $2), $2), (1, 2, 3);
+    printf("foldl %d\n", f);
+}
+# on_error, the same object passed twice, a conversion of the argument when the parameter is bound, a throw from a
+# callee called from a function
+sub clr_on_error(*T p) {
+    on_error printf("on_error\n");
+    p = NOTHING;
+    printf("after clear on_error\n");
+    throw "ERR2", "x";
+}
+sub pair_clr(*T a, *T b) {
+    a = NOTHING;
+    printf("after pair a\n");
+    b = NOTHING;
+    printf("after pair b\n");
+}
+sub soft(softlist<auto> l) {
+    printf("soft %d\n", l.size());
+    l = ();
+    printf("after soft\n");
+}
+sub more_calls() {
+    try {
+        clr_on_error(new T("onerr"));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s\n", ex.err);
+    }
+    {
+        T d("dup");
+        pair_clr(d, d);
+        remove d;
+        printf("after dup\n");
+    }
+    soft(new T("soft"));
+    try {
+        throws(new T("fthrows"));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s\n", ex.desc);
+    }
+}
+# an enum argument beside a temporary one: a value that is not a reference-counted node
+enum PrrColor : string {
+    Red = "red",
+    Green = "green",
+}
+sub clr_enum(*T p, auto c) {
+    p = NOTHING;
+    printf("after clear enum %s\n", c);
+}
+sub enum_calls() {
+    clr_enum(new T("enum"), PrrColor::Green);
+    auto c = PrrColor::Red;
+    clr_enum(new T("enum-local"), c);
+}
+# issue #5701's calls, from a function
+sub issue_calls() {
+    clr(new T("i5701-f"));
+    D d();
+    d.clr(new T("i5701-m"));
+    D::sclr(new T("i5701-s"));
+    code c = sub (*T p) { p = NOTHING; printf("after clear closure\n"); };
+    c(new T("i5701-c"));
+    code r = \clr();
+    r(new T("i5701-r"));
+    clr_two(new T("i5701-p"), new T("i5701-q"));
+    clr_va(new T("i5701-v"), new T("i5701-v1"), new T("i5701-v2"));
+}
+
+# a caller with native code calling with temporary arguments
+sub caller() {
+    cls(new T("caller"));
+    hsh({"o": new T("caller-hash")});
+    printf("caller ret %d\n", read_only(new T("caller-ro"), 1));
+}
+
+# parameters bound on the runtime stack (a default argument: no direct parameters) that are written (issue #5958): a
+# parameter that is only reassigned (tls_re_*, tls_two, TlsC::s, the closure) is IR-only, and the frame takes the
+# value of a temporary over from the runtime variable into its slot (takeOverRuntimeStackParams()); one whose element
+# is written (h.k = j, l[1] = j: an lvalue path) or that a handler reads stays on the runtime stack, whose variable
+# holds the temporary (tls_hash, tls_list, TlsC::m, tls_on_exit); a caller's variable keeps its value.  The typed
+# hash is the value of a call: the AST interpreter keeps a typed hash literal (<TlsHash>{...}) in the argument list
+# until the call returns, so a write to the parameter does not release it there
+hashdecl TlsHash {
+    *T o;
+    int k = 0;
+}
+sub tls_hash(hash<auto> h, string tag, int m = 3) {
+    for (int j = 0; j < m; ++j) {
+        h.k = j;
+    }
+    h = {};
+    printf("after write %s\n", tag);
+}
+sub tls_list(list<auto> l, string tag, int m = 1) {
+    for (int j = 0; j < m; ++j) {
+        l[1] = j;
+    }
+    l = ();
+    printf("after write %s\n", tag);
+}
+sub tls_two(hash<auto> a, hash<auto> b, string tag, int m = 1) {
+    b = {};
+    printf("after write %s b\n", tag);
+    a = {};
+    printf("after write %s a\n", tag);
+}
+sub tls_on_exit(hash<auto> h, string tag, int m = 1) {
+    on_exit printf("on_exit %s %y\n", tag, h.o);
+    h = {};
+    printf("after write %s\n", tag);
+}
+class TlsC {
+    m(hash<auto> h, string tag, int m = 1) {
+        h.k = m;
+        h = {};
+        printf("after write %s\n", tag);
+    }
+    static s(hash<auto> h, string tag, int m = 1) {
+        h = {};
+        printf("after write %s\n", tag);
+    }
+}
+sub tls_re_hash(hash<auto> h, string tag, int m = 1) {
+    h = {};
+    printf("after write %s\n", tag);
+}
+sub tls_re_list(list<auto> l, string tag, int m = 1) {
+    l = ();
+    printf("after write %s\n", tag);
+}
+sub tls_re_thash(hash<TlsHash> h, string tag, int m = 1) {
+    h = <TlsHash>{};
+    printf("after write %s\n", tag);
+}
+# the parameter that takes its argument over is the second one; the first is read only
+sub tls_re_second(hash<auto> a, hash<auto> b, string tag, int m = 1) {
+    b = {};
+    printf("after write %s %d\n", tag, a.size());
+}
+# reassigned in a loop: the first write releases the temporary
+sub tls_re_loop(hash<auto> h, string tag, int m = 3) {
+    for (int j = 0; j < m; ++j) {
+        h = {"k": j};
+        printf("after write %s %d\n", tag, j);
+    }
+}
+hash<TlsHash> sub tls_mk_thash(string n) {
+    return <TlsHash>{"o": new T(n)};
+}
+sub tls_frames() {
+    tls_re_hash({"o": new T("tls-rh")}, "tls-rh");
+    tls_re_list((new T("tls-rl"),), "tls-rl");
+    tls_re_thash(tls_mk_thash("tls-rth"), "tls-rth");
+    tls_re_second({"o": new T("tls-r2a")}, {"o": new T("tls-r2b")}, "tls-r2");
+    tls_re_loop({"o": new T("tls-rlp")}, "tls-rlp");
+    code rcr = \tls_re_hash();
+    rcr({"o": new T("tls-rcr")}, "tls-rcr");
+    hash<auto> rhv = {"o": new T("tls-rkept")};
+    tls_re_hash(rhv, "tls-rkept");
+    printf("tls rkept %s\n", rhv.o.n);
+    remove rhv;
+    printf("tls rkept removed\n");
+    tls_hash({"o": new T("tls-h"), "k": 0}, "tls-h");
+    tls_list((new T("tls-l"), 0), "tls-l");
+    tls_two({"o": new T("tls-2a")}, {"o": new T("tls-2b")}, "tls-2");
+    tls_on_exit({"o": new T("tls-oe")}, "tls-oe");
+    TlsC c();
+    c.m({"o": new T("tls-m"), "k": 0}, "tls-m");
+    TlsC::s({"o": new T("tls-s")}, "tls-s");
+    code cl = sub (hash<auto> h, string tag, int m = 1) { h = {}; printf("after write %s\n", tag); };
+    cl({"o": new T("tls-cl")}, "tls-cl");
+    code cr = \tls_hash();
+    cr({"o": new T("tls-cr"), "k": 0}, "tls-cr");
+    # the caller's variable keeps the value that the callee's parameter wrote over
+    hash<auto> hv = {"o": new T("tls-kept"), "k": 0};
+    tls_hash(hv, "tls-kept");
+    printf("tls kept %s\n", hv.o.n);
+    remove hv;
+    printf("tls kept removed\n");
+    list<auto> lv = (new T("tls-lkept"), 0);
+    tls_list(lv, "tls-lkept");
+    printf("tls lkept %s\n", lv[0].n);
+}
+
+for (int round = 0; round < 3; ++round) {
+    printf("round %d\n", round);
+    cls(new T("cls"));
+    obj(new T("obj"));
+    untyped(new T("auto"));
+    optional(new T("opt"));
+    hsh({"o": new T("hash")});
+    lst((new T("list"),));
+    typed_hash({"o": new T("thash")});
+    elem({"o": new T("eh")}, (new T("el"),));
+    printf("scalars ret %d\n", scalars(1, 1.5, True, "s", new T("scalars")));
+    printf("scalar_only %d\n", scalar_only(round, "ab"));
+    printf("read only ret %d\n", read_only(new T("ro"), round));
+    twice(new T("twice"));
+    loop(new T("loop"), 3);
+    cond(new T("cy"), True);
+    cond(new T("cn"), False);
+    foreach_param((new T("e1"), new T("e2")));
+    for (int i = 0; i < 2; ++i) {
+        cls(new T("in-loop" + i));
+    }
+    {
+        # an argument that the caller still holds is not destroyed by the reassignment
+        T held("held");
+        cls(held);
+        printf("held %s\n", held.n);
+    }
+    {
+        T r("ref");
+        ref(\r);
+        printf("after ref %s\n", r.n);
+        auto a = new T("refa");
+        ref_auto(\a);
+        printf("after ref auto %s\n", a.n);
+    }
+    {
+        T x = ret(new T("ret"));
+        printf("ret %s\n", x.n);
+    }
+    clear(new T("clear"));
+    try {
+        throws(new T("throws"));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s\n", ex.desc);
+    }
+    with_default(new T("dflt"));
+    with_varargs(new T("va"), 1, 2);
+    recurse(new T("rec2"), 2);
+    {
+        C c(new T("c"));
+        c.meth(new T("meth"));
+        c.self_call();
+        C::stat(new T("stat"));
+        F f();
+        f.meth(new T("final"));
+    }
+    caller();
+    # issue #5701's calls from top-level code and from a function
+    clr(new T("i5701"));
+    {
+        D d();
+        d.clr(new T("i5701-tm"));
+        D::sclr(new T("i5701-ts"));
+        code c = sub (*T p) { p = NOTHING; printf("after clear closure\n"); };
+        c(new T("i5701-tc"));
+        code r = \clr();
+        r(new T("i5701-tr"));
+        clr_two(new T("i5701-tp"), new T("i5701-tq"));
+        clr_va(new T("i5701-tv"), new T("i5701-tv1"), new T("i5701-tv2"));
+        d.two_read(new T("mra"), new T("mrb"));
+        D::stwo_read(new T("sra"), new T("srb"));
+    }
+    issue_calls();
+    {
+        int x;
+        clr_ref(new T("cref"), \x);
+        clr_on_exit(new T("coe"));
+    }
+    two_read(new T("tra"), new T("trb"));
+    va_read(new T("vra"), new T("vrx"), new T("vry"));
+    read_on_exit(new T("roe"));
+    printf("leaf %d\n", leaf_size(name_of(new T("leaf"))));
+    printf("leaf after\n");
+    inline_then_call();
+    ref_calls("");
+    {
+        K k("top");
+        code mr = \k.m();
+        mr(new T("mref-top"));
+        code sr = \K::s();
+        sr(new T("sref-top"));
+    }
+    cap(new T("cap"));
+    held(new T("held"));
+    byref(new T("byref"));
+    kept_local();
+    functional();
+    more_calls();
+    enum_calls();
+    lvalue_results();
+    dynamic_dispatch();
+    generic_refs();
+    more_shapes();
+    handler_writes();
+    seventeen_calls();
+    cross_program();
+    ownership_calls();
+    tls_frames();
+    # a closure and a call reference
+    code cl = sub (T k) { k = new T(k.n + "-cl"); printf("closure out %s\n", k.n); };
+    cl(new T("closure"));
+    code cr = \cls();
+    cr(new T("callref"));
+    printf("round end %d\n", round);
+}

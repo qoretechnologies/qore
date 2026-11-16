@@ -151,7 +151,7 @@ class ArithParseResultTypesBase inherits QUnit::Test {
 
     constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
         self.part = part;
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");

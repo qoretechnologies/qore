@@ -7,6 +7,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -14,10 +15,9 @@
 
 class AOTDebugTemporaryExceptionTest inherits QUnit::Test {
     private {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore_bin = TestInterpreter::qore_interpreter();
         # QORE_BINARY can be the CI selector script; sibling tools belong to the running executable.
-        string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
-            ?? dirname(QORE_ARGV[0]) + "/qcc";
+        string qcc_bin = TestInterpreter::qcc_compiler();
         string worker = get_script_dir() + "/aot-debug-temporary-exception-worker.q";
         string prefix;
         const Result = "caught assigned DTOR\ncaught ignored DTOR\ncaught indirect DTOR\nlocal DTOR\n"

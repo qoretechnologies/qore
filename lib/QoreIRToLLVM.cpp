@@ -750,14 +750,13 @@ static BatchCalleeReturnKind qore_ir_get_concrete_native_return_kind(
     if (!rejects_nothing || !QoreTypeInfo::hasType(type)) {
         return BatchCalleeReturnKind::Boxed;
     }
-    if (QoreTypeInfo::isType(type, NT_INT)
-            && !QoreTypeInfo::getReturnEnum(type)) {
+    if (QoreTypeInfo::isPlainType(type, NT_INT)) {
         return BatchCalleeReturnKind::NativeInt;
     }
-    if (QoreTypeInfo::isType(type, NT_FLOAT)) {
+    if (QoreTypeInfo::isPlainType(type, NT_FLOAT)) {
         return BatchCalleeReturnKind::NativeFloat;
     }
-    if (QoreTypeInfo::isType(type, NT_BOOLEAN)) {
+    if (QoreTypeInfo::isPlainType(type, NT_BOOLEAN)) {
         return BatchCalleeReturnKind::NativeBool;
     }
     return BatchCalleeReturnKind::Boxed;
@@ -927,14 +926,40 @@ static uint8_t qore_ir_date_kind_guard_flags(const QoreTypeInfo* param_ti) {
     return 0;
 }
 
+//! Returns true if the fast entry of \a variant cannot be called by a call that gives the callee a temporary argument
+//! (\a call_gives_args, QoreIRToLLVM::callGivesArgs()), which a parameter of the callee takes over
+//! (QoreIRFunction::param_take_over); the fast entry takes a reference of its own to each argument, so the call is made
+//! by the consume path, whose binding from the runtime stack takes the argument over (see design/param-take-over.md)
+static bool qore_ir_fast_entry_refuses_given_args(bool call_gives_args, const AbstractQoreFunctionVariant* variant) {
+    if (!call_gives_args) {
+        return false;
+    }
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const QoreIRFunction* callee_ir = uvb ? uvb->getCachedIR() : nullptr;
+    // a callee without IR here has no fast entry that this code could call
+    if (!callee_ir) {
+        return false;
+    }
+    if (callee_ir->param_take_over) {
+        return true;
+    }
+    // the IR of the AOT compiler does not set QoreIRFunction::param_take_over: it is computed once for the callee
+    int8_t state = callee_ir->take_over_params_state.load(std::memory_order_acquire);
+    if (!state) {
+        state = qore_ir_collect_take_over_params(*callee_ir, nullptr) ? 2 : 1;
+        callee_ir->take_over_params_state.store(state, std::memory_order_release);
+    }
+    return state == 2;
+}
+
 //! qore_ir_fast_entry_args_need_no_binding() without clearing @a date_kind_guards when it returns false
-static bool qore_ir_fast_entry_args_need_no_binding_impl(
+static bool qore_ir_fast_entry_args_need_no_binding_impl(bool call_gives_args,
         const AbstractQoreFunctionVariant* variant,
         const QoreValue& expr, int arg_start, int nargs,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation,
         const QoreTypeInfo* receiver_type_info, std::vector<uint8_t>* date_kind_guards) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
-    if (!uvb || arg_start < 0 || nargs < 0) {
+    if (!uvb || arg_start < 0 || nargs < 0 || qore_ir_fast_entry_refuses_given_args(call_gives_args, variant)) {
         return false;
     }
 
@@ -1022,7 +1047,7 @@ static bool qore_ir_fast_entry_args_need_no_binding_impl(
     needed and is empty otherwise; the caller must emit the checks (emitFastEntryDateKindGuards()) and call the fast
     entry only if they pass, else the generic call, which raises the parameter's error
 */
-static bool qore_ir_fast_entry_args_need_no_binding(
+static bool qore_ir_fast_entry_args_need_no_binding(bool call_gives_args,
         const AbstractQoreFunctionVariant* variant,
         const QoreValue& expr, int arg_start, int nargs,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation =
@@ -1031,7 +1056,7 @@ static bool qore_ir_fast_entry_args_need_no_binding(
     if (date_kind_guards) {
         date_kind_guards->clear();
     }
-    if (qore_ir_fast_entry_args_need_no_binding_impl(variant, expr, arg_start, nargs,
+    if (qore_ir_fast_entry_args_need_no_binding_impl(call_gives_args, variant, expr, arg_start, nargs,
             explicit_type_param_instantiation, receiver_type_info, date_kind_guards)) {
         return true;
     }
@@ -1042,10 +1067,11 @@ static bool qore_ir_fast_entry_args_need_no_binding(
     return false;
 }
 
-static bool qore_ir_fast_entry_args_allow_optional_scalar_guard(
+static bool qore_ir_fast_entry_args_allow_optional_scalar_guard(bool call_gives_args,
         const AbstractQoreFunctionVariant* variant,
         const QoreValue& expr, int arg_start, int nargs) {
-    if (q_env_is_set("QORE_DISABLE_AOT_OPTIONAL_SCALAR_FAST_ENTRY")) {
+    if (q_env_is_set("QORE_DISABLE_AOT_OPTIONAL_SCALAR_FAST_ENTRY")
+            || qore_ir_fast_entry_refuses_given_args(call_gives_args, variant)) {
         return false;
     }
     const auto* call = expr.hasNode()
@@ -1110,17 +1136,20 @@ static bool qore_ir_fast_entry_args_allow_optional_scalar_guard(
     return needs_guard;
 }
 
-static bool qore_ir_fast_entry_operands_need_no_binding(
+static bool qore_ir_fast_entry_operands_need_no_binding(bool call_gives_args,
         const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
         const QoreIRFunction* ir_func, const std::vector<QoreIRValue>& operands,
         int arg_start, int nargs, bool allow_relaxed_binding = false) {
+    if (qore_ir_fast_entry_refuses_given_args(call_gives_args, variant)) {
+        return false;
+    }
     int parsed_arg_start = arg_start;
     if (expr.hasNode()
             && dynamic_cast<const QoreDotEvalOperatorNode*>(
                 expr.getInternalNode())) {
         parsed_arg_start = 0;
     }
-    if (qore_ir_fast_entry_args_need_no_binding(
+    if (qore_ir_fast_entry_args_need_no_binding(call_gives_args,
             variant, expr, parsed_arg_start, nargs)) {
         return true;
     }
@@ -1218,12 +1247,12 @@ static bool qore_ir_fast_entry_operands_need_no_binding(
     return !relaxed_parsed_types || relaxed_binding;
 }
 
-static bool qore_ir_native_closure_call_eligible(
+static bool qore_ir_native_closure_call_eligible(bool call_gives_args,
         const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
         const QoreIRFunction* ir_func, const std::vector<QoreIRValue>& operands,
         int arg_start, int nargs,
         const std::vector<BatchCalleeParamKind>& param_kinds) {
-    if (!qore_ir_fast_entry_operands_need_no_binding(variant, expr, ir_func,
+    if (!qore_ir_fast_entry_operands_need_no_binding(call_gives_args, variant, expr, ir_func,
             operands, arg_start, nargs)) {
         return false;
     }
@@ -3442,6 +3471,21 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
             owned_ir_local_allocas.push_back(alloca);
         }
     };
+    // the parameters that take their arguments over, whose normal entry takes the value of the runtime variable that
+    // the call bound, so that the native cache holds the only reference to a temporary argument and a write releases
+    // it, as in the AST interpreter; the fast entry binds them as before (issue #5958, design/param-take-over.md).  A
+    // function that can deoptimize takes none over: the deoptimization runs it again from the runtime variables.  No
+    // lowering makes such a function today (a guard has a deopt target only in a try block, where the values that a
+    // guard checks are made by invokes, which end their block, so no guard is made for them): a debug build asserts
+    // it, so that a lowering that makes one is found; a release build calls the function without the take-over and
+    // reports nothing (printd() is compiled only in a debug build)
+    std::unordered_set<const void*> take_over_params;
+    if (current_ir_func && !fast_entry_args && !current_ir_func->param_local_vars.empty()
+            && qore_ir_collect_take_over_params(*current_ir_func, &take_over_params)
+            && qore_ir_function_may_deopt(*current_ir_func)) {
+        assert(false && "a function with a deopt-target guard has parameters that take their arguments over");
+        take_over_params.clear();
+    }
     for (LocalVar* var : function_locals) {
         auto key = reinterpret_cast<const void*>(var);
         if (local_allocas.count(key)) {
@@ -3577,9 +3621,21 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                 preinstantiated_entry_cleanup_allocas.push_back(boxed_cleanup);
                 preinstantiated_entry_cleanup_by_local[key] = boxed_cleanup;
             }
+            // a parameter that takes its argument over, with IR storage (see take_over_params above)
+            // (a parameter that can be given a reference, untyped or `auto`, is never IR-only when it is written:
+            // QoreIRFunction::computeIROnlyLocals() keeps it on the runtime stack, so no taken parameter has a
+            // reference flag)
+            const bool take_over = boxed_cleanup && take_over_params.count(key)
+                && current_ir_func->ir_only_locals.count(key);
+            assert(!take_over || !usesReferenceFlag(key));
+            const bool take_param = take_over && !usesReferenceFlag(key);
+            if (take_param) {
+                taken_param_cleanups.emplace_back(var, boxed_cleanup);
+            }
             if (aot_mode) {
                 // a reference held by a local of no reference type is cached as it is (see emitLocalCacheLoad())
-                llvm::Value* init_val = emitLocalCacheLoad(key, alloca_builder, module);
+                llvm::Value* init_val = take_param ? emitParamTake(key, alloca_builder, module)
+                    : emitLocalCacheLoad(key, alloca_builder, module);
                 if (is_native_int) {
                     auto to_int = module.getOrInsertFunction("qore_rt_to_int",
                             llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -3604,7 +3660,8 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                 }
             } else {
                 // see above
-                llvm::Value* init_val = emitLocalCacheLoad(key, alloca_builder, module);
+                llvm::Value* init_val = take_param ? emitParamTake(key, alloca_builder, module)
+                    : emitLocalCacheLoad(key, alloca_builder, module);
                 if (is_native_int) {
                     auto to_int = module.getOrInsertFunction("qore_rt_to_int",
                             llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -6161,11 +6218,6 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
     auto i64_nothing = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
-    auto clear_alloca = [&](llvm::Value* alloca) {
-        llvm::Value* val = builder->CreateLoad(i64_type, alloca);
-        builder->CreateStore(i64_nothing, alloca);
-        builder->CreateCall(helper, {val, xsink_arg});
-    };
 
     // The tracker for each local holds an explicit +1 ref to the value currently
     // cached in the alloca, paired one-to-one with the alloca's cached copy so
@@ -7672,6 +7724,23 @@ llvm::Value* QoreIRToLLVM::emitLocalCacheLoad(const void* key, llvm::IRBuilder<>
 }
 
 // documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::emitParamTake(const void* key, llvm::IRBuilder<>& b, llvm::Module& module) {
+    // a taken parameter has no reference flag (see preCreateLocalAllocas())
+    assert(!usesReferenceFlag(key));
+    if (aot_mode) {
+        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+        auto take_fn = module.getOrInsertFunction("qore_rt_take_param_aot",
+            llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+        return b.CreateCall(take_fn, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+    }
+    llvm::Value* var_as_ptr = b.CreateIntToPtr(llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(key)),
+        ptr_type);
+    auto take_fn = module.getOrInsertFunction("qore_rt_take_param",
+        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+    return b.CreateCall(take_fn, {var_as_ptr, xsink_arg});
+}
+
+// documented in QoreIRToLLVM.h
 llvm::Value* QoreIRToLLVM::emitValueIsReference(llvm::Value* value, QoreIRValue value_id, llvm::Module& module,
         llvm::Function* llvm_func) {
     llvm::Type* i8_type = llvm::Type::getInt8Ty(ctx);
@@ -8414,6 +8483,25 @@ bool QoreIRToLLVM::buildAotFastEntryArgs(const QoreIRInstruction* inst,
             llvm::cast<llvm::PointerType>(ptr_type));
     }
     return true;
+}
+
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::callGivesArgs(const QoreIRInstruction* inst) const {
+    int arg_start = qore_ir_call_arg_start(inst);
+    if (arg_start < 0) {
+        return false;
+    }
+    // the test of buildArgCleanupArray() for an argument whose cleanup slot is given to the callee
+    for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
+        uint32_t value_id = inst->operands[i].id;
+        auto uses_it = operand_remaining_uses.find(value_id);
+        if (invoke_alloca_map.count(value_id)
+                && (uses_it == operand_remaining_uses.end() || uses_it->second <= 1)
+                && !(value_id < reused_call_args.size() && reused_call_args[value_id])) {
+            return true;
+        }
+    }
+    return false;
 }
 
 llvm::Value* QoreIRToLLVM::buildArgCleanupArray(const QoreIRInstruction* inst,
@@ -13719,13 +13807,8 @@ static bool setExpressionFallbackError(std::string& error,
     return false;
 }
 
-static bool setExpressionFallbackError(std::string& error,
-        const QoreIRInstruction* inst, const std::string& reason) {
-    return setExpressionFallbackError(error, inst, reason.c_str());
-}
-
 void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_func,
-        const QoreIRInstruction* inst, bool synthetic) {
+        const QoreIRInstruction* inst, bool synthetic, const QoreIRInstruction* folded_host) {
     // AOT native code is program-independent: it cannot bake the program-specific
     // attached-debugger gate or the StatementBlock context, so the hook is JIT-only.
     // (AOT debug-step support would require resolving both from the runtime execution
@@ -13804,14 +13887,33 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
         }
         auto fn = module.getOrInsertFunction("qore_rt_dbg_step",
                 llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+        // the event of an operation's step event is made in the statement's location, not in the operation's,
+        // which the code of the operation stored before the hook (see emitRuntimeLocationUpdate())
+        if (folded_host && inst->loc) {
+            emitRuntimeLocationStore(inst->loc);
+        }
         builder->CreateCall(fn, {stmt_ptr, sb_ptr, xsink_arg});
     }
     // Honor a debugger-raised exception (the only flow-control signal honored
     // mid-native-frame); routes to the instruction's exception target or the
     // function-level error-return block.
     emitExceptionCheck(module, llvm_func, inst);
+    // the operation then runs in its own location if it starts on another line, as after a DebugStatement instruction
+    if (folded_host && folded_host->loc && inst->loc && folded_host->loc->start_line != inst->loc->start_line) {
+        emitRuntimeLocationStore(folded_host->loc);
+    }
     builder->CreateBr(cont);
     builder->SetInsertPoint(cont);
+}
+
+void QoreIRToLLVM::emitRuntimeLocationStore(const QoreProgramLocation* loc) {
+    if (!loc_cache_ptr || aot_mode) {
+        return;
+    }
+    llvm::Value* loc_val = builder->CreateIntToPtr(
+        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(loc)),
+        llvm::PointerType::getUnqual(ctx));
+    builder->CreateStore(loc_val, loc_cache_ptr);
 }
 
 void QoreIRToLLVM::annotateAotExecutableExprFallback(llvm::Value* call,
@@ -14359,10 +14461,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             const QoreTypeInfo* ti = lv->getTypeInfo();
             bool native_scalar = native_aot_body_locals
                 && !native_unsafe_locals.count(key)
-                && ((QoreTypeInfo::isType(ti, NT_INT)
-                        && !QoreTypeInfo::getReturnEnum(ti))
-                    || QoreTypeInfo::isType(ti, NT_FLOAT)
-                    || QoreTypeInfo::isType(ti, NT_BOOLEAN));
+                && (QoreTypeInfo::isPlainType(ti, NT_INT)
+                    || QoreTypeInfo::isPlainType(ti, NT_FLOAT)
+                    || QoreTypeInfo::isPlainType(ti, NT_BOOLEAN));
             bool owned_string = string_aot_body_locals
                 && !native_unsafe_locals.count(key)
                 && ti == stringTypeInfo;
@@ -14428,17 +14529,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (QoreTypeInfo::isReference(ti) || readsThroughReference(lv)) {
                 continue;
             }
-            // Enum types report base type NT_INT, but an enum VALUE is a tagged
-            // QoreValue (TAG_ENUM carrying the QoreEnumMember*), not a bare int.
-            // Unboxing an enum local to a native int strips the enum tag, so a
+            // Enum types report their base type (NT_INT or NT_FLOAT), but an enum VALUE is a tagged
+            // QoreValue (TAG_ENUM carrying the QoreEnumMember*), not a bare int or float.
+            // Unboxing an enum local to a native int or float strips the enum tag, so a
             // later assignment to an enum-typed lvalue (which runtime-checks for a
             // proper enum value) fails with RUNTIME-TYPE-ERROR.  Keep enum locals
-            // boxed so they preserve enum identity (matches the IR interpreter).
-            if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+            // boxed so they preserve enum identity (matches the IR interpreter; qore#6236).
+            if (QoreTypeInfo::isPlainType(ti, NT_INT)) {
                 native_int_locals.insert(key);
-            } else if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+            } else if (QoreTypeInfo::isPlainType(ti, NT_FLOAT)) {
                 native_float_locals.insert(key);
-            } else if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+            } else if (QoreTypeInfo::isPlainType(ti, NT_BOOLEAN)) {
                 native_bool_locals.insert(key);
             }
         }
@@ -14648,6 +14749,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     preinstantiated_entry_loads.clear();
     preinstantiated_entry_cleanup_allocas.clear();
     preinstantiated_entry_cleanup_by_local.clear();
+    taken_param_cleanups.clear();
     fast_entry_param_allocas.clear();
     fast_entry_param_allocas_by_local.clear();
     owned_ir_local_allocas.clear();
@@ -15595,9 +15697,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             const QoreTypeInfo* value_type =
                 qore_get_value_type(local->getTypeInfo());
             bool stable_scalar = !local->isTopLevel() && value_type
-                && ((QoreTypeInfo::isType(value_type, NT_INT)
-                        && !QoreTypeInfo::getReturnEnum(value_type))
-                    || QoreTypeInfo::isType(value_type, NT_FLOAT));
+                && (QoreTypeInfo::isPlainType(value_type, NT_INT)
+                    || QoreTypeInfo::isPlainType(value_type, NT_FLOAT));
             size_t stable_load_count = 0;
             for (const QoreIRLocalInstruction* load : loads) {
                 if (stable_load_count++ && !(stable_load_count % 100)
@@ -17098,6 +17199,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     if (jit_deopt_block) {
         builder->SetInsertPoint(jit_deopt_block);
         emitIteratorCleanup(module);
+        // the function runs again with the parameters' runtime variables: a function that can deoptimize takes no
+        // parameter from its variable (see take_over_params in preCreateLocalAllocas(), issue #5958)
+        assert(taken_param_cleanups.empty());
         emitPreinstantiatedCleanup(module);
         emitInvokeCleanup(module);
         // Discard (without firing) any on_block_exit handlers this native frame
@@ -17330,6 +17434,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Function* llvm_func,
         llvm::Module& module, std::string& error) {
     printd(3, "LLVM-LOWER: opcode=%d result=%%%d\n", (int)inst->opcode, inst->result.id);
+    // whether the call gives the callee a temporary argument, for the choice of its fast entry (issue #5958)
+    const bool call_gives_args = callGivesArgs(inst);
     auto emit_string_case_comparison = [&]() -> llvm::Value* {
         uint8_t transform_operand =
             inst->aot_string_case_comparison_operand;
@@ -20957,6 +21063,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::AddAssignLocalInt: {
             const auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+            // the step event of the statement, which the operation keeps (qore_ir_fold_debug_statements()), as the
+            // DebugStatement instruction that it was
+            if (const QoreIRDebugStatementInstruction* folded_step = qore_ir_folded_debug_step(inst)) {
+                emitDebugStepHook(module, llvm_func, folded_step, /*synthetic=*/false, inst);
+            }
             auto target_key = reinterpret_cast<const void*>(fused->target);
             auto source_key = reinterpret_cast<const void*>(fused->source);
             auto target_it = local_allocas.find(target_key);
@@ -20983,6 +21094,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::IncrementLocalInt: {
             const auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
+            // the step event of the statement, which the operation keeps (qore_ir_fold_debug_statements()), as the
+            // DebugStatement instruction that it was
+            if (const QoreIRDebugStatementInstruction* folded_step = qore_ir_folded_debug_step(inst)) {
+                emitDebugStepHook(module, llvm_func, folded_step, /*synthetic=*/false, inst);
+            }
             auto key = reinterpret_cast<const void*>(fused->local);
             if (fused->local && fused->local->closureUse()) {
                 llvm::Value* result;
@@ -21809,7 +21925,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     generic_specialization_matches)
                                 : isFastFunctionCallEligible(variant,
                                     generic_specialization_matches))
-                            && qore_ir_fast_entry_args_need_no_binding(
+                            && qore_ir_fast_entry_args_need_no_binding(call_gives_args,
                                 variant, inv->expr, arg_start, nargs,
                                 generic_specialization_matches
                                     ? invoke_concrete_inst
@@ -21918,7 +22034,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (invoke_batch_callee) {
                         const auto& callee_info = *invoke_batch_callee;
                         if (callee_info.approach_b_eligible
-                                && qore_ir_fast_entry_args_need_no_binding(
+                                && qore_ir_fast_entry_args_need_no_binding(call_gives_args,
                                     call->getVariant(), inv->expr, arg_start, nargs)
                                 && !fastEntryNativeArgsNeedNothingGuard(
                                     callee_info, raw_arg_ids)) {
@@ -22078,7 +22194,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 && isFastFunctionCallEligible(
                                     aot_call->getVariant(),
                                     generic_specialization_matches)
-                                && qore_ir_fast_entry_args_need_no_binding(
+                                && qore_ir_fast_entry_args_need_no_binding(call_gives_args,
                                     aot_call->getVariant(), inv->expr, arg_start,
                                     nargs, generic_specialization_matches
                                         ? invoke_concrete_inst
@@ -22160,7 +22276,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         invoke_return_kind = aot_approach_b_callee->return_kind;
                     } else if (is_self_rec
                             && isFastFunctionCallEligible(aot_call->getVariant())
-                            && qore_ir_fast_entry_args_need_no_binding(
+                            && qore_ir_fast_entry_args_need_no_binding(call_gives_args,
                                 aot_call->getVariant(), inv->expr, arg_start, nargs)
                             && !selfRecursiveFastEntryArgsNeedNothingGuard(
                                 raw_arg_ids)) {
@@ -22328,7 +22444,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 && isFastMethodCallEligible(
                                     static_call->getVariant(),
                                     generic_specialization_matches)
-                                && qore_ir_fast_entry_args_need_no_binding(
+                                && qore_ir_fast_entry_args_need_no_binding(call_gives_args,
                                     static_call->getVariant(), inv->expr, 0,
                                     nargs, concrete_inst,
                                     invoke_receiver_type_info, &call_date_kind_guards)) {
@@ -22503,11 +22619,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 } else {
                     llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
-                            llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {expr_const, args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    if (has_arg_cleanups) {
+                        // the call releases the arguments given to it in the callee's frame, whose parameters take
+                        // them over (issues #5882, #5958)
+                        auto helper = module.getOrInsertFunction("qore_rt_call_with_args_consume_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {expr_const, args_array, arg_cleanups,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    } else {
+                        auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {expr_const, args_array,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    }
                 }
 
                 // Calls with reference-capable arguments can mutate locals that
@@ -24141,11 +24267,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 } else {
                     llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
-                            llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, i32_type, ptr_type}, false));
-                    call_result = builder->CreateCall(helper, {expr_const, args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    if (has_arg_cleanups) {
+                        // the call releases the arguments given to it in the callee's frame, whose parameters take
+                        // them over (issues #5882, #5958)
+                        auto helper = module.getOrInsertFunction("qore_rt_call_with_args_consume_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        call_result = builder->CreateCall(helper, {expr_const, args_array, arg_cleanups,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    } else {
+                        auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, i32_type, ptr_type}, false));
+                        call_result = builder->CreateCall(helper, {expr_const, args_array,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    }
                 }
             } else {
                 if (aot_mode) {
@@ -24234,7 +24370,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && function->numVariants() == 1
                     ? function->first() : nullptr;
                 if (candidate
-                        && qore_ir_fast_entry_args_allow_optional_scalar_guard(
+                        && qore_ir_fast_entry_args_allow_optional_scalar_guard(call_gives_args,
                             candidate, direct_inst->expr, arg_start, nargs)) {
                     aot_direct_variant = candidate;
                 }
@@ -24259,17 +24395,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastFunctionCallEligible(aot_direct_variant,
                             generic_specialization_matches)
-                        && (qore_ir_fast_entry_args_need_no_binding(
+                        && (qore_ir_fast_entry_args_need_no_binding(call_gives_args,
                                 aot_direct_variant, direct_inst->expr, arg_start,
                                 nargs, concrete_inst, nullptr, date_kind_guards_out)
                             || (fused_aggregate_projection
-                                && qore_ir_fast_entry_operands_need_no_binding(
+                                && qore_ir_fast_entry_operands_need_no_binding(call_gives_args,
                                     aot_direct_variant, direct_inst->expr,
                                     current_ir_func, direct_inst->operands,
                                     arg_start, nargs, true))
                             || (!explicit_inst
                                 && !generic_specialization_matches
-                                && qore_ir_fast_entry_args_allow_optional_scalar_guard(
+                                && qore_ir_fast_entry_args_allow_optional_scalar_guard(call_gives_args,
                                     aot_direct_variant, direct_inst->expr,
                                     arg_start, nargs)))) {
                     if (it->second.cross_module) {
@@ -24295,7 +24431,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ? getBatchCallee(direct_inst->variant) : nullptr;
             bool is_approach_b = direct_batch_callee
                     && direct_batch_callee->approach_b_eligible
-                    && qore_ir_fast_entry_args_need_no_binding(
+                    && qore_ir_fast_entry_args_need_no_binding(call_gives_args,
                         direct_inst->variant, direct_inst->expr, arg_start, nargs, nullptr, nullptr,
                         date_kind_guards_out);
             // JIT: a call that needs date kind checks calls the fast entry if they pass, else the batch entry
@@ -25629,7 +25765,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && isSelfRecursiveVariant(direct_inst->variant)
                     && isFastFunctionCallEligible(direct_inst->variant)
                     && !aot_self_recursive_fast_entry.empty()
-                    && qore_ir_fast_entry_args_need_no_binding(
+                    && qore_ir_fast_entry_args_need_no_binding(call_gives_args,
                         direct_inst->variant, direct_inst->expr, arg_start, nargs)
                     && !selfRecursiveFastEntryArgsNeedNothingGuard(
                         raw_arg_ids)) {
@@ -26005,7 +26141,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(direct_inst->variant,
                             generic_specialization_matches)
-                        && qore_ir_fast_entry_operands_need_no_binding(
+                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args,
                             direct_inst->variant, direct_inst->expr, current_ir_func,
                             inst->operands, 0, nargs)) {
                     aot_self_batch_fn = module.getFunction(it->second.fast_name);
@@ -26266,7 +26402,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(invoke_inst->variant,
                             generic_specialization_matches)
-                        && qore_ir_fast_entry_operands_need_no_binding(
+                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args,
                             invoke_inst->variant, invoke_inst->expr, current_ir_func,
                             inst->operands, 0, nargs)) {
                     aot_self_batch_fn = module.getFunction(it->second.fast_name);
@@ -26550,7 +26686,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(direct_inst->variant,
                             generic_specialization_matches)
-                        && qore_ir_fast_entry_args_need_no_binding(
+                        && qore_ir_fast_entry_args_need_no_binding(call_gives_args,
                             direct_inst->variant, direct_inst->expr, 0, nargs,
                             concrete_inst, receiver_type_info,
                             fused_string_consumer ? nullptr : &call_date_kind_guards)) {
@@ -26982,7 +27118,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && (object_target_non_overridable
                             || !q_env_is_set(
                                 "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
-                        && qore_ir_fast_entry_operands_need_no_binding(
+                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args,
                             direct_inst->variant, direct_inst->expr,
                             current_ir_func, inst->operands, 1, nargs)) {
                     aot_object_set_get = &it->second;
@@ -27015,7 +27151,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && (object_target_non_overridable
                             || !q_env_is_set(
                                 "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
-                        && qore_ir_fast_entry_operands_need_no_binding(
+                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args,
                             direct_inst->variant, direct_inst->expr,
                             current_ir_func, inst->operands, 1, nargs)) {
                     aot_object_compound_get = &it->second;
@@ -27047,7 +27183,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 && it->second.float_expression))
                         && isFastMethodCallEligible(direct_inst->variant,
                             generic_specialization_matches)
-                        && qore_ir_fast_entry_operands_need_no_binding(
+                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args,
                             direct_inst->variant, direct_inst->expr,
                             current_ir_func, inst->operands, 1, nargs)
                         && !q_env_is_set(
@@ -27071,7 +27207,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(direct_inst->variant,
                             generic_specialization_matches)
-                        && qore_ir_fast_entry_operands_need_no_binding(
+                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args,
                             direct_inst->variant, direct_inst->expr, current_ir_func,
                             inst->operands, 1, nargs)) {
                     aot_object_batch_fn = module.getFunction(it->second.fast_name);
@@ -27927,7 +28063,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && (object_target_non_overridable
                             || !q_env_is_set(
                                 "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
-                        && qore_ir_fast_entry_operands_need_no_binding(
+                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args,
                             invoke_inst->variant, invoke_inst->expr,
                             current_ir_func, inst->operands, 1, nargs)) {
                     aot_object_set_get = &it->second;
@@ -27960,7 +28096,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && (object_target_non_overridable
                             || !q_env_is_set(
                                 "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
-                        && qore_ir_fast_entry_operands_need_no_binding(
+                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args,
                             invoke_inst->variant, invoke_inst->expr,
                             current_ir_func, inst->operands, 1, nargs)) {
                     aot_object_compound_get = &it->second;
@@ -27989,7 +28125,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(invoke_inst->variant,
                             generic_specialization_matches)
-                        && qore_ir_fast_entry_operands_need_no_binding(
+                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args,
                             invoke_inst->variant, invoke_inst->expr, current_ir_func,
                             inst->operands, 1, nargs)) {
                     aot_object_batch_fn = module.getFunction(it->second.fast_name);
@@ -29662,7 +29798,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     !q_env_is_set("QORE_DISABLE_IR_NATIVE_IN_PLACE_LIST_PUSH");
                 if (native_specialization && assigned_native
                         && facts->representation == QoreIRValueRepresentation::NativeFloat
-                        && QoreTypeInfo::parseReturns(inst->element_type, NT_FLOAT) == QTI_IDENT
+                        && QoreTypeInfo::parseReturnsPlain(inst->element_type, NT_FLOAT)
                         && val->getType() == double_type) {
                     auto helper = module.getOrInsertFunction(
                         "qore_rt_list_push_float_in_place_unchecked",
@@ -29675,7 +29811,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 if (native_specialization && assigned_native
                         && facts->representation == QoreIRValueRepresentation::NativeBool
-                        && QoreTypeInfo::parseReturns(inst->element_type, NT_BOOLEAN) == QTI_IDENT
+                        && QoreTypeInfo::parseReturnsPlain(inst->element_type, NT_BOOLEAN)
                         && val->getType() == i1_type) {
                     auto helper = module.getOrInsertFunction(
                         "qore_rt_list_push_bool_in_place_unchecked",
@@ -30023,8 +30159,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && facts->never_nothing;
             bool typed_specialization = qore_ir_use_typed_map_fusion(aot_mode,
                 "QORE_DISABLE_AOT_TYPED_LIST_SET_SPECIALIZATION");
-            bool exact_int_element = QoreTypeInfo::parseReturns(inst->element_type, NT_INT) == QTI_IDENT;
-            bool exact_float_element = QoreTypeInfo::parseReturns(inst->element_type, NT_FLOAT) == QTI_IDENT;
+            bool exact_int_element = QoreTypeInfo::parseReturnsPlain(inst->element_type, NT_INT);
+            bool exact_float_element = QoreTypeInfo::parseReturnsPlain(inst->element_type, NT_FLOAT);
             bool exact_bool_element = QoreTypeInfo::parseReturns(
                 inst->element_type, NT_BOOLEAN) == QTI_IDENT;
             auto get_output_data = [&]() -> llvm::Value* {
@@ -30172,9 +30308,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             bool exact_value_type = facts && facts->type_info
                 && ((exact_int_element
-                        && QoreTypeInfo::parseReturns(facts->type_info, NT_INT) == QTI_IDENT)
+                        && QoreTypeInfo::parseReturnsPlain(facts->type_info, NT_INT))
                     || (exact_float_element
-                        && QoreTypeInfo::parseReturns(facts->type_info, NT_FLOAT) == QTI_IDENT));
+                        && QoreTypeInfo::parseReturnsPlain(facts->type_info, NT_FLOAT)));
             if (inst->typed_value_prevalidated && typed_specialization && exact_value_type
                     && nanboxed_values.count(inst->operands[2].id)
                     && val->getType() == i64_type) {
@@ -30535,7 +30671,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return false;
                 }
                 bool native_call_eligible = callee != batch_callees->end()
-                    && qore_ir_native_closure_call_eligible(variant,
+                    && qore_ir_native_closure_call_eligible(call_gives_args, variant,
                         call->expr, current_ir_func, inst->operands, 1,
                         native_nargs, callee->second.param_kinds);
                 bool guarded_native_args = false;
@@ -30921,7 +31057,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 int native_nargs = static_cast<int>(inst->operands.size()) - 1;
                 if (callee != batch_callees->end()
                         && callee->second.approach_b_eligible
-                        && qore_ir_native_closure_call_eligible(immediate_variant,
+                        && qore_ir_native_closure_call_eligible(call_gives_args, immediate_variant,
                             closure_call->expr, current_ir_func, inst->operands,
                             1, native_nargs, callee->second.param_kinds)) {
                     llvm::Function* fast_fn = module.getFunction(callee->second.fast_name);
@@ -31136,7 +31272,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 if (closure && !closure->isInMethod()
                         && captures_supported && variant
-                        && qore_ir_native_closure_call_eligible(variant,
+                        && qore_ir_native_closure_call_eligible(call_gives_args, variant,
                             closure_call->expr, current_ir_func, inst->operands,
                             1, native_nargs, closure_param_kinds)) {
                     QoreValue expr_val = create->expr;
@@ -31435,7 +31571,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 && current_ir_func && closure && !closure->isInMethod()
                                 && (!captures || captures->empty()) && variant
                                 && !q_env_is_set("QORE_DISABLE_AOT_DIRECT_CLOSURE_FAST_ENTRY")
-                                && qore_ir_fast_entry_operands_need_no_binding(variant,
+                                && qore_ir_fast_entry_operands_need_no_binding(call_gives_args, variant,
                                     closure_call->expr, current_ir_func, inst->operands,
                                     1, nargs)) {
                             std::string dispatch_name = current_ir_func->name
@@ -38683,6 +38819,20 @@ llvm::Value* QoreIRToLLVM::emitAnyArithFastPath(llvm::Instruction::BinaryOps int
     return phi;
 }
 
+bool QoreIRToLLVM::comparisonOperandsMayBeBuffers(const QoreIRInstruction* inst) const {
+    if (!inst) {
+        return true;
+    }
+    for (const QoreIRValue& operand : inst->operands) {
+        const QoreIRValueFacts* facts = current_ir_func ? current_ir_func->getValueFacts(operand) : nullptr;
+        if (!facts || !facts->type_info
+                || QoreTypeInfo::parseReturns(facts->type_info, NT_BUFFER) != QTI_NOT_EQUAL) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Phase 5b: Emit inline LLVM fast-path for .any comparisons.
 // Checks int-vs-int and float-vs-float for native comparison, then boxes result as bool.
 // Falls back to qore_rt_comparison_op for mixed types.
@@ -38744,8 +38894,35 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
     llvm::Value* slow_result = emitMaybeInvoke(helper, helper_throwing,
             {opcode_val, lhs, rhs, xsink_arg}, module, llvm_func, inst);
     if (native_result) {
-        slow_result = builder->CreateICmpEQ(slow_result,
-                llvm::ConstantInt::get(i64_type, VAL_TRUE));
+        if (comparisonOperandsMayBeBuffers(inst)) {
+            // the comparison of a buffer gives the buffer of the elementwise comparison, which is converted as a
+            // boolean consumer converts it, and released (qore#6160); other operands give a boolean
+            llvm::Value* is_true = builder->CreateICmpEQ(slow_result, llvm::ConstantInt::get(i64_type, VAL_TRUE));
+            llvm::Value* is_bool = builder->CreateOr(is_true,
+                builder->CreateICmpEQ(slow_result, llvm::ConstantInt::get(i64_type, VAL_FALSE)));
+            llvm::BasicBlock* bool_bb = builder->GetInsertBlock();
+            llvm::BasicBlock* value_bb = llvm::BasicBlock::Create(ctx, "cmp_slow_value", llvm_func);
+            llvm::BasicBlock* done_bb = llvm::BasicBlock::Create(ctx, "cmp_slow_done", llvm_func);
+            builder->CreateCondBr(is_bool, done_bb, value_bb);
+            builder->SetInsertPoint(value_bb);
+            auto to_bool = module.getOrInsertFunction("qore_rt_to_bool",
+                llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* value_bool = builder->CreateICmpNE(builder->CreateCall(to_bool, {slow_result}),
+                llvm::ConstantInt::get(i64_type, 0));
+            auto decref = module.getOrInsertFunction("qore_rt_decref",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            builder->CreateCall(decref, {slow_result, xsink_arg});
+            builder->CreateBr(done_bb);
+            llvm::BasicBlock* value_end = builder->GetInsertBlock();
+            builder->SetInsertPoint(done_bb);
+            llvm::PHINode* bool_result = builder->CreatePHI(i1_type, 2);
+            bool_result->addIncoming(is_true, bool_bb);
+            bool_result->addIncoming(value_bool, value_end);
+            slow_result = bool_result;
+        } else {
+            slow_result = builder->CreateICmpEQ(slow_result,
+                    llvm::ConstantInt::get(i64_type, VAL_TRUE));
+        }
     }
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();
@@ -39458,7 +39635,6 @@ bool QoreIRToLLVM::emitFoldLoop(const QoreIRInstruction* inst, llvm::Module& mod
     std::string loop_name = std::string(label) + "_loop";
     std::string exit_name = std::string(label) + "_exit";
 
-    llvm::BasicBlock* preheader = builder->GetInsertBlock();
     llvm::BasicBlock* empty_bb = llvm::BasicBlock::Create(ctx, empty_name, llvm_func);
     llvm::BasicBlock* init_bb = llvm::BasicBlock::Create(ctx, init_name, llvm_func);
     llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, loop_name, llvm_func);
@@ -39610,7 +39786,6 @@ bool QoreIRToLLVM::emitFoldReverseLoop(const QoreIRInstruction* inst, llvm::Modu
     std::string loop_name = std::string(label) + "_loop";
     std::string exit_name = std::string(label) + "_exit";
 
-    llvm::BasicBlock* preheader = builder->GetInsertBlock();
     llvm::BasicBlock* empty_bb = llvm::BasicBlock::Create(ctx, empty_name, llvm_func);
     llvm::BasicBlock* init_bb = llvm::BasicBlock::Create(ctx, init_name, llvm_func);
     llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, loop_name, llvm_func);

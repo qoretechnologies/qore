@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - checks run in child processes with explicit execution modes
+# test-platform: macos - JIT and AOT exception unwinding and handler ownership
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%exec-class ParameterHandlerOwnershipTest
+
+#! Replacing a parameter releases its old value at the AST assignment boundary (#6004, #5701)
+class ParameterHandlerOwnershipTest inherits QUnit::Test {
+    public {
+        const Expected = "catch-Object: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-AnyObject: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-TypedHash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-Hash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-AnyHash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-TypedList: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-List: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-AnyList: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-Object: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-AnyObject: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-TypedHash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-Hash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-AnyHash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-TypedList: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-List: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-AnyList: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-Object: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-AnyObject: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-TypedHash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-Hash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-AnyHash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-TypedList: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-List: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-AnyList: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+plain-parameter: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+handler-local: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-method: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-static-method: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-closure: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-call-reference: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-no-try-function: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-no-try-method: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-no-try-closure: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-method: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-static-method: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-closure: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-call-reference: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-no-try-function: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-no-try-method: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-no-try-closure: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-Object: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-AnyObject: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-TypedHash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-Hash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-AnyHash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-TypedList: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-List: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-AnyList: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-Object: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-AnyObject: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-TypedHash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-Hash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-AnyHash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-TypedList: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-List: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-AnyList: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-Object: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-AnyObject: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-TypedHash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-Hash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-AnyHash: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-TypedList: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-List: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+nested-AnyList: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+plain-parameter: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+handler-local: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-method: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-static-method: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-closure: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-call-reference: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-no-try-function: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-no-try-method: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+catch-no-try-closure: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-method: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-static-method: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-closure: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-call-reference: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-no-try-function: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-no-try-method: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+on-error-no-try-closure: [\"~a\", \"assigned\", \"exit\", \"~b\", \"caught:E\"]
+";
+    }
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string prefix;
+        string worker;
+    }
+    constructor() : QUnit::Test("ParameterHandlerOwnershipTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? libdir + "/qcc";
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        worker = get_script_dir() + "/ParameterHandlerOwnership.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": parameter handler ownership", \modeTest(), (mode,));
+        }
+        addTestCase("tiered IR: parameter handler ownership", \irTierTest());
+        foreach int opt in (0, 3) {
+            addTestCase(sprintf("qcc -O%d: parameter handler ownership", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string checked(string command, bool ir_tier = False) {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(command, False,
+            ir_tier ? ExecModeHarness::IRTierEnv : NOTHING);
+        assertEq(0, result.rc, sprintf("child exited normally: %s\n%s", command, result.out));
+        if (ir_tier) { ExecModeHarness::check_ir_tier(result); }
+        else if (result.mode) { ExecModeHarness::check_native(result); }
+        return result.out;
+    }
+    modeTest(string mode) {
+        assertEq(Expected, checked(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode="
+            + mode + " " + quote(worker)), mode);
+    }
+    irTierTest() {
+        assertEq(Expected, checked(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=tiered "
+            + quote(worker), True), "tiered IR");
+    }
+    aotTest(int opt) {
+        TmpDir tmp("qore-parameter-handler-ownership-");
+        string exe = tmp.path + DirSep + "parameter-handler";
+        checked(prefix + quote(qcc_bin) + sprintf(" -O%d -o ", opt) + quote(exe) + " " + quote(worker));
+        assertTrue(is_file(exe), "qcc produced the executable");
+        assertEq(Expected, checked(prefix + quote(exe) + " -b --enable-debug"), "qcc");
+    }
+}

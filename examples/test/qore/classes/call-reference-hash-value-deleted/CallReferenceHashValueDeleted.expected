@@ -1,0 +1,45 @@
+round 0
+method reference, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+  side effect: valid
+method reference, object valid: 1
+reference to another method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::n() on an object that has already been deleted
+  side effect: closure
+closure: 2
+call in a method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+call in a function, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+pseudo-method name in a function, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+pseudo-method name through a parameter, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+pseudo-method name in a method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+pseudo-method name in top-level code, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+  side effect: pseudo-method
+pseudo-method of a hash without the member: False
+round 1
+method reference, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+  side effect: valid
+method reference, object valid: 1
+reference to another method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::n() on an object that has already been deleted
+  side effect: closure
+closure: 2
+call in a method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+call in a function, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+pseudo-method name in a function, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+pseudo-method name through a parameter, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+pseudo-method name in a method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+pseudo-method name in top-level code, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+  side effect: pseudo-method
+pseudo-method of a hash without the member: False
+round 2
+method reference, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+  side effect: valid
+method reference, object valid: 1
+reference to another method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::n() on an object that has already been deleted
+  side effect: closure
+closure: 2
+call in a method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+call in a function, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+pseudo-method name in a function, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+pseudo-method name through a parameter, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+pseudo-method name in a method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+pseudo-method name in top-level code, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+  side effect: pseudo-method
+pseudo-method of a hash without the member: False

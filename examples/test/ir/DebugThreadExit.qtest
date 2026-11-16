@@ -8,14 +8,15 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 %exec-class DebugThreadExitTest
 
 class DebugThreadExitTest inherits QUnit::Test {
     private {
-        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
-        string qcc = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE ?? dirname(QORE_ARGV[0]) + "/qcc";
+        string qore = TestInterpreter::qore_interpreter();
+        string qcc = TestInterpreter::qcc_compiler();
         string worker = get_script_dir() + "/debug-thread-exit-worker.q";
         string prefix;
     }

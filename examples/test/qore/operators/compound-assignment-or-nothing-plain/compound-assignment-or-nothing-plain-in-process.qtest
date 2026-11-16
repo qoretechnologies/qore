@@ -10,7 +10,7 @@
 %exec-class CompoundAssignmentOrNothingPlainInProcessTest
 
 #! Tests that soft-typed lvalues hold their declared type after a compound assignment in the test's execution mode
-/** The child processes of compound-assignment-or-nothing-plain.qtest check every execution mode against the AST
+/** The child processes of CompoundAssignmentOrNothingPlain-<n>.qtest check every execution mode against the AST
     interpreter; these checks run in the process of the test, so each CI job checks them in its own execution mode.
 */
 class CompoundAssignmentOrNothingPlainInProcessTest inherits QUnit::Test {
