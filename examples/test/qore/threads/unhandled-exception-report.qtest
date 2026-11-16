@@ -9,6 +9,7 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %exec-class UnhandledExceptionReportTest
 
 #! The report of an unhandled exception is written whole
@@ -39,7 +40,7 @@ class UnhandledExceptionReportTest inherits QUnit::Test {
     }
 
     private {
-        string qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string worker = get_script_dir() + "/unhandled-exception-report/worker.q";
     }
 
