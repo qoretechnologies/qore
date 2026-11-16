@@ -750,6 +750,11 @@
     ordinary character; set the \c quote_escape option to a backslash to read or write files in the earlier format;
     see @ref csvutil_rfc4180.
 
+    @par FixedLengthUtil Validates Numeric Field Values
+    A @ref fixedlengthutilintro "FixedLengthUtil" \c "int", \c "float" or \c "number" field value that is not a number
+    of its type (ex: \c "12abc", read as \c 12 before) raises an exception when read or written; see
+    @ref fixedlengthnumericvalues (<a href="https://github.com/qoretechnologies/qore/issues/300">issue 300</a>).
+
     @par Destructors on a Cancelled or Interrupted Thread
     The destructor of a trusted class runs with cancellation and @ref sandbox_interrupt "program interrupts" deferred,
     so it completes, the destructor of a sandboxed class is skipped while a cancellation, an interrupt or a sandbox
