@@ -5185,6 +5185,54 @@ QoreValue qore_class_private::evalMemberGate(QoreObject* self, const char* nme, 
     return self->evalMethod(*memberGate, *args, xsink);
 }
 
+//! calls the call reference or closure that member \a nme holds, with an argument list that holds the last references
+//! of the arguments that the caller gave to the call (see qore_call_ref_invoke_given_args())
+/** As qore_eval_missing_method() calls the value of a member that a method call names when the class has no such
+    method, but the parameters of the code called take the arguments over, so that the last reference of a temporary
+    argument is released in the callee's frame, as when the AST interpreter's call evaluates them (issue #6063).
+
+    @return true if the member holds a call reference or closure, which was called (\a rv is its value), false if not
+*/
+static QORE_INTERN_NOINLINE bool qore_eval_member_call_ref_given_args(const qore_class_private& qcp, QoreObject* self,
+        const char* nme, QoreListNode* args, const qore_class_private* class_ctx, QoreValue& rv,
+        ExceptionSink* xsink) {
+    if (!args) {
+        return false;
+    }
+    const QoreMemberInfo* mi = qcp.runtimeGetMemberInfo(nme, class_ctx);
+    if (!mi) {
+        return false;
+    }
+    const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
+    qore_object_private* obj_priv = qore_object_private::get(*self);
+    QoreValue mv{};
+    bool exists = false;
+    {
+        QoreAutoVarRWReadLocker al(obj_priv->rml);
+        if (obj_priv->status == OS_DELETED) {
+            return false;
+        }
+        const QoreHashNode* odata = member_class_ctx ? obj_priv->getInternalData(member_class_ctx)
+            : obj_priv->data;
+        if (odata) {
+            mv = qore_hash_private::get(*odata)->getReferencedKeyValueIntern(nme, exists);
+        }
+    }
+    if (!exists) {
+        return false;
+    }
+    ValueHolder mvh(mv, xsink);
+    if (mv.getType() != NT_FUNCREF && mv.getType() != NT_RUNTIME_CLOSURE) {
+        return false;
+    }
+    const ResolvedCallReferenceNode* ref = dynamic_cast<const ResolvedCallReferenceNode*>(mv.getInternalNode());
+    if (!ref) {
+        return false;
+    }
+    rv = qore_call_ref_invoke_given_args(ref, args, xsink);
+    return true;
+}
+
 QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* nme, QoreListNode* args,
         const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink, QoreProgram* pgm_ctx) const {
     assert(self);
@@ -5197,9 +5245,37 @@ QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* 
         if (w) {
             return qore_method_private::evalGivenArgs(*w, xsink, rc, self, args, class_ctx, pgm_ctx);
         }
+        QoreValue rv;
+        if (qore_eval_member_call_ref_given_args(*this, self, nme, args, class_ctx, rv, xsink)) {
+            return rv;
+        }
     }
     // anything else is called as evalMethod() calls it
     return evalMethod(self, nme, args, class_ctx, rc, xsink, nullptr, pgm_ctx);
+}
+
+QoreValue qore_class_private::evalMethodTmpArgs(QoreObject* self, const char* nme, QoreListNode* args,
+        const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+    assert(self);
+    qore_object_private* self_priv = qore_object_private::get(*self);
+    if (self_priv->status != OS_DELETED && strcmp(nme, "copy")) {
+        const QoreMethod* w = getMethodForEval(nme, self_priv->pgm, class_ctx, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (w) {
+            // as AbstractMethodCallNode::exec() calls a method found by name with a temporary argument list
+            return qore_method_private::evalTmpArgs(*w, xsink, rc, self, args, class_ctx, nullptr, nullptr,
+                explicit_type_param_instantiation);
+        }
+        QoreValue rv;
+        if (qore_eval_member_call_ref_given_args(*this, self, nme, args, class_ctx, rv, xsink)) {
+            return rv;
+        }
+    }
+    // anything else is called as evalMethod() calls it
+    return evalMethod(self, nme, args, class_ctx, rc, xsink, explicit_type_param_instantiation);
 }
 
 // Member-call references, pseudo-methods and methodGate are only considered after method lookup fails.

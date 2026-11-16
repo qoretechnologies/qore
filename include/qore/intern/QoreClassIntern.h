@@ -4413,6 +4413,14 @@ public:
     DLLLOCAL QoreValue evalMethodGivenArgs(QoreObject* self, const char* nme, QoreListNode* args,
             const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink, QoreProgram* pgm_ctx) const;
 
+    //! as evalMethod() by name, with an argument list that holds the last references of the arguments that the caller
+    //! gave to the call, whose values the parameters of the method found, or of the call reference or closure that a
+    //! member holds, take over, as the AST interpreter's call moves its evaluated arguments into the parameters
+    //! (issue #6063); the list stays the caller's
+    DLLLOCAL QoreValue evalMethodTmpArgs(QoreObject* self, const char* nme, QoreListNode* args,
+            const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+
     DLLLOCAL QoreValue evalMethodGate(QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreValue evalMethodGate(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;

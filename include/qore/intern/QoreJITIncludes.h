@@ -54,4 +54,10 @@ DLLLOCAL uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method
     uint64_t* args, int nargs, ExceptionSink* xsink,
     const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
 
+//! dot_eval_fallback_with_args() with the cleanup slots of the arguments, whose references are given to the call,
+//! which the callee takes over (issue #6063)
+DLLLOCAL uint64_t dot_eval_fallback_with_given_args(QoreValue base, const char* method_name,
+    uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
+
 #endif

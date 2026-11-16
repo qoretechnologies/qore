@@ -2004,6 +2004,21 @@ QoreValue ResolvedCallReferenceNode::invoke(const QoreListNode* args, ExceptionS
     return dispatchValue(args, xsink);
 }
 
+QoreValue qore_call_ref_invoke_given_args(const ResolvedCallReferenceNode* r, QoreListNode* args,
+        ExceptionSink* xsink) {
+    if (args) {
+        if (r->getType() == NT_RUNTIME_CLOSURE) {
+            QoreSandboxProvenanceHelper provenance(r);
+            return static_cast<const QoreClosureBase*>(r)->execValueTmpArgs(args, xsink);
+        }
+        if (auto* rcr = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r)) {
+            QoreSandboxProvenanceHelper provenance(r);
+            return rcr->execValueTmpArgs(args, xsink);
+        }
+    }
+    return r->invoke(args, xsink);
+}
+
 QoreValue ResolvedCallReferenceNode::invokeLexical(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
     QoreSandboxProvenanceHelper provenance(this);
