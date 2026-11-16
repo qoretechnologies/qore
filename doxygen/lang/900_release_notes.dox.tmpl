@@ -1499,6 +1499,8 @@
       - alignment drops an index that the template does not have (see @ref qore_3_0_0_compatibility)
       - @ref SqlUtil::RestartableTransaction "RestartableTransaction" restarts Oracle transactions when sessions are
         killed (ex: during RAC rolling patching) or the connection is lost
+      - @ref SqlUtil::op_trunc_date() "op_trunc_date()" compares a truncated date column in where clauses
+        (<a href="https://github.com/qoretechnologies/qore/issues/2363">issue 2363</a>)
       - see @ref sqlutilv3_11_0 for all changes
 
     - @ref tablemapperintro "TableMapper" module
