@@ -9071,6 +9071,27 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
         }
     }
 
+    // true if an instruction of the block in [begin, end) other than the append accesses the local
+    auto accesses_local = [&](const QoreIRBasicBlock* block, size_t begin, size_t end,
+            const QoreIRInstruction& append, LocalVar* local) {
+        for (size_t i = begin; i < end; ++i) {
+            const QoreIRInstruction* candidate = block->instructions[i].get();
+            if (candidate == &append) {
+                continue;
+            }
+            if (candidate->opcode == QoreIROpcode::LoadLocal
+                    || candidate->opcode == QoreIROpcode::StoreLocal
+                    || candidate->opcode == QoreIROpcode::InstantiateLocal
+                    || candidate->opcode == QoreIROpcode::UninstantiateLocal) {
+                const auto* local_inst =
+                    static_cast<const QoreIRLocalInstruction*>(candidate);
+                if (local_inst->local == local) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
     auto has_uninterrupted_local_access = [&](const QoreIRInstruction& append,
             const QoreIRLocalInstruction& store, LocalVar* local) {
         auto load_def = definitions.find(append.operands[0].id);
@@ -9083,29 +9104,39 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
         if (load_pos == positions.end() || append_pos == positions.end()
                 || store_pos == positions.end()
                 || load_pos->second.first != append_pos->second.first
-                || append_pos->second.first != store_pos->second.first
-                || load_pos->second.second >= append_pos->second.second
-                || append_pos->second.second >= store_pos->second.second) {
+                || load_pos->second.second >= append_pos->second.second) {
             return false;
         }
         const QoreIRBasicBlock* block = cfg.blocks[load_pos->second.first];
-        for (size_t i = load_pos->second.second + 1; i < store_pos->second.second; ++i) {
-            const QoreIRInstruction* candidate = block->instructions[i].get();
-            if (candidate == &append) {
-                continue;
+        if (append.opcode == QoreIROpcode::Invoke) {
+            // an append in a try block is the invoke that ends the block of the load; the paired store is in the
+            // invoke's normal continuation, which only the invoke enters, before any other access to the local.  The
+            // exception edge leaves the local as it was: the append helpers change it only once the append succeeded
+            // (issue #6280)
+            const auto& invoke = static_cast<const QoreIRInvokeInstruction&>(append);
+            const size_t store_block_id = store_pos->second.first;
+            if (append_pos->second.second + 1 != block->instructions.size()
+                    || !invoke.normal_target || invoke.normal_target == invoke.exception_target
+                    || cfg.blocks[store_block_id] != invoke.normal_target
+                    || store_block_id == load_pos->second.first
+                    || cfg.predecessors[store_block_id].size() != 1
+                    || cfg.predecessors[store_block_id][0] != load_pos->second.first) {
+                return false;
             }
-            if (candidate->opcode == QoreIROpcode::LoadLocal
-                    || candidate->opcode == QoreIROpcode::StoreLocal
-                    || candidate->opcode == QoreIROpcode::InstantiateLocal
-                    || candidate->opcode == QoreIROpcode::UninstantiateLocal) {
-                const auto* local_inst =
-                    static_cast<const QoreIRLocalInstruction*>(candidate);
-                if (local_inst->local == local) {
-                    return false;
-                }
-            }
+            return !accesses_local(block, load_pos->second.second + 1, block->instructions.size(), append, local)
+                && !accesses_local(cfg.blocks[store_block_id], 0, store_pos->second.second, append, local);
         }
-        return true;
+        if (append_pos->second.first != store_pos->second.first
+                || append_pos->second.second >= store_pos->second.second) {
+            return false;
+        }
+        return !accesses_local(block, load_pos->second.second + 1, store_pos->second.second, append, local);
+    };
+    // true for a local copy-on-write string append: the binary op, or the invoke made for it in a try block
+    auto is_string_append = [](const QoreIRInstruction& inst) {
+        return inst.opcode == QoreIROpcode::AppendStringCow
+            || (inst.opcode == QoreIROpcode::Invoke
+                && static_cast<const QoreIRInvokeInstruction&>(inst).invoke_opcode == QoreIROpcode::AppendStringCow);
     };
 
     auto get_loaded_local = [&](QoreIRValue value) -> LocalVar* {
@@ -9119,7 +9150,7 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
     };
     auto get_paired_append_store = [&](const QoreIRInstruction& append,
             LocalVar* local) -> const QoreIRLocalInstruction* {
-        if (append.opcode != QoreIROpcode::AppendStringCow
+        if (!is_string_append(append)
                 || append.operands.size() != 2 || !append.result.isValid()
                 || get_loaded_local(append.operands[0]) != local) {
             return nullptr;
@@ -9186,7 +9217,7 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                 }
                 bool preserves_freshness =
                     qore_ir_is_read_only_string_use(inst, operand)
-                    || (inst.opcode == QoreIROpcode::AppendStringCow
+                    || (is_string_append(inst)
                         && !inst.operands.empty()
                         && inst.operands[0].id == operand.id
                         && get_paired_append_store(inst, local));
@@ -9197,8 +9228,7 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                 cancelled = true;
                 return state;
             }
-            if (inst.opcode == QoreIROpcode::AppendStringCow
-                    && inst.operands.size() == 2) {
+            if (is_string_append(inst) && inst.operands.size() == 2) {
                 LocalVar* local = get_loaded_local(inst.operands[0]);
                 const QoreIRLocalInstruction* store = local
                     ? get_paired_append_store(inst, local) : nullptr;
@@ -9231,8 +9261,10 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                 // qore_rt_string_append_in_place() appends only a string: an operand that can be NOTHING or a
                 // value of another type takes the guarded copy-on-write append, which also appends in place to a
                 // string that the local alone holds (issue #6266)
+                // the invoke of an append in a try block is never marked: it has no in-place code
                 if (mark && !inst.string_append_in_place && store
-                        && local_cow && inst.string_append_string_operand
+                        && local_cow && inst.opcode == QoreIROpcode::AppendStringCow
+                        && inst.string_append_string_operand
                         && fresh_candidate != candidate_index.end()
                         && state.test(fresh_candidate->second) && facts
                         && facts->assigned_state == QoreIRAssignedState::Assigned
@@ -9335,16 +9367,18 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
     }
 
     size_t changed = 0;
+    // the blocks that the graph, which has no exception edges, does not reach are the handlers of try statements and
+    // the blocks that only they reach: nothing is fresh there, so that only their guarded copy-on-write appends are
+    // paired with the local's load and store (issue #6280)
+    const FreshLocalSet none_fresh(candidate_index.size(), false);
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR in-place string append escape analysis")) {
             return changed;
         }
-        if (cfg.reachable[block_id]) {
-            transfer_block(block_id, fresh_in[block_id], true, changed);
-            if (cancelled) {
-                return changed;
-            }
+        transfer_block(block_id, cfg.reachable[block_id] ? fresh_in[block_id] : none_fresh, true, changed);
+        if (cancelled) {
+            return changed;
         }
     }
     return changed;
@@ -11523,7 +11557,10 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
             if (qore_ir_is_list_push_instruction(*inst)) {
                 has_list_push = true;
             } else if (enable_in_place_string_append
-                    && inst->opcode == QoreIROpcode::AppendStringCow) {
+                    && (inst->opcode == QoreIROpcode::AppendStringCow
+                        || (inst->opcode == QoreIROpcode::Invoke
+                            && static_cast<const QoreIRInvokeInstruction&>(*inst).invoke_opcode
+                                == QoreIROpcode::AppendStringCow))) {
                 has_string_append = true;
             }
             if (has_list_push

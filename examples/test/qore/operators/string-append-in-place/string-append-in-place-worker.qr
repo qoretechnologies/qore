@@ -346,6 +346,151 @@ string sub check_enum(string piece) {
     return sprintf("%s|%s|%s", s, a, ES::Long);
 }
 
+# appends in a try block (issue #6280)
+string sub check_try_literal() {
+    Sandbox sb();
+    string s = sb.makeString();
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += "ab";
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        s = ex.err;
+    }
+    return sb.result(s);
+}
+
+string sub check_try_variable(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += piece;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        s = ex.err;
+    }
+    return sb.result(s);
+}
+
+string sub check_try_call() {
+    Sandbox sb();
+    string s = sb.makeString();
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += piece_call();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        s = ex.err;
+    }
+    return sb.result(s);
+}
+
+string sub check_try_int() {
+    Sandbox sb();
+    string s = sb.makeString();
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += i;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        s = ex.err;
+    }
+    return sb.result(s);
+}
+
+string sub check_try_mixed(list<auto> l) {
+    Sandbox sb();
+    string s = sb.makeString();
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += l[i % l.size()];
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        s = ex.err;
+    }
+    return sb.result(s);
+}
+
+string sub check_try_nested(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            try {
+                s += piece;
+            } catch (hash<ExceptionInfo> ex) {
+                s = ex.err;
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        s = ex.err;
+    }
+    return sb.result(s);
+}
+
+# an append that raises an exception leaves the string as it was, and the handler sees it
+string sub check_try_exception(string piece) {
+    Sandbox sb();
+    string s = sb.makeLatin1();
+    string seen = "none";
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += i == Appends - 1 ? "\u20ac" : piece;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        seen = sprintf("%s:%d:%s", ex.err, s.size(), convert_encoding(s.substr(-4), "UTF-8"));
+    }
+    return sb.result(s) + ":" + seen;
+}
+
+# appends in a catch block
+string sub check_catch(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    try {
+        throw "CATCH";
+    } catch (hash<ExceptionInfo> ex) {
+        for (int i = 0; i < Appends; ++i) {
+            s += piece;
+        }
+    }
+    return sb.result(s);
+}
+
+# a string that another variable holds is copied before it is appended to in a try block too
+string sub check_try_shared(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    string alias = s;
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += piece;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        s = ex.err;
+    }
+    return sb.result(s) + sprintf(":%d", alias.size());
+}
+
+# an exception raised after an append in the same try block: the handler sees the string as appended
+string sub check_try_after(string piece) {
+    Sandbox sb();
+    string s = sb.makeString();
+    string seen = "none";
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += piece;
+            if (i == Appends - 1) {
+                throw "AFTER", s.substr(-4);
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        seen = sprintf("%s:%s:%d", ex.err, ex.desc, s.size());
+    }
+    return sb.result(s) + ":" + seen;
+}
+
 # each check runs twice: the first call runs in the IR interpreter in the JIT and tiered modes, the second compiled
 # code (the harness compiles a function synchronously after its first call)
 hash<string, code<string()>> checks = {
@@ -375,6 +520,16 @@ hash<string, code<string()>> checks = {
     "reference": string sub () { return check_reference("ab"); },
     "reference-parameter": string sub () { return check_reference_parameter("ab"); },
     "enum": string sub () { return check_enum("ab"); },
+    "try-literal": \check_try_literal(),
+    "try-variable": string sub () { return check_try_variable("ab"); },
+    "try-call": \check_try_call(),
+    "try-int": \check_try_int(),
+    "try-mixed": string sub () { return check_try_mixed(("ab", 1, 2.5, True, NOTHING, NULL, 3n, ("l",), {"h": 1})); },
+    "try-nested": string sub () { return check_try_nested("ab"); },
+    "try-exception": string sub () { return check_try_exception("\u00e9a"); },
+    "catch": string sub () { return check_catch("ab"); },
+    "try-shared": string sub () { return check_try_shared("ab"); },
+    "try-after": string sub () { return check_try_after("ab"); },
 };
 
 foreach hash<auto> i in (checks.pairIterator()) {
