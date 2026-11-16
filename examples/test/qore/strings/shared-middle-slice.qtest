@@ -65,8 +65,19 @@ class SharedMiddleSliceTest inherits QUnit::Test {
         assertTrue(j.next());
         assertTrue(isView(j.getMatch()), "a match to the end of the subject is a view");
 
-        # the ASCII prefix of the parent is known in the copy, which keeps a character offset O(1)
+        # a character offset makes the source's ASCII prefix known beyond the slice taken below
+        string c = source[5100];
+        assertEq("4", c);
+        # the copy is allocated exactly, as a view is when it is materialized: its size, a terminator and 48 bytes,
+        # rounded up to 16 (an append-sized buffer is larger)
         string copy = source.substr(10, 5000);
+        assertEq(((5000 + 48) / 16 + 1) * 16, call_function("dbg_string_capacity", copy), "exact capacity");
+        RegexMatchIterator m(new Regex("line 00500"), source);
+        assertTrue(m.next());
+        string match = m.getMatch();
+        assertEq(((10 + 48) / 16 + 1) * 16, call_function("dbg_string_capacity", match), "exact capacity of a match");
+        # the ASCII prefix of the parent that the copy holds is known in the copy, which keeps a character offset O(1)
+        assertEq(5000, call_function("dbg_string_ascii_prefix", copy), "the copy's known ASCII prefix");
         assertEq(source.substr(4000, 1), copy.substr(3990, 1));
     }
 
