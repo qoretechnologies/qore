@@ -34,8 +34,13 @@ Each handler belongs to one rank (the lock order below) and one mode:
 - A leaf lock that a handled object owns and that its holders take only briefly, with no lock order of its own (a Program's parse option lock `po_mutex` and the condition of the copies of its external data, the parse option mask locks of the module manager and of each module, the debug lock of the thread list's records of cancellable waits), is initialized again in the child by the handler of its owner, which also drops the state of the parent's other threads (ex: their copies of a Program's external data in progress).
 - Conditions bound to a lock are initialized again in the child too: their waiters do not exist there, and a glibc
   condition variable with waiters that never return can block a later signal or broadcast.
-- A lock is initialized again in the child rather than unlocked: a recursive mutex held by the forking thread
-  cannot be unlocked there on glibc (its owner is the parent's thread ID). It is first reset by assigning its static
+- A plain mutex (`std::mutex`, a non-recursive `QoreThreadLock`) that the forking thread acquired before `fork()` is
+  unlocked in the child, so that ThreadSanitizer sees the release: a lock that it considers held for the rest of the
+  child's life makes it report a lock order inversion for every lock that the child takes after it and that was taken
+  before it in the parent (qore#6177's leaf lock, which the parent takes under a Program's options lock, showed it).
+  Any other lock is initialized again in the child rather than unlocked: a recursive mutex held by the forking thread
+  cannot be unlocked there on glibc (its owner is the parent's thread ID), and a lock that the handler did not
+  acquire can be held by a thread that does not exist in the child. It is first reset by assigning its static
   initializer, since a held `pthread_rwlock_t` cannot be initialized again on macOS (`EBUSY`); the environment lock
   is only reset that way.
 
