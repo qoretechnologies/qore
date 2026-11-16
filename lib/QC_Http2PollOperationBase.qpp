@@ -1328,6 +1328,8 @@ nothing Http2PollOperationBase::registerResponseSendWatch(int stream_id) {
     @since %Qore 3.0
 */
 nothing Http2PollOperationBase::onStreamSendResult(string stream_key, bool sent) {
+    (void)stream_key;
+    (void)sent;  // a hook that does nothing
 }
 
 //! Returns True if an error occurred
@@ -1612,5 +1614,6 @@ nothing Http2PollOperationBase::clearStreamQueues() {
     @since %Qore 3.0
 */
 nothing Http2PollOperationBase::onStreamData(int stream_id) [flags=NAMED_ARGS] {
+    (void)stream_id;  // a hook that does nothing
     // Default no-op — Qore subclass overrides to wake handler
 }

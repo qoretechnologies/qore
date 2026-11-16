@@ -1563,39 +1563,11 @@ static const QoreValue* getSerializationOnlyInstructionExpr(const QoreIRInstruct
     }
 }
 
-//! Returns true if the opcode is a call/invoke that could trigger AST evaluation
-//! and potentially access locals through the thread-local variable stack.
-static bool isCallOrInvoke(QoreIROpcode op) {
-    switch (op) {
-        case QoreIROpcode::Call:
-        case QoreIROpcode::CallDirect:
-        case QoreIROpcode::CallIndirect:
-        case QoreIROpcode::CallMethod:
-        case QoreIROpcode::CallMethodDirect:
-        case QoreIROpcode::InvokeMethodDirect:
-        case QoreIROpcode::CallStatic:
-        case QoreIROpcode::CallStaticDirect:
-        case QoreIROpcode::DotEvalMethodDirect:
-        case QoreIROpcode::InvokeDotEvalMethodDirect:
-        case QoreIROpcode::Invoke:
-            return true;
-        default:
-            return false;
-    }
-}
-
 static void collectLocalsFromIRFunction(const QoreIRFunction& func,
         std::unordered_set<const void*>& ast_locals,
         bool& unknown_node_found, std::unordered_set<const QoreIRFunction*>& visited_handlers);
 
 //! Collects the locals of \a func and of its handlers, each handler function once (they can be shared, #6087)
-static void collectLocalsFromIRFunction(const QoreIRFunction& func,
-        std::unordered_set<const void*>& ast_locals,
-        bool& unknown_node_found) {
-    std::unordered_set<const QoreIRFunction*> visited_handlers;
-    collectLocalsFromIRFunction(func, ast_locals, unknown_node_found, visited_handlers);
-}
-
 static void collectLocalsFromIRFunction(const QoreIRFunction& func,
         std::unordered_set<const void*>& ast_locals,
         bool& unknown_node_found, std::unordered_set<const QoreIRFunction*>& visited_handlers) {

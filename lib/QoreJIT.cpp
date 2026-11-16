@@ -1308,7 +1308,6 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     }
 
     auto& es = jit->getExecutionSession();
-    auto& dl = jit->getDataLayout();
     auto& jd = jit->getMainJITDylib();
 
     // Build symbol map for all C ABI runtime helpers

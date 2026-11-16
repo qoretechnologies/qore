@@ -1542,6 +1542,7 @@ static constexpr uintptr_t QORE_CANCEL_WAKEUP_IDENT = 1;
 static std::map<int, int> qore_cancel_wakeup_pipe_map;
 #endif
 
+#ifndef __linux__
 static int qore_set_cloexec_nonblock(int fd, bool nonblock) {
     int fdflags = fcntl(fd, F_GETFD);
     if (fdflags < 0 || fcntl(fd, F_SETFD, fdflags | FD_CLOEXEC) < 0) {
@@ -1555,6 +1556,7 @@ static int qore_set_cloexec_nonblock(int fd, bool nonblock) {
     }
     return 0;
 }
+#endif
 
 //! creates a wakeup channel and returns the descriptor to poll, or -1 with errno set; thread_list.lck is held
 static int qore_cancel_wakeup_create() {

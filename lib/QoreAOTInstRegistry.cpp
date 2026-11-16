@@ -657,34 +657,6 @@ static const AbstractQoreZoneInfo* readAOTDateZone(const char* zone_name) {
     return zone;
 }
 
-//! Resolve a pseudo-class by its serialized path (e.g. "::Qore::<value>").
-//! Pseudo-classes are not in the normal namespace hierarchy, so runtimeFindClass()
-//! cannot resolve them when rebuilding direct dot-eval instructions from AOT IR.
-static const QoreClass* instRegistryFindPseudoClassByPath(const char* path) {
-    if (!path || !*path) {
-        return nullptr;
-    }
-
-    for (qore_type_t t = 0; t <= NT_NUMBER; ++t) {
-        const QoreClass* pc = qore_pseudo_get_class(t);
-        if (pc && !strcmp(pc->getPath(), path)) {
-            return pc;
-        }
-    }
-
-    const QoreClass* pc = qore_pseudo_get_class(NT_FUNCREF);
-    if (pc && !strcmp(pc->getPath(), path)) {
-        return pc;
-    }
-
-    pc = qore_pseudo_get_class(NT_RUNTIME_CLOSURE);
-    if (pc && !strcmp(pc->getPath(), path)) {
-        return pc;
-    }
-
-    return nullptr;
-}
-
 //! Return a class path suitable for AOT instruction metadata.
 static std::string instRegistryGetClassPath(const QoreClass* qc, bool pseudo = false) {
     if (!qc) {
@@ -1372,67 +1344,6 @@ static std::unique_ptr<QoreIRInstruction> readLocal(
     li->exception_target = exc_target;
     return std::unique_ptr<QoreIRInstruction>(li);
 }
-
-// ============================================================================
-// STUB IMPLEMENTATIONS FOR REMAINING GROUPS 7-51
-// These are placeholders - full implementations will be added in next iteration
-// ============================================================================
-
-#define MAKE_STUB_PAIR(N, CLASS) \
-static bool write_group_##N(AOTInstWriteCtx& ctx) { return true; } \
-static std::unique_ptr<QoreIRInstruction> read_group_##N(uint16_t opcode_raw, QoreIRBasicBlock* exc_target, \
-        const std::vector<QoreIRValue>& operands, uint32_t result_id, AOTInstReadCtx& ctx) { \
-    return nullptr; \
-}
-
-MAKE_STUB_PAIR(7, QoreIRVarInstruction)
-MAKE_STUB_PAIR(8, QoreIRLValueInstruction)
-MAKE_STUB_PAIR(9, QoreIRExprInstruction)
-MAKE_STUB_PAIR(10, QoreIRCallDirectInstruction)
-MAKE_STUB_PAIR(11, QoreIRCallMethodDirectInstruction)
-MAKE_STUB_PAIR(12, QoreIRInvokeMethodDirectInstruction)
-MAKE_STUB_PAIR(13, QoreIRCallStaticDirectInstruction)
-MAKE_STUB_PAIR(14, QoreIRDotEvalMethodDirectInstruction)
-MAKE_STUB_PAIR(15, QoreIRInvokeDotEvalMethodDirectInstruction)
-MAKE_STUB_PAIR(16, QoreIRInvokeInstruction)
-MAKE_STUB_PAIR(17, QoreIRScopeEnterInstruction)
-MAKE_STUB_PAIR(18, QoreIRScopeExitInstruction)
-MAKE_STUB_PAIR(19, QoreIRLandingPadInstruction)
-MAKE_STUB_PAIR(20, QoreIRSwitchIntInstruction)
-MAKE_STUB_PAIR(21, QoreIRSwitchStringInstruction)
-MAKE_STUB_PAIR(22, QoreIRPhiInstruction)
-MAKE_STUB_PAIR(23, QoreIRGuardInstruction)
-MAKE_STUB_PAIR(24, QoreIRImplicitArgInstruction)
-MAKE_STUB_PAIR(25, QoreIRHashKeyAccessInstruction)
-MAKE_STUB_PAIR(26, QoreIRSelfMemberInstruction)
-MAKE_STUB_PAIR(27, QoreIRStaticVarInstruction)
-MAKE_STUB_PAIR(28, QoreIRNewObjectInstruction)
-MAKE_STUB_PAIR(29, QoreIRLoadConstantInstruction)
-MAKE_STUB_PAIR(30, QoreIRCreateClosureInstruction)
-MAKE_STUB_PAIR(31, QoreIRCreateCallRefInstruction)
-MAKE_STUB_PAIR(32, QoreIRCreateMethodRefInstruction)
-MAKE_STUB_PAIR(33, QoreIRCreateParseRefInstruction)
-MAKE_STUB_PAIR(34, QoreIRNewHashDeclInstruction)
-MAKE_STUB_PAIR(35, QoreIRNewComplexHashInstruction)
-MAKE_STUB_PAIR(36, QoreIRNewComplexListInstruction)
-MAKE_STUB_PAIR(37, QoreIRVrnConstructInstruction)
-MAKE_STUB_PAIR(38, QoreIRHashKeyStoreInstruction)
-MAKE_STUB_PAIR(39, QoreIRListIndexStoreInstruction)
-MAKE_STUB_PAIR(40, QoreIRAddAssignLocalIntInstruction)
-MAKE_STUB_PAIR(41, QoreIRIncrementLocalIntInstruction)
-MAKE_STUB_PAIR(42, QoreIRBranchIfLtLocalIntInstruction)
-MAKE_STUB_PAIR(43, QoreIRMapHashKeyInstruction)
-MAKE_STUB_PAIR(44, QoreIRIteratorCreateInstruction)
-MAKE_STUB_PAIR(45, QoreIRIteratorNextInstruction)
-MAKE_STUB_PAIR(46, QoreIRRefForeachInitInstruction)
-MAKE_STUB_PAIR(47, QoreIRSwitchRegexMatchInstruction)
-MAKE_STUB_PAIR(49, QoreIRMakeHashConstKeysInstruction)
-MAKE_STUB_PAIR(50, QoreIRSwitchCaseMatchInstruction)
-MAKE_STUB_PAIR(51, QoreIRListIndexAccessInstruction)
-MAKE_STUB_PAIR(52, QoreIRHashKeyStoreDynamicInstruction)
-MAKE_STUB_PAIR(53, QoreIRLValuePathInstruction)
-
-#undef MAKE_STUB_PAIR
 
 // ============================================================================
 // Group 48: OnBlockExit - Handler with nested IR

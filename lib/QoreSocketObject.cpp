@@ -3846,26 +3846,6 @@ static BinaryNode* qore_socket_object_exec_recv_bytes(QoreSocketObject* s, size_
     return bin.release();
 }
 
-static BinaryNode* qore_socket_object_exec_recv_some_binary(QoreSocketObject* s, size_t size,
-        int timeout_ms, ExceptionSink* xsink, const char* owner_name = "recvToOutputStream") {
-    s->ref();
-    ValueHolder result(qore_socket_object_exec_recv_poll(s,
-        new SocketRecvSomePollOperation(xsink, static_cast<ssize_t>(size), s, false, true),
-        timeout_ms, owner_name, xsink), xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    if (result->isNothing()) {
-        return new BinaryNode;
-    }
-    if (result->getType() != NT_BINARY) {
-        xsink->raiseException("SOCKET-RECV-ERROR", "expected binary data from async receive operation, got '%s'",
-            result->getFullTypeName());
-        return nullptr;
-    }
-    return result.release().get<BinaryNode>();
-}
-
 static QoreHashNode* qore_socket_object_exec_read_http_header(QoreSocketObject* s, QoreHashNode* info,
         int timeout_ms, ExceptionSink* xsink) {
     s->ref();

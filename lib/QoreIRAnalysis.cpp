@@ -7864,14 +7864,6 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
         auto i = definitions.find(value.id);
         return i == definitions.end() ? nullptr : i->second;
     };
-    auto get_loaded_local = [&](QoreIRValue value) -> LocalVar* {
-        QoreIRInstruction* def = get_definition(value);
-        if (!def || def->opcode != QoreIROpcode::LoadLocal || !qore_ir_is_assigned_value(func, value)) {
-            return nullptr;
-        }
-        auto* load = static_cast<QoreIRLocalInstruction*>(def);
-        return load->is_ref || load->is_closure ? nullptr : load->local;
-    };
     auto get_raw_loaded_local = [&](QoreIRValue value) -> LocalVar* {
         QoreIRInstruction* def = get_definition(value);
         if (!def || def->opcode != QoreIROpcode::LoadLocal) {

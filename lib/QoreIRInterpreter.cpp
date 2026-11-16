@@ -573,14 +573,6 @@ static QoreValue evalAndRef(QoreValue& val, ExceptionSink* xsink) {
 }
 
 
-// Overload for const QoreValue& (used in evalInvoke with const instruction)
-static QoreValue evalAndRef(const QoreValue& val, ExceptionSink* xsink) {
-    if (!val.hasNode()) {
-        return val;
-    }
-    return evalAndRef(const_cast<AbstractQoreNode*>(val.getInternalNode()), xsink);
-}
-
 static QoreValue getListAssignmentValue(QoreValue value, int64_t index) {
     if (value.getType() == NT_LIST) {
         const QoreListNode* l = value.get<const QoreListNode>();
@@ -7181,7 +7173,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     }
                     return out;
                 }
-                if (auto* hod = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
+                if (dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
                         inv->expr.getInternalNode())) {
                     QoreValue lhs_val = getIRValue(values, inv->operands[0]);
                     QoreValue rhs_val = getIRValue(values, inv->operands[1]);
@@ -19564,7 +19556,7 @@ load_local_done:
                             evaluateOwnedListElement(res, xsink);
                         }
                         used_operands = true;
-                    } else if (auto* hod = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
+                    } else if (dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
                             call_expr.getInternalNode())) {
                         QoreValue lhs_val = getIRValue(values, inst->operands[0]);
                         QoreValue rhs_val = getIRValue(values, inst->operands[1]);
@@ -21035,7 +21027,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::AddFloat:
             return QoreValue(left.getAsFloat() + right.getAsFloat());
         case QoreIROpcode::AddAny: {
-            bool needs_deref = true;
             QorePlusOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
@@ -21065,7 +21056,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 return left.get<const DateTimeNode>()->add(r, xsink);
             }
             // Fallback for non-timeout cases
-            bool needs_deref = true;
             QorePlusOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
@@ -21101,7 +21091,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::SubFloat:
             return QoreValue(left.getAsFloat() - right.getAsFloat());
         case QoreIROpcode::SubAny: {
-            bool needs_deref = true;
             QoreMinusOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
@@ -21131,7 +21120,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 return left.get<const DateTimeNode>()->subtractBy(r, xsink);
             }
             // Fallback
-            bool needs_deref = true;
             QoreMinusOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
@@ -21140,7 +21128,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::MulFloat:
             return QoreValue(left.getAsFloat() * right.getAsFloat());
         case QoreIROpcode::MulAny: {
-            bool needs_deref = true;
             QoreMultiplicationOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
@@ -21200,7 +21187,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::AndInt:
             return QoreValue(left.getAsBigInt() & right.getAsBigInt());
         case QoreIROpcode::AndAny: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreBinaryAndOperatorNode(get_runtime_location(), ir_operator_operand(left),
                 ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
@@ -21208,7 +21194,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::OrInt:
             return QoreValue(left.getAsBigInt() | right.getAsBigInt());
         case QoreIROpcode::OrAny: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreBinaryOrOperatorNode(get_runtime_location(), ir_operator_operand(left),
                 ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
@@ -21216,7 +21201,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::XorInt:
             return QoreValue(left.getAsBigInt() ^ right.getAsBigInt());
         case QoreIROpcode::XorAny: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreBinaryXorOperatorNode(get_runtime_location(), ir_operator_operand(left),
                 ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
@@ -21286,7 +21270,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::ShlInt:
             return QoreValue(left.getAsBigInt() << right.getAsBigInt());
         case QoreIROpcode::ShlAny: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreShiftLeftOperatorNode(get_runtime_location(), ir_operator_operand(left),
                 ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
@@ -21294,7 +21277,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::ShrInt:
             return QoreValue(left.getAsBigInt() >> right.getAsBigInt());
         case QoreIROpcode::ShrAny: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreShiftRightOperatorNode(get_runtime_location(), ir_operator_operand(left),
                 ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
@@ -21310,7 +21292,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::FoldlAny:
         case QoreIROpcode::FoldlInt:
         case QoreIROpcode::FoldlFloat: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreFoldlOperatorNode(get_runtime_location(), ir_operator_operand(left),
                 ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
@@ -21749,7 +21730,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::FoldrAny:
         case QoreIROpcode::FoldrInt:
         case QoreIROpcode::FoldrFloat: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreFoldrOperatorNode(get_runtime_location(), ir_operator_operand(left),
                 ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
@@ -21757,7 +21737,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::MapAny:
         case QoreIROpcode::MapInt:
         case QoreIROpcode::MapFloat: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreMapOperatorNode(get_runtime_location(), ir_operator_operand(left),
                 ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
@@ -22001,7 +21980,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::SelectAny:
         case QoreIROpcode::SelectInt:
         case QoreIROpcode::SelectFloat: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreSelectOperatorNode(get_runtime_location(), ir_operator_operand(left),
                 ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
@@ -22317,7 +22295,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return fromBits(qore_rt_list_string_join_identity_map_checked(
                 toBits(left), toBits(right), xsink));
         case QoreIROpcode::RangeAny: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreRangeOperatorNode(get_runtime_location(), ir_operator_operand(left),
                 ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
@@ -22325,7 +22302,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
         case QoreIROpcode::RangeDate: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreRangeOperatorNode(get_runtime_location(), ir_operator_operand(left),
                 ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
@@ -22453,21 +22429,18 @@ QoreValue QoreIRInterpreter::evalTernary(QoreIROpcode op, const QoreValue& first
         case QoreIROpcode::RangeSliceAny:
         case QoreIROpcode::RangeSliceInt:
         case QoreIROpcode::RangeSliceFloat: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreSquareBracketsRangeOperatorNode(get_runtime_location(),
                 ir_operator_operand(first), ir_operator_operand(second), ir_operator_operand(third))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::MapSelectAny:
         case QoreIROpcode::MapSelectList: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreMapSelectOperatorNode(get_runtime_location(),
                 ir_operator_operand(first), ir_operator_operand(second), ir_operator_operand(third))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::HashMapAny:
         case QoreIROpcode::HashMap: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreHashMapOperatorNode(get_runtime_location(),
                 ir_operator_operand(first), ir_operator_operand(second), ir_operator_operand(third))), xsink);
             return evalAndRef(*node, xsink);
@@ -22495,7 +22468,6 @@ QoreValue QoreIRInterpreter::evalQuaternary(QoreIROpcode op, const QoreValue& fi
     switch (op) {
         case QoreIROpcode::HashMapSelectAny:
         case QoreIROpcode::HashMapSelect: {
-            bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreHashMapSelectOperatorNode(get_runtime_location(),
                 ir_operator_operand(first), ir_operator_operand(second), ir_operator_operand(third),
                 ir_operator_operand(fourth))), xsink);
@@ -22544,7 +22516,6 @@ QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const Qore
 }
 
 QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& lvalue, ExceptionSink* xsink) {
-    bool needs_deref = true;
     QoreValue lvalue_ref = lvalue.refSelf();
     switch (op) {
         case QoreIROpcode::PreIncLValue: {
@@ -23295,7 +23266,6 @@ QoreValue QoreIRInterpreter::evalLValueBinary(QoreIROpcode op, const QoreValue& 
 
 QoreValue QoreIRInterpreter::evalLValueTernary(QoreIROpcode op, const QoreValue& lvalue, const QoreValue& first,
         const QoreValue& second, const QoreValue& third, ExceptionSink* xsink) {
-    bool needs_deref = true;
     QoreValue lvalue_ref = lvalue.refSelf();
     switch (op) {
         case QoreIROpcode::SpliceLValue: {

@@ -6126,11 +6126,6 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
     auto i64_nothing = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
-    auto clear_alloca = [&](llvm::Value* alloca) {
-        llvm::Value* val = builder->CreateLoad(i64_type, alloca);
-        builder->CreateStore(i64_nothing, alloca);
-        builder->CreateCall(helper, {val, xsink_arg});
-    };
 
     // The tracker for each local holds an explicit +1 ref to the value currently
     // cached in the alloca, paired one-to-one with the alloca's cached copy so
@@ -13682,11 +13677,6 @@ static bool setExpressionFallbackError(std::string& error,
     appendQoreIRInstructionDiagnostic(error, inst);
     error += "; AST expression fallback is disabled; add native IR lowering instead";
     return false;
-}
-
-static bool setExpressionFallbackError(std::string& error,
-        const QoreIRInstruction* inst, const std::string& reason) {
-    return setExpressionFallbackError(error, inst, reason.c_str());
 }
 
 void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_func,
@@ -39419,7 +39409,6 @@ bool QoreIRToLLVM::emitFoldLoop(const QoreIRInstruction* inst, llvm::Module& mod
     std::string loop_name = std::string(label) + "_loop";
     std::string exit_name = std::string(label) + "_exit";
 
-    llvm::BasicBlock* preheader = builder->GetInsertBlock();
     llvm::BasicBlock* empty_bb = llvm::BasicBlock::Create(ctx, empty_name, llvm_func);
     llvm::BasicBlock* init_bb = llvm::BasicBlock::Create(ctx, init_name, llvm_func);
     llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, loop_name, llvm_func);
@@ -39571,7 +39560,6 @@ bool QoreIRToLLVM::emitFoldReverseLoop(const QoreIRInstruction* inst, llvm::Modu
     std::string loop_name = std::string(label) + "_loop";
     std::string exit_name = std::string(label) + "_exit";
 
-    llvm::BasicBlock* preheader = builder->GetInsertBlock();
     llvm::BasicBlock* empty_bb = llvm::BasicBlock::Create(ctx, empty_name, llvm_func);
     llvm::BasicBlock* init_bb = llvm::BasicBlock::Create(ctx, init_name, llvm_func);
     llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, loop_name, llvm_func);

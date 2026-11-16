@@ -2644,7 +2644,7 @@ static void check_operator_bin_xor(const QoreProgramLocation* loc, QoreValue n, 
 %parse-param {yyscan_t yyscanner}
 %locations
 // the location is initialized as a trivial type (see YYLTYPE_IS_TRIVIAL), which would start columns at 1
-%initial-action { @$ = QoreParserLocation(); }
+%initial-action { @$ = QoreParserLocation(); (void)yynerrs; }
 // remove this and use the following line when bison is updated on all build environments enough to support parse.error verbose
 %error-verbose
 

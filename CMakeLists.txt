@@ -2770,6 +2770,18 @@ if (ADDRESS_SANITIZER)
     target_link_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 endif()
 
+# warnings about code that nothing uses: libqore and qcc were compiled without any warning flag, so static functions
+# that nothing calls were never reported (ten were found by a manual sweep, qore#6163); a static function whose only
+# caller is itself is still not reported by the compilers, only by a sweep
+set(QORE_UNUSED_WARNING_FLAGS "-Wunused-function -Wunused-variable -Wunused-but-set-variable" CACHE STRING
+    "warnings about unused code enabled for libqore and qcc (gcc and clang; empty to disable)")
+set(QORE_UNUSED_WARNINGS_ENABLED FALSE)
+if (QORE_UNUSED_WARNING_FLAGS AND (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
+    separate_arguments(_qore_unused_flags UNIX_COMMAND "${QORE_UNUSED_WARNING_FLAGS}")
+    target_compile_options(libqore PRIVATE ${_qore_unused_flags})
+    set(QORE_UNUSED_WARNINGS_ENABLED TRUE)
+endif()
+
 # What decides the frame sizes of libqore besides its code (issue #5852), as get_qore_library_info() reports it and
 # tools/check-stack-usage.py checks it: the build type and its flags (a multi-config generator chooses the
 # configuration at build time, so it has none here), the target triple, which names the C library
@@ -3086,6 +3098,9 @@ add_subdirectory(examples/plugins/sample-buffer EXCLUDE_FROM_ALL)
 
 # qcc - Qore Code Compiler (AOT)
 add_executable(qcc qcc-main.cpp)
+if (QORE_UNUSED_WARNINGS_ENABLED)
+    target_compile_options(qcc PRIVATE ${_qore_unused_flags})
+endif()
 # qcc's test hooks run a command named in the environment at fixed points of a compile (QORE_QCC_TEST_*_COMMAND, see
 # qcc_run_test_hook() in qcc-main.cpp), for the tests that change a source while qcc compiles; a qcc that is
 # packaged must never run a command taken from its environment, so they are only in a debug build by default, and

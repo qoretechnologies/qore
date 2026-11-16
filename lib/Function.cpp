@@ -2165,7 +2165,6 @@ int CodeEvaluationHelper::prepareDefaultArgsImpl(ExceptionSink* xsink, AbstractF
         return 0;
     }
     OptionalObjectOnlySubstitutionHelper self_helper;
-    bool self_set = false;
     for (unsigned i = 0; i < max; ++i) {
         const QoreTypeInfo* paramTypeInfo = nullptr;
         auto get_param_type_info = [&]() -> const QoreTypeInfo* {
@@ -4011,8 +4010,6 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
 
         // get parse options
         QoreParseOptions po = (*i)->getParseOptions(ppo);
-        // if we should ignore "noop" variants
-        bool strict_args = static_cast<bool>(po & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
 
         // ignore "runtime noop" variants if necessary
         if (qore_runtime_skip_noop_variant(po, vflags)) {
@@ -4550,8 +4547,6 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
 
             // get runtime parse options
             QoreParseOptions po = (*i)->getParseOptions(ppo);
-            // if we should ignore "noop" variants
-            bool strict_args = static_cast<bool>(po & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
 
             int64 vflags = (*i)->getFlags();
 
@@ -4737,8 +4732,6 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(Excepti
 
             // get runtime parse options
             QoreParseOptions po = (*i)->getParseOptions(ppo);
-            // if we should ignore "noop" variants
-            bool strict_args = static_cast<bool>(po & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
 
             int64 vflags = (*i)->getFlags();
 
@@ -6190,7 +6183,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                 int max_pscore = 0;
                 int variant_nperfect = 0;
                 bool variant_runtime_match = false;
-                bool variant_hard_match = false;  // true if missing type info (must do runtime dispatch)
                 bool variant_soft_match = false;  // true if union type partial match (may do runtime dispatch)
                 bool ok = true;
                 bool needs_type_param_substitution = sig->needsTypeParameterSubstitution();
@@ -6223,7 +6215,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                             if (pi < num_args) {
                                 // we are missing parse-time type information, we need to match at runtime (HARD)
                                 variant_runtime_match = true;
-                                variant_hard_match = true;
                                 break;
                             } else if (sig->hasDefaultArg(pi)) {
                                 rc = max_rc = QTI_IGNORE;

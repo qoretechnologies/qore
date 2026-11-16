@@ -3353,7 +3353,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.setBlock(merge_block);
         return true;
     }
-    if (auto* summarize_stmt = dynamic_cast<const SummarizeStatement*>(stmt)) {
+    if (dynamic_cast<const SummarizeStatement*>(stmt)) {
         error = "unsupported IR statement lowering: legacy summarize statement has no native lowering";
         if (stmt->loc) {
             error += " at ";
@@ -3559,7 +3559,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.createThreadExit(thread_exit_stmt->loc, handler);
         return true;
     }
-    if (auto* break_stmt = dynamic_cast<const BreakStatement*>(stmt)) {
+    if (dynamic_cast<const BreakStatement*>(stmt)) {
         QoreIRBasicBlock* target = nullptr;
         size_t target_cleanup_depth = 0;
         size_t target_temp_depth = 0;
@@ -3604,7 +3604,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         return true;
     }
-    if (auto* cont_stmt = dynamic_cast<const ContinueStatement*>(stmt)) {
+    if (dynamic_cast<const ContinueStatement*>(stmt)) {
         QoreIRBasicBlock* target = nullptr;
         size_t target_cleanup_depth = 0;
         size_t target_temp_depth = 0;
@@ -6574,18 +6574,6 @@ static bool getLValueBaseValue(const QoreValue& value, QoreValue& base) {
     }
 }
 
-static bool isInvokeLValueNode(const AbstractQoreNode* node) {
-    return dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)
-        || dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)
-        || dynamic_cast<const QorePreIncrementOperatorNode*>(node)
-        || dynamic_cast<const QorePostIncrementOperatorNode*>(node)
-        || dynamic_cast<const QorePreDecrementOperatorNode*>(node)
-        || dynamic_cast<const QorePostDecrementOperatorNode*>(node)
-        || dynamic_cast<const QoreShiftOperatorNode*>(node)
-        || dynamic_cast<const QoreUnshiftOperatorNode*>(node)
-        || dynamic_cast<const QoreSpliceOperatorNode*>(node);
-}
-
 static std::string describeIRLoweringExpr(const QoreValue& expr) {
     std::string desc = "QoreValue type '";
     desc += expr.getTypeName();
@@ -7542,15 +7530,6 @@ QoreIRBasicBlock* QoreIRLowering::createBlock(const std::string& prefix) {
         b->enclosing_loop_exit = current_loop_exit;
     }
     return b;
-}
-
-static bool isContainerLiteral(const QoreValue& v) {
-    if (!v.hasNode()) {
-        return false;
-    }
-    const AbstractQoreNode* node = v.getInternalNode();
-    return dynamic_cast<const QoreParseHashNode*>(node) || dynamic_cast<const QoreParseListNode*>(node)
-        || dynamic_cast<const QoreHashNode*>(node) || dynamic_cast<const QoreListNode*>(node);
 }
 
 //! Largest container a constant is still rebuilt from its entries rather than referenced
@@ -8679,34 +8658,6 @@ void QoreIRLowering::maybeInsertNotNothingGuard(QoreIRValue value, const QoreVal
         fprintf(stderr, "[GUARD-INSERT] About to insert GuardNotNothing for value slot %d, expr=%s, target_type=%s\n",
                 value.id, expr ? "present" : "nullptr", target_type ? "present" : "nullptr");
         fflush(stderr);
-    }
-
-    // Check expression's analysis for assignment state and never-nothing guarantees
-    // Don't insert guard if: (1) expr never returns nothing, OR (2) target wasn't definitely assigned
-    if (expr && expr->hasNode()) {
-        const AbstractQoreNode* node = expr->getInternalNode();
-        if (node && dynamic_cast<const ParseNode*>(node)) {
-            QoreParseAnalysis expr_analysis;
-            bool got_analysis = false;
-            try {
-                got_analysis = getAnalysis(*expr, expr_analysis);
-            } catch (...) {
-                got_analysis = false;
-            }
-
-            if (got_analysis) {
-                static constinit QoreLazyValue<bool> debug_guard_type_setting([]() -> bool {
-                    QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
-                    const char* debug_env = debug_env_holder.c_str();
-                    return debug_env && strstr(debug_env, "guard");
-                });
-                const bool debug_guard_type = debug_guard_type_setting.get();
-
-                // Note: These checks are handled in needsNotNothingGuard()
-                // which returns bool, not here in maybeInsertNotNothingGuard() which is void
-                // The actual logic is checked before calling this function
-            }
-        }
     }
 
     // Skip guard if the value is known to never be NOTHING (tracks across block boundaries)
@@ -10447,8 +10398,6 @@ QoreIRValue QoreIRLowering::lowerPlus(const QoreValue& expr, std::string& error)
         return QoreIRValue();
     }
 
-    QoreValue left_expr = plus->getLeft();
-    QoreValue right_expr = plus->getRight();
 
     // Lambda to check if a leaf expression has string type using AST type info
     // Note: We check VarRefNode specifically because ParseNode::getTypeInfo() is protected
@@ -20188,14 +20137,12 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
     bool use_direct_index = false;
     bool elem_is_int = false;
-    bool elem_is_float = false;
     if (elem_type) {
         if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT) {
             use_direct_index = true;
             elem_is_int = true;
         } else if (QoreTypeInfo::parseReturns(elem_type, NT_FLOAT) == QTI_IDENT) {
             use_direct_index = true;
-            elem_is_float = true;
         }
     }
 
