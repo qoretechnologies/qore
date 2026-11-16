@@ -1911,6 +1911,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - parsing or loading a long chain of classes, each inheriting the previous one (see @ref inheritance), took time
+      that grew with the fourth power of its length, as each class walked the whole hierarchy again for each of its
+      ancestors; it now grows about with the square of the length (issue #6106)
     - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
       threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
     - an allocation that fails while a thread enters another %Program (ex: in a binary module's

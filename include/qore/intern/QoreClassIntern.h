@@ -54,6 +54,9 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #define OTF_USER    CT_USER
@@ -1345,8 +1348,26 @@ protected:
     bool init = false;
 };
 
-// for the inheritance list for each member
-typedef std::vector<const qore_class_private*> cls_vec_t;
+// a class in the list of the classes where a member is accessible after the first one (see QoreMemberInfo), the
+// last one first; a member imported from a base class shares the list of the member it was copied from, so that
+// the members of a class in a deep hierarchy do not each have a copy of the list, which has an entry for each level
+// of the hierarchy (issue #6106)
+struct QoreMemberClassNode {
+    const qore_class_private* cls;
+    std::shared_ptr<QoreMemberClassNode> next;
+
+    DLLLOCAL QoreMemberClassNode(const qore_class_private* cls, std::shared_ptr<QoreMemberClassNode> next)
+            : cls(cls), next(std::move(next)) {
+    }
+
+    // releases the rest of the list iteratively, as it is as long as the hierarchy is deep
+    DLLLOCAL ~QoreMemberClassNode() {
+        std::shared_ptr<QoreMemberClassNode> n = std::move(next);
+        while (n && n.use_count() == 1) {
+            n = std::move(n->next);
+        }
+    }
+};
 
 // maps from an accessing context to the object storage context
 typedef std::map<const qore_class_private*, const qore_class_private*> cls_context_map_t;
@@ -1397,10 +1418,8 @@ public:
     DLLLOCAL QoreMemberInfo(const QoreProgramLocation* loc, const QoreTypeInfo* n_typeInfo = nullptr,
             QoreParseTypeInfo* n_parseTypeInfo = nullptr, QoreValue e = QoreValue(), ClassAccess n_access = Public,
             const qore_class_private* qc = nullptr)
-            : QoreMemberInfoBaseAccess(loc, n_typeInfo, n_parseTypeInfo, e, n_access), is_local(true) {
-        if (qc) {
-            cls_vec.push_back(qc);
-        }
+            : QoreMemberInfoBaseAccess(loc, n_typeInfo, n_parseTypeInfo, e, n_access), decl_cls(qc),
+            is_local(true) {
     }
 
     // copy to a new class - same member, new class
@@ -1412,8 +1431,8 @@ public:
     }
 
     DLLLOCAL void setDeclaringClass(const qore_class_private* qc) {
-        assert(cls_vec.empty());
-        cls_vec.push_back(qc);
+        assert(!decl_cls);
+        decl_cls = qc;
         assert(is_local);
     }
 
@@ -1429,7 +1448,12 @@ public:
 
     // returns the class where the member was declared
     DLLLOCAL const qore_class_private* getClass() const {
-        return cls_vec[0];
+        return decl_cls;
+    }
+
+    // returns the last class where the member is accessible
+    DLLLOCAL const qore_class_private* getLastClass() const {
+        return cls_list ? cls_list->cls : decl_cls;
     }
 
     // issue #2970: returns the class ptr to be used to access the member data in the object; nullptr means to access in the standard object hash
@@ -1511,8 +1535,11 @@ private:
     // the accessors of a member whose value is held in external storage owned by a module; shared with the copies of
     // the member in subclasses
     std::shared_ptr<const QoreMemberAccessors> accessors;
-    // the classes where this member is accessible; the first class is the class where the member was defined
-    cls_vec_t cls_vec;
+    // the first class where this member is accessible: the class where the member was defined (or the class it was
+    // copied to)
+    const qore_class_private* decl_cls = nullptr;
+    // the other classes where this member is accessible, the last one first
+    std::shared_ptr<QoreMemberClassNode> cls_list;
     // maps class contexts to class pointers in object storage for private members
     cls_context_map_t* cls_context_map = nullptr;
     // list of inherited members for initialization
@@ -1910,6 +1937,12 @@ public:
     typedef typename member_list_t::const_iterator const_iterator;
     member_list_t member_list;
 
+    DLLLOCAL QoreMemberMapBase() = default;
+
+    // the index refers to the names in the list, which are owned by the list
+    DLLLOCAL QoreMemberMapBase(const QoreMemberMapBase&) = delete;
+    DLLLOCAL QoreMemberMapBase& operator=(const QoreMemberMapBase&) = delete;
+
     DLLLOCAL ~QoreMemberMapBase() {
         for (auto& i : member_list) {
             //printd(5, "QoreMemberMap::~QoreMemberMap() this: %p freeing member %p '%s'\n", this, i->second, i->first);
@@ -1917,7 +1950,7 @@ public:
             free(i.first);
             delete i.second;
         }
-        member_list.clear();
+        clearList();
     }
 
     DLLLOCAL bool inList(const char* name) const {
@@ -1925,6 +1958,12 @@ public:
     }
 
     DLLLOCAL T* find(const char* name) const {
+        // the index is only used when it has an entry for each member: it is updated when a member is added, and
+        // the list could be changed directly
+        if (!index.empty() && index.size() == member_list.size()) {
+            typename index_t::const_iterator i = index.find(name);
+            return i == index.end() ? nullptr : i->second;
+        }
         typename member_list_t::const_iterator i =
             std::find_if(member_list.begin(), member_list.end(), [name](const member_list_element_t& e)
                 -> bool {return !strcmp(e.first, name); });
@@ -1938,7 +1977,34 @@ public:
         assert(i != member_list.end());
         T* rv = i->second;
         i->second = info;
+        if (!index.empty()) {
+            index[i->first] = info;
+        }
         return rv;
+    }
+
+    //! removes all members from the list without freeing them
+    DLLLOCAL void clearList() {
+        member_list.clear();
+        index.clear();
+        num_front = 0;
+    }
+
+    //! returns an iterator to the first member that was not added at the start of the list
+    /** members imported from base classes are added at the start of the list, so the members declared in the class
+        are all after this position; in a deep hierarchy, a class has many more imported members than declared ones
+        (issue #6106)
+    */
+    DLLLOCAL const_iterator endOfFront() const {
+        if (num_front == (size_t)-1) {
+            return member_list.begin();
+        }
+        assert(num_front <= member_list.size());
+        const_iterator i = member_list.end();
+        for (size_t n = member_list.size() - num_front; n; --n) {
+            --i;
+        }
+        return i;
     }
 
     DLLLOCAL bool empty() const {
@@ -1950,6 +2016,7 @@ public:
         assert(info);
         assert(!inList(name));
         member_list.push_back(std::make_pair(name, info));
+        indexAdded(name, info);
     }
 
     DLLLOCAL void addNoCheck(std::pair<char*, T*> pair) {
@@ -1958,11 +2025,47 @@ public:
 
     DLLLOCAL void moveAllTo(QoreMemberMapBase<T>& dest) {
         dest.member_list.insert(dest.member_list.end(), member_list.begin(), member_list.end());
-        member_list.clear();
+        if (num_front) {
+            // members added at the start of this list are not at the start of the other one
+            dest.num_front = (size_t)-1;
+        }
+        dest.index.clear();
+        dest.indexAdded(nullptr, nullptr);
+        clearList();
     }
 
     DLLLOCAL size_t size() const {
         return member_list.size();
+    }
+
+protected:
+    // the members by name in a long list, so that a member is not found by scanning the list: a class in a deep
+    // hierarchy has the members of all of its ancestors (issue #6106); only built from IndexMin members, and kept
+    // current when members are added, so that find() never changes it, as it can be called by several threads
+    typedef std::unordered_map<std::string_view, T*> index_t;
+    index_t index;
+
+    // the number of members added at the start of the list, or -1 if not known
+    size_t num_front = 0;
+
+    static constexpr size_t IndexMin = 16;
+
+    //! updates the index after a member has been added at the end or the start of the list
+    /** builds it when the list has reached IndexMin members; with \a name null, only builds it if needed
+    */
+    DLLLOCAL void indexAdded(const char* name, T* info) {
+        if (member_list.size() < IndexMin) {
+            return;
+        }
+        if (name && !index.empty() && index.size() + 1 == member_list.size()) {
+            index.emplace(name, info);
+            return;
+        }
+        index.clear();
+        index.reserve(member_list.size() * 2);
+        for (auto& i : member_list) {
+            index.emplace(i.first, i.second);
+        }
     }
 };
 
@@ -1982,6 +2085,10 @@ public:
         assert(info);
         assert(!inList(name));
         member_list.insert(member_list.begin(), std::make_pair(name, info));
+        if (num_front != (size_t)-1) {
+            ++num_front;
+        }
+        indexAdded(name, info);
     }
 
     DLLLOCAL int parseInit(LocalVar& selfid);
@@ -2005,7 +2112,7 @@ public:
             free(i->first);
             delete i->second;
         }
-        member_list.clear();
+        clearList();
     }
 
     DLLLOCAL void del() {
@@ -2019,11 +2126,11 @@ public:
             free(i->first);
             delete i->second;
         }
-        member_list.clear();
+        clearList();
     }
 
     DLLLOCAL void clearNoFree() {
-        member_list.clear();
+        clearList();
     }
 
     DLLLOCAL void moveAllTo(QoreClass* qc, ClassAccess access);
@@ -2173,6 +2280,21 @@ public:
 
     // parseResolve classes to the new class pointer after all namespaces and classes have been copied
     DLLLOCAL void resolveCopy();
+
+private:
+    // the classes in a long list by ID, so that adding a class does not scan the list: a class in a deep
+    // hierarchy has all of its ancestors in its list, and each is added once to the list of each subclass (issue
+    // #6106); only used from SML_INDEX_MIN entries, and rebuilt when it does not have an entry for each element (the
+    // list is also built by the copy constructor, and classes keep their IDs when copied)
+    std::unordered_map<qore_classid_t, const QoreClass*> id_index;
+
+    static constexpr size_t SML_INDEX_MIN = 16;
+
+    // returns true if the index is used for this list; makes it current first
+    DLLLOCAL bool useIndex();
+
+    // appends the class to the list and to the index if it is used
+    DLLLOCAL void append(QoreClass* qc, bool is_virtual);
 };
 
 // set of private class pointers; used when checking for recursive class inheritance lists
@@ -2328,6 +2450,10 @@ public:
     BCSMList sml;
     bool valid = true;
     bool rescanned = false;
+    // true if sml holds all ancestors of the class: set when the class has been initialized and each of its base
+    // classes is a builtin class or a class whose own sml is complete; then the base classes do not have to be walked
+    // again to add the ancestors to a subclass or to search the hierarchy (issue #6106)
+    bool sml_complete = false;
 
     DLLLOCAL BCList(BCNode* n) {
         push_back(n);
@@ -2336,7 +2462,7 @@ public:
     DLLLOCAL BCList() {
     }
 
-    DLLLOCAL BCList(const BCList& old) : sml(old.sml) {
+    DLLLOCAL BCList(const BCList& old) : sml(old.sml), sml_complete(old.sml_complete) {
         assert(old.valid);
         reserve(old.size());
         for (bclist_t::const_iterator i = old.begin(), e = old.end(); i != e; ++i)
@@ -2429,12 +2555,24 @@ public:
     DLLLOCAL bool isBaseClass(QoreClass* qc, bool toplevel) const;
 
     DLLLOCAL int addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bool is_virtual) {
-        for (auto& i : *this) {
-            if ((*i).addBaseClassesToSubclass(child, is_virtual))
-                return -1;
+        // a complete sml already holds every class that walking the base classes would add, in the same order and
+        // with the same virtual flags (issue #6106)
+        if (!smlComplete()) {
+            for (auto& i : *this) {
+                if ((*i).addBaseClassesToSubclass(child, is_virtual))
+                    return -1;
+            }
         }
         return sml.addBaseClassesToSubclass(thisparent, child, is_virtual);
     }
+
+    //! returns true if sml holds all ancestors of the class
+    DLLLOCAL bool smlComplete() const {
+        return sml_complete && valid;
+    }
+
+    //! sets sml_complete after the class has been initialized, if each base class's ancestor list is complete
+    DLLLOCAL void setSmlComplete();
 
     DLLLOCAL void rescanParents(QoreClass* cls);
 
@@ -2803,7 +2941,12 @@ public:
             never assigned a namespace": both leave ns null, but only the former means the
             class must no longer be executed.
         */
-        ns_deleted : 1 = false
+        ns_deleted : 1 = false,
+        //! set when initializeHierarchy() has succeeded, so that it is not done again for each subclass
+        /** The methods' inheritance lists are built there, and each subclass's hierarchy is initialized through its
+            base classes (issue #6106)
+        */
+        hierarchy_initialized : 1 = false
         ;
 
     std::vector<QoreGenericTypeParam> type_params;
