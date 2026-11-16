@@ -453,7 +453,8 @@ $function$
       @ref sqlutilv3_11_0 "SqlUtil v3.11.0")
     - fixed aligning a column to the \c smallserial, \c serial or \c bigserial pseudo-type, which generated an
       <tt>alter ... type</tt> to the pseudo-type that PostgreSQL rejects, also for a column that already was one: the
-      column gets the pseudo-type's integer type and a sequence of its own as its default
+      column gets the pseudo-type's integer type and a sequence of its own as its default, named as PostgreSQL
+      names it (with a number when the name is taken)
       (<a href="https://github.com/qoretechnologies/qore/issues/853">issue 853</a>)
 
     @section pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
@@ -1430,11 +1431,18 @@ list l = col.getModifySql(t, newcol);
             return l;
         }
 
-        # the sequence is named as PostgreSQL names the sequence of a serial column
-        PgsqlTable pt = cast<PgsqlTable>(t);
-        seq = pgsql_quote_identifier(pt.getSchemaName()) + "."
-            + pgsql_get_sql_identifier(PgsqlColumn::getSerialSequenceName(pgsql_parse_object_name(pt.getName()).name,
-                name));
+        # the sequence is named as PostgreSQL names the sequence of a serial column, with the names of the table and
+        # of its schema in the catalog; issue #853: a name that a relation of the schema has is not taken
+        AbstractDatasource ds = t.getDatasource();
+        hash<auto> rel = ds.selectRow("select c.relname, n.nspname from pg_catalog.pg_class c "
+            "join pg_catalog.pg_namespace n on n.oid = c.relnamespace where c.oid = %v::regclass", tn);
+        string seq_name = PgsqlColumn::chooseSerialSequenceName(rel.relname, name,
+            bool sub (string candidate) {
+                return exists ds.selectRow("select 1 as e from pg_catalog.pg_class c "
+                    "join pg_catalog.pg_namespace n on n.oid = c.relnamespace where n.nspname = %v "
+                    "and c.relname = %v", rel.nspname, candidate);
+            });
+        seq = pgsql_quote_identifier(rel.nspname) + "." + pgsql_quote_identifier(seq_name);
         string seq_lit = pgsql_get_string_literal(seq);
         l += sprintf("create sequence %s%s owned by %s.%s", seq, as_type ? " as " + serial_type : "", tn, ddl_name);
         l += sprintf("select setval(%s, coalesce(max(%s), 0) + 1, false) from %s", seq_lit, ddl_name, tn);
@@ -1451,28 +1459,76 @@ list l = col.getModifySql(t, newcol);
         return lit ? pgsql_get_string_literal_value(lit) : NOTHING;
     }
 
-    #! Returns the name of the sequence of a serial column as PostgreSQL makes it
-    /** \c <table>_<column>_seq, with the longer of the table and column names shortened so that the name is at
-        most 63 characters long
+    #! Returns the name of the sequence of a serial column as PostgreSQL chooses it
+    /** As PostgreSQL's \c ChooseRelationName(): \c <table>_<column>_seq, or, if a relation of the schema has that
+        name, \c <table>_<column>_seq1, \c <table>_<column>_seq2 and so on, the first that none has; see
+        makeObjectName() for the shortening of the names
 
         @param table the name of the table in the catalog
         @param column the name of the column in the catalog
+        @param taken returns @ref True if a relation of the table's schema has the given name
 
         @return the name of the sequence in the catalog
 
         @since PgsqlSqlUtilBase 1.19
     */
-    static string getSerialSequenceName(string table, string column) {
-        # the length of a name, less the "_" between the names and the "_seq" suffix
-        int avail = 63 - 5;
-        while (table.length() + column.length() > avail) {
-            if (table.length() > column.length()) {
-                splice table, -1;
+    static string chooseSerialSequenceName(string table, string column, code taken) {
+        string label = "seq";
+        int pass = 0;
+        while (True) {
+            string name = PgsqlColumn::makeObjectName(table, column, label);
+            if (!taken(name)) {
+                return name;
+            }
+            label = sprintf("seq%d", ++pass);
+        }
+    }
+
+    #! Returns a name made of two names and a label as PostgreSQL's \c makeObjectName() makes it
+    /** \c <name1>_<name2>_<label>, with the longer of the two names shortened by a byte at a time (\a name2 when
+        they are as long) until the name is at most 63 bytes long (\c NAMEDATALEN - 1), each name then cut at the
+        last whole character within its length
+
+        @param name1 the first name
+        @param name2 the second name
+        @param label the label
+
+        @return the name
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    static string makeObjectName(string name1, string name2, string label) {
+        int name1bytes = name1.size();
+        int name2bytes = name2.size();
+        # the "_" after each name and the label
+        int avail = 63 - (1 + label.size() + 1);
+        while (name1bytes + name2bytes > avail) {
+            if (name1bytes > name2bytes) {
+                --name1bytes;
             } else {
-                splice column, -1;
+                --name2bytes;
             }
         }
-        return sprintf("%s_%s_seq", table, column);
+        return sprintf("%s_%s_%s", PgsqlColumn::clipBytes(name1, name1bytes),
+            PgsqlColumn::clipBytes(name2, name2bytes), label);
+    }
+
+    #! returns the leading whole characters of a string that are at most the given number of bytes long
+    private static string clipBytes(string str, int bytes) {
+        if (str.size() <= bytes) {
+            return str;
+        }
+        string rv = "";
+        int size = 0;
+        for (int i = 0; i < str.length(); ++i) {
+            string ch = str[i];
+            size += ch.size();
+            if (size > bytes) {
+                break;
+            }
+            rv += ch;
+        }
+        return rv;
     }
 
     #! Returns @ref True "True" if a default value read from the server is the declared default value

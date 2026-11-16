@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires SqlUtil
+%requires PgsqlSqlUtilBase
 %requires PgsqlSqlUtil
 %requires QUnit
 
@@ -32,6 +33,8 @@ public class PgsqlSerialAlignmentTest inherits QUnit::Test {
         addTestCase("serial columns aligned with serial pseudo-types are unchanged", \unchanged());
         addTestCase("a serial column is aligned to another serial pseudo-type", \serialToSerial());
         addTestCase("a serial column is aligned to its integer type", \serialToInt());
+        addTestCase("the sequence takes the next free name", \nameClash());
+        addTestCase("long names are shortened as PostgreSQL does", \longNames());
         set_return_value(main());
     }
 
@@ -145,5 +148,95 @@ public class PgsqlSerialAlignmentTest inherits QUnit::Test {
         assertEq(NULL, ds.selectRow("select column_default from information_schema.columns "
             "where table_schema = current_schema() and table_name = 'ser_to_int' and column_name = 'n'")
             .column_default);
+    }
+
+    #! the sequence takes the next free name when the default one is taken, as PostgreSQL chooses it
+    nameClash() {
+        Datasource ds = connectOrSkip();
+        on_exit ds.rollback();
+        # the default name and the first numbered one are taken, by a sequence and by a table
+        ds.exec("create table ser_clash (id integer not null primary key, n integer)");
+        ds.exec("insert into ser_clash values (1, 7)");
+        ds.exec("create sequence ser_clash_n_seq");
+        ds.exec("create table ser_clash_n_seq1 (x integer)");
+        ds.commit();
+        alignTwice(ds, "ser_clash", "serial");
+        assertEq("ser_clash_n_seq2", getOwnedSequence(ds, "ser_clash", "n"));
+        assertRegex("^nextval\\('(\\w+\\.)?ser_clash_n_seq2'::regclass\\)$", getDefault(ds, "ser_clash", "n"));
+        ds.exec("insert into ser_clash (id) values (2)");
+        assertEq(8, ds.selectRow("select n from ser_clash where id = 2").n);
+        ds.commit();
+        # the sequences that were there are untouched
+        assertEq(1, ds.selectRow("select nextval('ser_clash_n_seq') as v").v);
+    }
+
+    #! long names are shortened as PostgreSQL shortens them, also with a numbered label and multi-byte characters
+    longNames() {
+        Datasource ds = connectOrSkip();
+        on_exit ds.rollback();
+        # (table, column) pairs: the table longer, then multi-byte characters in both names
+        list<list<string>> names = (
+            ("serlong_" + strmul("a", 42), "col_" + strmul("b", 26)),
+            ("ser_ž" + strmul("č", 25), "sl_" + strmul("ř", 20)),
+        );
+        foreach list<string> n in (names) {
+            string table = n[0];
+            string col = n[1];
+            string qtable = quote(table);
+            string qcol = quote(col);
+            # PostgreSQL's own choice with the default name free: the table's sequence is dropped with the table
+            ds.exec(sprintf("create table %s (id integer, %s serial)", qtable, qcol));
+            string pg_name = getOwnedSequence(ds, table, col);
+            assertEq(PgsqlSqlUtilBase::PgsqlColumn::makeObjectName(table, col, "seq"), pg_name);
+            assertTrue(pg_name.size() <= 63, pg_name);
+            ds.exec(sprintf("drop table %s", qtable));
+            # and with it taken
+            ds.exec(sprintf("create sequence %s", quote(pg_name)));
+            ds.exec(sprintf("create table %s (id integer, %s serial)", qtable, qcol));
+            string pg_name1 = getOwnedSequence(ds, table, col);
+            assertEq(PgsqlSqlUtilBase::PgsqlColumn::makeObjectName(table, col, "seq1"), pg_name1);
+            ds.exec(sprintf("drop table %s", qtable));
+            ds.exec(sprintf("create table %s (id integer, %s integer)", qtable, qcol));
+            ds.commit();
+
+            # the alignment takes the name that PostgreSQL takes
+            Database db(ds);
+            hash<auto> desc = {"columns": {
+                "id": {"native_type": "integer"},
+                col: {"native_type": "serial", "notnull": True},
+            }};
+            list<auto> sql = (new Table(ds, table)).getTable().getAlignSql(db.makeTable(table, desc));
+            map ds.exec($1), sql;
+            ds.commit();
+            assertEq(pg_name1, getOwnedSequence(ds, table, col));
+            assertEq((), (new Table(ds, table)).getTable().getAlignSql(db.makeTable(table, desc)));
+        }
+        # the rule itself: the longer name is shortened a byte at a time, the second one when they are as long
+        assertEq(strmul("a", 29) + "_" + strmul("b", 29) + "_seq", PgsqlSqlUtilBase::PgsqlColumn::makeObjectName(strmul("a", 50),
+            strmul("b", 30), "seq"));
+        assertEq(strmul("a", 29) + "_" + strmul("b", 28) + "_seq1", PgsqlSqlUtilBase::PgsqlColumn::makeObjectName(strmul("a", 50),
+            strmul("b", 30), "seq1"));
+        assertEq("t_c_seq", PgsqlSqlUtilBase::PgsqlColumn::makeObjectName("t", "c", "seq"));
+    }
+
+    #! returns a name as a quoted identifier
+    private static string quote(string name) {
+        return "\"" + replace(name, "\"", "\"\"") + "\"";
+    }
+
+    #! returns the name of the sequence owned by a column
+    private static *string getOwnedSequence(Datasource ds, string table, string col) {
+        *string seq = ds.selectRow("select pg_get_serial_sequence(%v, %v) as s", quote(table), col).s;
+        if (!seq) {
+            return;
+        }
+        # the name without its schema and quotes
+        return ds.selectRow("select relname from pg_class where oid = %v::regclass", seq).relname;
+    }
+
+    #! returns the default of a column
+    private static *string getDefault(Datasource ds, string table, string col) {
+        return ds.selectRow("select column_default from information_schema.columns where table_schema = "
+            "current_schema() and table_name = %v and column_name = %v", table, col).column_default;
     }
 }
