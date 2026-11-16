@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../QoreBuildTree.qm
 %requires FsUtil
 %requires QoreOnnxTools
 %requires ml
@@ -446,8 +447,8 @@ class QoreOnnxToolsTest inherits QUnit::Test {
         # qore-onnx requires reflection (and pulls in other binary modules transitively): list the AOT modules and
         # every binary module directory of the build of the qore that runs this test, so CI runners that don't have
         # these installed system-wide can still load them, and a build other than build/ loads its own modules
-        # (an installed qore found in PATH has no build directory)
-        *string build_dir = ENV.QORE_LIBDIR ?? (qore_bin =~ /[\/\\]/ ? dirname(qore_bin) : NOTHING);
+        # (an installed qore has no build directory)
+        *string build_dir = QoreBuildTree::build_dir();
         list<string> dirs = (root + "/qlib",);
         if (build_dir) {
             dirs += build_dir + "/qlib-qmod";

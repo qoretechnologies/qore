@@ -24,6 +24,8 @@
 
 %modern
 
+%requires ./TestInterpreter.qm
+
 module QoreBuildTree {
     version = "1.0";
     desc    = "finds the qore under test and its build tree";
@@ -52,11 +54,12 @@ if (!build) {
 */
 public namespace QoreBuildTree {
     #! Returns the qore that runs this program as an absolute path, symbolic links resolved
-    /** This is \c QORE_ARGV[0], the qore executable itself (not a wrapper script such as the one that the CI jobs can
-        give in \c QORE_BINARY); a bare name is looked up in \c PATH.  It is resolved when this module is loaded, so a
-        later change of the working directory does not change it.
+    /** This is the interpreter that TestInterpreter::qore_interpreter() gives (the one that the test runner
+        configures, else the running interpreter), resolved when this module is loaded, so a later change of the
+        working directory does not change it.
 
-        @return the path of the qore that runs this program, or \c QORE_ARGV[0] if it cannot be found
+        @return the path of the qore under test, or the name that TestInterpreter::qore_interpreter() gives if it
+        cannot be found, or an empty string when qcc loads this module to compile a test
     */
     public string sub qore_executable() {
         return Paths::qore;
@@ -123,17 +126,14 @@ public namespace QoreBuildTree {
 
         #! Resolves the paths; called by the initialization of the module
         static init() {
-            string exe = QORE_ARGV[0];
-            if (exe !~ /\//) {
-                foreach string dir in ((ENV.PATH ?? "").split(":")) {
-                    if (dir && is_executable(dir + "/" + exe)) {
-                        exe = dir + "/" + exe;
-                        break;
-                    }
-                }
+            # qcc initializes the module when it compiles a test that requires it: there is no program to run then
+            if (QORE_ARGV) {
+                string exe = TestInterpreter::qore_interpreter();
+                qore = is_file(exe) ? realpath(exe) : exe;
+            } else {
+                qore = "";
             }
-            qore = is_file(exe) ? realpath(exe) : exe;
-            if (is_file(qore)) {
+            if (qore && is_file(qore)) {
                 candidates += dirname(qore);
             }
             if (ENV.LIBQORE_BINARY && is_file(ENV.LIBQORE_BINARY)) {

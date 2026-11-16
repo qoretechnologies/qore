@@ -18,6 +18,12 @@
     the child processes run chdir-child.q, which changes its working directory before it asks
 */
 public class QoreBuildTreeTest inherits QUnit::Test {
+    public {
+        #! the env(1) options that remove the interpreter that the test runner configures, so that a child takes the
+        #! qore that runs it (see TestInterpreter::qore_interpreter())
+        const NoInterpreterEnv = "-u QORE_BIN -u QORE_BINARY -u QORE_EXECUTABLE";
+    }
+
     private {
         #! the build tree of the qore that runs this test, if it runs from one
         *string build;
@@ -30,6 +36,7 @@ public class QoreBuildTreeTest inherits QUnit::Test {
         addTestCase("the paths after a change of the working directory", \afterChdir());
         addTestCase("a relative qore path", \relativeQore());
         addTestCase("a relative LIBQORE_BINARY", \relativeLibqore());
+        addTestCase("a relative QORE_BINARY", \relativeQoreBinary());
         addTestCase("a qore outside a build tree", \outsideBuildTree());
         addTestCase("the source tree of a build tree", \sourceDir());
         set_return_value(main());
@@ -55,7 +62,8 @@ public class QoreBuildTreeTest inherits QUnit::Test {
     relativeQore() {
         requireBuild();
         TmpDir tmp("qore-build-tree-");
-        hash<string, string> out = runChild(build, "-u LIBQORE_BINARY -u QORE_LIBDIR", "./qore", tmp.path);
+        hash<string, string> out = runChild(build, NoInterpreterEnv + " -u LIBQORE_BINARY -u QORE_LIBDIR", "./qore",
+            tmp.path);
         assertEq(build + "/qore", out.qore);
         assertEq(build, out.build);
         assertEq(build, out.candidates);
@@ -68,11 +76,22 @@ public class QoreBuildTreeTest inherits QUnit::Test {
         string qore = tmp.path + "/qore";
         copyQore(qore);
         string lib = is_file(build + "/libqore.so") ? "libqore.so" : "libqore.dylib";
-        hash<string, string> out = runChild(dirname(build), "-u QORE_LIBDIR LIBQORE_BINARY="
+        hash<string, string> out = runChild(dirname(build), NoInterpreterEnv + " -u QORE_LIBDIR LIBQORE_BINARY="
             + quote(basename(build) + "/" + lib), qore, tmp.path);
         assertEq(realpath(qore), out.qore);
         assertEq(build, out.build);
         assertEq(realpath(tmp.path) + ":" + build, out.candidates);
+    }
+
+    #! the interpreter that the test runner configures, relative to the working directory that the child changes
+    relativeQoreBinary() {
+        requireBuild();
+        TmpDir tmp("qore-build-tree-");
+        hash<string, string> out = runChild(dirname(build), NoInterpreterEnv + " -u LIBQORE_BINARY -u QORE_LIBDIR "
+            "QORE_BINARY=" + quote(basename(build) + "/qore"), build + "/qore", tmp.path);
+        assertEq(build + "/qore", out.qore);
+        assertEq(build, out.build);
+        assertEq(build, out.candidates);
     }
 
     outsideBuildTree() {
@@ -80,7 +99,8 @@ public class QoreBuildTreeTest inherits QUnit::Test {
         TmpDir tmp("qore-build-tree-");
         string qore = tmp.path + "/qore";
         copyQore(qore);
-        hash<string, string> out = runChild(tmp.path, "-u LIBQORE_BINARY -u QORE_LIBDIR", qore, tmp.path);
+        hash<string, string> out = runChild(tmp.path, NoInterpreterEnv + " -u LIBQORE_BINARY -u QORE_LIBDIR", qore,
+            tmp.path);
         assertEq(realpath(qore), out.qore);
         assertEq("NOTHING", out.build);
         assertEq(realpath(tmp.path), out.candidates);
