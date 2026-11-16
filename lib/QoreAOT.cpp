@@ -23522,6 +23522,8 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     }
     // the float to int conversions of an x86-64 target, after the optimization passes (issue #6181)
     QoreIRToLLVM::expandFloatToIntForTarget(module, t);
+    // the addresses of the slots of the cleanup frames in the blocks that use them (qore#6299)
+    QoreIRToLLVM::sinkFrameSlotAddresses(module);
 
     // Dump IR after optimization if requested
     if (q_env_is_set("QORE_DUMP_IR_AFTER_OPT")) {

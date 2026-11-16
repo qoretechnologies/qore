@@ -20960,9 +20960,10 @@ static bool dbg_get_bg_compile_hold_point(const QoreStringNode* point, QoreJIT::
 
 //! makes the next check of a finalization loop of the native lowering report a cancellation at the given entry
 /** The lowering of the function then fails, and the function is not compiled.  The loops are \c "reload-chain-slots"
-    (QoreIRToLLVM::finalizeReloadChainSlots()) and \c "handler-local-table" (QoreIRToLLVM::finalizeObeEntries()); the
-    hook is cleared when it fires, or with a negative index.  It is process-wide: it fires in whichever lowering first
-    reaches that loop at that index, on any thread, which can be that of a callee of the batch of another function.
+    (the reload chain slots of QoreIRToLLVM::finalizeCleanupFrame()) and \c "handler-local-table"
+    (QoreIRToLLVM::finalizeObeEntries()); the hook is cleared when it fires, or with a negative index.  It is
+    process-wide: it fires in whichever lowering first reaches that loop at that index, on any thread, which can be
+    that of a callee of the batch of another function.
 
     @throw DBG-ARGUMENT-ERROR the loop is unknown
 */
