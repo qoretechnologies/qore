@@ -285,6 +285,8 @@ bool TestCls::next(ExceptionSink* xsink) {
             "int TestCls::conv(softint i, softstring s) {",
             "int TestCls::dflt(int a = f(1), int b = g(h(2))) [flags=CONSTANT] {",
             "int TestCls::fp(int (*cb)(int)) [flags=CONSTANT] {",
+            "int TestCls::opt(*string a) [flags=CONSTANT] {",
+            "int TestCls::opt2( * string a) [flags=CONSTANT] {",
         );
     }
 
@@ -561,6 +563,16 @@ static auto get_table() -> int(&)[3] {
 static int (*get_row(int i))[N] {
 }
 static int (&get_ref(int i))[MAX] {
+}
+static int (*ns::get_row2(int i))[N] {
+}
+static int (**pp2(int))[N] {
+}
+static int (&&rr(int))[N] {
+}
+static int (*const cp(int))[N] {
+}
+static int (Cls::*mp(int))[N] {
 }
 static int hex = 0x1F'FF; static double f = 1'000.5; /*
 int t_hidden(softint a) {

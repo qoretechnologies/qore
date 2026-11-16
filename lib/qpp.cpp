@@ -1297,18 +1297,44 @@ static bool qpp_line_has_qpp_only_syntax(const std::string& orig_line) {
     // attributes after the parameters: ") [" or ")[" after the ')' that closes the parameter list of the name, with
     // an attribute name ("[flags=...]", "[dom=...]"), not an array type ("-> int(&)[3]") or a C++ attribute ("[["); a
     // parenthesized declarator ("int (*name(...))[N]", "int (&name(...))[N]") returns an array, which C++ accepts
+    // ("int (**name(...))[N]", "int (*const name(...))[N]", "int (*ns::name(...))[N]", "int (Cls::*name(...))[N]"):
+    // after the '(', pointers, references, cv-qualifiers and scopes, then the name and its '('; a Qore parameter of an
+    // or-nothing type ("(*string a") has a name after its type, not a '('
     bool declarator = false;
     {
-        size_t i = line.find_first_not_of(" \t", paren + 1);
-        if (i != std::string::npos && (line[i] == '*' || line[i] == '&')) {
-            i = line.find_first_not_of(" \t", i + 1);
-            if (i != std::string::npos && (isalpha(static_cast<unsigned char>(line[i])) || line[i] == '_')) {
-                while (i < line.size() && qpp_idchar(line[i])) {
-                    ++i;
-                }
-                i = line.find_first_not_of(" \t", i);
-                declarator = i != std::string::npos && line[i] == '(';
+        size_t i = paren + 1;
+        bool ptr = false;
+        while (true) {
+            i = line.find_first_not_of(" \t", i);
+            if (i == std::string::npos) {
+                break;
             }
+            if (line[i] == '*' || line[i] == '&') {
+                ptr = true;
+                ++i;
+                continue;
+            }
+            if (!(isalpha(static_cast<unsigned char>(line[i])) || line[i] == '_')) {
+                break;
+            }
+            size_t e = i;
+            while (e < line.size() && qpp_idchar(line[e])) {
+                ++e;
+            }
+            std::string word(line, i, e - i);
+            if (word == "const" || word == "volatile") {
+                i = e;
+                continue;
+            }
+            if (!line.compare(e, 2, "::")) {
+                // a scope: of the name, or of a pointer to member ("Cls::*")
+                i = e + 2;
+                continue;
+            }
+            // the name: the declarator has a pointer or a reference, and the name has its parameters
+            size_t j = line.find_first_not_of(" \t", e);
+            declarator = ptr && j != std::string::npos && line[j] == '(';
+            break;
         }
     }
     if (!declarator) {
