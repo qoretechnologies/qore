@@ -749,14 +749,13 @@ static BatchCalleeReturnKind qore_ir_get_concrete_native_return_kind(
     if (!rejects_nothing || !QoreTypeInfo::hasType(type)) {
         return BatchCalleeReturnKind::Boxed;
     }
-    if (QoreTypeInfo::isType(type, NT_INT)
-            && !QoreTypeInfo::getReturnEnum(type)) {
+    if (QoreTypeInfo::isPlainType(type, NT_INT)) {
         return BatchCalleeReturnKind::NativeInt;
     }
-    if (QoreTypeInfo::isType(type, NT_FLOAT)) {
+    if (QoreTypeInfo::isPlainType(type, NT_FLOAT)) {
         return BatchCalleeReturnKind::NativeFloat;
     }
-    if (QoreTypeInfo::isType(type, NT_BOOLEAN)) {
+    if (QoreTypeInfo::isPlainType(type, NT_BOOLEAN)) {
         return BatchCalleeReturnKind::NativeBool;
     }
     return BatchCalleeReturnKind::Boxed;
@@ -14314,10 +14313,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             const QoreTypeInfo* ti = lv->getTypeInfo();
             bool native_scalar = native_aot_body_locals
                 && !native_unsafe_locals.count(key)
-                && ((QoreTypeInfo::isType(ti, NT_INT)
-                        && !QoreTypeInfo::getReturnEnum(ti))
-                    || QoreTypeInfo::isType(ti, NT_FLOAT)
-                    || QoreTypeInfo::isType(ti, NT_BOOLEAN));
+                && (QoreTypeInfo::isPlainType(ti, NT_INT)
+                    || QoreTypeInfo::isPlainType(ti, NT_FLOAT)
+                    || QoreTypeInfo::isPlainType(ti, NT_BOOLEAN));
             bool owned_string = string_aot_body_locals
                 && !native_unsafe_locals.count(key)
                 && ti == stringTypeInfo;
@@ -14383,17 +14381,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (QoreTypeInfo::isReference(ti) || readsThroughReference(lv)) {
                 continue;
             }
-            // Enum types report base type NT_INT, but an enum VALUE is a tagged
-            // QoreValue (TAG_ENUM carrying the QoreEnumMember*), not a bare int.
-            // Unboxing an enum local to a native int strips the enum tag, so a
+            // Enum types report their base type (NT_INT or NT_FLOAT), but an enum VALUE is a tagged
+            // QoreValue (TAG_ENUM carrying the QoreEnumMember*), not a bare int or float.
+            // Unboxing an enum local to a native int or float strips the enum tag, so a
             // later assignment to an enum-typed lvalue (which runtime-checks for a
             // proper enum value) fails with RUNTIME-TYPE-ERROR.  Keep enum locals
-            // boxed so they preserve enum identity (matches the IR interpreter).
-            if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+            // boxed so they preserve enum identity (matches the IR interpreter; qore#6236).
+            if (QoreTypeInfo::isPlainType(ti, NT_INT)) {
                 native_int_locals.insert(key);
-            } else if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+            } else if (QoreTypeInfo::isPlainType(ti, NT_FLOAT)) {
                 native_float_locals.insert(key);
-            } else if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+            } else if (QoreTypeInfo::isPlainType(ti, NT_BOOLEAN)) {
                 native_bool_locals.insert(key);
             }
         }
@@ -15550,9 +15548,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             const QoreTypeInfo* value_type =
                 qore_get_value_type(local->getTypeInfo());
             bool stable_scalar = !local->isTopLevel() && value_type
-                && ((QoreTypeInfo::isType(value_type, NT_INT)
-                        && !QoreTypeInfo::getReturnEnum(value_type))
-                    || QoreTypeInfo::isType(value_type, NT_FLOAT));
+                && (QoreTypeInfo::isPlainType(value_type, NT_INT)
+                    || QoreTypeInfo::isPlainType(value_type, NT_FLOAT));
             size_t stable_load_count = 0;
             for (const QoreIRLocalInstruction* load : loads) {
                 if (stable_load_count++ && !(stable_load_count % 100)
@@ -29616,7 +29613,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     !q_env_is_set("QORE_DISABLE_IR_NATIVE_IN_PLACE_LIST_PUSH");
                 if (native_specialization && assigned_native
                         && facts->representation == QoreIRValueRepresentation::NativeFloat
-                        && QoreTypeInfo::parseReturns(inst->element_type, NT_FLOAT) == QTI_IDENT
+                        && QoreTypeInfo::parseReturnsPlain(inst->element_type, NT_FLOAT)
                         && val->getType() == double_type) {
                     auto helper = module.getOrInsertFunction(
                         "qore_rt_list_push_float_in_place_unchecked",
@@ -29629,7 +29626,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 if (native_specialization && assigned_native
                         && facts->representation == QoreIRValueRepresentation::NativeBool
-                        && QoreTypeInfo::parseReturns(inst->element_type, NT_BOOLEAN) == QTI_IDENT
+                        && QoreTypeInfo::parseReturnsPlain(inst->element_type, NT_BOOLEAN)
                         && val->getType() == i1_type) {
                     auto helper = module.getOrInsertFunction(
                         "qore_rt_list_push_bool_in_place_unchecked",
@@ -29977,8 +29974,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && facts->never_nothing;
             bool typed_specialization = qore_ir_use_typed_map_fusion(aot_mode,
                 "QORE_DISABLE_AOT_TYPED_LIST_SET_SPECIALIZATION");
-            bool exact_int_element = QoreTypeInfo::parseReturns(inst->element_type, NT_INT) == QTI_IDENT;
-            bool exact_float_element = QoreTypeInfo::parseReturns(inst->element_type, NT_FLOAT) == QTI_IDENT;
+            bool exact_int_element = QoreTypeInfo::parseReturnsPlain(inst->element_type, NT_INT);
+            bool exact_float_element = QoreTypeInfo::parseReturnsPlain(inst->element_type, NT_FLOAT);
             bool exact_bool_element = QoreTypeInfo::parseReturns(
                 inst->element_type, NT_BOOLEAN) == QTI_IDENT;
             auto get_output_data = [&]() -> llvm::Value* {
@@ -30126,9 +30123,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             bool exact_value_type = facts && facts->type_info
                 && ((exact_int_element
-                        && QoreTypeInfo::parseReturns(facts->type_info, NT_INT) == QTI_IDENT)
+                        && QoreTypeInfo::parseReturnsPlain(facts->type_info, NT_INT))
                     || (exact_float_element
-                        && QoreTypeInfo::parseReturns(facts->type_info, NT_FLOAT) == QTI_IDENT));
+                        && QoreTypeInfo::parseReturnsPlain(facts->type_info, NT_FLOAT)));
             if (inst->typed_value_prevalidated && typed_specialization && exact_value_type
                     && nanboxed_values.count(inst->operands[2].id)
                     && val->getType() == i64_type) {

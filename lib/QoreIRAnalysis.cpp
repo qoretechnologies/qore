@@ -168,10 +168,9 @@ bool qore_ir_get_readonly_scalar_closure_captures(
         bool exact_scalar = type
             && !QoreTypeInfo::isReference(type)
             && !QoreTypeInfo::parseAcceptsReturns(type, NT_NOTHING)
-            && ((QoreTypeInfo::isType(type, NT_INT)
-                    && !QoreTypeInfo::getReturnEnum(type))
-                || QoreTypeInfo::isType(type, NT_FLOAT)
-                || QoreTypeInfo::isType(type, NT_BOOLEAN));
+            && (QoreTypeInfo::isPlainType(type, NT_INT)
+                || QoreTypeInfo::isPlainType(type, NT_FLOAT)
+                || QoreTypeInfo::isPlainType(type, NT_BOOLEAN));
         if (!exact_scalar) {
             result.clear();
             return false;
@@ -9396,14 +9395,13 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
         QoreIRPhiValueKind phi_kind = QoreIRPhiValueKind::QoreValue;
         if (type && !QoreTypeInfo::isReference(type)
                 && !QoreTypeInfo::parseAcceptsReturns(type, NT_NOTHING)) {
-            if (QoreTypeInfo::isType(type, NT_INT)
-                    && !QoreTypeInfo::getReturnEnum(type)) {
+            if (QoreTypeInfo::isPlainType(type, NT_INT)) {
                 representation = QoreIRValueRepresentation::NativeInt;
                 phi_kind = QoreIRPhiValueKind::NativeInt;
-            } else if (QoreTypeInfo::isType(type, NT_FLOAT)) {
+            } else if (QoreTypeInfo::isPlainType(type, NT_FLOAT)) {
                 representation = QoreIRValueRepresentation::NativeFloat;
                 phi_kind = QoreIRPhiValueKind::NativeFloat;
-            } else if (QoreTypeInfo::isType(type, NT_BOOLEAN)) {
+            } else if (QoreTypeInfo::isPlainType(type, NT_BOOLEAN)) {
                 representation = QoreIRValueRepresentation::NativeBool;
                 phi_kind = QoreIRPhiValueKind::NativeBool;
             }
@@ -9949,10 +9947,9 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
                 const QoreTypeInfo* value_type =
                     type ? qore_get_value_type(type) : nullptr;
                 bool native_scalar = value_type
-                    && ((QoreTypeInfo::isType(value_type, NT_INT)
-                            && !QoreTypeInfo::getReturnEnum(value_type))
-                        || QoreTypeInfo::isType(value_type, NT_FLOAT)
-                        || QoreTypeInfo::isType(value_type, NT_BOOLEAN));
+                    && (QoreTypeInfo::isPlainType(value_type, NT_INT)
+                        || QoreTypeInfo::isPlainType(value_type, NT_FLOAT)
+                        || QoreTypeInfo::isPlainType(value_type, NT_BOOLEAN));
                 if (local && !local->closureUse()
                         && !QoreTypeInfo::isReference(type)
                         && native_scalar) {
@@ -10164,10 +10161,9 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
                         qore_get_value_type(refined_facts.type_info);
                     refined_facts.representation = !assigned
                         ? QoreIRValueRepresentation::Boxed
-                        : QoreTypeInfo::isType(value_type, NT_INT)
-                            && !QoreTypeInfo::getReturnEnum(value_type)
+                        : QoreTypeInfo::isPlainType(value_type, NT_INT)
                             ? QoreIRValueRepresentation::NativeInt
-                            : QoreTypeInfo::isType(value_type, NT_FLOAT)
+                            : QoreTypeInfo::isPlainType(value_type, NT_FLOAT)
                                 ? QoreIRValueRepresentation::NativeFloat
                                 : QoreIRValueRepresentation::NativeBool;
                     if (facts.assigned_state != refined_facts.assigned_state
@@ -15005,9 +15001,7 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
         }
         const QoreTypeInfo* value_type =
             qore_get_value_type(facts->type_info);
-        return value_type && QoreTypeInfo::isType(value_type, type)
-            && (type != NT_INT
-                || !QoreTypeInfo::getReturnEnum(value_type));
+        return value_type && QoreTypeInfo::isPlainType(value_type, type);
     };
     //! returns true if the value may be NOTHING: its type allows NOTHING and nothing proves that it is not
     /** The specialization of an operator to native arithmetic converts NOTHING to 0 or 0.0, where the operators give

@@ -15671,16 +15671,14 @@ static size_t projectAOTNonescapingObjectScalars(
                 if (return_kind == BatchCalleeReturnKind::NativeInt
                         && source_facts->representation
                             == QoreIRValueRepresentation::NativeInt
-                        && QoreTypeInfo::isType(member_type, NT_INT)
-                        && !QoreTypeInfo::getReturnEnum(member_type)) {
+                        && QoreTypeInfo::isPlainType(member_type, NT_INT)) {
                     projection.kind =
                         QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::NativeInt;
                 } else if (return_kind == BatchCalleeReturnKind::NativeFloat
                         && source_facts->representation
                             == QoreIRValueRepresentation::NativeFloat
-                        && QoreTypeInfo::isType(
-                            member_type, NT_FLOAT)) {
+                        && QoreTypeInfo::isPlainType(member_type, NT_FLOAT)) {
                     projection.kind =
                         QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::NativeFloat;

@@ -765,11 +765,11 @@ std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
         }
 
         const QoreTypeInfo* ti = ir_func.specializeType(lv->getTypeInfo());
-        if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+        if (QoreTypeInfo::isPlainType(ti, NT_INT)) {
             kinds[i] = BatchCalleeParamKind::NativeInt;
-        } else if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_FLOAT)) {
             kinds[i] = BatchCalleeParamKind::NativeFloat;
-        } else if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_BOOLEAN)) {
             kinds[i] = BatchCalleeParamKind::NativeBool;
         }
     }
@@ -821,11 +821,11 @@ std::vector<BatchCalleeParamKind> qore_ir_get_signature_param_kinds(
         }
         const LocalVar* lv = sig->lv[i];
         const QoreTypeInfo* ti = lv ? lv->getTypeInfo() : nullptr;
-        if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+        if (QoreTypeInfo::isPlainType(ti, NT_INT)) {
             kinds[i] = BatchCalleeParamKind::NativeInt;
-        } else if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_FLOAT)) {
             kinds[i] = BatchCalleeParamKind::NativeFloat;
-        } else if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_BOOLEAN)) {
             kinds[i] = BatchCalleeParamKind::NativeBool;
         }
     }
@@ -838,13 +838,13 @@ BatchCalleeParamKind qore_ir_get_scalar_local_kind(const LocalVar* local) {
             || QoreTypeInfo::parseAcceptsReturns(type, NT_NOTHING)) {
         return BatchCalleeParamKind::Boxed;
     }
-    if (QoreTypeInfo::isType(type, NT_INT) && !QoreTypeInfo::getReturnEnum(type)) {
+    if (QoreTypeInfo::isPlainType(type, NT_INT)) {
         return BatchCalleeParamKind::NativeInt;
     }
-    if (QoreTypeInfo::isType(type, NT_FLOAT)) {
+    if (QoreTypeInfo::isPlainType(type, NT_FLOAT)) {
         return BatchCalleeParamKind::NativeFloat;
     }
-    if (QoreTypeInfo::isType(type, NT_BOOLEAN)) {
+    if (QoreTypeInfo::isPlainType(type, NT_BOOLEAN)) {
         return BatchCalleeParamKind::NativeBool;
     }
     return BatchCalleeParamKind::Boxed;
@@ -889,13 +889,13 @@ BatchCalleeReturnKind qore_ir_get_fast_entry_return_kind(
     const QoreTypeInfo* ti = ir_func
         ? ir_func->specializeType(sig->getReturnTypeInfo())
         : sig->getReturnTypeInfo();
-    if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+    if (QoreTypeInfo::isPlainType(ti, NT_INT)) {
         return BatchCalleeReturnKind::NativeInt;
     }
-    if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+    if (QoreTypeInfo::isPlainType(ti, NT_FLOAT)) {
         return BatchCalleeReturnKind::NativeFloat;
     }
-    if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+    if (QoreTypeInfo::isPlainType(ti, NT_BOOLEAN)) {
         return BatchCalleeReturnKind::NativeBool;
     }
     return BatchCalleeReturnKind::Boxed;
