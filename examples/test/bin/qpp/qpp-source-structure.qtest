@@ -307,6 +307,24 @@ int TestCls::get5() [flags=CONSTANT] {
         assertSucceeded(r, "directive lines in a raw string literal and a block comment");
         assertRegex("TestCls_get5", r.cpp_text, "the method after them is bound");
 
+        # a comment that starts in a directive line and ends in code that a definition skips
+        r = runQpp(ClassStart + "
+#ifdef FOO
+int a;
+#else /* start
+ end */
+int b;
+#endif
+//! documented
+/** doc
+*/
+int TestCls::get6() [flags=CONSTANT] {
+    return 1;
+}
+", ("-DFOO",));
+        assertSucceeded(r, "a comment ending in skipped code");
+        assertRegex("TestCls_get6", r.cpp_text, "the method after the skipped code is bound");
+
         # a method in a raw string literal is copied as it is
         r = runQpp(ClassStart + "
 static const char* s3 = R\"(

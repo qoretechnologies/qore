@@ -5363,6 +5363,8 @@ public:
             // Skip content in inactive conditional blocks
             if (ppState.isSkipping()) {
                 addText(buf, line);  // Keep the raw text for pass-through to C++
+                // a comment or a raw string literal can start or end in skipped code, as for the preprocessor
+                copied.text(line);
                 continue;
             }
 
@@ -8702,6 +8704,8 @@ protected:
             // Skip content in inactive conditional blocks
             if (ppState.isSkipping()) {
                 buf += str;  // Keep the raw text for pass-through to C++
+                // a comment or a raw string literal can start or end in skipped code, as for the preprocessor
+                copied.text(str);
                 continue;
             }
 
