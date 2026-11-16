@@ -11776,6 +11776,43 @@ private:
 };
 }
 
+//! true for an instruction that a pending exception cannot leave the frame from or be observed by, between the check
+//! of a release and an instruction that checks the sink with the same handler: a constant, scalar arithmetic or
+//! comparison, or the release of a temporary, whose own exception the same check takes (qore#6072)
+static bool qore_ir_release_check_transparent(const QoreIRInstruction* inst) {
+    switch (inst->opcode) {
+        case QoreIROpcode::ConstInt:
+        case QoreIROpcode::ConstFloat:
+        case QoreIROpcode::ConstBool:
+        case QoreIROpcode::ConstNothing:
+        case QoreIROpcode::ConstString:
+        case QoreIROpcode::AddInt:
+        case QoreIROpcode::AddFloat:
+        case QoreIROpcode::SubInt:
+        case QoreIROpcode::SubFloat:
+        case QoreIROpcode::MulInt:
+        case QoreIROpcode::MulFloat:
+        case QoreIROpcode::EqInt:
+        case QoreIROpcode::NeInt:
+        case QoreIROpcode::LtInt:
+        case QoreIROpcode::LeInt:
+        case QoreIROpcode::GtInt:
+        case QoreIROpcode::GeInt:
+        case QoreIROpcode::ListSize:
+        case QoreIROpcode::ReleaseOwnedTemp:
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! true for an instruction that checks the sink after itself with the given handler, in the IR interpreter and in
+//! native code, and runs no Qore code: a check of a release before it is redundant (qore#6072)
+static bool qore_ir_release_check_covering(const QoreIRInstruction* inst, const QoreIRBasicBlock* handler) {
+    // ListSetValue is not one: native code stores some values without a check
+    return handler && inst->exception_target == handler && inst->opcode == QoreIROpcode::ListAppendElement;
+}
+
 // documented in QoreIRAnalysis.h
 size_t qore_ir_prune_release_checks(QoreIRFunction& func) {
     bool any = false;
@@ -11862,12 +11899,31 @@ size_t qore_ir_prune_release_checks(QoreIRFunction& func) {
                 keep = facts.valueMayHoldObject(value);
                 auto d = defs.find(value.id);
                 QoreIRInstruction* def = d == defs.end() ? nullptr : d->second;
-                if (keep && def) {
-                    if (qore_ir_takes_region_exception_target(def->opcode)) {
-                        // native code checks the sink after the release of the value that the container replaces
-                        if (!def->exception_target) {
-                            def->exception_target = inst->exception_target;
+                // the next instruction that is not transparent checks the sink with the same handler: the check is
+                // redundant, at no cost in any mode
+                bool covered = false;
+                if (keep) {
+                    for (size_t j = i + 1, e = insts.size(); j < e; ++j) {
+                        if (qore_ir_release_check_covering(insts[j].get(), inst->exception_target)) {
+                            covered = true;
+                            break;
                         }
+                        if (!qore_ir_release_check_transparent(insts[j].get())) {
+                            break;
+                        }
+                    }
+                }
+                if (keep && def && qore_ir_takes_region_exception_target(def->opcode)) {
+                    // native code checks the sink after the release of the value that the container replaces
+                    if (!def->exception_target) {
+                        def->exception_target = inst->exception_target;
+                    }
+                }
+                if (covered) {
+                    keep = false;
+                } else if (keep && def) {
+                    if (qore_ir_takes_region_exception_target(def->opcode)) {
+                        // the check stays for the IR interpreter, which emits nothing for it in native code
                     } else if (def->opcode == QoreIROpcode::Invoke || def->opcode == QoreIROpcode::Phi) {
                         // native code releases the previous value at the start of the call's continuation or of the
                         // Phi's block, where this is
@@ -11876,8 +11932,20 @@ size_t qore_ir_prune_release_checks(QoreIRFunction& func) {
                     }
                 }
             } else {
-                // at a back-edge
+                // at a back-edge; redundant when the instructions before it, which are transparent, follow one that
+                // checks the sink with the same handler
                 keep = backEdgeLoopHasObjects(block.get());
+                if (keep) {
+                    for (size_t j = i; j-- > 0; ) {
+                        if (qore_ir_release_check_covering(insts[j].get(), inst->exception_target)) {
+                            keep = false;
+                            break;
+                        }
+                        if (!qore_ir_release_check_transparent(insts[j].get())) {
+                            break;
+                        }
+                    }
+                }
             }
             if (keep) {
                 ++i;
