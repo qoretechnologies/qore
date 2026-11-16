@@ -91,6 +91,7 @@
     |@ref lock-warnings "%lock-warnings"|Prohibits further changes to the warning mask (equivalent to the <tt>-</tt><tt>-lock-warnings</tt> command line option)
     |@ref loose-args "%loose-args"|reverts the effect of the @ref strict-args "%strict-args" parse options
     |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", @ref strict-parse-errors "%strict-parse-errors", @ref streaming-any "%streaming-any", @ref negative-offsets "%negative-offsets", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with any extension other than <tt>.q</tt> (including no extension) automatically enable this mode; set the environment variable \c QORE_OLD_STYLE_DEFAULT to disable the auto-enable globally.<br/><br/>Since %Qore 3.0
+    |@ref module-cmd "%module-cmd"<tt>(<em>module</em>) <em>command</em></tt>|Loads the named @ref qore_modules "module" into the current @ref Qore::Program "Program" if it is not already loaded and issues the given command to it at parse time; the module defines the commands that it accepts; see also @ref Qore::Program::issueModuleCmd() "Program::issueModuleCmd()"
     |@ref loose-types "%loose-types"|Deprecated: support removed in %Qore 3.0; this directive has no effect
     |@ref new-style "%new-style"|Sets both @ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local". These two options together make programming in %Qore superficially more like programming in C++ or Java programs; use this if you dislike programming with the \c "$" sign, for example; see also @ref old-style "%old-style" <br/><br/>Since %Qore 0.8.1
     |@ref old-style "%old-style"|Resets default %Qore parsing behavior by setting @ref require-dollar "%require-dollar" and @ref assume-global "%assume-global"; this option is the opposite of @ref new-style "%new-style" <br/><br/>Since %Qore 0.8.4
@@ -1672,6 +1673,47 @@ sub validate_input(int value, int max_value) {
     - Use \c "any (expr)" for the streaming operator in syntactically ambiguous positions such as direct function-call arguments.
 
     @since %Qore 3.0
+
+    <hr>
+    @section module-cmd %module-cmd
+
+    @par Parse Directive:
+    <tt>%%module-cmd(<em>module</em>) <em>command</em></tt>
+
+    @par Command Line:
+    n/a
+
+    @par Parse Option Constant:
+    n/a
+
+    @par Description:
+    Issues a command to a @ref qore_modules "module" at parse time: the module named in parentheses is loaded into
+    the current @ref Qore::Program "Program" if it is not already loaded, and the rest of the line, without leading
+    and trailing whitespace, is given to the module's command handler as the command when the directive is parsed, so
+    that the command can affect the parsing of the code that follows it (ex: by importing the classes that the code
+    uses).  The directive must be on a line of its own, starting at the beginning of the line.
+
+    The commands that a module accepts and what they do are defined by the module; see its documentation.  For
+    example, the \c jni module adds entries to the Program's classpath and imports Java classes into the Program with
+    commands:
+    @code{.py}
+%module-cmd(jni) add-classpath /opt/app/lib/app.jar
+%module-cmd(jni) import java.util.ArrayList
+
+ArrayList l();
+    @endcode
+
+    A directive without a module name in parentheses or without a command raises a parse exception, and a directive
+    for a module that cannot be loaded or that has no command handler raises \c PARSE-COMMAND-ERROR; an error in the
+    command itself raises an exception defined by the module.
+
+    A command issued by restricted code (sandboxed code, or code with a parse option that restricts a functional
+    domain, such as @ref no-filesystem "%no-filesystem") is given only to a module that declares that its command
+    handler honors the restrictions of the code that issues it; for any other module the directive raises
+    \c PARSE-COMMAND-ERROR (see @ref qore_modules).  A program or module compiled with \c qcc records its
+    \c %%module-cmd directives and issues them again when it is loaded.
+
+    A command can also be issued at runtime with @ref Qore::Program::issueModuleCmd() "Program::issueModuleCmd()".
 
     <hr>
     @section new-style %new-style
