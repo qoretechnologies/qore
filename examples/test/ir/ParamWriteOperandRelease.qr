@@ -69,6 +69,10 @@ sub operands(string p) {
     wa((foldr $1, (mk(p + "fra"), mk(p + "frb"))), p + "fr");
     wa((foldr $1 + $2, mk(p + "frx")), p + "frx");
     wa((foldl $1, True ? (mk(p + "fta"), mk(p + "ftb")) : ()), p + "ft");
+    # a fold over the list that a select gives, and the value of a fold in a hash or list literal
+    wa((foldr $1, (select (mk(p + "fsa"), mk(p + "fsb")), True)), p + "fs");
+    wa({"x": (foldl $1, (mk(p + "hfold"),))}, p + "hfold");
+    wl(((foldl $1, (mk(p + "lfold"),)),), p + "lfold");
     # methods, static methods and closures given the value of a functional operator
     C c();
     c.m((map mk(p + "mmap" + $1), (1,)), p + "mmap");
