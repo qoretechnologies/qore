@@ -542,6 +542,12 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      - the IR of an OnBlockExit instruction whose handler function an earlier one of the same function or of its
 //!        handlers has is written as handler flag 2 and the u32 index of that function (QoreAOTSharedHandlerTable),
 //!        and the slot map entry of a function has a u32 count of its LValuePath instructions (qore#6087, qore#6127)
+//!      - an expression that is a unary plus (AOTExprKind::UNARY_PLUS, 129: the operand), a binary not (~, BIT_NOT,
+//!        130: the operand), a comparison (<=>, LOG_CMP, 131: the left and the right operand), a list assignment
+//!        (LIST_ASSIGN, 132: the lvalue list as a LIST_LITERAL and the value) or a backquote (BACKQUOTE, 133: the
+//!        command as a string ref) is written natively, so that a default argument with one that is not folded at
+//!        parse time can be written (qore#6229, qore#6302); the earlier formats have no such expressions, and a reader
+//!        of them refuses the kinds
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -2513,6 +2519,12 @@ enum class AOTExprKind : uint8_t {
     FIND               = 127,
     CALLREF_CALL_NAMED = 128, //!< named call reference call (M4 phase 3): as CALLREF_CALL, then u8 name count + a
                               //!< string ref per argument name ("" for a positional argument)
+    UNARY_PLUS         = 129, //!< Unary plus operator: operand(AOTExprKind) (qore#6229)
+    BIT_NOT            = 130, //!< Binary not (~) operator: operand(AOTExprKind) (qore#6229)
+    LOG_CMP            = 131, //!< Comparison (<=>) operator: left(AOTExprKind) + right(AOTExprKind) (qore#6229)
+    //! list assignment operator: lvalue list (LIST_LITERAL; read as a parse list) + value(AOTExprKind) (qore#6229)
+    LIST_ASSIGN        = 132,
+    BACKQUOTE          = 133, //!< Backquote (shell command) expression: command(stringref) (qore#6302)
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };

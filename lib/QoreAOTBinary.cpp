@@ -52,6 +52,7 @@
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/Function.h"
 #include "qore/intern/QoreClosureParseNode.h"
+#include "qore/intern/BackquoteNode.h"
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/ConstantList.h"
@@ -116,6 +117,10 @@
 #include "qore/intern/QorePushOperatorNode.h"
 #include "qore/intern/QoreUnshiftOperatorNode.h"
 #include "qore/intern/QoreUnaryMinusOperatorNode.h"
+#include "qore/intern/QoreUnaryPlusOperatorNode.h"
+#include "qore/intern/QoreBinaryNotOperatorNode.h"
+#include "qore/intern/QoreLogicalComparisonOperatorNode.h"
+#include "qore/intern/QoreListAssignmentOperatorNode.h"
 #include "qore/intern/QoreAssignmentOperatorNode.h"
 #include "qore/intern/QorePlusEqualsOperatorNode.h"
 #include "qore/intern/QoreMinusEqualsOperatorNode.h"
@@ -13513,6 +13518,27 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     if (auto* unary_minus = dynamic_cast<const QoreUnaryMinusOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::UNARY_MINUS));
         return write_inline_expr(unary_minus->getExp());
+    }
+    if (auto* unary_plus = dynamic_cast<const QoreUnaryPlusOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::UNARY_PLUS));
+        return write_inline_expr(unary_plus->getExp());
+    }
+    if (auto* bit_not = dynamic_cast<const QoreBinaryNotOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::BIT_NOT));
+        return write_inline_expr(bit_not->getExp());
+    }
+    if (auto* cmp = dynamic_cast<const QoreLogicalComparisonOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_CMP));
+        return write_inline_expr(cmp->getLeft()) && write_inline_expr(cmp->getRight());
+    }
+    if (auto* list_assign = dynamic_cast<const QoreListAssignmentOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LIST_ASSIGN));
+        return write_inline_expr(list_assign->getLeft()) && write_inline_expr(list_assign->getRight());
+    }
+    if (auto* bq = dynamic_cast<const BackquoteNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::BACKQUOTE));
+        writer.writeStringRef(bq->str ? bq->str : "");
+        return true;
     }
     if (auto* multiply = dynamic_cast<const QoreMultiplicationOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::MULTIPLY));
