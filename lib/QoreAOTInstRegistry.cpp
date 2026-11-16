@@ -1001,7 +1001,7 @@ static std::unique_ptr<QoreIRInstruction> readTypedBase(
     if (type_path && *type_path) {
         std::string type_error;
         QoreAOTTypeResolver type_resolver(ctx.pgm);
-        inst->element_type = type_resolver.resolve(type_path, type_error);
+        inst->element_type = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
         if (!inst->element_type) {
             ctx.error = std::string("cannot resolve instruction element type '") + type_path
                 + "': " + type_error;
@@ -1353,8 +1353,23 @@ static bool writeOnBlockExit(AOTInstWriteCtx& ctx) {
     obe_type_e type = obe_inst->stmt ? obe_inst->stmt->getType() : obe_inst->obe_type;
     ctx.writer.writeU8(static_cast<uint8_t>(type));
     if (obe_inst->handler_ir) {
+        // a handler function written before in the IR of the function is written as its index (#6087)
+        QoreAOTSharedHandlerTable* table = QoreAOTSharedHandlerTable::current();
+        if (table) {
+            auto i = table->written.find(obe_inst->handler_ir.get());
+            if (i != table->written.end()) {
+                ctx.writer.writeU8(2);
+                ctx.writer.writeU32(i->second);
+                return true;
+            }
+            uint32_t index = static_cast<uint32_t>(table->written.size());
+            table->written.emplace(obe_inst->handler_ir.get(), index);
+        }
         ctx.writer.writeU8(1);
-        if (!serializeIRFunction(ctx.writer, *obe_inst->handler_ir, ctx.writeExpr)) {
+        QoreAOTSharedHandlerTable::nested() = true;
+        bool ok = serializeIRFunction(ctx.writer, *obe_inst->handler_ir, ctx.writeExpr);
+        QoreAOTSharedHandlerTable::nested() = false;
+        if (!ok) {
             return false;
         }
     } else {
@@ -1369,25 +1384,48 @@ static std::unique_ptr<QoreIRInstruction> readOnBlockExit(
         AOTInstReadCtx& ctx) {
     obe_type_e obe_type = static_cast<obe_type_e>(QoreAOTBinaryReader::readU8(ctx.ptr));
     uint8_t has_handler_ir = QoreAOTBinaryReader::readU8(ctx.ptr);
-    std::unique_ptr<QoreIRFunction> nested_handler;
-    if (has_handler_ir) {
+    std::shared_ptr<QoreIRFunction> nested_handler;
+    QoreAOTSharedHandlerTable* table = QoreAOTSharedHandlerTable::current();
+    if (has_handler_ir == 2) {
+        // a handler function read before in the IR of the function (#6087)
+        if (ctx.end < ctx.ptr || static_cast<size_t>(ctx.end - ctx.ptr) < 4) {
+            ctx.error = "truncated shared OnBlockExit handler index";
+            return nullptr;
+        }
+        uint32_t index = QoreAOTBinaryReader::readU32(ctx.ptr);
+        if (!table || index >= table->read.size() || !table->read[index]) {
+            ctx.error = "invalid shared OnBlockExit handler index " + std::to_string(index);
+            return nullptr;
+        }
+        nested_handler = table->read[index];
+    } else if (has_handler_ir) {
+        size_t index = table ? table->read.size() : 0;
+        if (table) {
+            table->read.emplace_back();
+        }
         // A nested handler's parent slots are the slots of the IR function containing it, with the same slot
         // ids: bind them through the container's slot map (ctx.slot_to_local), so they resolve to the
         // container's LocalVars (same pointer identity as the runtime TLS stack) even when names are shadowed.
         // The enclosing AOT context's tables resolve the handler's explicit variable bindings; the local_map
         // is the name-based fallback for artifacts without them.
         assert(ctx.slot_to_local);
-        nested_handler = deserializeIRFunction(ctx.reader, ctx.ptr, ctx.end, ctx.pgm, ctx.readExpr,
-            &ctx.local_map, ctx.error, ctx.parent_locals_arr, ctx.num_parent_locals, nullptr, false, nullptr,
-            ctx.local_owner_pgm, false, nullptr, ctx.enclosing_body_locals, ctx.slot_to_local);
-        if (!nested_handler) {
+        QoreAOTSharedHandlerTable::nested() = true;
+        std::unique_ptr<QoreIRFunction> handler = deserializeIRFunction(ctx.reader, ctx.ptr, ctx.end, ctx.pgm,
+            ctx.readExpr, &ctx.local_map, ctx.error, ctx.parent_locals_arr, ctx.num_parent_locals, nullptr, false,
+            nullptr, ctx.local_owner_pgm, false, nullptr, ctx.enclosing_body_locals, ctx.slot_to_local);
+        QoreAOTSharedHandlerTable::nested() = false;
+        if (!handler) {
             ctx.error = "failed to deserialize nested OnBlockExit handler IR: " + ctx.error;
             return nullptr;
         }
-        nested_handler->computeSlotIdsAndEmbed();
+        handler->computeSlotIdsAndEmbed();
         // the parent's variables are pre-instantiated in the handler, as its lowering marks them; without them the
         // IR interpreter took the closure-bound variables of the function for the handler's own
-        nested_handler->restoreHandlerPreInstantiatedLocals();
+        handler->restoreHandlerPreInstantiatedLocals();
+        nested_handler = std::move(handler);
+        if (table) {
+            table->read[index] = nested_handler;
+        }
     } else {
         ctx.error = "OnBlockExit without handler IR in deserialized context";
         return nullptr;
@@ -2639,7 +2677,7 @@ static std::unique_ptr<QoreIRInstruction> readGuard(
     if (type_path && *type_path) {
         std::string type_error;
         QoreAOTTypeResolver type_resolver(ctx.pgm);
-        gi->type_info = type_resolver.resolve(type_path, type_error);
+        gi->type_info = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
     }
     gi->result = QoreIRValue(result_id);
     gi->operands = operands;
@@ -2861,7 +2899,10 @@ static std::unique_ptr<QoreIRInstruction> readNewObject(
         if (object_type_path && *object_type_path) {
             QoreAOTTypeResolver resolver(ctx.pgm);
             std::string type_error;
-            object_type_info = resolver.resolve(object_type_path, type_error);
+            // a type parameter of the generic function that the code is in (B<U> b() in sub f<U>()) is resolved as that
+            // function's, so that the call's type arguments replace it (qore#6261)
+            object_type_info = resolver.resolveForSignature(object_type_path, type_error,
+                qore_aot_get_type_param_owner());
             if (!object_type_info || !type_error.empty()) {
                 ctx.error = "cannot resolve NewObject object type path '";
                 ctx.error += object_type_path;
@@ -3916,7 +3957,7 @@ static std::unique_ptr<QoreIRInstruction> readMakeHashConstKeys(
     if (type_path && *type_path) {
         std::string type_error;
         QoreAOTTypeResolver type_resolver(ctx.pgm);
-        inst->typeInfo = type_resolver.resolve(type_path, type_error);
+        inst->typeInfo = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
         if (!inst->typeInfo) {
             ctx.error = "cannot resolve MakeHashConstKeys type '" + std::string(type_path) + "': " + type_error;
             return nullptr;
@@ -4365,7 +4406,7 @@ static std::unique_ptr<QoreIRInstruction> readMakeList(
     if (type_path && *type_path) {
         std::string type_error;
         QoreAOTTypeResolver type_resolver(ctx.pgm);
-        inst->typeInfo = type_resolver.resolve(type_path, type_error);
+        inst->typeInfo = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
         if (!inst->typeInfo) {
             ctx.error = "cannot resolve MakeList type '" + std::string(type_path) + "': " + type_error;
             return nullptr;
@@ -4402,7 +4443,7 @@ static std::unique_ptr<QoreIRInstruction> readMakeHash(
     if (type_path && *type_path) {
         std::string type_error;
         QoreAOTTypeResolver type_resolver(ctx.pgm);
-        inst->typeInfo = type_resolver.resolve(type_path, type_error);
+        inst->typeInfo = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
         if (!inst->typeInfo) {
             ctx.error = "cannot resolve MakeHash type '" + std::string(type_path) + "': " + type_error;
             return nullptr;

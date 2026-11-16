@@ -1573,6 +1573,14 @@ bool qore_ir_return_value_needs_conversion(
             value_type = nonoptional_value_type;
         }
     }
+    // the value of an enum type is the enum's member: a type that is not the enum's own type converts it to the
+    // enum's base type (string sub f(ES e) { return e; } returns a string), although the enum's type spec matches its
+    // base type without a filter (qore#6254)
+    if (const QoreEnumDecl* value_enum = QoreTypeInfo::getReturnEnum(value_type)) {
+        if (value_enum != QoreTypeInfo::getReturnEnum(return_type)) {
+            return true;
+        }
+    }
 
     bool may_not_match = false;
     bool may_need_filter = false;
@@ -4729,28 +4737,36 @@ void QoreIRToLLVM::reloadLocalsViaTable(llvm::Module& module, llvm::Function* ll
 }
 
 // documented in QoreIRToLLVM.h
-std::vector<const void*> QoreIRToLLVM::getReleasedReloadLocals() {
+std::vector<const void*> QoreIRToLLVM::getReleasedReloadLocals(const std::unordered_set<const void*>* only) {
     if (local_reload_trackers.empty() && local_reload_deferred.empty()
             && preinstantiated_entry_cleanup_by_local.empty()) {
         return {};
     }
+    // the storage of a local that the helper shares is released as that of a local that a handler references: if the
+    // reload after the call reloads it (see releasesReloadStorageForHandlers())
+    auto releases = [&](const void* key) -> bool {
+        if (only) {
+            return only->count(key) && canReloadLocalFromRuntime(key, true);
+        }
+        return releasesReloadStorageForHandlers(key);
+    };
     llvm::MapVector<const void*, bool> keys;
     size_t count = 0;
     for (const auto& entry : preinstantiated_entry_cleanup_by_local) {
         if (!(++count % 100)) {
             (void)qore_check_cancel(nullptr, "LLVM handler entry cleanup collection");
         }
-        if (releasesReloadStorageForHandlers(entry.first)) {
+        if (releases(entry.first)) {
             keys.insert({entry.first, true});
         }
     }
     for (const auto& entry : local_reload_deferred) {
-        if (releasesReloadStorageForHandlers(entry.first)) {
+        if (releases(entry.first)) {
             keys.insert({entry.first, true});
         }
     }
     for (const auto& entry : local_reload_trackers) {
-        if (releasesReloadStorageForHandlers(entry.first)) {
+        if (releases(entry.first)) {
             keys.insert({entry.first, true});
         }
     }
@@ -4758,8 +4774,9 @@ std::vector<const void*> QoreIRToLLVM::getReleasedReloadLocals() {
 }
 
 // documented in QoreIRToLLVM.h
-std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorageViaTable(llvm::Module& module) {
-    std::vector<const void*> released = getReleasedReloadLocals();
+std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorageViaTable(llvm::Module& module,
+        const std::unordered_set<const void*>* only) {
+    std::vector<const void*> released = getReleasedReloadLocals(only);
     if (released.empty()) {
         return released;
     }
@@ -5246,7 +5263,8 @@ std::vector<const void*> QoreIRToLLVM::getLocalsInReverseDeclarationOrder(const 
     return keys;
 }
 
-std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& module) {
+std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& module,
+        const std::unordered_set<const void*>* only) {
     if (local_reload_trackers.empty() && local_reload_deferred.empty()
             && preinstantiated_entry_cleanup_by_local.empty()) {
         return {};
@@ -5264,7 +5282,7 @@ std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& m
     };
     // the locals in the order of their release (shared with the table-driven release, see
     // releaseLocalReloadStorageViaTable())
-    std::vector<const void*> released = getReleasedReloadLocals();
+    std::vector<const void*> released = getReleasedReloadLocals(only);
     size_t count = 0;
     for (const void* key : released) {
         if (!(++count % 100)) {
@@ -5302,8 +5320,22 @@ bool QoreIRToLLVM::releasesReloadStorageForHandlers(const void* key) const {
 
 void QoreIRToLLVM::recordHandlerSite(llvm::CallInst* call, bool reload) {
     if (has_on_block_exit_handlers) {
-        handler_sites.push_back({call, reload});
+        handler_sites.push_back({call, reload, nullptr, nullptr});
     }
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::recordHelperSite(llvm::CallInst* call, const std::vector<const LocalVar*>& shared_locals,
+        llvm::Instruction* reload_after) {
+    if (shared_locals.empty()) {
+        return;
+    }
+    auto keys = std::make_unique<std::unordered_set<const void*>>();
+    keys->reserve(shared_locals.size());
+    for (const LocalVar* lv : shared_locals) {
+        keys->insert(reinterpret_cast<const void*>(lv));
+    }
+    handler_sites.push_back({call, true, std::move(keys), reload_after});
 }
 
 void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* llvm_func) {
@@ -5318,6 +5350,8 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
     // would rotate. A local without a reload tracker or entry owner is left to cache invalidation, as before.
     // The locals released are reloaded eagerly after the handlers: code can read a local's native cache
     // without the stale check (fused local operations), and the reference that backed the cache was released.
+    // The call of an outlined function-body helper is a site too, for the locals that the helper shares with this
+    // function, which it can assign on the runtime stack as a handler can (qore#6300).
     // the sites are taken from the member, which is left empty on any exit
     std::vector<HandlerSite> sites;
     sites.swap(handler_sites);
@@ -5325,8 +5359,9 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
     llvm::IRBuilderBase::InsertPointGuard insert_point_guard(*builder);
     for (const HandlerSite& site : sites) {
         builder->SetInsertPoint(site.call);
-        std::vector<const void*> released = obe_table_mode ? releaseLocalReloadStorageViaTable(module)
-            : releaseLocalReloadStorage(module);
+        const std::unordered_set<const void*>* only = site.shared_locals.get();
+        std::vector<const void*> released = obe_table_mode ? releaseLocalReloadStorageViaTable(module, only)
+            : releaseLocalReloadStorage(module, only);
         if (!site.reload || released.empty()) {
             continue;
         }
@@ -5334,12 +5369,14 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
         // of endPendingHandlerRun(), and every block of the lowered function has a terminator, so the call has a next
         // instruction; a block without one gets the reloads at its end, after the call, and is then rejected by the
         // check for blocks without a terminator that lowerFunction() makes afterwards, so no invalid IR gets through
-        llvm::Instruction* next = site.call->getNextNode();
+        // the reloads after a helper call follow the invalidation of the caches after it (see recordHelperSite())
+        llvm::Instruction* after = site.reload_after ? site.reload_after : site.call;
+        llvm::Instruction* next = after->getNextNode();
         assert(next);
         if (next) {
             builder->SetInsertPoint(next);
         } else {
-            builder->SetInsertPoint(site.call->getParent());
+            builder->SetInsertPoint(after->getParent());
         }
         if (obe_table_mode) {
             // the locals that have an owner are reloaded by one call (qore#6110)
@@ -14620,7 +14657,14 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 if (func->getSubprogram()) {
                     func->setSubprogram(nullptr);
                 }
-                func->eraseFromParent();
+                if (func->use_empty()) {
+                    func->eraseFromParent();
+                } else {
+                    // a function declared before it was lowered (a member of a batch, or a fast entry) is called by
+                    // code of the module already: it is left as a declaration, which its callers keep referring to,
+                    // and the caller of the lowering discards the module or fails (qore#6313)
+                    func->deleteBody();
+                }
                 // Clear the subprogram pointer so the reset path doesn't reference it
                 if (di_sp_ptr) {
                     *di_sp_ptr = nullptr;
@@ -17701,6 +17745,75 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     return true;
 }
 
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::emitStringAppendCow(const QoreIRInstruction* inst, llvm::Value* lhs_boxed,
+        llvm::Value* rhs_boxed, bool use_in_place, llvm::Module& module, llvm::Function* llvm_func, bool& borrowed,
+        std::string& error) {
+    borrowed = false;
+    if (inst->string_append_local_cow) {
+        auto definition = value_definitions.find(inst->operands[0].id);
+        if (definition == value_definitions.end()
+                || definition->second->opcode != QoreIROpcode::LoadLocal) {
+            error = "internal error: local string append has no local load";
+            return nullptr;
+        }
+        const auto* load = static_cast<const QoreIRLocalInstruction*>(definition->second);
+        auto key = reinterpret_cast<const void*>(load->local);
+        auto local = local_allocas.find(key);
+        if (local == local_allocas.end()) {
+            // Top-level variables referenced from a function are
+            // represented by LocalVar instructions but remain on the
+            // runtime stack. Their loads own a temporary reference, so
+            // use guarded CoW and let StoreLocal publish the result.
+            use_in_place = false;
+        } else if (ir_only_locals_set
+                && ir_only_locals_set->count(key) && !use_in_place) {
+            // raw local cache: the helper appends to the stored string in place
+            llvm::Value* owner = local->second.storage();
+            auto preinst_cleanup =
+                preinstantiated_entry_cleanup_by_local.find(key);
+            if (preinst_cleanup
+                    != preinstantiated_entry_cleanup_by_local.end()) {
+                owner = preinst_cleanup->second;
+            } else if (!fast_entry_param_allocas_by_local.count(key)
+                    && owned_ir_local_alloca_keys.insert(key).second) {
+                if (auto* local_ai =
+                        llvm::dyn_cast<llvm::AllocaInst>(local->second.storage())) {
+                    owned_ir_local_allocas.push_back(local_ai);
+                }
+            }
+
+            auto helper = module.getOrInsertFunction(
+                "qore_rt_string_append_local_cow",
+                llvm::FunctionType::get(i64_type,
+                    {ptr_type, ptr_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper,
+                {owner, local->second.storage(), rhs_boxed, xsink_arg});
+            markLocalCacheFresh(key, llvm_func);
+            // the helper returns the local's own value, which the local keeps
+            borrowed = true;
+            return result;
+        } else if (!(ir_only_locals_set
+                && ir_only_locals_set->count(key))) {
+            // The runtime stack owns the local. Drop only compiler-held
+            // reload/cache references so the helper's refcount test sees
+            // real aliases, then let the paired StoreLocal publish the
+            // owned result normally.
+            clearLocalCachedValue(key, module, llvm_func,
+                LocalCacheClearMode::DuplicateRefsOnly);
+            clearLocalReloadTracker(key, module, llvm_func);
+            use_in_place = false;
+        }
+    }
+    const char* helper_name = use_in_place
+        ? "qore_rt_string_append_in_place" : "qore_rt_string_append_cow";
+    auto helper = module.getOrInsertFunction(helper_name,
+            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+    // the in-place helper returns the local's own value
+    borrowed = use_in_place;
+    return builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
+}
+
 bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Function* llvm_func,
         llvm::Module& module, std::string& error) {
     printd(3, "LLVM-LOWER: opcode=%d result=%%%d\n", (int)inst->opcode, inst->result.id);
@@ -18325,72 +18438,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
-            bool use_in_place = inst->string_append_in_place;
-            if (inst->string_append_local_cow) {
-                auto definition = value_definitions.find(inst->operands[0].id);
-                if (definition == value_definitions.end()
-                        || definition->second->opcode != QoreIROpcode::LoadLocal) {
-                    error = "internal error: local string append has no local load";
-                    return false;
-                }
-                const auto* load = static_cast<const QoreIRLocalInstruction*>(
-                    definition->second);
-                auto key = reinterpret_cast<const void*>(load->local);
-                auto local = local_allocas.find(key);
-                if (local == local_allocas.end()) {
-                    // Top-level variables referenced from a function are
-                    // represented by LocalVar instructions but remain on the
-                    // runtime stack. Their loads own a temporary reference, so
-                    // use guarded CoW and let StoreLocal publish the result.
-                    use_in_place = false;
-                } else if (ir_only_locals_set
-                        && ir_only_locals_set->count(key) && !use_in_place) {
-                    // raw local cache: the helper appends to the stored string in place
-                    llvm::Value* owner = local->second.storage();
-                    auto preinst_cleanup =
-                        preinstantiated_entry_cleanup_by_local.find(key);
-                    if (preinst_cleanup
-                            != preinstantiated_entry_cleanup_by_local.end()) {
-                        owner = preinst_cleanup->second;
-                    } else if (!fast_entry_param_allocas_by_local.count(key)
-                            && owned_ir_local_alloca_keys.insert(key).second) {
-                        if (auto* local_ai =
-                                llvm::dyn_cast<llvm::AllocaInst>(local->second.storage())) {
-                            owned_ir_local_allocas.push_back(local_ai);
-                        }
-                    }
-
-                    auto helper = module.getOrInsertFunction(
-                        "qore_rt_string_append_local_cow",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, i64_type, ptr_type}, false));
-                    llvm::Value* result = builder->CreateCall(helper,
-                        {owner, local->second.storage(), rhs_boxed, xsink_arg});
-                    values[inst->result.id] = result;
-                    nanboxed_values.insert(inst->result.id);
-                    markLocalCacheFresh(key, llvm_func);
-                    emitExceptionCheck(module, llvm_func, inst);
-                    return true;
-                } else if (!(ir_only_locals_set
-                        && ir_only_locals_set->count(key))) {
-                    // The runtime stack owns the local. Drop only compiler-held
-                    // reload/cache references so the helper's refcount test sees
-                    // real aliases, then let the paired StoreLocal publish the
-                    // owned result normally.
-                    clearLocalCachedValue(key, module, llvm_func,
-                        LocalCacheClearMode::DuplicateRefsOnly);
-                    clearLocalReloadTracker(key, module, llvm_func);
-                    use_in_place = false;
-                }
+            bool borrowed = false;
+            llvm::Value* result = emitStringAppendCow(inst, lhs_boxed, rhs_boxed, inst->string_append_in_place,
+                module, llvm_func, borrowed, error);
+            if (!result) {
+                return false;
             }
-            const char* helper_name = use_in_place
-                ? "qore_rt_string_append_in_place" : "qore_rt_string_append_cow";
-            auto helper = module.getOrInsertFunction(helper_name,
-                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
-            if (!use_in_place) {
+            if (!borrowed) {
                 trackResultForCleanup(result, inst->result.id, llvm_func);
             }
             emitExceptionCheck(module, llvm_func, inst);
@@ -21392,6 +21448,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {builder->CreateIntToPtr(var_ptr, ptr_type),
                          llvm::ConstantInt::get(i64_type, fused->delta, true), xsink_arg});
                 }
+                // no exception check follows: the helper changes a closure-bound int or softint variable, which
+                // accepts any int (an enum variable takes the lvalue path, see qore_ir_is_enum_lvalue_type() in
+                // QoreIRLowering.cpp, qore#6197), and a read-only variable cannot be changed by ++, --, += or -=
                 if (inst->result.isValid()) {
                     values[inst->result.id] = result;
                 }
@@ -21828,6 +21887,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst);
             llvm::Value* result;
             bool result_proven_nothrow = false;
+            // true if the result is a value that a local keeps, which is not released (see emitStringAppendCow())
+            bool result_borrowed = false;
             BatchCalleeReturnKind invoke_return_kind = BatchCalleeReturnKind::Boxed;
 
             // Dispatch based on invoke_opcode and operand availability to avoid
@@ -21882,9 +21943,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!lhs || !rhs) { return false; }
                 llvm::Value* lhs_boxed = boxValue(lhs, inv->operands[0].id);
                 llvm::Value* rhs_boxed = boxValue(rhs, inv->operands[1].id);
-                auto helper = module.getOrInsertFunction("qore_rt_string_append_cow",
-                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
+                // an append to a local in a try block is paired with its load and store as outside of one (issue
+                // #6280); the helpers leave the local unchanged on the exception edge.  An invoke is never marked
+                // in place
+                result = emitStringAppendCow(inst, lhs_boxed, rhs_boxed, false, module, llvm_func, result_borrowed,
+                    error);
+                if (!result) {
+                    return false;
+                }
 
             } else if (inv->invoke_opcode == QoreIROpcode::StringConcat
                     && !inv->operands.empty()) {
@@ -24141,9 +24207,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (inv->invoke_opcode != QoreIROpcode::RefForeachInit
                     && invoke_return_kind == BatchCalleeReturnKind::Boxed) {
                 nanboxed_values.insert(inst->result.id);
-                result_deferred = trackResultForCleanup(result, inst->result.id, llvm_func,
-                    result_proven_nothrow ? nullptr
-                        : getInvokeResultDeferBlock(inv->normal_target, inv->exception_target));
+                if (!result_borrowed) {
+                    result_deferred = trackResultForCleanup(result, inst->result.id, llvm_func,
+                        result_proven_nothrow ? nullptr
+                            : getInvokeResultDeferBlock(inv->normal_target, inv->exception_target));
+                }
             } else if (invoke_return_kind != BatchCalleeReturnKind::Boxed) {
                 native_call_result_kinds.emplace(
                     inst->result.id, invoke_return_kind);
@@ -37440,14 +37508,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* helper_ft = llvm::FunctionType::get(i64_type,
                     {ptr_type, ptr_type}, false);
             auto helper = module.getOrInsertFunction(cah->helper_name, helper_ft);
-            llvm::Value* result = builder->CreateCall(helper,
+            llvm::CallInst* result = builder->CreateCall(helper,
                     {aot_ctx_arg, xsink_arg});
-            // Outlined function-body helpers execute with this function's
-            // runtime frame and can assign shared (non-IR-only) locals
-            // through the TLS stack — mark all reloadable local allocas
-            // stale (no-op for init-expression helpers, which reference no
-            // locals).
+            // Outlined function-body helpers execute with this function's runtime frame and can assign shared
+            // (non-IR-only) locals through the TLS stack, so all reloadable local caches are marked stale after the
+            // call (no-op for init-expression helpers, which reference no locals).  The reload storage of the
+            // helper's shared locals is also released before the call and the locals reloaded after it, so that a
+            // value that the helper replaces is released at its assignment (qore#6300; see
+            // finalizeHandlerSites()); the reloads go after the epoch bump emitted here, so that they leave the
+            // caches fresh and a later read does not reload them again.
             reloadAllLocalsFromRuntime(module, llvm_func);
+            recordHelperSite(result, cah->shared_locals, &builder->GetInsertBlock()->back());
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -38163,13 +38234,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
                 if (inst->opcode == QoreIROpcode::ListIndexDynamic) {
                     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
-                    int32_t string_index_char = 1;
+                    // %no-string-index-char is refused under %modern, so compiled code always has string index chars
+                    const int32_t string_index_char = 1;
+#ifdef DEBUG
                     if (expr_inst->expr.hasNode()) {
                         if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                                 expr_inst->expr.getInternalNode())) {
-                            string_index_char = sq->hasStringIndexChar() ? 1 : 0;
+                            assert(sq->hasStringIndexChar());
                         }
                     }
+#endif
                     if (!expr_inst->list_selector_kinds.empty()) {
                         int num_selectors = static_cast<int>(inst->operands.size()) - 1;
                         llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
@@ -38211,14 +38285,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!rhs) { return false; }
                 llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
                 if (inst->opcode == QoreIROpcode::ListIndexDynamic) {
+                    // %no-string-index-char is refused under %modern, so compiled code always has string index chars
+                    const int32_t string_index_char = 1;
+#ifdef DEBUG
                     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
-                    int32_t string_index_char = 1;
                     if (expr_inst->expr.hasNode()) {
                         if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                                 expr_inst->expr.getInternalNode())) {
-                            string_index_char = sq->hasStringIndexChar() ? 1 : 0;
+                            assert(sq->hasStringIndexChar());
                         }
                     }
+#endif
                     auto helper = module.getOrInsertFunction("qore_rt_list_index_dynamic",
                         llvm::FunctionType::get(i64_type, {i64_type, i64_type, i32_type, ptr_type}, false));
                     llvm::Value* result = builder->CreateCall(helper,
@@ -38641,7 +38718,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 case QoreIROpcode::LValuePathUnary: {
                     if (direct_self_mutation) {
                         auto ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, i32_type, ptr_type}, false);
+                            {ptr_type, i32_type, i32_type, ptr_type}, false);
                         auto fn = module.getOrInsertFunction(
                             "qore_rt_self_member_update", ft);
                         auto fn_throwing = module.getOrInsertFunction(
@@ -38650,6 +38727,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {direct_member_ptr,
                              llvm::ConstantInt::get(i32_type,
                                 static_cast<int32_t>(path_inst->unary_op)),
+                             llvm::ConstantInt::get(i32_type, path_inst->ref_rv ? 1 : 0),
                              xsink_arg}, module, llvm_func, inst);
                     } else if (aot_slots) {
                         auto ft = llvm::FunctionType::get(i64_type,
@@ -38970,7 +39048,9 @@ bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::M
     if (idx_val->getType() != i64_type) {
         return false;  // Can't determine index type
     }
-    llvm::Value* string_index_char = llvm::ConstantInt::get(i32_type, sq_brackets->hasStringIndexChar() ? 1 : 0);
+    // %no-string-index-char is refused under %modern, so compiled code always has string index chars
+    assert(sq_brackets->hasStringIndexChar());
+    llvm::Value* string_index_char = llvm::ConstantInt::get(i32_type, 1);
     auto helper = module.getOrInsertFunction(
         "qore_rt_list_index_access_compat",
         llvm::FunctionType::get(i64_type,

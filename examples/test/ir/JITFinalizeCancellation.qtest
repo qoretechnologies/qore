@@ -32,13 +32,14 @@ class JITFinalizeCancellationTest inherits QUnit::Test {
             ("reload-chain-slots", "reload chain slots", ""));
         addTestCase("a cancelled finalization of the handler local table refuses the function", \testLoop(),
             ("handler-local-table", "handler local table", "QORE_JIT_OBE_TABLE_BUDGET=0"));
+        addTestCase("a cancelled finalization of a member of a batch refuses the batch", \testBatch());
         set_return_value(main());
     }
 
     #! Returns a script with a function of \a n catch blocks with a local, an object local and a handler
     /** If \a loop is given, the script arms the hook for the loop before it calls the function
     */
-    private string getCode(int n, *string loop) {
+    private string getCode(int n, *string loop, *bool batch) {
         string code = "%modern
 
 string log;
@@ -71,12 +72,20 @@ string sub big(int n) {
         code += "    return sprintf(\"%d:%s\", r, keep.get());
 }
 ";
+        string call = "big(c)";
+        if (batch) {
+            # root() is compiled with its callees in one batch, in which a() calls big()
+            code += "string sub a(int n) { return big(n); }
+string sub root(int n) { return a(n) + big(n); }
+";
+            call = "root(c)";
+        }
         if (loop) {
             code += sprintf("call_function(\"dbg_force_finalize_cancel\", %y, 1);\n", loop);
         }
         code += "for (int c = 0; c < 4; ++c) {
     log = \"\";
-    string v = big(c);
+    string v = " + call + ";
     printf(\"rv%d:%s %s\\n\", c, v, log);
 }
 ";
@@ -99,6 +108,26 @@ string sub big(int n) {
             }
         }
         return {"out": out, "rc": rc, "results": results};
+    }
+
+    #! The lowering of big(), a member of the batch of root(), is refused while the code of a() calls it already
+    testBatch() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the finalization cancellation hook needs a debug build");
+        }
+        # the handler local table is used for every place that runs handlers
+        string env = "QORE_JIT_OBE_TABLE_BUDGET=0";
+        hash<auto> expected = run(getCode(30, NOTHING, True), "ast", env);
+        assertEq(0, expected.rc, "the AST run succeeds");
+        assertEq(4, expected.results.split("\n").size(), "four result lines");
+        foreach string mode in (("jit", "tiered")) {
+            hash<auto> r = run(getCode(30, "handler-local-table", True), mode, env);
+            assertEq(0, r.rc, sprintf("%s: the run succeeds: %s", mode, r.out.substr(-2000)));
+            assertRegex("batch member 'big[^']*' failed to lower \\(the finalization of the handler local table of "
+                "'big[^']*' was cancelled\\); compiling 'root[^']*' alone", r.out,
+                mode + ": the lowering of the member was refused, and the root compiled alone");
+            assertEq(expected.results, r.results, mode + ": the results of the AST");
+        }
     }
 
     testLoop(string loop, string label, string env) {

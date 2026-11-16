@@ -75,6 +75,10 @@ qclass FileInputStream [system_constructor=FILEINPUTSTREAM_system_constructor; a
            if not given or negative the operations will never time out
     @param nonblocking_open if @ref True, then the \c O_NONBLOCK flag will be set in the call to <tt>open() (2)</tt>
 
+    @note On native Windows ports, %Qore cannot wait for data on a file descriptor (\c select() works only on
+    sockets there), so \a timeout_ms is not applied: a read blocks until data is available or the end of the file is
+    reached
+
     @throw FILE-OPEN2-ERROR if the file cannot be opened (does not exist, permission error, etc)
     @throw FILE-OPEN2-ERROR the path contains a NUL character; see @ref path_nul_characters
 

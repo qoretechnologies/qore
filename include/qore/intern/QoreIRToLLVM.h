@@ -34,6 +34,7 @@
 
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -1992,9 +1993,13 @@ private:
     //! Reloads the locals from the runtime after handlers ran with qore_rt_obe_reload()
     void reloadLocalsViaTable(llvm::Module& module, llvm::Function* llvm_func, bool honor_reload_exempt);
     //! Releases the reload storage of the locals with qore_rt_obe_release(); as releaseLocalReloadStorage()
-    std::vector<const void*> releaseLocalReloadStorageViaTable(llvm::Module& module);
+    std::vector<const void*> releaseLocalReloadStorageViaTable(llvm::Module& module,
+        const std::unordered_set<const void*>* only = nullptr);
     //! Returns the locals whose reload storage releaseLocalReloadStorage() releases, in the order of its release
-    std::vector<const void*> getReleasedReloadLocals();
+    /** @param only if not null, only these locals (the shared locals of an outlined helper) instead of those that
+        the handlers reference (see releasesReloadStorageForHandlers())
+    */
+    std::vector<const void*> getReleasedReloadLocals(const std::unordered_set<const void*>* only = nullptr);
     //! Makes the constant array of the records of obe_entries, once the function is lowered (finalizeCleanupFrame())
     /** @return false if it was cancelled (qore_finalize_cancelled()), leaving records unmade: the function must
         then be refused (qore#6305)
@@ -2014,18 +2019,40 @@ private:
     */
     void recordHandlerSite(llvm::CallInst* call, bool reload);
 
-    //! Emits the release before and the reload after each call recorded by recordHandlerSite(), once the function is
-    //! lowered and its reload storage is known
+    //! Records the call of an outlined function-body helper, around which finalizeHandlerSites() releases and
+    //! reloads the reload storage of the locals that the helper shares with this function (qore#6300)
+    /** The helper assigns the shared locals on the runtime local stack: a reference that this function's reload
+        storage held to a local's value across the call would keep the value that the helper replaces alive until
+        this function next reloaded the local, so its destructor would run late.
+
+        @param call the call of the helper
+        @param shared_locals the locals of the function that the helper references
+        @param reload_after the instruction after which the released locals are reloaded: the last one of the
+        invalidation of the caches after the call, so that the reloads leave the caches fresh
+    */
+    void recordHelperSite(llvm::CallInst* call, const std::vector<const LocalVar*>& shared_locals,
+        llvm::Instruction* reload_after);
+
+    //! Emits the release before and the reload after each call recorded by recordHandlerSite() or
+    //! recordHelperSite(), once the function is lowered and its reload storage is known
     void finalizeHandlerSites(llvm::Module& module, llvm::Function* llvm_func);
 
     //! Releases the reload trackers and deferred slots of the locals that handlers can assign, last declared first,
     //! at the builder's insertion point, and returns the locals released, last declared first
-    std::vector<const void*> releaseLocalReloadStorage(llvm::Module& module);
+    /** @param only if not null, only these locals (see getReleasedReloadLocals())
+    */
+    std::vector<const void*> releaseLocalReloadStorage(llvm::Module& module,
+        const std::unordered_set<const void*>* only = nullptr);
 
-    //! a call that runs handlers out of line (see recordHandlerSite())
+    //! a call that runs handlers out of line (see recordHandlerSite()) or an outlined helper (see recordHelperSite())
     struct HandlerSite {
         llvm::CallInst* call;
         bool reload;
+        //! for the call of an outlined helper: the locals that it shares with this function, whose storage is
+        //! released (instead of that of the locals that the handlers reference)
+        std::unique_ptr<std::unordered_set<const void*>> shared_locals;
+        //! for the call of an outlined helper: the instruction after which the released locals are reloaded
+        llvm::Instruction* reload_after;
     };
     std::vector<HandlerSite> handler_sites;
 
@@ -2715,6 +2742,18 @@ private:
     llvm::AllocaInst* getOrCreateLocalValidEpoch(const void* key,
             llvm::Function* llvm_func);
     void markLocalCacheFresh(const void* key, llvm::Function* llvm_func);
+    //! Emits the copy-on-write string append of \a inst (string.append.cow, or the invoke made for it in a try block)
+    /** A paired local append (QoreIRInstruction::string_append_local_cow) of a local that only native code holds
+        appends to the local's string through its storage, and the runtime stack's local is released by the compiler
+        before the append, so that the helper sees the string as unique if no other variable holds it.  The helpers
+        leave the local unchanged if the append raises an exception.
+
+        @param use_in_place the append is marked in place (QoreIRInstruction::string_append_in_place)
+        @param borrowed set to true if the result is the local's own value, which is not released
+        @return the result of the append, or nullptr with \a error set
+    */
+    llvm::Value* emitStringAppendCow(const QoreIRInstruction* inst, llvm::Value* lhs_boxed, llvm::Value* rhs_boxed,
+            bool use_in_place, llvm::Module& module, llvm::Function* llvm_func, bool& borrowed, std::string& error);
     // Marks the cache of a local stale, so that the next ensureLocalCacheFresh() reloads it from the runtime stack
     // on every path (see clearLocalCachedValue())
     void markLocalCacheStale(const void* key, llvm::Function* llvm_func);

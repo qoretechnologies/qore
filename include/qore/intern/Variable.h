@@ -600,6 +600,10 @@ DLLLOCAL int64 q_get_lvalue_removal_probe_count();
 DLLLOCAL void q_record_lvalue_removal_probe();
 //! returns the number of lazy removal-tracker states allocated in this thread
 DLLLOCAL int64 q_get_lvalue_removal_allocation_count();
+//! returns the number of old values of number lvalues copied by post-increments and post-decrements in this thread
+/** for tests; see dbg_get_number_old_value_copy_count()
+*/
+DLLLOCAL int64 q_get_number_old_value_copy_count();
 #endif
 
 //! Identities held by a removal until its recursive-reference scan completes
@@ -736,12 +740,38 @@ protected:
     //! Replaces the enum value \a current that the lvalue holds with an owned copy of its base value
     /** see qore_enum_value_copy_for_write(); the lvalue's reference to the enum member is released here (releasing
         it executes no Qore code)
+
+        @param current the enum value that the lvalue holds
+        @param desc the description of the operation that modifies the copy in place, or nullptr; see ensureUnique()
+
+        @return -1 if the lvalue's type refuses the copy and an exception was raised (only with \a desc), 0 if not
     */
-    DLLLOCAL void replaceEnumForWrite(const QoreValue& current);
+    DLLLOCAL int replaceEnumForWrite(const QoreValue& current, const char* desc);
+
+    //! ensureUnique() and ensureUnique(const char*): \a desc is used only if \a Checked
+    template <bool Checked>
+    DLLLOCAL int ensureUniqueImpl(const char* desc) {
+        // a write-protected variable's container is only read (see setReadOnlyResolution())
+        if (read_only_resolution) {
+            return 0;
+        }
+        member_lvalue_modified = true;
+        // an enum (QV_Enum, which QoreLValue::getValue() returns borrowed), a container or a string: never a scalar
+        // that the lvalue stores natively in a node that getValue() would create and keep (qore#6094)
+        QoreValue current = val ? val->getValue() : *qv;
+        // an enum value, a short string held inline and an opaque reference take the slow path
+        if (!current.isPlainPointer()) [[unlikely]] {
+            return ensureUniqueSlow(current, Checked ? desc : nullptr);
+        }
+        assert(!val || !val->optimized());
+        ensureUniqueNode();
+        return 0;
+    }
 
     //! ensureUnique() for a value other than an ordinary node pointer: an enum value, an inline short string or an
-    //! opaque reference
-    DLLLOCAL QORE_INTERN_NOINLINE void ensureUniqueSlow(const QoreValue& current);
+    //! opaque reference; returns -1 if the copy of an enum value is refused (only with \a desc, see
+    //! ensureUnique(const char*))
+    DLLLOCAL QORE_INTERN_NOINLINE int ensureUniqueSlow(const QoreValue& current, const char* desc);
 
     //! ensureUnique() for a node held as an ordinary pointer or through an opaque reference
     DLLLOCAL void ensureUniqueNode() {
@@ -824,7 +854,9 @@ protected:
     DLLLOCAL bool numberResultNeedsConversion() const;
 
     //! stores a number result of an operation, converted to the lvalue's type; takes the reference of \a n
-    DLLLOCAL void storeNumberResult(QoreNumberNode* n, const char* desc);
+    /** @return 0 for OK, -1 if the lvalue's type refused the result (an exception was raised)
+    */
+    DLLLOCAL int storeNumberResult(QoreNumberNode* n, const char* desc);
     DLLLOCAL int makeIntVal(const char* desc);
 
     //! returns true if a removal started with startContainerRemoval() left the reachable objects unchanged
@@ -1505,24 +1537,41 @@ public:
 
     DLLLOCAL QoreValue getReferencedValue() const;
 
-    // only call if there is a reference-counted AbstractQoreNode value in place
+    //! Raises RUNTIME-TYPE-ERROR for a value that the operation \a desc would give the lvalue, which its type refuses
+    /** For an operation that leaves the lvalue unchanged instead of making a value that its type refuses (ex: += on a
+        string enum lvalue with no value, qore#6195); only call if the lvalue's type refuses \a n
+
+        @param desc the description of the operation
+        @param n a value of the type that the operation would make (only its type is used)
+
+        @return -1 (an exception has been raised)
+    */
+    DLLLOCAL int refuseValue(const char* desc, const QoreValue& n);
+
+    //! Makes the value of the lvalue unique, so that it can be modified in place
+    /** Only call if there is a reference-counted AbstractQoreNode value in place.
+
+        An enum value is replaced with an owned copy of its base value; for an operation that modifies a string or a
+        number in place, which leaves a plain value of the enum's base type, use ensureUnique(const char*), which
+        checks that the lvalue's type accepts it.  A container is never an enum value.
+    */
     // FIXME: port operators to LValueHelper instead and remove this function
     DLLLOCAL void ensureUnique() {
-        // a write-protected variable's container is only read (see setReadOnlyResolution())
-        if (read_only_resolution) {
-            return;
-        }
-        member_lvalue_modified = true;
-        // an enum (QV_Enum, which QoreLValue::getValue() returns borrowed), a container or a string: never a scalar
-        // that the lvalue stores natively in a node that getValue() would create and keep (qore#6094)
-        QoreValue current = val ? val->getValue() : *qv;
-        // an enum value, a short string held inline and an opaque reference take the slow path
-        if (!current.isPlainPointer()) [[unlikely]] {
-            ensureUniqueSlow(current);
-            return;
-        }
-        assert(!val || !val->optimized());
-        ensureUniqueNode();
+        ensureUniqueImpl<false>(nullptr);
+    }
+
+    //! Makes the value of the lvalue unique for an operation that modifies a string or a number in place
+    /** As ensureUnique(), but an enum value is replaced with its base value only if the lvalue's type accepts a
+        plain value of the enum's base type, which the operation leaves: if it does not (an enum type),
+        RUNTIME-TYPE-ERROR is raised with \a desc, and the lvalue is left unchanged (qore#6195).
+
+        @param desc the description of the operation (ex: \c "<trim operator>")
+
+        @return -1 if the lvalue's type refused the copy of an enum value and an exception was raised, 0 if not
+    */
+    DLLLOCAL int ensureUnique(const char* desc) {
+        assert(desc);
+        return ensureUniqueImpl<true>(desc);
     }
 
     DLLLOCAL int64 getAsBigInt() const;
@@ -1559,7 +1608,9 @@ public:
     DLLLOCAL void divideEqualsNumber(QoreValue r, const char* desc = "<lvalue>");
     DLLLOCAL void preIncrementNumber(const char* desc = "<lvalue>");
     DLLLOCAL void preDecrementNumber(const char* desc = "<lvalue>");
+    //! increments a number lvalue; returns the old value if \a ref_rv is true, or nullptr if an exception was raised
     DLLLOCAL QoreNumberNode* postIncrementNumber(bool ref_rv, const char* desc = "<lvalue>");
+    //! decrements a number lvalue; returns the old value if \a ref_rv is true, or nullptr if an exception was raised
     DLLLOCAL QoreNumberNode* postDecrementNumber(bool ref_rv, const char* desc = "<lvalue>");
 
     DLLLOCAL QoreNumberNode* ensureUniqueNumber(const char* desc = "<lvalue>") {

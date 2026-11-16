@@ -59,7 +59,7 @@
 //! the new thread only, not for the arguments of its calls)
 #define PF_BACKGROUND_EXPR       (1 << 13)
 //! parsing code that an operator or a foreach statement runs for each element with the element's index as the
-//! implicit element (\c $#); a \c $# parsed without it is unset (qore#5690)
+//! implicit element (\c $#); a \c $# parsed without it is a parse error (qore#5690, qore#803)
 #define PF_IMPLICIT_ELEMENT      (1 << 14)
 //! parsing the operand of the reference (\\x), delete or remove operator, which does not read a variable that is the
 //! operand (qore#5937)

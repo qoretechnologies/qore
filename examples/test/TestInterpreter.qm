@@ -112,7 +112,7 @@ public namespace TestInterpreter {
         # QORE_BIN first: a developer sets it to choose a build, while run_tests.sh always exports QORE_BINARY
         foreach *string candidate in ((ENV.QORE_BIN, ENV.QORE_BINARY, ENV.QORE_EXECUTABLE)) {
             if (candidate && !is_own_executable(candidate)) {
-                return candidate;
+                return absolute_command_path(candidate);
             }
         }
         if (!running_compiled()) {
@@ -125,7 +125,7 @@ public namespace TestInterpreter {
                     return found;
                 }
             }
-            return path;
+            return absolute_command_path(path);
         }
         *string found = trim(`command -v qore 2>/dev/null`);
         if (found && !is_own_executable(found)) {
@@ -135,6 +135,19 @@ public namespace TestInterpreter {
             "is configured (QORE_BINARY) or found in the PATH", QORE_ARGV[0]);
     }
 
+    #! returns a path that names the same file from any directory
+    /** A relative path with a directory (\c build/qcc, as run_tests.sh finds the build directory when QORE_BINARY is
+        not set) is made absolute, so that a test that runs a command in another directory (<tt>cd \<dir\> && ...</tt>)
+        still finds it; a bare name is left to the PATH
+    */
+    public string sub absolute_command_path(string path) {
+        if (path !~ /\// || path =~ /^\//) {
+            return path;
+        }
+        *string cwd = getcwd();
+        return cwd ? cwd + "/" + path : path;
+    }
+
     #! returns qcc: the one configured in the environment, the one next to the interpreter, or the one in the PATH
     /** @return the path of qcc, or NOTHING if none is found
     */
@@ -142,7 +155,7 @@ public namespace TestInterpreter {
         guard_recursion();
         foreach *string candidate in ((ENV.QCC, ENV.QORE_QCC, ENV.QORE_QCC_EXECUTABLE)) {
             if (candidate && !is_own_executable(candidate)) {
-                return candidate;
+                return absolute_command_path(candidate);
             }
         }
         string qore = qore_interpreter();

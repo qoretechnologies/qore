@@ -52,6 +52,7 @@
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/Function.h"
 #include "qore/intern/QoreClosureParseNode.h"
+#include "qore/intern/BackquoteNode.h"
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/ConstantList.h"
@@ -116,6 +117,10 @@
 #include "qore/intern/QorePushOperatorNode.h"
 #include "qore/intern/QoreUnshiftOperatorNode.h"
 #include "qore/intern/QoreUnaryMinusOperatorNode.h"
+#include "qore/intern/QoreUnaryPlusOperatorNode.h"
+#include "qore/intern/QoreBinaryNotOperatorNode.h"
+#include "qore/intern/QoreLogicalComparisonOperatorNode.h"
+#include "qore/intern/QoreListAssignmentOperatorNode.h"
 #include "qore/intern/QoreAssignmentOperatorNode.h"
 #include "qore/intern/QorePlusEqualsOperatorNode.h"
 #include "qore/intern/QoreMinusEqualsOperatorNode.h"
@@ -13514,6 +13519,27 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::UNARY_MINUS));
         return write_inline_expr(unary_minus->getExp());
     }
+    if (auto* unary_plus = dynamic_cast<const QoreUnaryPlusOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::UNARY_PLUS));
+        return write_inline_expr(unary_plus->getExp());
+    }
+    if (auto* bit_not = dynamic_cast<const QoreBinaryNotOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::BIT_NOT));
+        return write_inline_expr(bit_not->getExp());
+    }
+    if (auto* cmp = dynamic_cast<const QoreLogicalComparisonOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_CMP));
+        return write_inline_expr(cmp->getLeft()) && write_inline_expr(cmp->getRight());
+    }
+    if (auto* list_assign = dynamic_cast<const QoreListAssignmentOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LIST_ASSIGN));
+        return write_inline_expr(list_assign->getLeft()) && write_inline_expr(list_assign->getRight());
+    }
+    if (auto* bq = dynamic_cast<const BackquoteNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::BACKQUOTE));
+        writer.writeStringRef(bq->str ? bq->str : "");
+        return true;
+    }
     if (auto* multiply = dynamic_cast<const QoreMultiplicationOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::MULTIPLY));
         return write_inline_expr(multiply->getLeft()) && write_inline_expr(multiply->getRight());
@@ -14592,6 +14618,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         };
         constexpr size_t u16_max = std::numeric_limits<uint16_t>::max();
         constexpr size_t u8_max = std::numeric_limits<uint8_t>::max();
+        constexpr size_t u32_max = std::numeric_limits<uint32_t>::max();
         if (!checkCount(std::max<size_t>(func.num_locals, func.slot_ids.locals.size()), u16_max,
                     "local variable slots")
                 || !checkCount(std::max<size_t>(func.num_globals, func.slot_ids.globals.size()), u16_max,
@@ -14602,7 +14629,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 || !checkCount(func.slot_ids.regex_cases.size(), u16_max, "regex case slots")
                 || !checkCount(func.slot_ids.body_locals.size(), u16_max, "body local slots")
                 || !checkCount(std::max<size_t>(func.num_lv_path_insts, func.slot_ids.lv_path_insts.size()),
-                    u8_max, "lvalue path instructions (counting those of its handler functions)")) {
+                    u32_max, "lvalue path instructions (counting those of its handler functions)")) {
             return false;
         }
 
@@ -14616,6 +14643,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         writer.writeU16(static_cast<uint16_t>(func.slot_ids.body_locals.size()));
         writer.writeU8(func.slot_ids.has_unsupported_exprs ? 1 : 0);
         writer.writeU8(static_cast<uint8_t>(func.num_lv_path_insts)); // was: padding byte
+        // the full count follows: a function can have more than 255 LValuePath instructions (#6127)
+        writer.writeU32(static_cast<uint32_t>(func.num_lv_path_insts));
         traceEntryOffset("after header");
 
         // Local slot entries (in slot order)
@@ -15479,6 +15508,16 @@ static const char* aotTestFailIRSerialization() {
     return name && *name ? name : nullptr;
 }
 
+QoreAOTSharedHandlerTable*& QoreAOTSharedHandlerTable::current() {
+    static thread_local QoreAOTSharedHandlerTable* table = nullptr;
+    return table;
+}
+
+bool& QoreAOTSharedHandlerTable::nested() {
+    static thread_local bool nested = false;
+    return nested;
+}
+
 //! Returns the maximum number of basic blocks of a serialized IR function
 /** Block references are u16 indices, with 0xFFFF meaning no block; the QORE_AOT_TEST_MAX_IR_BLOCKS environment
     variable can only lower the limit, for tests of the check
@@ -15498,6 +15537,8 @@ static size_t aotMaxIRBlocks() {
 
 bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
         const AOTExprWriteFunc& writeExpr) {
+    // the handler functions written in the IR of the function (#6087)
+    QoreAOTSharedHandlerScope shared_handler_scope;
     if (const char* fail_name = aotTestFailIRSerialization()) {
         if (strstr(func.name.c_str(), fail_name)) {
             qoreAOTSetExprSerializationError("serialization of IR function '" + func.name
@@ -20331,6 +20372,13 @@ bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
             continue;
         }
         qore_class_private* priv = qore_class_private::get(*qc);
+        // initializeMembers() recurses to the base classes whose members are not yet imported, and stops while the
+        // parse stack reserve remains (issue #6047); no parse reports that here, so the load fails with the error
+        if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
+            thread_stack_exceeded = true;
+            error = QORE_PARSE_STACK_DESC;
+            return false;
+        }
         // initializeMembers() checks parse_resolve_class_members flag to avoid re-initialization,
         // iterates base class list, and calls parseImportMembers() for each base class
         priv->initializeMembers();
@@ -21837,6 +21885,40 @@ bool readFunctionalDomain(const QoreAOTBinaryReader& reader, QoreParseOptions& d
     uint64_t lo = QoreAOTBinaryReader::readU64(ptr);
     uint64_t hi = QoreAOTBinaryReader::readU64(ptr);
     dom = QoreParseOptions(static_cast<int64_t>(lo), static_cast<int64_t>(hi));
+    return true;
+}
+
+void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header) {
+    if (zone.empty()) {
+        return;
+    }
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::TIME_ZONE);
+    writer.writeStringRef(zone.c_str());
+    // 1 if the directive follows the header of a user module (qore#6270)
+    writer.writeU8(after_module_header ? 1 : 0);
+    writer.endSection(sec_idx);
+}
+
+bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, bool& after_module_header,
+        std::string& error) {
+    zone.clear();
+    after_module_header = false;
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::TIME_ZONE);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr || sec->size < 5) {
+        error = "invalid TIME_ZONE section";
+        return false;
+    }
+    const char* z = reader.readStringRef(ptr);
+    if (!z || !*z) {
+        error = "invalid TIME_ZONE section: empty time zone";
+        return false;
+    }
+    zone = z;
+    after_module_header = QoreAOTBinaryReader::readU8(ptr) != 0;
     return true;
 }
 

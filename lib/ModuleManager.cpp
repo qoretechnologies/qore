@@ -248,6 +248,12 @@ static bool qore_binary_load_error_can_fallback_to_source(ExceptionSink& xsink) 
         return false;
     }
 
+    // a binary module that could not be loaded within the stack of this thread is not one to replace with its source,
+    // whose parse needs more stack (issue #6047)
+    if (qore_has_thread_stack_error(xsink)) {
+        return false;
+    }
+
     QoreValue desc = xsink.getExceptionDesc();
     if (desc.getType() == NT_STRING) {
         QoreStringValueHelper str(desc);
@@ -313,6 +319,46 @@ public:
 private:
     QoreModuleLoadWarningFrame frame;
 };
+
+//! Raises the parse stack error and returns -1 if a module load in this thread has reached the parse stack reserve
+/** Every module load that loads or merges a module comes through loadModuleIntern() (or, for a statically linked AOT
+    module, registerAOTStaticModuleIntern()), including the loads of the dependencies of a binary or AOT module
+    (loadAOTBinaryModuleDependencies(), the dependencies of a binary module's description) and of child modules,
+    which load the modules that they depend on in turn, with no stack check of their own: the load stops while the
+    parse stack reserve remains, as the parse of a source module does (issue #6047; see
+    QoreModuleManager::parseLoadModule()).  The checks are made after the requests that need no stack (the \c qore
+    feature, a feature that the Program already has) and before every path that loads, reloads or merges a module
+    (see design/qore-module-structure.md)
+*/
+static int qore_module_load_check_stack(ExceptionSink& xsink) {
+    if (!q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
+        return 0;
+    }
+    // the error is located at the directive of the nearest module load in progress made by a parse directive with a
+    // location (the directive of the module source that has it, for a module that loads modules in turn), as a parse
+    // error is; the run-time location during a parse is that of the code that started the parse.  The search passes
+    // directive frames without a location (ModuleManager::parseLoadModule(), called by a binary module or by qcc)
+    // and stops at a frame of a load made at run time, which only QoreModuleManager::runTimeLoadModule() pushes: its
+    // error has the run-time location where the load was made.  The other loads push no frame (loadProviderModule(),
+    // loadModuleForReexport(), and the loads of issueParseCmd(), for a %module-cmd directive, and of
+    // issueRuntimeCmd()), so their errors are located at the directive of the enclosing load, if any: for example, a
+    // constant initializer that runs while %requires Foo loads Foo and loads a data provider module with
+    // loadProviderModule()
+    const QoreProgramLocation* loc = nullptr;
+    for (const QoreModuleLoadWarningFrame* frame = qore_module_load_warning_frame; frame && frame->pgm;
+            frame = frame->parent) {
+        if (frame->loc) {
+            loc = frame->loc;
+            break;
+        }
+    }
+    if (loc) {
+        xsink.raiseException(*loc, QORE_PARSE_STACK_ERR, QoreValue(), new QoreStringNode(QORE_PARSE_STACK_DESC));
+    } else {
+        xsink.raiseException(QORE_PARSE_STACK_ERR, QORE_PARSE_STACK_DESC);
+    }
+    return -1;
+}
 
 //! Reports a warning of the module loader about how a module was loaded
 /** These are the loader's own warnings: an AOT module that was not loaded and whose source module was loaded instead
@@ -1867,6 +1913,8 @@ void QoreUserModuleDefContextHelper::setNameInit(const char* name) {
 void QoreUserModuleDefContextHelper::close() {
     // the options in effect before the module header, without the restrictions that the header removed (domains)
     pgm->pwo.parse_options = po & ~QoreParseOptions(dom_removed);
+    // a %set-time-zone directive after the header is checked against these options (qore#6270)
+    pgm->module_header_closed = true;
     // mod_header_dom stays set: the header's closures are parse-initialized after the header with the options that
     // were in effect when they were parsed, which include the header's restrictions; no other code has them unless
     // the module sets them itself
@@ -2779,6 +2827,12 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
         return 0;
     }
 
+    // as in loadModuleIntern(): the registration initializes the module or merges it into tpgm (a module already
+    // registered by another Program), which need stack as a module load does
+    if (qore_module_load_check_stack(xsink)) {
+        return -1;
+    }
+
     OptLocker ol(&mutex);
 
     // see if the module is already registered with QMM; if so skip the init path
@@ -2847,7 +2901,8 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
             }
             std::string available;
             if (!aot_info->unavailable_optional_modules.empty()
-                    && findAvailableOptionalModule(aot_info->unavailable_optional_modules, tpgm, available)) {
+                    && findAvailableOptionalModule(xsink, aot_info->unavailable_optional_modules, tpgm,
+                        available)) {
                 // a statically linked module has no source module to load instead: it is used, and the missing
                 // functionality is always reported, as for a .qmod without its source
                 qore_report_module_load_warning(xsink, nullptr, QP_WARN_MODULES, true, "BINARY-MODULE-STALE",
@@ -2858,6 +2913,9 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
                 if (xsink) {
                     return -1;
                 }
+            }
+            if (xsink) {
+                return -1;
             }
         }
         // restore info hash for the descriptor handoff
@@ -3253,6 +3311,11 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         if (!mi || !mi->isInjected()) {
             return xsink ? nullptr : mi;
         }
+        // a reload parses the module again: checked as the loads below are (the reload returns before the check
+        // after the lookup of a feature that the Program already has)
+        if (qore_module_load_check_stack(xsink)) {
+            return nullptr;
+        }
 
         // rename module and make private
         map.erase(mmi);
@@ -3329,6 +3392,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     if (pgm && (pgm->getParseOptions() & PO_NO_MODULES)) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "cannot load modules ('%s' " \
             "requested) into the current Program object because PO_NO_MODULES is set", name);
+        return nullptr;
+    }
+
+    // the stack check sits after the returns that need no stack (the "qore" feature, a feature that the Program
+    // already has) and before the merge of a loaded module, which needs stack as a new load does: see
+    // qore_module_load_check_stack() and design/qore-module-structure.md
+    if (qore_module_load_check_stack(xsink)) {
         return nullptr;
     }
 
@@ -4396,8 +4466,8 @@ static int qore_parse_module_spec(const char* spec, QoreString& name, mod_op_e& 
     return 0;
 }
 
-bool QoreModuleManager::findAvailableOptionalModule(const std::vector<std::string>& specs, QoreProgram* path_pgm,
-        std::string& available) {
+bool QoreModuleManager::findAvailableOptionalModule(ExceptionSink& xsink, const std::vector<std::string>& specs,
+        QoreProgram* path_pgm, std::string& available) {
     for (size_t i = 0; i < specs.size(); ++i) {
         if (i && !(i % 10) && qore_check_cancel(nullptr, "AOT optional module check")) {
             return false;
@@ -4415,6 +4485,14 @@ bool QoreModuleManager::findAvailableOptionalModule(const std::vector<std::strin
         if (!tmp) {
             available = specs[i];
             return true;
+        }
+        // an error that depends on the stack of the thread does not tell whether the module is available: taken
+        // as unavailable, it would make the module load with its branch for the optional module being unavailable
+        // in this thread and be found stale in a larger one; the load fails instead, as the load of a source module
+        // that runs short of the stack does (issue #6047)
+        if (qore_has_thread_stack_error(tmp)) {
+            xsink.assimilate(tmp);
+            return false;
         }
         tmp.clear();
     }
@@ -4506,6 +4584,12 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
 
     assert(!xsink);
 
+    // a module that is loaded from its source is parsed in the stack of the parse that requires it, and the parses
+    // nest with the modules that require each other, with the parser's large frames and no stack check of their own:
+    // loadModuleIntern() stops the load while enough stack remains (qore_module_load_check_stack(); not for a module
+    // that the Program already has, which loads nothing), and its error is a parse error of the directive below
+    // (issue #6047)
+
     QoreString str;
     mod_op_e mo;
     version_list_t iv;
@@ -4530,6 +4614,18 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
     if (mod) {
         assert(!xsink);
         qore_program_private::get(*pgm)->addParseModule(mod->getName());
+    }
+
+    if (loc && xsink && qore_has_thread_stack_error(xsink)) {
+        // the module, or a module that it loads, could not be parsed or initialized within the stack of this thread
+        // (see qore_has_thread_stack_error()): this is not a module that is not available, so the error is a parse
+        // error of the parse that loads it, which the parse
+        // directive does not handle as the error of its load (as for %try-module, whose module would be replaced by
+        // its fallback code depending on the thread's stack)
+        qore_program_private::get(*pgm)->collectModuleLoadErrors(*loc, xsink);
+        // the exceptions keep the locations where the parse ran short of stack
+        qore_program_private::addParseException(pgm, xsink);
+        return -1;
     }
 
     return xsink ? -1 : 0;
@@ -4729,6 +4825,15 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
             c.status = CMS_ABSENT;
             cx.clear();
             continue;
+        }
+
+        if (qore_has_thread_stack_error(cx)) {
+            // the child could not be parsed or initialized within the stack of this thread, which says nothing about
+            // the child:
+            // the extensions of a module must not depend on the thread that loads it, so the child stays pending,
+            // to be attached by a load of the module in a thread with a larger stack, and the load fails
+            xsink.assimilate(cx);
+            return -1;
         }
 
         // The child is present but could not be loaded.  The declaration is optional, so this does not fail
@@ -5612,7 +5717,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     // module being unavailable, so it is stale once the module can be loaded
     if (have_aot_info && !aot_info.unavailable_optional_modules.empty()) {
         std::string available;
-        if (findAvailableOptionalModule(aot_info.unavailable_optional_modules, path_pgm, available)) {
+        if (findAvailableOptionalModule(xsink, aot_info.unavailable_optional_modules, path_pgm, available)) {
             if (source_available) {
                 xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT module '%s' was "
                     "compiled when optional module '%s' was not available, but it is available now; rebuild the "
@@ -5627,6 +5732,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
                 "rebuild the binary module", path, available.c_str()));
             qore_report_module_load_warning(xsink, wsink != &xsink ? wsink : nullptr, warning_mask, true,
                 "BINARY-MODULE-STALE", feature, desc.release());
+        }
+        if (xsink) {
+            return nullptr;
         }
     }
 

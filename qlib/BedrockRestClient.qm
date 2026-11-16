@@ -1191,8 +1191,9 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             encode_url(getBedrockModelId(opts), True));
         try {
             return withRetry(hash<auto> sub () {
+                # the request's own timeout (LlmRequestOptions::timeout_ms), not only the client's
                 return rest_client.restDoEncodedRawRequest("POST", path, binary(make_json(body)),
-                    {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
+                    {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson}, getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "LLM-CANCELLED") {
@@ -1417,7 +1418,9 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                         opts{key} = getConfig().provider_options{key};
                     }
                 }
-                opts.request_timeout = getConfig().timeout_ms;
+                # the RestClientIo option for the response deadline is "timeout" (not the connection manager's
+                # "request_timeout"), as for the other LLM clients
+                opts.timeout = getConfig().timeout_ms;
                 opts.connect_timeout = getConfig().connect_timeout_ms;
                 rest_client = new BedrockRestClientIo(opts);
             }
