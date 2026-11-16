@@ -315,16 +315,16 @@ static size_t min_stack_size() {
 }
 
 //! true with --plain-exit: the fixture returns from main() after qore_cleanup(), without qore_fork_child_quick_exit()
-/** For the test of the debug library's check of a process that ends so while a test hook holds an abandoned compile
-    (QoreJIT::dbgExitIfAbandonedCompileHeld(), issue #6296); never used otherwise
+/** For the test that a process can return from main() after qore_cleanup() while a background compile was in LLVM
+    (issue #6296)
 */
 static bool plain_exit = false;
 
-//! Tears the library down and returns the exit status, or ends the process with it when it must not run exit()
-/** A background JIT compile still in LLVM when qore_cleanup() stops the compiler is abandoned (the module code that
-    the fixture loads is %modern, so its functions are compiled in the background), and exit() would destroy the
-    static objects of LLVM under it: an embedding program that returns from main() calls qore_fork_child_quick_exit()
-    after qore_cleanup(), which then flushes the standard I/O streams and ends the process with _exit()
+//! Tears the library down and returns the exit status, or ends the process with it
+/** The module code that the fixture loads is %modern, so its functions are compiled in the background; a compile still
+    in LLVM when qore_cleanup() stops the compiler is detached, and qore_cleanup() waits for it before it returns, so
+    the process can return from main() then (issue #6296).  Without --plain-exit, the fixture ends with
+    qore_fork_child_quick_exit(), as the qore program does.
 */
 static int end_process(int rc) {
     qore_cleanup();
