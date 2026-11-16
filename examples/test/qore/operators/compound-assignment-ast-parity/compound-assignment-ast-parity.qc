@@ -100,7 +100,7 @@ class CompoundAssignmentAstParityBase inherits QUnit::Test {
     #! checks the operators given; the matrix is split into families so that each test runs in a short time
     constructor(string name, list<string> operators) : QUnit::Test(name, "1.0", \ARGV) {
         Operators = operators;
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 

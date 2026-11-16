@@ -25,6 +25,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires Util
 %requires FsUtil
 %requires json
@@ -424,7 +425,7 @@ public class I18nGeneratorRecordTest inherits QUnit::Test {
     #! Returns the Qore that runs the tool: the built qore if there is one, as for the other tests of the tool
     private string realQore() {
         string build_qore = root + DirSep + "build/qore";
-        return is_executable(build_qore) ? build_qore : QORE_ARGV[0];
+        return is_executable(build_qore) ? build_qore : TestInterpreter::qore_interpreter();
     }
 
     #! Returns a Qore that runs the real Qore but reports the identity of a commit of the fixture history

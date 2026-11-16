@@ -13,12 +13,13 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %exec-class SwitchStringEncodingTest
 
 class SwitchStringEncodingTest inherits QUnit::Test {
     private {
-        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string qore = realpath(TestInterpreter::qore_interpreter());
         string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
         string qcc = ENV.QCC ?? libdir + "/qcc";
         string source = get_script_dir() + "/SwitchStringEncoding.qr";
