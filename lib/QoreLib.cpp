@@ -3917,7 +3917,37 @@ void ensure_unique(AbstractQoreNode* *v, ExceptionSink* xsink) {
     }
 }
 
+QoreValue qore_enum_value_copy_for_write(const QoreValue& v) {
+    assert(v.isEnum());
+    QoreValue base = v.getEnumBaseValue();
+    if (base.isShortString()) {
+        char buf[7];
+        base.getShortString(buf);
+        return new QoreStringNode(buf, base.shortStringLen(), QCS_UTF8);
+    }
+    const AbstractQoreNode* n = base.getInternalNode();
+    if (n) {
+        return n->realCopy();
+    }
+    // a base value held inline is not shared
+    return base;
+}
+
+//! Replaces the enum value \a v with an owned copy of its base value and returns the enum value replaced
+static QORE_INTERN_NOINLINE QoreValue replace_enum_value_for_write(QoreValue& v) {
+    QoreValue copy = qore_enum_value_copy_for_write(v);
+    QoreValue old = v;
+    v = copy;
+    return old;
+}
+
 void ensure_unique(QoreValue& v, ExceptionSink* xsink) {
+    if (v.isEnum()) [[unlikely]] {
+        // replaces the enum value with an owned copy of its base value and releases the enum value
+        replace_enum_value_for_write(v).discard(xsink);
+        return;
+    }
+
     if (v.isShortString()) {
         char buf[7];
         v.getShortString(buf);
@@ -3958,6 +3988,8 @@ QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* copy) {
 }
 
 QoreValue qore_value_copy_on_write(QoreValue& v) {
+    // an enum value does not own its base value's node: its callers replace it with an owned copy instead
+    assert(!v.isEnum());
     AbstractQoreNode* n = v.getInternalNode();
     assert(n && n->getType() != NT_OBJECT);
     if (n->is_unique()) {
@@ -4043,7 +4075,7 @@ static QORE_INTERN_ALWAYS_INLINE int64 qore_plus_equals_int_operand_steps(const 
         }
     }
     if (v.isFloat()) {
-        return static_cast<int64>(v.getDouble());
+        return q_float_to_int64(v.getDouble());
     }
     if (v.isBool()) {
         return v.getBool() ? 1 : 0;

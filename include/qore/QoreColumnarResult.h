@@ -129,11 +129,32 @@ public:
     DLLEXPORT QoreColumnarResult();
 
     //! Creates a columnar result from an existing hash-of-lists result.
+    /** For a DBI driver: a value in a column stored as a dense integer buffer is converted to an integer whatever
+        its type, so that a scale-0 numeric column of precision 18 or less, which is stored as \c buffer<int64>,
+        takes the driver's number values (see fromScriptColumnHash() for values given by a script).
+    */
     DLLEXPORT static QoreColumnarResult* fromColumnHash(const QoreHashNode* columns, const QoreHashNode* desc,
         ExceptionSink* xsink);
 
     //! Creates a columnar result from an existing list-of-row-hashes result.
+    /** For a DBI driver; values are converted as by fromColumnHash().
+    */
     DLLEXPORT static QoreColumnarResult* fromRows(const QoreListNode* rows, const QoreHashNode* desc,
+        ExceptionSink* xsink);
+
+    //! Creates a columnar result from a hash-of-lists given by a script (ColumnarResult::fromColumnHash())
+    /** As fromColumnHash(), except that a value in a column stored as a dense integer buffer must be an int, float,
+        number, numeric string (an optional sign and decimal digits, with optional surrounding whitespace, whose value
+        fits in an int64), NULL or NOTHING; any other value raises \c COLUMNAR-RESULT-ERROR.  A float or number is
+        converted as by QoreValue::getAsBigInt() (truncated toward zero).
+    */
+    DLLLOCAL static QoreColumnarResult* fromScriptColumnHash(const QoreHashNode* columns, const QoreHashNode* desc,
+        ExceptionSink* xsink);
+
+    //! Creates a columnar result from row hashes given by a script (ColumnarResult::fromRows())
+    /** Values are checked as by fromScriptColumnHash().
+    */
+    DLLLOCAL static QoreColumnarResult* fromScriptRows(const QoreListNode* rows, const QoreHashNode* desc,
         ExceptionSink* xsink);
 
     //! Creates a columnar result from a serialized payload.
@@ -286,6 +307,14 @@ private:
     //! Adds a column; @a flags select the conversion and the check of the schema, which raises @a err
     DLLLOCAL int addColumnIntern(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
         int flags, const char* err, ExceptionSink* xsink);
+
+    //! Creates a columnar result from a hash-of-lists, checking script values if @a script_values is true
+    DLLLOCAL static QoreColumnarResult* fromColumnHashIntern(const QoreHashNode* columns, const QoreHashNode* desc,
+        bool script_values, ExceptionSink* xsink);
+
+    //! Creates a columnar result from row hashes, checking script values if @a script_values is true
+    DLLLOCAL static QoreColumnarResult* fromRowsIntern(const QoreListNode* rows, const QoreHashNode* desc,
+        bool script_values, ExceptionSink* xsink);
 };
 
 //! Creates a Qore SQL::ColumnarResult object taking ownership of @a result.

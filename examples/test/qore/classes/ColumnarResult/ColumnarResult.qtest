@@ -8,6 +8,11 @@
 
 %exec-class ColumnarResultTest
 
+#! An enum with an integer value, for the dense integer column tests
+enum CrIntEnum {
+    Twelve = 12,
+}
+
 #! An object held by a ColumnarResult in the garbage collection tests
 class CrNode inherits Serializable {
     public {
@@ -30,6 +35,8 @@ class ColumnarResultTest inherits QUnit::Test {
         addTestCase("row result round trip", \rowResultRoundTrip());
         addTestCase("scale-0 numeric narrowing", \scaleZeroNumericNarrowing());
         addTestCase("large ints in a dense int64 column", \largeIntColumn());
+        addTestCase("script values accepted in a dense integer column", \scriptIntColumnAccepted());
+        addTestCase("script values refused in a dense integer column", \scriptIntColumnRefused());
         addTestCase("NUL characters in names and descriptions", \nulNames());
         addTestCase("NUL characters in strings passed on as C strings", \nulCStrings());
         addTestCase("a cycle through an object in a ColumnarResult column is collected", \cycleCollection());
@@ -110,6 +117,141 @@ class ColumnarResultTest inherits QUnit::Test {
         assertEq(ints, columns.i.toList());
         assertEq("buffer<*int64>", columns.n18_0.fullType());
         assertEq((123456789012345678, -123456789012345678, NOTHING, 1, 2, 3), columns.n18_0.toList());
+    }
+
+    # the descriptions that make a list column a dense integer buffer
+    private hash<string, hash<auto>> intColumnDescs() {
+        return {
+            "bigint": {"native_type": "bigint"},
+            "NT_INT": {"type": NT_INT},
+            "integer": {"native_type": "integer"},
+            "numeric(10,0)": {"native_type": "numeric(10,0)"},
+        };
+    }
+
+    # ints, floats, numbers, numeric strings, NULL and NOTHING given by a script are stored in a dense integer column
+    # (a float or number is truncated toward zero, as by int())
+    private scriptIntColumnAccepted() {
+        list<auto> values = (1, 1000, -3, 1.5, -1.5, 2.9n, -2.9n, "12", " -7 ", "+5", "\t8\n", NOTHING, NULL);
+        list<auto> expected = (1, 1000, -3, 1, -1, 2, -2, 12, -7, 5, 8, NOTHING, NOTHING);
+        foreach hash<auto> i in (intColumnDescs().pairIterator()) {
+            ColumnarResult r = ColumnarResult::fromColumnHash({"i": values}, {"i": i.value});
+            auto column = r.toColumnHash().i;
+            assertRegex("^buffer<\\*int(64|32)>$", column.fullType(), i.key + ": dense buffer");
+            assertEq(expected, column.toList(), i.key + ": values");
+        }
+
+        # numeric strings of values that are not stored inline in a value (see largeIntColumn() for ints)
+        ColumnarResult r = ColumnarResult::fromColumnHash({"i": ("4611686018427387904", "-9223372036854775808")},
+            {"i": {"native_type": "bigint"}});
+        assertEq((1 << 62, -9223372036854775807 - 1), r.toColumnHash().i.toList(), "64-bit numeric strings");
+
+        # fromRows() checks the values in the same way
+        r = ColumnarResult::fromRows((("i": "12"), ("i": 2.5), ("i": NOTHING)), {"i": {"native_type": "bigint"}});
+        assertEq((12, 2, NOTHING), r.toColumnHash().i.toList(), "fromRows() values");
+
+        # a column of ints with no description is inferred as a dense int64 column
+        r = ColumnarResult::fromColumnHash({"i": (1, NOTHING, 3)});
+        assertEq("buffer<*int64>", r.toColumnHash().i.fullType(), "inferred int column");
+        assertEq((1, NOTHING, 3), r.toColumnHash().i.toList(), "inferred int column values");
+
+        # a list with a value that is not an int is not inferred as an int column, and keeps its values
+        r = ColumnarResult::fromColumnHash({"i": (1, "x", True)});
+        assertEq((1, "x", True), r.toColumnHash().i, "inferred mixed column");
+
+        # an enum value with an integer value is an int, and a numeric string in an encoding that is not
+        # ASCII-compatible is read as the same characters in UTF-8
+        r = ColumnarResult::fromColumnHash({"i": (CrIntEnum::Twelve, convert_encoding("42", "UTF-16LE"))},
+            {"i": {"native_type": "bigint"}});
+        assertEq((12, 42), r.toColumnHash().i.toList(), "enum and UTF-16 values");
+    }
+
+    # any other value given by a script for a dense integer column raises an exception instead of being stored as an
+    # integer (before qore#6147, "x" was stored as 0)
+    private scriptIntColumnRefused() {
+        # the type of each refused value in the message
+        hash<string, auto> refused = {
+            "string": "x",
+            "empty string": "",
+            "fraction string": "1.5",
+            "exponent string": "1e3",
+            "trailing characters": "12abc",
+            "sign only": "-",
+            "whitespace only": "  ",
+            "out of range string": "9223372036854775808",
+            "NUL character string": "12\x00",
+            "bool True": True,
+            "bool False": False,
+            "list": (1, 2),
+            "hash": {"a": 1},
+            "date": 2026-01-01,
+            "binary": <0102>,
+        };
+        foreach hash<auto> d in (intColumnDescs().pairIterator()) {
+            foreach hash<auto> v in (refused.pairIterator()) {
+                string label = sprintf("%s: %s", d.key, v.key);
+                string expected_desc = v.value.typeCode() == NT_STRING
+                    ? "integer column 'col' row 1 has a string that is not a decimal integer"
+                    : sprintf("integer column 'col' row 1 has type '%s'", v.value.fullType());
+                *hash<ExceptionInfo> ex;
+                try {
+                    ColumnarResult r = ColumnarResult::fromColumnHash({"col": (1, v.value, 3)}, {"col": d.value});
+                } catch (hash<ExceptionInfo> e) {
+                    ex = e;
+                }
+                assertEq("COLUMNAR-RESULT-ERROR", ex.err, label + ": err");
+                assertEq(expected_desc, ex.desc ? ex.desc.substr(0, expected_desc.length()) : NOTHING,
+                    label + ": desc");
+            }
+        }
+
+        # the issue's example
+        assertThrows("COLUMNAR-RESULT-ERROR", "integer column 'i' row 1 has a string",
+            \ColumnarResult::fromColumnHash(), ({"i": (1 << 50, "x")}, {"i": {"native_type": "bigint"}}),
+            "qore#6147 example");
+
+        # fromRows() checks the values in the same way
+        assertThrows("COLUMNAR-RESULT-ERROR", "integer column 'i' row 2 has type 'bool'",
+            \ColumnarResult::fromRows(), ((("i": 1), ("i": NOTHING), ("i": True)), {"i": {"native_type": "bigint"}}),
+            "fromRows() refuses a bool");
+
+        # a char and a non-numeric string in an encoding that is not ASCII-compatible
+        assertThrows("COLUMNAR-RESULT-ERROR", "integer column 'i' row 0 has type 'char'",
+            \ColumnarResult::fromColumnHash(), ({"i": ("ab"[0],)}, {"i": {"native_type": "bigint"}}),
+            "a char is refused");
+        assertThrows("COLUMNAR-RESULT-ERROR", "integer column 'i' row 0 has a string",
+            \ColumnarResult::fromColumnHash(), ({"i": (convert_encoding("4x", "UTF-16LE"),)},
+            {"i": {"native_type": "bigint"}}), "a non-numeric UTF-16 string is refused");
+
+        # a "schema" sub-hash of the description that makes a list column a dense integer column is checked too
+        assertThrows("COLUMNAR-RESULT-ERROR", "integer column 'i' row 1 has a string",
+            \ColumnarResult::fromColumnHash(), ({"i": (1, "x")}, {"i": {"schema": {"native_type": "bigint"}}}),
+            "a schema sub-hash with an integer native type");
+        assertThrows("COLUMNAR-RESULT-ERROR", "integer column 'i' row 1 has type 'bool'",
+            \ColumnarResult::fromColumnHash(), ({"i": (1, True)},
+            {"i": {"native_type": "json", "schema": {"native_type": "integer"}}}),
+            "a schema sub-hash with an integer native type under a native type that is not dense");
+        assertThrows("COLUMNAR-RESULT-ERROR", "integer column 'i' row 1 has a string",
+            \ColumnarResult::fromRows(), ((("i": 1), ("i": "x")), {"i": {"schema": {"native_type": "bigint"}}}),
+            "fromRows() with a schema sub-hash");
+        ColumnarResult sr = ColumnarResult::fromColumnHash({"i": (1, "12", 2.5)},
+            {"i": {"schema": {"native_type": "bigint"}}});
+        assertEq((1, 12, 2), sr.toColumnHash().i.toList(), "a schema sub-hash with accepted values");
+
+        # serialized data with a list column of a dense integer type is checked against its schema, and the list is not
+        # converted (qore#6214)
+        hash<SerializationInfo> data = ColumnarResult::fromColumnHash({"a": (1, "x")}).serializeToData();
+        bool found;
+        foreach hash<auto> i in (data._index.pairIterator()) {
+            # only hash entries have members
+            if (i.value.hasKey("_members") && i.value._members.name == "a" && i.value._members.hasKey("kind")) {
+                data._index{i.key}._members += {"kind": "int", "native_type": "bigint"};
+                found = True;
+            }
+        }
+        assertTrue(found, "serialized schema found");
+        assertThrows("DESERIALIZATION-ERROR", "column 'a' row 1 has a value of type 'string'",
+            \Serializable::deserialize(), (data,), "deserialization refuses a non-numeric string");
     }
 
     private ColumnarResult makeMixedResult() {

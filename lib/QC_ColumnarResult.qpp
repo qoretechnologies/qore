@@ -162,6 +162,34 @@ ColumnarResult::copy() {
     \c binary; the list kinds: \c list; \c struct and \c map: \c hash), checked recursively against the child
     schemas.  A NOTHING or NULL value makes the column or child schema nullable.
 
+    @par Integer Column Values
+    @parblock
+    A list column stored as a dense integer buffer (a column whose \a desc gives an integer type, ex: a
+    \c native_type of \c "bigint" or a \c type of @ref Qore::NT_INT "NT_INT", a scale-0 numeric column of
+    precision 18 or less, or a list whose values are all integers) accepts these values:
+    |!Value|!Stored As
+    |@ref integer|the integer
+    |@ref float or @ref number|the value truncated toward zero (ex: \c 1.5 is stored as \c 1); a value outside \
+    the 64-bit integer range or NaN is converted as by @ref softint_type "softint", with no exception
+    |numeric string|its integer value
+    |@ref null or @ref nothing|a null element
+
+    A numeric string is an optional sign and decimal digits, with optional leading and trailing whitespace, whose
+    value fits in a 64-bit integer (ex: \c "12" or \c " -7 ").  Any other value raises a
+    \c COLUMNAR-RESULT-ERROR exception naming the column and row, among them a @ref boolean, a @ref date, a list, a
+    hash and a string that is not a numeric string (ex: \c "x", \c "", \c "1.5" or \c "12abc", which a
+    @ref softint_type "softint" conversion would read as \c 0, \c 0, \c 1 and \c 12).
+
+    An integer value outside the range of a column of a narrower integer type (ex: a \c native_type of
+    \c "integer", stored as \c buffer<int32>) raises a \c BUFFER-RANGE-ERROR exception.
+
+    The values of a ColumnarResult created by deserialization (see @ref Qore::Serializable "Serializable") are
+    checked against the column schema, and a list column is not converted; a value that does not match raises a
+    \c DESERIALIZATION-ERROR exception.  A columnar result returned by a DBI driver (ex: Datasource::selectColumnar()) is not
+    checked: the driver's values of such a column, such as the @ref number values of a scale-0 numeric column, are
+    stored as integers.
+    @endparblock
+
     @par Example: building a projected dense block
     @code{.py}
 hash<auto> columns = result.toColumnHash();
@@ -171,16 +199,18 @@ ColumnarResult compact = ColumnarResult::fromColumnHash({
 });
     @endcode
 
-    @throw COLUMNAR-RESULT-ERROR if a column value is not a list or buffer, or
-        if column lengths differ
+    @throw COLUMNAR-RESULT-ERROR if a column value is not a list or buffer, if column lengths differ, or if a value
+        in a column stored as a dense integer buffer is not an integer, float, number, numeric string, @ref null or
+        @ref nothing (see "Integer Column Values" above)
     @throw COLUMNAR-SCHEMA-ERROR a column schema does not match the column data
     @throw BUFFER-TYPE-ERROR a value of a list column cannot be stored in the buffer of its kind
+    @throw BUFFER-RANGE-ERROR an integer value is outside the range of a column of a narrower integer type
     @throw HASH-KEY-ERROR a column or field name in \a desc has a NUL character, which the keys of the records,
         column hashes and struct values of the result cannot contain
 */
 static ColumnarResult ColumnarResult::fromColumnHash(hash<auto> columns, *hash<auto> desc)
         [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    return qore_columnar_result_to_object(QoreColumnarResult::fromColumnHash(columns, desc, xsink), xsink);
+    return qore_columnar_result_to_object(QoreColumnarResult::fromScriptColumnHash(columns, desc, xsink), xsink);
 }
 
 //! Creates a ColumnarResult from row hashes
@@ -192,15 +222,18 @@ static ColumnarResult ColumnarResult::fromColumnHash(hash<auto> columns, *hash<a
     This is a compatibility constructor for row-oriented data. Prefer
     fromColumnHash() when column containers are already available.
 
+    The values of the columns are checked as by fromColumnHash() (see "Integer Column Values" there).
+
     @throw COLUMNAR-RESULT-ERROR if row values are not hashes or cannot be
-        converted to columns
+        converted to columns, or if a value in a column stored as a dense integer buffer is not an integer, float,
+        number, numeric string, @ref null or @ref nothing (see fromColumnHash())
     @throw COLUMNAR-SCHEMA-ERROR a column schema does not match the column data (see fromColumnHash())
     @throw HASH-KEY-ERROR a column or field name in \a desc has a NUL character, which the keys of the records,
         column hashes and struct values of the result cannot contain
 */
 static ColumnarResult ColumnarResult::fromRows(list<hash<auto>> rows, *hash<auto> desc)
         [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    return qore_columnar_result_to_object(QoreColumnarResult::fromRows(rows, desc, xsink), xsink);
+    return qore_columnar_result_to_object(QoreColumnarResult::fromScriptRows(rows, desc, xsink), xsink);
 }
 
 //! Returns the number of rows in the result

@@ -46,6 +46,7 @@
 #include <vector>
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreCallTargetCheckCache.h"
 #include <qore/intern/QoreTypeInfo.h>
 
 //! how the thread of a background helper uses the object of the starting code (defined in qore_thread_intern.h)
@@ -1033,7 +1034,38 @@ enum class QoreIROpcode : uint16_t {
     */
     CheckCallTarget = 431,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (432, 433, ...)
+    /** Comparisons whose operands may hold a value of a plugin operation's type (qore#5911): EqAny, NeAny, LtAny,
+        LeAny, GtAny and GeAny for operands that the parser found may hold such a value only for some of their values
+        (an or-nothing or a union type that includes the plugin's type, auto, or no type).  They dispatch to the
+        plugin operation for such a value, as the AST operator does, and compare as the Any opcode otherwise; the
+        result need not be a boolean.  A switch case with an operator compares with the Any opcode, as the AST's
+        CaseNodeWithOperator compares without plugins.
+    */
+    EqPlugin = 432,
+    NePlugin = 433,
+    LtPlugin = 434,
+    LePlugin = 435,
+    GtPlugin = 436,
+    GePlugin = 437,
+
+    /** Hands the value of a return statement in a handler run out of line to the function that the handler runs for,
+        as the AST interpreter runs a handler with a reference to the return value of its function (#6074)
+
+        operands[0] = the value of the return, or no operand for a return without a value; no result.  Lowered only in
+        the body of a handler compiled as a function of its own (QoreIROnBlockExitInstruction::handler_ir), where the
+        return statement executes, before the handler's own handlers run, or where the outermost try statement of the
+        handler that the return is in ends, as the AST interpreter's try statement gives the value of its return to
+        the enclosing block when it ends.  While the handler runs during an unwind (an exception or a thread_exit),
+        the value replaces the value of the return that the unwind interrupted, which is released then, and the value
+        of an earlier hand-over; otherwise it is ignored, as the value that the handler function returns is.  A
+        return without a value replaces it with no value.  The release of a replaced value can raise an exception (a
+        destructor), which the IR interpreter takes to the instruction's exception target and native code to the target
+        of the CheckException that the lowering emits after the instruction (the same target).  See
+        qore_rt_handler_return().
+    */
+    HandlerReturn = 438,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (439, 440, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1042,9 +1074,40 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::CheckCallTarget);
-static_assert(QORE_IR_MAX_OPCODE == 431, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::HandlerReturn);
+static_assert(QORE_IR_MAX_OPCODE == 438, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
+
+//! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself
+inline QoreIROpcode qore_ir_plugin_comparison_base_opcode(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::EqPlugin: return QoreIROpcode::EqAny;
+        case QoreIROpcode::NePlugin: return QoreIROpcode::NeAny;
+        case QoreIROpcode::LtPlugin: return QoreIROpcode::LtAny;
+        case QoreIROpcode::LePlugin: return QoreIROpcode::LeAny;
+        case QoreIROpcode::GtPlugin: return QoreIROpcode::GtAny;
+        case QoreIROpcode::GePlugin: return QoreIROpcode::GeAny;
+        default: return op;
+    }
+}
+
+//! Returns the plugin comparison opcode of an Any comparison (QoreIROpcode::EqAny...GeAny), or \a op itself
+inline QoreIROpcode qore_ir_plugin_comparison_opcode(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::EqAny: return QoreIROpcode::EqPlugin;
+        case QoreIROpcode::NeAny: return QoreIROpcode::NePlugin;
+        case QoreIROpcode::LtAny: return QoreIROpcode::LtPlugin;
+        case QoreIROpcode::LeAny: return QoreIROpcode::LePlugin;
+        case QoreIROpcode::GtAny: return QoreIROpcode::GtPlugin;
+        case QoreIROpcode::GeAny: return QoreIROpcode::GePlugin;
+        default: return op;
+    }
+}
+
+//! Returns true for a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin)
+inline bool qore_ir_is_plugin_comparison_opcode(QoreIROpcode op) {
+    return qore_ir_plugin_comparison_base_opcode(op) != op;
+}
 
 //! The flags of QoreIROpcode::ListSelectorStep (operands[2])
 enum class QoreIRListSelectorFlag : int64_t {
@@ -1336,7 +1399,7 @@ struct QoreIRPhiIncoming;
 //! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
 enum class QoreIRFusedCallTargetCheck : uint8_t {
     None,           //!< no check
-    MethodCall,     //!< the call is a method call: a valid object needs no other check
+    MethodCall,     //!< a method call resolved at parse time: a valid object of the method's classes needs no other check
     CallReference,  //!< the call is a call through a call reference: a closure needs no other check
     Other,          //!< any other call: always the full check
 };
@@ -1416,30 +1479,6 @@ enum class QoreIRInstClass : uint8_t {
     CallAOTHelper,
 };
 
-//! The class tag of an IR instruction object: a copy of the object has the same class, an assignment keeps it
-/** An assignment to the QoreIRInstruction part of an instruction (copying the common fields from an instruction of
-    another class) must not change the class of the object assigned to.
-*/
-class QoreIRInstClassTag {
-public:
-    constexpr QoreIRInstClassTag(QoreIRInstClass c) : cls(c) {
-    }
-
-    QoreIRInstClassTag(const QoreIRInstClassTag&) = default;
-
-    //! Keeps the class of the object assigned to
-    QoreIRInstClassTag& operator=(const QoreIRInstClassTag&) {
-        return *this;
-    }
-
-    constexpr operator QoreIRInstClass() const {
-        return cls;
-    }
-
-private:
-    QoreIRInstClass cls;
-};
-
 //! Declares the instruction class tag of an IR instruction class without subclasses
 #define QORE_IR_INST_CLASS(name) \
     static constexpr QoreIRInstClass inst_class_id = QoreIRInstClass::name; \
@@ -1465,9 +1504,13 @@ public:
 
     virtual ~QoreIRInstruction() = default;
 
+    //! Instructions are not copied: the class tag of an object must be that of its class (see qore_ir_inst_cast())
+    QoreIRInstruction(const QoreIRInstruction&) = delete;
+    QoreIRInstruction& operator=(const QoreIRInstruction&) = delete;
+
     QoreIROpcode opcode;
-    //! The class of this object; set on construction and never changed (see qore_ir_inst_cast())
-    QoreIRInstClassTag inst_class;
+    //! The class of this object, set by the constructor of its class (see qore_ir_inst_cast())
+    const QoreIRInstClass inst_class;
     // -1 = no loc, >=0 = loc->start_line (fills the padding after the opcode, so 32 bits are free here); must be
     // 32-bit to match QoreProgramLineLocation::start_line, or lines > 32767 wrap to negative values and the
     // debug line-change gate below reports the wrong line
@@ -1486,6 +1529,11 @@ public:
     // Transient: LoadLocal directly followed by the CheckCallTarget of its value: the interpreter makes the check in
     // the load and steps over it (qore_ir_fuse_call_target_checks(); issue #5784)
     QoreIRFusedCallTargetCheck fused_call_target_check = QoreIRFusedCallTargetCheck::None;
+    // Transient: the CheckCallTarget of a method call that the IR had directly before the call (after the arguments,
+    // or for arguments without side effects), which the call makes itself: the IR interpreter and native code run it
+    // before the call, with the check's own location and exception routing (qore_ir_fuse_call_target_checks();
+    // issue #5824)
+    std::unique_ptr<QoreIRInstruction> fused_call_check;
     bool borrowed_local_load = false;  // Transient: LoadLocal solely feeding an in-place mutation; the interpreter
                                        // borrows the local's slot-cache reference so the node stays unique at the
                                        // mutation site (native code borrows via alloca loads already)
@@ -2982,6 +3030,23 @@ public:
     }
 
     QoreValue expr;
+    //! CheckCallTarget only (transient: set by the lowering): the class of the method resolved at parse time and the
+    //! method's class; an object of either is called with that method, and needs no other check than that it has not
+    //! been deleted (AbstractMethodCallNode::exec()); null if the call has no such method (issue #5824)
+    const QoreClass* check_class = nullptr;
+    const QoreClass* check_method_class = nullptr;
+    //! CheckCallTarget only (transient: set by the lowering): the call is made with its method on an object of any
+    //! class, which needs no other check than that it has not been deleted (a qualified self call, which is not
+    //! virtual: SelfFunctionCallNode::evalImpl())
+    bool check_any_class = false;
+    //! CheckCallTarget only (transient: set by the lowering): the check made after the arguments of a call that can
+    //! have side effects, which can delete the object: the AST interpreter raises its error when the method's code is
+    //! entered (CodeContextHelper: qore_object_private::startCall() or checkCurrentObjectCall()), naming the method's
+    //! class (issue #5824)
+    bool check_after_args = false;
+    //! CheckCallTarget only (transient: set by the builder): the cache of the call site
+    //! (AbstractMethodCallNode::check_cache), which the IR interpreter tests inline (issue #5824)
+    const QoreCallTargetCheckCache* check_cache = nullptr;
     bool has_ref_args = false;  //!< True if any operand is a reference type (may be modified by callee)
     //! ListIndexDynamic only: selector kinds for native list/string/binary slices
     //! with range entries. 0 = single index (one operand), 1 = range (start+stop operands).
@@ -4129,11 +4194,14 @@ public:
 
     //! Returns the estimated number of LLVM instructions of the code that runs the on_block_exit handlers of the function
     /** The code that runs the pending handlers at each exit that can leave a scope with a handler publishes every local
-        of the function to the runtime and reloads it afterwards, so its size is the product of the handlers and of
-        the locals: a function with 200 try statements whose catch blocks have a local and a handler took tens of
-        minutes to compile with the JIT, though it has fewer IR instructions than the limit of
-        QoreJIT::getMaxJITIRInstructions() (qore#6104).  Used with QoreJIT::getMaxJITHandlerCost() to keep such a
-        function on the IR tier.  Memoized like getInstructionCount().
+        of the function to the runtime and reloads it afterwards, so its inline size is the product of the handlers
+        and of the locals: a function with 200 try statements whose catch blocks have a local and a handler took tens
+        of minutes to compile with the JIT, though it has fewer IR instructions than the limit of
+        QoreJIT::getMaxJITIRInstructions() (qore#6104).  A function over a size calls helpers with tables of the
+        locals instead (QoreIRToLLVM::obe_table_mode, qore#6110), which takes a number of instructions for each place
+        that does not depend on the locals, so the estimate is the smaller of the two.  Used with
+        QoreJIT::getMaxJITHandlerCost() to keep a function that is expensive in spite of that on the IR tier.
+        Memoized like getInstructionCount().
     */
     size_t getHandlerCostEstimate() const {
         size_t cost = cached_handler_cost.load(std::memory_order_relaxed);
@@ -4146,9 +4214,12 @@ public:
                     }
                 }
             }
-            // the code of a handler run takes about 18 instructions for each local, and a handler is run at about two
-            // places (measured: 83 runs for 40 handlers of 41 locals, 62k of the 93k instructions of the function)
-            cost = handlers * 2 * 18 * (static_cast<size_t>(total_local_count) + 1);
+            // the inline code of a handler run takes about 18 instructions for each local, and a handler is run at
+            // about two places (measured: 83 runs for 40 handlers of 41 locals, 62k of the 93k instructions of the
+            // function); a table-driven run takes about 64 instructions, and the function 16 for each local
+            size_t inline_cost = handlers * 2 * 18 * (static_cast<size_t>(total_local_count) + 1);
+            size_t table_cost = handlers * 2 * 64 + static_cast<size_t>(total_local_count) * 16;
+            cost = std::min(inline_cost, table_cost);
             // zero marks "not computed"
             cached_handler_cost.store(cost ? cost : 1, std::memory_order_relaxed);
             return cost;
@@ -4271,6 +4342,17 @@ public:
     //! only the compiles referencing a Program being torn down. Set unconditionally at
     //! lowering (independent of the #5352 debug context above). Null for AOT.
     QoreProgram* pgm = nullptr;
+    //! true if the code of the function always runs with the class context \a static_class_ctx and with \a pgm as
+    //! the current Program of its thread (issue #5824)
+    /** Known for top-level code (no class context), plain functions (none) and normal and static methods and
+        destructors (the class of the method), and for the functions lowered as part of one of them; not for
+        constructors and copy methods (an imported class runs them in its own class context), closures (a closure
+        created in a method runs in the Program of its object) and code compiled ahead of time, which the
+        call-target cache test then reads from the thread (QoreCallTargetCheckCache)
+    */
+    bool static_call_context = false;
+    //! the class context of the code of the function, if \a static_call_context
+    const qore_class_private* static_class_ctx = nullptr;
     //! the ID of \a pgm, taken when it is set: a background compile checks that the Program with this ID is still
     //! the one at \a pgm, as a deleted Program's address can be reused (see QoreJIT::enqueueBgCompile())
     qore_program_id_t pgm_id = 0;
@@ -4816,6 +4898,31 @@ public:
         serialized: IR read back keeps them until the end of the try statement (qore#5941)
     */
     std::unordered_map<const QoreIRInstruction*, std::vector<uint32_t>> catch_interrupted_returns;
+    //! the value of the CatchException of the catch block that each CatchCleanup of a break, continue or return
+    //! closes
+    /** Set by the lowering and read by the LLVM lowering and the IR interpreter, which release the value (the
+        exception's information, which holds its argument) when the jump leaves the catch block, as the AST
+        interpreter releases it with the catch block: native code does not release the temporaries of the scopes that
+        a jump leaves (UnwindTemps), and kept it until the value was overwritten or the function ended, and the IR
+        interpreter released it with the try statement's temp scope, which a return leaves only when the frame ends;
+        not serialized: IR read back keeps it until then (#6079)
+    */
+    std::unordered_map<const QoreIRInstruction*, uint32_t> catch_cleanup_results;
+    //! the number of the frame's catch blocks that enclose the try statement of each CatchCleanup of a catch block's
+    //! exit block
+    /** Set by the lowering and read by the IR interpreter and the LLVM lowering: the exit block closes every catch
+        block of the frame opened after them, its own and any nested one that a call raising an exception left open
+        (a catch block without an exit block, closed at runtime only where the exception lands), not the innermost
+        one only; not serialized: IR read back closes the innermost one (#5968)
+    */
+    std::unordered_map<const QoreIRInstruction*, uint32_t> catch_exit_depths;
+    //! true if the function has a catch block without an exit block whose statements can raise an exception (or
+    //! run a thread_exit) that leaves the frame without closing it
+    /** Set by the lowering and read by the LLVM lowering, whose exception exits of the frame then close the catch
+        blocks still open before the frame's handlers and locals; not serialized: IR read back closes them at the
+        frame's end (#5968)
+    */
+    bool catch_exit_unwind = false;
     mutable std::vector<uint32_t> interpreter_return_preserve_slot_ids;
     mutable std::vector<const QoreIRCallDirectInstruction*> interpreter_direct_calls;
     mutable bool interpreter_needs_slot_cache_tls = false;

@@ -293,6 +293,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Group 6: HTTPClient Alt-Svc Upgrade (Phase 2)
         addTestCase("HTTPClient Alt-Svc auto-upgrade to HTTP/3", \testHttpClientAltSvcUpgrade());
         addTestCase("HTTPClient http3_mode=disabled skips QUIC", \testHttpClientHttp3Disabled());
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("HTTPClient Alt-Svc entry after a step forward of the system clock",
+                \testHttpClientAltSvcClockStep());
+        }
         addTestCase("HTTPClient QUIC fallback on failure", \testHttpClientQuicFallback());
         addTestCase("HTTPClient http3_mode option in constructor", \testHttpClientHttp3ModeOption());
 
@@ -903,6 +907,8 @@ l50Xb2GWQesIt9k5jF5IOw==
                 "logger": logger,
                 "request_timeout": 10s,
                 "connect_timeout": 5s,
+                # the request after the server's shutdown is not repeated: it fails at the first attempt
+                "max_request_retries": 0,
             },
         );
         on_exit mgr.closeAll();
@@ -913,18 +919,40 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Now shut down the server gracefully (which triggers GOAWAY)
         delete server;
+        # no other server can take the freed port and answer the request below (#6215)
+        Socket port_hold = holdFreedPort(port);
+        on_exit port_hold.close();
 
         # After server shutdown, the next request should fail
         bool got_error = False;
+        *hash<auto> unexpected;
         try {
-            mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
+            unexpected = mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
         } catch (hash<ExceptionInfo> ex) {
             got_error = True;
             if (m_options.verbose > 1) {
                 printf("testGoawayGracefulShutdown: got expected error: %s: %s\n", ex.err, ex.desc);
             }
         }
-        assertTrue(got_error, "request after GOAWAY shutdown should fail");
+        assertTrue(got_error, sprintf("request after GOAWAY shutdown should fail; got status %y, headers %y",
+            unexpected.status_code, unexpected.headers));
+    }
+
+    #! Holds a UDP port that a server of this case has just freed, until the returned socket is closed (#6215)
+    /** The kernel hands a freed UDP port out again at once, and tests running beside this one start QUIC servers on
+        port 0: one of them could take the port and answer the request that must fail after the server's shutdown.
+        The socket is bound to the port and never read, so nothing answers there.  The case is skipped if the port
+        was taken between the shutdown and the bind.
+    */
+    private Socket holdFreedPort(int port) {
+        Socket sock();
+        try {
+            sock.bindINET("0.0.0.0", string(port), False, AF_INET, SOCK_DGRAM);  # all-interfaces: holds the freed port against servers binding it on any address
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("the freed UDP port %d was taken by another process before it could be held: %s: %s",
+                port, ex.err, ex.desc));
+        }
+        return sock;
     }
 
     testClientGoawayDraining() {
@@ -958,6 +986,8 @@ l50Xb2GWQesIt9k5jF5IOw==
                 "request_timeout": 10s,
                 "connect_timeout": 5s,
                 "max_connections_per_host": 4,
+                # the requests after the server's shutdown are not repeated: they fail at the first attempt
+                "max_request_retries": 0,
             },
         );
         on_exit mgr.closeAll();
@@ -975,13 +1005,17 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Step 2: Trigger GOAWAY via server shutdown
         # HttpServer graceful shutdown sends GOAWAY frames to connected clients
         delete server;
+        # no other server can take the freed port and answer the requests below (#6215)
+        Socket port_hold = holdFreedPort(port);
+        on_exit port_hold.close();
 
         # Step 3: The next request drives I/O on the existing connection, which
         # processes the in-flight GOAWAY frames. The connection transitions to
         # Draining state. The request fails because the server is gone.
         bool got_error = False;
+        *hash<auto> unexpected;
         try {
-            mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
+            unexpected = mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
         } catch (hash<ExceptionInfo> ex) {
             got_error = True;
             if (m_options.verbose > 1) {
@@ -989,7 +1023,8 @@ l50Xb2GWQesIt9k5jF5IOw==
                     ex.err, ex.desc);
             }
         }
-        assertTrue(got_error, "request after server shutdown (GOAWAY) should fail");
+        assertTrue(got_error, sprintf("request after server shutdown (GOAWAY) should fail; got status %y, headers %y",
+            unexpected.status_code, unexpected.headers));
 
         # Step 4: After GOAWAY processing, the connection may still be in the
         # pool (draining/closed) or may have already been removed by the async
@@ -1199,6 +1234,44 @@ l50Xb2GWQesIt9k5jF5IOw==
         hash<auto> resp3 = client.send("", "GET", "/test", NOTHING, True);
         assertEq(200, int(resp3.status_code), "third HTTP/3 request should return 200");
         assertTrue(client.isHttp3Active(), "should still be HTTP/3 after third request");
+    }
+
+    #! A step forward of the system clock does not expire the Alt-Svc entry of an HTTPClient (#6166)
+    /** The lifetime of an entry (ma=) is measured on the monotonic clock: on the system clock, a step forward longer
+        than the lifetime dropped the entry, so the next request did not upgrade to HTTP/3.  The step is made with
+        dbg_set_realtime_offset() (debug builds).
+    */
+    testHttpClientAltSvcClockStep() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "enable_h3": True,
+        });
+        on_exit {
+            delete server;
+        }
+        server.setHandler("test", "/test", NOTHING, new SimpleHandler());
+        server.waitForAsyncIo();
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": "0",
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+
+        HTTPClient client({"url": "https://127.0.0.1:" + info.port, "ssl_verify_cert": False});
+        on_exit {
+            delete client;
+        }
+        hash<auto> resp1 = client.send("", "GET", "/test", NOTHING, True);
+        assertEq(200, int(resp1.status_code));
+        assertTrue(exists resp1."alt-svc", "the response advertises HTTP/3");
+
+        # a step of 30 days, longer than the lifetime that the server advertises
+        call_function("dbg_set_realtime_offset", 30 * 86400 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        hash<auto> resp2 = client.send("", "GET", "/test", NOTHING, True);
+        assertEq(200, int(resp2.status_code));
+        assertTrue(client.isHttp3Active(), "the Alt-Svc entry is used: the request upgraded to HTTP/3");
     }
 
     testHttpClientHttp3Disabled() {

@@ -629,9 +629,6 @@ public:
         std::vector<uint8_t>&& paramFlags = std::vector<uint8_t>(),
         QoreProgram* localOwnerPgm = nullptr);
 
-    DLLLOCAL void replaceResolvedTypes(const QoreTypeInfo* retType,
-        std::vector<const QoreTypeInfo*>&& paramTypes);
-
     DLLLOCAL virtual ~UserSignature() {
         // type-parameter types are cached by signature address, which the next signature allocated can reuse
         qore_purge_derived_types(this, nullptr, nullptr);
@@ -886,6 +883,24 @@ public:
 
         saves current program location in case there's an exception
     */
+    //! the tag of the constructor for a method call on an object that its arguments deleted
+    struct DeletedByArgs {};
+
+    //! resolves the variant of a method call whose arguments, evaluated before the call, deleted its object
+    /** As the constructor with pre-evaluated arguments, but without the test of the object: the variant is resolved as
+        the call resolves it (raising the error of the resolution, as the AST interpreter does before it enters the
+        method's code); the caller then raises the error of the method's code (issue #5824).  Only for the cold path
+        of the compiled modes' check of a call's target after its arguments: the call itself is not made.
+    */
+    /** @param n_arg_names the names of the arguments of a named call resolved at run time by parameter name
+        (AbstractMethodCallNode::execNamed()), whose arguments are in source order, or nullptr
+    */
+    DLLLOCAL CodeEvaluationHelper(DeletedByArgs, ExceptionSink* n_xsink, RuntimeConfig& n_rc,
+            const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, const char* n_name,
+            QoreListNode* args, QoreObject* self, const qore_class_private* n_qc, const qore_class_private* cctx,
+            QoreProgram* pgm_ctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+            const name_vec_t* n_arg_names);
+
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args = nullptr,
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
@@ -1561,8 +1576,8 @@ DLLLOCAL bool qore_program_is_module(const QoreProgram* pgm);
 */
 DLLLOCAL QoreParseOptions qore_relieve_module_declared_domains(const QoreParseOptions& po, const QoreProgram* code_pgm);
 
-//! sets the runtime parse options override for a call of a user variant; see qore_get_user_call_runtime_po_override()
-/** The part of qore_get_user_call_runtime_po_override() for module code and for code that runs in a Program other
+//! sets the runtime parse options override for a call of a user variant; see qore_set_user_call_runtime_po_override()
+/** The part of qore_set_user_call_runtime_po_override() for module code and for code that runs in a Program other
     than the one that defined it
 */
 DLLLOCAL QORE_INTERN_NOINLINE void qore_set_user_call_runtime_po_override_slow(
@@ -2075,11 +2090,6 @@ public:
         return aot_body_loc;
     }
 
-    //! Returns true if this variant's AOT context has already been materialized.
-    DLLLOCAL bool hasMaterializedAOTContext() const {
-        return cached_aot_ctx.load(std::memory_order_acquire) != nullptr;
-    }
-
     //! Returns the cached AOT context for direct AOT fast-entry dispatch.
     DLLLOCAL QoreAOTContext* getCachedAOTContext() const {
         return cached_aot_ctx.load(std::memory_order_acquire);
@@ -2180,39 +2190,8 @@ public:
     }
 };
 
-//! sets the runtime parse options override for a call of a user variant
-/** - a variant that runs in a Program other than the one that defined it (user code whose Program has released it,
-      which runs in its caller's Program) runs with the executing Program's options forced into its runtime parse
-      options;
-    - the code of a user module (a function or a method of the module, which runs in the module's Program) runs with
-      the module's options and, for a sandboxed caller only, also with the restrictions of its caller, except for the
-      options of get_module_own_access_parse_options(), which are those of the module's Program (see
-      qore_get_module_call_runtime_po_override()); a call of module code by code of the same module keeps the
-      override that is in effect (see runtime_module_call_override_in_effect());
-    - otherwise any override of the caller is cleared for the call.
-
-    Every path that calls a user variant applies it in the same way, so that the call behaves as it does with the AST
-    interpreter.
-
-    @param helper the helper that sets the override, created without one; it sets none if the call keeps the
-    thread's override
-    @param exec_pgm the Program that the variant runs in, or nullptr for the Program that defined it
-    @param uvb the variant
-    @param caller_po the effective options of the code making the call, or nullptr if they are those of \a caller_pgm
-    (see runtime_get_effective_parse_options_for()), which are then determined only if they are needed
-    @param caller_pgm the Program making the call, before the call switched to \a exec_pgm
-*/
-DLLLOCAL QORE_INTERN_ALWAYS_INLINE void qore_set_user_call_runtime_po_override(RuntimeParseOptionsOverrideHelper& helper,
-        const QoreProgram* exec_pgm, const UserVariantBase* uvb, const QoreParseOptions* caller_po,
-        const QoreProgram* caller_pgm) {
-    // the usual case: code that is not module code runs in the Program that defined it and clears the caller's
-    // override
-    if ((!exec_pgm || exec_pgm == uvb->pgm) && !qore_program_is_module(uvb->pgm)) {
-        helper.setCleared();
-        return;
-    }
-    qore_set_user_call_runtime_po_override_slow(helper, exec_pgm, uvb, caller_po, caller_pgm);
-}
+// qore_set_user_call_runtime_po_override() is defined in qore_program_private.h, where it can read the parse options
+// of the called variant's Program inline (qore_program_is_module_inline())
 
 // the following defines the pure virtual functions that are common to all user variants
 #define COMMON_USER_VARIANT_FUNCTIONS DLLLOCAL virtual int64 getFunctionality() const override {\

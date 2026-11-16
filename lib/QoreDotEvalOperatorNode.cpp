@@ -132,8 +132,44 @@ QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* x
     return evalWithBaseCommon<false>(base, xsink);
 }
 
+int qore_check_object_method_call(QoreObject* obj, const char* name, const QoreClass* qc, const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, ExceptionSink* xsink, const QoreCallTargetCheckCache* cache) {
+    // as AbstractMethodCallNode::exec(), up to the evaluation of the arguments
+    if (!obj->isValid()) {
+        qore_raise_deleted_method_call(xsink, obj, name, qc, method, variant);
+        return -1;
+    }
+    // the method resolved at parse time is called on an object of the parse-time class or of the method's class
+    if (qc && method && (obj->getClass() == qc || obj->getClass() == method->getClass())) {
+        return 0;
+    }
+    // otherwise the method is looked up by name, which can find a private method or no method (issue #5824), as
+    // MethodCallNode::exec() looks it up
+    const QoreClass* obj_class = obj->getClass();
+    const qore_class_private* obj_class_priv = qore_class_private::get(*obj_class);
+    const qore_class_private* runtime_class = runtime_get_class();
+    // a lookup that found a method for the object's class from the same class context finds it again
+    const bool cacheable = cache && obj_class_priv->runtimeMethodLookupIsStable();
+    if (cacheable && cache->hit(obj_class, runtime_class)) {
+        return 0;
+    }
+    const qore_class_private* class_ctx = runtime_class;
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*obj_class, class_ctx)) {
+        class_ctx = nullptr;
+    }
+    // read before the lookup: a change of the method tables during the lookup makes the entry stale
+    const uint64_t epoch = cacheable ? qore_get_method_dispatch_epoch() : 0;
+    bool found_method = false;
+    int rc = obj_class_priv->checkMethodForEval(obj, name, class_ctx, xsink, &found_method);
+    if (!rc && found_method && cacheable) {
+        cache->set(obj_class, runtime_class, epoch);
+    }
+    return rc;
+}
+
 int qore_check_method_call_receiver(QoreValue base, const char* name, const QoreClass* qc,
-        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, bool pseudo, ExceptionSink* xsink) {
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, bool pseudo, ExceptionSink* xsink,
+        const QoreCallTargetCheckCache* cache) {
     // the dispatch of QoreDotEvalOperatorNode::evalWithBase(), up to the evaluation of the arguments
     QoreObject* obj = nullptr;
     switch (base.getType()) {
@@ -162,12 +198,7 @@ int qore_check_method_call_receiver(QoreValue base, const char* name, const Qore
     }
 
     if (obj) {
-        // as AbstractMethodCallNode::exec()
-        if (obj->isValid()) {
-            return 0;
-        }
-        qore_raise_deleted_method_call(xsink, obj, name, qc, method, variant);
-        return -1;
+        return qore_check_object_method_call(obj, name, qc, method, variant, xsink, cache);
     }
 
     if (pseudo) {
@@ -185,7 +216,7 @@ int qore_check_method_call_receiver(QoreValue base, const char* name, const Qore
 
 int QoreDotEvalOperatorNode::checkReceiver(QoreValue base, ExceptionSink* xsink) const {
     return qore_check_method_call_receiver(base, m->getName(), m->getClass(), m->getMethod(), m->getVariant(),
-        m->isPseudo(), xsink);
+        m->isPseudo(), xsink, &m->check_cache);
 }
 
 QoreValue QoreDotEvalOperatorNode::evalRuntimeNamedWithArgs(QoreListNode* args, ExceptionSink* xsink) const {

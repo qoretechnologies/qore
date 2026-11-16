@@ -885,6 +885,37 @@ private:
     bool active = false;
 };
 
+#ifdef DEBUG
+//! The steps of an entry into another Program at which dbg_fail_next_program_entry() makes an allocation fail
+enum qore_dbg_program_entry_site_e : int {
+    //! after the thread's current Program is switched (ProgramThreadCountContextHelper::setOtherProgram())
+    QDPES_SWITCH = 0,
+    //! the allocation of the thread's local data in the Program (qore_program_private::setThreadVarData())
+    QDPES_LOCAL_DATA = 1,
+    //! the record of the Program in the thread's Program set (ThreadProgramData::saveProgram())
+    QDPES_PROGRAM_SET = 2,
+    //! the instantiation of the Program's top-level local variables for the thread (ThreadProgramData::saveProgram())
+    QDPES_INSTANTIATION = 3,
+    //! the instantiation of a top-level local variable after the first one (doTopLevelInstantiation())
+    QDPES_INSTANTIATION_VAR = 4,
+    //! the steps of the entry once the thread's context is switched (ProgramThreadCountContextHelper::enterSwitched())
+    QDPES_SWITCHED = 5,
+    //! after the Program's thread entry handler ran (ThreadEntryHandlerFrame::enterHandlers())
+    QDPES_ENTRY_HANDLER = 6,
+    //! the Program's thread exit handler (ThreadEntryHandlerFrame::exitHandlers())
+    QDPES_EXIT_HANDLER = 7,
+    //! the steps of the entry after the Program's entry handler ran (ProgramThreadCountContextHelper::enterSwitched())
+    QDPES_ENTERED = 8,
+};
+
+//! Makes the next step of an entry into another Program at \a site throw std::bad_alloc; several sites can be armed,
+//! each fails once; -1 disarms all of them
+DLLLOCAL void qore_dbg_fail_next_program_entry(int site);
+
+//! Returns true, and disarms the site, if the next step at \a site is armed to fail
+DLLLOCAL bool qore_dbg_program_entry_fails(int site);
+#endif
+
 //! Pops a sandbox policy barrier pushed with @ref qore_push_sandbox_policy_barrier()
 DLLLOCAL void qore_pop_sandbox_policy_barrier();
 
@@ -937,9 +968,11 @@ DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
     This helper sets the runtime parse options to the given options of the code being loaded and suspends any such
     override for its lifetime, which makes load-time resolution what parse-time resolution is for the same source.
     It must only be used around the loading of AOT-compiled code (deserialization, slot-map context construction and
-    module initialization), never around the evaluation of code on behalf of a caller: a variant resolved when code is
-    evaluated is checked against the options in effect for that evaluation, including the restrictions of the
-    Program it runs in.
+    module initialization, including the constant initializers of compiled modules and scripts, eager or run when a
+    constant is first read: qore#6189, and those of source code, evaluated when the declaring code is committed or
+    when a constant is first read: qore#6205), never around the evaluation of code on behalf of a caller: a variant resolved
+    when code is evaluated is checked against the options in effect for that evaluation, including the restrictions
+    of the Program it runs in.
 */
 class LoadTimeParseOptionsHelper {
 public:
@@ -1042,7 +1075,7 @@ private:
     const QoreProgram* old_from_pgm;
 };
 
-//! the runtime parse options override of a call; see qore_get_user_call_runtime_po_override()
+//! the runtime parse options override of a call; see qore_set_user_call_runtime_po_override()
 struct QoreCallParseOptionsOverride {
     //! the options that the override covers
     QoreParseOptions mask;
@@ -1602,7 +1635,7 @@ DLLLOCAL void parse_cond_mark_else();
 DLLLOCAL bool parse_cond_has_else();
 DLLLOCAL bool parse_cond_pop(const QoreProgramLocation* loc);
 DLLLOCAL bool parse_cond_test(const QoreProgramLocation* loc);
-DLLLOCAL void push_parse_options();
+DLLLOCAL void push_parse_options(const QoreProgramLocation* loc);
 DLLLOCAL void parse_try_module_inc();
 DLLLOCAL bool parse_try_module_dec(const QoreProgramLocation* loc);
 DLLLOCAL unsigned parse_try_module_get();
@@ -2331,8 +2364,11 @@ public:
 private:
     //! runs the entry handler of the Program, if any; see enter()
     DLLLOCAL QORE_INTERN_NOINLINE int enterHandlers(ThreadData* td, QoreProgram* pgm, ExceptionSink* xsink);
-    //! runs the exit handler paired with the entry handler that ran; see exit()
+    //! runs the exit handler paired with the entry handler that ran; see exit(); never throws: a C++ exception is
+    //! recorded in the sink
     DLLLOCAL QORE_INTERN_NOINLINE void exitHandlers(ThreadData* td, ExceptionSink* xsink);
+    //! leaves the frame for an entry whose handler failed: no exit handler runs for it; never throws
+    DLLLOCAL void failEntry(ThreadData* td, ExceptionSink& handler_xsink) noexcept;
 
     //! the thread's entered Program before the frame
     QoreProgram* old_entry_pgm = nullptr;
@@ -2348,9 +2384,10 @@ private:
 /** This is the case when the Program has thread entry handlers and is not the thread's entered Program: the current
     Program can be set without entering it, for example while a Program is parsed or committed, or while metadata
     of a Program is looked up.  Callers that skip ProgramThreadCountContextHelper for a call within the current
-    Program must check this first; ProgramThreadCountContextHelper::set() checks it itself.
+    Program must check this first; ProgramThreadCountContextHelper::set() checks it itself.  Binary modules use the
+    exported qore_program_thread_entry_pending().
 */
-DLLLOCAL bool thread_entry_pending(QoreProgram* pgm);
+DLLLOCAL bool thread_entry_pending(const QoreProgram* pgm);
 
 //! A thread's entry into a Program, counted with its thread count, which is left with
 //! qore_program_private::decThreadCount(*pgm, tid, xsink)
@@ -2499,6 +2536,14 @@ protected:
 private:
     //! restores the thread's context as it was before set() switched it
     DLLLOCAL void restoreContext();
+
+    //! releases the thread count that set() took in \a pgm, or leaves the entry without it (module_uncounted)
+    DLLLOCAL void releaseThreadCount(ThreadData* td, QoreProgram* pgm);
+
+    //! the steps of setOtherProgram() once the thread's context is switched (the budgets, the deferral, the entry
+    //! handler, the thread initialization code and the debugger); an exception that they raise is undone by the caller
+    DLLLOCAL void enterSwitched(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm, qore_program_private* pp,
+        bool runtime);
 
     //! Takes the thread count in the Program that set() entered without it (module_uncounted) for takeThreadCount()
     /** The entry without the thread count is still left when the context is restored
@@ -3262,7 +3307,7 @@ public:
        @return true if this is the thread's first entry into the Program; the caller then runs the Program's thread
        initialization code (qore_program_private::doThreadInit()), after the Program's thread entry handler
    */
-   DLLLOCAL bool saveProgram(bool runtime);
+   DLLLOCAL bool saveProgram(bool runtime, bool* first_entry = nullptr);
    DLLLOCAL void del(ExceptionSink* xsink);
    DLLLOCAL bool canRunDebugCallbacks() const;
    DLLLOCAL bool isActiveProgram(QoreProgram* pgm) const;

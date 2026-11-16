@@ -530,6 +530,14 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::ToFloatChecked, {G::Base, G::Expr}, true},
     {O::IteratorCreateSource, {G::IteratorCreate}},
     {O::CheckCallTarget, {G::Expr}},
+    // the comparisons that may dispatch to a plugin operation (qore#5911)
+    {O::EqPlugin, {G::Base, G::Expr}, true},
+    {O::NePlugin, {G::Base, G::Expr}, true},
+    {O::LtPlugin, {G::Base, G::Expr}, true},
+    {O::LePlugin, {G::Base, G::Expr}, true},
+    {O::GtPlugin, {G::Base, G::Expr}, true},
+    {O::GePlugin, {G::Base, G::Expr}, true},
+    {O::HandlerReturn, {G::Base}},
 };
 
 constexpr bool aotOpcodeLayoutsIndexed() {
@@ -861,20 +869,17 @@ static bool instRegistryWriteCallTargetExpr(AOTInstWriteCtx& ctx, const QoreValu
         ctx.writer.writeU8(0);
         return true;
     }
-    if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (auto* call = qore_get_self_function_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
-        const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
+        const QoreClass* qc = call->getRecordedClass();
         ctx.writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
-        const AbstractQoreFunctionVariant* variant = call->getVariant();
-        // the explicit type arguments of the call (qore#5865)
-        std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant, nullptr,
-            call->getExplicitTypeParamInstantiation());
+        std::string method_ref = qore_aot_encode_self_method_ref(call, false);
         ctx.writer.writeStringRef(method_ref.c_str());
         ctx.writer.writeU8(0);
         return true;
     }
-    if (auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (auto* call = qore_get_static_method_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
         const QoreClass* qc = method ? method->getClass() : nullptr;

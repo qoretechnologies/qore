@@ -1423,6 +1423,54 @@ void QoreLValueReferencePrograms::releaseIntern(ExceptionSink* xsink) {
     }
 }
 
+void LValueHelper::replaceEnumForWrite(const QoreValue& current) {
+    assert(current.isEnum());
+    assert(val || qv);
+    QoreValue copy = qore_enum_value_copy_for_write(current);
+    if (val) {
+        // QoreLValue::assignAssume() takes the copy and releases the lvalue's reference to the enum member
+        saveTemp(val->assignAssume(copy));
+        return;
+    }
+    QoreValue old = *qv;
+    *qv = copy;
+    saveTemp(old);
+}
+
+void LValueHelper::ensureUniqueSlow(const QoreValue& current) {
+    if (current.isEnum()) {
+        // the enum member's base value is shared and constant: the lvalue takes an owned copy to modify
+        replaceEnumForWrite(current);
+        return;
+    }
+    // never a scalar that the lvalue stores natively (qore#6094)
+    assert(!val || !val->optimized());
+    if (current.isShortString()) {
+        char buf[7];
+        current.getShortString(buf);
+        assignNodeIntern(new QoreStringNode(buf, current.shortStringLen(), QCS_UTF8));
+        return;
+    }
+    // an opaque reference
+    assert(current.isOpaque());
+    ensureUniqueNode();
+}
+
+void LValueHelper::keepCreatedNode(QoreValue rv) const {
+    assert(val && val->optimized());
+    // a large int or a special float, which a value holds in a new node (qore#6094); a natively stored scalar is never
+    // returned as an opaque reference
+    assert(!rv.isOpaque());
+    AbstractQoreNode* n = rv.getInternalNode();
+    assert(n);
+    try {
+        tvec.push_back(n);
+    } catch (...) {
+        n->deref(nullptr);
+        throw;
+    }
+}
+
 void LValueHelper::saveTemp(QoreValue val) {
     if (val.isEnum()) {
         val.discard(nullptr);
@@ -1482,7 +1530,7 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
         } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
             evaluated += hop->getRight().needsEval() ? 1 : 0;
             c = hop->getLeft();
-        } else if (auto* cop = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+        } else if (auto* cop = qore_get_cast_operator_node(node)) {
             c = cop->getExp();
         } else {
             break;
@@ -1503,7 +1551,7 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
         } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
             keys.push_back(hop->getRight());
             c = hop->getLeft();
-        } else if (auto* cop = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+        } else if (auto* cop = qore_get_cast_operator_node(node)) {
             c = cop->getExp();
         } else {
             break;
@@ -1714,7 +1762,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
 
         //printd(5, "LValueHelper::doListLValue() this: %p saving old value: %p '%s'\n", this, vp, get_type_name(vp));
         // create a hash of the required type if the lvalue has a complex hash type and currently has no value
-        if (!getValue()) {
+        if (isNothing()) {
             // issue #2652: assign the current runtime type based on the declared complex list type
             if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
                 // issue #3429 assign an untyped list if required
@@ -1859,7 +1907,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         }
 
         // create a hash of the required type if the lvalue has a complex hash type and currently has no value
-        if (!getValue()) {
+        if (isNothing()) {
             // issue #2652: assign the current runtime type based on the declared complex list type
             if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
                 // issue #3429 assign an untyped list if required
@@ -1983,7 +2031,7 @@ int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) 
         //printd(5, "LValueHelper::doHashLValue() cv: '%s' ti: %p '%s' c: %p\n", getValue().getFullTypeName(),
         //    typeInfo, QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo));
         // create a hash of the required type if the lvalue has a complex hash type and currently has no value
-        if (!getValue()) {
+        if (isNothing()) {
             if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == hashTypeInfo
                 || typeInfo == hashOrNothingTypeInfo) {
                 // issue #3429 assign an untyped hash if required
@@ -2345,13 +2393,13 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
                 return -1;
             }
         } else {
-            const QoreCastOperatorNode* cast_op = dynamic_cast<const QoreCastOperatorNode*>(n.getInternalNode());
+            const QoreCastOperatorNode* cast_op = qore_get_cast_operator_node(n.getInternalNode());
             if (cast_op) {
                 if (doLValue(cast_op->getExp(), for_remove)) {
                     clearPtr();
                     return -1;
                 }
-                if (cast_op->checkValue(vl.xsink, val ? val->getValue() : *qv, true)) {
+                if (cast_op->checkValue(vl.xsink, getValue(), true)) {
                     clearPtr();
                     return -1;
                 }
@@ -2483,13 +2531,13 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
                 return -1;
             }
         } else {
-            const QoreCastOperatorNode* cast_op = dynamic_cast<const QoreCastOperatorNode*>(n.getInternalNode());
+            const QoreCastOperatorNode* cast_op = qore_get_cast_operator_node(n.getInternalNode());
             if (cast_op) {
                 if (doLValue(cast_op->getExp(), rc, for_remove)) {
                     clearPtr();
                     return -1;
                 }
-                if (cast_op->checkValue(vl.xsink, val ? val->getValue() : *qv, true)) {
+                if (cast_op->checkValue(vl.xsink, getValue(), true)) {
                     clearPtr();
                     return -1;
                 }
@@ -2817,7 +2865,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                         return -1;
                     }
                     // auto-vivify: create list with appropriate type
-                    if (!getValue()) {
+                    if (isNothing()) {
                         if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo
                             || typeInfo == listOrNothingTypeInfo) {
                             assignNodeIntern((l = new QoreListNode));
@@ -2857,7 +2905,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
             case LVPathStepKind::Cast:
                 // the value so far must have the cast's type, as doLValue() checks a cast in an lvalue
                 assert(step.cast_node);
-                if (step.cast_node->checkValue(vl.xsink, val ? val->getValue() : *qv, true)) {
+                if (step.cast_node->checkValue(vl.xsink, getValue(), true)) {
                     clearPtr();
                     return -1;
                 }
@@ -3505,10 +3553,12 @@ int64 LValueHelper::preIncrementBigInt(const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    int64 newVal = qv->getAsBigInt() + 1;
+    // computed from the old value, as in postIncrementBigInt(): the compiler keeps one register less than for a new
+    // value that is both stored and returned
+    int64 oldVal = qv->getAsBigInt();
     saveTemp(*qv);
-    qv->set(newVal);
-    return newVal;
+    qv->set(oldVal + 1);
+    return oldVal + 1;
 }
 
 int64 LValueHelper::preDecrementBigInt(const char* desc) {
@@ -3524,10 +3574,12 @@ int64 LValueHelper::preDecrementBigInt(const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    int64 newVal = qv->getAsBigInt() - 1;
+    // computed from the old value, as in postDecrementBigInt(): the compiler keeps one register less than for a new
+    // value that is both stored and returned
+    int64 oldVal = qv->getAsBigInt();
     saveTemp(*qv);
-    qv->set(newVal);
-    return newVal;
+    qv->set(oldVal - 1);
+    return oldVal - 1;
 }
 
 int64 LValueHelper::postIncrementBigInt(const char* desc) {
@@ -3913,17 +3965,23 @@ public:
             : list(&list), xsink(xsink) {
     }
 
-    ~LValueRemoveSelectors() {
-        // the exception of a selector is raised before any exception raised since
+    // inlined in the removal functions, which hold one each: an out-of-line call costs every removal; the exception
+    // of a selector is handled out of line (raiseSelectorException())
+    QORE_INTERN_ALWAYS_INLINE ~LValueRemoveSelectors() {
         if (sel_xsink) {
-            ExceptionSink since;
-            since.assimilate(*xsink);
-            xsink->assimilate(sel_xsink);
-            xsink->assimilate(since);
+            raiseSelectorException();
         }
         for (QoreValue& v : values) {
             v.discard(xsink);
         }
+    }
+
+    //! raises the exception of a selector before any exception raised since
+    QORE_INTERN_NOINLINE void raiseSelectorException() {
+        ExceptionSink since;
+        since.assimilate(*xsink);
+        xsink->assimilate(sel_xsink);
+        xsink->assimilate(since);
     }
 
     //! the root hook of LValueHelper: evaluates the selectors
@@ -4094,7 +4152,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
     }
 
     {
-        const QoreSquareBracketsRangeOperatorNode* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(lvalue.getInternalNode());
+        const QoreSquareBracketsRangeOperatorNode* op = qore_exact_node_cast<QoreSquareBracketsRangeOperatorNode>(lvalue.getInternalNode());
         if (op) {
             doRemove(op);
             return;
@@ -4133,7 +4191,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
 
         if (o) {
             qore_object_private::takeMembers(*o, rv, lvh, l, for_del);
-            lvh.removedValue(rv.getValue());
+            lvh.removedValue(rv);
         } else {
             unsigned old_count = qore_hash_private::getScanCount(*h);
 
@@ -4324,7 +4382,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                     lvh.setDelta(-1);
             }
             discard(rv.assignInitial(v.release()), xsink);
-            lvh.removedValue(rv.getValue());
+            lvh.removedValue(rv);
             return;
         }
 
@@ -4370,7 +4428,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                 }
             }
             discard(rv.assignInitial(v.release()), xsink);
-            lvh.removedValue(rv.getValue());
+            lvh.removedValue(rv);
             return;
         }
 
@@ -4402,7 +4460,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                 }
             }
             discard(rv.assignInitial(v.release()), xsink);
-            lvh.removedValue(rv.getValue());
+            lvh.removedValue(rv);
             return;
         }
     }
@@ -4411,11 +4469,8 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
     QoreValue tmp = lvh.remove(static_assignment);
     if (static_assignment)
         tmp.ref();
-#ifdef DEBUG
-    assert(!rv.assignAssumeInitial(tmp));
-#else
-    rv.assignAssumeInitial(tmp);
-#endif
+    // rv stores a large int or a special float natively and returns the node that held it (qore#6094)
+    discard(rv.assignAssumeInitial(tmp), xsink);
 }
 
 void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, const QoreParseListNode* pln) {
@@ -4484,7 +4539,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                     lvh.setDelta(-1);
             }
             discard(rv.assignInitial(v.release()), xsink);
-            lvh.removedValue(rv.getValue());
+            lvh.removedValue(rv);
             return;
         }
 
@@ -4530,7 +4585,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                     xsink->assimilate(xsink2);
             }
             discard(rv.assignInitial(v.release()), xsink);
-            lvh.removedValue(rv.getValue());
+            lvh.removedValue(rv);
             return;
         }
 
@@ -4562,7 +4617,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                 bin->splice(i, 1);
             }
             discard(rv.assignInitial(v.release()), xsink);
-            lvh.removedValue(rv.getValue());
+            lvh.removedValue(rv);
             return;
         }
     }
@@ -4622,7 +4677,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
                         break;
                 }
                 discard(rv.assignInitial(v), xsink);
-                lvh.removedValue(rv.getValue());
+                lvh.removedValue(rv);
             }
             return;
         }
@@ -4698,7 +4753,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
 
     discard(rv.assignInitial(v.release()), xsink);
 
-    lvh.removedValue(rv.getValue());
+    lvh.removedValue(rv);
 }
 
 bool LocalVarValue::TypeSubstitutionCache::matches(const QoreTypeInfo* typeInfo, const QoreTypeInfo* refTypeInfo,

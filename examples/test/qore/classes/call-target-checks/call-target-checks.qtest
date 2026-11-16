@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the receiver checks of a method call
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CallTargetChecksTest
+
+#! Tests what a method call raises before and after its arguments are evaluated (qore#5824)
+/** The AST interpreter dispatches a method call before it evaluates the arguments, and is the reference: the call of
+    a private or missing method found when the call is made raises its error without evaluating them, the error of a
+    deleted object names the variant resolved at parse time also for an overloaded method, and an argument that deletes
+    the object makes the call of its method raise the error of qore_object_private::startCall().  The checks are in
+    call-target-checks-worker.qr, which is run in each execution mode, on the IR tier and as a program compiled with
+    qcc; every run must give the results below.
+*/
+class CallTargetChecksTest inherits QUnit::Test {
+    public {
+        #! the result of every check the worker makes
+        const Expected = {
+            "private-object": "args []; METHOD-IS-PRIVATE: Priv::p() is private and cannot be accessed externally",
+            "private-any": "args []; METHOD-IS-PRIVATE: Priv::p() is private and cannot be accessed externally",
+            "private-auto": "args []; METHOD-IS-PRIVATE: Priv::p() is private and cannot be accessed externally",
+            "private-hash-member": "args []; METHOD-IS-PRIVATE: Priv::p() is private and cannot be accessed "
+                "externally",
+            "missing-object": "args []; METHOD-DOES-NOT-EXIST: no method Priv::nope() has been defined and no "
+                "pseudo-method <object>::nope() is available (class lang: Qore)",
+            "missing-any": "args []; METHOD-DOES-NOT-EXIST: no method Priv::nope() has been defined and no "
+                "pseudo-method <object>::nope() is available (class lang: Qore)",
+            "private-override": "args []; METHOD-IS-PRIVATE: PrivOverride::m() is private and cannot be accessed "
+                "externally",
+            "public-object": "args [\"a\"]; null",
+            "method-gate": "args [\"a\"]; \"gate anything(1)\"",
+            "member-closure": "args [\"a\"]; \"closure 1\"",
+            "pseudo-method": "args [\"a\"]; True",
+            "copy": "args []; \"Priv\"",
+            "overloaded-deleted": "args []; OBJECT-ALREADY-DELETED: cannot call Over::m(int a) on an object that "
+                "has already been deleted",
+            "overloaded-deleted-string": "args []; OBJECT-ALREADY-DELETED: cannot call Over::m(string a) on an "
+                "object that has already been deleted",
+            "overloaded-deleted-argument": "args []; OBJECT-ALREADY-DELETED: cannot call Over::m(int a) on an "
+                "object that has already been deleted",
+            "argument-deletes-subclass": "args []; OBJECT-ALREADY-DELETED: cannot call Base2::m2() on an object "
+                "that has already been deleted",
+            "argument-deletes-same-class": "args []; OBJECT-ALREADY-DELETED: cannot call Base2::m2() on an object "
+                "that has already been deleted",
+            "argument-deletes-auto": "args []; OBJECT-ALREADY-DELETED: cannot call Base2::m2() on an object that "
+                "has already been deleted",
+            "argument-deletes-object": "args []; OBJECT-ALREADY-DELETED: cannot call Base2::m2() on an object "
+                "that has already been deleted",
+            "argument-deletes-overloaded": "args []; OBJECT-ALREADY-DELETED: cannot call Over::m() on an object "
+                "that has already been deleted",
+            "argument-deletes-weak-reference": "args []; OBJECT-ALREADY-DELETED: cannot call Base2::m2() on an "
+                "object that has already been deleted",
+            "argument-deletes-current-object": "args []; OBJECT-ALREADY-DELETED: cannot call DeleteCurrent::m2() "
+                "on an object that has already been deleted",
+            "private-in-class-context": "args [\"a\"]; 1",
+            "private-base-in-class-context": "args [\"a\"]; 1",
+            "private-base": "args []; BASE-CLASS-IS-PRIVATE: m() is a method of a privately-inherited class "
+                "PrivateInherit",
+            "hash-member-closure": "args [\"a\"]; 1",
+            "call-site-public": "args [\"a\"]; null",
+            "call-site-private": "args []; METHOD-IS-PRIVATE: PrivOverride::m() is private and cannot be accessed "
+                "externally",
+            "top-level-private": "args []; METHOD-IS-PRIVATE: Priv::p() is private and cannot be accessed externally",
+            "top-level-overloaded-deleted": "OBJECT-ALREADY-DELETED: cannot call Over::m(int a) on an object that "
+                "has already been deleted",
+            "top-level-argument-deletes": "OBJECT-ALREADY-DELETED: cannot call Base2::m2() on an object that has "
+                "already been deleted",
+            "stable": "True",
+        };
+
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("CallTargetChecksTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
+        addTestCase("compiled program", \testCompiledProgram());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, getWorker()));
+            checkWorkerOutput(mode, out);
+        }
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testIrTier() {
+        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=tiered %s", libqore_dir, qore_bin, getWorker())));
+    }
+
+    testCompiledProgram() {
+        TmpDir tmp("qore-call-target-checks-");
+        string exe = tmp.path + DirSep + "call-target-checks";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --strip-source -o %s %s 2>&1", libqore_dir,
+            qcc_bin, exe, getWorker()));
+        assertTrue(is_file(exe), "compiled program: " + compile_out);
+        checkWorkerOutput("aot", backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "call-target-checks-worker.qr";
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them; any other output fails
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

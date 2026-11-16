@@ -50,6 +50,10 @@ class JITLargeFunctionBlocksTest inherits QUnit::Test {
         #! shared exits, and 3.39 before (the sizes grow by 2 in the locals and in the try statements: the product
         #! grows by 4)
         const MaxTotalRatio = 2.8;
+
+        #! the largest ratio of the number of instructions of the function with 40 catch blocks that have a handler and
+        #! a local and of the one with 20 (2.98 with the handler code inline, 2.09 with tables)
+        const MaxHandlerRatio = 2.5;
     }
 
     private {
@@ -60,7 +64,9 @@ class JITLargeFunctionBlocksTest inherits QUnit::Test {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         addTestCase("the blocks of a function with many locals and exits are bounded", \testBlocks());
         addTestCase("the function with shared exits returns the same results as the AST", \testResults());
-        addTestCase("a function with many catch blocks that have handlers stays on the IR tier", \testHandlerBudget());
+        addTestCase("the code that runs the handlers of a function grows with its handlers", \testHandlerSize());
+        addTestCase("a function with many catch blocks that have handlers compiles, and the budget is kept",
+            \testHandlerBudget());
         addTestCase("the shared exits release the value of a handler's return", \testHandlerReturnOnException());
         set_return_value(main());
     }
@@ -183,12 +189,17 @@ printf(\"rv:%%d\\n\", t);
     }
 
     private hash<auto> compile(int locals, int blocks) {
-        string out = runScript(getCode(locals, blocks, 3000), "jit",
-            "QORE_DUMP_LLVM_IR=1 QORE_JIT_OPT_LEVEL=0 QORE_JIT_MAX_IR_INSTRUCTIONS=0");
+        return compileCode(getCode(locals, blocks, 3000), sprintf("%d locals", locals));
+    }
+
+    #! Has the JIT compile the function \c big of the script, and returns the sizes of its LLVM function
+    private hash<auto> compileCode(string code, string what, *string env) {
+        string out = runScript(code, "jit", "QORE_DUMP_LLVM_IR=1 QORE_JIT_OPT_LEVEL=0 QORE_JIT_MAX_IR_INSTRUCTIONS=0 "
+            "QORE_JIT_MAX_HANDLER_COST=0 " + (env ?? ""));
         *hash<auto> sizes = getSizes(out);
         if (!sizes) {
-            throw "NO-DUMP", sprintf("no LLVM function 'big' in the output (%d bytes) for %d locals: the function "
-                "was not compiled", out.size(), locals);
+            throw "NO-DUMP", sprintf("no LLVM function 'big' in the output (%d bytes) for %s: the function was not "
+                "compiled", out.size(), what);
         }
         return sizes;
     }
@@ -274,24 +285,47 @@ printf(\"rv:%d\\n\", t);
         (QORE_JIT_MAX_HANDLER_COST), and a function over it stays on the IR tier, where it runs as before.
     */
     testHandlerBudget() {
+        # the code that runs the handlers uses tables for a function this size, so it is compiled
         string big = getHandlerCode(100);
         string out = runTrace(big, "");
-        assertRegex("skipped native promotion of 'big[^']*' \\(handler budget exceeded", out,
-            "a function with 100 catch blocks with handlers is not compiled");
-        # without the limit, the function is compiled (slowly)
-        string small = getHandlerCode(20);
-        out = runTrace(small, "");
-        assertFalse(out =~ /handler budget exceeded/, "a function with 20 catch blocks with handlers is compiled");
+        assertFalse(out =~ /handler budget exceeded/, "a function with 100 catch blocks with handlers is compiled");
         assertRegex("compiled 'big[^']*' and promoted to JIT tier", out);
-        # the limit is set by the environment
+        # a limit that the function is over keeps it on the IR tier: set by the environment
+        string small = getHandlerCode(20);
         out = runTrace(small, "QORE_JIT_MAX_HANDLER_COST=1000");
         assertRegex("skipped native promotion of 'big[^']*' \\(handler budget exceeded", out);
+        out = runTrace(small, "");
+        assertFalse(out =~ /handler budget exceeded/, "a function with 20 catch blocks with handlers is compiled");
 
-        # the result is that of the AST in every mode, whichever tier runs the function
+        # the result is that of the AST in every mode, whichever tier runs the function, with the tables forced
+        # on and off
         string expected = runResultLine(big, "ast");
         foreach string mode in (("ir", "jit", "tiered")) {
             assertEq(expected, runResultLine(big, mode), mode);
         }
+        foreach string env in (("QORE_JIT_OBE_TABLE_BUDGET=0", "QORE_JIT_OBE_TABLE_BUDGET=100000000")) {
+            foreach string mode in (("jit", "tiered")) {
+                assertEq(expected, runResultLineEnv(big, mode, env), env + " " + mode);
+            }
+        }
+    }
+
+    #! The LLVM function of a function with many handlers grows with the handlers (qore#6110)
+    /** Each place that runs the pending handlers publishes the locals of the function to the runtime and reloads them
+        afterwards: written inline, that is a number of instructions in the number of locals, and the function grew
+        by 2.98 when its handlers and locals doubled; with the table-driven helpers it grows by 2.1 (linear).
+    */
+    testHandlerSize() {
+        hash<auto> small = compileCode(getHandlerCode(20), "20 catch blocks");
+        hash<auto> large = compileCode(getHandlerCode(40), "40 catch blocks");
+        float ratio = float(large.total) / small.total;
+        assertTrue(ratio <= MaxHandlerRatio, sprintf("the function grows by %0.2f when its handlers and locals double "
+            "(at most %0.2f): %d -> %d instructions", ratio, MaxHandlerRatio, small.total, large.total));
+        # the tables make the same function the same size per handler whichever way the sizes are reached
+        hash<auto> inline = compileCode(getHandlerCode(40), "40 catch blocks, inline code",
+            "QORE_JIT_OBE_TABLE_BUDGET=100000000");
+        assertTrue(inline.total > 2 * large.total, sprintf("the inline code of the handlers is larger than the code "
+            "that uses tables: %d and %d instructions", inline.total, large.total));
     }
 
     #! Functions whose exits on an exception (no handler of the function takes them) have handlers that return values
@@ -375,6 +409,15 @@ printf(\"rv:done\\n\");
             }
         }
         return out;
+    }
+
+    private string runResultLineEnv(string code, string exec_mode, string env) {
+        foreach string line in (runScript(code, exec_mode, env).split("\n")) {
+            if (line =~ /^rv:/) {
+                return trim(line);
+            }
+        }
+        throw "NO-RESULT", sprintf("no result line in the output of %s", exec_mode);
     }
 
     private string runResultLine(string code, string exec_mode) {
