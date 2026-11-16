@@ -13385,6 +13385,8 @@ llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, co
         // the nested function shares the AOT context of the function being lowered: its slot tables
         nested_lowering.setAOTMode(aot_slots);
         nested_lowering.setAOTDirectClosureFastEntry(aot_direct_closure_fast_entry);
+        // and its slot symbols, such as the dispatch functions of its closures (qore#6339)
+        nested_lowering.aot_symbol_owner = getAOTSymbolOwner();
     }
     if (active_di_builder && di_cu) {
         nested_lowering.setSharedDebugInfo(active_di_builder, di_cu);
@@ -31470,13 +31472,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             ? i1_type : i64_type;
                     auto dispatch_type = llvm::FunctionType::get(
                         dispatch_return_type, param_types, false);
-                    std::string dispatch_name = current_ir_func->name
+                    // named after the owner of the slot map: an outlined helper's closure dispatch is defined
+                    // with its coordinator's closure bodies (qore#6310)
+                    std::string dispatch_name = getAOTSymbolOwner()
                         + (guarded_stored_closure
                             ? "_closure_native_guarded_dispatch_"
                             : "_closure_native_dispatch_")
                         + std::to_string(slot);
+                    std::string return_kind_value = std::to_string(
+                        static_cast<unsigned>(closure_return_kind));
+                    // one dispatch function serves one closure creation; a declaration left by another call site
+                    // (an outlined helper whose lowering failed, qore#6310) must have the same ABI, or the call and
+                    // the definition would disagree
+                    for (const std::string& existing_name : {dispatch_name, dispatch_name + "_throwing"}) {
+                        llvm::Function* existing = module.getFunction(existing_name);
+                        if (!existing) {
+                            continue;
+                        }
+                        llvm::Attribute existing_kind = existing->getFnAttribute(
+                            "qore.closure.return_kind");
+                        if (existing->getFunctionType() != dispatch_type
+                                || (!guarded_stored_closure && existing_kind.isStringAttribute()
+                                    && existing_kind.getValueAsString() != return_kind_value)) {
+                            error = "internal error: closure dispatch function '" + existing_name
+                                + "' is already declared with another ABI";
+                            return false;
+                        }
+                    }
                     auto dispatch = module.getOrInsertFunction(dispatch_name,
                         dispatch_type);
+                    if (!guarded_stored_closure) {
+                        // the definition boxes the closure's native result for a call site that declares a boxed
+                        // one; i64 does not tell a native int from a boxed value (qore#6310)
+                        if (auto* dispatch_fn = llvm::dyn_cast<llvm::Function>(
+                                dispatch.getCallee())) {
+                            dispatch_fn->addFnAttr("qore.closure.return_kind", return_kind_value);
+                        }
+                    }
                     if (capture_count) {
                         if (auto* dispatch_fn = llvm::dyn_cast<llvm::Function>(
                                 dispatch.getCallee())) {
@@ -31714,7 +31746,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 && qore_ir_fast_entry_operands_need_no_binding(call_gives_args, variant,
                                     closure_call->expr, current_ir_func, inst->operands,
                                     1, nargs)) {
-                            std::string dispatch_name = current_ir_func->name
+                            std::string dispatch_name = getAOTSymbolOwner()
                                 + "_closure_dispatch_" + std::to_string(slot);
                             helper = module.getOrInsertFunction(dispatch_name, ft);
                         }

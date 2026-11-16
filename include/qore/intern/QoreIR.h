@@ -4409,8 +4409,22 @@ public:
     //! @return true if direct parameter passing is enabled and no parameter local is closure-captured
     bool isDirectParamsRuntimeSafe() const;
 
+    //! Returns the LLVM symbol of the AOT-compiled body that owns this function's expression slots
+    /** An AOT outlined helper (function-body regions and init-expression operands, see
+        design/aot-function-outlining.md) runs with its owner's slot map and context, so the per-slot symbols that its
+        code references, such as the dispatch functions of the closures that it creates and calls, are named after
+        and defined with the owner (compileAOTClosureBodiesForOwner()), not after the helper.
+    */
+    const std::string& getAOTSymbolOwner() const {
+        return aot_symbol_owner.empty() ? name : aot_symbol_owner;
+    }
+
     std::string name;
     std::string display_name;
+    //! the LLVM symbol of the AOT body whose slot map this function uses, when it is an outlined helper
+    /** Empty for every other function; see getAOTSymbolOwner().
+    */
+    std::string aot_symbol_owner;
     //! the count of the on_block_exit handlers lowered for this function; numbers their names deterministically
     uint32_t handler_name_seq = 0;
     //! Source QoreFunction this IR was lowered from.
