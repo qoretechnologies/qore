@@ -43,8 +43,8 @@
 #include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIR.h"
-#include "qore/intern/BreakStatement.h"
 #include "qore/intern/QoreIRAnalysis.h"
+#include "qore/intern/BreakStatement.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/qore_string_private.h"
@@ -10898,6 +10898,39 @@ static int ut_folded_debug_steps(QoreProgram* pgm, const char* name, int first_l
     return count;
 }
 
+//! The IncrementLocalInt instruction of a statement of the IR of a function, as ut_inc_local_int_at() finds it
+struct UtIncLocalIntInfo {
+    //! true if the IR of the function has an IncrementLocalInt instruction on the line
+    bool found = false;
+    //! true if the instruction has an exception target (when it keeps a step event, that of the event)
+    bool exception_target = false;
+    //! true if the instruction keeps the step event of its statement (qore_ir_folded_debug_step())
+    bool folded = false;
+};
+
+//! Returns the IncrementLocalInt instruction on line \a line of the IR of function \a name of \a pgm
+static UtIncLocalIntInfo ut_inc_local_int_at(QoreProgram* pgm, const char* name, int line) {
+    UtIncLocalIntInfo info;
+    const QoreFunction* qf = reinterpret_cast<const QoreFunction*>(pgm->findFunction(name));
+    const AbstractQoreFunctionVariant* variant = qf && qf->numVariants() == 1 ? qf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const QoreIRFunction* ir = uvb ? uvb->getCachedIR() : nullptr;
+    if (!ir) {
+        return info;
+    }
+    for (const auto& block : ir->blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::IncrementLocalInt && inst->loc && inst->loc->start_line == line) {
+                info.found = true;
+                info.exception_target = inst->exception_target != nullptr;
+                info.folded = qore_ir_folded_debug_step(inst.get()) != nullptr;
+                return info;
+            }
+        }
+    }
+    return info;
+}
+
 //! the step event of a statement whose first instruction is a fused local int operation, which the operation makes
 //! (qore_ir_fold_debug_statements()), is made before the operation, and an exception raised by the debugger at it
 //! leaves the statement before the operation runs, to the statement's exception path
@@ -10919,8 +10952,15 @@ static int ut_folded_debug_steps(QoreProgram* pgm, const char* name, int first_l
     locals are); a debugger can still be attached to it, as it does not have PO_NO_DEBUGGING.  \a allow_debugger
     gives the same function in a Program with PO_ALLOW_DEBUGGER, whose statements are not folded, as the reference:
     the step events and results must be the same.
+
+    The statement where the debugger raises its exception, `b = ++a;`, is in a try block: it is folded only if the
+    lowering gives its operation no exception target of its own (qore#6197 gives it the try block's handler).  The
+    reference, which runs first, records in \a ref_inc_target whether its IncrementLocalInt of line 13 has an exception
+    target (1) or not (0), as lowered, since no fold changes it there; the Program without PO_ALLOW_DEBUGGER must then
+    fold the statement exactly when it has none.
 */
-static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_mode_t mode, bool allow_debugger) {
+static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_mode_t mode, bool allow_debugger,
+        int& ref_inc_target) {
     ExceptionSink xsink;
     // a Program of its own, whose parse options are not restricted or extended by those of a parent Program; with the
     // options of %modern from the start, which the execution modes other than AST need
@@ -11049,7 +11089,30 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
     // Program without PO_ALLOW_DEBUGGER when it is not folded, as when its operation has an exception target of its
     // own in the try block (qore#6197; see qore_ir_fold_debug_statements())
     {
-        bool raise_folded = mode != QEM_AST && !allow_debugger && ut_folded_debug_steps(pgm, "work", 13, 13) == 1;
+        // whether `b = ++a;` must be folded, from the lowering of its operation (see above), not from the fold
+        bool raise_folded = false;
+        if (mode != QEM_AST) {
+            UtIncLocalIntInfo inc = ut_inc_local_int_at(pgm, "work", 13);
+            UT_ASSERT(c, inc.found, "the IR has the IncrementLocalInt instruction of line 13");
+            if (allow_debugger) {
+                UT_ASSERT(c, !inc.folded, "the IncrementLocalInt instruction of line 13 of the reference is not "
+                    "folded");
+                ref_inc_target = inc.exception_target ? 1 : 0;
+            } else {
+                UT_ASSERT(c, ref_inc_target >= 0, "the reference recorded the exception target of the "
+                    "IncrementLocalInt instruction of line 13");
+                raise_folded = ref_inc_target == 0;
+                UT_ASSERT_EQ(c, raise_folded ? 1 : 0, ut_folded_debug_steps(pgm, "work", 13, 13),
+                    raise_folded ? "`b = ++a;` is folded: its operation has no exception target of its own"
+                        : "`b = ++a;` is not folded: its operation has an exception target of its own");
+                UT_ASSERT_EQ(c, raise_folded, inc.folded, "the IncrementLocalInt instruction of line 13 keeps the step "
+                    "event exactly when it has no exception target of its own");
+                if (!inc.folded) {
+                    UT_ASSERT(c, inc.exception_target, "the IncrementLocalInt instruction of line 13 that is not folded "
+                        "has an exception target of its own");
+                }
+            }
+        }
         FoldedStepDebugProgram::LineColumn statement, runtime, ex;
         dbg.getRaiseLocations(statement, runtime, ex);
         FoldedStepDebugProgram::LineColumn expected_loc = {13, 8};
@@ -11176,8 +11239,10 @@ static void ut_debug_step_folded_statements(UnitTestCounters& c, QoreProgram* /*
     // the statements are folded in the IR of the IR and JIT tiers; the AST interpreter, and the same function in a
     // Program that allows a debugger, whose statements are not folded, give the same events and results
     for (qore_exec_mode_t mode : {QEM_AST, QEM_IR, QEM_JIT, QEM_TIERED}) {
-        for (bool allow_debugger : {false, true}) {
-            ut_debug_step_folded_statements_mode(c, mode, allow_debugger);
+        // the reference first: it records whether the operation of `b = ++a;` has an exception target as lowered
+        int ref_inc_target = -1;
+        for (bool allow_debugger : {true, false}) {
+            ut_debug_step_folded_statements_mode(c, mode, allow_debugger, ref_inc_target);
         }
     }
 }
