@@ -837,6 +837,24 @@ static bool write_slot_UNARY_PLUS(AOTExprSlotWriteCtx& ctx) {
         ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
 }
 
+static bool write_slot_BIT_NOT(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreBinaryNotOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getExp(),
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_LOG_CMP(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreLogicalComparisonOperatorNode>(ctx);
+}
+
+static bool write_slot_LIST_ASSIGN(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreListAssignmentOperatorNode>(ctx);
+}
+
 static bool write_slot_NULL_COAL(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreNullCoalescingOperatorNode>(ctx);
 }

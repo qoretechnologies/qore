@@ -41,7 +41,8 @@ class AOTDefaultArgExprTreeTest inherits QUnit::Test {
         addTestCase("base class constructor argument expression tree", \testBaseConstructorArg());
         addTestCase("default argument expression tree with a caller-defined-first callee",
             \testCalleeDeclaredLast());
-        addTestCase("unary plus default argument expression tree", \testUnaryPlusDefaultArg());
+        addTestCase("unary plus, binary not, comparison and list assignment default argument expression trees",
+            \testUnaryPlusDefaultArg());
 
         set_return_value(main());
     }
@@ -102,7 +103,8 @@ public date sub getDelay() {
         assertEq("60\n", runModule(qmod_dir, script_path), mod_name + ": AOT module");
     }
 
-    #! a default argument with a unary plus that is not folded at parse time (qore#6229)
+    #! default arguments with a unary plus, a binary not, a comparison or a list assignment that are not folded at
+    #! parse time (qore#6229)
     testUnaryPlusDefaultArg() {
         checkModule("AOTDefArgUnaryPlus", "public class C {
     int mdefault(auto v = +getDelay().durationSeconds()) {
@@ -128,11 +130,33 @@ public int sub fbig(auto x = +bigi(7)) {
     return x;
 }
 
+# binary not, comparison and list assignment defaults (qore#6229)
+public int sub fbitnot(auto d = ~getDelay().durationSeconds()) {
+    return d;
+}
+
+public int sub fcmp(auto d = (getDelay().durationSeconds() <=> 5)) {
+    return d;
+}
+
+public class S {
+    public {
+        static int a;
+        static int b;
+    }
+}
+
+public int sub flist(auto d = ((S::a, S::b) = (getDelay().durationSeconds(), 2))) {
+    return S::a + S::b + d.size();
+}
+
 public string sub verify() {
     C c();
     string rv = sprintf(\"%d\", fdefault());
-    if (c.mdefault() != fdefault() || fnested() != fdefault() || fbig() != 4611686018427387911) {
-        rv = sprintf(\"%d %d %d %d\", fdefault(), c.mdefault(), fnested(), fbig());
+    if (c.mdefault() != fdefault() || fnested() != fdefault() || fbig() != 4611686018427387911
+            || fbitnot() != -61 || fcmp() != 1 || flist() != 64) {
+        rv = sprintf(\"%d %d %d %d %d %d %d\", fdefault(), c.mdefault(), fnested(), fbig(), fbitnot(), fcmp(),
+            flist());
     }
     return rv;
 }

@@ -94,6 +94,10 @@
 #include "qore/intern/QorePushOperatorNode.h"
 #include "qore/intern/QoreUnshiftOperatorNode.h"
 #include "qore/intern/QoreUnaryMinusOperatorNode.h"
+#include "qore/intern/QoreUnaryPlusOperatorNode.h"
+#include "qore/intern/QoreBinaryNotOperatorNode.h"
+#include "qore/intern/QoreLogicalComparisonOperatorNode.h"
+#include "qore/intern/QoreListAssignmentOperatorNode.h"
 #include "qore/intern/ContextrefNode.h"
 #include "qore/intern/ContextRowNode.h"
 #include "qore/intern/ComplexContextrefNode.h"
@@ -477,9 +481,10 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     {"CALLREF_CALL_NAMED", 128, true, write_slot_CALLREF_CALL, "Named call reference call"},
     // 129: UNARY_PLUS
     {"UNARY_PLUS", 129, true, write_slot_UNARY_PLUS, "Unary plus operator"},
-    {nullptr, 130, false, nullptr, nullptr},
-    {nullptr, 131, false, nullptr, nullptr},
-    {nullptr, 132, false, nullptr, nullptr},
+    // 130-132: BIT_NOT, LOG_CMP, LIST_ASSIGN
+    {"BIT_NOT", 130, true, write_slot_BIT_NOT, "Binary not operator"},
+    {"LOG_CMP", 131, true, write_slot_LOG_CMP, "Comparison (<=>) operator"},
+    {"LIST_ASSIGN", 132, true, write_slot_LIST_ASSIGN, "List assignment operator"},
     {nullptr, 133, false, nullptr, nullptr},
     {nullptr, 134, false, nullptr, nullptr},
     {nullptr, 135, false, nullptr, nullptr},

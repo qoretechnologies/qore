@@ -121,6 +121,9 @@
 #include "qore/intern/QoreUnshiftOperatorNode.h"
 #include "qore/intern/QoreUnaryMinusOperatorNode.h"
 #include "qore/intern/QoreUnaryPlusOperatorNode.h"
+#include "qore/intern/QoreBinaryNotOperatorNode.h"
+#include "qore/intern/QoreLogicalComparisonOperatorNode.h"
+#include "qore/intern/QoreListAssignmentOperatorNode.h"
 #include "qore/intern/QoreRangeOperatorNode.h"
 #include "qore/intern/QoreAssignmentOperatorNode.h"
 #include "qore/intern/ContextrefNode.h"
@@ -5103,6 +5106,66 @@ static QoreValue read_expr_unary_plus(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
     return QoreValue(new QoreUnaryPlusOperatorNode(&loc_builtin, operand));
+}
+
+// ============================================================================
+// BIT_NOT (130)
+// ============================================================================
+
+static bool write_expr_bit_not(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreBinaryNotOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::BIT_NOT));
+    return classifyAndWriteExpr(ctx.writer, op->getExp(), ctx.parent_locals,
+        ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static QoreValue read_expr_bit_not(AOTExprReadCtx& ctx) {
+    std::string operand_err;
+    QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (!operand_err.empty()) {
+        operand.discard(nullptr);
+        ctx.error = operand_err;
+        return QoreValue();
+    }
+    return QoreValue(new QoreBinaryNotOperatorNode(&loc_builtin, operand));
+}
+
+// ============================================================================
+// LOG_CMP (131), LIST_ASSIGN (132)
+// ============================================================================
+
+static bool write_expr_log_cmp(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreLogicalComparisonOperatorNode>(ctx, AOTExprKind::LOG_CMP);
+}
+
+static QoreValue read_expr_log_cmp(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreLogicalComparisonOperatorNode>(ctx);
+}
+
+static bool write_expr_list_assign(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreListAssignmentOperatorNode>(ctx, AOTExprKind::LIST_ASSIGN);
+}
+
+static QoreValue read_expr_list_assign(AOTExprReadCtx& ctx) {
+    std::string left_err;
+    QoreValue left = readOneExpr(ctx.reader, ctx.ptr, ctx.end, left_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    std::string right_err;
+    QoreValue right = readOneExpr(ctx.reader, ctx.ptr, ctx.end, right_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (!left_err.empty() || !right_err.empty() || left.getType() != NT_PARSE_LIST) {
+        ctx.error = !left_err.empty() ? left_err : (!right_err.empty() ? right_err
+            : std::string("LIST_ASSIGN lvalue is not a list"));
+        left.discard(nullptr);
+        right.discard(nullptr);
+        return QoreValue();
+    }
+    return QoreValue(new QoreListAssignmentOperatorNode(&loc_builtin, left, right));
 }
 
 // ============================================================================

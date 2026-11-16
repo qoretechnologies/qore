@@ -517,10 +517,12 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        releases (two more arguments).  A handler of an earlier format returned its value, which the runtime no
 //!        longer reads; the AOT runtime identity changes with the runtime entry, so a module compiled for an earlier
 //!        format is refused and must be rebuilt (#6074).
-//! v40: an expression that is a unary plus operator is written natively (AOTExprKind::UNARY_PLUS, 129: the operand;
-//!      its node form EN_UNARY_PLUS, 52), so that a default argument with a unary plus that is not folded at parse
-//!      time can be written (#6229); the earlier formats have no such expression, and a reader of them refuses the
-//!      kind.
+//! v40: an expression that is a unary plus (AOTExprKind::UNARY_PLUS, 129: the operand), a binary not (~, BIT_NOT,
+//!      130: the operand), a comparison (<=>, LOG_CMP, 131: the left and the right operand) or a list assignment
+//!      (LIST_ASSIGN, 132: the lvalue list as a LIST_LITERAL and the value) is written natively (their node forms
+//!      EN_UNARY_PLUS, EN_BIT_NOT, EN_LOG_CMP and EN_LIST_ASSIGN existed), so that a default argument with one that
+//!      is not folded at parse time can be written (#6229); the earlier formats have no such expressions, and a
+//!      reader of them refuses the kinds.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -563,7 +565,8 @@ constexpr uint16_t QORE_AOT_MODULE_CMD_OPTIONS_VERSION = 37;
 constexpr uint16_t QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION = 38;
 //! First format version whose out-of-line handlers hand their return values over with HandlerReturn (see v39 above).
 constexpr uint16_t QORE_AOT_HANDLER_RETURN_VERSION = 39;
-//! First format version with native unary plus expressions (see v40 above).
+//! First format version with native unary plus, binary not, comparison and list assignment expressions (see v40
+//! above).
 constexpr uint16_t QORE_AOT_NATIVE_UNARY_PLUS_VERSION = 40;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
@@ -2482,6 +2485,10 @@ enum class AOTExprKind : uint8_t {
     CALLREF_CALL_NAMED = 128, //!< named call reference call (M4 phase 3): as CALLREF_CALL, then u8 name count + a
                               //!< string ref per argument name ("" for a positional argument)
     UNARY_PLUS         = 129, //!< Unary plus operator: operand(AOTExprKind) (qore#6229)
+    BIT_NOT            = 130, //!< Binary not (~) operator: operand(AOTExprKind) (qore#6229)
+    LOG_CMP            = 131, //!< Comparison (<=>) operator: left(AOTExprKind) + right(AOTExprKind) (qore#6229)
+    //! list assignment operator: lvalue list (LIST_LITERAL; read as a parse list) + value(AOTExprKind) (qore#6229)
+    LIST_ASSIGN        = 132,
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };

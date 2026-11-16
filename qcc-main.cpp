@@ -2804,6 +2804,8 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::LOG_GE:
         case AOTExprKind::PUSH:
         case AOTExprKind::UNSHIFT:
+        case AOTExprKind::LOG_CMP:
+        case AOTExprKind::LIST_ASSIGN:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
@@ -2817,6 +2819,8 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::REMOVE:
         case AOTExprKind::BACKGROUND:
         case AOTExprKind::UNARY_MINUS:
+        case AOTExprKind::UNARY_PLUS:
+        case AOTExprKind::BIT_NOT:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
         case AOTExprKind::QUESTION:

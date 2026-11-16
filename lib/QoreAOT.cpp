@@ -36483,6 +36483,21 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.child_expr = v;
         return id;
     }
+    if (dynamic_cast<const QoreBinaryNotOperatorNode*>(node)) {
+        id.kind = AOTExprKind::BIT_NOT;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreLogicalComparisonOperatorNode*>(node)) {
+        id.kind = AOTExprKind::LOG_CMP;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreListAssignmentOperatorNode*>(node)) {
+        id.kind = AOTExprKind::LIST_ASSIGN;
+        id.child_expr = v;
+        return id;
+    }
     if (dynamic_cast<const QoreNullCoalescingOperatorNode*>(node)) {
         id.kind = AOTExprKind::NULL_COAL;
         id.child_expr = v;
