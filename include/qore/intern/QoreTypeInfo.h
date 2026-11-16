@@ -150,6 +150,14 @@ public:
         return accept_vec.size() == 1;
     }
 
+    //! returns true if this is a union with a member whose type is the value's own scalar or enum type
+    /** A member that comes before it could accept the value by converting it; the union accepts it as it is, whatever
+        the order of its members (qore#6407).  Called only before a conversion, so plain types pay nothing for it.
+    */
+    DLLLOCAL bool unionAcceptsExactly(const QoreValue& n) const {
+        return union_type && unionAcceptsExactlyImpl(n);
+    }
+
     DLLLOCAL bool acceptsRuntimeValueWithoutFilter(const QoreValue& n) const {
         if (n.isEnum()) {
             return false;
@@ -1263,6 +1271,8 @@ protected:
     uint64_t identity_serial = 0;
     //! true for a union type, which accepts a value of one of its member types as it is (qore#6407)
     bool union_type = false;
+
+    DLLLOCAL bool unionAcceptsExactlyImpl(const QoreValue& n) const;
 
     DLLLOCAL QoreTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec, const QoreString& tname)
             : accept_vec(a_vec), return_vec(r_vec), tname(tname) {

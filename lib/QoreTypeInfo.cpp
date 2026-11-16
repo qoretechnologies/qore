@@ -3903,6 +3903,15 @@ const QoreComplexCodeTypeInfo* QoreTypeInfo::getComplexCodeType(const QoreTypeIn
     return dynamic_cast<const QoreComplexCodeTypeInfo*>(ti);
 }
 
+bool QoreTypeInfo::unionAcceptsExactlyImpl(const QoreValue& n) const {
+    for (const QoreAcceptSpec& t : accept_vec) {
+        if (!t.map && t.spec.isExactScalarValueType(n)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool QoreTypeSpec::isExactScalarValueType(const QoreValue& n) const {
     if (typespec == QTS_ENUM) {
         return n.isEnum() && n.getEnumMember()->getEnumDecl() == u.ed;
@@ -5139,6 +5148,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
             // whose value type is the plain type, as an assignment to the container's element converts it; only an
             // enum type or auto keeps the enum value (qore#6274)
             if (n.isEnum() && u.t != NT_ALL) {
+                // a union with the enum as a member keeps the value as it is (qore#6407)
+                if (typeInfo.unionAcceptsExactly(n)) {
+                    return true;
+                }
                 QoreValue base_val = n.getEnumMember()->getValue();
                 base_val.ref();
                 n.discard(xsink);
@@ -5185,6 +5198,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
     if (ok) {
         assert(!priv_error);
         if (accept.map) {
+            // a union with a member of the value's own type keeps the value as it is (qore#6407)
+            if (typeInfo.unionAcceptsExactly(n)) {
+                return true;
+            }
             policy.map(accept, n, xsink);
             if (xsink && *xsink) {
                 xsink->appendLastDescription(" (while converting types for type '%s')",
@@ -8337,17 +8354,6 @@ void QoreTypeInfo::acceptInputInternImpl(ExceptionSink* xsink, const char* arg_t
             }
             doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink, vts);
             return;
-        }
-    }
-
-    // a union accepts a value of one of its member types as it is, whatever the order of its members: a member that
-    // is tried before it could accept the value by converting it (ex: int for an enum value in a union<int, EI>, or
-    // float for an int in a union<float, int>) (qore#6407)
-    if (union_type) {
-        for (auto& t : getAcceptSpecs()) {
-            if (!t.map && t.spec.isExactScalarValueType(n)) {
-                return;
-            }
         }
     }
 
