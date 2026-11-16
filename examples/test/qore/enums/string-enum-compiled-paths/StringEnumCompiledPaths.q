@@ -125,6 +125,16 @@ list<int> sub fConcatMember(ES e) {
     return (fConcatLength(h.s, "q"), fConcatLocalLength(h.s, "q"), fConcatSize("q", h.s, "r"),
         fConcatFind("q", h.s, "r"));
 }
+bool sub fConcatStartsWith(string a, string b, string c, string p) { return fConcat3(a, b, c).startsWith(p); }
+bool sub fConcatContains(string a, string b, string c, string p) { return fConcat3(a, b, c).contains(p); }
+int sub fConcatFindParam(string a, string b, string c, string p) { return fConcat3(a, b, c).find(p); }
+string sub fAppend(string a, string b) { string r = a; r += b; return r; }
+# a search of a concatenation with a pattern that is a parameter, and an append of the member
+list<auto> sub fConcatSearchMember(ES e, string p) {
+    hash<HS> h = <HS>{"s": e};
+    return (fConcatStartsWith(h.s, "q", "r", p), fConcatContains("q", h.s, "r", p), fConcatFindParam("q", h.s, "r", p),
+        fAppend("q", h.s), fAppend(h.s, "q"));
+}
 list<int> sub fConcatMultiByteMember(EU u) {
     hash<HS> h = <HS>{"s": u};
     return (fConcatLength(h.s, "q"), fConcatLocalLength(h.s, "q"), fConcatSize("q", h.s, "r"),
@@ -252,6 +262,10 @@ run("method enum return", auto sub () { return fMethodReturnEnum(e); });
 run("method optional enum return", auto sub () { return fMethodReturnOptionalEnum(e); });
 run("closure enum return", auto sub () { return fClosureReturnEnum(e); });
 run("concatenated hashdecl member length(), size(), find()", auto sub () { return fConcatMember(e); });
+run("concatenated hashdecl member search with a parameter, append",
+    auto sub () { return fConcatSearchMember(e, "y"); });
+run("concatenated hashdecl member search with another parameter, append",
+    auto sub () { return fConcatSearchMember(e, "q"); });
 run("concatenated multi-byte hashdecl member length(), size(), find()",
     auto sub () { return fConcatMultiByteMember(EU::U); });
 run("long value size()", auto sub () { return fLongSize(EL::Long); });

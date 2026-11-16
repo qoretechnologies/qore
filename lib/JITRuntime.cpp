@@ -10984,7 +10984,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
     // an enum value does not own the string node of its member's base value, whose reference count does not show
     // the enum values that share it (see qore_enum_value_copy_for_write()): it is never appended to in place
     QoreStringNode* left_node = left.isShortString() || left.isEnum() ? nullptr : left.get<QoreStringNode>();
-    QoreStringNode* right_node = right.isShortString() ? nullptr : right.get<QoreStringNode>();
+    // the base value of an enum value on the right is its member's, which holds a reference of its own (qore#6254)
+    QoreStringNode* right_node = right.isShortString() || right.isEnum() ? nullptr : right.get<QoreStringNode>();
     if (left_node && left_node != right_node && left_node->reference_count() == 1) {
         left_node->concat(*right_string, xsink);
         if (xsink && *xsink) {
@@ -11029,7 +11030,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
     // an enum value does not own the string node of its member's base value, whose reference count does not show
     // the enum values that share it (see qore_enum_value_copy_for_write()): it is never appended to in place
     QoreStringNode* left_node = left.isShortString() || left.isEnum() ? nullptr : left.get<QoreStringNode>();
-    QoreStringNode* right_node = right.isShortString() ? nullptr : right.get<QoreStringNode>();
+    // the base value of an enum value on the right is its member's, which holds a reference of its own (qore#6254)
+    QoreStringNode* right_node = right.isShortString() || right.isEnum() ? nullptr : right.get<QoreStringNode>();
     if (left_node && left_node != right_node && left_node->reference_count() == 1) {
         left_node->concat(*right_string, xsink);
         return xsink && *xsink ? toBits(QoreValue()) : left_bits;
@@ -11061,7 +11063,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_in_place(
     }
 
     QoreStringNode* left_string = left.get<QoreStringNode>();
-    QoreStringNode* right_node = right.isShortString() ? nullptr : right.get<QoreStringNode>();
+    // the base value of an enum value on the right is its member's, which holds a reference of its own (qore#6254)
+    QoreStringNode* right_node = right.isShortString() || right.isEnum() ? nullptr : right.get<QoreStringNode>();
     QoreStringValueHelper right_string(right);
     if (left_string == right_node) {
         ReferenceHolder<QoreStringNode> right_copy(new QoreStringNode(*right_string), xsink);
