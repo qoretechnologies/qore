@@ -2399,6 +2399,7 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
 
     successors.resize(blocks.size());
     predecessors.resize(blocks.size());
+    std::vector<std::vector<size_t>> exception_successors(blocks.size());
     for (size_t block_id = 0; block_id < blocks.size(); ++block_id) {
         if (qore_ir_analysis_cancelled(check_count, "IR control-flow analysis")) {
             cancelled = true;
@@ -2417,23 +2418,31 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
             predecessors[it->second].push_back(block_id);
         };
         qore_ir_visit_successors(*block->instructions.back(), add_successor);
+        // the exception edges are always collected, for exception_entry and exception_only; they are edges of the
+        // graph only with include_exception_edges
+        std::unordered_set<size_t> successor_ids;
         if (include_exception_edges) {
-            std::unordered_set<size_t> successor_ids(
-                successors[block_id].begin(), successors[block_id].end());
-            auto add_exception_successor = [&](QoreIRBasicBlock* successor) {
-                auto it = block_ids.find(successor);
-                if (it == block_ids.end()
-                        || !successor_ids.insert(it->second).second) {
-                    return;
-                }
-                successors[block_id].push_back(it->second);
-                predecessors[it->second].push_back(block_id);
-            };
-            if (!qore_ir_visit_exception_targets(*block, add_exception_successor, &check_count,
-                    "IR exceptional control-flow analysis")) {
-                cancelled = true;
+            successor_ids.insert(successors[block_id].begin(), successors[block_id].end());
+        }
+        std::vector<size_t>& block_exception_successors = exception_successors[block_id];
+        auto add_exception_successor = [&](QoreIRBasicBlock* successor) {
+            auto it = block_ids.find(successor);
+            if (it == block_ids.end()) {
                 return;
             }
+            if (std::find(block_exception_successors.begin(), block_exception_successors.end(), it->second)
+                    == block_exception_successors.end()) {
+                block_exception_successors.push_back(it->second);
+            }
+            if (include_exception_edges && successor_ids.insert(it->second).second) {
+                successors[block_id].push_back(it->second);
+                predecessors[it->second].push_back(block_id);
+            }
+        };
+        if (!qore_ir_visit_exception_targets(*block, add_exception_successor, &check_count,
+                "IR exceptional control-flow analysis")) {
+            cancelled = true;
+            return;
         }
     }
 
@@ -2457,6 +2466,52 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
         }
     }
 
+    // the blocks that run: those reachable through normal and exception edges; the exception targets of the blocks
+    // that run are the handler entries, and the blocks that run but are not in reachable run only through exception
+    // edges
+    exception_entry.assign(blocks.size(), 0);
+    exception_only.assign(blocks.size(), 0);
+    std::vector<uint8_t> runs(reachable);
+    // the exception edges into each block that runs, for the dominators
+    std::vector<std::vector<size_t>> exception_predecessors(blocks.size());
+    {
+        std::vector<size_t> worklist;
+        for (size_t block_id = 0; block_id < blocks.size(); ++block_id) {
+            if (runs[block_id]) {
+                worklist.push_back(block_id);
+            }
+        }
+        while (!worklist.empty()) {
+            if (qore_ir_analysis_cancelled(check_count, "IR exceptional reachability analysis")) {
+                cancelled = true;
+                return;
+            }
+            size_t block_id = worklist.back();
+            worklist.pop_back();
+            for (size_t successor : exception_successors[block_id]) {
+                exception_entry[successor] = 1;
+                exception_predecessors[successor].push_back(block_id);
+                if (!runs[successor]) {
+                    runs[successor] = 1;
+                    worklist.push_back(successor);
+                }
+            }
+            for (size_t successor : successors[block_id]) {
+                if (!runs[successor]) {
+                    runs[successor] = 1;
+                    worklist.push_back(successor);
+                }
+            }
+        }
+        for (size_t block_id = 0; block_id < blocks.size(); ++block_id) {
+            exception_only[block_id] = runs[block_id] && !reachable[block_id];
+        }
+    }
+
+    // the dominators are computed over the normal and the exception edges of the blocks that run, so that a block
+    // that the end of a catch block flows into (the block after a try statement) is not dominated by the blocks of
+    // the try block, which an exception can leave early (issue #6334); dominates() still answers only for the blocks
+    // in reachable
     const size_t word_count = (blocks.size() + 63) / 64;
     dominators.assign(blocks.size(), std::vector<uint64_t>(word_count, 0));
     for (size_t block_id = 0; block_id < blocks.size(); ++block_id) {
@@ -2464,7 +2519,7 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
             cancelled = true;
             return;
         }
-        if (!reachable[block_id]) {
+        if (!runs[block_id]) {
             if (word_count) {
                 dominators[block_id][block_id / 64] |= uint64_t(1) << (block_id % 64);
             }
@@ -2475,7 +2530,7 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
             continue;
         }
         for (size_t candidate = 0; candidate < blocks.size(); ++candidate) {
-            if (reachable[candidate]) {
+            if (runs[candidate]) {
                 dominators[block_id][candidate / 64] |= uint64_t(1) << (candidate % 64);
             }
         }
@@ -2489,19 +2544,25 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
                 cancelled = true;
                 return;
             }
-            if (!reachable[block_id]) {
+            if (!runs[block_id]) {
                 continue;
             }
             std::vector<uint64_t> next(word_count, std::numeric_limits<uint64_t>::max());
             bool saw_predecessor = false;
-            for (size_t predecessor : predecessors[block_id]) {
-                if (!reachable[predecessor]) {
-                    continue;
+            auto meet = [&](size_t predecessor) {
+                if (!runs[predecessor]) {
+                    return;
                 }
                 saw_predecessor = true;
                 for (size_t word = 0; word < word_count; ++word) {
                     next[word] &= dominators[predecessor][word];
                 }
+            };
+            for (size_t predecessor : predecessors[block_id]) {
+                meet(predecessor);
+            }
+            for (size_t predecessor : exception_predecessors[block_id]) {
+                meet(predecessor);
             }
             if (!saw_predecessor) {
                 std::fill(next.begin(), next.end(), 0);
@@ -8905,15 +8966,22 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
         size_t block_id = worklist.back();
         worklist.pop_back();
         queued[block_id] = 0;
-        // no reachable predecessor leaves nothing fresh on entry to the block
+        // no reachable predecessor leaves nothing fresh on entry to the block; nor does a handler entry, which an
+        // exception enters from anywhere in the blocks that it handles, or a predecessor that runs only through
+        // exception edges (the end of a catch block), whose state this dataflow does not compute (issue #6334)
         FreshLocalSet input(candidate_index.size(), false);
-        if (block_id) {
+        if (block_id && !cfg.exception_entry[block_id]) {
             bool first = true;
+            bool exception_only_predecessor = false;
             for (size_t predecessor : cfg.predecessors[block_id]) {
                 if (qore_ir_analysis_cancelled(check_count, "IR local list push dataflow")) {
                     return 0;
                 }
                 if (!cfg.reachable[predecessor]) {
+                    if (cfg.exception_only[predecessor]) {
+                        exception_only_predecessor = true;
+                        break;
+                    }
                     continue;
                 }
                 if (first) {
@@ -8922,6 +8990,9 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
                     continue;
                 }
                 input.intersect(fresh_out[predecessor]);
+            }
+            if (exception_only_predecessor) {
+                input = FreshLocalSet(candidate_index.size(), false);
             }
         }
         fresh_in[block_id] = input;
@@ -9217,16 +9288,23 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
         size_t block_id = worklist.back();
         worklist.pop_back();
         queued[block_id] = 0;
-        // no reachable predecessor leaves nothing fresh on entry to the block
+        // no reachable predecessor leaves nothing fresh on entry to the block; nor does a handler entry, which an
+        // exception enters from anywhere in the blocks that it handles, or a predecessor that runs only through
+        // exception edges (the end of a catch block), whose state this dataflow does not compute (issue #6334)
         FreshLocalSet input(candidate_index.size(), false);
-        if (block_id) {
+        if (block_id && !cfg.exception_entry[block_id]) {
             bool first = true;
+            bool exception_only_predecessor = false;
             for (size_t predecessor : cfg.predecessors[block_id]) {
                 if (qore_ir_analysis_cancelled(check_count,
                         "IR in-place string append dataflow")) {
                     return 0;
                 }
                 if (!cfg.reachable[predecessor]) {
+                    if (cfg.exception_only[predecessor]) {
+                        exception_only_predecessor = true;
+                        break;
+                    }
                     continue;
                 }
                 if (first) {
@@ -9235,6 +9313,9 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                     continue;
                 }
                 input.intersect(fresh_out[predecessor]);
+            }
+            if (exception_only_predecessor) {
+                input = FreshLocalSet(candidate_index.size(), false);
             }
         }
         fresh_in[block_id] = input;
@@ -9307,16 +9388,17 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
         !q_env_is_set("QORE_DISABLE_IR_NATIVE_LOCAL_STORE_ELIMINATION");
 
     // Exception handlers are not represented by normal CFG predecessors. Keep
-    // promotion on normal control flow so every PHI edge is exact.
+    // promotion on normal control flow so every PHI edge is exact: no handler
+    // entry, including the target of a throw (issue #6334)
     for (const auto& block : func.blocks) {
-        for (const auto& inst : block->instructions) {
-            if (qore_ir_analysis_cancelled(check_count,
-                    "IR native local SSA exception-flow analysis")) {
-                return {};
-            }
-            if (inst->exception_target) {
-                return {};
-            }
+        bool has_exception_target = false;
+        if (!qore_ir_visit_exception_targets(*block, [&](QoreIRBasicBlock*) {
+                    has_exception_target = true;
+                }, &check_count, "IR native local SSA exception-flow analysis")) {
+            return {};
+        }
+        if (has_exception_target) {
+            return {};
         }
     }
 
@@ -10100,7 +10182,9 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
             }
             std::unordered_set<const LocalVar*> next = block_id == 0
                 ? initially_known : std::unordered_set<const LocalVar*>();
-            if (block_id && !cfg.predecessors[block_id].empty()) {
+            // a handler entry, which an exception enters from anywhere in the blocks that it handles, starts with
+            // nothing known whatever its predecessors (issue #6334)
+            if (block_id && !cfg.exception_entry[block_id] && !cfg.predecessors[block_id].empty()) {
                 next = out[cfg.predecessors[block_id].front()];
                 for (size_t pred_index = 1;
                         pred_index < cfg.predecessors[block_id].size();
@@ -10416,7 +10500,10 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
             std::unordered_set<const LocalVar*> next = block_id == 0
                 ? initially_known : universe;
             bool have_predecessor = block_id == 0;
-            if (block_id) {
+            // a handler entry or a predecessor that runs only through exception edges, whose state this dataflow
+            // does not compute, leaves nothing known (issue #6334)
+            bool exception_only_predecessor = false;
+            if (block_id && !cfg.exception_entry[block_id]) {
                 size_t predecessor_count = 0;
                 for (size_t predecessor : cfg.predecessors[block_id]) {
                     if (++predecessor_count % 100 == 0
@@ -10425,6 +10512,10 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
                         return false;
                     }
                     if (!cfg.reachable[predecessor]) {
+                        if (cfg.exception_only[predecessor]) {
+                            exception_only_predecessor = true;
+                            break;
+                        }
                         continue;
                     }
                     if (!have_predecessor) {
@@ -10447,7 +10538,7 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
                     }
                 }
             }
-            if (!have_predecessor) {
+            if (!have_predecessor || exception_only_predecessor) {
                 next.clear();
             }
             in[block_id] = next;
@@ -10683,15 +10774,16 @@ static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
             || func.blocks.empty() || func.has_opaque_ast_local_access) {
         return stats;
     }
+    // no handler entry, including the target of a throw (issue #6334)
     for (const auto& block : func.blocks) {
-        for (const auto& inst : block->instructions) {
-            if (qore_ir_analysis_cancelled(check_count,
-                    "IR dense list exception-flow analysis")) {
-                return {};
-            }
-            if (inst->exception_target) {
-                return stats;
-            }
+        bool has_exception_target = false;
+        if (!qore_ir_visit_exception_targets(*block, [&](QoreIRBasicBlock*) {
+                    has_exception_target = true;
+                }, &check_count, "IR dense list exception-flow analysis")) {
+            return {};
+        }
+        if (has_exception_target) {
+            return stats;
         }
     }
 
@@ -10819,7 +10911,9 @@ static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
                 return {};
             }
             std::unordered_set<const LocalVar*> next;
-            if (block_id && !cfg.predecessors[block_id].empty()) {
+            // a handler entry, which an exception enters from anywhere in the blocks that it handles, starts with
+            // nothing known whatever its predecessors (issue #6334)
+            if (block_id && !cfg.exception_entry[block_id] && !cfg.predecessors[block_id].empty()) {
                 next = out[cfg.predecessors[block_id].front()];
                 for (size_t pred_index = 1;
                         pred_index < cfg.predecessors[block_id].size();
@@ -15820,13 +15914,20 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
             LocalFacts next = block_id == 0
                 ? initially_known : LocalFacts{};
             bool have_predecessor = block_id == 0;
-            if (block_id) {
+            // a handler entry or a predecessor that runs only through exception edges, whose state this dataflow
+            // does not compute, leaves nothing known (issue #6334)
+            bool exception_only_predecessor = false;
+            if (block_id && !cfg.exception_entry[block_id]) {
                 for (size_t predecessor : cfg.predecessors[block_id]) {
                     if (qore_ir_analysis_cancelled(check_count,
                             "IR exact boxed local predecessor analysis")) {
                         return 0;
                     }
                     if (!cfg.reachable[predecessor]) {
+                        if (cfg.exception_only[predecessor]) {
+                            exception_only_predecessor = true;
+                            break;
+                        }
                         continue;
                     }
                     if (!have_predecessor) {
@@ -15837,7 +15938,7 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
                     }
                 }
             }
-            if (!have_predecessor) {
+            if (!have_predecessor || exception_only_predecessor) {
                 next.clear();
             }
             in[block_id] = next;
