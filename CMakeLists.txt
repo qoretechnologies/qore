@@ -2887,6 +2887,10 @@ add_executable(qore-ascii-string-index-test examples/test/qore/strings/ascii_str
 target_include_directories(qore-ascii-string-index-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-ascii-string-index-test PRIVATE libqore)
+add_executable(qore-ir-pointer-slot-test examples/test/ir/ir-pointer-slot/ir_pointer_slot.cpp)
+target_include_directories(qore-ir-pointer-slot-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-ir-pointer-slot-test PRIVATE libqore)
 add_executable(qore-number-round-trip-test EXCLUDE_FROM_ALL
     examples/test/qore/vars/number_round_trip.cpp)
 target_include_directories(qore-number-round-trip-test PRIVATE
@@ -3258,6 +3262,11 @@ set(_qcc_format_sources
 #                      calls that give their temporary arguments) in a unit of
 #                      its own, and is out for the same reason.
 #   QoreIRPrinter      diagnostic IR dumps to stderr behind a debug flag.
+#   QoreIRPointerSlot  how the IR interpreter keeps the addresses of the objects
+#                      that a frame owns in its value slots, at run time; native
+#                      code keeps these handles in SSA values, and the runtime
+#                      functions that allocate them only check that their types
+#                      are aligned for it.
 #   QoreAOTBatchMemory the memory admission of batch codegen workers: it decides
 #                      how many objects are compiled at once, never what they
 #                      contain (the objects are the same with any worker count).
@@ -3265,6 +3274,7 @@ set(_qcc_format_excluded_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBatchMemory.h
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRInterpreter.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPointerSlot.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPrinter.h
     ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreter.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreterGivenArgs.cpp
