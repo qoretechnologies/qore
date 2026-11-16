@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class StringOffsetBoundsTest
 
@@ -26,7 +27,7 @@ class StringOffsetBoundsTest inherits QUnit::Test {
     }
 
     native() {
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         string native = ENV.QORE_STRING_OFFSET_BOUNDS_TEST ?? dirname(qore) + "/qore-string-offset-bounds-test";
         if (!is_file(native)) {
             testSkip("the native string offset bounds test executable is not available");

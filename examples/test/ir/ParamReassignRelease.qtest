@@ -9,6 +9,7 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -27,7 +28,7 @@
 */
 class ParamReassignReleaseTest inherits QUnit::Test {
     private {
-        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         string libdir = ENV.QORE_LIBDIR ?? dirname(qore);
         string qcc = ENV.QCC ?? (is_file(libdir + "/qcc") ? libdir + "/qcc" : dirname(qore) + "/qcc");
         string script = get_script_dir() + "/ParamReassignRelease.qr";

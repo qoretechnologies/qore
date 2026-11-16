@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class FormatNumberTest
 
@@ -34,7 +35,7 @@ public class FormatNumberTest inherits QUnit::Test {
         "1.,2234.,2567,289"
     */
     singleByteDefaultEncoding() {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         string code = "printf(\"%s|%s|%s|%s|%s|%s\", get_default_encoding(), format_number(\".,2\", 1234567.891), "
             "format_number(\".,3\", -48392093894.2349), (1234567.891n).format(\".,2\"), "

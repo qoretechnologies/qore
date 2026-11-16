@@ -27,6 +27,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires json
 %requires Util
 %requires QLS
@@ -356,7 +357,7 @@ class WorkspaceIndexTest inherits QUnit::Test {
         string module_dir = root + "/other" + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
         int rc;
         string out = backquote(sprintf("QORE_MODULE_DIR=%s %s -b %s 2>&1", shellQuote(module_dir),
-            shellQuote(ENV.QORE_BINARY ?? QORE_ARGV[0]), shellQuote(script)), \rc);
+            shellQuote(TestInterpreter::qore_interpreter()), shellQuote(script)), \rc);
         assertEq(0, rc, out);
         assertEq("[]\n", out, "the size limit applies to standard modules");
     }
