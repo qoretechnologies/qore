@@ -416,10 +416,11 @@ static bool qoreParquetCompressionFromName(const std::string& name,
         compression = parquet::Compression::BROTLI;
     } else if (lower == "zstd") {
         compression = parquet::Compression::ZSTD;
-    } else if (lower == "lz4") {
+    } else if (lower == "lz4" || lower == "lz4_raw" || lower == "lz4-raw") {
+        // Arrow writes parquet::Compression::LZ4 as the Parquet codec LZ4_RAW; Parquet has no codec for the LZ4
+        // frame format (Arrow's LZ4_FRAME), and its codec LZ4 (Hadoop framing, Arrow's LZ4_HADOOP) is deprecated
+        // but still read
         compression = parquet::Compression::LZ4;
-    } else if (lower == "lz4_frame" || lower == "lz4-frame") {
-        compression = parquet::Compression::LZ4_FRAME;
     } else {
         return false;
     }
@@ -450,7 +451,7 @@ static bool qoreParquetWriteOptions(const QoreHashNode* options, QoreParquetWrit
         parsed.has_compression = true;
         if (!qoreParquetCompressionFromName(codec, parsed.compression)) {
             xsink->raiseException("DATAFRAME-IO-ERROR",
-                "unsupported Parquet compression '%s'; expected one of: none, snappy, gzip, brotli, zstd, lz4, lz4_frame",
+                "unsupported Parquet compression '%s'; expected one of: none, snappy, gzip, brotli, zstd, lz4, lz4_raw",
                 codec.c_str());
             return false;
         }
