@@ -119,11 +119,17 @@ every binding, with no change to the inline, direct-parameter and fast-entry cal
   which can be given a reference, is never IR-only when it is written, `computeIROnlyLocals()`), and a deoptimization
   of a function that took a parameter (the deoptimization runs the function again from the runtime variables, which
   the take emptied): a function with a guard that has a deopt target takes no parameter over
-  (`qore_ir_function_may_deopt()`).  No lowering makes such a guard today: only `GuardNotNothing` is made, and it has
+  (`qore_ir_function_may_deopt()`, checked only for a function with parameters that take their arguments over); a
+  debug build asserts that no such function has one, so that the debug suites find a lowering that makes it, and a
+  release build calls it without the take-over (`printd()` at level 0).  No lowering makes such a guard today: only `GuardNotNothing` is made, and it has
   a deopt target only in a try block (or the release block of a replaced return), where the values that it would
   check are made by invokes, which end their block, so `maybeInsertNotNothingGuard()` makes none for them (checked
   with `QORE_AOT_DUMP_IR` on `ParamReassignRelease.qr` and on probes of slices, ranges, member and key reads in try
   blocks).  The hand-back helpers of 1d03004059 (`qore_rt_return_param()`) and the `_raw` takes were removed;
+- the take-over of a callee's AOT IR, which does not set `param_take_over`, is cached in
+  `QoreIRFunction::take_over_params_state` for the fast-entry gates of its callers; every change of the write
+  inventories that it is computed from (`computeIROnlyLocals()`, the scalar replacement of containers in
+  `QoreIRAnalysis.cpp`) resets it, so a later gate computes it again from the inventories as they are;
 - a native call that gives the callee a temporary argument (`QoreIRToLLVM::callGivesArgs()`, the test of
   `buildArgCleanupArray()`) does not call the fast entry of a callee with `param_take_over`
   (`qore_ir_fast_entry_refuses_given_args()` in the fast-entry gates): it is made by the consume path, which binds
@@ -161,3 +167,13 @@ ast, ir, jit, tiered, tiered with thresholds 1 (tlow), qcc -O0 and -O3.
   `f_tmp_read`, `m_tmp_read`) is 0 or cheaper in code in every mode; `rv_fa` ir/tiered/tlow +40..44 is libc only
   (+65, code -21..-25).  The move replaces the first load's reference of the IR frame (fewer instructions than the
   reference and its release).  `b_ast` (a giving site) is -1902 in IR mode and +1078 in jit, all of it in libc.
+- After the second review (19ee4e85bc, ccb1e54b21; spinster, against R): `b_loop` writes `h.k` (an lvalue path), so
+  its parameter is not IR-only and the frame's move does not run for it; the rows whose parameter is IR-only and
+  reassigned, bound from the runtime stack (a default argument): `b_reloop` (read and reassigned in a loop, called
+  with a variable) -1332 per call in IR mode, -346 in tiered and tlow, -327 in jit and qcc; `b_reone` (written once,
+  never read) and `b_retop` (the same from top-level code) **+126 in IR mode** (the move's lookup of the runtime
+  variable, which R never makes for a parameter that the frame does not read: `takeOverRuntimeStackParams()` +123),
+  -346 in tiered and tlow, -327 in jit and qcc (one lookup instead of a load and a second lookup); `b_retmp` (the
+  giving form) the same.  The other rows are unchanged from the previous measurement.  Whether the caller gave the
+  frame a temporary is not known in the frame without that lookup, so the IR cost of a parameter that is written
+  before it is read stays: the decision is prof's.
