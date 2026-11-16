@@ -227,8 +227,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   under valgrind
         # - float-int-conversion (#6181): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
-        # - JITFinalizeCancellation (#6305): its checks run in child processes that set their own --exec-mode and arm
-        #   a debug hook in them
+        # - JITFinalizeCancellation (#6305, #6313): its checks run in child processes that set their own --exec-mode
+        #   and arm a debug hook in them
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",

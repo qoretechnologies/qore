@@ -14244,7 +14244,14 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 if (func->getSubprogram()) {
                     func->setSubprogram(nullptr);
                 }
-                func->eraseFromParent();
+                if (func->use_empty()) {
+                    func->eraseFromParent();
+                } else {
+                    // a function declared before it was lowered (a member of a batch, or a fast entry) is called by
+                    // code of the module already: it is left as a declaration, which its callers keep referring to,
+                    // and the caller of the lowering discards the module or fails (qore#6313)
+                    func->deleteBody();
+                }
                 // Clear the subprogram pointer so the reset path doesn't reference it
                 if (di_sp_ptr) {
                     *di_sp_ptr = nullptr;
