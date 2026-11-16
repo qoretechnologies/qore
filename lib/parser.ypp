@@ -3495,6 +3495,11 @@ namespace_decl:
         $$ = new NSNode($1);
     }
     | outofline_methoddef {
+        // see if strong encapsulation is enabled, as for an out-of-line method at the top level (issue #6384); an
+        // unqualified name is a function declaration without "sub"
+        if ($1->name.size() > 1) {
+            check_strong_encapsulation($1->loc, "method", $1->name.ostr);
+        }
         $$ = new NSNode($1);
     }
     ;

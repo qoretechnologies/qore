@@ -3168,6 +3168,8 @@ int sub get() {
 
     @par Description:
     Disallows out-of-line namespace and class declarations which break encapsulation by allowing changes to existing namespaces and classes by external code.
+    Out-of-line method definitions are refused too, at the top level and in a namespace block (since %Qore 3.0, also
+    in a namespace block; see @ref outofline_methods_in_namespaces "out-of-line methods in namespaces").
 
     @since %Qore 0.8.13
 

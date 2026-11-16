@@ -101,6 +101,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Strong Encapsulation Refuses Out-of-Line Methods in Namespace Blocks
+    @ref strong-encapsulation "%strong-encapsulation" (also set by @ref modern "%modern") refuses an out-of-line method
+    definition in a namespace block, as it does at the top level (see
+    @ref outofline_methods_in_namespaces "out-of-line methods in namespaces"; issue #6384).
+
     @par Parse Directives Are Not Allowed in an Expression
     A parse directive in the source of an @ref Qore::Expression "Expression" is now a parse exception and is not
     applied; it changed the parse state of the Program that the expression was created in (see
