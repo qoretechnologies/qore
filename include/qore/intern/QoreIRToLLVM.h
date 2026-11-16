@@ -1171,7 +1171,10 @@ private:
     //! Returns the index of \a slot in reload_chain_slots, adding it if it has none
     uint32_t getReloadChainSlotIndex(llvm::Value* slot);
     //! Writes the addresses of the slots of reload_chain_slots in the entry block, once the function is lowered
-    void finalizeReloadChainSlots(llvm::Function* llvm_func);
+    /** @return false if it was cancelled (qore_check_cancel()), leaving slots unwritten: the function must then be
+        refused
+    */
+    bool finalizeReloadChainSlots(llvm::Function* llvm_func);
 
     // Error return block: used for exception cleanup when outside a try block.
     // When a Call/CallDirect/CallMethodDirect throws outside a try, execution

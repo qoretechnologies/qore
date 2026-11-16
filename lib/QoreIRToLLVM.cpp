@@ -4717,9 +4717,9 @@ uint32_t QoreIRToLLVM::getReloadChainSlotIndex(llvm::Value* slot) {
 }
 
 // documented in QoreIRToLLVM.h
-void QoreIRToLLVM::finalizeReloadChainSlots(llvm::Function* llvm_func) {
+bool QoreIRToLLVM::finalizeReloadChainSlots(llvm::Function* llvm_func) {
     if (!reload_chain_slots) {
-        return;
+        return true;
     }
     llvm::BasicBlock& entry = llvm_func->getEntryBlock();
     llvm::Instruction* term = qoreGetTerminator(entry);
@@ -4727,12 +4727,14 @@ void QoreIRToLLVM::finalizeReloadChainSlots(llvm::Function* llvm_func) {
     llvm::IRBuilder<> ab(term);
     for (size_t i = 0; i < reload_chain_slot_allocas.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "LLVM reload chain slot table")) {
-            break;
+            // the flushes read every slot of the array: a function with a slot left unwritten is refused
+            return false;
         }
         ab.CreateStore(reload_chain_slot_allocas[i], ab.CreateConstGEP1_64(ptr_type, reload_chain_slots, i));
     }
     reload_chain_slots->setOperand(0, llvm::ConstantInt::get(i64_type,
         std::max<size_t>(reload_chain_slot_allocas.size(), 1)));
+    return true;
 }
 
 // documented in QoreIRToLLVM.h
@@ -17278,8 +17280,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     finalizeInvokeCleanupArray();
 
     // the addresses of the slots that the tables of the flushes of the reload chains cover, once all the code of the
-    // function is emitted (qore#6299)
-    finalizeReloadChainSlots(llvm_func);
+    // function is emitted (qore#6299); a cancelled finalization refuses the function, as its code would read slots
+    // that were not written
+    if (!finalizeReloadChainSlots(llvm_func)) {
+        error = "the finalization of the reload chain slots of '" + fn_name + "' was cancelled";
+        return false;
+    }
 
     // Emit llvm.lifetime.start/end annotations for entry-block allocas.
     // Must run after all terminators are in place (we walk ret/resume sites).

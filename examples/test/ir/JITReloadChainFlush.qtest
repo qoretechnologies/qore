@@ -121,11 +121,15 @@ for (int c = 0; c < 3; ++c) {
     }
 
     #! Returns the number of each call of the native code of function \c big in the LLVM dump in \a out
+    /** JIT: the function \c big@<id>_0; AOT: \c big_<signature>__<hash> and the functions outlined from it, without
+        the functions of its handlers (\c _obe_<n>); a dump of the module before and after its optimization counts
+        twice
+    */
     private hash<string, int> getCalls(string out, string what) {
         hash<string, int> calls;
         bool in_big;
         foreach string line in (out.split("\n")) {
-            if (line =~ /^define .* @"big@[0-9]+_0"\(/) {
+            if (line =~ /^define .* @"?big(@[0-9]+_0|_[A-Za-z0-9_]+)"?\(/ && line !~ /_obe_[0-9]/) {
                 in_big = True;
                 continue;
             }
@@ -133,7 +137,8 @@ for (int c = 0; c < 3; ++c) {
                 continue;
             }
             if (line =~ /^}/) {
-                break;
+                in_big = False;
+                continue;
             }
             *list<string> m = (line =~ x/ (?:call|invoke) [^@]*@"?([A-Za-z_0-9.]+)/);
             if (m) {
@@ -182,9 +187,13 @@ for (int c = 0; c < 3; ++c) {
         f.close();
         foreach string opt in (("-O0", "-O3")) {
             string exe = join_paths(dir.path, "flush" + opt);
-            string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", lib_env, qcc_bin, opt, exe,
-                src));
-            assertTrue(is_executable(exe), sprintf("qcc %s made an executable: %s", opt, out));
+            string out = backquote(sprintf("%s QORE_DUMP_LLVM_IR=1 %s %s -o %s %s 2>&1", lib_env, qcc_bin, opt,
+                exe, src));
+            assertTrue(is_executable(exe), sprintf("qcc %s made an executable: %s", opt, out.substr(-2000)));
+            # the AOT code takes the table path too
+            hash<string, int> calls = getCalls(out, "qcc " + opt);
+            assertGt(0, calls.qore_rt_reload_chain_flush ?? 0, "qcc " + opt + ": the flushes are table calls");
+            assertEq(0, calls.qore_rt_reload_chain_rotate ?? 0, "qcc " + opt + ": no rotation of a single local");
             assertEq(expected, getResults(backquote(sprintf("%s %s 2>&1", lib_env, exe))), "qcc " + opt);
         }
     }
