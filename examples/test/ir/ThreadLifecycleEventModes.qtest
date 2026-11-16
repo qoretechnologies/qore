@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -21,7 +22,7 @@
 */
 class ThreadLifecycleEventModesTest inherits QUnit::Test {
     private {
-        string qore_bin = ENV.QORE_BINARY ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         #! the code of the child Program

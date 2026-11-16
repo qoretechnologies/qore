@@ -4,6 +4,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires DataProvider
 %requires ProviderIndex
@@ -13,7 +14,7 @@
 
 class ProviderIndexIdentityTest inherits QUnit::Test {
     private {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(dirname(qore_bin) + "/qcc") ? dirname(qore_bin) + "/qcc" : "qcc");
         string fixture = get_script_dir() + "/index-identity/IndexIdentityFixture.qm";

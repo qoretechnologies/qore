@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires Util
 
 %exec-class RuntimeDiagnosticsTest
@@ -239,7 +240,7 @@ public class RuntimeDiagnosticsTest inherits QUnit::Test {
     }
 
     private string qoreBin() {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
+        string qore_bin = TestInterpreter::qore_interpreter();
         assertTrue(exists qore_bin, "no qore binary path available");
         return qore_bin;
     }

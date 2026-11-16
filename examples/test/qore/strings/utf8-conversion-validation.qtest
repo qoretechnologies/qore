@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class Utf8ConversionValidationTest
 
@@ -89,7 +90,7 @@ class Utf8ConversionValidationTest inherits QUnit::Test {
     }
 
     native() {
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         string native = ENV.QORE_UTF8_VALIDATION_TEST ?? dirname(qore) + "/qore-utf8-validation-test";
         if (!is_file(native)) {
             testSkip("the native UTF-8 validation test executable is not available");

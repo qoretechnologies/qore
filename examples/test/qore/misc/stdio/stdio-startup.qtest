@@ -5,6 +5,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 
 %try-module v8
@@ -15,7 +16,7 @@
 
 class StdioStartupTest inherits QUnit::Test {
     private {
-        string qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
     }
 
     constructor() : Test("Standard descriptors at startup", "1.0") {

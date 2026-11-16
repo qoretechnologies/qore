@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires ../../../ExecModeHarness.qm
 
 %exec-class NestedHandlerLoweringTimeTest
@@ -81,7 +82,7 @@ throw 0x20001000 11: \"LEVEL-11\" 0,1,2,3,4,5,6,7,8,9,10,11,core
     }
 
     constructor() : QUnit::Test("NestedHandlerLoweringTimeTest", "1.0") {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         script = get_script_dir() + "/NestedHandlerLoweringTime.q";
         foreach string mode in (ExecModeHarness::ExecModes) {

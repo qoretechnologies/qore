@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class JitOptimizationLevelTest
@@ -29,7 +30,7 @@ class JitOptimizationLevelTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("JitOptimizationLevelTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         addTestCase("current Program static methods", \testCurrentProgram());
         addTestCase("per-Program override is independent", \testPerProgramOverride());
         addTestCase("invalid levels are rejected", \testInvalidLevels());

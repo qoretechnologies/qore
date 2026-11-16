@@ -81,12 +81,15 @@ struct qore_string_private {
 public:
     size_t len = 0;
     size_t allocated = 0;
-    char* buf = nullptr;
+private:
+    char* buffer = nullptr;
+
+public:
     const QoreEncoding* encoding = nullptr;
 
     // View support: when `view_parent` is non-null, this string is a read-only
     // view onto `view_parent`'s buffer starting at byte `view_offset`. The `len`
-    // field is still authoritative for the view's byte length; `buf` and
+    // field is still authoritative for the view's byte length; `buffer` and
     // `allocated` are unused in the view state (set to nullptr/0). On any
     // mutation the view is materialised (bytes copied out, parent deref'd,
     // view_parent/view_offset cleared) before writing.
@@ -99,8 +102,34 @@ public:
     // the CoW convention (ref>1 strings must not be mutated in place).
     const AbstractQoreNode* owning_node = nullptr;
 
-    //! the sandbox memory charge of buf (see design/sandbox-resource-limits.md); synced with allocated
+    //! the sandbox memory charge of the buffer (see design/sandbox-resource-limits.md); synced with allocated
     QoreSandboxChargeRecord sb;
+
+    //! Provides a writable buffer before accessing owned storage or changing its length/capacity metadata.
+    /** Views materialize; empty storage left by clear()/giveBuffer() gains a terminator. */
+    DLLLOCAL char*& mutableBuffer() {
+        if (!buffer) {
+            prepareMutableBuffer();
+        }
+        return buffer;
+    }
+
+    DLLLOCAL QORE_INTERN_NOINLINE void prepareMutableBuffer();
+
+    //! Access after construction, materialization, check_char() or allocate() has established owned storage.
+    /** This explicit precondition keeps the already-checked append paths free of a second view check. Read-only
+        callers that can receive a view must use effective_buf(); other mutators must first use mutableBuffer().
+        Keeping the raw pointer private makes an unchecked access outside the storage implementation a compile error.
+    */
+    DLLLOCAL char*& ownedBuffer() {
+        assert(!view_parent);
+        return buffer;
+    }
+
+    DLLLOCAL char* const& ownedBuffer() const {
+        assert(!view_parent);
+        return buffer;
+    }
 
     DLLLOCAL qore_string_private() {
     }
@@ -108,19 +137,19 @@ public:
     DLLLOCAL qore_string_private(const qore_string_private &p) {
         allocated = p.len + STR_CLASS_EXTRA;
         allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-        buf = (char*)malloc(sizeof(char) * allocated);
+        ownedBuffer() = (char*)malloc(sizeof(char) * allocated);
         sb.sync(allocated);
         len = p.len;
         if (len)
-            memcpy(buf, p.effective_buf(), len);
-        buf[len] = '\0';
+            memcpy(ownedBuffer(), p.effective_buf(), len);
+        ownedBuffer()[len] = '\0';
         encoding = p.getEncoding();
     }
 
     DLLLOCAL ~qore_string_private() {
         sb.release();
-        if (buf) {
-            free(buf);
+        if (buffer) {
+            free(buffer);
         }
         if (view_parent) {
             dec_view_parent();
@@ -132,12 +161,12 @@ public:
     // is inlined here; the view path is out-of-line below (uses the complete
     // type of QoreStringNode to reach its priv).
     DLLLOCAL const char* effective_buf() const {
-        return view_parent ? effective_buf_view_path() : buf;
+        return view_parent ? effective_buf_view_path() : buffer;
     }
 
     // Out-of-line slow path for views. Guaranteed to return a null-terminated
-    // buffer: end-slice views return parent->buf + offset (terminator is the
-    // parent's own); mid-slice views materialise lazily and return buf.
+    // buffer: end-slice views return parent buffer + offset (terminator is the
+    // parent's own); mid-slice views materialise lazily and return the owned buffer.
     DLLLOCAL const char* effective_buf_view_path() const;
 
     // Drops the strong reference held on view_parent. Out-of-line because
@@ -146,11 +175,11 @@ public:
 
     // Copy-on-write: if a view, copy the viewed bytes into a fresh owned
     // buffer and release the parent. No-op on a non-view. Must be called
-    // before any in-place mutation of buf/len/allocated.
+    // before any in-place mutation of buffer/len/allocated.
     DLLLOCAL void materialize();
 
     // Drop the view without copying bytes. Used by mutations that fully
-    // replace content (set/take/clear). After return: buf=nullptr,
+    // replace content (set/take/clear). After return: buffer=nullptr,
     // allocated=0, len=0, view_parent=nullptr. No-op on a non-view.
     DLLLOCAL void abandon_view();
 
@@ -173,7 +202,7 @@ public:
             size_t d = i >> 2;
             allocated = i + (d < STR_CLASS_BLOCK ? STR_CLASS_BLOCK : d);
             allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-            buf = (char*)realloc(buf, allocated * sizeof(char));
+            ownedBuffer() = (char*)realloc(ownedBuffer(), allocated * sizeof(char));
             sb.sync(allocated);
         }
     }
@@ -539,9 +568,9 @@ public:
         if (view_parent) {
             materialize();
         }
-        memmove(buf, buf + prefix.size(), len - prefix.size());
+        memmove(ownedBuffer(), ownedBuffer() + prefix.size(), len - prefix.size());
         len -= prefix.size();
-        buf[len] = '\0';
+        ownedBuffer()[len] = '\0';
     }
 
     //! returns true if the string contains the given text, which must be in the encoding of the string
@@ -592,7 +621,7 @@ public:
         if (other.view_parent) {
             other.materialize();
         }
-        std::swap(buf, other.buf);
+        std::swap(ownedBuffer(), other.ownedBuffer());
         std::swap(len, other.len);
         std::swap(allocated, other.allocated);
         sb.swap(other.sb);
@@ -874,9 +903,9 @@ public:
         assert(p);
         assert(plen);
         check_char(len + plen);
-        memcpy(buf + len, p, plen);
+        memcpy(ownedBuffer() + len, p, plen);
         len += plen;
-        buf[len] = '\0';
+        ownedBuffer()[len] = '\0';
     }
 
     DLLLOCAL void concat_simple(const qore_string_private& str, qore_offset_t pos) {
@@ -994,7 +1023,7 @@ public:
         if (view_parent) {
             materialize();
         }
-        memmove(buf, buf + num, len - num);
+        memmove(ownedBuffer(), ownedBuffer() + num, len - num);
         len -= num;
         return num;
     }
@@ -1006,7 +1035,7 @@ public:
         }
         if (allocated) {
             len = 0;
-            buf[0] = '\0';
+            ownedBuffer()[0] = '\0';
         }
     }
 
@@ -1015,18 +1044,18 @@ public:
             materialize();
         }
         if (allocated) {
-            buf[len] = c;
+            ownedBuffer()[len] = c;
             check_char(++len);
-            buf[len] = '\0';
+            ownedBuffer()[len] = '\0';
             return;
         }
         // allocate new string buffer
         allocated = STR_CLASS_BLOCK;
         len = 1;
-        buf = (char*)malloc(sizeof(char) * allocated);
+        ownedBuffer() = (char*)malloc(sizeof(char) * allocated);
         sb.sync(allocated);
-        buf[0] = c;
-        buf[1] = '\0';
+        ownedBuffer()[0] = c;
+        ownedBuffer()[1] = '\0';
     }
 
     DLLLOCAL void concat(const qore_string_private* str) {
@@ -1037,9 +1066,9 @@ public:
             // if priv->buffer needs to be resized
             check_char(str->len + len + STR_CLASS_EXTRA);
             // concatenate new string (source may be a view)
-            memcpy(buf + len, str->effective_buf(), str->len);
+            memcpy(ownedBuffer() + len, str->effective_buf(), str->len);
             len += str->len;
-            buf[len] = '\0';
+            ownedBuffer()[len] = '\0';
         }
     }
 
@@ -1059,12 +1088,12 @@ public:
                 // if priv->buffer needs to be resized
                 check_char(len);
                 // concatenate one character at a time
-                buf[len++] = str[i++];
+                ownedBuffer()[len++] = str[i++];
             }
             // see if priv->buffer needs to be resized for '\0'
             check_char(len);
             // terminate string
-            buf[len] = '\0';
+            ownedBuffer()[len] = '\0';
         }
     }
 
@@ -1080,52 +1109,53 @@ public:
         nothing is appended if the output cannot be formatted, such as an output longer than INT_MAX characters
     */
     DLLLOCAL int vsprintf(const char *fmt, va_list args, bool* failed = nullptr) {
+        mutableBuffer();
         size_t fmtlen = ::strlen(fmt);
         // ensure minimum space is free
         if ((allocated - len - fmtlen) < MIN_SPRINTF_BUFSIZE) {
             allocated += fmtlen + MIN_SPRINTF_BUFSIZE;
             allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
             // resize buffer
-            buf = (char*)realloc(buf, allocated * sizeof(char));
+            ownedBuffer() = (char*)realloc(ownedBuffer(), allocated * sizeof(char));
             sb.sync(allocated);
         }
         // set free buffer size
         qore_offset_t free = allocated - len;
 
         // copy formatted string to buffer
-        int i = ::vsnprintf(buf + len, free, fmt, args);
+        int i = ::vsnprintf(ownedBuffer() + len, free, fmt, args);
 
 #ifdef HPUX
         // vsnprintf failed but didn't tell us how big the buffer should be
         if (i < 0) {
-            //printf("DEBUG: vsnprintf() failed: i=%d allocated=" QSD " len=" QSD " buf=%p fmtlen=" QSD
-            //    " (new=i+%d = %d)\n", i, allocated, len, buf, fmtlen, STR_CLASS_EXTRA, i + STR_CLASS_EXTRA);
+            //printf("DEBUG: vsnprintf() failed: i=%d allocated=" QSD " len=" QSD " ownedBuffer()=%p fmtlen=" QSD
+            //    " (new=i+%d = %d)\n", i, allocated, len, ownedBuffer(), fmtlen, STR_CLASS_EXTRA, i + STR_CLASS_EXTRA);
             // resize buffer
             allocated += STR_CLASS_EXTRA;
             allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-            buf = (char*)realloc(buf, sizeof(char) * allocated);
+            ownedBuffer() = (char*)realloc(ownedBuffer(), sizeof(char) * allocated);
             sb.sync(allocated);
-            *(buf + len) = '\0';
+            *(ownedBuffer() + len) = '\0';
             return -1;
         }
 #else
         if (i < 0) {
             // the output cannot be formatted: nothing is appended, and repeating the call cannot change that
-            *(buf + len) = '\0';
+            *(ownedBuffer() + len) = '\0';
             if (failed) {
                 *failed = true;
             }
             return 0;
         }
         if (i >= free) {
-            //printf("DEBUG: vsnprintf() failed: i=%d allocated=" QSD " len=" QSD " buf=%p fmtlen=" QSD
-            //    " (new=i+%d = %d)\n", i, allocated, len, buf, fmtlen, STR_CLASS_EXTRA, i + STR_CLASS_EXTRA);
+            //printf("DEBUG: vsnprintf() failed: i=%d allocated=" QSD " len=" QSD " ownedBuffer()=%p fmtlen=" QSD
+            //    " (new=i+%d = %d)\n", i, allocated, len, ownedBuffer(), fmtlen, STR_CLASS_EXTRA, i + STR_CLASS_EXTRA);
             // resize buffer
             allocated = len + i + STR_CLASS_EXTRA;
             allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-            buf = (char*)realloc(buf, sizeof(char) * allocated);
+            ownedBuffer() = (char*)realloc(ownedBuffer(), sizeof(char) * allocated);
             sb.sync(allocated);
-            *(buf + len) = '\0';
+            *(ownedBuffer() + len) = '\0';
             return -1;
         }
 #endif
@@ -1184,7 +1214,7 @@ public:
         const char* src = effective_buf();
         if (getEncoding()->isMultiByte()) {
             const char* p = src;
-            char* targ_end = targ.buf + len;
+            char* targ_end = targ.ownedBuffer() + len;
             const char* end = src + len;
             while (p < end) {
                 bool invalid;
@@ -1193,7 +1223,7 @@ public:
                     bl = 1;
                 }
                 targ_end -= bl;
-                if (targ_end < targ.buf) {
+                if (targ_end < targ.ownedBuffer()) {
                     break;
                 }
                 // memcpy() and not strncpy(): multi-byte encodings such as UTF-16* have characters
@@ -1204,11 +1234,11 @@ public:
             }
         } else {
             for (size_t i = 0; i < len; ++i) {
-                targ.buf[i] = src[len - i - 1];
+                targ.ownedBuffer()[i] = src[len - i - 1];
             }
         }
 
-        targ.buf[len] = '\0';
+        targ.ownedBuffer()[len] = '\0';
         targ.len = len;
     }
 
@@ -1292,13 +1322,13 @@ public:
         if ((unsigned)allocated >= requested_size)
             return 0;
         requested_size = (requested_size / 0x10 + 1) * 0x10; // fill complete cache line
-        char* aux = (char*)realloc(buf, requested_size * sizeof(char));
+        char* aux = (char*)realloc(ownedBuffer(), requested_size * sizeof(char));
         if (!aux) {
             assert(false);
             // FIXME: std::bad_alloc() should be thrown here;
             return -1;
         }
-        buf = aux;
+        ownedBuffer() = aux;
         allocated = requested_size;
         sb.sync(allocated);
         return 0;
@@ -1411,17 +1441,17 @@ DLLLOCAL T* binary_to_string(BinaryNode* bin, const QoreEncoding* qe) {
 
     qore_string_private *p = new qore_string_private;
     p->len = b->size() - 1;
-    p->buf = (char*)b->giveBuffer();
+    p->ownedBuffer() = (char*)b->giveBuffer();
     p->encoding = qe;
 
     // free binary object
     b = 0;
 
     // check for null termination
-    if (p->buf[p->len]) {
+    if (p->ownedBuffer()[p->len]) {
         ++p->len;
-        p->buf = (char*)realloc(p->buf, p->len + 1);
-        p->buf[p->len] = '\0';
+        p->ownedBuffer() = (char*)realloc(p->ownedBuffer(), p->len + 1);
+        p->ownedBuffer()[p->len] = '\0';
     }
 
     p->allocated = p->len + 1;

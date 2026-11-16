@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires Util
 %requires FsUtil
 %requires ProviderIndexUtil
@@ -67,7 +68,7 @@ class ConcurrentModuleProgramMergeTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("ConcurrentModuleProgramMergeTest", "1.0") {
-        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         qlib_dir = normalize_dir(get_script_dir() + "/../../../../../qlib");
         addTestCase("module code loads modules into the module's own Program", \moduleProgramIsTheTarget());
         addTestCase("importing a module while its Program is merged into", \importDuringRuntimeLoad());

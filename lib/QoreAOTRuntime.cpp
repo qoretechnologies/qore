@@ -1731,7 +1731,9 @@ static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const 
             }
             const AbstractQoreFunctionVariant* resolved_variant = nullptr;
             QoreTypeParamInstantiation type_param_instantiation;
-            if (method_ref.sig_text) {
+            if (method_ref.abstract_self_call) {
+                // a call to an abstract method: looked up by name at run time, with no variant
+            } else if (method_ref.sig_text) {
                 resolved_variant = findAOTStaticMethodVariantByRef(pgm, m, method_ref, false);
             } else if (method_ref.arg_type_sig && *method_ref.arg_type_sig) {
                 MethodFunctionBase* mfb = qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction();
@@ -1762,7 +1764,12 @@ static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const 
             // unqualified names produce ns.size() == 1 for normal virtual dispatch
             SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin, strdup(method_full_name), nullptr, m,
                 qc, qcp);
-            if (resolved_variant) {
+            if (method_ref.abstract_self_call) {
+                // as SelfFunctionCallNode::parseInitCall() marked it: a call to an abstract method is resolved at run
+                // time on the object's class, with no variant, also when it is qualified (Base::m())
+                sfcn->setAbstractCall();
+            } else if (resolved_variant && !static_cast<const MethodVariantBase*>(resolved_variant)->isAbstract()) {
+                // an abstract variant is never bound to a call: parsing binds none
                 sfcn->setVariant(resolved_variant);
                 if (!type_param_instantiation.type_args.empty()) {
                     sfcn->setTypeParamInstantiation(std::move(type_param_instantiation));
@@ -4298,15 +4305,27 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const std::string target_method_text = target_type_arg_pos == std::string::npos
                     ? encoded_target : encoded_target.substr(0, target_type_arg_pos);
                 AOTEncodedMethodRef method_ref(target_method_text.c_str());
-                uint8_t is_pseudo = QoreAOTBinaryReader::readU8(ptr);
+                const uint8_t target_flags = QoreAOTBinaryReader::readU8(ptr);
+                const bool is_pseudo = (target_flags & QORE_AOT_DOT_EVAL_TARGET_PSEUDO) != 0;
+                // a call dispatched by name records the method resolved at parse time only for the check of its
+                // target (issue #5824)
+                const bool name_dispatch = (target_flags & QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH) != 0;
 
-                const QoreClass* qc = findAOTClassByPath(pgm, ref1, is_pseudo != 0);
+                const QoreClass* qc = findAOTClassByPath(pgm, ref1, is_pseudo);
                 const QoreMethod* method = findAOTMethodByName(qc, method_ref.method_name);
                 const AbstractQoreFunctionVariant* variant = findAOTMethodVariantByRef(
-                    pgm, method, method_ref, is_pseudo != 0);
+                    pgm, method, method_ref, is_pseudo);
+                ctx->call_targets[i].check_qc = qc;
+                ctx->call_targets[i].check_method = method;
+                ctx->call_targets[i].check_variant = variant;
+                if (name_dispatch) {
+                    qc = nullptr;
+                    method = nullptr;
+                    variant = nullptr;
+                }
                 ctx->call_targets[i].method = method;
                 ctx->call_targets[i].qc = qc;
-                ctx->call_targets[i].is_pseudo = is_pseudo != 0;
+                ctx->call_targets[i].is_pseudo = is_pseudo;
                 // Make an owned copy of the method name since the source buffer
                 // (decompressed metadata) may be freed after deserialization
                 if (method_ref.method_name && *method_ref.method_name) {
@@ -4345,6 +4364,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                         // caller args directly to the picked variant's signature.
                         ctx->call_targets[i].variant = mfb->first();
                     }
+                }
+                if (!name_dispatch) {
+                    ctx->call_targets[i].check_variant = ctx->call_targets[i].variant;
                 }
                 // Store NOTHING in exprs — slot-based dispatch uses call_targets
                 ctx->exprs[i] = toBitsNB(QoreValue());
@@ -4577,7 +4599,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                         uvb ? uvb->getUserSignature() : nullptr);
                     if (base_bits) {
                         QoreValue base_val = fromBits(base_bits);
-                        const SelfFunctionCallNode* base_sfcn = dynamic_cast<const SelfFunctionCallNode*>(
+                        const SelfFunctionCallNode* base_sfcn = qore_get_self_function_call_node(
                             base_val.getInternalNode());
                         if (base_sfcn && num_args && self_args_ok) {
                             SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(*base_sfcn,
@@ -6459,7 +6481,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             continue;
         }
         // Static method call
-        const auto* smc = dynamic_cast<const StaticMethodCallNode*>(node);
+        const auto* smc = qore_get_static_method_call_node(node);
         if (smc && smc->getMethod()) {
             ctx->call_targets[i].method = smc->getMethod();
             ctx->call_targets[i].is_static_method = true;
@@ -6474,7 +6496,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             continue;
         }
         // Self method call
-        const auto* self_call = dynamic_cast<const SelfFunctionCallNode*>(node);
+        const auto* self_call = qore_get_self_function_call_node(node);
         if (self_call && self_call->getMethod()) {
             ctx->call_targets[i].method = self_call->getMethod();
             ctx->call_targets[i].qc = self_call->getClass();
@@ -11400,7 +11422,8 @@ static int executeInitFunctions(QoreProgram* pgm,
     const char* mod_path,
     bool write_shadow,
     ExceptionSink* failure_sink,
-    bool script_load = false);
+    bool script_load = false,
+    bool* module_init_failed = nullptr);
 static void preInitStaticVarsInProgram(QoreProgram* pgm);
 
 static std::string makeAOTRegistrationFailureMessage(const char* label,
@@ -11558,9 +11581,41 @@ static bool aotRequiredDepUnavailable(const char* dep) {
     return !QMM.findModule(dep);
 }
 
+//! why a required dependency failed to load
+enum class AOTDepLoadFailure {
+    //! a circular or in-progress dependency, registered in the module map and resolved later
+    TOLERATED,
+    //! not registered: the module could not be loaded
+    UNAVAILABLE,
+    //! registered, but its initialization failed (its init closure raised an exception): the module stays registered
+    //! for the declarations that its failed load created, and cannot be used (qore#6217)
+    INIT_FAILED,
+};
+
+//! Returns why a required dependency whose load failed is not available, or TOLERATED (see aotRequiredDepUnavailable())
+static AOTDepLoadFailure aotRequiredDepFailure(const char* dep) {
+    QoreAbstractModule* mi = QMM.findModule(dep);
+    if (!mi) {
+        return AOTDepLoadFailure::UNAVAILABLE;
+    }
+    return mi->isInitFailed() ? AOTDepLoadFailure::INIT_FAILED : AOTDepLoadFailure::TOLERATED;
+}
+
+//! Returns the exception of a dependency load as "ERR: desc" for a message, or an empty string
+static std::string aotDepLoadExceptionText(ExceptionSink& xsink) {
+    if (!xsink.isException()) {
+        return std::string();
+    }
+    QoreStringValueHelper err(xsink.getExceptionErr());
+    QoreStringValueHelper desc(xsink.getExceptionDesc());
+    return std::string(err->c_str()) + ": " + desc->c_str();
+}
+
 struct AOTDependencyLoadResult {
     std::string dependency;
     bool cancelled = false;
+    //! the exception of the initialization of \a dependency, if it failed (qore#6217)
+    std::string init_error;
 
     explicit operator bool() const {
         return dependency.empty() && !cancelled;
@@ -11599,14 +11654,24 @@ static AOTDependencyLoadResult aotLoadModuleDependencies(ExceptionSink& xsink,
             if (rc >= 0 && !xsink) {
                 continue;
             }
-            xsink.clear();
-            if (aotRequiredDepUnavailable(dep.c_str())) {
+            AOTDepLoadFailure failure = aotRequiredDepFailure(dep.c_str());
+            // the first dependency that cannot be used fails the module; the other dependencies are loaded, and
+            // their initialization runs, before it fails, as in the interpreter, which loads the other modules that
+            // a module requires (qore#6217)
+            if (failure != AOTDepLoadFailure::TOLERATED && result.dependency.empty()) {
+                if (failure == AOTDepLoadFailure::INIT_FAILED) {
+                    // a module whose initialization failed cannot be used
+                    result.init_error = aotDepLoadExceptionText(xsink);
+                    if (result.init_error.empty()) {
+                        result.init_error = "its initialization failed";
+                    }
+                }
                 result.dependency = dep;
-                return false;
             }
+            xsink.clear();
             // A circular/in-progress dependency is registered in the module map and is resolved later.
         }
-        return true;
+        return result.dependency.empty();
     };
 
     if (!imports_present || force_legacy_imports) {
@@ -11722,17 +11787,34 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                     if (dep_rc < 0 || xsink.isException()) {
                         printd(2, "AOT v2: dependency '%s' load error (rc=%d)\n",
                             dep.c_str(), dep_rc);
-                        xsink.clear();
+                        if (aotRequiredDepFailure(dep.c_str()) == AOTDepLoadFailure::INIT_FAILED) {
+                            // the initialization of the module failed: its exception is reported and the
+                            // program fails, as in the interpreter (qore#6217)
+                            if (!xsink.isException()) {
+                                xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which "
+                                    "the AOT-compiled program (%s) requires, failed", dep.c_str(),
+                                    (label && *label) ? label : "<unknown path>");
+                            }
+                            xsink.handleExceptions();
+                            // the other dependencies are loaded, and their initialization runs, before the program
+                            // fails, as in the interpreter, which loads the other modules of the program
+                            dep_unavailable = true;
+                            continue;
+                        }
                         if (aotRequiredDepUnavailable(dep.c_str())) {
+                            // the dependency's own load exception is reported with the error (qore#6217)
                             xsink.raiseException("AOT-ERROR",
                                 "the AOT-compiled program (%s) requires module '%s', which could not "
                                 "be loaded; the program was AOT-compiled against '%s' (its compiled "
                                 "code references that module's symbols) and cannot be loaded without it",
                                 (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
                             xsink.handleExceptions();
+                            // the other dependencies are loaded, and their initialization runs, before the program
+                            // fails, as in the interpreter, which loads the other modules of the program
                             dep_unavailable = true;
-                            break;
+                            continue;
                         }
+                        xsink.clear();
                     }
                 }
             }
@@ -11878,9 +11960,19 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                 if (!init_descriptors.empty()) {
                     ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
                     if (!xsink.isException()) {
+                        // the initializers are the program's own code: they run with its parse options, as when
+                        // the program is parsed, not with those in effect when it is loaded (qore#6189)
+                        LoadTimeParseOptionsHelper init_poh((*qpgm)->getParseOptions());
+                        // the init closure of a module of the executable that raises an exception fails the
+                        // executable, as the interpreter fails the program (qore#6217)
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
-                            /*write_shadow=*/true, /*failure_sink=*/nullptr, /*script_load=*/true);
+                            /*write_shadow=*/true, /*failure_sink=*/&xsink, /*script_load=*/true);
+                    }
+                    if (xsink.isException()) {
+                        xsink.handleExceptions();
+                        rc = 2;
+                        break;
                     }
                 }
             }
@@ -12000,9 +12092,12 @@ static int executeInitFunctions(QoreProgram* pgm,
     const char* mod_path,
     bool write_shadow,
     ExceptionSink* failure_sink,
-    bool script_load);
+    bool script_load,
+    bool* module_init_failed);
 
 struct AotModuleState {
+    //! true if the module's init closure raised an exception: its initialization is not run again (qore#6217)
+    bool init_failed = false;
     QoreProgram* pgm = nullptr;
     const QoreAOTFunc* funcs = nullptr;
     int num_funcs = 0;
@@ -12746,6 +12841,19 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     }
     qore_program_private* target_pp = qore_program_private::get(*tpgm);
 
+    // a module whose init closure raised an exception is not initialized again, which would run the closure again
+    // (qore#6217); a load through the module manager reports it before, this covers the other paths
+    {
+        AutoLocker al(get_aot_module_state_lock());
+        auto sit = aot_module_map.find(mod_name);
+        if (sit != aot_module_map.end() && sit->second.init_failed) {
+            result.attempted = true;
+            result.hard_error = true;
+            result.error = "the initialization of the module failed on a prior attempt";
+            return result;
+        }
+    }
+
     const QoreAOTFunc* init_funcs = nullptr;
     int init_num_funcs = 0;
     QoreProgram* init_ctx_pgm = nullptr;
@@ -13190,10 +13298,29 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     if (!init_func_contexts.empty()) {
         printd(2, "AOT ns_init '%s': executing %d init functions\n",
             mod_name.c_str(), (int)init_func_contexts.size());
+        // the initializers are the module's own code: they run with the module's parse options, as its contexts are
+        // built with them above, not with those of the code that imports it or that is being parsed when it is
+        // loaded (qore#6189)
+        LoadTimeParseOptionsHelper exec_poh(init_ctx_pgm->getParseOptions());
+        bool module_init_failed = false;
         int failed = executeInitFunctions(tpgm, init_func_contexts,
             pending_descriptors, mod_name.c_str(), shadow_pgm,
             mod_path.empty() ? nullptr : mod_path.c_str(),
-            write_shadow, &xsink);
+            write_shadow, &xsink, false, &module_init_failed);
+        if (module_init_failed) {
+            // the module's init closure raised an exception: the module stays registered but cannot be used, as a
+            // source module whose initialization failed (qore#6217); it is a hard error, so its initialization is not
+            // retried, which would run the closure again
+            QMM.setModuleInitFailed(mod_name.c_str());
+            {
+                AutoLocker aot_state_al(get_aot_module_state_lock());
+                auto it = aot_module_map.find(mod_name);
+                if (it != aot_module_map.end()) {
+                    it->second.init_failed = true;
+                }
+            }
+            return finish(false, true);
+        }
         return finish(failed == 0);
     }
 
@@ -13213,7 +13340,8 @@ static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm,
             AutoLocker aot_state_al(get_aot_module_state_lock());
             for (const auto& entry : aot_module_map) {
                 const AotModuleState& state = entry.second;
-                if (state.init_descriptors && !state.init_descriptors->empty()
+                // a module whose init closure raised an exception is not initialized again (qore#6217)
+                if (!state.init_failed && state.init_descriptors && !state.init_descriptors->empty()
                         && (state.init_reader || state.metadata)
                         && target_pp->merged_aot_modules.find(entry.first)
                             != target_pp->merged_aot_modules.end()
@@ -13546,17 +13674,34 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     if (dep_rc < 0 || xsink.isException()) {
                         printd(2, "AOT v3: dependency '%s' load error (rc=%d)\n",
                             dep.c_str(), dep_rc);
-                        xsink.clear();
+                        if (aotRequiredDepFailure(dep.c_str()) == AOTDepLoadFailure::INIT_FAILED) {
+                            // the initialization of the module failed: its exception is reported and the
+                            // program fails, as in the interpreter (qore#6217)
+                            if (!xsink.isException()) {
+                                xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which "
+                                    "the AOT-compiled program (%s) requires, failed", dep.c_str(),
+                                    (label && *label) ? label : "<unknown path>");
+                            }
+                            xsink.handleExceptions();
+                            // the other dependencies are loaded, and their initialization runs, before the program
+                            // fails, as in the interpreter, which loads the other modules of the program
+                            dep_unavailable_v3 = true;
+                            continue;
+                        }
                         if (aotRequiredDepUnavailable(dep.c_str())) {
+                            // the dependency's own load exception is reported with the error (qore#6217)
                             xsink.raiseException("AOT-ERROR",
                                 "the AOT-compiled program (%s) requires module '%s', which could not "
                                 "be loaded; the program was AOT-compiled against '%s' (its compiled "
                                 "code references that module's symbols) and cannot be loaded without it",
                                 (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
                             xsink.handleExceptions();
+                            // the other dependencies are loaded, and their initialization runs, before the program
+                            // fails, as in the interpreter, which loads the other modules of the program
                             dep_unavailable_v3 = true;
-                            break;
+                            continue;
                         }
+                        xsink.clear();
                     }
                 }
             }
@@ -13705,9 +13850,19 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                 if (!init_descriptors.empty()) {
                     ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
                     if (!xsink.isException()) {
+                        // the initializers are the program's own code: they run with its parse options, as when
+                        // the program is parsed, not with those in effect when it is loaded (qore#6189)
+                        LoadTimeParseOptionsHelper init_poh((*qpgm)->getParseOptions());
+                        // the init closure of a module of the executable that raises an exception fails the
+                        // executable, as the interpreter fails the program (qore#6217)
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
-                            /*write_shadow=*/true, /*failure_sink=*/nullptr, /*script_load=*/true);
+                            /*write_shadow=*/true, /*failure_sink=*/&xsink, /*script_load=*/true);
+                    }
+                    if (xsink.isException()) {
+                        xsink.handleExceptions();
+                        rc = 2;
+                        break;
                     }
                 }
             }
@@ -13878,27 +14033,49 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // (via ModuleLoadMapHelper), so we can safely load dependencies here.
     std::vector<std::string> reexport_deps;
     std::vector<std::string> deps = extractDependencies(source, source_len, &reexport_deps);
+    // the error of the first dependency that cannot be used, which fails the module after the other dependencies are
+    // loaded and their initialization runs, as in the interpreter, which loads the other modules that a module
+    // requires (qore#6217)
+    SimpleRefHolder<QoreStringNode> dep_err;
     for (const std::string& dep : deps) {
         // Try to load the module (it may already be loaded, which is fine)
         int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
         if (rc < 0 || xsink) {
+            AOTDepLoadFailure failure = aotRequiredDepFailure(dep.c_str());
+            if (failure == AOTDepLoadFailure::INIT_FAILED) {
+                // a module whose initialization failed cannot be used (qore#6217)
+                std::string init_error = aotDepLoadExceptionText(xsink);
+                xsink.clear();
+                if (!dep_err) {
+                    dep_err = new QoreStringNodeMaker("AOT module '%s' (%s) requires module '%s', "
+                        "whose initialization failed (%s)", mod_name ? mod_name : "<unknown>",
+                        (label && *label) ? label : "<unknown path>", dep.c_str(),
+                        init_error.empty() ? "its initialization failed" : init_error.c_str());
+                }
+                continue;
+            }
             xsink.clear();
             // A genuinely-missing dependency is a hard error (this init path runs with the
             // module-loading mutex unlocked, so use the locking lookup); only a circular/in-progress
             // dependency, still registered in the module map, is tolerated.
-            if (aotRequiredDepUnavailable(dep.c_str())) {
-                QoreStringNode* err = new QoreStringNodeMaker(
-                    "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
-                    "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
-                    "and cannot be loaded without it",
-                    mod_name ? mod_name : "<unknown>",
-                    (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
-                local_pgm->waitForTerminationAndDeref(nullptr);
-                return err;
+            if (failure == AOTDepLoadFailure::UNAVAILABLE) {
+                if (!dep_err) {
+                    dep_err = new QoreStringNodeMaker(
+                        "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
+                        "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
+                        "and cannot be loaded without it",
+                        mod_name ? mod_name : "<unknown>",
+                        (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                }
+                continue;
             }
             // Circular dependency or other in-progress load - tolerate and continue.
             // The types might be resolved later when the requiring script is parsed.
         }
+    }
+    if (dep_err) {
+        local_pgm->waitForTerminationAndDeref(nullptr);
+        return dep_err.release();
     }
 
     // Set up module context for the parser (must be QoreUserModuleDefContextHelper
@@ -14748,6 +14925,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         if (load_result.cancelled) {
             err = new QoreStringNodeMaker("AOT module '%s' (%s) dependency loading was cancelled",
                 mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>");
+        } else if (!load_result.init_error.empty()) {
+            err = new QoreStringNodeMaker("AOT module '%s' (%s) requires module '%s', whose initialization "
+                "failed (%s)", mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>",
+                load_result.dependency.c_str(), load_result.init_error.c_str());
         } else {
             err = new QoreStringNodeMaker(
                 "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
@@ -15510,6 +15691,9 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
         const char* old_name = set_module_context_name(rec->mod_name.empty() ? nullptr : rec->mod_name.c_str());
         const char* old_path = set_module_context_path(rec->mod_path.empty() ? nullptr : rec->mod_path.c_str());
         uint64_t raw_result = 0;
+        // a constant initialized when it is first read runs with the parse options of the code that it belongs to
+        // (the module's own Program, or the script's), not with those of the code that reads it (qore#6189)
+        LoadTimeParseOptionsHelper lazy_poh((rec->shadow_pgm ? rec->shadow_pgm : init_pgm)->getParseOptions());
         try {
             raw_result = rec->fn_ptr(rec->ctx, &init_xsink);
         } catch (const QoreJITException&) {
@@ -15587,7 +15771,8 @@ static int executeInitFunctions(
         const char* mod_path,
         bool write_shadow,
         ExceptionSink* failure_sink,
-        bool script_load) {
+        bool script_load,
+        bool* module_init_failed) {
     if (exec_infos.empty() || descriptors.empty()) {
         return 0;
     }
@@ -16004,8 +16189,15 @@ static int executeInitFunctions(
             printd(5, "AOT init: '%s' raised exception: %s: %s%s\n",
                 desc.name.c_str(), err_cstr, desc_cstr,
                 is_pending ? " (will retry)" : "");
+            if (run_module_init && desc.target_type == AOTCompiledInitFunc::MODULE_INIT && !is_pending
+                && module_init_failed) {
+                // the module's init closure raised an exception: the module's initialization failed and is not run
+                // again (qore#6217)
+                *module_init_failed = true;
+            }
             if (failure_sink && !*failure_sink && run_module_init) {
-                failure_sink->raiseException(err_cstr, "%s", desc_cstr);
+                // the whole exception, with its location and call stack (qore#6217)
+                failure_sink->assimilate(xsink);
             }
             xsink.clear();
             if (!run_module_init) {
@@ -16302,13 +16494,16 @@ static int executeInitFunctions(
                 printd(0, "AOT init: '%s' remained unresolved after %d rounds; last exception: %s: %s%s\n",
                     descriptors[di].name.c_str(), 32, last_error[di].c_str(), last_desc[di].c_str(),
                     last_error_pending[di] ? " (pending)" : "");
-                if (failure_sink && !*failure_sink) {
+                // a script load reports only the failures of module init closures: a constant or variable of a
+                // script whose initializer did not complete gets a recovery record below, and its first read runs
+                // the initializer again, raising its exception there (qore#6217)
+                if (failure_sink && !*failure_sink && !script_load) {
                     failure_sink->raiseException(last_error[di].c_str(), "%s", last_desc[di].c_str());
                 }
             } else {
                 printd(0, "AOT init: '%s' remained pending after %d rounds\n",
                     descriptors[di].name.c_str(), 32);
-                if (failure_sink && !*failure_sink) {
+                if (failure_sink && !*failure_sink && !script_load) {
                     failure_sink->raiseException("AOT-INIT-ERROR",
                         "AOT initializer '%s' remained pending after %d rounds",
                         descriptors[di].name.c_str(), 32);
@@ -16794,6 +16989,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         if (load_result.cancelled) {
             err = new QoreStringNodeMaker("AOT module '%s' (%s) dependency loading was cancelled",
                 mod_name ? mod_name : "<unknown>", module_context_desc.c_str());
+        } else if (!load_result.init_error.empty()) {
+            err = new QoreStringNodeMaker("AOT module '%s' (%s) requires module '%s', whose initialization "
+                "failed (%s)", mod_name ? mod_name : "<unknown>", module_context_desc.c_str(),
+                load_result.dependency.c_str(), load_result.init_error.c_str());
         } else {
             err = new QoreStringNodeMaker(
                 "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
@@ -17275,11 +17474,21 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
                     tch_xsink.handleExceptions();
                     return 6;
                 }
+                // the initializers are the script's own code: they run with its parse options, not with those of
+                // the host code that registers it (qore#6189)
+                LoadTimeParseOptionsHelper init_poh(tpgm->getParseOptions());
+                // the init closure of a module of the script that raises an exception fails the registration, as
+                // the interpreter fails the program (qore#6217)
+                ExceptionSink init_xsink;
                 executeInitFunctions(tpgm, init_func_contexts,
                     init_descriptors, label ? label : "<script>",
                     /*shadow_pgm=*/nullptr, /*mod_path=*/nullptr,
-                    /*write_shadow=*/true, /*failure_sink=*/nullptr,
+                    /*write_shadow=*/true, /*failure_sink=*/&init_xsink,
                     /*script_load=*/true);
+                if (init_xsink.isException()) {
+                    init_xsink.handleExceptions();
+                    return 7;
+                }
             }
         }
     }
@@ -17365,6 +17574,9 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
             printd(2, "qore_aot_script_register(%s): loading %d dependencies\n",
                 label ? label : "<script>", (int)deps.size());
             size_t dep_cancel_i = 0;
+            // true if a dependency could not be loaded or its initialization failed: the other dependencies are
+            // loaded, and their initialization runs, before the script fails, as in the interpreter
+            bool dep_failed = false;
             for (const std::string& dep : deps) {
                 if (dep_cancel_i && !(dep_cancel_i % 100)
                         && qore_check_cancel(&xsink, "AOT script dependency load")) {
@@ -17375,19 +17587,38 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                 if (dep_rc < 0 || xsink.isException()) {
                     printd(2, "qore_aot_script_register(%s): dependency '%s' load error "
                         "(rc=%d)\n", label ? label : "<script>", dep.c_str(), dep_rc);
-                    xsink.clear();
+                    if (aotRequiredDepFailure(dep.c_str()) == AOTDepLoadFailure::INIT_FAILED) {
+                        // the initialization of the module failed: its exception is reported and the script
+                        // fails, as in the interpreter (qore#6217)
+                        if (!xsink.isException()) {
+                            xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which the "
+                                "AOT-compiled script (%s) requires, failed", dep.c_str(),
+                                label ? label : "<script>");
+                        }
+                        xsink.handleExceptions();
+                        dep_failed = true;
+                        ++dep_cancel_i;
+                        continue;
+                    }
                     if (aotRequiredDepUnavailable(dep.c_str())) {
+                        // the dependency's own load exception is reported with the error (qore#6217)
                         xsink.raiseException("AOT-ERROR",
                             "the AOT-compiled script (%s) requires module '%s', which could not be "
                             "loaded; the script was AOT-compiled against '%s' (its compiled code "
                             "references that module's symbols) and cannot be loaded without it",
                             label ? label : "<script>", dep.c_str(), dep.c_str());
                         xsink.handleExceptions();
-                        return 7;
+                        dep_failed = true;
+                        ++dep_cancel_i;
+                        continue;
                     }
+                    xsink.clear();
                     // else: circular/in-progress dependency (still registered) - tolerate.
                 }
                 ++dep_cancel_i;
+            }
+            if (dep_failed) {
+                return 7;
             }
         }
     }
@@ -17483,14 +17714,24 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                     if (tch_xsink.isException()) {
                         tch_xsink.handleExceptions();
                     } else {
+                        // the initializers are the script's own code: they run with its parse options, not with
+                        // those of the host code that registers it (qore#6189)
+                        LoadTimeParseOptionsHelper init_poh(tpgm->getParseOptions());
+                        // the init closure of a module of the script that raises an exception fails the
+                        // registration, as the interpreter fails the program (qore#6217)
+                        ExceptionSink init_xsink;
                         executeInitFunctions(tpgm, init_func_contexts,
                             init_descriptors,
                             label ? label : "<script>",
                             /*shadow_pgm=*/nullptr,
                             /*mod_path=*/nullptr,
                             /*write_shadow=*/true,
-                            /*failure_sink=*/nullptr,
-                    /*script_load=*/true);
+                            /*failure_sink=*/&init_xsink,
+                            /*script_load=*/true);
+                        if (init_xsink.isException()) {
+                            init_xsink.handleExceptions();
+                            return 7;
+                        }
                     }
                 }
             } else {
@@ -17643,6 +17884,9 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
     // Mirrors qore_aot_run_v2 / qore_aot_module_init_v3.
     {
         size_t dep_cancel_i = 0;
+        // true if a dependency could not be loaded or its initialization failed: the other dependencies are loaded, and
+        // their initialization runs, before the scripts fail, as in the interpreter
+        bool dep_failed = false;
         for (auto& d : batch->deferred) {
             if (d.native_only) {
                 continue;
@@ -17667,22 +17911,41 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                     if (dep_rc < 0 || xsink.isException()) {
                         printd(2, "qore_aot_script_end_batch(%s): dependency '%s' load "
                             "error (rc=%d)\n", d.label.c_str(), dep.c_str(), dep_rc);
-                        xsink.clear();
+                        if (aotRequiredDepFailure(dep.c_str()) == AOTDepLoadFailure::INIT_FAILED) {
+                            // the initialization of the module failed: its exception is reported and the
+                            // script fails, as in the interpreter (qore#6217)
+                            if (!xsink.isException()) {
+                                xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which "
+                                    "the AOT-compiled script (%s) requires, failed", dep.c_str(),
+                                    d.label.c_str());
+                            }
+                            xsink.handleExceptions();
+                            dep_failed = true;
+                            ++dep_load_i;
+                            continue;
+                        }
                         if (aotRequiredDepUnavailable(dep.c_str())) {
+                            // the dependency's own load exception is reported with the error (qore#6217)
                             xsink.raiseException("AOT-ERROR",
                                 "the AOT-compiled script (%s) requires module '%s', which could not be "
                                 "loaded; the script was AOT-compiled against '%s' (its compiled code "
                                 "references that module's symbols) and cannot be loaded without it",
                                 d.label.c_str(), dep.c_str(), dep.c_str());
                             xsink.handleExceptions();
-                            return 13;
+                            dep_failed = true;
+                            ++dep_load_i;
+                            continue;
                         }
+                        xsink.clear();
                         // else: circular/in-progress dependency (still registered) - tolerate.
                     }
                     ++dep_load_i;
                 }
             }
             ++dep_cancel_i;
+        }
+        if (dep_failed) {
+            return 13;
         }
     }
 
@@ -17842,15 +18105,25 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                 tch_xsink.handleExceptions();
             } else {
                 uint64_t t1 = time_on ? now_us() : 0;
+                // the initializers are the script's own code: they run with its parse options, not with those of
+                // the host code that registers it (qore#6189)
+                LoadTimeParseOptionsHelper init_poh(tpgm->getParseOptions());
+                // the init closure of a module of the script that raises an exception fails the batch, as the
+                // interpreter fails the program (qore#6217)
+                ExceptionSink init_xsink;
                 executeInitFunctions(tpgm, batch_init_contexts,
                     batch_init_descriptors, "<script-batch>",
                     /*shadow_pgm=*/nullptr,
                     /*mod_path=*/nullptr,
                     /*write_shadow=*/true,
-                    /*failure_sink=*/nullptr,
+                    /*failure_sink=*/&init_xsink,
                     /*script_load=*/true);
                 if (time_on) {
                     us_init += now_us() - t1;
+                }
+                if (init_xsink.isException()) {
+                    init_xsink.handleExceptions();
+                    return 7;
                 }
             }
         }

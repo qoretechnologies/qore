@@ -55,7 +55,7 @@ class ExecModeOutputTest inherits QUnit::Test {
         self.script = script;
         self.expected = expected;
         prefix = name.lwr();
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
@@ -90,7 +90,7 @@ class ExecModeOutputTest inherits QUnit::Test {
 
     #! returns the output of the AST interpreter for a script, for a test whose expected output is too large to give
     static string ast_output(string name, string script) {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         TmpDir tmp("qore-" + name.lwr() + "-ast-");
         string path = tmp.path + DirSep + name.lwr() + ".qr";

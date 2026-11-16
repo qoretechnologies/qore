@@ -26,6 +26,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires QoreCodeFormat
 %requires QoreRepl
 %requires HttpServerUtil
@@ -2312,7 +2313,7 @@ printf('OK');
         # module path handed to the subprocess is this build's, and an installed binary older than
         # the build tree cannot load its AOT qmods (ex: "STATIC-VAR-ERROR: cannot resolve class ...
         # for static variable" when the metadata format has moved on)
-        string qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_exe = TestInterpreter::qore_interpreter();
         string cmd;
         # Shell-escape paths by replacing ' with '\'' and wrapping in single quotes
         string escaped_script = "'" + replace(temp_script, "'", "'\\''") + "'";

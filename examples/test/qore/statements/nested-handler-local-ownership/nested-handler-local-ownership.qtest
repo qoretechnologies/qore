@@ -8,6 +8,7 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 %exec-class NestedHandlerLocalOwnershipTest
@@ -36,7 +37,7 @@ read-after: [\"a\", \"~a\", \"assigned\", \"outer:b\", \"~b\", \"caught:E\"]
         string worker;
     }
     constructor() : QUnit::Test("NestedHandlerLocalOwnershipTest", "1.0") {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? libdir + "/qcc";
         prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)

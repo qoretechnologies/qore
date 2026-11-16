@@ -4,6 +4,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %exec-class DeclarationOwnerTest
 
 class DeclarationOwnerTest inherits QUnit::Test {
@@ -13,7 +14,7 @@ class DeclarationOwnerTest inherits QUnit::Test {
     }
 
     private nativeOwners() {
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         string native = ENV.QORE_DECLARATION_OWNER_TEST ?? dirname(qore) + "/qore-declaration-owner-test";
         if (!is_file(native)) {
             testSkip("the native declaration owner test executable is not available");

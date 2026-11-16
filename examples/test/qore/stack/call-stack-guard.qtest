@@ -27,6 +27,7 @@
 %no-child-restrictions
 
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires FsUtil
 %requires ../../ExecModeHarness.qm

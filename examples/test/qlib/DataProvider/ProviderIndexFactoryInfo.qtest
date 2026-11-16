@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires DataProvider
 %requires ProviderIndex
@@ -40,7 +41,7 @@ public class ProviderIndexFactoryInfoTest inherits QUnit::Test {
     }
 
     constructor() : Test("ProviderIndex factory info test", "1.0") {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         if (qore_bin.find(DirSep) >= 0) {
             qore_bin = normalize_dir(qore_bin);
         }

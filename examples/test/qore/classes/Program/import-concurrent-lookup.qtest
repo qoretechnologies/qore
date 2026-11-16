@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class ImportConcurrentLookupTest
@@ -35,7 +36,7 @@ class ImportConcurrentLookupTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("ImportConcurrentLookupTest", "1.0") {
-        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         addTestCase("importing into a Program while threads look names up in it", \importDuringLookup());
         set_return_value(main());
     }

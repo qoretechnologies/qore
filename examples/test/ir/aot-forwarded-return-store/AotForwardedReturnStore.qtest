@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the native code generation and linking of qcc executables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AotForwardedReturnStoreTest
+
+#! issue #6162: a call of a function that returns its parameter through a typed local skips the local's conversion
+/** qcc replaces a call of a function that only returns a parameter with the argument; the summary followed the
+    parameter through a store into a local of another type, so the converted value (a float of an int, a string of an
+    int, a plain list) or the error of the store was lost.  The script returns parameters through locals of other
+    types, of a type parameter instantiated by the call, and of the parameter's own type (a store into a local of
+    the parameter's own type is still folded; see ir/AOTGenericReturnParam.qtest), and checks the results in every
+    execution mode and in qcc-compiled code.
+*/
+class AotForwardedReturnStoreTest inherits QUnit::Test {
+    public {
+        const Iteration = "float: 1.0 float\n"
+            "softstring: \"1\" string\n"
+            "number: 1 number\n"
+            "int: RUNTIME-TYPE-ERROR\n"
+            "list: [1, 2] list\n"
+            "hash: {a: 1} hash\n"
+            "same: 1 integer\n"
+            "same or nothing: null nothing\n"
+            "unreturned int: RUNTIME-TYPE-ERROR\n"
+            "type parameter any: [1, 2] list\n"
+            "type parameter list: [1, 2] list\n"
+            "type parameter float: 1.0 float\n"
+            "type parameter float parameter: 1.0 float\n"
+            "folded: [1, 2] list<int>\n";
+        const Expected = Iteration + Iteration + Iteration;
+
+        #! the functions whose call returns a parameter through a converting store, which qcc folded before
+        const ConvertingCases = ("case_float", "case_softstring", "case_number", "case_int", "case_list",
+            "case_hash", "case_unreturned", "case_type_parameter_any", "case_type_parameter_list",
+            "case_type_parameter_float");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("AOT forwarded return store", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/AotForwardedReturnStore.qr";
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("background compiles", \backgroundTest());
+        addTestCase("AOT executable -O0", \aotTest(), "-O0");
+        addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        addTestCase("AOT folds only calls whose store keeps the value", \aotFoldTest());
+        set_return_value(main());
+    }
+
+    #! runs the script in every execution mode, compiled at the first call
+    private modesTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, ExecModeHarness::run(sprintf("%s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s "
+                "--exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+    }
+
+    #! runs the script with background compiles
+    private backgroundTest() {
+        foreach string mode in (("jit", "tiered")) {
+            assertEq(Expected, backquote(sprintf("env -u QORE_JIT_SYNC_COMPILE %s QORE_IR_THRESHOLD=1 "
+                "QORE_JIT_THRESHOLD=1 %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, script)),
+                mode + " with background compiles");
+        }
+    }
+
+    #! checks with the IR optimization statistics of qcc that the calls with a converting store are not replaced
+    /** qcc prints the statistics of a function only when one of its counters is not zero: a function that it does
+        not print folded no call
+    */
+    private aotFoldTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("aot-forwarded-return-store-fold-");
+        string exe = dir.path + "/aot-forwarded-return-store";
+        string out = ExecModeHarness::run_any(sprintf("%s QORE_IR_OPT_STATS=1 %s -O3 -o %s %s", env, qcc_bin, exe,
+            script));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        # the call of keep_list() with a list<int> stored in a list<int> local is replaced with its argument
+        assertEq(1, foldedCalls(out, "folded"), "folded()");
+        # none of the calls whose store converts or checks the value is
+        foreach string function in (ConvertingCases) {
+            assertEq(0, foldedCalls(out, function), function + "()");
+        }
+    }
+
+    #! returns the number of calls of \a function that qcc replaced with an argument
+    private static int foldedCalls(string out, string function) {
+        # the statistics name the function by its native symbol: the name, underscores and a hash
+        *string calls = out.regexExtract(sprintf("IR-OPT-AOT-EFFECTS: %s_+h[0-9a-f]+:[^\n]*boxed-return-calls=([0-9]+)",
+            function))[0];
+        return calls ? calls.toInt() : 0;
+    }
+
+    #! compiles the script with qcc: the functions are called through their native fast entries
+    private aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("aot-forwarded-return-store-aot-");
+        string exe = dir.path + "/aot-forwarded-return-store";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        assertEq(Expected, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+}

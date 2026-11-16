@@ -42,7 +42,7 @@ class AOTSccIncrementalDriverBase inherits QUnit::Test {
 
     constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
         self.part = part;
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         tools_dir = normalize_dir(get_script_dir() + "/../../../tools");
         source_order_tool = tools_dir + DirSep + "qore-qo-source-order";
         incremental_tool = tools_dir + DirSep + "qore-qo-incremental";

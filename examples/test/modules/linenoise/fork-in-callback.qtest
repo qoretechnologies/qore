@@ -19,6 +19,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires Util
 %requires FsUtil
 
@@ -37,7 +38,7 @@ class LinenoiseForkTest inherits QUnit::Test {
         if (system("command -v script > /dev/null 2>&1")) {
             testSkip("script(1) is not available to run the scenario in a terminal");
         }
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string scenario = get_script_dir() + DirSep + "ForkInCallbackScenario.qr";
         string dir = make_tmp_dir("linenoise-fork");
         on_exit remove_tree(dir);

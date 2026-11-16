@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires FsUtil
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class SkipOutputTest
 
@@ -77,7 +78,7 @@ class SkippingTest inherits QUnit::Test {
                 cmd += sprintf("%s='%s' ", var, ENV{var});
             }
         }
-        cmd += sprintf("'%s' '%s' %s 2>&1", ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore", path, args ?? "");
+        cmd += sprintf("'%s' '%s' %s 2>&1", TestInterpreter::qore_interpreter(), path, args ?? "");
         int rc;
         string out = backquote(cmd, \rc);
         return {"rc": rc, "out": out};

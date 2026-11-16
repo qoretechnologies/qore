@@ -11,6 +11,7 @@
 
 %requires linenoise
 %requires QUnit
+%requires ../../../examples/test/TestInterpreter.qm
 %requires FsUtil
 
 %exec-class LinenoiseProgramCleanupTest
@@ -151,7 +152,7 @@ bind();
         f.write(ScriptCode);
         f.close();
 
-        string qore = ENV.QORE_BIN ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         int rc;
         string output = backquote(LinenoiseProgramCleanupTest::quote(qore) + " "
             + LinenoiseProgramCleanupTest::quote(script) + " < /dev/null 2>&1", \rc);

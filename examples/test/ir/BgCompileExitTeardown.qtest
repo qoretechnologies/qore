@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 # the process module runs the children and bounds the time they can run
@@ -65,7 +66,7 @@ printf(\"sum=%d held=%y type=%s yaml=%s json=%s\\n\", sum, held, (new Reflection
     }
 
     constructor() : QUnit::Test("BgCompileExitTeardownTest", "1.0") {
-        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         addTestCase("normal exit releases module namespaces in qore_cleanup()", \normalExit());
         addTestCase("exit with a detached compile releases module namespaces", \detachedExit());
         addTestCase("valgrind: no module state is lost at exit with a detached compile", \valgrindDetachedExit());

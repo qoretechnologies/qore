@@ -19,6 +19,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires ../ExecModeHarness.qm
 
 %exec-class ExecClassAstProgramContextTest
@@ -30,7 +31,7 @@ class ExecClassAstProgramContextTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("ExecClassAstProgramContextTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         scenario = get_script_dir() + DirSep + "ExecClassAstProgramContextScenario.qr";
         addTestCase("set_return_value resolves the exec-class Program in every mode",
             \testAllExecModes());

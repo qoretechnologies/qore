@@ -10,6 +10,7 @@
 %requires Util
 %requires FsUtil
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires json
 
 %prepend-module-path "${SCRIPT_DIR}"
@@ -90,7 +91,7 @@ class TestRunIsolationTest inherits QUnit::Test {
         sf.close();
         # when the holder has ended, however it ended, the shell that runs it says so, so that a holder that fails
         # before it holds the lock is reported instead of waited for
-        system(sprintf("sh -c '%s %s > %s/out 2>&1; echo ended > %s' &", ENV.QORE_EXECUTABLE ?? "qore", script, dir,
+        system(sprintf("sh -c '%s %s > %s/out 2>&1; echo ended > %s' &", TestInterpreter::qore_interpreter(), script, dir,
             ready));
         File r();
         r.open2(ready);
@@ -191,7 +192,7 @@ class TestRunIsolationTest inherits QUnit::Test {
         string pw = "Secret-pw-9";
         string script = normalize_dir(get_script_dir() + "/../../docker_test/drop-test-run-leftovers.q");
         string out = backquote(sprintf("env -u QORE_DB_CONNSTR_ORACLE_SYS -u QORE_DB_CONNSTR_FREETDS "
-            "QORE_DB_CONNSTR_MYSQL='mysql:user/%s@db%%host:12x' '%s' '%s' 2>&1", pw, ENV.QORE_EXECUTABLE ?? "qore",
+            "QORE_DB_CONNSTR_MYSQL='mysql:user/%s@db%%host:12x' '%s' '%s' 2>&1", pw, TestInterpreter::qore_interpreter(),
             script));
         assertRegex("MySQL: skipped: DATASOURCE-PARSE-ERROR", out);
         assertEq(-1, out.find(pw), out);
@@ -260,7 +261,7 @@ class TestRunIsolationTest inherits QUnit::Test {
             string out = backquote(sprintf("env -u PGOPTIONS QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s "
                 "QORE_DB_CONNSTR_ORACLE_SYS='oracle:system/p@db%%localhost:1' %s %s 2>&1",
                 TestRunIsolationTest::shellQuote(module_path),
-                TestRunIsolationTest::shellQuote(ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore"),
+                TestRunIsolationTest::shellQuote(TestInterpreter::qore_interpreter()),
                 TestRunIsolationTest::shellQuote(script)));
             *hash<auto> h;
             try {
@@ -317,7 +318,7 @@ class TestRunIsolationTest inherits QUnit::Test {
             string out = trim(backquote(sprintf("QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s "
                 "QORE_DB_CONNSTR_ORACLE_SYS='oracle:system/%s@db%%host:12x' %s %s 2>&1",
                 TestRunIsolationTest::shellQuote(module_path), pw,
-                TestRunIsolationTest::shellQuote(ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore"),
+                TestRunIsolationTest::shellQuote(TestInterpreter::qore_interpreter()),
                 TestRunIsolationTest::shellQuote(script))));
             assertRegex("^DATASOURCE-PARSE-ERROR: ", out, module_path);
             assertEq(-1, out.find(pw), out);

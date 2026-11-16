@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -101,7 +102,7 @@ class IRWeakReferenceLocalStoreTest inherits QUnit::Test {
 
     #! Returns the qore binary to test, or NOTHING when it cannot be determined
     private *string getQoreBinary() {
-        return ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0];
+        return TestInterpreter::qore_interpreter();
     }
 
     #! The weak store must produce the same correct result in all execution modes

@@ -30,6 +30,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 %requires cppapiuser
@@ -198,7 +199,7 @@ string sub own_cmd(string mod, string cmd) {
     }
 
     private {
-        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string qore_bin = executablePath(TestInterpreter::qore_interpreter());
         string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
         TmpDir dir("qore-aot-module-cmd-replay-");

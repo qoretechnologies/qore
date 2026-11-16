@@ -37,6 +37,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires WebSocketClient
 
 %try-module process >= 2.2
@@ -132,7 +133,7 @@ class ServerProcess {
 
     constructor(*string mode) {
         string script = get_script_dir() + "/ws-program-end-server.q";
-        proc = new Process(executablePath(ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore"),
+        proc = new Process(executablePath(TestInterpreter::qore_interpreter()),
             (script,) + (mode ? (mode,) : ()), {"env": Process::getEnvironment()});
         readUntil("\n");
         port = (out =~ x/port ([0-9]+)/)[0].toInt();

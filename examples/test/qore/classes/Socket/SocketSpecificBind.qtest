@@ -41,6 +41,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 
 %exec-class SocketSpecificBindTest
 
@@ -188,7 +189,7 @@ class SocketSpecificBindTest inherits QUnit::Test {
     }
 
     otherProgramTest() {
-        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore = TestInterpreter::qore_interpreter();
         string code = "Socket s(); try { s.bindINET(\"127.0.0.1\", ARGV[0].toInt(), True, AF_INET); "
             "print(\"bound\"); } catch (hash<ExceptionInfo> ex) { print(ex.err); }";
         Socket h = SocketSpecificBindTest::wildcard("ipv4", True, True);

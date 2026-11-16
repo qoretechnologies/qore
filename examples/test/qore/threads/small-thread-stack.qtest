@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class SmallThreadStackTest
@@ -38,7 +39,7 @@ public class SmallThreadStackTest inherits QUnit::Test {
         if (ENV.LIBQORE_BINARY && is_file(ENV.LIBQORE_BINARY)) {
             push candidates, dirname(realpath(ENV.LIBQORE_BINARY));
         }
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         if (qore !~ /\//) {
             *string found;
             foreach string dir in (ENV.PATH.split(":")) {

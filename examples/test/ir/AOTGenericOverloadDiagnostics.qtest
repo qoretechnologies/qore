@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class AOTGenericOverloadDiagnosticsTest
@@ -17,7 +18,7 @@ class AOTGenericOverloadDiagnosticsTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("AOTGenericOverloadDiagnosticsTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("AOT qmod reports substituted generic overload signatures",

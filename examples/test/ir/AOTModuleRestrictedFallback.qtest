@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class AOTModuleRestrictedFallbackTest
@@ -198,7 +199,7 @@ try {
     }
 
     constructor() : QUnit::Test("AOTModuleRestrictedFallbackTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         both_dir = tmp.path + "/both";
         split_aot_dir = tmp.path + "/split-aot";

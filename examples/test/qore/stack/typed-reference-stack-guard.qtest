@@ -28,6 +28,7 @@
 %no-child-restrictions
 
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires FsUtil
 %requires ../../ExecModeHarness.qm
@@ -223,7 +224,7 @@ printf(\"DONE\\n\");
     }
 
     constructor() : QUnit::Test("TypedReferenceStackGuardTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? libqore_dir + "/qcc";
         if (!is_file(qcc_bin)) {

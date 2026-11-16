@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires FsUtil
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class BackgroundImplicitArgsTest
 
@@ -59,7 +60,7 @@ class BackgroundImplicitArgsTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("BackgroundImplicitArgsTest", "1.0") {
-        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         addTestCase("implicit arguments of the code that starts the thread", \testFreeImplicitArgs());
         addTestCase("implicit arguments of an operator in the background expression", \testBoundImplicitArgs());
         addTestCase("both in one background expression", \testMixedImplicitArgs());

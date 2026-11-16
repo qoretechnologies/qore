@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires DgcRemoveScanChecks
 %requires ../../../ExecModeHarness.qm
@@ -111,7 +112,7 @@ class DgcRemoveScanTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("DgcRemoveScanTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("scan counts in this program", \testScanCountsInProgram());

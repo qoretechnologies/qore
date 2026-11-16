@@ -153,7 +153,7 @@ public:
         return "unknown";
     }
 
-    //! Returns the wall-clock time in microseconds when the poll op was
+    //! Returns the time in microseconds on the monotonic clock (q_get_monotonic_us()) when the poll op was
     //! submitted to the controller.  Used to compute elapsed-since-submit
     //! for diagnostic logging.
     DLLLOCAL int64_t getSubmitTimeUs() const {
@@ -221,7 +221,7 @@ private:
     //! Error info hash (ref'd) — set on failure paths.
     QoreHashNode* error_info = nullptr;
 
-    //! Microsecond wall-clock time at which this poll op was constructed
+    //! Microsecond monotonic-clock time (q_get_monotonic_us(), #6150) at which this poll op was constructed
     //! (immediately before submission to the AsyncIoController).  Used
     //! by diagnostic logging to compute time-since-submit on each state
     //! transition, so the qorus-core log can pinpoint exactly which step
@@ -351,9 +351,8 @@ public:
         return neg_priv ? neg_priv->getStateName() : "no-priv";
     }
 
-    //! Returns the wall-clock submit time of the inner poll op in
-    //! microseconds (or 0 if no priv).  Paired with the current time at
-    //! the point of a diagnostic log to compute the elapsed wait.
+    //! Returns the submit time of the inner poll op in microseconds on the monotonic clock (q_get_monotonic_us()), or
+    //! 0 if no priv.  Paired with the monotonic clock at the point of a diagnostic log to compute the elapsed wait.
     DLLLOCAL int64_t getNegSubmitTimeUs() const {
         return neg_priv ? neg_priv->getSubmitTimeUs() : 0;
     }

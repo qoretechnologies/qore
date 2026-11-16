@@ -12,6 +12,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 
 %requires QUnit
+%requires ../../../examples/test/TestInterpreter.qm
 %requires FsUtil
 
 %requires dataframe
@@ -65,7 +66,7 @@ try {
     }
 
     constructor() : QUnit::Test("DataFramePluginExceptionHandlerTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("plugin operation exceptions are caught in each mode", \testExceptionHandler());

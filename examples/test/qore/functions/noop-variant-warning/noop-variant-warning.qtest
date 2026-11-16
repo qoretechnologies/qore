@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 
 %exec-class NoopVariantWarningTest
 
@@ -26,7 +27,7 @@ class NoopVariantWarningTest inherits QUnit::Test {
     }
 
     testWarning() {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         string cmd = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -W %s", libqore_dir, libqore_dir, qore_bin,
             get_script_dir() + DirSep + "noop-variant-warning-worker.q");

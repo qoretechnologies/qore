@@ -8,6 +8,7 @@
 %requires DebugCmdLine
 %requires Util
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires json
 %requires FsUtil
 
@@ -587,7 +588,7 @@ public class DebugCmdLineTest inherits QUnit::Test {
                 cmd += sprintf("%s='%s' ", var, ENV{var});
             }
         }
-        cmd += sprintf("'%s' '%s' > /dev/null 2>&1; echo $?", QORE_ARGV[0], script.path);
+        cmd += sprintf("'%s' '%s' > /dev/null 2>&1; echo $?", TestInterpreter::qore_interpreter(), script.path);
         return int(trim(backquote(cmd)));
     }
 

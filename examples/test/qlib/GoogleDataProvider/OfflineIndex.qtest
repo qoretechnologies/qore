@@ -6,6 +6,7 @@
 %requires Util
 %requires DataProvider
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires ProviderIndex
 %requires ./OfflineIndexFixture.qm
@@ -119,7 +120,7 @@ public class OfflineGoogleIndexTest inherits QUnit::Test {
             + "/ProviderIndexEnvironmentMapFixture.qm");
         hash<ProviderIndexCreateOptions> opts = options(1, ("GoogleCalendar", "Gmail"));
         # an interpreter run by name is found in the PATH, so only a path is normalized
-        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore = TestInterpreter::qore_interpreter();
         if (qore.find(DirSep) >= 0) {
             qore = normalize_dir(qore);
         }

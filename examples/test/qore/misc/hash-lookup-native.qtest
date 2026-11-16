@@ -4,6 +4,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %exec-class HashLookupNativeTest
 
 class HashLookupNativeTest inherits QUnit::Test {
@@ -13,7 +14,7 @@ class HashLookupNativeTest inherits QUnit::Test {
     }
 
     private nativeLookup() {
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         string native = ENV.QORE_HASH_LOOKUP_TEST ?? dirname(qore) + "/qore-hash-lookup-test";
         if (!is_file(native)) {
             testSkip("the native hash lookup test executable is not available");

@@ -9,6 +9,7 @@
 %requires cppapiuser
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires Util
 
@@ -102,7 +103,7 @@ printf(\"done\\n\");
 
     constructor() : QUnit::Test("binary module writes to a user module's Program while it is imported", "1.0",
             \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         # absolute: the child runs in another directory
         module_path = normalize_dir(get_script_dir() + "NamespaceWriteTarget.qm");

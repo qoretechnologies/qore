@@ -20,6 +20,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires Util
 %requires FsUtil
 %requires ../../ExecModeHarness.qm
@@ -85,7 +86,7 @@ class NativeProgramSandboxTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("NativeProgramSandboxTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         # libqore is next to qore in a build directory, and in ../lib for an installed qore
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         if (!ENV.QORE_LIBDIR && !glob(libqore_dir + "/libqore*") && is_dir(libqore_dir + "/../lib")) {

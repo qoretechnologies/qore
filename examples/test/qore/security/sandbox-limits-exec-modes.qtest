@@ -15,6 +15,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../ExecModeHarness.qm
 
@@ -144,7 +145,7 @@ foreach code f in (\\SandboxSpin::spin(), \\SandboxSpin::deep()) {
     }
 
     constructor() : QUnit::Test("SandboxLimitsExecModesTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         addTestCase("the wall time and stack limits stop code in every execution mode", \testExecModes());
         addTestCase("the wall time and stack limits stop AOT-compiled code", \testAot());
