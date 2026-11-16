@@ -9167,6 +9167,10 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
     if (exp) {
         printd(5, "QoreMemberInfo::parseInit() this: %p '%s' s'%s' %d\n", this, name, exp.getFullTypeName(),
             exp.getType());
+        // the initializer is code of the class, whatever code makes the class parse it: it sees self and the
+        // top-level local variables (qore#6268)
+        DeclarationParseScopeHelper declaration_scope;
+        SelfLocalVarParseHelper slvph(&selfid);
         QoreParseContext parse_context(&selfid);
         if (parse_init_value(exp, parse_context) && !err) {
             err = -1;
@@ -9221,6 +9225,8 @@ int QoreVarInfo::parseInit(const char* name) {
     val.set(typeInfo);
 
     if (exp) {
+        // the initializer is code of the class, whatever code makes the class parse it (qore#6268)
+        DeclarationParseScopeHelper declaration_scope;
         QoreParseContext parse_context;
         if (parse_init_value(exp, parse_context) && !err) {
             err = -1;

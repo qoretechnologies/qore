@@ -226,6 +226,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   --exec-mode, in qcc executables and in a qcc-compiled module
         # - hashdecl-default-closure-typeparam (#6269): its probes run in child processes that set their own
         #   --exec-mode, in qcc executables and in a qcc-compiled module
+        # - declaration-initializer-scope (#6268): its scripts run in child processes that set their own --exec-mode
+        #   and in qcc executables
         # - AOTInitParseOptions (#6189): its checks run in child processes that set their own --exec-mode and in qcc
         #   executables
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
@@ -270,6 +272,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/threads/background-runtime-parse-options.qtest",
                                  "examples/test/qore/threads/deferred-callback-runtime-parse-options.qtest",
                                  "examples/test/qore/misc/hashdecl-default-closure-typeparam.qtest",
+                                 "examples/test/qore/misc/declaration-initializer-scope.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",

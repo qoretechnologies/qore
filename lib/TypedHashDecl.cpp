@@ -139,6 +139,8 @@ int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
         return err;
     }
 
+    // the initializer is code of the hashdecl, whatever code makes the hashdecl parse it (qore#6268)
+    DeclarationParseScopeHelper declaration_scope;
     QoreParseContext parse_context;
     if (parse_init_value(exp, parse_context) && !err) {
         err = -1;
