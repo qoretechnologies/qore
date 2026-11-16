@@ -2553,6 +2553,9 @@
     - fixed stream sockets bound on all interfaces being unreachable over IPv6 (see @ref qore_3_0_0_compatibility),
       and @ref Qore::Socket::bindINET() "Socket::bindINET()" trying only the first resolved address
     - fixed Base64 conversion of an empty binary leaving an unterminated string buffer
+    - a column operator in the set clause of a SqlUtil update raised an unclear \c INVALID-MEMBER; it raises
+      \c UPDATE-ERROR, which names the @ref sql_uop_funcs "update operators" to use instead (see
+      @ref sqlutilv3_11_0) (<a href="https://github.com/qoretechnologies/qore/issues/2962">issue 2962</a>)
     - fixed @ref Qore::Serializable "Serializable" deserialization losing references to containers deserialized
       after the value referring to them, and serialization referring to the wrong container when a released
       container's memory was reused

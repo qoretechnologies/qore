@@ -7820,7 +7820,17 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
                 exp += getColumnNameIntern(qinfo, value.field);
             } else if (value instanceof hash<DataProviderExpression>) {
                 exp += getExpressionIntern(\qinfo, ER_Field, value, getColumnDataType(key));
-            } else if (value.uop) {
+            } else if (value.typeCode() == NT_HASH && value.hasKey("cop")) {
+                # issue #2962: a column operator gave INVALID-MEMBER for the missing "uop" key
+                throw "UPDATE-ERROR", sprintf("%s: column %y: column operators (%y given) are not supported in the "
+                    "set clause of an update; use an update operator (see the uop_*() functions, ex: "
+                    "uop_plus(5) for <col> = <col> + 5), a field reference or an expression instead", getDesc(),
+                    key, value.cop);
+            } else if (value instanceof hash<OperatorInfo>) {
+                throw "UPDATE-ERROR", sprintf("%s: column %y: where operators (%y given) are not supported in the set "
+                    "clause of an update; use an update operator (see the uop_*() functions)", getDesc(), key,
+                    value.op);
+            } else if (value.typeCode() == NT_HASH && value.hasKey("uop") && value.uop) {
                 exp += getUpdateExpression(getColumnSqlName(key), cast<hash<UpdateOperatorInfo>>(value));
             } else {
                 exp += "%v";
