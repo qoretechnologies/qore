@@ -4507,36 +4507,18 @@ public:
                             close = false;
                     }
                 } else if (!strcmp(buf, "content-type")) {
-                    // the encoding of the body follows the rules shared by all HTTP clients and servers, as far as
-                    // they can be applied before the body is read; see qore_get_http_header_charset()
-                    const QoreEncoding* assumed = QEM.findCreate(assume_http_encoding.c_str());
-                    const QoreEncoding* hdr_enc = qore_get_http_header_charset(t, assumed);
-                    qore_http_media_type_param charset;
-                    if (qore_find_http_media_type_param(t, "charset", charset) && !charset.value.empty()) {
-                        enc = hdr_enc ? hdr_enc : QEM.findCreate(charset.value.c_str());
-                        senc = enc.load()->getCode();
-                        //printd(5, "got encoding '%s' from request\n", senc);
-
-                        if (info) {
-                            info->setKeyValue("charset", new QoreStringNode(charset.value.c_str(),
-                                charset.value.size(), QCS_DEFAULT), nullptr);
-
-                            // the content type without the charset parameter
-                            SimpleRefHolder<QoreStringNode> ct(new QoreStringNode(t, charset.begin, QCS_DEFAULT));
-                            ct->trim_trailing();
-                            ct->concat(t + charset.end);
-                            ct->trim();
-                            if (!ct->empty()) {
-                                info->setKeyValue("body-content-type", ct.release(), nullptr);
-                            }
-                        }
-                    } else {
-                        // a type that is not text is read in the assumed encoding, as before
-                        enc = hdr_enc ? hdr_enc : assumed;
-                        senc = enc.load()->getCode();
-                        if (info) {
-                            info->setKeyValue("charset", new QoreStringNode(senc), nullptr);
-                            info->setKeyValue("body-content-type", val->refSelf(), nullptr);
+                    // the character set and the media type, which the HTTP/2 and HTTP/3 servers report in the same
+                    // way (qore_get_http_content_type_info(), qore#6318)
+                    QoreHttpContentTypeInfo cti = qore_get_http_content_type_info(t,
+                        QEM.findCreate(assume_http_encoding.c_str()));
+                    enc = cti.enc;
+                    senc = enc.load()->getCode();
+                    if (info) {
+                        info->setKeyValue("charset", new QoreStringNode(cti.charset.c_str(), cti.charset.size(),
+                            QCS_DEFAULT), nullptr);
+                        if (cti.has_body_content_type) {
+                            info->setKeyValue("body-content-type", new QoreStringNode(cti.body_content_type.c_str(),
+                                cti.body_content_type.size(), QCS_DEFAULT), nullptr);
                         }
                     }
                 } else if (chunked && !strcmp(buf, "transfer-encoding") && !strcasecmp(t, "chunked")) {

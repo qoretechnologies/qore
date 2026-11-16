@@ -2450,6 +2450,8 @@ public class HttpAsyncSocketIoController {
             "keep_alive": True,
             "ssl": True,  # QUIC always uses TLS
         };
+        # the character set and the media type of the request, as for HTTP/1.x (qore#6318)
+        conn_info.header_info += Priv::http_request_content_type_info(hdr);
 
         # Check for persistent queue — if a dedicated thread is waiting for this
         # connection, route the request to it instead of the pool
@@ -5240,6 +5242,8 @@ public class HttpAsyncSocketIoController {
             "keep_alive": True,
             "ssl": dispatch_ssl,
         };
+        # the character set and the media type of the request, as for HTTP/1.x (qore#6318)
+        conn_info.header_info += Priv::http_request_content_type_info(hdr);
 
         # Check for persistent queue — if a dedicated thread is waiting for this
         # connection and the request matches the session filter, route the request
@@ -5553,6 +5557,8 @@ public class HttpAsyncSocketIoController {
             "keep_alive": True,
             "ssl": dispatch_ssl,
         };
+        # the character set and the media type of the request, as for HTTP/1.x (qore#6318)
+        conn_info.header_info += Priv::http_request_content_type_info(hdr);
 
         # Apply the same pre-dispatch admission contract to extended CONNECT requests.
         try {
@@ -5935,6 +5941,33 @@ public class HttpAsyncSocketIoController {
 
 #! @cond nodoc
 namespace Priv {
+#! Returns the character set and the media type of a request's Content-Type for its header information
+/** HTTP/1.x requests get them from Socket::readHTTPHeader() (\c "charset" and \c "body-content-type"); the HTTP/2
+    and HTTP/3 requests, whose headers the controller decodes itself, get the same values from the same rules
+    (get_http_content_type_info()), so that a handler sees the same \c hdr."content-type" and
+    \c cx."header-info" for every HTTP version (qore#6318).  The last value of a repeated header is used, as for
+    HTTP/1.x, which reads the header lines in turn.
+
+    @param hdr the request headers
+
+    @return the \c "charset" and \c "body-content-type" keys of the header information; empty without a Content-Type
+*/
+hash<auto> sub http_request_content_type_info(hash<auto> hdr) {
+    auto ct = hdr."content-type";
+    if (ct.typeCode() == NT_LIST) {
+        ct = ct.last();
+    }
+    if (ct.typeCode() != NT_STRING) {
+        return {};
+    }
+    hash<HttpContentTypeInfo> info = get_http_content_type_info(ct);
+    hash<auto> rv = {"charset": info.charset};
+    if (exists info.body_content_type) {
+        rv."body-content-type" = info.body_content_type;
+    }
+    return rv;
+}
+
 #! Counts one connection for a drain (see design/http-server-drain.md)
 /** The token is carried in the connection's entry (HttpActiveConnectionInfo), which every state change of the
     connection copies, so it is released, and the drain's Counter decremented, when the connection is gone

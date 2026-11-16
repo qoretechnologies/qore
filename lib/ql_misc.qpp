@@ -527,6 +527,18 @@ hashdecl ModuleParseOptionMaskInfo {
     list<string> add;
 }
 
+//! the character set and the media type that an HTTP server reports for the Content-Type of a request
+/** see @ref Qore::get_http_content_type_info() "get_http_content_type_info()"
+
+    @since %Qore 3.0
+*/
+hashdecl HttpContentTypeInfo {
+    //! the character set: the \c charset parameter as given, else the encoding that the body is read in
+    string charset;
+    //! the media type without its \c charset parameter; missing if only a \c charset parameter is left
+    *string body_content_type;
+}
+
 //! a hash describing a parsed URL
 /** @since %Qore 0.9.3
 */
@@ -1703,6 +1715,42 @@ data body = decode_http_body(resp.headers."content-type", resp.body);
 data decode_http_body(*string content_type, binary body, string assumed_encoding = "ISO-8859-1") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return qore_decode_http_body(content_type ? content_type->c_str() : nullptr, body,
         QEM.findCreate(assumed_encoding));
+}
+
+//! Returns the character set and the media type that an HTTP server reports for the Content-Type of a request
+/** An HTTP server reports them in the header information of a request (the \c "charset" and
+    \c "body-content-type" keys of the info hash of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()",
+    and of \c cx."header-info" in an @ref HttpServer::HttpServer "HttpServer" request handler) for every HTTP version:
+
+    - with a \c charset parameter, the character set is its value, and the media type is the field value without
+      the parameter (missing if nothing else is left)
+    - otherwise the character set is the encoding that the body is read in (as determined for
+      @ref Qore::get_http_body_encoding() "get_http_body_encoding()" before the body is known, else
+      \a assumed_encoding), and the media type is the whole field value
+
+    @param content_type the \c Content-Type header value
+    @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
+
+    @return the character set and the media type of the request
+
+    @par Example:
+    @code{.py}
+hash<HttpContentTypeInfo> info = get_http_content_type_info("application/json;charset=utf-8");
+# info.charset: "utf-8", info.body_content_type: "application/json"
+    @endcode
+
+    @since %Qore 3.0
+*/
+hash<HttpContentTypeInfo> get_http_content_type_info(string content_type, string assumed_encoding = "ISO-8859-1") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreHttpContentTypeInfo cti = qore_get_http_content_type_info(content_type->c_str(),
+        QEM.findCreate(assumed_encoding));
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclHttpContentTypeInfo, xsink), xsink);
+    rv->setKeyValue("charset", new QoreStringNode(cti.charset.c_str(), cti.charset.size(), QCS_DEFAULT), xsink);
+    if (cti.has_body_content_type) {
+        rv->setKeyValue("body_content_type", new QoreStringNode(cti.body_content_type.c_str(),
+            cti.body_content_type.size(), QCS_DEFAULT), xsink);
+    }
+    return rv.release();
 }
 
 //! Returns the URL string passed without any password information
