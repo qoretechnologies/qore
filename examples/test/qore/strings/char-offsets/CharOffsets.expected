@@ -1,6 +1,5 @@
 abc UTF-8: 319 checks, 0 mismatches
 abc ISO-8859-1: 319 checks, 0 mismatches
-abc IBM037: 319 checks, 0 mismatches
 abc SHIFT_JIS: 319 checks, 0 mismatches
 abc UTF-16: 319 checks, 0 mismatches
 abc UTF-16LE: 319 checks, 0 mismatches
@@ -13,7 +12,6 @@ abc UCS-2LE: 319 checks, 0 mismatches
 abc UCS-2BE: 319 checks, 0 mismatches
 latin1 UTF-8: 1105 checks, 0 mismatches
 latin1 ISO-8859-1: 1105 checks, 0 mismatches
-latin1 IBM037: 1105 checks, 0 mismatches
 latin1 UTF-16: 1105 checks, 0 mismatches
 latin1 UTF-16LE: 1105 checks, 0 mismatches
 latin1 UTF-16BE: 1105 checks, 0 mismatches
@@ -43,7 +41,6 @@ kanji UCS-2LE: 1105 checks, 0 mismatches
 kanji UCS-2BE: 1105 checks, 0 mismatches
 empty UTF-8: 25 checks, 0 mismatches
 empty ISO-8859-1: 25 checks, 0 mismatches
-empty IBM037: 25 checks, 0 mismatches
 empty SHIFT_JIS: 25 checks, 0 mismatches
 empty UTF-16: 25 checks, 0 mismatches
 empty UTF-16LE: 25 checks, 0 mismatches

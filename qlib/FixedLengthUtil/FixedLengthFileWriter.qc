@@ -114,7 +114,8 @@ w.write(hh);
         - \c "record": a hash giving the input record to be rendered (with keys as defined in the @ref fixedlengthspecrecordhash for the record identified by the \a type argument)
 
         @throw INVALID-RECORD record name (\a type key in the record hash) not recognized
-        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field
+        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field, or a string value of an
+        \c "int", \c "float" or \c "number" field is not a number of its type
         @throw RECORD-TRANSITION-ERROR a record transition error occurred; an invalid record sequence was given in the input data
     */
     write(hash<auto> line) {
@@ -133,7 +134,8 @@ w.write(i);
         - \c "record": a hash giving the input record to be rendered (with keys as defined in the @ref fixedlengthspecrecordhash for the record identified by the \a type argument)
 
         @throw INVALID-RECORD record name (\a type key in the record hash) not recognized
-        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field
+        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field, or a string value of an
+        \c "int", \c "float" or \c "number" field is not a number of its type
         @throw RECORD-TRANSITION-ERROR a record transition error occurred; an invalid record sequence was given in the input data
     */
     write(list<auto> lines) {
@@ -152,7 +154,8 @@ w.write(i);
         - \c "record": a hash giving the input record to be rendered (with keys as defined in the @ref fixedlengthspecrecordhash for the record identified by the \a type argument)
 
         @throw INVALID-RECORD record name (\a type key in the record hash) not recognized
-        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field
+        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field, or a string value of an
+        \c "int", \c "float" or \c "number" field is not a number of its type
         @throw RECORD-TRANSITION-ERROR a record transition error occurred; an invalid record sequence was given in the input data
     */
     write(Qore::AbstractIterator lines) {

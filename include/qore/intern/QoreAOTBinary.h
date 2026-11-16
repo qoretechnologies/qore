@@ -3255,6 +3255,8 @@ class QoreAOTBinaryDeserializer {
     const char* embedded_source = nullptr;       //!< embedded source text
     size_t embedded_source_len = 0;              //!< length of embedded source text
     std::vector<std::string> fallback_func_names; //!< legacy names of functions needing source fallback
+    //! deserialization failed as it ran short of the stack of this thread; see threadStackExceeded()
+    bool thread_stack_exceeded = false;
 
     // Classes that already existed in the program (from module loading)
     // — skip methods/members for these since they're already committed
@@ -3928,6 +3930,9 @@ public:
 
     //! Check if this legacy object names functions that require disabled source fallback.
     bool hasLegacyFallbackFunctions() const { return !fallback_func_names.empty(); }
+
+    //! Returns true if deserialization failed as it ran short of the stack of this thread (QORE_PARSE_STACK_ERR)
+    bool threadStackExceeded() const { return thread_stack_exceeded; }
 
     //! Get the legacy list of function names that need source fallback.
     const std::vector<std::string>& getFallbackFuncNames() const { return fallback_func_names; }

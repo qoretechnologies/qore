@@ -23,7 +23,8 @@
 /** A background compile lowers the Qore IR of the Programs it compiles to LLVM IR, and then optimizes, generates and
     emits the code of the self-contained LLVM module.  The teardown of a Program waits for the lowering only: a compile
     in the LLVM phase, which can take without bound, is detached, and its result is discarded when LLVM returns.
-    Process exit detaches it too, and does not wait for the compile thread.
+    Process exit detaches it too; qore_cleanup() then lets it go and waits for it before it returns (issue #6296), and
+    exit() without qore_cleanup() ends the process without waiting for it.
 
     The debug build stops the compile thread at a point of the compile (the start of the lowering, the start of the
     LLVM phase, or the end of the LLVM phase) until the test lets it continue, holding the compile lock as a compile
@@ -250,7 +251,8 @@ printf(\"sum=%d held=%y waited=%y pending=%d continued=%y discarded=%d\\n\", sum
     }
 
     #! the process exits while a compile is stopped in LLVM and never continued
-    /** The compile thread is left running: process exit neither waits for it nor destroys the JIT under it.  The
+    /** The compile is detached at the exit; qore_cleanup() lets it go and waits for it before it releases the JIT
+        (issue #6296), and exit() ends the process without waiting for it and without destroying the JIT under it.  The
         compile belongs to a child Program deleted before the exit, to the main Program, which is deleted at the exit,
         or to a Program that is not deleted, as exit() ends the process without tearing Programs down.
     */

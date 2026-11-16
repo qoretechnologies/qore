@@ -36,6 +36,7 @@
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/ql_debug.h"
 
 #include <cassert>
 #include <unordered_map>
@@ -523,6 +524,10 @@ void HttpClientConnectionBase::drainInFlight() {
     // close_cv_ under close_mu_; we take the mutex here and reload the
     // state under it so the notify happens-before our observation of
     // zero.
+#ifdef DEBUG
+    // tests learn that the close waits for a call in flight
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::DrainWait);
+#endif
     std::unique_lock<std::mutex> lk(close_mu_);
     close_cv_.wait(lk, [this] {
         return (lifetime_state_.load(std::memory_order_acquire)

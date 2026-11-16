@@ -77,7 +77,8 @@ string file = w.write(input_list);
         @return the rendered string for all input records
 
         @throw INVALID-RECORD record name (\a type key in the record hash) not recognized
-        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field
+        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field, or a string value of an
+        \c "int", \c "float" or \c "number" field is not a number of its type
         @throw RECORD-TRANSITION-ERROR a record transition error occurred; an invalid record sequence was given in the input data
     */
     string write(list<auto> lines) {
@@ -117,7 +118,8 @@ string line = w.write(hh);
         @return a single line for a single input record hash
 
         @throw INVALID-RECORD record name (\a type key in the record hash) not recognized
-        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field
+        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field, or a string value of an
+        \c "int", \c "float" or \c "number" field is not a number of its type
         @throw RECORD-TRANSITION-ERROR a record transition error occurred; an invalid record sequence was given in the input data
     */
     string write(hash<auto> line) {
@@ -138,7 +140,8 @@ string file = w.write(i);
         @return the rendered string for all input records
 
         @throw INVALID-RECORD record name (\a type key in the record hash) not recognized
-        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field
+        @throw FIELD-INPUT-ERROR the input value is too large to render into the output field, or a string value of an
+        \c "int", \c "float" or \c "number" field is not a number of its type
         @throw RECORD-TRANSITION-ERROR a record transition error occurred; an invalid record sequence was given in the input data
     */
     string write(Qore::AbstractIterator lines) {

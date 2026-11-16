@@ -323,8 +323,8 @@ private:
     //! @c poll_op_priv within submission callbacks see a consistent view.
     //! The attempt's UDP socket is bound with the synchronous QoreSocketObject::bindINET(), which waits for the
     //! async I/O controller.  That is only allowed because a connection of this class is only ever created by
-    //! HttpClientConnectionManagerBase::acquireConnection(), acquireConnectionForStreamingSend() and
-    //! acquireConnectionAsync(), which refuse to run on an async I/O execution path
+    //! HttpClientConnectionManagerBase::acquireConnectionRef(), acquireConnectionForStreamingSendRef() and
+    //! acquireConnectionAsyncRef(), which refuse to run on an async I/O execution path
     //! (SocketSyncPoll::assertNotOnIoThread()); HTTPClient poll operations acquire the connection of a redirect in a
     //! native task for that reason.  The candidate families come from resolveCandidateFamilies(), which resolves no
     //! name.  A connection that could be created on an I/O path must instead give its poll operation an unbound

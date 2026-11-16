@@ -59,6 +59,34 @@ bool sub fits(string enc, list<int> cps) {
     }
 }
 
+# true if every platform's iconv can hold the code points in the encoding: UCS-2 has no characters outside the BMP,
+# but some iconv implementations (ex: macOS libiconv) convert them to surrogate pairs; the text is checked wherever
+# it converts, but its summary line is printed only where every platform converts it, so that the output is the same
+# on every platform (a mismatch is printed everywhere)
+bool sub portable(string enc, list<int> cps) {
+    return !NonPortableEncodings{enc} && (!enc.equalPartial("UCS-2") || !(select cps, $1 > 0xffff));
+}
+
+#! the encodings that not every platform's iconv has (ex: musl's has no IBM037); they are checked where they exist,
+#! with their summary lines printed only on a mismatch, as for portable()
+const NonPortableEncodings = {
+    "IBM037": True,
+};
+
+#! the encodings that the platform converts, determined once per encoding with a non-empty string (converting an
+#! empty string does not reach iconv)
+hash<string, bool> sub get_supported_encodings() {
+    hash<string, bool> rv;
+    foreach string enc in (Encodings) {
+        try {
+            rv{enc} = convert_encoding(convert_encoding("a", enc), "UTF-8") == "a";
+        } catch (hash<ExceptionInfo> ex) {
+            rv{enc} = False;
+        }
+    }
+    return rv;
+}
+
 int sub ref_get_unicode(list<int> cps, int offset) {
     int n = cps.size();
     if (offset < 0) {
@@ -138,11 +166,20 @@ string sub result(code c) {
 }
 
 int errors = 0;
+hash<string, bool> supported = get_supported_encodings();
+foreach string enc in (Encodings) {
+    # an encoding that every platform has must be supported
+    if (!supported{enc} && !NonPortableEncodings{enc}) {
+        printf("encoding %s is not supported\n", enc);
+        ++errors;
+    }
+}
 foreach hash<auto> t in (Texts.pairIterator()) {
     list<int> cps = t.value;
     int n = cps.size();
     foreach string enc in (Encodings) {
-        if (!fits(enc, cps)) {
+        # an encoding that the platform does not have is skipped entirely
+        if (!supported{enc} || !fits(enc, cps)) {
             continue;
         }
         string str = convert_encoding(text(cps), enc);
@@ -177,7 +214,12 @@ foreach hash<auto> t in (Texts.pairIterator()) {
                 }
             }
         }
-        printf("%s %s: %d checks, %d mismatches\n", t.key, enc, checks, mismatches.size());
+        if (portable(enc, cps)) {
+            printf("%s %s: %d checks, %d mismatches\n", t.key, enc, checks, mismatches.size());
+        } else if (mismatches) {
+            printf("%s %s (converted on this platform): %d checks, %d mismatches\n", t.key, enc, checks,
+                mismatches.size());
+        }
         map printf("  %s\n", $1), mismatches;
         errors += mismatches.size();
     }

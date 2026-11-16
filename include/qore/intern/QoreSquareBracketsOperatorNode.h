@@ -90,6 +90,13 @@ public:
         return negative_offsets;
     }
 
+    //! sets what parseInit() sets for %modern code, for an operator of compiled code
+    /** For an operator that a reader of compiled code (AOT) creates, whose parseInit() is not called (qore#6294):
+        compiled code is %modern (negative offsets, string index characters), and an offset list with a range is a
+        list of ranges, as parseCheckValueTypes() finds
+    */
+    DLLLOCAL void setCompiledCodeOptions();
+
 protected:
     const QoreTypeInfo* typeInfo = nullptr;
     // is the RHS a list with a range?

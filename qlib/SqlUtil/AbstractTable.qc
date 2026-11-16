@@ -4074,6 +4074,21 @@ table.insert(row);
         return {"sql": sql, "args": vh.values ?? ()};
     }
 
+    #! Returns the placeholder of a value written to the given column by an insert, an update or an upsert
+    /** The default implementation returns \c "%v"; a driver whose database needs a cast for the value of a column
+        bound as the type of its Qore value overrides it (ex: PostgreSQL's \c json and \c jsonb columns, given a
+        string)
+
+        @param column the name of the column
+
+        @return the placeholder for the value of the column in SQL
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getColumnValuePlaceholder(string column) {
+        return "%v";
+    }
+
     private hash<auto> getPlaceholdersAndValues(hash<auto> row) {
         hash<auto> im;
         # placeholder list
@@ -4085,7 +4100,7 @@ table.insert(row);
         while (i.next()) {
             string key = i.getKey();
             auto v = i.getValue();
-            string ph = "%v";
+            string ph = getColumnValuePlaceholder(key);
             if (v.typeCode() == NT_LIST)
                 v = v[0];
             if (v."_iop".typeCode() == NT_STRING) {
@@ -4482,7 +4497,7 @@ int rows = table.insertFromIterator(i);
 
         # make insert statement template
         string sql = sprintf("insert into %s (%s) values (%s)", getSqlName(), (foldl $1 + "," + $2, (map getColumnSqlName($1), keys row)),
-                                (foldl $1 + "," + $2, (map "%v", keys row)));
+                                (foldl $1 + "," + $2, (map getColumnValuePlaceholder($1), keys row)));
         AbstractSQLStatement stmt = ds.getSQLStatement();
         stmt.prepare(sql);
 
@@ -6045,10 +6060,21 @@ string sql = table.getSelectSql(sh, \args);
                 HashIterator i(jh.jcols);
                 while (i.next()) {
                     string key = i.getKey();
-                    string value = i.getValue();
+                    auto value = i.getValue();
                     if (!jt.columns.hasKey(key))
                         throw "SELECT-ERROR", sprintf("%s: cannot join on unknown column %y.%y; known columns: %y",
                             getDesc(), jt.getSqlName(), key, jt.columns.keys());
+                    # issue #738: a column operator applied to columns of the joined table
+                    if (value.typeCode() == NT_HASH) {
+                        jel += sprintf("%s.%s = %s", jtn, jt.getColumnSqlName(key),
+                            getJoinColumnOperatorIntern(\info, t, an, key, value));
+                        continue;
+                    }
+                    if (value.typeCode() != NT_STRING) {
+                        throw "SELECT-ERROR", sprintf("%s: join clause error; the join column for column %y.%y must "
+                            "be a column name of %y or a column operator hash; got type %y instead", getDesc(),
+                            jt.getSqlName(), key, t.getSqlName(), value.type());
+                    }
                     if (!t.describe().hasKey(value))
                         throw "SELECT-ERROR", sprintf("%s: cannot join on unknown column %y.%y; known columns: %y",
                             getDesc(), t.getSqlName(), value, t.columns.keys());
@@ -6438,6 +6464,35 @@ string sql = table.getSelectSql(sh, \args);
         return getPartitionReadSqlNameImpl(qh.partition);
     }
 
+    #! Returns the SQL of a column operator given as the join column of a column in a join
+    /** The columns of the operator that are given without a table alias are columns of the joined table
+
+        @param info the query information
+        @param t the joined table
+        @param an the alias of the joined table in SQL, or its name if it has no alias
+        @param key the column of the other table that the operator's value is compared with
+        @param cop the column operator description hash
+
+        @return the SQL of the operator
+
+        @throw SELECT-ERROR the operator gives a column alias, which a join condition cannot use
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getJoinColumnOperatorIntern(reference<hash<QueryInfo>> info, AbstractTable t, string an,
+            string key, hash<auto> cop) {
+        hash<QueryInfo> cinfo = info;
+        cinfo.table = t;
+        cinfo.column_prefix = an;
+        string sql = t.doColumnOperatorIntern(\cinfo, cop);
+        if (cinfo.pseudo_column_map != info.pseudo_column_map) {
+            throw "SELECT-ERROR", sprintf("%s: cannot use column operator %y with a column alias in the join column "
+                "for column %y", getDesc(), cop.cop, key);
+        }
+        info.args = cinfo.args;
+        return sql;
+    }
+
     private string getColumnExpressionIntern(reference<hash<QueryInfo>> info, auto cvc) {
         switch (cvc.typeCode()) {
             case NT_HASH:
@@ -6521,7 +6576,13 @@ string sql = table.getSelectSql(sh, \args);
             # an alias is quoted when required, in the case given, as it names the key of the result
             switch (arg.typeCode()) {
                 case NT_STRING: arg = getAliasSqlName(arg); break;
-                case NT_HASH: arg.as = getAliasSqlName(arg.as); break;
+                case NT_HASH: {
+                    # issue #2847: the alias is optional (ex: cop_seq() without one in insertFromSelect())
+                    if (exists arg.as) {
+                        arg.as = getAliasSqlName(arg.as);
+                    }
+                    break;
+                }
             }
             return cmd.code(cve, arg, \info.pseudo_column_map);
         } else if (cmd.withcolumn) {
@@ -6532,7 +6593,13 @@ string sql = table.getSelectSql(sh, \args);
         }
     }
 
-    private string getColumnNameIntern(hash<QueryInfo> info, string column_name) {
+    #! returns the SQL for a column designator
+    /** @param info the query information
+        @param column_name the column designator
+        @param prefer_column if @ref True "True", a designator that is both a column of the table and a column alias
+        of the query names the column, as in SQL; used for where clauses (issue #1747)
+    */
+    private string getColumnNameIntern(hash<QueryInfo> info, string column_name, bool prefer_column = False) {
         # remove any disposable unique prefix
         column_name =~ s/^[0-9]+://;
         # return the name if it's a "technical name" (starts with "_"), as an identifier, so that it cannot change
@@ -6563,7 +6630,7 @@ string sql = table.getSelectSql(sh, \args);
                     "table %y); known columns: %y", getDesc(), table_prefix, column_name, table_prefix,
                     info.join_map{table_prefix}.getSqlName(),
                     keys info.join_map{table_prefix}.describe());
-        } else if (info.pseudo_column_map{column_name}) {
+        } else if (info.pseudo_column_map{column_name} && !(prefer_column && columns.hasKey(column_name))) {
             if (info.pseudo_column_map{column_name}.typeCode() == NT_STRING) {
                 # substitute aliases with their actual definition
                 column_name = info.pseudo_column_map{column_name};
@@ -6576,7 +6643,8 @@ string sql = table.getSelectSql(sh, \args);
                     "%y", getDesc(), column_name, keys info.subquery_column_map);
             }
         } else {
-            table_prefix_sql = getSqlName();
+            # issue #738: the columns of a column operator in a join column are given with the joined table's alias
+            table_prefix_sql = info.column_prefix ?? getSqlName();
             if (column_name == "*") {
                 use_prefix = asteriskRequiresPrefix();
             } else if (!columns.hasKey(column_name) && !info.pseudo_column_map{column_name}) {
@@ -6721,7 +6789,7 @@ string sql = table.getSelectSql(sh, \args);
         return
             map doWhereExpressionIntern(\info, cprefix
                 ? sprintf("%s.%s", cprefix, getColumnSqlName(regex_subst($1.key, "^[0-9]+:", "")))
-                : getColumnNameIntern(info, $1.key), $1.value, $1.key, cprefix),
+                : getColumnNameIntern(info, $1.key, True), $1.value, $1.key, cprefix),
             cond.pairIterator();
     }
 
@@ -6805,6 +6873,18 @@ string sql = table.getSelectSql(sh, \args);
                     "of: %y (operator hash: %y)", getDesc(), cn, we.op, keys info.where_operator_map, we);
             }
 
+            # issue #2363: an operator that applies a column operator to the column, such as op_trunc_date(), whose
+            # result is compared with the operator's value or operator hash; the database's own implementation of
+            # the column operator is used
+            if (cmd.column_cop) {
+                if (we.arg.typeCode() != NT_HASH || !we.arg.hasKey("arg")) {
+                    throw "WHERE-ERROR", sprintf("%s: operator hash for key %y expects a hash with \"cop_arg\" and "
+                        "\"arg\" keys as its argument; got %y instead", getDesc(), cn, we.arg);
+                }
+                string ccn = doColumnOperatorIntern(\info, cmd.column_cop, we.arg.cop_arg, cn, column_name);
+                return doWhereExpressionIntern(\info, ccn, we.arg.arg, NOTHING, cprefix);
+            }
+
             if (cmd.recursive) {
                 cn = doWhereExpressionIntern(\info, cn, we.arg, column_name, cprefix);
                 delete we.arg;
@@ -6881,6 +6961,8 @@ int dcnt = table.delCommit(("name": name));
 
         @return the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @see delete(*hash)
@@ -6932,6 +7014,8 @@ int dcnt = table.del(("name": name));
 
         @return the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @see delCommit(*hash)
@@ -6970,6 +7054,8 @@ hash<SqlResultInfo> info = table.delWithInfo({"name": name});
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
 
         @return a hash where the \c result key is the count of rows deleted
+
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
 
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
@@ -7279,6 +7365,8 @@ int dcnt = table.delDpqlCommit('@status == "inactive"');
 
         @return the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
@@ -7326,6 +7414,8 @@ int dcnt = table.delDpql('@status == "inactive"');
 
         @return the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
@@ -7359,6 +7449,8 @@ int dcnt = table.delDpql('@status == "inactive"');
 
         @return a hash where the \c result key is the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
@@ -7376,7 +7468,27 @@ int dcnt = table.delDpql('@status == "inactive"');
         return del(cond, \sql);
     }
 
+    #! checks the options of an update or a delete, which are @ref SqlDataCallbackOptions
+    /** @param op the operation, for the error message: \c "update" or \c "delete"
+        @param opt the options
+
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
+        @since %SqlUtil 3.11.0
+    */
+    private validateDataOptionsIntern(string op, reference<*hash<auto>> opt) {
+        # issue #757: the "returning" option was silently ignored, as were other unknown options
+        if (exists opt.returning) {
+            throw "OPTION-ERROR", sprintf("%s: the \"returning\" option is not supported with %s; it is supported "
+                "only with insert", getDesc(), op);
+        }
+        if (opt) {
+            validateOptionsIntern("OPTION-ERROR", getSqlDataCallbackOptions(), \opt);
+        }
+    }
+
     private int delIntern(*hash<auto> cond, *reference<string> sql, *hash<auto> opt, *reference<softlist<auto>> args) {
+        validateDataOptionsIntern("delete", \opt);
         # make query
         sql = sprintf("delete from %s", getSqlName());
         if (cond) {
@@ -7402,6 +7514,7 @@ int ucnt = table.updateCommit(("id": id), ("name": name));
         @return the count of rows updated
 
         @throw UPDATE-ERROR the set hash is empty
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @see update()
@@ -7456,6 +7569,7 @@ int ucnt = table.update(("id": id), ("name": name));
         @return the count of rows updated
 
         @throw UPDATE-ERROR the set hash is empty
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @see updateCommit()
@@ -7500,6 +7614,7 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         @return an info hash where the \c result key is assigned to the count of rows updated
 
         @throw UPDATE-ERROR the set hash is empty
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @since SqlUtil 1.7
@@ -7659,6 +7774,7 @@ int ucnt = table.updateDpqlCommit({"counter": "@counter + 1"}, '@status == "acti
 
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw UPDATE-ERROR the set hash is empty or invalid
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
 
@@ -7715,6 +7831,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw UPDATE-ERROR the set hash is empty or invalid
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
 
@@ -7755,6 +7872,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw UPDATE-ERROR the set hash is empty or invalid
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
 
@@ -7820,10 +7938,20 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
                 exp += getColumnNameIntern(qinfo, value.field);
             } else if (value instanceof hash<DataProviderExpression>) {
                 exp += getExpressionIntern(\qinfo, ER_Field, value, getColumnDataType(key));
-            } else if (value.uop) {
+            } else if (value.typeCode() == NT_HASH && value.hasKey("cop")) {
+                # issue #2962: a column operator gave INVALID-MEMBER for the missing "uop" key
+                throw "UPDATE-ERROR", sprintf("%s: column %y: column operators (%y given) are not supported in the "
+                    "set clause of an update; use an update operator (see the uop_*() functions, ex: "
+                    "uop_plus(5) for <col> = <col> + 5), a field reference or an expression instead", getDesc(),
+                    key, value.cop);
+            } else if (value instanceof hash<OperatorInfo>) {
+                throw "UPDATE-ERROR", sprintf("%s: column %y: where operators (%y given) are not supported in the set "
+                    "clause of an update; use an update operator (see the uop_*() functions)", getDesc(), key,
+                    value.op);
+            } else if (value.typeCode() == NT_HASH && value.hasKey("uop") && value.uop) {
                 exp += getUpdateExpression(getColumnSqlName(key), cast<hash<UpdateOperatorInfo>>(value));
             } else {
-                exp += "%v";
+                exp += getColumnValuePlaceholder(key);
                 qinfo.args += value;
             }
             sl += exp;
@@ -7853,6 +7981,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
     private int updateIntern(hash<auto> set, *hash<auto> cond, *reference<string> sql, *hash<auto> opt,
             *reference<softlist<auto>> args) {
+        validateDataOptionsIntern("update", \opt);
         hash<SqlCommandInfo> update_hash = getUpdateSql(set, cond);
         sql = update_hash.sql;
         args = update_hash.args;
@@ -8129,7 +8258,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         string sql = sprintf("insert into %s (", getSqlName());
         sql += (foldl $1 + "," + $2, (map getColumnSqlName($1), keys row));
         sql += ") values (";
-        sql += (foldl $1 + "," + $2, (map "%v", keys row));
+        sql += (foldl $1 + "," + $2, (map getColumnValuePlaceholder($1), keys row));
         sql += ")";
         return sql;
     }
@@ -8144,7 +8273,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
         # make sql
         string sql = sprintf("update %s set ", getSqlName());
-        sql += foldl $1 + ", " + $2, (map sprintf("%s = %v", getColumnSqlName($1)), updc);
+        sql += foldl $1 + ", " + $2, (map getColumnSqlName($1) + " = " + getColumnValuePlaceholder($1), updc);
         sql += " where ";
         sql += foldl $1 + " and " + $2, (map sprintf("%s = %v", getColumnSqlName($1)), cols.keyIterator());
 

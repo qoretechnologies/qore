@@ -12,27 +12,23 @@
 
 %exec-class JitTeardownAtExitTest
 
-#! issue #5842: the JIT is released at the end of the process after an abandoned background compile ends
-/** A background compile that is still in LLVM when the process ends is abandoned, and the JIT is not released under
-    it.  When the compile ends before the process does, the process ends with exit(), and the JIT must be released
-    before: that deregisters the EH frames that JITLink registered with libgcc for the compiled code.  Before, they
+#! issue #5842, #6296: qore_cleanup() waits for a background compile still in LLVM and then releases the JIT
+/** A background compile that is still in LLVM when qore_cleanup() stops the compiler is detached; it skips what it can
+    of LLVM, and QoreJIT::shutdown() at the end of qore_cleanup() waits for it before it releases the JIT (issue #6296).
+    Releasing the JIT deregisters the EH frames that JITLink registered with libgcc for the compiled code: before, they
     stayed registered, libgcc freed its table of registered frames at exit, and the memory that it had allocated for
     each frame was lost ("definitely lost" in valgrind, from __register_frame), as was the memory of the JIT
     ("possibly lost").
 
-    The script holds a background compile in LLVM at the end and lets it end before the process does (test hooks of
-    a debug libqore): when it is abandoned, so that QoreJIT::shutdown() releases the JIT, or at the end of the
-    process, so that QoreJIT::exitQuickly() releases it.  The test checks that the JIT is released where expected
-    (QORE_JIT_TIMING output), and, when valgrind is available, that valgrind reports no leak and no error.
+    The script holds a background compile in LLVM at the end (a test hook of a debug libqore), and qore_cleanup() lets
+    it go.  The test checks that the JIT is released in QoreJIT::shutdown() (QORE_JIT_TIMING output), and, when
+    valgrind is available, that valgrind reports no leak and no error.
 */
 class JitTeardownAtExitTest inherits QUnit::Test {
     public {
         const Expected = "held: True result: 810";
-        #! where the compile ends, and what QORE_JIT_TIMING reports then
-        const Released = {
-            "shutdown": "[BG-JIT] released the JIT in shutdown() after the abandoned compile ended",
-            "exit": "[BG-JIT] released the JIT at the end of the process after the abandoned compile ended",
-        };
+        #! what QORE_JIT_TIMING reports when shutdown() releases the JIT after the held compile ended
+        const Released = "[BG-JIT] released the JIT in shutdown() after the abandoned compile ended";
     }
 
     private {
@@ -57,26 +53,20 @@ class JitTeardownAtExitTest inherits QUnit::Test {
     #! skips the test case without library debugging, which the script needs
     private checkDebugging() {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
-            testSkip("dbg_finish_abandoned_bg_compile() requires library debugging");
+            testSkip("dbg_hold_bg_compile() requires library debugging");
         }
     }
 
-    #! the JIT is released where the compile ends, in JIT and tiered execution
+    #! the JIT is released in shutdown() after the held compile ended, in JIT and tiered execution
     private releasedTest() {
         checkDebugging();
         foreach string mode in (("jit", "tiered")) {
-            foreach hash<auto> i in (Released.pairIterator()) {
-                string out = backquote(sprintf("%s QORE_JIT_TIMING=1 %s -b --exec-mode=%s %s %s 2>&1", env, qore_bin,
-                    mode, script, i.key));
-                string what = sprintf("%s, %s", mode, i.key);
-                assertTrue(out.find(Expected) >= 0, sprintf("%s: result: %s", what, out));
-                assertTrue(out.find(i.value) >= 0, sprintf("%s: the JIT is released there: %s", what, out));
-                foreach string other in (keys Released) {
-                    if (other != i.key) {
-                        assertEq(-1, out.find(Released{other}), sprintf("%s: released once: %s", what, out));
-                    }
-                }
-            }
+            int rc;
+            string out = backquote(sprintf("%s QORE_JIT_TIMING=1 %s -b --exec-mode=%s %s 2>&1", env, qore_bin, mode,
+                script), \rc);
+            assertEq(0, rc, sprintf("%s: the process ends normally: %s", mode, out));
+            assertTrue(out.find(Expected) >= 0, sprintf("%s: result: %s", mode, out));
+            assertTrue(out.find(Released) >= 0, sprintf("%s: the JIT is released in shutdown(): %s", mode, out));
         }
     }
 
@@ -91,17 +81,14 @@ class JitTeardownAtExitTest inherits QUnit::Test {
             testSkip("valgrind is not available");
         }
         foreach string mode in (("jit", "tiered")) {
-            foreach string point in (keys Released) {
-                int rc;
-                string out = backquote(sprintf("%s QORE_PCRE2_NO_JIT=1 %s --leak-check=full "
-                    "--errors-for-leak-kinds=definite,possible --error-exitcode=99 %s -b --exec-mode=%s %s %s 2>&1",
-                    env, valgrind, qore_bin, mode, script, point), \rc);
-                string what = sprintf("%s, %s", mode, point);
-                assertEq(0, rc, sprintf("%s: valgrind reports no error: %s", what, out));
-                assertRegex("definitely lost: 0 bytes|no leaks are possible|All heap blocks were freed", out,
-                    what + ": no memory is lost");
-                assertTrue(out.find(Expected) >= 0, sprintf("%s: result: %s", what, out));
-            }
+            int rc;
+            string out = backquote(sprintf("%s QORE_PCRE2_NO_JIT=1 %s --leak-check=full "
+                "--errors-for-leak-kinds=definite,possible --error-exitcode=99 %s -b --exec-mode=%s %s 2>&1",
+                env, valgrind, qore_bin, mode, script), \rc);
+            assertEq(0, rc, sprintf("%s: valgrind reports no error: %s", mode, out));
+            assertRegex("definitely lost: 0 bytes|no leaks are possible|All heap blocks were freed", out,
+                mode + ": no memory is lost");
+            assertTrue(out.find(Expected) >= 0, sprintf("%s: result: %s", mode, out));
         }
     }
 
