@@ -1173,8 +1173,8 @@ private:
     //! Returns the index of \a slot in reload_chain_slots, adding it if it has none
     uint32_t getReloadChainSlotIndex(llvm::Value* slot);
     //! Writes the addresses of the slots of reload_chain_slots in the entry block, once the function is lowered
-    /** @return false if it was cancelled (qore_check_cancel()), leaving slots unwritten: the function must then be
-        refused (qore#6299)
+    /** @return false if it was cancelled (qore_finalize_cancelled()), leaving slots unwritten: the function must
+        then be refused (qore#6299)
     */
     bool finalizeReloadChainSlots(llvm::Function* llvm_func);
 
