@@ -27,6 +27,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires json
 %requires FsUtil
 %requires Util
@@ -380,7 +381,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         #! the capabilities that the adapter gave in its response to the last initialize request
         hash<auto> capabilities;
 
-        string qore_exe = executablePath(ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore");
+        string qore_exe = executablePath(TestInterpreter::qore_interpreter());
         string adapter = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-vsc-adapter");
         string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
         string server_script = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-server");

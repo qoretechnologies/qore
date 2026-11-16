@@ -51,20 +51,15 @@ int QorePostIncrementOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
 QoreValue QorePostIncrementOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
     LValueHelper n(exp, xsink);
-    if (!n) {
+    if (!n)
         return QoreValue();
-    }
 
-    if (n.getType() == NT_NUMBER) {
-        return n.postIncrementNumber(ref_rv, "<++ (post) operator>");
-    }
+    if (n.getType() == NT_NUMBER)
+        return n.postIncrementNumber(ref_rv, "<-- (post) operator>");
 
     if (n.getType() == NT_FLOAT) {
         double f = n.postIncrementFloat("<++ (post) operator>");
-        // the lvalue's type can refuse the result (ex: a float or number enum, qore#6197)
-        if (*xsink) {
-            return QoreValue();
-        }
+        assert(!*xsink);
         return f;
     }
 

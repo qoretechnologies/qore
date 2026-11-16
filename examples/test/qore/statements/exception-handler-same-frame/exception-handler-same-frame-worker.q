@@ -227,98 +227,6 @@ string sub discard_temps_out() {
     return "not raised";
 }
 
-#! a foreach statement over a reference to a list<int> assigns the list of the loop variable's values to the variable
-#! when the loop ends, which refuses a string (qore#6197)
-string sub ref_foreach_type(auto v) {
-    list<int> l = (1, 2);
-    try {
-        on_exit printf("  on_exit\n");
-        foreach auto x in (\l) {
-            x = v;
-        }
-        return sprintf("not raised %y", l);
-    } catch (hash<ExceptionInfo> ex) {
-        return sprintf("caught %s %y", ex.err, l);
-    }
-}
-
-#! as ref_foreach_type(), the loop left with break
-string sub ref_foreach_break(auto v) {
-    list<int> l = (1, 2);
-    try {
-        foreach auto x in (\l) {
-            x = v;
-            break;
-        }
-        return sprintf("not raised %y", l);
-    } catch (hash<ExceptionInfo> ex) {
-        return sprintf("caught %s %y", ex.err, l);
-    }
-}
-
-#! as ref_foreach_type(), the loop left with return: the exception replaces the return
-string sub ref_foreach_return(auto v) {
-    list<int> l = (1, 2);
-    try {
-        foreach auto x in (\l) {
-            x = v;
-            return "returned";
-        }
-        return sprintf("not raised %y", l);
-    } catch (hash<ExceptionInfo> ex) {
-        return sprintf("caught %s %y", ex.err, l);
-    }
-}
-
-#! as ref_foreach_return(), returning a list, which is released when the exception replaces the return, in a block
-#! with an on_exit handler in the try block
-list<string> sub ref_foreach_return_list(auto v) {
-    list<int> l = (1, 2);
-    try {
-        {
-            on_exit printf("  inner on_exit\n");
-            foreach auto x in (\l) {
-                x = v;
-                return ("returned", "list");
-            }
-        }
-        return ("not raised", sprintf("%y", l));
-    } catch (hash<ExceptionInfo> ex) {
-        return ("caught", ex.err, sprintf("%y", l));
-    }
-}
-
-#! the write-back of a foreach statement over a reference releases the list it replaces, whose only element is an
-#! object whose destructor raises; this case also passes without the write-back's exception target (qore#6197) and is
-#! kept as coverage
-string sub ref_foreach_dtor() {
-    list l = (new DtorThrow(),);
-    try {
-        foreach auto x in (\l) {
-            x = 1;
-        }
-        return sprintf("not raised %y", l);
-    } catch (hash<ExceptionInfo> ex) {
-        return sprintf("caught %s %y", ex.err, l);
-    }
-}
-
-#! the foreach statement over a reference is in a loop in a try block in a loop
-string sub ref_foreach_loop() {
-    list<string> rv = ();
-    for (int i = 0; i < 2; ++i) {
-        list<int> l = (1, 2);
-        try {
-            foreach auto x in (\l) {
-                x = "a";
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            rv += sprintf("%d:%s", i, ex.err);
-        }
-    }
-    return rv.join(" ");
-}
-
 #! runs a case; an exception that leaves the case is reported as escaped
 sub run(string label, code c) {
     try {
@@ -359,12 +267,4 @@ for (int i = 0; i < 3; ++i) {
     run("discard temps if plain", \discard_temps_if_plain());
     run("discard temps loop", \discard_temps_loop());
     run("discard temps out", \discard_temps_out());
-    run("ref foreach type", auto sub () { return ref_foreach_type("a"); });
-    run("ref foreach type ok", auto sub () { return ref_foreach_type(3); });
-    run("ref foreach break", auto sub () { return ref_foreach_break("a"); });
-    run("ref foreach return", auto sub () { return ref_foreach_return("a"); });
-    run("ref foreach return list", auto sub () { return ref_foreach_return_list("a").join(" "); });
-    run("ref foreach return list ok", auto sub () { return ref_foreach_return_list(3).join(" "); });
-    run("ref foreach dtor", \ref_foreach_dtor());
-    run("ref foreach loop", \ref_foreach_loop());
 }

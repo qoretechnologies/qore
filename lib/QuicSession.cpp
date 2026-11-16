@@ -2509,7 +2509,8 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 return -1;
             }
             if (sveccnt > 0 || stream_id >= 0) {
-                size_t vec_total = 0;
+                // only the traces read it
+                [[maybe_unused]] size_t vec_total = 0;
                 for (nghttp3_ssize i = 0; i < sveccnt; ++i) {
                     vec_total += vec[i].len;
                 }
@@ -3648,9 +3649,23 @@ int QuicSession::sendStreamCloseFrame(int64_t stream_id, const void* data, size_
             it2->second.close_frame_staged = true;
             // a pong kept before is not sent after the close frame
             it2->second.pending_pong.clear();
+            // the connection's record outlives the stream and the session (#6077).  It is set here, under the
+            // session's mutex, because every close frame of the stream is staged here and the callers hold the
+            // mutex already (the frame state's close frame comes through sendStreamControlFrame() under it);
+            // setting it is one atomic store, which calls nothing, so it cannot block or re-enter
+            auto rit = ws_close_records_.find(stream_id);
+            if (rit != ws_close_records_.end()) {
+                rit->second->setCloseSent();
+            }
         }
     }
     return rv;
+}
+
+WebSocketCloseRecordRef QuicSession::getWebSocketCloseRecord(int64_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = ws_close_records_.find(stream_id);
+    return it == ws_close_records_.end() ? WebSocketCloseRecordRef() : it->second;
 }
 
 int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
@@ -3988,6 +4003,20 @@ void QuicSession::deregisterConnectStreamQueue(int64_t stream_id) {
 
 void QuicSession::registerConnectStreamFrameState(int64_t stream_id, Queue* msg_queue) {
     ExceptionSink xsink;
+
+    // the record of the stream's close frame exists before the stream can carry one, so that the connection's stream
+    // context gets it also if it is created after the frame state's close frame and the end of the stream (#6077)
+    {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        if (ws_close_records_.find(stream_id) == ws_close_records_.end()) {
+            WebSocketCloseRecordRef rec = WebSocketCloseRecordRef::create();
+            auto it = streaming_body_data_.find(stream_id);
+            if (it != streaming_body_data_.end() && it->second.close_frame_staged) {
+                rec->setCloseSent();
+            }
+            ws_close_records_.emplace(stream_id, std::move(rec));
+        }
+    }
 
     // Capture a weak self-reference via 'this' — safe because the QuicSession
     // outlives the frame state (the frame state is stored inside the session
@@ -5603,7 +5632,7 @@ int QuicSession::beginPathValidationCallback(ngtcp2_conn* /* conn */,
                                               const ngtcp2_path* /* fallback_path */,
                                               void* user_data) {
     try {
-        auto* session = static_cast<QuicSession*>(user_data);
+        [[maybe_unused]] auto* session = static_cast<QuicSession*>(user_data);
         printd(3, "QuicSession::beginPathValidationCallback(): path validation started "
             "(session %lld)\n", (long long)session->session_id_);
     } catch (const std::exception& e) {
@@ -5647,8 +5676,8 @@ int QuicSession::dcidStatusCallback(ngtcp2_conn* /* conn */,
                                      const uint8_t* /* token */,
                                      void* user_data) {
     try {
-        auto* session = static_cast<QuicSession*>(user_data);
-        const char* type_str;
+        [[maybe_unused]] auto* session = static_cast<QuicSession*>(user_data);
+        [[maybe_unused]] const char* type_str;
         switch (type) {
             case NGTCP2_CONNECTION_ID_STATUS_TYPE_ACTIVATE:
                 type_str = "ACTIVATE";
@@ -6091,7 +6120,7 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                 }
             }
             if (frame_state) {
-                int pushed = frame_state->feedData(data, datalen);
+                [[maybe_unused]] int pushed = frame_state->feedData(data, datalen);
                 ASYNC_IO_TRACE("QuicSession::h3RecvDataCallback CONNECT_SRV_FRAME session=%lld stream_id=%lld datalen=%zu msgs_pushed=%d\n",
                     (long long)session->getSessionId(), (long long)stream_id,
                     datalen, pushed);

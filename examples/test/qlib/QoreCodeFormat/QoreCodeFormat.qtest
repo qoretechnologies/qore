@@ -7,7 +7,6 @@
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/astparser"
 %requires QUnit
 %requires QoreCodeFormat
 

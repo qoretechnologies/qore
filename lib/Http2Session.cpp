@@ -1351,7 +1351,7 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
             h2.updateResponseSendWatches();
         }
     } response_send_watch_updater(*this);
-    size_t pending = send_buffer.size() - send_offset;
+    [[maybe_unused]] size_t pending = send_buffer.size() - send_offset;
     printd(5, "sendPendingData() want_write=%d isServer=%d timeout_ms=%d pending=%zu\n",
         nghttp2_session_want_write(session), is_server, timeout_ms, pending);
     // The output of nghttp2 is collected and written in rounds: a round stops collecting at the high-water mark,
@@ -1361,7 +1361,8 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
         // First, collect data from nghttp2; drain until it reports no more data.
         // We intentionally loop until nghttp2_session_mem_send* returns 0 to avoid
         // relying on nghttp2_session_want_write() as a loop condition.
-        size_t total_collected = 0;
+        // only the debug log reads it
+        [[maybe_unused]] size_t total_collected = 0;
         // set when collection stopped at the high-water mark with output left in nghttp2
         bool capped = false;
         while (true) {
@@ -1427,9 +1428,9 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
                 while (off + 9 <= send_buffer.size() && count < 32) {
                     const uint8_t* hdr = reinterpret_cast<const uint8_t*>(&send_buffer[off]);
                     uint32_t length = (uint32_t(hdr[0]) << 16) | (uint32_t(hdr[1]) << 8) | uint32_t(hdr[2]);
-                    uint8_t type = hdr[3];
-                    uint8_t flags = hdr[4];
-                    uint32_t stream_id = ((uint32_t(hdr[5]) & 0x7f) << 24) | (uint32_t(hdr[6]) << 16)
+                    [[maybe_unused]] uint8_t type = hdr[3];
+                    [[maybe_unused]] uint8_t flags = hdr[4];
+                    [[maybe_unused]] uint32_t stream_id = ((uint32_t(hdr[5]) & 0x7f) << 24) | (uint32_t(hdr[6]) << 16)
                         | (uint32_t(hdr[7]) << 8) | uint32_t(hdr[8]);
                     printd(5, "sendPendingData() frame[%d] len=%u type=%u flags=0x%x stream_id=%u\n",
                         count, length, type, flags, stream_id);
@@ -1615,9 +1616,9 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
     if (len >= 9) {
         uint8_t* hdr = reinterpret_cast<uint8_t*>(const_cast<void*>(data->getPtr()));
         uint32_t flen = (uint32_t(hdr[0]) << 16) | (uint32_t(hdr[1]) << 8) | uint32_t(hdr[2]);
-        uint8_t ftype = hdr[3];
-        uint8_t fflags = hdr[4];
-        uint32_t fstream = ((uint32_t(hdr[5]) & 0x7f) << 24) | (uint32_t(hdr[6]) << 16)
+        [[maybe_unused]] uint8_t ftype = hdr[3];
+        [[maybe_unused]] uint8_t fflags = hdr[4];
+        [[maybe_unused]] uint32_t fstream = ((uint32_t(hdr[5]) & 0x7f) << 24) | (uint32_t(hdr[6]) << 16)
             | (uint32_t(hdr[7]) << 8) | uint32_t(hdr[8]);
         if (local_settings.max_frame_size && flen > local_settings.max_frame_size) {
             printd(5, "receiveData() first frame header len=%u type=%u flags=0x%x stream_id=%u local_max=%u\n",
@@ -2218,9 +2219,9 @@ int Http2Session::onFrameSendCallback(nghttp2_session* session,
         const nghttp2_frame* frame, void* user_data) {
     Http2Session* h2 = static_cast<Http2Session*>(user_data);
     uint32_t remote_max = h2 ? h2->remote_settings.max_frame_size : 0;
-    uint32_t local_max = h2 ? h2->local_settings.max_frame_size : 0;
-    int is_server = h2 ? h2->is_server : 0;
-    int fd = h2 ? h2->sock->sock.load() : -1;
+    [[maybe_unused]] uint32_t local_max = h2 ? h2->local_settings.max_frame_size : 0;
+    [[maybe_unused]] int is_server = h2 ? h2->is_server : 0;
+    [[maybe_unused]] int fd = h2 ? h2->sock->sock.load() : -1;
     printd(5, "onFrameSendCallback type=%d stream_id=%d flags=%d len=%d remote_max_frame=%u local_max_frame=%u "
         "isServer=%d fd=%d\n",
         frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length, remote_max, local_max,
@@ -3053,7 +3054,7 @@ int Http2Session::onBeginHeadersCallback(nghttp2_session* session,
 int Http2Session::onInvalidFrameRecvCallback(nghttp2_session* session,
         const nghttp2_frame* frame, int lib_error_code, void* user_data) {
     // Log invalid frames for debugging but don't fail
-    Http2Session* h2 = static_cast<Http2Session*>(user_data);
+    [[maybe_unused]] Http2Session* h2 = static_cast<Http2Session*>(user_data);
     printd(1, "Http2Session::onInvalidFrameRecvCallback() type: %d stream_id: %d flags: 0x%x len=%d err=%s "
         "remote_max_frame=%u local_max_frame=%u\n",
         frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length,
@@ -3226,7 +3227,7 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
     }
     {
         auto it2 = pending_body_data.find(stream_id);
-        size_t pending = it2 == pending_body_data.end() ? 0 : (it2->second.data.size() - it2->second.offset);
+        [[maybe_unused]] size_t pending = it2 == pending_body_data.end() ? 0 : (it2->second.data.size() - it2->second.offset);
         printd(5, "sendStreamData() stream_id=%d pending_buffer=%zu\n", stream_id, pending);
     }
 
@@ -3302,7 +3303,40 @@ int Http2Session::sendStreamCloseFrame(int32_t stream_id, const void* data, size
     } else {
         // a pong kept before is not sent after the close frame
         pending_pongs.erase(stream_id);
+        // the connection's record outlives the stream and the session (#6077).  It is set here, under the
+        // session's mutex, because every close frame of the stream is recorded here and the callers hold the mutex
+        // already (the frame state's close frame comes through sendStreamControlFrame() under it); setting it is one
+        // atomic store, which calls nothing, so it cannot block or re-enter while the mutex is held
+        auto rit = ws_close_records.find(stream_id);
+        if (rit != ws_close_records.end()) {
+            rit->second->setCloseSent();
+        }
     }
+    return rv;
+}
+
+WebSocketCloseRecordRef Http2Session::getWebSocketCloseRecord(int32_t stream_id, bool create) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = ws_close_records.find(stream_id);
+    if (it != ws_close_records.end()) {
+        return it->second;
+    }
+    if (!create) {
+        return WebSocketCloseRecordRef();
+    }
+    WebSocketCloseRecordRef rec = WebSocketCloseRecordRef::create();
+    // a close frame buffered on the stream before the record was made
+    if (close_frame_streams.find(stream_id) != close_frame_streams.end()) {
+        rec->setCloseSent();
+    }
+    ws_close_records.emplace(stream_id, rec);
+    return rec;
+}
+
+std::unordered_map<int32_t, WebSocketCloseRecordRef> Http2Session::takeWebSocketCloseRecords() {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    std::unordered_map<int32_t, WebSocketCloseRecordRef> rv;
+    rv.swap(ws_close_records);
     return rv;
 }
 

@@ -1533,7 +1533,7 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
         if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             evaluated += op->getRight().needsEval() ? 1 : 0;
             c = op->getLeft();
-        } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        } else if (auto* hop = qore_exact_node_cast<QoreHashObjectDereferenceOperatorNode>(node)) {
             evaluated += hop->getRight().needsEval() ? 1 : 0;
             c = hop->getLeft();
         } else if (auto* cop = qore_get_cast_operator_node(node)) {
@@ -1554,7 +1554,7 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
         if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             keys.push_back(op->getRight());
             c = op->getLeft();
-        } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        } else if (auto* hop = qore_exact_node_cast<QoreHashObjectDereferenceOperatorNode>(node)) {
             keys.push_back(hop->getRight());
             c = hop->getLeft();
         } else if (auto* cop = qore_get_cast_operator_node(node)) {
@@ -2355,9 +2355,9 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
         setObjectContext(qore_object_private::get(*obj));
     } else if (ntype == NT_CLASS_VARREF) {
         const AbstractQoreNode* node = n.getInternalNode();
-        const StaticClassVarRefNode* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
+        const StaticClassVarRefNode* static_var = qore_exact_node_cast<StaticClassVarRefNode>(node);
         const DeferredStaticClassMemberRefNode* deferred_static =
-            static_var ? nullptr : dynamic_cast<const DeferredStaticClassMemberRefNode*>(node);
+            static_var ? nullptr : qore_exact_node_cast<DeferredStaticClassMemberRefNode>(node);
         if (!static_var && !deferred_static) {
             vl.xsink->raiseException("REFERENCE-ERROR", "invalid static class variable reference node");
             clearPtr();
@@ -2493,9 +2493,9 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
         setObjectContext(qore_object_private::get(*obj));
     } else if (ntype == NT_CLASS_VARREF) {
         const AbstractQoreNode* node = n.getInternalNode();
-        const StaticClassVarRefNode* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
+        const StaticClassVarRefNode* static_var = qore_exact_node_cast<StaticClassVarRefNode>(node);
         const DeferredStaticClassMemberRefNode* deferred_static =
-            static_var ? nullptr : dynamic_cast<const DeferredStaticClassMemberRefNode*>(node);
+            static_var ? nullptr : qore_exact_node_cast<DeferredStaticClassMemberRefNode>(node);
         if (!static_var && !deferred_static) {
             vl.xsink->raiseException("REFERENCE-ERROR", "invalid static class variable reference node");
             clearPtr();
@@ -3273,17 +3273,11 @@ int LValueHelper::makeIntVal(const char* desc) {
 int LValueHelper::makeIntQv(const char* desc) {
     member_lvalue_modified = true;
     assert(qv);
-    // an inline int, the common case, is checked without the type lookup
-    if (qv->isInt()) {
-        return 0;
-    }
-    // a member of an int enum has the base type int, but it is an enum value, which the operation replaces with a
-    // plain int: the lvalue's type is checked for it, as an enum type refuses a plain int (qore#6197)
-    if (!qv->isEnum() && qv->getType() == NT_INT) {
+    if (qv->getType() == NT_INT) {
         return 0;
     }
 
-    if (typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo)) {
+    if (typeInfo && qv->getType() != NT_INT && !QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo)) {
         // the 4th arg to doTypeException() is needed only for the type
         typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1), vl.xsink);
         write_rejected = true;
@@ -3320,9 +3314,7 @@ int LValueHelper::makeFloat(const char* desc) {
 
         saveTemp(val->makeFloat());
     } else {
-        // an inline float; a member of a float enum is an enum value, which the operation replaces with a plain float
-        // (see makeIntQv())
-        if (qv->isFloat()) {
+        if (!qv->hasNode() && qv->getType() == NT_FLOAT) {
            return 0;
         }
 
@@ -4149,11 +4141,11 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
 
     if (t == NT_CLASS_VARREF) {
         AbstractQoreNode* node = lvalue.getInternalNode();
-        if (StaticClassVarRefNode* static_var = dynamic_cast<StaticClassVarRefNode*>(node)) {
+        if (StaticClassVarRefNode* static_var = qore_exact_node_cast<StaticClassVarRefNode>(node)) {
             static_var->remove(*this);
         } else {
             DeferredStaticClassMemberRefNode* deferred_static =
-                dynamic_cast<DeferredStaticClassMemberRefNode*>(node);
+                qore_exact_node_cast<DeferredStaticClassMemberRefNode>(node);
             if (deferred_static) {
                 deferred_static->remove(*this);
             } else {

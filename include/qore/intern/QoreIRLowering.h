@@ -963,9 +963,6 @@ private:
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
         QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord
-        //! for a RefForeach entry: the exception target outside the statement, where an exception raised by the
-        //! write-back of the list goes (an enclosing try block's handler, or nullptr to leave the frame; qore#6197)
-        QoreIRBasicBlock* ref_foreach_exception_target = nullptr;
         QoreIRValue old_implicit_element;          //!< saved $# for RefForeachRecord/ForeachElement
         QoreValue var_expr;                        //!< loop variable expression for RefForeachRecord
         QoreIRValue context_state;                 //!< Context* handle for Context entries

@@ -14,6 +14,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires Util
 
 %exec-class ProgramObjectOutlivesCleanupTest
@@ -27,7 +28,7 @@ class ProgramObjectOutlivesCleanupTest inherits QUnit::Test {
     }
 
     constructor() : Test("ProgramObjectOutlivesCleanupTest", "1.0") {
-        qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        qore_exe = TestInterpreter::qore_interpreter();
         if (ENV.LD_LIBRARY_PATH) {
             env_prefix += sprintf("LD_LIBRARY_PATH=%s ", ENV.LD_LIBRARY_PATH);
         }

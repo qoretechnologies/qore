@@ -39,16 +39,6 @@ class RuntimeConfig;
 
 class AssertStatement : public AbstractStatement {
 public:
-    //! Returns the message of a failed assertion made from the value of its message expression
-    /** A list is formatted as the arguments of sprintf() (the format and its arguments), a string is used as it is,
-        and any other value is converted as AbstractQoreNode::getAsString() converts it (ex: \c True for a boolean,
-        \c "<NOTHING>" for no value).  The IR (QoreIROpcode::Sprintf) and native code make the message with this
-        function, so that it is the same in every execution mode (qore#6197).
-
-        @return the message, or nullptr if an exception was raised
-    */
-    DLLLOCAL static QoreStringNode* makeMessage(const QoreValue& msg_val, ExceptionSink* xsink);
-
     DLLLOCAL static AssertStatement* create(LexicalSemanticPolicy policy, int start_line, int end_line,
             QoreValue exp);
     //! no lexical sub-scope of its own

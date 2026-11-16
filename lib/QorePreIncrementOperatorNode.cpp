@@ -57,19 +57,13 @@ QoreValue QorePreIncrementOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
 
     if (n.getType() == NT_NUMBER) {
         n.preIncrementNumber("<++ (pre) operator>");
-        // the lvalue's type can refuse the result (ex: a float or number enum, qore#6197)
-        if (*xsink) {
-            return QoreValue();
-        }
+        assert(!*xsink);
         return !ref_rv ? QoreValue() : n.getReferencedValue();
     }
 
     if (n.getType() == NT_FLOAT) {
         double f = n.preIncrementFloat("<++ (pre) operator>");
-        // the lvalue's type can refuse the result (ex: a float or number enum, qore#6197)
-        if (*xsink) {
-            return QoreValue();
-        }
+        assert(!*xsink);
         return f;
     }
 

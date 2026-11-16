@@ -106,8 +106,9 @@ operands of the corresponding instructions in the receiver class).
 
 A value borrowed from a variable is not held by these nodes, and a value that a read of a variable gives a
 reference of its own to is held by the variable reference itself (see [Values read from
-variables](#values-read-from-variables)).  Nor are strings, numbers, binaries and dates, which hold no other values,
-so their lifetime cannot be observed.
+variables](#values-read-from-variables)).  Nor are strings, numbers, binaries, dates, and ints and floats outside the
+inline range (nodes), which hold no other values, so their lifetime cannot be observed; an operator that returns its
+operand (unary plus) then returns such a value owned, never one that only the scope holds.
 
 ## Values read from variables
 

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,7 +38,8 @@
 //! Warns when a hash member is converted directly to bool by a condition expression
 DLLLOCAL void qore_warn_hash_member_truth_test(QoreProgram* pgm, const QoreValue& condition);
 
-class QoreHashObjectDereferenceOperatorNode : public QoreBinaryOperatorNode<> {
+// final: qore_exact_node_cast() tests it by its exact type on the lvalue and reference paths
+class QoreHashObjectDereferenceOperatorNode final : public QoreBinaryOperatorNode<> {
 OP_COMMON
 public:
     //! the keys of the lvalue path that ends with this step, if they are evaluated before it is resolved
