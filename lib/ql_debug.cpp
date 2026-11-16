@@ -17824,6 +17824,33 @@ void qore_dbg_parse_commit_gate(const QoreProgram* pgm, int point) {
     parse_commit_gate.cv.wait(ul, [] { return parse_commit_gate.release; });
 }
 
+//! Debug-only: creates a child process with fork() from the current thread (issue #6243)
+/** The child runs the code given and exits with the value it returns (99 if it raised an exception); the other
+    threads of the process do not exist in the child.  As in the other fork seams, the signal manager and the sandbox
+    watchdog are not prepared for the fork, so the code must not use signal handling, start threads or rely on time
+    limits.  DEBUG builds only.
+
+    @return the exit status of the child (-1 if it did not exit normally)
+
+    @throw DBG-FORK-ERROR fork() failed
+*/
+static QoreValue f_dbg_fork_child(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    pid_t pid = fork();
+    if (!pid) {
+        ExceptionSink child_xsink;
+        ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+        int status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+        child_xsink.clear();
+        _exit(status);
+    }
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", errno, "fork() failed");
+        return QoreValue();
+    }
+    return ut_wait_child(pid);
+}
+
 //! Debug-only: stops the next commit of a parse of the Program once it has started (issue #6243)
 /** The commit stops after the Program has been marked as committing (\a point 0), or after the new code has been
     merged into the Program, before the deferred initialization of its closures (\a point 1), until
@@ -24202,6 +24229,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_detach_async_io_socket", f_dbg_detach_async_io_socket,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_fork_child", f_dbg_fork_child, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
+        codeTypeInfo, QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_arm_parse_commit_gate", f_dbg_arm_parse_commit_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", bigIntTypeInfo, QORE_PARAM_NO_ARG,
         "point");

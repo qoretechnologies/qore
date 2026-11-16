@@ -21,6 +21,7 @@ public class ReparseCommitEntryTest inherits QUnit::Test {
         addTestCase("pending commit refuses entry", \pendingCommitRefusesEntry());
         addTestCase("first commit refuses entry", \firstCommitRefusesEntry());
         addTestCase("deferred closure initialization", \deferredClosureInit());
+        addTestCase("fork() during a commit", \forkDuringCommit());
         set_return_value(main());
     }
 
@@ -119,5 +120,23 @@ public class ReparseCommitEntryTest inherits QUnit::Test {
             assertEq("PROGRAM-ERROR", tryCall(p, "h"));
         }, 1);
         assertEq(5, p.callFunction("h"));
+    }
+
+    #! a child process created with fork() while another thread commits a parse can enter the Program
+    /** The committing thread does not exist in the child, where the commit does not go on
+    */
+    forkDuringCommit() {
+        skipWithoutGate();
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        Program p = getProgram();
+        checkDuringCommit(p, sub () { p.parse("int sub g() { return 2; }", "g"); }, sub () {
+            int status = call_function("dbg_fork_child", int sub () { return tryCall(p) == "OK" ? 0 : 1; });
+            assertEq(0, status);
+            # the parent still refuses the entry while the commit goes on
+            assertEq("PROGRAM-ERROR", tryCall(p));
+        });
+        assertEq(2, p.callFunction("g"));
     }
 }

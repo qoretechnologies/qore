@@ -631,11 +631,12 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
         commit_entry_restricted = false;
     }
     // the other threads of the parent do not exist in the child, whose TIDs can be given to other threads
-    {
-        bool own_parse_thread = parse_tids.find(tid) != parse_tids.end();
-        parse_tids.clear();
-        if (own_parse_thread) {
-            parse_tids.insert(tid);
+    // (erased without allocating)
+    for (std::set<int>::iterator i = parse_tids.begin(); i != parse_tids.end();) {
+        if (*i == tid) {
+            ++i;
+        } else {
+            i = parse_tids.erase(i);
         }
     }
     tlock.reinitAfterFork();

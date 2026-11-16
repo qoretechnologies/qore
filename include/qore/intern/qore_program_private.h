@@ -6539,11 +6539,10 @@ DLLLOCAL bool qore_exit_hooks_started();
 
 #ifdef DEBUG
 //! Stops the commit of a parse of the Program armed with dbg_arm_parse_commit_gate() (debug builds, for tests)
-/** Called by qore_program_private::internParseCommit() once the commit has started and other threads cannot enter
-    the Program (\a point 0; see qore_program_private::refusedByCommit()), and once the new code has been merged into
-    the Program and before the deferred
-    initialization of its closures (\a point 1): the thread waits until dbg_release_parse_commit_gate() releases it,
-    so that a test can try to enter the Program meanwhile (issue #6243).
+/** Called by qore_program_private::internParseCommit() once the commit has started and other threads cannot enter the
+    Program (\a point 0; see qore_program_private::refusedByCommit()), and once the new code has been merged into the
+    Program and before the deferred initialization of its closures (\a point 1): the thread waits until
+    dbg_release_parse_commit_gate() releases it, so that a test can try to enter the Program meanwhile (issue #6243).
 */
 DLLLOCAL void qore_dbg_parse_commit_gate(const QoreProgram* pgm, int point);
 
