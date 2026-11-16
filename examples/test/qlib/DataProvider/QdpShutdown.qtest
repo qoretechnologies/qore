@@ -8,6 +8,7 @@
 # normalize_dir() lives in Util; neither FsUtil nor QUnit reexports it, so it has to be required here
 %requires Util
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class QdpShutdownTest
 
@@ -36,7 +37,7 @@ public class QdpShutdownTest inherits QUnit::Test {
     }
 
     private string getQoreBinary() {
-        return ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        return TestInterpreter::qore_interpreter();
     }
 
     #! Runs qdp with the marker module loaded and returns the return code and whether the marker was written

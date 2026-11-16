@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires Schema
 
@@ -168,7 +169,7 @@ schema.log(\"END-OF-RUN\");
             }
         }
         string module_dir = get_script_dir() + "/../../../../qlib" + (ENV.QORE_MODULE_DIR ? PathSep + ENV.QORE_MODULE_DIR : "");
-        cmd += sprintf("QORE_MODULE_DIR='%s' '%s' '%s' %d %s 2>&1", module_dir, ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore",
+        cmd += sprintf("QORE_MODULE_DIR='%s' '%s' '%s' %d %s 2>&1", module_dir, TestInterpreter::qore_interpreter(),
             path, verbose, do_msgs ? "true" : "false");
         int rc;
         string out = backquote(cmd, \rc);

@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../ExecModeHarness.qm
 
@@ -35,7 +36,7 @@ class TempReleasePointsTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("temporary release points", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
@@ -50,7 +51,7 @@ class TempReleasePointsTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(56, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
+        assertEq(68, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
         assertTrue(out =~ /^list literal:\n  dtor lit\n  mark lit\n/, "list literal");
         assertTrue(out =~ /\nmember:\n  dtor mem\n  mark mem\n/, "member");
         assertTrue(out =~ /\nno write:\n  mark nw\n  dtor nw\n/, "no write");
@@ -65,6 +66,25 @@ class TempReleasePointsTest inherits QUnit::Test {
         assertTrue(out =~ /\noperand of keys:\n  mark k\n  dtor k\n/, "operand of keys");
         assertTrue(out =~ /\nkeys source hash:\n  mark ksh\n  dtor ksh\n/, "keys of a hash as a functional source");
         assertTrue(out =~ /\noperand of index:\n  mark ix\n  dtor ix\n/, "an index");
+        # a key, [] as the source of a functional operator, and the operand of a class or an enum cast (qore#5712)
+        assertTrue(out =~ /\noperand of key value:\n  mark keyv\n  dtor keyv\n/, "a key");
+        assertTrue(out =~ /\nindex source:\n  mark ixs\n  dtor ixs\n/, "the index of [] as a functional source");
+        assertTrue(out =~ /\nindex source container:\n  mark ixc\n  dtor ixc\n/,
+            "the container of [] as a functional source");
+        assertTrue(out =~ /\noperand of class cast:\n  mark cc\n  dtor cc\n/, "operand of a class cast");
+        assertTrue(out =~ /\nclass cast exception:\n  dtor arg\n  dtor ccx\n  ! RUNTIME-CAST-ERROR\n/,
+            "class cast and an exception");
+        assertTrue(out =~ /\nenum cast exception:\n  dtor arg\n  dtor enx\n  ! RUNTIME-CAST-ERROR\n/,
+            "enum cast and an exception");
+        # a class cast whose value is used after the scope of its expression: the value lives as long as it is used
+        assertTrue(out =~ /\nclass cast element:\n  mark cel\n  dtor cel\n/, "class cast assigned to an element");
+        assertTrue(out =~ /\nclass cast default argument:\n  dtor cda\n  mark cda\n/,
+            "class cast in a default argument");
+        assertTrue(out =~ /\nclass cast member:\n  mark cmi\n  dtor cmi\n/, "class cast in a member initializer");
+        # unary plus of an int node whose value is used after the scope of its expression
+        assertTrue(out =~ /\nunary plus element:\n  value 4611686018427400249\n/, "unary plus assigned to an element");
+        assertTrue(out =~ /\nunary plus push:\n  value 4611686018427387911\n/, "unary plus pushed to a list");
+        assertTrue(out =~ /\nunary plus variable:\n  value 1\.5 <time: 3 hours>\n/, "unary plus of variables");
         assertTrue(out =~ /\nkeys source object:\n  mark kso\n  dtor kso\n/, "keys of an object as a functional source");
         assertTrue(out =~ /\noperand of float compare:\n  mark lt\n  dtor lt\n/, "operand of a float comparison");
         assertTrue(out =~ /\nfloat compare exception:\n  dtor arg\n  dtor gt\n  ! X\n/, "float comparison and an exception");

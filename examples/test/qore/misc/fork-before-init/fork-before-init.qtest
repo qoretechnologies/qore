@@ -6,6 +6,7 @@
 %modern
 
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 
 %exec-class ForkBeforeInitTest
 
@@ -24,7 +25,7 @@ class ForkBeforeInitTest inherits QUnit::Test {
     }
 
     nativeTest() {
-        string qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore_bin = TestInterpreter::qore_interpreter();
         string native_bin = ENV.QORE_FORK_BEFORE_INIT_TEST ?? dirname(qore_bin) + "/qore-fork-before-init-test";
         if (PlatformOS == "Windows" || !is_file(native_bin)) {
             testSkip("the POSIX native test executable is not available");

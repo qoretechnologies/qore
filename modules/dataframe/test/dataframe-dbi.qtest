@@ -7,15 +7,11 @@
 
 %modern
 
-%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/dataframe"
-
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires Util
 
-%try-module dataframe
-%define NoDataFrame
-%endtry
+%requires dataframe
 
 %exec-class DataFrameDbiTest
 
@@ -53,9 +49,6 @@ class DataFrameDbiTest inherits QUnit::Test {
     }
 
     private verifyDriver(string label, Datasource ds) {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%endif
         try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {

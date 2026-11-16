@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires MemberNotificationChecks
 %requires ../../../ExecModeHarness.qm
@@ -31,7 +32,7 @@ class MemberNotificationTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("MemberNotificationTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("checks in this program", \testInProgram());
