@@ -32,6 +32,7 @@
 #ifndef _QORE_INTERN_QOREIRLOWERING_H
 #define _QORE_INTERN_QOREIRLOWERING_H
 
+#include <map>
 #include <stack>
 #include <string>
 #include <unordered_map>
@@ -895,6 +896,10 @@ private:
         QoreIRBasicBlock* join = nullptr;
         //! for the last handler: the code of each request after the handler (RC_RETURN, RC_BREAK, RC_CONTINUE)
         QoreIRBasicBlock* request_end[3] = {};
+        //! the paths of the requests that the step events of the body with the same lowering state share, as the
+        //! events of the code do (setDebugFlowTargets()), so that the code of the paths of a handler lowered inline,
+        //! which can lower the handlers of the blocks of the body inline in turn, grows with the body
+        DebugFlowSegment segment;
     };
     //! the handlers being lowered inline, innermost last
     std::vector<InlineHandlerFlow> inline_handler_flow_stack;
@@ -904,6 +909,14 @@ private:
     //! Lowers a return statement without a value at the current lowering position: the cleanups of every block and
     //! the return (\a debug_flow: for the path of a debugger's return request, see lowerLoopJump())
     bool lowerReturnWithoutValue(std::string& error, bool debug_flow = false);
+    //! The shared ends of the return paths of a debugger's requests (#6201)
+    /** The release of the locals of the blocks at the bottom of cleanup_stack, those with no cleanup but their locals
+        (Lvars and CatchVar entries), and the return are the same for every return path in them: each path ends with
+        a branch to one block of that code (QoreIRBasicBlock::debug_flow_return_tail), so that the code of the paths
+        grows with that of the function and not with the product of its statements and its locals.  Keyed by the
+        function and the locals of the entries.
+    */
+    std::map<std::pair<const QoreIRFunction*, std::vector<const void*>>, QoreIRBasicBlock*> debug_flow_return_tails;
 
     //! Returns true if what a return statement leaves on its way out of the code depends on an error it raises
     /** A try block catches the error, a catch block and a context clean up, the handlers of a block run by how it
@@ -1263,6 +1276,9 @@ private:
     class ExitLoweringNesting;
     //! the nesting of the lowering of the paths of a debugger's flow requests (see DebugFlowPathLowering)
     int debug_flow_path_depth = 0;
+    //! the handler bodies lowered inline in the paths of the debugger's requests of the function (see
+    //! QORE_IR_PATH_INLINE_HANDLER_BUDGET)
+    size_t path_handlers_lowered = 0;
     class DebugFlowPathLowering;
     //! the value of the return that a return in a try statement in a handler replaces when the walk of its
     //! cleanups leaves the outermost try statement in the handler (try_end_depth == try_replaced_depth), as the AST

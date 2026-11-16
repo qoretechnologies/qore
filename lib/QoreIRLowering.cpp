@@ -4241,6 +4241,9 @@ static constexpr size_t QORE_IR_INLINE_HANDLER_BUDGET = 64;
 //! The nesting of handler bodies lowered inline in the exits of other handler bodies past which their handlers run out
 //! of line (see above)
 static constexpr int QORE_IR_INLINE_HANDLER_MAX_NESTING = 16;
+//! The handler bodies that the paths of the debugger's requests of a function can lower inline, past which they run
+//! out of line (see lowerHandlersAtExit(), #6201)
+static constexpr size_t QORE_IR_PATH_INLINE_HANDLER_BUDGET = QORE_IR_INLINE_HANDLER_BUDGET;
 
 //! Counts the nesting of the exits being lowered: the outermost one starts the count of the handler bodies lowered
 //! inline (see QORE_IR_INLINE_HANDLER_BUDGET)
@@ -4860,9 +4863,67 @@ bool QoreIRLowering::lowerReturnWithoutValue(std::string& error, bool debug_flow
     // Also handles RefForeach cleanup: record the current element, then write the
     // referenced list back with its unvisited elements unchanged, as break does.
     // the catch blocks that the return leaves are closed in their places among the cleanups (qore#6017)
-    if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES
+    // the path of a debugger's request shares the release of the locals of the bottom blocks and the return with the
+    // other paths (debug_flow_return_tails, #6201)
+    size_t shared = 0;
+    if (debug_flow) {
+        while (shared < cleanup_stack.size() && (cleanup_stack[shared].type == BlockCleanupEntry::Lvars
+                || cleanup_stack[shared].type == BlockCleanupEntry::CatchVar)) {
+            ++shared;
+        }
+    }
+    if (!emitBlockCleanups(shared, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES
             | (debug_flow ? CF_HANDLERS_OUT_OF_LINE : 0))) {
         return false;
+    }
+    if (shared) {
+        if (blockHasTerminator(builder.getBlock())) {
+            return true;
+        }
+        std::vector<const void*> locals;
+        locals.reserve(shared);
+        for (size_t i = 0; i < shared; ++i) {
+            const BlockCleanupEntry& entry = cleanup_stack[i];
+            locals.push_back(entry.type == BlockCleanupEntry::Lvars ? static_cast<const void*>(entry.lvars)
+                : static_cast<const void*>(entry.catch_var));
+        }
+        QoreIRBasicBlock*& tail = debug_flow_return_tails[{builder.getFunction(), std::move(locals)}];
+        if (!tail) {
+            QoreIRBasicBlock* path_block = builder.getBlock();
+            QoreIRBasicBlock* new_tail = createBlock("debug.flow.return.tail");
+            if (!new_tail) {
+                error = "IR builder failed to create the shared end of the return paths of a debugger";
+                return false;
+            }
+            new_tail->debug_flow_return_tail = true;
+            // the tail is lowered with the entries above the shared ones left, which are restored afterwards, also
+            // on an exception
+            struct TailLowering {
+                QoreIRLowering& l;
+                QoreIRBasicBlock* path_block;
+                std::vector<BlockCleanupEntry> left;
+                DLLLOCAL TailLowering(QoreIRLowering& l, QoreIRBasicBlock* path_block, size_t shared)
+                        : l(l), path_block(path_block),
+                        left(l.cleanup_stack.begin() + shared, l.cleanup_stack.end()) {
+                    l.cleanup_stack.resize(shared);
+                }
+                DLLLOCAL ~TailLowering() {
+                    // the capacity of the stack holds the entries again
+                    l.cleanup_stack.insert(l.cleanup_stack.end(), std::make_move_iterator(left.begin()),
+                        std::make_move_iterator(left.end()));
+                    l.builder.setBlock(path_block);
+                }
+            } tail_lowering(*this, path_block, shared);
+            builder.setBlock(new_tail);
+            if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES | CF_HANDLERS_OUT_OF_LINE)) {
+                return false;
+            }
+            assert(!blockHasTerminator(builder.getBlock()));
+            builder.createReturnNothing();
+            tail = new_tail;
+        }
+        builder.createBranch(tail);
+        return true;
     }
     // a handler that the cleanups lowered inline ended the block (a throw or a thread_exit in it, or a return): the
     // code after it is unreachable and is not lowered, as its values would have no definitions (#6030)
@@ -5094,9 +5155,42 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
         entry->instructions.push_back(std::move(br));
         return entry;
     };
+    // the segment of the event in the body: the cleanups of a path depend only on this state
+    const size_t hf_index = inline_handler_flow_stack.size() - 1;
+    {
+        DebugFlowSegment& segment = inline_handler_flow_stack[hf_index].segment;
+        const size_t cleanup_depth = cleanup_stack.size();
+        const size_t handlers = block_handlers.size();
+        const size_t temp_depth = builder.getTempScopeDepth();
+        const size_t flow_depth = flow_stack.size();
+        const size_t scopes = scope_stack.size();
+        QoreIRBasicBlock* exception_target = getCurrentExceptionTarget();
+        if (segment.cleanup_depth != cleanup_depth || segment.handlers != handlers || segment.temp_depth != temp_depth
+                || segment.catch_depth != catch_cleanup_depth || segment.flow_depth != flow_depth
+                || segment.scopes != scopes || segment.exception_target != exception_target) {
+            segment = DebugFlowSegment();
+            segment.cleanup_depth = cleanup_depth;
+            segment.handlers = handlers;
+            segment.temp_depth = temp_depth;
+            segment.catch_depth = catch_cleanup_depth;
+            segment.flow_depth = flow_depth;
+            segment.scopes = scopes;
+            segment.exception_target = exception_target;
+        }
+    }
     auto flow = std::make_unique<QoreIRDebugFlowTargets>();
     for (int rc : {RC_RETURN, RC_BREAK, RC_CONTINUE}) {
-        QoreIRBasicBlock* path = make_path(rc);
+        // lowering a path can lower handlers inline, which pushes on inline_handler_flow_stack: the cache is read
+        // and written by its index
+        auto cached = [&]() -> QoreIRBasicBlock*& {
+            DebugFlowSegment& segment = inline_handler_flow_stack[hf_index].segment;
+            return rc == RC_RETURN ? segment.return_path
+                : (rc == RC_BREAK ? segment.break_path : segment.continue_path);
+        };
+        QoreIRBasicBlock* path = cached();
+        if (!path && (path = make_path(rc))) {
+            cached() = path;
+        }
         QoreIRBasicBlock* entry = path ? make_entry(path) : nullptr;
         if (!entry) {
             if (error.empty()) {
@@ -5961,14 +6055,23 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
             // budget, in an exit lowered inside the body of another handler, the handlers still registered in the
             // scope run out of line, as before #5992: their returns do not replace the value of the function's
             // return then
-            if (have_scope && inline_handler_body_depth && (inline_handlers_lowered >= QORE_IR_INLINE_HANDLER_BUDGET
-                    || inline_handler_body_depth >= QORE_IR_INLINE_HANDLER_MAX_NESTING)) {
+            // The paths of the debugger's requests, which every step event has, lower the handlers of the blocks
+            // that they leave: with each handler body lowered inline in them having step events with paths of their
+            // own, the code of the paths of nested handlers that return grows exponentially with their nesting, so
+            // the handler bodies lowered inline in the paths of a function have a budget of their own, past which
+            // they run out of line (#6201)
+            if (have_scope && ((inline_handler_body_depth && (inline_handlers_lowered >= QORE_IR_INLINE_HANDLER_BUDGET
+                    || inline_handler_body_depth >= QORE_IR_INLINE_HANDLER_MAX_NESTING))
+                    || (debug_flow_path_depth && path_handlers_lowered >= QORE_IR_PATH_INLINE_HANDLER_BUDGET))) {
                 auto* se_inst = builder.createScopeExit(scope_id, is_error, scope_loc, /*inline_lowered=*/false);
                 se_inst->exception_target = set_exception_target ? handler_exception_target
                     : getCurrentExceptionTarget();
                 return true;
             }
             ++inline_handlers_lowered;
+            if (debug_flow_path_depth) {
+                ++path_handlers_lowered;
+            }
             // the last handler of the exit that runs: a debugger's request in it becomes that of the block (#6201)
             bool last_run = !is_error;
             for (int j = i - 1; last_run && j >= static_cast<int>(start_index); --j) {

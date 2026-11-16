@@ -5270,13 +5270,19 @@ void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_s
         auto helper = module.getOrInsertFunction("qore_rt_decref",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
         size_t count = 0;
-        auto end = first_temp < invoke_result_allocas.size()
-            ? invoke_result_allocas.rend() - static_cast<std::ptrdiff_t>(first_temp) : invoke_result_allocas.rbegin();
-        for (auto it = invoke_result_allocas.rbegin(); it != end; ++it) {
+        for (size_t i = invoke_result_allocas.size(); i > first_temp;) {
+            // a path releases each temporary once (#6201)
+            if (lowering_debug_flow_block) {
+                size_t skip = debugFlowPathSkipTemps(i);
+                if (skip != i) {
+                    i = skip;
+                    continue;
+                }
+            }
             if (!(++count % 100)) {
                 (void)qore_check_cancel(nullptr, "LLVM function exit temp release");
             }
-            llvm::Value* alloca_ptr = *it;
+            llvm::Value* alloca_ptr = invoke_result_allocas[--i];
             if (persistent_cleanup_allocas.count(alloca_ptr) || (hold_returns && isReturnValueAlloca(alloca_ptr))) {
                 continue;
             }
@@ -5843,6 +5849,8 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
 
 void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, bool statement_end) {
     TempCleanupMark mark;
+    // true for the release of a scope of the code by a path, which changes no lowering state of the code (#6201)
+    bool code_scope = false;
     if (!temp_cleanup_marks.empty()) {
         // Select the matching mark by scope id rather than blindly popping the
         // stack back.  When short-circuit operators (??, ?:, &&, ||) split a
@@ -5864,14 +5872,21 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
             }
         }
         mark = temp_cleanup_marks[idx];
-        // for the blocks of the scope that are lowered after its end (see closed_temp_cleanup_marks)
-        if (mark.scope_id) {
-            closed_temp_cleanup_marks.emplace(mark.scope_id, std::vector<TempCleanupMark>(temp_cleanup_marks.begin(),
-                temp_cleanup_marks.begin() + idx + 1));
+        if (lowering_debug_flow_block && (idx < debug_flow_run_marks
+                || (scope_id && temp_cleanup_marks[idx].scope_id != scope_id))) {
+            // a path releases the temporaries of a scope of the code: the scope goes on in the code after the path
+            // (#6201)
+            code_scope = true;
+        } else {
+            // for the blocks of the scope that are lowered after its end (see closed_temp_cleanup_marks)
+            if (mark.scope_id) {
+                closed_temp_cleanup_marks.emplace(mark.scope_id,
+                    std::vector<TempCleanupMark>(temp_cleanup_marks.begin(), temp_cleanup_marks.begin() + idx + 1));
+            }
+            temp_cleanup_marks.erase(temp_cleanup_marks.begin() + idx);
+            // the end of the scope's temporaries (see finalizeOrderedErrorReturnEdges())
+            temp_scope_end.emplace(mark.scope_id, invoke_result_allocas.size());
         }
-        temp_cleanup_marks.erase(temp_cleanup_marks.begin() + idx);
-        // the end of the scope's temporaries (see finalizeOrderedErrorReturnEdges())
-        temp_scope_end.emplace(mark.scope_id, invoke_result_allocas.size());
     }
 
     auto helper = module.getOrInsertFunction("qore_rt_decref",
@@ -5880,16 +5895,51 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
     {
         // last registered first
         std::vector<llvm::Value*> release;
-        for (size_t i = invoke_result_allocas.size(); i > mark.invoke_alloca_count; --i) {
-            llvm::Value* alloca_ptr = invoke_result_allocas[i - 1];
-            if (!persistent_cleanup_allocas.count(alloca_ptr)) {
-                release.push_back(alloca_ptr);
+        if (code_scope) {
+            // a path's block releases each temporary of the code's scopes once (#6201)
+            for (size_t i = invoke_result_allocas.size(); i > mark.invoke_alloca_count;) {
+                size_t skip = debugFlowPathSkipTemps(i);
+                if (skip != i) {
+                    i = skip;
+                    continue;
+                }
+                llvm::Value* alloca_ptr = invoke_result_allocas[--i];
+                if (!persistent_cleanup_allocas.count(alloca_ptr)) {
+                    release.push_back(alloca_ptr);
+                }
+            }
+            debug_flow_released.emplace_back(mark.invoke_alloca_count, invoke_result_allocas.size());
+        } else {
+            for (size_t i = invoke_result_allocas.size(); i > mark.invoke_alloca_count; --i) {
+                llvm::Value* alloca_ptr = invoke_result_allocas[i - 1];
+                if (!persistent_cleanup_allocas.count(alloca_ptr)) {
+                    release.push_back(alloca_ptr);
+                }
             }
         }
         emitTempReleaseSequence(module, release, 0, release.size());
     }
 
-    if (pending_ssa_cleanup.size() > mark.pending_ssa_count) {
+    if (code_scope) {
+        // the SSA cleanups of the scope that the path's block has not released yet; the code releases them again at
+        // the end of the scope
+        llvm::BasicBlock* cur = builder->GetInsertBlock();
+        size_t end = std::min(pending_ssa_cleanup.size(), debug_flow_pending_released);
+        for (size_t i = end; i > mark.pending_ssa_count; --i) {
+            const SsaCleanupEntry& e = pending_ssa_cleanup[i - 1];
+            if (e.def_bb == cur || dominates(e.def_bb, cur)) {
+                builder->CreateCall(helper, {e.value, xsink_arg});
+            } else if (llvm::AllocaInst* alloca = promoteSsaEntryToAlloca(e.result_id, module,
+                    builder->GetInsertBlock()->getParent())) {
+                llvm::Value* val = builder->CreateLoad(i64_type, alloca);
+                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+                builder->CreateCall(helper, {val, xsink_arg});
+            }
+        }
+        if (mark.pending_ssa_count < end) {
+            debug_flow_pending_released = mark.pending_ssa_count;
+        }
+    } else if (pending_ssa_cleanup.size() > mark.pending_ssa_count) {
         llvm::BasicBlock* cur = builder->GetInsertBlock();
         for (size_t i = pending_ssa_cleanup.size(); i > mark.pending_ssa_count; --i) {
             const SsaCleanupEntry& e = pending_ssa_cleanup[i - 1];
@@ -5912,6 +5962,16 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
     if (statement_end) {
         flushLocalReloadStateAtTempBoundary(module);
     }
+}
+
+size_t QoreIRToLLVM::debugFlowPathSkipTemps(size_t i) const {
+    assert(i);
+    for (const auto& r : debug_flow_released) {
+        if (i > r.first && i <= r.second) {
+            return r.first;
+        }
+    }
+    return i;
 }
 
 void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
@@ -14497,6 +14557,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     exit_temp_cleanup_slot.clear();
     persistent_cleanup_allocas.clear();
     temp_cleanup_marks.clear();
+    debug_flow_run_marks = 0;
+    debug_flow_saved_marks.clear();
+    debug_flow_saved_pending_ssa.clear();
+    debug_flow_released.clear();
+    debug_flow_pending_released = SIZE_MAX;
     exception_edges.clear();
     ir_block_predecessor_counts.clear();
     ir_block_predecessor_counts_valid = false;
@@ -16261,10 +16326,23 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 saved_local_reload_boundary_cleanup_pending = local_reload_boundary_cleanup_pending;
                 // the reload state of the event is not known here: the next statement end releases it
                 local_reload_boundary_cleanup_pending = true;
+                // the temp scopes of the code: the paths release their temporaries, and the code after the paths
+                // still has them
+                debug_flow_run_marks = temp_cleanup_marks.size();
+                debug_flow_saved_marks = temp_cleanup_marks;
+                debug_flow_saved_pending_ssa = pending_ssa_cleanup;
             } else {
                 local_reload_boundary_cleanup_pending = saved_local_reload_boundary_cleanup_pending;
+                temp_cleanup_marks = std::move(debug_flow_saved_marks);
+                pending_ssa_cleanup = std::move(debug_flow_saved_pending_ssa);
+                debug_flow_saved_marks.clear();
+                debug_flow_saved_pending_ssa.clear();
+                debug_flow_run_marks = 0;
             }
         }
+        // the releases of each path block (#6201)
+        debug_flow_released.clear();
+        debug_flow_pending_released = SIZE_MAX;
         aot_hash_string_extraction_cache.clear();
         llvm::BasicBlock* llvm_block = block_map[block.get()];
         if (!llvm_block) {
@@ -20297,7 +20375,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup_alloca);
                         builder->CreateCall(decref_fn, {old_val, xsink_arg});
                     }
-                    cleanup_it->second.clear();
+                    // a path of a debugger's request leaves the code after it, whose own exit of the block releases
+                    // them too (#6201)
+                    if (!lowering_debug_flow_block) {
+                        cleanup_it->second.clear();
+                    }
                 }
                 auto tracker_it = local_reload_trackers.find(key);
                 if (tracker_it != local_reload_trackers.end()) {
@@ -20698,6 +20780,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     qore_ir_loop_cancel_operation(br->target->loop_cancel), "loop_cancel_operation");
                 builder->CreateCall(check_cancel, {xsink_arg, operation});
                 emitExceptionCheck(module, llvm_func, inst);
+            }
+            // a return path of a debugger's request releases the temporaries that its position has before the end of
+            // the return paths that it shares, which releases the locals of the bottom blocks and returns (#6201)
+            if (lowering_debug_flow_block && br->target && br->target->debug_flow_return_tail) {
+                emitExitStatementCleanup(module, true, false, !temp_cleanup_marks.empty()
+                    ? temp_cleanup_marks.front().invoke_alloca_count : invoke_result_allocas.size());
             }
             builder->CreateBr(it->second);
             return true;
@@ -21283,9 +21371,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the AST; the return of the path of a debugger's request at a step event, which every step event has,
             // releases those of the temp scopes still open, so that the size of the code of the paths grows with
             // that of the function (#6201)
-            emitExitStatementCleanup(module, true, false, lowering_debug_flow_block && !temp_cleanup_marks.empty()
-                ? temp_cleanup_marks.front().invoke_alloca_count
-                : (lowering_debug_flow_block ? invoke_result_allocas.size() : 0));
+            // the shared end of the return paths: each path released its temporaries before it branched here
+            if (!(lowering_debug_flow_block && current_lowering_block_
+                    && current_lowering_block_->debug_flow_return_tail)) {
+                emitExitStatementCleanup(module, true, false, lowering_debug_flow_block && !temp_cleanup_marks.empty()
+                    ? temp_cleanup_marks.front().invoke_alloca_count
+                    : (lowering_debug_flow_block ? invoke_result_allocas.size() : 0));
+            }
             // the returns of the paths of a debugger's requests, which every step event of the function has, share
             // the rest of the return, so that the size of the code of the paths grows with that of the function
             // (#6201)

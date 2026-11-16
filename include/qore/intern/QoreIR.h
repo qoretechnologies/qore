@@ -4246,6 +4246,10 @@ public:
     //! only runs when a debugger requests a break or a continue; not counted in the size of the function
     //! (QoreIRFunction::getInstructionCount())
     bool debug_flow = false;
+    //! Transient (never serialized): true for the shared end of the return paths of a debugger's requests (see
+    //! QoreIRLowering::debug_flow_return_tails), whose paths release the temporaries of their temp scopes before
+    //! they branch to it in native code (#6201)
+    bool debug_flow_return_tail = false;
 
     //! True if this block contains phi nodes at the beginning.
     //! Set during computeSlotIdsAndEmbed() to optimize phi loop skipping.

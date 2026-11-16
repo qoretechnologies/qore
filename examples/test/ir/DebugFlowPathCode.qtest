@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the paths of a debugger's requests
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class DebugFlowPathCodeTest
+
+#! the code after the paths of a debugger's requests has the lowering state that the code before them left (#6201)
+/** Code with step events, the default, has the paths of a debugger's return, break and continue requests at every
+    step event, which release the temporaries, the locals and the handlers of the blocks that they leave.  The paths
+    run only on a request, and the native code of the blocks after them is lowered with the state that the code before
+    them left: the temp scopes still open and the cleanups of the locals of the blocks still open.  The return paths
+    share the release of the locals of the bottom blocks of the function, and the paths of the step events of handler
+    bodies lowered inline are shared as those of other code, so that the code of the paths grows with the function.
+*/
+class DebugFlowPathCodeTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/DebugFlowPathCode/probe.q";
+        *string ast_out;
+    }
+
+    constructor() : Test("debug flow path code", "1.0", \ARGV) {
+        addTestCase("AST reference", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        set_return_value(main());
+    }
+
+    astReference() {
+        list<string> lines = getAst().split("\n");
+        foreach string line in (
+                'cases 3 a3b3c3d3',
+                'cases 12 ',
+                'loop_switch a0d0b0a1s1b1a2d2b2 ["~a0", "~d0", "~b0", "e0", "~a1", "~s1", "c1", "~b1", "e1", "~a2", "~d2", '
+                    '"~b2", "e2"]',
+                'block_locals ["a0", "b0", "~e0", "~d0", "c0", "a1", "b1", "~e1", "~d1", "c1", "end"]',
+                'locals_tries 50 23',
+                'nested_handlers ["h1", "h2", "h3", "~blk", "out:O"]',
+            ) {
+            # each case runs twice, so that the tiered mode runs compiled code on the second call
+            assertEq(2, (select lines, $1 == line).size(), line);
+        }
+    }
+
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit") {
+            assertEq(expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, probe)), mode);
+        }
+        assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1", "QORE_JIT_THRESHOLD=1", qore_bin,
+            "-b", "--enable-debug", "--exec-mode=tiered", probe)), "tiered");
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-debug-flow-path-code-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe));
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

@@ -823,6 +823,17 @@ private:
         size_t iterator_count = 0;
     };
     std::vector<TempCleanupMark> temp_cleanup_marks;
+    //! The number of temp_cleanup_marks open at the start of the current run of path blocks: the marks of the code
+    /** A path's release of the temporaries of a scope of the code changes no lowering state of the code (#6201)
+    */
+    size_t debug_flow_run_marks = 0;
+    //! The lowering state of the code saved at the start of a run of path blocks, restored at its end (#6201)
+    std::vector<TempCleanupMark> debug_flow_saved_marks;
+    std::vector<SsaCleanupEntry> debug_flow_saved_pending_ssa;
+    //! The ranges of invoke_result_allocas and of pending_ssa_cleanup that the path block being lowered released for
+    //! the temp scopes of the code, so that each is released once in it (#6201)
+    std::vector<std::pair<size_t, size_t>> debug_flow_released;
+    size_t debug_flow_pending_released = SIZE_MAX;
     //! The release code of the exception edges to each handler block (see getExceptionEdgeTarget())
     /** An edge releases the temporaries of the temp scopes that the exception leaves, in the order in which the AST
         interpreter unwinds them: those of argument lists, then the receivers (qore_ir_order_exception_release()).  The
@@ -1962,6 +1973,11 @@ private:
     //! reload state that is kept until the end of a statement (false for DiscardTempsKeep, which closes the scope
     //! of an operand in the middle of a statement)
     void emitDiscardTemps(llvm::Module& module, uint32_t scope_id = 0, bool statement_end = true);
+
+    //! Returns where a path's release of invoke_result_allocas, going down from \a i, goes on: the start of a range
+    //! that the path's block released already and that ends at or after \a i (debug_flow_released), otherwise \a i,
+    //! when it releases the temporary before \a i (#6201)
+    size_t debugFlowPathSkipTemps(size_t i) const;
 
     // Register an alloca-backed cleanup slot and, for large functions, add its
     // address to the entry-block cleanup pointer array used by
