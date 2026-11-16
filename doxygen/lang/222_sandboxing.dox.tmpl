@@ -383,9 +383,13 @@ authenticate();
     @ref SqlUtil::AbstractDatabase::getDatabase() "AbstractDatabase::getDatabase()" and the constructors of
     @ref SqlUtil::Table "Table" and @ref SqlUtil::Database "Database" that take one are in the \c DATABASE domain and
     check the caller when other module code calls them, and the deserialization of a table and
-    @ref DbDataProvider::DbDataProviderBase::getDatasource() "DbDataProviderBase::getDatasource()" check the caller;
-    the datasources that the host gives the code, and the names that the host's datasource lookup resolves, are not
-    affected.
+    @ref DbDataProvider::DbDataProviderBase::getDatasource() "DbDataProviderBase::getDatasource()" check the caller,
+    as does a @ref DbDataProvider::DatasourceConnection "DatasourceConnection" when it is created or deserialized, so
+    the code that gives its URL decides; the datasources and connections that the host gives the code, and the names
+    that the host's datasource lookup resolves, are not affected (but code governed by a sandbox that restricts the
+    \c DATABASE domain runs the module code with that restriction, so it cannot open a connection through them
+    either: \c INVALID-FUNCTION-ACCESS).  A module that creates connection objects when they are first looked up
+    must therefore create them in the host's context, or before restricted code can look them up.
 
     @since %Qore 3.0
 
