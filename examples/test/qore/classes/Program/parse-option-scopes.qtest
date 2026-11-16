@@ -1,0 +1,263 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - threads reading and changing a Program's parse options while another thread parses it, and fork()
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class ParseOptionScopesTest
+
+#! Parse options that are in effect only for a part of a parse (issues #6175 and #6207)
+/** A parse gives some code options of its own for a while: the options of a statement while it is initialized, the
+    options of a file with %push-parse-options, and the restrictions of a module header.  These options are the
+    parsing thread's own: another thread sees the Program's own options meanwhile, both when it reads them and when it
+    enters the Program, and a change that another thread makes to the Program's options or warning mask meanwhile is
+    kept when the scoped options end.
+
+    The other thread reads or changes the options when the scoped options are in effect, with a gate of the debug
+    build (dbg_arm_parse_scope_gate()), which stops the parsing thread until it has.
+*/
+public class ParseOptionScopesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ParseOptionScopesTest", "1.0", \ARGV) {
+        addTestCase("statement options", \statementTest());
+        addTestCase("%push-parse-options", \pushTest());
+        addTestCase("module header", \headerTest());
+        addTestCase("statement options are not visible to other threads", \statementVisibilityTest());
+        addTestCase("%push-parse-options options are not visible to other threads", \pushVisibilityTest());
+        addTestCase("module header options are not visible to other threads", \headerVisibilityTest());
+        addTestCase("%lock-options in a file with %push-parse-options", \pushLockTest());
+        addTestCase("%modern set for the Program while a legacy file's options are in effect", \pushModernTest());
+        addTestCase("fork()", \forkTest());
+        set_return_value(main());
+    }
+
+    private skipWithoutGate() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+    }
+
+    statementTest() {
+        skipWithoutGate();
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_NO_CHILD_PO_RESTRICTIONS);
+        # the directive at the end changes the options after the statements were parsed, so each statement is
+        # initialized with its own options, which are in effect for a while
+        call_function("dbg_arm_parse_scope_gate", p, "statement", PO_NO_PROCESS_CONTROL,
+            WARN_UNREFERENCED_VARIABLE, False);
+        p.parse("int sub f() { int x = 1; return x; }\n%no-gui\n", "statement", WARN_ALL);
+        hash<auto> r = call_function("dbg_parse_scope_gate_result");
+        assertTrue(r.fired);
+        assertTrue(r.ended);
+        assertEq(NOTHING, r.other_error);
+        # the restriction that the other thread set is kept, and so is the directive's option
+        assertTrue(p.getFullParseOptions().hasAny(PO_NO_PROCESS_CONTROL));
+        assertTrue(p.getFullParseOptions().hasAny(PO_NO_GUI));
+        assertNeq(0, r.options & PO_NO_PROCESS_CONTROL);
+        # the warning that the other thread disabled stays disabled when the statement's options end
+        assertEq(0, r.warn_mask & WARN_UNREFERENCED_VARIABLE);
+    }
+
+    pushTest() {
+        skipWithoutGate();
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        call_function("dbg_arm_parse_scope_gate", p, "push", PO_NO_PROCESS_CONTROL, 0, False);
+        p.parse("%push-parse-options\n%no-gui\nint sub f() { return 1; }\n", "push");
+        hash<auto> r = call_function("dbg_parse_scope_gate_result");
+        assertTrue(r.fired);
+        assertTrue(r.ended);
+        assertEq(NOTHING, r.other_error);
+        # the file's own option ends with it, the restriction that the other thread set is kept
+        assertFalse(p.getFullParseOptions().hasAny(PO_NO_GUI));
+        assertTrue(p.getFullParseOptions().hasAny(PO_NO_PROCESS_CONTROL));
+        assertNeq(0, r.options & PO_NO_PROCESS_CONTROL);
+        assertEq(0, r.options & PO_NO_GUI);
+    }
+
+    headerTest() {
+        skipWithoutGate();
+        string fn = writeModule();
+        on_exit unlink(fn);
+        # the restrictions of the module header, in the module's own Program
+        call_function("dbg_arm_parse_scope_gate", NOTHING, "header", PO_NO_PROCESS_CONTROL, 0, False);
+        load_module(fn);
+        hash<auto> r = call_function("dbg_parse_scope_gate_result");
+        assertTrue(r.fired);
+        assertTrue(r.ended);
+        assertEq(NOTHING, r.other_error);
+        # the restriction that the other thread set is kept when the header's restrictions end
+        assertNeq(0, r.options & PO_NO_PROCESS_CONTROL);
+        # and the header's other restrictions end
+        assertEq(0, r.options & PO_NO_FILESYSTEM);
+    }
+
+    statementVisibilityTest() {
+        skipWithoutGate();
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_NO_CHILD_PO_RESTRICTIONS);
+        # the statements are parsed before the directive, so their own options do not have its restriction, which the
+        # Program has when they are initialized
+        hash<auto> r = parseWithObserver(p, "statement", "int sub f() { int x = 1; return x; }\n%no-gui\n");
+        assertTrue(r.fired);
+        assertTrue(r.ended);
+        # the statement's own options are in effect in the parsing thread
+        assertEq(0, r.scope_options & PO_NO_GUI);
+        # another thread that reads the options of the Program meanwhile sees the Program's own options
+        assertNeq(0, r.observed & PO_NO_GUI);
+        assertNeq(0, r.other_options & PO_NO_GUI);
+        # and a thread that enters the Program meanwhile runs with them
+        assertNeq(0, r.other_call_options & PO_NO_GUI);
+        assertTrue(p.getFullParseOptions().hasAny(PO_NO_GUI));
+    }
+
+    pushVisibilityTest() {
+        skipWithoutGate();
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        hash<auto> r = parseWithObserver(p, "push", "%push-parse-options\n%no-gui\nint sub f() { return 1; }\n");
+        assertTrue(r.fired);
+        assertTrue(r.ended);
+        # the file's own option is in effect in the parsing thread
+        assertNeq(0, r.scope_options & PO_NO_GUI);
+        # another thread that reads the options of the Program meanwhile sees the Program's own options
+        assertEq(0, r.observed & PO_NO_GUI);
+        assertEq(0, r.other_options & PO_NO_GUI);
+        # and a thread that enters the Program meanwhile runs with them
+        assertEq(0, r.other_call_options & PO_NO_GUI);
+        assertFalse(p.getFullParseOptions().hasAny(PO_NO_GUI));
+    }
+
+    headerVisibilityTest() {
+        skipWithoutGate();
+        string fn = writeModule();
+        on_exit unlink(fn);
+        # the module's Program is not available to the test: another thread of the debug build reads its options
+        call_function("dbg_arm_parse_scope_gate", NOTHING, "header", 0, 0, False);
+        load_module(fn);
+        hash<auto> r = call_function("dbg_parse_scope_gate_result");
+        assertTrue(r.fired);
+        assertTrue(r.ended);
+        # the header's restrictions are in effect in the parsing thread
+        assertNeq(0, r.scope_options & PO_NO_FILESYSTEM);
+        # another thread that reads the options of the Program meanwhile sees the Program's own options
+        assertEq(0, r.other_options & PO_NO_FILESYSTEM);
+        # and a thread that enters the Program meanwhile runs with them
+        assertEq(0, r.other_call_options & PO_NO_FILESYSTEM);
+        assertEq(0, r.options & PO_NO_FILESYSTEM);
+    }
+
+    pushLockTest() {
+        skipWithoutGate();
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%push-parse-options\n%no-gui\n%lock-options\nint sub f() { return 1; }\n", "push-lock");
+        # the restriction in effect when the file locked the options stays in effect after the file
+        assertTrue(p.getFullParseOptions().hasAny(PO_NO_GUI));
+        # and cannot be disabled
+        assertThrows("OPTIONS-LOCKED", \p.disableParseOptions(), PO_NO_GUI);
+        assertEq(0, call_function("dbg_parse_scope_count", p));
+    }
+
+    pushModernTest() {
+        skipWithoutGate();
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        # the Program gets %modern (Program::setParseOptions() in another thread) while the legacy file's own
+        # compatibility option is in effect: the file keeps the options that it had, and the Program has %modern after
+        # the file
+        call_function("dbg_arm_parse_scope_gate", p, "push", PO_MODERN, 0, False);
+        p.parse("%push-parse-options\n%broken-range\nsub f() { int x = 1; x += 1; }\nf();\n", "push-modern");
+        hash<auto> r = call_function("dbg_parse_scope_gate_result");
+        assertTrue(r.fired);
+        assertTrue(r.ended);
+        assertEq(NOTHING, r.other_error);
+        # the file's options: its own compatibility option, and the options of %modern that the Program had before
+        assertNeq(0, r.scope_options & PO_BROKEN_RANGE);
+        assertNeq(0, r.scope_options & PO_NEW_STYLE);
+        assertNeq(PO_MODERN, r.scope_options & PO_MODERN);
+        # without the options that %modern implies
+        foreach string opt in ("no-summarize", "streaming-any", "negative-offsets", "strict-parse-errors") {
+            assertFalse(r.scope_option_names.contains(opt), opt);
+        }
+        # the Program's own options
+        assertEq(PO_MODERN, r.options & PO_MODERN);
+        assertEq(0, r.options & PO_BROKEN_RANGE);
+        assertTrue(p.getFullParseOptions().hasAll(PO_MODERN));
+        list<string> opts = p.getFullParseOptions().toStringList();
+        foreach string opt in ("no-summarize", "negative-offsets", "strict-parse-errors") {
+            assertTrue(opts.contains(opt), opt);
+        }
+        assertEq(0, call_function("dbg_parse_scope_count", p));
+    }
+
+    forkTest() {
+        skipWithoutGate();
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        # another thread has scoped options of the Program in effect when fork() is called; it does not exist in the
+        # child
+        int status = call_function("dbg_fork_while_parse_scope_active", p, int sub () {
+            return call_function("dbg_parse_scope_count", p);
+        });
+        assertEq(0, status);
+        assertEq(0, call_function("dbg_parse_scope_count", p));
+    }
+
+    #! parses the code in the Program with a thread that reads the Program's options while the scoped options are in
+    #! effect; returns the result of the gate with the options read by the thread in \c observed
+    private hash<auto> parseWithObserver(Program p, string kind, string code) {
+        call_function("dbg_arm_parse_scope_gate", p, kind, 0, 0, True);
+        Queue q();
+        background sub () {
+            on_exit call_function("dbg_parse_scope_gate_continue");
+            try {
+                # waits until the scoped options are in effect, or the gate has been closed without firing
+                q.push(call_function("dbg_parse_scope_gate_wait") ? p.getParseOptions() : -1);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+        hash<auto> r;
+        {
+            # the gate is closed even if the parse fails, so that the thread does not wait for it
+            on_exit r = call_function("dbg_parse_scope_gate_result");
+            p.parse(code, kind + "-visibility");
+        }
+        auto observed = q.get();
+        if (observed.typeCode() == NT_HASH) {
+            throw observed.err, observed.desc;
+        }
+        r.observed = observed;
+        return r;
+    }
+
+    #! writes a user module with a header to a temporary file and returns its path
+    private string writeModule() {
+        string name = "ParseOptionScopes" + get_random_string(8, 2);
+        string fn = tmp_location() + DirSep + name + ".qm";
+        File f();
+        f.open2(fn, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(sprintf("# -*- mode: qore; indent-tabs-mode: nil -*-
+module %s {
+    version = \"1.0\";
+    desc = \"test\";
+    author = \"test\";
+    url = \"https://qore.org\";
+}
+
+%%new-style
+%%require-types
+
+public namespace %s {
+public int sub f() {
+    return 1;
+}
+}
+", name, name));
+        f.close();
+        return fn;
+    }
+}

@@ -18135,6 +18135,277 @@ static QoreValue f_dbg_release_parse_start_gate(const QoreListNode* params, Runt
     return QoreValue();
 }
 
+namespace {
+//! the gate of dbg_arm_parse_scope_gate() (issues #6175, #6207)
+struct QoreDbgParseScopeGate {
+    std::mutex m;
+    std::condition_variable cv;
+    bool armed = false;
+    //! the Program whose scoped options stop the parse, or nullptr for any Program
+    QoreProgram* pgm = nullptr;
+    std::string kind;
+    //! the options that the other thread sets
+    int64 set_options = 0;
+    //! the warnings that the other thread disables
+    int disable_warnings = 0;
+    //! true if the parse waits for an observer thread (dbg_parse_scope_gate_wait())
+    bool observer = false;
+    //! the Program whose scoped options stopped the parse
+    QoreProgram* fired_pgm = nullptr;
+    //! the options that the parsing thread had then
+    QoreParseOptions scope_options;
+    //! the error of the other thread's change, if any
+    std::string other_error;
+    //! the options of the Program that another thread read then (QoreProgram::getParseOptions())
+    QoreParseOptions other_options;
+    //! the options that a call entering the Program from another thread took then
+    QoreParseOptions other_call_options;
+    //! the options of the Program when the scoped options ended
+    QoreParseOptions end_options;
+    int end_warn_mask = 0;
+    bool ended = false;
+    //! the observer is done
+    bool observer_done = false;
+    //! the gate was closed by dbg_parse_scope_gate_result()
+    bool closed = false;
+};
+
+QoreDbgParseScopeGate parse_scope_gate;
+}
+
+void qore_dbg_parse_scope_begin(QoreProgram* pgm, const char* kind) {
+    int64 set_options;
+    int disable_warnings;
+    {
+        std::lock_guard<std::mutex> lg(parse_scope_gate.m);
+        if (!parse_scope_gate.armed || (parse_scope_gate.pgm && parse_scope_gate.pgm != pgm)
+                || parse_scope_gate.kind != kind) {
+            return;
+        }
+        parse_scope_gate.armed = false;
+        set_options = parse_scope_gate.set_options;
+        disable_warnings = parse_scope_gate.disable_warnings;
+    }
+    // another thread reads the options of the Program, as Program::getParseOptions() does and as a call that enters
+    // the Program does, and then changes them as Program::setParseOptions() and Program::disableWarning() do; this
+    // thread waits for it, so that it is done while the scoped options are in effect
+    QoreParseOptions other_options, other_call_options;
+    std::string other_error;
+    std::thread other([pgm, set_options, disable_warnings, &other_options, &other_call_options, &other_error]() {
+        other_options = pgm->getParseOptions();
+        other_call_options = qore_program_private::getParseOptions(*pgm);
+        if (!set_options && !disable_warnings) {
+            return;
+        }
+        // a Qore thread, so that the API can raise its exceptions
+        QoreForeignThreadHelper qfth;
+        if (!qfth) {
+            other_error = "the thread could not be registered";
+            return;
+        }
+        if (set_options) {
+            ExceptionSink xsink;
+            pgm->setParseOptions(QoreParseOptions(set_options), &xsink);
+            if (xsink) {
+                QoreValue err = xsink.getExceptionErr();
+                QoreStringValueHelper str(err);
+                other_error = str->c_str();
+                xsink.clear();
+            }
+        }
+        if (disable_warnings) {
+            pgm->disableWarning(disable_warnings);
+        }
+    });
+    other.join();
+    // the options that this thread sees then
+    QoreParseOptions scope_options = pgm->getParseOptions();
+    std::unique_lock<std::mutex> ul(parse_scope_gate.m);
+    parse_scope_gate.scope_options = scope_options;
+    parse_scope_gate.other_error = other_error;
+    parse_scope_gate.other_options = other_options;
+    parse_scope_gate.other_call_options = other_call_options;
+    parse_scope_gate.fired_pgm = pgm;
+    parse_scope_gate.cv.notify_all();
+    if (parse_scope_gate.observer) {
+        // the observer thread reads the options now
+        parse_scope_gate.cv.wait(ul, [] { return parse_scope_gate.observer_done || parse_scope_gate.closed; });
+    }
+}
+
+void qore_dbg_parse_scope_end(QoreProgram* pgm, const char* kind) {
+    std::lock_guard<std::mutex> lg(parse_scope_gate.m);
+    if (parse_scope_gate.fired_pgm != pgm || parse_scope_gate.kind != kind || parse_scope_gate.ended) {
+        return;
+    }
+    parse_scope_gate.end_options = pgm->getParseOptions();
+    parse_scope_gate.end_warn_mask = qore_program_private::getParseWarnOptions(pgm).warn_mask;
+    parse_scope_gate.ended = true;
+}
+
+//! Debug-only: stops a parse when the next scoped options of a kind are in effect (issues #6175, #6207)
+/** When scoped options of the Program (any Program if \a pgm is NOTHING) of the kind given are in effect
+    (\c "statement": the options of a statement while it is initialized, \c "push": the options of a file with
+    \%push-parse-options once one of its directives has changed them, \c "header": the restrictions of a module
+    header), another thread reads the options of the Program as Program::getParseOptions() does and as a call
+    entering the Program does, and then sets the options \a set_options with Program::setParseOptions() and disables
+    the warnings \a disable_warnings; the parse goes on once it has.  With \a observer, the parse waits then until
+    dbg_parse_scope_gate_continue() is called by a thread that dbg_parse_scope_gate_wait() released.
+    dbg_parse_scope_gate_result() gives the options seen and the options once the scoped options have ended, and closes
+    the gate.  One-shot.  DEBUG builds only.
+*/
+static QoreValue f_dbg_arm_parse_scope_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreProgram* p = nullptr;
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    if (obj) {
+        ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+            xsink)), xsink);
+        if (!pgm) {
+            return QoreValue();
+        }
+        p = *pgm;
+    }
+    QoreStringNodeValueHelper kind(get_param_value(params, 1));
+    std::lock_guard<std::mutex> lg(parse_scope_gate.m);
+    parse_scope_gate.armed = true;
+    parse_scope_gate.pgm = p;
+    parse_scope_gate.kind = kind->c_str();
+    parse_scope_gate.set_options = get_param_value(params, 2).getAsBigInt();
+    parse_scope_gate.disable_warnings = static_cast<int>(get_param_value(params, 3).getAsBigInt());
+    parse_scope_gate.observer = get_param_value(params, 4).getAsBool();
+    parse_scope_gate.fired_pgm = nullptr;
+    parse_scope_gate.scope_options = QoreParseOptions();
+    parse_scope_gate.other_error.clear();
+    parse_scope_gate.other_options = QoreParseOptions();
+    parse_scope_gate.other_call_options = QoreParseOptions();
+    parse_scope_gate.end_options = QoreParseOptions();
+    parse_scope_gate.end_warn_mask = 0;
+    parse_scope_gate.ended = false;
+    parse_scope_gate.observer_done = false;
+    parse_scope_gate.closed = false;
+    return QoreValue();
+}
+
+//! Debug-only: waits until the gate of dbg_arm_parse_scope_gate() stops a parse or is closed; DEBUG builds only
+/** @return True if a parse is stopped (call dbg_parse_scope_gate_continue() then), False if the gate was closed
+    without stopping one
+*/
+static QoreValue f_dbg_parse_scope_gate_wait(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::unique_lock<std::mutex> ul(parse_scope_gate.m);
+    parse_scope_gate.cv.wait(ul, [] { return parse_scope_gate.fired_pgm || parse_scope_gate.closed; });
+    return parse_scope_gate.fired_pgm && !parse_scope_gate.closed;
+}
+
+//! Debug-only: lets a parse stopped by the gate of dbg_arm_parse_scope_gate() go on; DEBUG builds only
+static QoreValue f_dbg_parse_scope_gate_continue(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(parse_scope_gate.m);
+    parse_scope_gate.observer_done = true;
+    parse_scope_gate.cv.notify_all();
+    return QoreValue();
+}
+
+//! Debug-only: returns the result of the gate of dbg_arm_parse_scope_gate() and closes it; DEBUG builds only
+/** @return a hash: \c fired: True if scoped options stopped a parse, \c ended: True if they have ended since,
+    \c scope_options: the low word of the options that the parsing thread had then, after the other thread's
+    change, \c scope_option_names: the names
+    of all of them, \c other_error: the error code of the other thread's change, if it failed, \c other_options:
+    the low word of the options that another thread read then (Program::getParseOptions()), \c other_call_options:
+    the low word of the options that a call entering the Program took then, \c options: the low word of the options
+    of the Program when the scoped options ended, \c warn_mask: its warning mask then
+*/
+static QoreValue f_dbg_parse_scope_gate_result(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(parse_scope_gate.m);
+    parse_scope_gate.armed = false;
+    parse_scope_gate.closed = true;
+    parse_scope_gate.cv.notify_all();
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("fired", static_cast<bool>(parse_scope_gate.fired_pgm), xsink);
+    h->setKeyValue("ended", parse_scope_gate.ended, xsink);
+    h->setKeyValue("scope_options", parse_scope_gate.scope_options.getLo(), xsink);
+    h->setKeyValue("scope_option_names", QoreParseOptionsData(parse_scope_gate.scope_options).toStringList(xsink),
+        xsink);
+    if (!parse_scope_gate.other_error.empty()) {
+        h->setKeyValue("other_error", new QoreStringNode(parse_scope_gate.other_error), xsink);
+    }
+    h->setKeyValue("other_options", parse_scope_gate.other_options.getLo(), xsink);
+    h->setKeyValue("other_call_options", parse_scope_gate.other_call_options.getLo(), xsink);
+    h->setKeyValue("options", parse_scope_gate.end_options.getLo(), xsink);
+    h->setKeyValue("warn_mask", static_cast<int64>(parse_scope_gate.end_warn_mask), xsink);
+    return h.release();
+}
+
+//! Debug-only: returns the number of scoped options of the Program in effect in any thread; DEBUG builds only
+static QoreValue f_dbg_parse_scope_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    return static_cast<int64>(qore_program_private::get(**pgm)->pwo.parse_options.getOverlayCount());
+}
+
+//! Debug-only: creates a child process with fork() while another thread has scoped options of the Program in effect
+/** The other thread gives the Program scoped options (as a statement does while it is initialized) and keeps them
+    until fork() has returned in the parent; the child runs the code given and exits with the value it returns (99 if
+    it raised an exception).  The thread does not exist in the child, so its scoped options must not be counted there
+    (issue #6207).  DEBUG builds only.
+
+    @return the exit status of the child (-1 if it did not exit normally)
+
+    @throw DBG-FORK-ERROR fork() failed
+*/
+static QoreValue f_dbg_fork_while_parse_scope_active(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 1).get<const ResolvedCallReferenceNode>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    const SyncParseOptions& po = qore_program_private::get(**pgm)->pwo.parse_options;
+    std::mutex m;
+    std::condition_variable cv;
+    bool active = false;
+    bool release = false;
+    std::thread holder([&]() {
+        ParseOptionsOverlayFrame frame(ParseOptionsOverlayFrame::STATEMENT);
+        frame.po = po.load() | QoreParseOptions(PO_NO_GUI);
+        frame.link(po);
+        std::unique_lock<std::mutex> ul(m);
+        active = true;
+        cv.notify_all();
+        cv.wait(ul, [&release] { return release; });
+    });
+    {
+        std::unique_lock<std::mutex> ul(m);
+        cv.wait(ul, [&active] { return active; });
+    }
+    pid_t pid = fork();
+    if (!pid) {
+        ExceptionSink child_xsink;
+        ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+        int status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+        child_xsink.clear();
+        _exit(status);
+    }
+    int fork_errno = errno;
+    {
+        std::lock_guard<std::mutex> lg(m);
+        release = true;
+        cv.notify_all();
+    }
+    holder.join();
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", fork_errno, "fork() failed");
+        return QoreValue();
+    }
+    return ut_wait_child(pid);
+}
+
 //! Debug-only: creates a child process with fork() while another thread holds the lock of a registered fork handler
 /** The other thread takes the lock as the handler's prepare handler does, and releases it when the prepare handlers
     reach the handler, so fork() waits for it.  The child takes and releases the lock in the same way, runs the code
@@ -25345,6 +25616,21 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_arm_parse_scope_gate", f_dbg_arm_parse_scope_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 5, QC_PROGRAM->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "kind", bigIntTypeInfo, QORE_PARAM_NO_ARG, "set_options", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "disable_warnings", boolTypeInfo, QORE_PARAM_NO_ARG, "observer");
+    qns.addBuiltinVariant("dbg_parse_scope_gate_wait", f_dbg_parse_scope_gate_wait, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo);
+    qns.addBuiltinVariant("dbg_parse_scope_gate_continue", f_dbg_parse_scope_gate_continue, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_parse_scope_gate_result", f_dbg_parse_scope_gate_result, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_parse_scope_count", f_dbg_parse_scope_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
+    qns.addBuiltinVariant("dbg_fork_while_parse_scope_active", f_dbg_fork_while_parse_scope_active, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", codeTypeInfo,
         QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_fork_while_parse_options_locked", f_dbg_fork_while_parse_options_locked, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", codeTypeInfo,

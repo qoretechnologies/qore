@@ -81,7 +81,8 @@ static const QoreProgramLocation* get_loc(YYLTYPE* yylloc) {
 // Capture token context, not the options in effect when bison eventually reduces a statement: lookahead may
 // already have consumed a restoring directive, and an expression may contain several option changes.
 static void set_native_token_info(YYLTYPE* loc, QoreParseState* state) {
-    const QoreParseOptions& po = qore_program_private::getParseOptions(*getProgram());
+    // the options in effect for the parse, with the scoped options of the parsing thread (issue #6207)
+    const QoreParseOptions po = qore_program_private::getViewParseOptions(*getProgram());
     loc->semantic_policy = state->semantic_policy = LexicalSemanticPolicy(po);
     loc->has_semantic_policy = true;
     // %modern options never include a compatibility option (qore#5682; asserted where they are applied); the check

@@ -1575,7 +1575,8 @@ sub validate_input(int value, int max_value) {
     n/a
 
     @par Description:
-    Prohibits further changes to parse options.
+    Prohibits further changes to parse options.  The restrictions in effect where the directive is used are locked,
+    also in a file with @ref push-parse-options "%push-parse-options", after which they stay in effect.
 
     <hr>
     @section lock-warnings %lock-warnings
@@ -2900,6 +2901,13 @@ if (str)
     a \c .q file or a @ref Qore::Program "Program" of its own.  A legacy file can use the directive before it sets
     @ref modern "%modern" itself, so that the file's %%modern ends with the file.  The compatibility options that a
     pushed scope sets (such as @ref broken-range "%broken-range") apply only to the code parsed in it.
+
+    The options that the file's directives set are in effect only for the code of the file, in the thread that parses
+    it: other threads, including their calls into the @ref Qore::Program "Program", see the Program's own options.  A
+    change of the Program's own options that is made while the file is parsed (with
+    @ref Qore::Program::setParseOptions() "Program::setParseOptions()", for example) applies to the rest of the file
+    as well and is kept after it.  If the file locks the options with @ref lock-options "%lock-options", the
+    restrictions in effect then stay in effect after the file; its other options end with it.
 
     <hr>
     @section require-dollar %require-dollar
