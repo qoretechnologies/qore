@@ -6117,6 +6117,11 @@ static const QoreTypeInfo* qore_resolve_parse_parameterized_class_type(const Qor
         args.push_back(arg);
     }
     for (size_t i = actual; i < expected; ++i) {
+        // the default resolved where the class is declared, once it is initialized (qore#6285)
+        if (const QoreTypeInfo* declared = qore_class_private::get(*qc)->getTypeParamDefaultTypeInfo(i)) {
+            args.push_back(declared);
+            continue;
+        }
         const char* default_type = qc->getTypeParameterDefaultType(i);
         assert(default_type);
         args.push_back(qore_resolve_parse_default_type_arg(default_type, loc, err));
@@ -6159,7 +6164,11 @@ static const QoreTypeInfo* qore_resolve_runtime_parameterized_class_type(const Q
         args.push_back(arg);
     }
     for (size_t i = actual; i < expected; ++i) {
-        const QoreTypeInfo* arg = qore_resolve_runtime_default_type_arg(qc->getTypeParameterDefaultType(i));
+        // the default resolved where the class is declared (qore#6285)
+        const QoreTypeInfo* arg = qore_class_private::get(*qc)->getTypeParamDefaultTypeInfo(i);
+        if (!arg) {
+            arg = qore_resolve_runtime_default_type_arg(qc->getTypeParameterDefaultType(i));
+        }
         if (!arg) {
             return nullptr;
         }

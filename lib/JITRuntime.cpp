@@ -4780,7 +4780,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_static_method_call_ref_aot(QoreAOTC
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : (current_pgm ? current_pgm : pgm);
     const qore_class_private* cls = rc.getClass() ? rc.getClass() : runtime_get_class();
     if (method->isStatic()) {
-        return toBits(QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, method, call_pgm, cls)));
+        // the reference names its class, whose specialization of a generic class of the method binds the method's
+        // type parameters (qore#6285)
+        return toBits(QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, method, call_pgm, cls,
+            LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo(*method, qc, cls))));
     }
 
     QoreObject* obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();

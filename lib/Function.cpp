@@ -1768,6 +1768,53 @@ static int check_sandbox_uncontrolled_api(const QoreFunction* func, const Abstra
 thread_local bool qore_dbg_runtime_chosen_variant = false;
 #endif
 
+//! Returns the receiver whose unbound type parameters take the type arguments inferred from a call's arguments
+/** The type arguments that \a receiver binds are kept: only an argument that is a type parameter left unbound takes
+    the inferred one (G2<X, int> with A inferred as float is G2<float, int>); nullptr if there is no inference or an
+    unbound argument is not a bare type parameter (G<list<X>>), whose inference from the method's class is not the
+    type parameter's
+*/
+static const QoreTypeInfo* qore_merge_inferred_class_receiver(const QoreTypeInfo* receiver,
+        const QoreTypeInfo* inferred) {
+    const QoreParameterizedClassTypeInfo* rpti = QoreTypeInfo::getParameterizedClassType(receiver);
+    const QoreParameterizedClassTypeInfo* ipti = QoreTypeInfo::getParameterizedClassType(inferred);
+    if (!rpti || !ipti || !qore_class_private::sameDeclaration(rpti->getBaseClass(), ipti->getBaseClass())
+            || rpti->getArgCount() != ipti->getArgCount()) {
+        return nullptr;
+    }
+    type_vec_t args;
+    args.reserve(rpti->getArgCount());
+    for (size_t i = 0, e = rpti->getArgCount(); i < e; ++i) {
+        const QoreTypeInfo* arg = rpti->getTypeArgs()[i];
+        if (qore_type_contains_type_parameter(arg)) {
+            if (!qore_get_type_parameter_type_info(arg)) {
+                return nullptr;
+            }
+            arg = ipti->getTypeArgs()[i];
+        }
+        args.push_back(arg);
+    }
+    return qore_get_parameterized_class_type(rpti->getBaseClass(), args, rpti->isOrNothing());
+}
+
+void CodeEvaluationHelper::substituteCallerReceiverTypeParams(const QoreFunction* func) {
+    assert(receiver_type_info);
+    // the type's cached flag decides it after its first test
+    if (receiver_type_info->getContainsTypeParameterCache()
+            && qore_type_contains_type_parameter(receiver_type_info)) {
+        receiver_type_info = qore_substitute_type_params_if_needed(receiver_type_info);
+        // code that runs without an instantiation of its type parameters (a static method of G<T> called as G::m(),
+        // whose code calls id(v)) binds those of the method's class to the types of the arguments, as G::id(v)
+        // made there does (qore#6186)
+        if (qore_type_contains_type_parameter(receiver_type_info)) {
+            if (const QoreTypeInfo* inferred = qore_merge_inferred_class_receiver(receiver_type_info,
+                    func->runtimeInferClassReceiverTypeInfo(getArgs(), receiver_type_info))) {
+                receiver_type_info = inferred;
+            }
+        }
+    }
+}
+
 template <bool LexicalInvocation, bool NAMED>
 QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, bool is_copy, const qore_class_private* cctx,
@@ -1784,7 +1831,10 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 
     // the callee's receiver is made current after the variant search below (qore#5892)
-    if (!receiver_type_info && self) {
+    if (receiver_type_info) {
+        // out of line, so that the calls without a receiver keep their code (qore#6308)
+        substituteCallerReceiverTypeParams(func);
+    } else if (self) {
         receiver_type_info = qore_get_object_receiver_type_info(self);
     }
 
@@ -3860,6 +3910,10 @@ static bool qore_finalize_class_type_args(const QoreProgramLocation* loc, const 
     bindings.resize(cls->getTypeParameterCount(), nullptr);
     for (size_t i = 0, e = cls->getTypeParameterCount(); i < e; ++i) {
         if (!bindings[i]) {
+            // the default resolved where the class is declared, once it is initialized (qore#6285)
+            bindings[i] = qore_class_private::get(*cls)->getTypeParamDefaultTypeInfo(i);
+        }
+        if (!bindings[i]) {
             const char* default_type = cls->getTypeParameterDefaultType(i);
             if (default_type) {
                 bindings[i] = qore_resolve_class_type_param_type(loc, cls, i, default_type, "default", err);
@@ -4151,6 +4205,96 @@ const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProg
     }
 
     return best.type_info;
+}
+
+const QoreTypeInfo* QoreFunction::runtimeInferClassReceiverTypeInfo(const QoreListNode* args,
+        const QoreTypeInfo* bound) const {
+    const QoreClass* cls = getClass();
+    if (!cls || !cls->hasTypeParameters()) {
+        return nullptr;
+    }
+    const qore_class_private* cp = qore_class_private::get(*cls);
+    size_t count = cls->getTypeParameterCount();
+    if (cp->rawConstructionDefaultsToAuto()) {
+        type_vec_t raw_args(count, autoTypeInfo);
+        return cls->getTypeInfo(raw_args);
+    }
+
+    size_t nargs = args ? args->size() : 0;
+    type_vec_t arg_types;
+    arg_types.reserve(nargs);
+    for (size_t i = 0; i < nargs; ++i) {
+        arg_types.push_back(args->retrieveEntry(i).getFullTypeInfo());
+    }
+
+    // the first variant whose parameters bind the type parameters to the types of the arguments and then accept the
+    // arguments; the variant search of the call selects the variant
+    for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
+        AbstractFunctionSignature* sig = (*i)->getSignature();
+        if (nargs > sig->numParams() && !(*i)->hasVarargs()) {
+            continue;
+        }
+        type_vec_t bindings(count, nullptr);
+        // the type arguments that the receiver binds
+        if (const QoreParameterizedClassTypeInfo* bpti = QoreTypeInfo::getParameterizedClassType(bound)) {
+            if (qore_class_private::sameDeclaration(bpti->getBaseClass(), cls) && bpti->getArgCount() == count) {
+                for (size_t ti = 0; ti < count; ++ti) {
+                    if (!qore_type_contains_type_parameter(bpti->getTypeArgs()[ti])) {
+                        bindings[ti] = bpti->getTypeArgs()[ti];
+                    }
+                }
+            }
+        }
+        bool ok = true;
+        for (unsigned pi = 0, pe = sig->numParams(); pi < pe && pi < nargs; ++pi) {
+            const QoreTypeInfo* actual = arg_types[pi];
+            if (!actual || !QoreTypeInfo::hasType(actual)) {
+                continue;
+            }
+            if (!qore_infer_class_type_args_from_type(cls, sig->getParamTypeInfo(pi), actual, bindings)) {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok) {
+            continue;
+        }
+        for (size_t ti = 0; ti < count; ++ti) {
+            if (!bindings[ti]) {
+                // the default resolved in the class's own Program when the class was initialized
+                bindings[ti] = cp->getTypeParamDefaultTypeInfo(ti);
+                if (!bindings[ti]) {
+                    bindings[ti] = cp->runtimeResolveTypeParamDefault(ti);
+                }
+                if (!bindings[ti]) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (!qore_class_type_arg_satisfies_bound(cp->getTypeParamBoundTypeInfo(ti), bindings[ti])) {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok) {
+            continue;
+        }
+        const QoreTypeInfo* receiver = cls->getTypeInfo(bindings);
+        for (unsigned pi = 0, pe = sig->numParams(); pi < pe && pi < nargs; ++pi) {
+            const QoreTypeInfo* param = qore_substitute_type_params_if_needed(sig->getParamTypeInfo(pi), receiver,
+                nullptr);
+            // a parameter with a type parameter of the method is checked by the call
+            if (!qore_type_contains_type_parameter(param)
+                    && QoreTypeInfo::runtimeAcceptsValue(param, args->retrieveEntry(pi)) == QTI_NOT_EQUAL) {
+                ok = false;
+                break;
+            }
+        }
+        if (ok) {
+            return receiver;
+        }
+    }
+    return nullptr;
 }
 
 //! Returns true if a noop variant is skipped at run time for a caller with the given parse options

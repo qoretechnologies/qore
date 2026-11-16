@@ -33,6 +33,7 @@
 
 #define _QORE_QORECLASSINTERN_H
 
+#include <mutex>
 #include "qore/safe_dslist"
 #include "qore/intern/QoreTypeOwner.h"
 #include "qore/intern/ConstantList.h"
@@ -2811,6 +2812,12 @@ public:
     //! initialized (see initializeIntern()); a value of a bounded type parameter has its bound in the class's code
     //! (qore#5774)
     type_vec_t type_param_bound_types;
+    //! the resolved defaults of the type parameters (nullptr for a parameter without one), resolved with the bounds
+    //! in the class's own Program, so that a copy imported into another Program keeps them (qore#6285)
+    type_vec_t type_param_default_types;
+    //! the defaults resolved at run time for a class loaded from compiled code (runtimeResolveTypeParamDefault())
+    mutable type_vec_t runtime_default_types;
+    mutable std::mutex runtime_default_lock;
     std::vector<const QoreTypeInfo*> parameterized_vparents;
 
     int64 domain;                    // capabilities of builtin class to use in the context of parse restrictions
@@ -3296,6 +3303,15 @@ public:
         return index < type_param_bound_types.size() ? type_param_bound_types[index] : nullptr;
     }
 
+    //! Returns the resolved default of a type parameter (see initializeIntern()), or nullptr if it has none
+    DLLLOCAL const QoreTypeInfo* getTypeParamDefaultTypeInfo(size_t index) const {
+        return index < type_param_default_types.size() ? type_param_default_types[index] : nullptr;
+    }
+
+    //! Resolves the default of a type parameter of a class that was not initialized from source (a class loaded
+    //! from compiled code) in the class's own Program, or returns nullptr if it has none or it cannot be resolved
+    DLLLOCAL const QoreTypeInfo* runtimeResolveTypeParamDefault(size_t index) const;
+
     DLLLOCAL size_t getTypeParamRequiredCount() const {
         for (size_t i = 0, e = type_params.size(); i < e; ++i) {
             if (type_params[i].hasDefault()) {
@@ -3334,6 +3350,33 @@ public:
             const QoreClass* target_base) const;
     DLLLOCAL const QoreTypeInfo* getConcreteParameterizedBaseTypeInfo(const QoreClass* target_base,
         bool allow_raw_self = true) const;
+
+    //! Returns the receiver of a call through this class of the static method \a m of a generic parent class
+    /** A class without type parameters that inherits a specialization of a generic class (H inherits G<float>) calls
+        the static methods of the generic class with its type parameters bound to the type arguments of the
+        specialization: H::m() is G<float>::m().  Returns nullptr if \a m is not a method of a generic class or this
+        class has type parameters of its own (qore#6186).
+    */
+    DLLLOCAL const QoreTypeInfo* getStaticCallReceiverTypeInfo(const QoreMethod& m) const;
+
+    //! Returns the receiver of a call of the static method \a m without type arguments of its class at parse time
+    /** @param m the static method called
+        @param scope_cls the class that the call names (C::m(), \\C::m()), or nullptr for an implicit call (m())
+        @param class_ctx the class whose code makes the call, if any
+        @param current_receiver set to true if the call's receiver is that of the running instantiation of the code
+        making it: a call in the code of a generic class of a static method of the class or of a parent class
+        (G::m() or m() in G<T> or in K<X> inherits G<list<X>>); the call does not infer the type arguments of the
+        method's class from its arguments then
+
+        @return the receiver of the call: the specialization of the method's generic class that the class named, or
+        else the class of the code making the call, inherits (H::m() and G::m() in a method of H for H inherits
+        G<float> is G<float>::m()); with \a current_receiver, the method's class with the type parameters of the
+        generic class making the call (G<T> or G<list<X>>), which the call substitutes with those of the running
+        instantiation (G<float>); nullptr if there is none, and the type arguments are then inferred from the
+        arguments, unless \a current_receiver is set (qore#6186)
+    */
+    DLLLOCAL static const QoreTypeInfo* parseGetStaticCallReceiverTypeInfo(const QoreMethod& m,
+            const QoreClass* scope_cls, const qore_class_private* class_ctx, bool& current_receiver);
 
     DLLLOCAL bool runtimeIsPrivateMemberIntern(const char* str, bool toplevel) const;
 
@@ -5723,6 +5766,15 @@ public:
         // as eval(): the receiver of a static method called through an object is the object's type (issue #5769)
         return SMETHF(priv->func)->evalMethodGivenArgs(xsink, rc, nullptr, args, cctx, pgm_ctx,
             self ? qore_get_object_receiver_type_info(self) : nullptr);
+    }
+
+    //! as evalGivenArgs(), for a static method called with the receiver \a receiver_type_info (qore#6285)
+    DLLLOCAL static QoreValue evalStaticGivenArgs(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
+            QoreListNode* args, const qore_class_private* cctx, QoreProgram* pgm_ctx,
+            const QoreTypeInfo* receiver_type_info) {
+        qore_method_private* priv = m.priv;
+        assert(priv->static_flag);
+        return SMETHF(priv->func)->evalMethodGivenArgs(xsink, rc, nullptr, args, cctx, pgm_ctx, receiver_type_info);
     }
 
     DLLLOCAL static QoreValue evalTmpArgs(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,

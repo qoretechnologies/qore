@@ -22071,10 +22071,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     bool concrete_generic_call = invoke_explicit_inst
                         || invoke_receiver_type_info
                         || generic_specialization_matches;
+                    // a fast entry specialized for the type arguments of a generic call is called only by the calls
+                    // with them (qore#6256)
                     if (it != batch_callees->end()
                             && (!concrete_generic_call
                                 || generic_specialization_matches
                                 || it->second.context_independent_fast_entry)
+                            && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
                             && it->second.approach_b_eligible
                             && it->second.context_independent_fast_entry
                             && nargs <= static_cast<int>(it->second.num_params)
@@ -22343,10 +22346,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             it != batch_callees->end()
                             && qore_ir_generic_fast_entry_matches(
                                 it->second, inv->expr);
+                        // a fast entry specialized for the type arguments of a generic call is called only by the
+                        // calls with them (qore#6256)
                         if (it != batch_callees->end()
                                 && (!invoke_explicit_inst
                                     || generic_specialization_matches
                                     || it->second.context_independent_fast_entry)
+                                && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
                                 && it->second.approach_b_eligible
                                 && nargs <= static_cast<int>(it->second.num_params)
                                 && isFastFunctionCallEligible(
@@ -22592,11 +22598,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         const QoreTypeParamInstantiation* concrete_inst =
                             generic_specialization_matches
                             ? invoke_concrete_inst : invoke_explicit_inst;
+                        // a fast entry specialized for the type arguments of a generic call is called only by the
+                        // calls with them (qore#6256)
                         if (it != batch_callees->end()
                                 && ((!invoke_explicit_inst
                                         && !invoke_receiver_type_info)
                                     || generic_specialization_matches
                                     || it->second.context_independent_fast_entry)
+                                && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
                                 && it->second.approach_b_eligible
                                 && nargs <= static_cast<int>(it->second.num_params)
                                 && isFastMethodCallEligible(
@@ -23123,7 +23132,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     } else {
                         auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node);
                         method = scr ? scr->getMethod() : nullptr;
-                        qc = method ? method->getClass() : nullptr;
+                        // the class that the reference names (qore#6285)
+                        qc = method ? scr->getScopeClass() : nullptr;
                         if (method && method->isStatic() && qc) {
                             llvm::Value* class_path =
                                 qore_ir_create_global_string_ptr(builder,
@@ -24547,10 +24557,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ? qore_ir_get_call_type_instantiation(
                         direct_inst->expr)
                     : explicit_inst;
+                // a fast entry specialized for the type arguments of a generic call is called only by the calls with
+                // them (qore#6256)
                 if (it != batch_callees->end()
                         && (!explicit_inst
                             || generic_specialization_matches
                             || it->second.context_independent_fast_entry)
+                        && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
                         && it->second.approach_b_eligible
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastFunctionCallEligible(aot_direct_variant,
@@ -26838,10 +26851,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ? qore_ir_get_call_type_instantiation(
                         direct_inst->expr)
                     : explicit_inst;
+                // a fast entry specialized for the type arguments of a generic call is called only by the calls with
+                // them (qore#6256)
                 if (it != batch_callees->end()
                         && ((!receiver_type_info && !explicit_inst)
                             || generic_specialization_matches
                             || it->second.context_independent_fast_entry)
+                        && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
                         && it->second.approach_b_eligible
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(direct_inst->variant,
@@ -33089,7 +33105,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 } else {
                     auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node);
                     method = scr ? scr->getMethod() : nullptr;
-                    qc = method ? method->getClass() : nullptr;
+                    // the class that the reference names (qore#6285)
+                    qc = method ? scr->getScopeClass() : nullptr;
                     if (method && method->isStatic() && qc) {
                         llvm::Value* class_path =
                             qore_ir_create_global_string_ptr(builder,
