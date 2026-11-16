@@ -154,7 +154,7 @@ enum class Order {
 */
 static void compare(const QoreStringNode& s, Order order, const char* label, bool sparse = false) {
     ExceptionSink xsink;
-    // the bytes; c_str() materializes a view in the middle of its parent, as every character offset would
+    // the bytes (a part in the middle of its parent is a copy, issue #6239)
     QoreStringNodeHolder ref(new QoreStringNode(s.c_str(), s.size(), qcs_ref));
     const qore_offset_t n = static_cast<qore_offset_t>(ref->length());
     // whether the text is valid UTF-8 (the reference walk finds no invalid byte)
@@ -447,7 +447,8 @@ static void check_owned(const Mutation& m, const char* content_name, const std::
     compare(**s, Order::Backward, (label + ", appended").c_str());
 }
 
-//! checks a mutation of a view: at the end of its parent, in its middle, or a view of a view
+//! checks a mutation of a view at the end of its parent, of a part in its middle (a copy, issue #6239), or of a view
+//! of either
 static void check_view(const Mutation& m, const char* content_name, const std::string& content, bool middle,
         bool nested, bool prime_parent) {
     std::string label = std::string(m.name) + ", " + (middle ? "middle" : "end") + " view" + (nested ? " of view" : "")
@@ -482,7 +483,13 @@ static void check_view(const Mutation& m, const char* content_name, const std::s
         }
         view = inner.release();
     }
-    {
+    if (middle && !nested) {
+        // a part in the middle of its parent is a copy, which owns its storage (issue #6239)
+        Outcome a, e;
+        a.num = view->capacity() >= view->size() ? 1 : 0;
+        e.num = 1;
+        expect(a, e, "middle part capacity()", label.c_str());
+    } else {
         // a view has no storage of its own, whatever its cache holds; a substring of fewer than 4096 bytes is a copy
         Outcome a, e;
         a.num = view->size() >= 4096 ? static_cast<int64>(view->capacity()) : 0;
