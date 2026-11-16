@@ -1,0 +1,209 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks the type of an enum value stored in an int-typed container; run by enum-int-container-literals.qtest
+
+/** An enum value stored in a container whose value type is int is converted to its base value, whether it is
+    assigned to an element or given in a list or hash literal (qore#6274).  Each check prints "name=type", where the
+    type is the full type of the value stored.
+*/
+
+%modern
+
+enum EI : int {
+    One = 1,
+    Seven = 7,
+    Eight = 8,
+}
+
+hashdecl HD {
+    int a;
+    list<int> l;
+    hash<string, int> h;
+    EI e;
+}
+
+hashdecl HDDefault {
+    int a = EI::Seven;
+    list<int> l = (EI::Seven,);
+}
+
+class C {
+    public {
+        int m;
+        list<int> lm;
+        int dm = EI::Eight;
+        list<int> dlm = (EI::Eight,);
+    }
+
+    constructor(EI e) {
+        m = e;
+        lm = (e,);
+    }
+}
+
+const ConstList = (EI::Seven,);
+const ConstTypedList = cast<list<int>>((EI::Seven,));
+const ConstHashDecl = <HD>{"a": EI::Seven, "l": (EI::Seven,)};
+
+sub show(string name, auto v) {
+    printf("%s=%s\n", name, v.fullType());
+}
+
+int sub first(list<int> l) {
+    return l[0];
+}
+
+auto sub first_auto(list<int> l) {
+    return l[0];
+}
+
+auto sub key_auto(hash<string, int> h) {
+    return h.a;
+}
+
+auto sub default_list(list<int> l = (EI::Eight,)) {
+    return l[0];
+}
+
+auto sub auto_key(*hash<auto> h) {
+    return h.e;
+}
+
+# the first use of the parameter in a list literal that initializes a list<int> (the case of qore#6274)
+auto sub list_init(EI e) {
+    list<int> l = (e,);
+    return l[0];
+}
+
+auto sub hash_init(EI e) {
+    hash<string, int> h = {"a": e};
+    return h.a;
+}
+
+auto sub list_init_multi(EI e) {
+    list<int> l = (e, e);
+    return l[1];
+}
+
+sub run(EI e) {
+    show("list-init", list_init(e));
+    show("list-init-multi", list_init_multi(e));
+    show("hash-init", hash_init(e));
+
+    # hash<string, int>
+    {
+        hash<string, int> h = {"a": e};
+        show("hash-literal-var", h.a);
+        hash<string, int> c = h;
+        show("hash-literal-var-copy", c.a);
+        h = {"a": EI::Seven};
+        show("hash-literal-const", h.a);
+        h = {"a": e, "b": EI::One, "c": e};
+        show("hash-literal-multi-var", h.a);
+        show("hash-literal-multi-const", h.b);
+        h = {};
+        h.a = e;
+        show("hash-key-assign", h.a);
+        string k = "a";
+        h = {k: e};
+        show("hash-literal-dynamic-key", h.a);
+        auto ch = cast<hash<string, int>>({"a": e});
+        show("hash-literal-cast", ch.a);
+        show("hash-literal-arg", key_auto({"a": e}));
+    }
+
+    # literals with enum and int values
+    {
+        hash<string, int> h = {"a": e, "b": 1};
+        show("hash-literal-mixed", h.a);
+        list<int> l = (e, 1);
+        show("list-literal-mixed", l[0]);
+        show("hash-literal-mixed-arg", key_auto({"a": e, "b": 1}));
+        show("list-literal-mixed-arg", first_auto((e, 1)));
+    }
+
+    # list<int>
+    {
+        list<int> l = (e,);
+        show("list-literal-var", l[0]);
+        l = (EI::Seven,);
+        show("list-literal-const", l[0]);
+        l = (e, EI::One, e);
+        show("list-literal-multi-var", l[0]);
+        show("list-literal-multi-const", l[1]);
+        l = ();
+        l[0] = e;
+        show("list-index-assign", l[0]);
+        push l, e;
+        show("list-push", l[1]);
+        auto cl = cast<list<int>>((e,));
+        show("list-literal-cast", cl[0]);
+        show("list-literal-arg", first_auto((e,)));
+        show("list-literal-arg-int", first((e,)));
+        show("list-default-arg", default_list());
+    }
+
+    # hashdecl members
+    {
+        hash<HD> hd = <HD>{"a": e, "l": (e,), "h": {"a": e}, "e": e};
+        show("hashdecl-literal-int", hd.a);
+        show("hashdecl-literal-list", hd.l[0]);
+        show("hashdecl-literal-hash", hd.h.a);
+        show("hashdecl-literal-enum", hd.e);
+        hd = <HD>{};
+        hd.a = e;
+        show("hashdecl-member-assign", hd.a);
+        hd.l = (e,);
+        show("hashdecl-member-list-assign", hd.l[0]);
+        hash<HDDefault> hdd();
+        show("hashdecl-default-int", hdd.a);
+        show("hashdecl-default-list", hdd.l[0]);
+    }
+
+    # class members
+    {
+        C c(e);
+        show("member-assign", c.m);
+        show("member-list-assign", c.lm[0]);
+        show("member-default-int", c.dm);
+        show("member-default-list", c.dlm[0]);
+    }
+
+    # nested containers
+    {
+        hash<string, list<int>> hl = {"a": (e,)};
+        show("nested-hash-list", hl.a[0]);
+        list<list<int>> ll = ((e,),);
+        show("nested-list-list", ll[0][0]);
+        list<hash<string, int>> lh = ({"a": e},);
+        show("nested-list-hash", lh[0].a);
+        hash<string, hash<string, int>> hh = {"x": {"a": e}};
+        show("nested-hash-hash", hh.x.a);
+    }
+
+    # containers whose value type keeps the enum value
+    {
+        list<auto> la = (e,);
+        show("list-auto-literal", la[0]);
+        list<EI> le = (e,);
+        show("list-enum-literal", le[0]);
+        hash<string, auto> ha = {"a": e};
+        show("hash-auto-literal", ha.a);
+        list<int> l = la;
+        show("list-auto-to-list-int", l[0]);
+        # a literal that is not stored in a typed container keeps its enum values with values of other types
+        auto uh = {"a": 1, "e": e};
+        show("untyped-hash-literal-mixed", uh.e);
+        auto ul = (1, e);
+        show("untyped-list-literal-mixed", ul[1]);
+        show("untyped-hash-literal-mixed-arg", auto_key({"a": 1, "e": e}));
+    }
+
+    show("const-list", ConstList[0]);
+    show("const-typed-list", ConstTypedList[0]);
+    show("const-hashdecl-int", ConstHashDecl.a);
+    show("const-hashdecl-list", ConstHashDecl.l[0]);
+}
+
+run(EI::Seven);

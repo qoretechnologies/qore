@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class EnumIntContainerLiteralsTest
+
+#! Tests that an enum value stored in an int-typed container is converted to its base value (qore#6274)
+/** An enum value stored in a container whose value type is \c int (a \c list<int>, a \c hash<string, int>, an
+    \c int member of a hashdecl or a class, and the same containers nested) is converted to its base value, whether
+    it is assigned to an element or given in a list or hash literal, a default value or a cast; only a container of
+    the enum type or of \c auto keeps the enum value.  The checks are in enum-int-container-literals-worker.qr,
+    which is run in each execution mode, on the IR tier and as a program compiled with qcc at -O0 and -O3; every
+    run must give the results below.
+*/
+class EnumIntContainerLiteralsTest inherits QUnit::Test {
+    public {
+        #! the type of the value stored by every check the worker makes
+        const Expected = {
+            "list-init": "integer",
+            "list-init-multi": "integer",
+            "hash-init": "integer",
+            "hash-literal-mixed": "integer",
+            "list-literal-mixed": "integer",
+            "hash-literal-mixed-arg": "integer",
+            "list-literal-mixed-arg": "integer",
+            "hash-literal-var": "integer",
+            "hash-literal-var-copy": "integer",
+            "hash-literal-const": "integer",
+            "hash-literal-multi-var": "integer",
+            "hash-literal-multi-const": "integer",
+            "hash-key-assign": "integer",
+            "hash-literal-dynamic-key": "integer",
+            "hash-literal-cast": "integer",
+            "hash-literal-arg": "integer",
+            "list-literal-var": "integer",
+            "list-literal-const": "integer",
+            "list-literal-multi-var": "integer",
+            "list-literal-multi-const": "integer",
+            "list-index-assign": "integer",
+            "list-push": "integer",
+            "list-literal-cast": "integer",
+            "list-literal-arg": "integer",
+            "list-literal-arg-int": "integer",
+            "list-default-arg": "integer",
+            "hashdecl-literal-int": "integer",
+            "hashdecl-literal-list": "integer",
+            "hashdecl-literal-hash": "integer",
+            "hashdecl-literal-enum": "enum<EI>",
+            "hashdecl-member-assign": "integer",
+            "hashdecl-member-list-assign": "integer",
+            "hashdecl-default-int": "integer",
+            "hashdecl-default-list": "integer",
+            "member-assign": "integer",
+            "member-list-assign": "integer",
+            "member-default-int": "integer",
+            "member-default-list": "integer",
+            "nested-hash-list": "integer",
+            "nested-list-list": "integer",
+            "nested-list-hash": "integer",
+            "nested-hash-hash": "integer",
+            "list-auto-literal": "enum<EI>",
+            "list-enum-literal": "enum<EI>",
+            "hash-auto-literal": "enum<EI>",
+            "list-auto-to-list-int": "integer",
+            "untyped-hash-literal-mixed": "enum<EI>",
+            "untyped-list-literal-mixed": "enum<EI>",
+            "untyped-hash-literal-mixed-arg": "enum<EI>",
+            "const-list": "enum<EI>",
+            "const-typed-list": "integer",
+            "const-hashdecl-int": "integer",
+            "const-hashdecl-list": "integer",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("EnumIntContainerLiteralsTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
+        addTestCase("compiled program", \testCompiledProgram());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, getWorker()));
+            checkWorkerOutput(mode, out);
+        }
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testIrTier() {
+        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=tiered %s", libqore_dir, qore_bin, getWorker())));
+    }
+
+    testCompiledProgram() {
+        TmpDir tmp("qore-enum-int-container-literals-");
+        foreach int opt in (0, 3) {
+            string label = sprintf("aot -O%d", opt);
+            string exe = tmp.path + DirSep + sprintf("enum-int-container-literals-O%d", opt);
+            string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d --strip-source -o %s %s 2>&1",
+                libqore_dir, qcc_bin, opt, exe, getWorker()));
+            assertTrue(is_file(exe), label + ": " + compile_out);
+            checkWorkerOutput(label, backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+        }
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "enum-int-container-literals-worker.qr";
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them; any other output fails
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}
