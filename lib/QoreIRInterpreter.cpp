@@ -21502,10 +21502,15 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::ModAssignAny:
             return qore_compound_assign_value(LVCompoundOp::ModAssign, left, right, xsink);
         case QoreIROpcode::ModAssignInt: {
-            // the modulo-equals operator assigns 0 for a divisor of 0, as AST execution does
-            // (QoreModuloEqualsOperatorNode); only the modulo operator raises an exception
+            // a divisor of zero raises DIVISION-BY-ZERO, as for % (qore#1034)
             int64_t divisor = right.getAsBigInt();
-            return QoreValue(divisor ? qore_int_mod(left.getAsBigInt(), divisor) : 0ll);
+            if (!divisor) {
+                if (xsink) {
+                    qore_raise_modulo_by_zero(xsink);
+                }
+                return QoreValue();
+            }
+            return QoreValue(qore_int_mod(left.getAsBigInt(), divisor));
         }
         case QoreIROpcode::AndAssignInt:
             return QoreValue(left.getAsBigInt() & right.getAsBigInt());
@@ -23459,9 +23464,10 @@ QoreValue QoreIRInterpreter::evalLValueBinary(QoreIROpcode op, const QoreValue& 
             if (!v) {
                 return QoreValue();
             }
+            // a divisor of zero raises DIVISION-BY-ZERO, as for % (qore#1034)
             if (!val) {
-                v.assign(0ll, "<%= operator>");
-                return 0ll;
+                qore_raise_modulo_by_zero(xsink);
+                return QoreValue();
             }
             return v.modulaEqualsBigInt(val, "<%= operator>");
         }

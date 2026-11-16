@@ -133,6 +133,37 @@
 string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == External);
     @endcode
 
+    @anchor undefined_arithmetic
+    @section undefined_arithmetic_section Undefined Arithmetic
+
+    An arithmetic operation whose result is not defined has one of two outcomes, the same for
+    @ref int_type "int", @ref float_type "float" and @ref number_type "number" values and in every
+    @ref execution_modes "execution mode", including qcc-compiled code:
+    - <b>a division by zero raises a \c DIVISION-BY-ZERO exception</b>: the @ref division_operator "/",
+      @ref divide_equals_operator "/=", @ref modulo_operator "%" and @ref modulo_equals_operator "%=" operators raise it
+      for a divisor of zero, whatever the dividend (also \c 0, infinity and NaN, as in <tt>0.0 / 0.0</tt> and
+      <tt>0n / 0n</tt>) and also for a negative zero divisor (\c -0.0, \c -0.0n), and pow() raises it for a base of
+      zero with a negative exponent, which is a division by zero (<tt>pow(0, -1)</tt> is <tt>1 / 0</tt>); the
+      \c % and \c %= operators compute with the @ref float_to_int_conversion "integer values" of their operands, so
+      a divisor that converts to \c 0 (ex: \c 0.5 or NaN) is a divisor of zero; a division with the \c / operator by
+      a constant zero is an error when the code is parsed
+    - <b>any other undefined result is NaN</b>: the floating-point and arbitrary-precision math functions return
+      NaN, with no exception, for an argument outside their domain (ex: <tt>sqrt(-1)</tt>, <tt>nlog(-1.0)</tt>,
+      <tt>log10(-1)</tt>, <tt>asin(-2)</tt>, <tt>acos(2)</tt>, <tt>log1p(-2.0)</tt>, <tt>sin(\@inf\@)</tt>, and
+      <tt>pow(-1.0, 0.5)</tt>, a negative base with an exponent that is not an integer), as a division by a divisor
+      that is not zero does for an undefined quotient (<tt>\@inf\@ / \@inf\@</tt>); a NaN argument gives NaN,
+      except where IEEE 754 defines another result (ex: <tt>pow(1.0, \@nan\@)</tt> is \c 1.0 and
+      <tt>hypot(\@inf\@, \@nan\@)</tt> is infinity)
+
+    The other results are those of IEEE 754 arithmetic: a result too large for a float gives infinity (ex:
+    <tt>exp(1000.0)</tt>), and the logarithm functions give negative infinity for zero (ex: <tt>nlog(0.0)</tt>).
+
+    These results are floats or numbers; when such a value is converted to an integer (ex: with int() or the integer
+    variants of round(), ceil() and floor()), infinity and a value out of the range of an integer give the largest or
+    the smallest integer and NaN gives \c 0, as described in @ref float_to_int_conversion.  The integer division of
+    the smallest integer by \c -1 is not undefined: integer arithmetic wraps, so it gives the smallest integer (see
+    @ref division_operator "/").
+
     @section op_details Operator Details
 
     <hr>
@@ -1414,7 +1445,11 @@ foreach string key in (keys hash)
     |@ref int_type "int"|Gives the result of dividing its arguments, rounded toward zero; as integer arithmetic wraps, the smallest integer divided by \c -1 gives the smallest integer
     |any other type|Converts argument to a @ref float_type "float" and performs the division
 
-    @throw DIVISION-BY-ZERO division by zero error
+    A division by a divisor that is not zero whose result is not defined gives NaN (ex: <tt>\@inf\@ / \@inf\@</tt>);
+    see @ref undefined_arithmetic.
+
+    @throw DIVISION-BY-ZERO the divisor is zero, for an @ref int_type "int", a @ref float_type "float" (also
+    \c -0.0) and a @ref number_type "number" divisor alike, whatever the dividend (see @ref undefined_arithmetic)
 
     <hr>
     @subsection modulo_operator Modulo Operator (%)
@@ -1435,7 +1470,8 @@ foreach string key in (keys hash)
     |!Argument|!Processing
     |@ref int_type "int"|Gives \a expression1 modulo \a expression2 (ex: <tt>12 % 10</tt> result in \c 2), with the sign of \a expression1; the remainder of a division by \c -1 is \c 0. Arguments are converted to integers if necessary.
 
-    @throw DIVISION-BY-ZERO \a expression2 is zero
+    @throw DIVISION-BY-ZERO \a expression2 is zero after its conversion to an integer (ex: \c 0, \c 0.5 or NaN; see
+    @ref undefined_arithmetic)
 
     <hr>
     @subsection plus_operator Plus (Addition and Concatenation) Operator (+)
@@ -2645,7 +2681,10 @@ if (x || y)
 
     <b>Arguments Processed by %=</b>
     |!Argument|!Processing
-    |All|the \a lvalue's type will be converted to an integer if necessary, and the \a expression will be evaluated and converted to an integer as well if necessary, and then the result will be used to divide the \a lvalue's value and the remainder will be saved to the \a lvalue, as by the @ref modulo_operator "modulo operator"; if the \a expression is zero, \c 0 is saved to the \a lvalue and no exception is raised
+    |All|the \a lvalue's type will be converted to an integer if necessary, and the \a expression will be evaluated and converted to an integer as well if necessary, and then the result will be used to divide the \a lvalue's value and the remainder will be saved to the \a lvalue, as by the @ref modulo_operator "modulo operator"
+
+    @throw DIVISION-BY-ZERO the \a expression is zero after its conversion to an integer; the \a lvalue keeps its value
+    (see @ref undefined_arithmetic)
 
     <hr>
     @subsection multiply_equals_operator Multiply Equals Operator (*=)
@@ -2690,7 +2729,8 @@ if (x || y)
     |!Argument|!Processing
     |All|The type precedence from highest to lowest is @ref number "number", @ref float "float", and @ref integer "int", other types are converted to @ref integer "int"; the \a expression will be evaluated and used to divide the \a lvalue, and the result will be saved to the \a lvalue, as by the @ref division_operator "divide operator".
 
-    @throw DIVISION-BY-ZERO If the divisor expression evaluates to zero, this exception is thrown
+    @throw DIVISION-BY-ZERO the divisor expression is zero, as for the @ref division_operator "divide operator"; the
+    \a lvalue keeps its value (see @ref undefined_arithmetic)
 
     <hr>
     @subsection xor_equals_operator Xor Equals Operator (^=)

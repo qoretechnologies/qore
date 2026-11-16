@@ -248,6 +248,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   raise unhandled exceptions at the same time
         # - float-conversion-edges (#6212): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - UndefinedArithmetic-<n> (#1034): their probes run in child processes that set their own --exec-mode, in qcc
+        #   executables and in a qcc-compiled module
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
@@ -262,6 +264,9 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/deleted-object-overload.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",
                                  "examples/test/qore/operators/float-int-conversion.qtest",
+                                 "examples/test/qore/operators/UndefinedArithmetic-1.qtest",
+                                 "examples/test/qore/operators/UndefinedArithmetic-2.qtest",
+                                 "examples/test/qore/operators/UndefinedArithmetic-3.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",

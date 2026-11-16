@@ -566,6 +566,9 @@ static inline int64 qore_int_div(int64 l, int64 r) {
     return r == -1 ? static_cast<int64>(0 - static_cast<uint64_t>(l)) : l / r;
 }
 
+//! Raises DIVISION-BY-ZERO for a modulo operator (\c %, \c %=) with a divisor of zero (qore#1034)
+DLLLOCAL void qore_raise_modulo_by_zero(ExceptionSink* xsink);
+
 //! Returns the remainder of an integer division by a divisor that is not zero
 /** The remainder of a division by -1 is 0, also for the smallest integer, where the CPU's division instruction
     traps (SIGFPE)
