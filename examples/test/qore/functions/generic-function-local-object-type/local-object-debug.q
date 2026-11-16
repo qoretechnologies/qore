@@ -55,7 +55,43 @@ class M {
     static string s<U>(list<U> l) { B<U> b(l); return b.desc(); }
     string m<U>(list<U> l) { return (new B<U>(l)).desc(); }
 }
+list<U> sub g1<U>(U v) { list<U> l = (v,); return l; }
+# a callee with a type parameter of the same name and index
+auto sub sameName<U>(U v) { return g1<string>("x") instanceof list<U>; }
+# generic functions with their type parameters swapped
+string sub sw<A, B>(A a, B b) {
+    list<A> la = (a,);
+    list<B> lb = (b,);
+    return la.fullType() + " " + lb.fullType() + " " + (a instanceof A) + (b instanceof A);
+}
+string sub sw2<B, A>(B b, A a) { return sw<A, B>(a, b) + " / " + sw<B, A>(b, a); }
+# a closure in a generic method of a generic class
+class C<T> {
+    public { list<T> lt = (); }
+    string m<U>(U u) {
+        code c = string sub (U x) {
+            list<T> a = ();
+            list<U> b = (x,);
+            return sprintf("%s %s %y %y", a.fullType(), b.fullType(), b instanceof list<U>, lt instanceof list<U>);
+        };
+        return c(u);
+    }
+}
+# nested closures
+string sub nested<U>(U v) {
+    code outer = string sub () {
+        code inner = string sub () { list<U> l = (v,); return l.fullType() + " " + (l instanceof list<U>); };
+        return inner();
+    };
+    return outer();
+}
 sub runCases() {
+    show("callee with the same type parameter name", auto sub () { return sameName<string>("a"); });
+    show("callee with the same type parameter name, negative", auto sub () { return sameName<int>(1); });
+    show("swapped type parameters", auto sub () { return sw2<int, string>(1, "a"); });
+    show("closure in a generic method", auto sub () { C<string> c(); return c.m<int>(1); });
+    show("closure in a generic method, same type", auto sub () { C<int> c(); return c.m<int>(1); });
+    show("nested closures", auto sub () { return nested<float>(1.5); });
     show("declaration", auto sub () { return viaDecl<int>((1,)); });
     show("new", auto sub () { return viaNew<string>(("a",)); });
     show("declaration in a closure", auto sub () { return viaClosure<int>((1,)); });

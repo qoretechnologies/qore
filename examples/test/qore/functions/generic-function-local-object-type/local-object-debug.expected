@@ -1,3 +1,9 @@
+callee with the same type parameter name => True
+callee with the same type parameter name, negative => False
+swapped type parameters => "list<string> list<int> 10 / list<int> list<string> 10"
+closure in a generic method => "list<string> list<int> True False"
+closure in a generic method, same type => "list<int> list<int> True True"
+nested closures => "list<float> 1"
 declaration => "list<int> [1]"
 new => "list<string> [\"a\"]"
 declaration in a closure => "list<int> [1]"
