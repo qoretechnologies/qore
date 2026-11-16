@@ -10,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../TestInterpreter.qm
 
 %exec-class JITFinalizeCancellationTest
 
@@ -26,7 +27,7 @@ class JITFinalizeCancellationTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("JITFinalizeCancellationTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         addTestCase("a cancelled finalization of the handler local table refuses the function", \testLoop(),
             ("handler-local-table", "handler local table", "QORE_JIT_OBE_TABLE_BUDGET=0"));
         addTestCase("a cancelled finalization of a member of a batch refuses the batch", \testBatch());
