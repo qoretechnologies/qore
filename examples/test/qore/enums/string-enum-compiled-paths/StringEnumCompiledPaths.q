@@ -9,6 +9,16 @@
 enum ES : string { X = "x", Y = "yy", N = "12" }
 enum EN : number { N1 = 1.5n, N2 = 2.5n }
 enum EI : int { One = 1, Two = 2 }
+enum EL : string { Long = "a string value longer than an inline short string" }
+
+hashdecl HS {
+    string s;
+}
+
+class C {
+    string get(ES e) { return e; }
+    static string getStatic(ES e) { return e; }
+}
 
 ES sub fs(int i) { return i ? ES::Y : ES::X; }
 EN sub fn(int i) { return i ? EN::N2 : EN::N1; }
@@ -60,6 +70,37 @@ auto sub fStringLocalInLoop(list<ES> l) { string s = ""; foreach ES e in (l) { s
 auto sub fNumberLocal(EN n) { number x = n; return x; }
 auto sub fNumberLocalFromCall() { number x = fn(1); return x; }
 auto sub fNumberLocalPlus(EN n) { number x = n; return x + 1n; }
+
+# the value of a string or number enum returned by a function, a method or a closure declared with another type is
+# converted to the type's base type
+string sub fReturnString(ES e) { return e; }
+*string sub fReturnOptionalString(ES e) { return e; }
+softstring sub fReturnSoftString(ES e) { return e; }
+number sub fReturnNumber(EN n) { return n; }
+string sub fReturnStringMixed(int i, ES e) { if (i) { return e; } return "plain"; }
+auto sub fReturnStringSize(ES e) { return fReturnString(e).size(); }
+auto sub fReturnStringStrlen(ES e) { return strlen(fReturnString(e)); }
+auto sub fReturnStringLocal(ES e) { string s = fReturnString(e); return s; }
+auto sub fReturnStringMixedSize(ES e) { return fReturnStringMixed(1, e).size(); }
+auto sub fMethodReturn(ES e) { C c(); return c.get(e); }
+auto sub fStaticMethodReturn(ES e) { return C::getStatic(e); }
+auto sub fClosureReturn(ES e) { code c = string sub (ES x) { return x; }; return c(e); }
+
+# the value of a string enum in a string-typed hash value or hashdecl member (where it is kept as the enum's member)
+# through the string paths
+auto sub fHashValueSize(hash<string, string> h) { return h.a.size(); }
+auto sub fHashValueEmpty(hash<string, string> h) { return h.a.empty(); }
+auto sub fHashValueVal(hash<string, string> h) { return h.a.val(); }
+auto sub fHashLocalSize(ES e) { hash<string, string> h = {"a": e}; return h.a.size(); }
+auto sub fHashLocalEmpty(ES e) { hash<string, string> h = {"a": e}; return h.a.empty(); }
+auto sub fHashDeclMemberSize(hash<HS> h) { return h.s.size(); }
+auto sub fHashDeclMemberEmpty(hash<HS> h) { return h.s.empty(); }
+
+# a string enum value that is not an inline short string
+auto sub fLongSize(EL e) { return e.size(); }
+auto sub fLongEmpty(EL e) { return e.empty(); }
+auto sub fLongLocal(EL e) { string s = e; return s; }
+auto sub fLongHashValueSize(hash<string, string> h) { return h.a.size(); }
 
 # values that keep their enum type
 auto sub fEnumLocal(ES e) { ES c = e; return c; }
@@ -145,3 +186,26 @@ run("==", auto sub () { return fEquals(e); });
 run("sprintf()", auto sub () { return fSprintfString(e); });
 run("number + 1", auto sub () { return fNumberPlus(n); });
 run("number toString()", auto sub () { return fNumberToString(n); });
+run("string return", auto sub () { return fReturnString(e); });
+run("*string return", auto sub () { return fReturnOptionalString(e); });
+run("softstring return", auto sub () { return fReturnSoftString(e); });
+run("number return", auto sub () { return fReturnNumber(n); });
+run("string return of one of two values", auto sub () { return fReturnStringMixed(1, e); });
+run("size() of a string return", auto sub () { return fReturnStringSize(e); });
+run("strlen() of a string return", auto sub () { return fReturnStringStrlen(e); });
+run("string local from a string return", auto sub () { return fReturnStringLocal(e); });
+run("size() of a string return of one of two values", auto sub () { return fReturnStringMixedSize(e); });
+run("method string return", auto sub () { return fMethodReturn(e); });
+run("static method string return", auto sub () { return fStaticMethodReturn(e); });
+run("closure string return", auto sub () { return fClosureReturn(e); });
+run("hash value size()", auto sub () { return fHashValueSize({"a": e}); });
+run("hash value empty()", auto sub () { return fHashValueEmpty({"a": e}); });
+run("hash value val()", auto sub () { return fHashValueVal({"a": e}); });
+run("hash local value size()", auto sub () { return fHashLocalSize(e); });
+run("hash local value empty()", auto sub () { return fHashLocalEmpty(e); });
+run("hashdecl member size()", auto sub () { return fHashDeclMemberSize(<HS>{"s": e}); });
+run("hashdecl member empty()", auto sub () { return fHashDeclMemberEmpty(<HS>{"s": e}); });
+run("long value size()", auto sub () { return fLongSize(EL::Long); });
+run("long value empty()", auto sub () { return fLongEmpty(EL::Long); });
+run("long value string local", auto sub () { return fLongLocal(EL::Long); });
+run("long value hash value size()", auto sub () { return fLongHashValueSize({"a": EL::Long}); });

@@ -49,3 +49,26 @@ regex: bool True
 sprintf(): string "<yy>"
 number + 1: number 3.5
 number toString(): string "2.5"
+string return: string "yy"
+*string return: string "yy"
+softstring return: string "yy"
+number return: number 2.5
+string return of one of two values: string "yy"
+size() of a string return: integer 2
+strlen() of a string return: integer 2
+string local from a string return: string "yy"
+size() of a string return of one of two values: integer 2
+method string return: string "yy"
+static method string return: string "yy"
+closure string return: string "yy"
+hash value size(): integer 2
+hash value empty(): bool False
+hash value val(): bool True
+hash local value size(): integer 2
+hash local value empty(): bool False
+hashdecl member size(): integer 2
+hashdecl member empty(): bool False
+long value size(): integer 49
+long value empty(): bool False
+long value string local: string "a string value longer than an inline short string"
+long value hash value size(): integer 49

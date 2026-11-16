@@ -22942,6 +22942,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_empty_noguard(uint64_t val_b
     if (v.isShortString()) {
         return toBits(QoreValue(v.shortStringLen() == 0));
     }
+    // the value of a string enum is its member, whose base value is the string (a value typed string is one in a hash
+    // value or a hashdecl member, qore#6254)
+    if (v.isEnum()) {
+        return qore_rt_pseudo_string_empty_noguard(toBits(v.getEnumBaseValue()));
+    }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
         return toBits(QoreValue(!str || str->empty()));
@@ -22955,6 +22960,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_val_noguard(uint64_t val_bit
     if (v.isShortString()) {
         return toBits(QoreValue(v.shortStringLen() != 0));
     }
+    // the value of a string enum is its member, whose base value is the string (a value typed string is one in a hash
+    // value or a hashdecl member, qore#6254)
+    if (v.isEnum()) {
+        return qore_rt_pseudo_string_val_noguard(toBits(v.getEnumBaseValue()));
+    }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
         return toBits(QoreValue(str && !str->empty()));
@@ -22962,16 +22972,29 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_val_noguard(uint64_t val_bit
     return qore_rt_pseudo_val(val_bits);
 }
 
+static int64_t qore_rt_pseudo_string_size_enum(QoreValue v);
+
 static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_size_native_impl(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
     if (v.isShortString()) {
         return static_cast<int64_t>(v.shortStringLen());
+    }
+    // the value of a string enum is its member, whose base value is the string (a value typed string is one in a hash
+    // value or a hashdecl member, qore#6254)
+    if (v.isEnum()) {
+        return qore_rt_pseudo_string_size_enum(v);
     }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
         return static_cast<int64_t>(str ? str->strlen() : 0);
     }
     return fromBits(qore_rt_pseudo_size(val_bits)).getAsBigInt();
+}
+
+//! returns the size of the base value of a string enum value (out of line: the inline size helper calls itself)
+static int64_t qore_rt_pseudo_string_size_enum(QoreValue v) {
+    assert(v.isEnum());
+    return qore_rt_pseudo_string_size_native_impl(toBits(v.getEnumBaseValue()));
 }
 
 //! Native scalar <string>::size()/strlen() for bases proven to be assigned strings.
