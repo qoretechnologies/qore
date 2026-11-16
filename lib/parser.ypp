@@ -91,7 +91,10 @@
 // use the call stack for each level of the tree
 #define QORE_MAX_PARSE_DEPTH 1000
 
-#define YYINITDEPTH 300
+// The parser's initial stack is in the frame of yyparse(), which is on the call stack once for each module that a
+// parse loads from its source (the module is parsed while the parse that requires it waits); a stack of 300 symbols
+// made the frame about 25KB.  A parse that nests more deeply grows the stack on the heap (see below).
+#define YYINITDEPTH 64
 // The parser grows its stack on the heap, which bison only does for a C++ parser whose semantic value and location
 // types can be copied with memcpy() (checked below). The stack holds a symbol for each pending operator of a nested
 // expression, and when the parser reduces them, it nests one node in the next without reading another token, so
@@ -1634,6 +1637,10 @@ public:
         LexicalSemanticPolicy policy;
         LexicalParsePolicyHelper::capture(policy);
         mi->bindInitializationPolicy(policy, true);
+        // the initializer runs with the parse options of the declaration, as a function does (qore#6292)
+        if (QoreProgram* pgm = getProgram()) {
+            mi->bindDeclarationParseOptions(qore_program_private::getParseWarnOptions(pgm));
+        }
         if (!(mi && mi->parseHasTypeInfo()) && parse_check_parse_option(PO_REQUIRE_TYPES))
             parse_error(*mi->loc, "member '%s' declared without type information, but parse options require type information for all declarations", name);
     }
@@ -1730,6 +1737,10 @@ struct ClassVarInfo : public MemberInfo {
         LexicalSemanticPolicy policy;
         LexicalParsePolicyHelper::capture(policy);
         vi->bindInitializationPolicy(policy);
+        // the initializer runs with the parse options of the declaration, as a constant's does (qore#6205)
+        if (QoreProgram* pgm = getProgram()) {
+            vi->bindDeclarationParseOptions(qore_program_private::getParseWarnOptions(pgm));
+        }
         if (!(vi && vi->parseHasTypeInfo()) && parse_check_parse_option(PO_REQUIRE_TYPES)) {
             parse_error(*vi->loc, "class static variable '%s' declared without type information, but parse options "
                 "require type information for all declarations", name);
@@ -2640,7 +2651,7 @@ static void check_operator_bin_xor(const QoreProgramLocation* loc, QoreValue n, 
 %parse-param {yyscan_t yyscanner}
 %locations
 // the location is initialized as a trivial type (see YYLTYPE_IS_TRIVIAL), which would start columns at 1
-%initial-action { @$ = QoreParserLocation(); }
+%initial-action { @$ = QoreParserLocation(); (void)yynerrs; }
 // remove this and use the following line when bison is updated on all build environments enough to support parse.error verbose
 %error-verbose
 

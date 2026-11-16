@@ -579,7 +579,7 @@ int qore_dbi_private::close(Datasource* ds, ExceptionSink* xsink) const {
     // a sink of its own, so that what the driver reports is checked against its return value even when the caller's
     // sink already holds an exception
     ExceptionSink close_xsink;
-    int rc = f.close_sink(ds, &close_xsink);
+    [[maybe_unused]] int rc = f.close_sink(ds, &close_xsink);
     assert(!rc == !close_xsink);
     // the driver releases its connection data in every case
     assert(!ds->getPrivateData());

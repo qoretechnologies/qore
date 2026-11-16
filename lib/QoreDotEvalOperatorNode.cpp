@@ -32,6 +32,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreStatementTemps.h"
+#include "qore/intern/CallReferenceNode.h"
 
 QoreString QoreDotEvalOperatorNode::name("dot eval expression");
 
@@ -132,6 +133,15 @@ QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* x
     return evalWithBaseCommon<false>(base, xsink);
 }
 
+//! the check of a call reference or closure in a hash member called as a method of the hash: as
+//! ResolvedCallReferenceNode::invoke(), which raises the error of a method call reference whose object has been
+//! deleted before it evaluates the arguments (issue #6225); a closure is always callable
+static int qore_check_hash_call_ref(const AbstractQoreNode* ref, ExceptionSink* xsink) {
+    return ref->getType() == NT_FUNCREF
+        ? qore_call_reference_check_target(static_cast<const ResolvedCallReferenceNode*>(ref), xsink)
+        : 0;
+}
+
 int qore_check_object_method_call(QoreObject* obj, const char* name, const QoreClass* qc, const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, ExceptionSink* xsink, const QoreCallTargetCheckCache* cache) {
     // as AbstractMethodCallNode::exec(), up to the evaluation of the arguments
@@ -178,8 +188,8 @@ int qore_check_method_call_receiver(QoreValue base, const char* name, const Qore
             break;
 
         case NT_WEAKREF_HASH:
-            if (check_call_ref(base.get<WeakHashReferenceNode>()->get(), name)) {
-                return 0;
+            if (const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), name)) {
+                return qore_check_hash_call_ref(ref, xsink);
             }
             break;
 
@@ -188,8 +198,8 @@ int qore_check_method_call_receiver(QoreValue base, const char* name, const Qore
             break;
 
         case NT_HASH:
-            if (check_call_ref(base.getInternalNode(), name)) {
-                return 0;
+            if (const AbstractQoreNode* ref = check_call_ref(base.getInternalNode(), name)) {
+                return qore_check_hash_call_ref(ref, xsink);
             }
             break;
 

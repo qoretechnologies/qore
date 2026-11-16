@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a message with an 8-bit part in a single-byte charset is parsed, and the part is decoded with the charset that it
+# declares; the parse failed with INVALID-ENCODING, a multipart message with "BOUNDARY=" could not be parsed, and a
+# part of type "TEXT/PLAIN" was returned as binary data (issue #114)
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires MailMessage
+
+%exec-class MailMessage8bitTest
+
+public class MailMessage8bitTest inherits QUnit::Test {
+    public {
+        # the message of issue #114, shortened: a multipart message whose first part is 8-bit ISO-8859-15 text
+        const Multipart = binary("From: Dave <dave@example.com>\r\nTo: Users <users@example.com>\r\n"
+            "Subject: Re: Announce\r\nMIME-version: 1.0\r\nContent-type: MULTIPART/MIXED;\r\n BOUNDARY=\"b1\"\r\n\r\n"
+            "  This message is in MIME format.  The first part should be readable text,\r\n"
+            "  while the remaining parts are likely unreadable without MIME-aware tools.\r\n\r\n"
+            "--b1\r\nContent-Type: TEXT/PLAIN; charset=ISO-8859-15\r\nContent-Transfer-Encoding: 8BIT\r\n\r\n"
+            "On Wed, 18 Mar 2015, Lawrence Vel") + <e1> + binary("zquez wrote:\r\n\r\n> costs 5 ") + <a4>
+            + binary(".\r\n"
+            "--b1\r\nContent-Type: text/plain; charset=\"us-ascii\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\n"
+            "footer\r\n"
+            "--b1--\r\n\r\n");
+
+        const MultipartBody = "On Wed, 18 Mar 2015, Lawrence Velázquez wrote:\r\n\r\n> costs 5 €.";
+        const MultipartBodyBytes = binary("On Wed, 18 Mar 2015, Lawrence Vel") + <e1>
+            + binary("zquez wrote:\r\n\r\n> costs 5 ") + <a4> + binary(".");
+
+        # a message that is one 8-bit ISO-8859-15 text part
+        const SinglePart = binary("From: Dave <dave@example.com>\r\nTo: Users <users@example.com>\r\n"
+            "Subject: single\r\nMIME-Version: 1.0\r\nContent-Type: TEXT/PLAIN; CHARSET=ISO-8859-15\r\n"
+            "Content-Transfer-Encoding: 8bit\r\n\r\n"
+            "Vel") + <e1> + binary("zquez ") + <a4> + binary("\r\n");
+
+        # an 8-bit ISO-8859-15 text part in a multipart/alternative part
+        const Nested = binary("From: Dave <dave@example.com>\r\nTo: Users <users@example.com>\r\n"
+            "Subject: nested\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=outer\r\n\r\n"
+            "--outer\r\nContent-Type: MULTIPART/ALTERNATIVE; BOUNDARY=\"inner\"\r\n\r\n"
+            "--inner\r\nContent-Type: Text/Plain; Charset=\"ISO-8859-15\"\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
+            "Vel") + <e1> + binary("zquez ") + <a4> + binary("\r\n"
+            "--inner--\r\n"
+            "--outer--\r\n");
+    }
+
+    constructor() : Test("MailMessage8bitTest", "1.0", \ARGV) {
+        addTestCase("multipart message with an 8-bit part", \multipart());
+        addTestCase("single-part 8-bit message", \singlePart());
+        addTestCase("nested 8-bit part", \nested());
+        set_return_value(main());
+    }
+
+    multipart() {
+        # the raw bytes as a string in UTF-8, as read from a socket, and in a single-byte encoding
+        foreach string enc in (("UTF-8", "ISO-8859-1")) {
+            MailMessage::Message msg(binary_to_string(Multipart, enc));
+            assertEq("Re: Announce", msg.getSubject(), enc + " subject");
+            assertTrue(msg.isMultipart(), enc + " multipart");
+            auto body = msg.getBody();
+            assertEq("ISO-8859-15", get_encoding(body), enc + " body encoding");
+            assertEq(MultipartBody, body, enc + " body");
+            assertEq(MultipartBodyBytes, binary(body), enc + " body bytes");
+            assertEq(("footer",), (map $1.getData(), msg.getParts()), enc + " parts");
+        }
+    }
+
+    singlePart() {
+        foreach string enc in (("UTF-8", "ISO-8859-1")) {
+            MailMessage::Message msg(binary_to_string(SinglePart, enc));
+            auto body = msg.getBody();
+            assertEq("ISO-8859-15", get_encoding(body), enc + " body encoding");
+            assertEq("Velázquez €\r\n", body, enc + " body");
+            assertEq(binary("Vel") + <e1> + binary("zquez ") + <a4> + binary("\r\n"), binary(body), enc
+                + " body bytes");
+        }
+    }
+
+    nested() {
+        foreach string enc in (("UTF-8", "ISO-8859-1")) {
+            MailMessage::Message msg(binary_to_string(Nested, enc));
+            auto body = msg.getBody();
+            assertEq("ISO-8859-15", get_encoding(body), enc + " body encoding");
+            assertEq("Velázquez €", body, enc + " body");
+        }
+    }
+}

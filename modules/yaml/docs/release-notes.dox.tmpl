@@ -117,6 +117,9 @@
     - fixed serializing date-only values whose day ends in \c 0, which lost that digit (for example
       \c "2026-04-10" was emitted as \c "2026-04-1"); date-only values now round-trip exactly
     - fixed error message in YAML parser to show proper line/column and error description
+    - fixed @ref Qore::YAML::parse_yaml() "parse_yaml()" and \c parseYAML() parsing a string in another encoding
+      than UTF-8 (ex: ISO-8859-1 or UTF-16) as UTF-8, which raised a parse error; the string is converted to UTF-8
+      (<a href="https://github.com/qoretechnologies/qore/issues/872">issue 872</a>)
 
     @section yaml_1_0_0 yaml Module Version 1.0.0
     - fixed a bug parsing single-quoted date-only strings (ex: \c '2022-02-22'), previously parsed as date/time

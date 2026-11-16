@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 
 %try-module process
@@ -93,7 +94,7 @@ class ProgramMemoryTest inherits QUnit::Test {
             + "for (int k = 0; k < 3; ++k) { for (int i = 0; i < 2000; ++i) { total += p.callFunction(\"f\" + i, k); } }\n"
             + "hash<auto> result = call_function(\"stop_alloc_tracking\");\n"
             + "printf(\"%d %d\\n\", total, result.size());\n";
-        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore = TestInterpreter::qore_interpreter();
         StringOutputStream out();
         StringOutputStream err();
         Process p(qore, ("--exec-mode=jit", "-e", code), {
@@ -220,7 +221,7 @@ public namespace ProgramMemoryAOT {
 ");
         source.close();
 
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         string qcc_bin = ENV.QCC ?? ENV.QORE_QCC
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");

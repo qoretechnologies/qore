@@ -12,13 +12,9 @@
 %requires Util
 %requires QUnit
 
-%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/tokenizer"
-
 %requires json
 
-%try-module tokenizer
-%define NoTokenizer
-%endtry
+%requires tokenizer
 
 %exec-class TokenizerTest
 
@@ -62,9 +58,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     private Tokenizer::HFTokenizer createMinimalWordPiece() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         hash<auto> config = {
             "model": {
                 "type": "WordPiece",
@@ -97,9 +90,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     basicWordPieceTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         Tokenizer::HFTokenizer tok = createMinimalWordPiece();
 
         assertEq(12, tok.getVocabSize(), "vocab size should be 12");
@@ -109,9 +99,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     bertTokenizerTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         # Load real BERT tokenizer
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
@@ -138,9 +125,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     encodeDecodeRoundTripTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -155,9 +139,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     emptyInputTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         Tokenizer::HFTokenizer tok = createMinimalWordPiece();
 
         # Empty string should produce only special tokens
@@ -167,9 +148,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     unicodeInputTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -191,9 +169,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     replaceRegexNormalizerTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         hash<auto> config = {
             "normalizer": {
                 "type": "Replace",
@@ -220,9 +195,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     vocabLookupTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         Tokenizer::HFTokenizer tok = createMinimalWordPiece();
 
         # Test all known tokens
@@ -237,9 +209,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     skipSpecialTokensTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -257,9 +226,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     gpt2TokenizerTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/gpt2-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -277,9 +243,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     t5TokenizerTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/t5-small-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -297,9 +260,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     gpt2DecodeTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/gpt2-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -312,9 +272,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     gpt4StyleSplitTokenizerTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         # GPT-4/Qwen-style byte-level BPE: the pre_tokenizer is a Sequence of a
         # Split{Regex} followed by a ByteLevel.  The Split pattern uses inline
         # case-insensitive groups (?i:...), Unicode property classes \p{L} / \p{N},
@@ -352,9 +309,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     private Tokenizer::HFTokenizer createSplitWordPiece(string behavior) {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         # WordPiece over a Split{"-"} pre-tokenizer: the vocab contains every
         # pre-token produced by all four behaviors so each maps to exactly one
         # token, making the segmentation directly observable via enc.tokens.
@@ -379,9 +333,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     splitBehaviorTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         # Verify the four HuggingFace SplitDelimiterBehavior modes against the
         # reference Python tokenizers library output for "a-b-c" (delimiter "-").
         assertEq(("a", "-", "b", "-", "c"),
@@ -399,9 +350,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     llamaTokenizerTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/tinyllama-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -418,9 +366,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     bertSentencePairTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -433,9 +378,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     truncationTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -451,9 +393,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     paddingTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -469,9 +408,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     batchEncodingTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -488,9 +424,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     modelInputTensorBatchTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -544,9 +477,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     errorCasesTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         # Missing model config
         assertThrows("TOKENIZER-ERROR", sub() {
             new Tokenizer::HFTokenizer({});
@@ -559,9 +489,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     slidingWindowTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -631,9 +558,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     preTokenizedTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         # --- BERT: encodePreTokenized ---
         {
             string json_str = ReadOnlyFile::readTextFile(
@@ -683,9 +607,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     addTokensTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         Tokenizer::HFTokenizer tok = createMinimalWordPiece();
 
         int orig_size = tok.getVocabSize();
@@ -734,9 +655,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     wordIdsTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         # --- BERT: word_ids with special tokens ---
         {
             string json_str = ReadOnlyFile::readTextFile(
@@ -798,9 +716,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     decoderCleanupTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -824,9 +739,6 @@ class TokenizerTest inherits QUnit::Test {
     }
 
     unicodeDigitTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string json_str = ReadOnlyFile::readTextFile(
             get_script_dir() + "/test_data/gpt2-tokenizer.json");
         Tokenizer::HFTokenizer tok(parse_json(json_str));
@@ -853,9 +765,6 @@ class TokenizerTest inherits QUnit::Test {
 
     # a NUL character is valid text: text, text pairs, added tokens and chat messages keep it
     nulTextTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         string nul_token = "a\x00b";
         assertEq(3, nul_token.size(), "the test token has a NUL character");
         Tokenizer::HFTokenizer tok = createMinimalWordPiece();
@@ -903,9 +812,6 @@ class TokenizerTest inherits QUnit::Test {
 
     # a NUL character in a tokenizer configuration is kept: here a Split pre-tokenizer splitting on NUL characters
     nulConfigTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         hash<auto> config = {
             "model": {
                 "type": "WordPiece",
@@ -928,9 +834,6 @@ class TokenizerTest inherits QUnit::Test {
     # the token string of an added token that is not in the model vocabulary is its content wherever IDs are turned
     # into token strings
     addedTokenStringTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         # added tokens from the configuration that are not in the model vocabulary: "<pad>", the pad token, and
         # "<s>" and "</s>", the BOS and EOS tokens
         hash<auto> config = {
@@ -1000,9 +903,6 @@ class TokenizerTest inherits QUnit::Test {
 
     # a chat template writes each tag's value exactly, and a value is never read as template text
     chatTemplateTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         list<hash<auto>> messages = (
             {"role": "system", "content": "be brief"},
             {"role": "user", "content": "hi"},
@@ -1067,9 +967,6 @@ class TokenizerTest inherits QUnit::Test {
     # a value inserted by a chat template is never read as template text, so a message cannot change the template
     # or make it run forever
     chatTemplateInjectionTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         Tokenizer::HFTokenizer tok = chatTokenizer("{% for message in messages %}{% if message['role'] == 'user' %}"
             "U{% else %}O{% endif %}({{ message['role'] }}):{{ message['content'] }};{% endfor %}");
 
@@ -1103,9 +1000,6 @@ class TokenizerTest inherits QUnit::Test {
     # loadConfig() changes the configuration under the tokenizer's lock, so a thread reading it at the same time sees
     # one of the loaded configurations, never a mix of two
     concurrentConfigTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         Tokenizer::HFTokenizer tok({
             "model": {
                 "type": "WordPiece",
@@ -1162,9 +1056,6 @@ class TokenizerTest inherits QUnit::Test {
 
     # as in Hugging Face tokenizers, a token or ID of an added token is looked up before the model vocabulary
     addedTokenPrecedenceTest() {
-%ifdef NoTokenizer
-        testSkip("tokenizer module not available");
-%endif
         # the added token "<sep>" has the ID of the model's "world", the added token "world" has an ID of its own, and
         # the added token "<x>" has the ID of the model's "hello"
         Tokenizer::HFTokenizer tok({

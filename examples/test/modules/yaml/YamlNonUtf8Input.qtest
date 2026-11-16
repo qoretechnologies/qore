@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires yaml
+
+%exec-class YamlNonUtf8InputTest
+
+#! Tests parsing YAML text given as a string in another encoding than UTF-8 (issue #872)
+/** The text is converted to UTF-8, which the YAML parser reads, by every function and class that parses a string
+*/
+class YamlNonUtf8InputTest inherits QUnit::Test {
+    public {
+        #! the document, with characters outside ASCII in a key and in a value
+        const Text = "name: Žluťoučký kůň\nčíslo: 1\nlist:\n  - á\n  - b\n";
+
+        #! the parsed document
+        const Value = {"name": "Žluťoučký kůň", "číslo": 1, "list": ("á", "b")};
+
+        #! the encodings tested
+        const Encodings = ("ISO-8859-2", "UTF-16LE", "UTF-16BE", "UTF-16", "UTF-32LE", "UTF-8");
+    }
+
+    constructor() : Test("YamlNonUtf8InputTest", "1.0") {
+        addTestCase("parse_yaml()", \parseYaml());
+        addTestCase("parse_yaml() with options", \parseYamlOptions());
+        addTestCase("parseYAML()", \parseYamlDeprecated());
+        addTestCase("parse_yaml_documents()", \parseYamlDocuments());
+        addTestCase("YamlDocumentIterator", \documentIterator());
+        addTestCase("YamlSaxParser::parse()", \saxParser());
+        addTestCase("text that cannot be converted", \conversionError());
+        set_return_value(main());
+    }
+
+    #! returns the text in the given encoding
+    private string getText(string enc, string text = Text) {
+        string str = convert_encoding(text, enc);
+        assertEq(enc, str.encoding());
+        return str;
+    }
+
+    parseYaml() {
+        foreach string enc in (Encodings) {
+            assertEq(Value, parse_yaml(getText(enc)), enc);
+            # a scalar with no characters outside ASCII
+            assertEq("abc", parse_yaml(getText(enc, "abc")), enc + " scalar");
+        }
+    }
+
+    parseYamlOptions() {
+        foreach string enc in (Encodings) {
+            assertEq(Value, parse_yaml(getText(enc), ParseCoreSchema), enc);
+        }
+    }
+
+    parseYamlDeprecated() {
+        foreach string enc in (Encodings) {
+            assertEq(Value, call_function("parseYAML", getText(enc)), enc);
+        }
+    }
+
+    parseYamlDocuments() {
+        foreach string enc in (Encodings) {
+            assertEq((Value, "x"), parse_yaml_documents(getText(enc, Text + "---\nx\n")), enc);
+        }
+    }
+
+    documentIterator() {
+        foreach string enc in (Encodings) {
+            YamlDocumentIterator i(getText(enc, Text + "---\nx\n"));
+            list<auto> l = ();
+            while (i.next()) {
+                l += i.getValue();
+            }
+            assertEq((Value, "x"), l, enc);
+        }
+    }
+
+    saxParser() {
+        foreach string enc in (Encodings) {
+            YamlSaxParser parser();
+            list<auto> scalars = ();
+            parser.parse(getText(enc), sub (hash<YamlSaxEvent> e) {
+                if (e.type == YamlSaxEventType::Scalar) {
+                    scalars += e.value;
+                }
+            });
+            assertEq(("name", "Žluťoučký kůň", "číslo", 1, "list", "á", "b"), scalars, enc);
+        }
+    }
+
+    conversionError() {
+        # a lone surrogate cannot be converted to UTF-8
+        string str = force_encoding(binary_to_string(<00d861003a00>, "UTF-16LE"), "UTF-16LE");
+        assertThrows("ENCODING-CONVERSION-ERROR", \parse_yaml(), str);
+    }
+}

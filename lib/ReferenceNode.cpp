@@ -127,7 +127,7 @@ QoreValue ParseReferenceNode::doPartialEval(QoreValue n, QoreObject*& self, cons
         }
         {
             QoreHashObjectDereferenceOperatorNode* op =
-                dynamic_cast<QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode());
+                qore_exact_node_cast<QoreHashObjectDereferenceOperatorNode>(n.getInternalNode());
             if (op) {
                 // the path is evaluated from the root out, as for the lvalue itself (qore#5753)
                 QoreValue nl = doPartialEval(op->getLeft(), self, lvalue_id, qc, xsink, resolved);
@@ -218,7 +218,7 @@ QoreValue ParseReferenceNode::doPartialEval(QoreValue n, RuntimeConfig& rc, Qore
         }
         {
             QoreHashObjectDereferenceOperatorNode* op =
-                dynamic_cast<QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode());
+                qore_exact_node_cast<QoreHashObjectDereferenceOperatorNode>(n.getInternalNode());
             if (op) {
                 // the path is evaluated from the root out, as for the lvalue itself (qore#5753)
                 QoreValue nl = doPartialEval(op->getLeft(), rc, self, lvalue_id, qc, xsink, resolved);
@@ -279,7 +279,7 @@ size_t ParseReferenceNode::pathKeyCount(const QoreValue& lvexp) {
         const AbstractQoreNode* node = n.getInternalNode();
         if (auto* sb = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             n = sb->getLeft();
-        } else if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        } else if (auto* hd = qore_exact_node_cast<QoreHashObjectDereferenceOperatorNode>(node)) {
             n = hd->getLeft();
         } else {
             break;
@@ -317,7 +317,7 @@ ReferenceNode* ParseReferenceNode::evalToRefWithResolvedSelector(QoreValue selec
         return evalToRefWithResolvedPathKeys(nullptr, selector, xsink);
     }
     auto* hd = lvexp.hasNode()
-        ? dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(lvexp.getInternalNode())
+        ? qore_exact_node_cast<QoreHashObjectDereferenceOperatorNode>(lvexp.getInternalNode())
         : nullptr;
     if (hd) {
         if (hd->getRight().getType() == NT_STRING) {
@@ -365,7 +365,7 @@ ReferenceNode* ParseReferenceNode::evalToRefWithResolvedSelector(RuntimeConfig& 
         return evalToRefWithResolvedPathKeys(&rc, selector, xsink);
     }
     auto* hd = lvexp.hasNode()
-        ? dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(lvexp.getInternalNode())
+        ? qore_exact_node_cast<QoreHashObjectDereferenceOperatorNode>(lvexp.getInternalNode())
         : nullptr;
     if (hd) {
         if (hd->getRight().getType() == NT_STRING) {
@@ -512,6 +512,11 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
             if (direct_var_ref && (parse_context.pflag & PF_NARROWED_TYPE)) {
                 argTypeInfo = vr->parseGetTypeInfoForReference();
             }
+            break;
+        }
+        // an operand that parse initialization did not initialize, as it ran short of stack, is NOTHING; the parse
+        // has failed (see parse_init_value())
+        if (ntype == NT_NOTHING) {
             break;
         }
         assert(ntype == NT_OPERATOR);

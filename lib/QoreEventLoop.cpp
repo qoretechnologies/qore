@@ -80,14 +80,18 @@ static void q_wait_us_to_timespec(int64_t us, struct timespec& ts) {
     ts.tv_nsec = static_cast<long>((us % 1000000) * 1000);
 }
 
+#if !defined(DARWIN) || !defined(HAVE_NANOSLEEP)
 //! Returns a wait of @p us microseconds in milliseconds, rounded up, for a call that only waits whole milliseconds
 /** A timer must never fire early: a wait rounded down ends before the timer is due, and the loop then polls again
     without blocking until it is, busy-looping its thread.  A wait rounded up ends late by less than the resolution.
+    Used by the waits that take milliseconds: poll() without nanosleep(), epoll and poll(); a macOS build (kqueue, with
+    nanosleep()) has none of them.
 */
 static int q_wait_us_to_ms(int64_t us) {
     int64_t ms = us / 1000 + (us % 1000 ? 1 : 0);
     return ms > INT_MAX ? INT_MAX : static_cast<int>(ms);
 }
+#endif
 
 #if defined(__linux__) && (defined(HAVE_EPOLL_PWAIT2) || (defined(SYS_epoll_pwait2) && defined(__LP64__)))
 #define QORE_HAVE_EPOLL_NS_WAIT 1

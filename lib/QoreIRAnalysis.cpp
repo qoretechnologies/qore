@@ -53,8 +53,18 @@ const VarRefNode* extractLValueBaseVarRef(const QoreValue& lvalue) {
             return nullptr;
         }
         const AbstractQoreNode* node = cur.getInternalNode();
-        if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+        if (auto* var = qore_get_var_ref_node(node)) {
             return var;
+        }
+        // the steps of a hash or list element path, tested first by their exact (final) class, which is none of the
+        // classes tested after them
+        if (auto* op = qore_exact_node_cast<QoreHashObjectDereferenceOperatorNode>(node)) {
+            cur = op->getLeft();
+            continue;
+        }
+        if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
+            cur = op->getLeft();
+            continue;
         }
         if (auto* op = dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)) {
             cur = op->getLeft();
@@ -64,16 +74,8 @@ const VarRefNode* extractLValueBaseVarRef(const QoreValue& lvalue) {
             cur = op->getLeft();
             continue;
         }
-        if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
-            cur = op->getLeft();
-            continue;
-        }
         if (auto* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
             cur = op->get(0);
-            continue;
-        }
-        if (auto* op = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
-            cur = op->getLeft();
             continue;
         }
         if (auto* op = dynamic_cast<const QoreShiftOperatorNode*>(node)) {
@@ -168,10 +170,9 @@ bool qore_ir_get_readonly_scalar_closure_captures(
         bool exact_scalar = type
             && !QoreTypeInfo::isReference(type)
             && !QoreTypeInfo::parseAcceptsReturns(type, NT_NOTHING)
-            && ((QoreTypeInfo::isType(type, NT_INT)
-                    && !QoreTypeInfo::getReturnEnum(type))
-                || QoreTypeInfo::isType(type, NT_FLOAT)
-                || QoreTypeInfo::isType(type, NT_BOOLEAN));
+            && (QoreTypeInfo::isPlainType(type, NT_INT)
+                || QoreTypeInfo::isPlainType(type, NT_FLOAT)
+                || QoreTypeInfo::isPlainType(type, NT_BOOLEAN));
         if (!exact_scalar) {
             result.clear();
             return false;
@@ -2634,6 +2635,81 @@ static size_t qore_ir_fuse_call_target_checks_intern(QoreIRFunction& func,
                 ++count;
             }
         }
+    }
+    return count;
+}
+
+//! Returns true if the step event \a dbg can be moved into \a host, the instruction that follows it in its block
+/** The operation must be one that cannot raise an exception, so that it has no exception path of its own, which would
+    run after the event without the debugger's state (see QORE_IR_DISPATCH_FOLDED_DEBUG_STEP() in
+    QoreIRInterpreter.cpp), and makes no exception check in native code: a fused local int operation on int locals
+    that only the IR uses (no closure-bound or reference local, and a source of type int, whose read cannot fail, as the
+    reference read of a source of no type can); it then has no exception target, and it takes that of the event.
+*/
+static bool qore_ir_can_fold_debug_step(const QoreIRDebugStatementInstruction& dbg, const QoreIRInstruction& host) {
+    // only the step event of a statement; the end of a statement, the start of an exception path and a block's event
+    // stay instructions of their own
+    if (dbg.opcode != QoreIROpcode::DebugStatement || !dbg.statement || dbg.block_locals
+            || (dbg.nest_flags & (QORE_IR_DEBUG_NEST_END | QORE_IR_DEBUG_NEST_UNWIND))) {
+        return false;
+    }
+    if (host.exception_target) {
+        return false;
+    }
+    auto is_int_local = [](const LocalVar* local) -> bool {
+        return local && !local->closureUse() && local->getTypeInfo() == bigIntTypeInfo;
+    };
+    switch (host.opcode) {
+        case QoreIROpcode::IncrementLocalInt: {
+            const auto& inc = static_cast<const QoreIRIncrementLocalIntInstruction&>(host);
+            return is_int_local(inc.local) && inc.ir_only && !inc.folded_debug_step;
+        }
+        case QoreIROpcode::AddAssignLocalInt: {
+            const auto& add = static_cast<const QoreIRAddAssignLocalIntInstruction&>(host);
+            return is_int_local(add.target) && add.target_ir_only && is_int_local(add.source)
+                && !add.folded_debug_step;
+        }
+        default:
+            return false;
+    }
+}
+
+size_t qore_ir_fold_debug_statements(QoreIRFunction& func) {
+    // the debug IR of AOT code is serialized with its DebugStatement instructions
+    if (!func.source_dpgm_addr || func.emit_debug_statements) {
+        return 0;
+    }
+    size_t count = 0;
+    for (auto& block : func.blocks) {
+        auto& insts = block->instructions;
+        size_t out = 0;
+        for (size_t i = 0; i < insts.size(); ++i) {
+            if (i + 1 < insts.size()) {
+                auto* dbg = qore_ir_inst_cast<QoreIRDebugStatementInstruction*>(insts[i].get());
+                QoreIRInstruction* host = insts[i + 1].get();
+                if (dbg && qore_ir_can_fold_debug_step(*dbg, *host)) {
+                    std::unique_ptr<QoreIRDebugStatementInstruction> step(
+                        static_cast<QoreIRDebugStatementInstruction*>(insts[i].release()));
+                    // the edge of the event's exception path stays in the block; the operation has none of its own
+                    assert(!host->exception_target);
+                    host->exception_target = step->exception_target;
+                    step->folded_host = host;
+                    if (host->opcode == QoreIROpcode::IncrementLocalInt) {
+                        static_cast<QoreIRIncrementLocalIntInstruction*>(host)->folded_debug_step = std::move(step);
+                    } else {
+                        static_cast<QoreIRAddAssignLocalIntInstruction*>(host)->folded_debug_step = std::move(step);
+                    }
+                    ++count;
+                    // the empty slot is dropped below
+                    continue;
+                }
+            }
+            if (out != i) {
+                insts[out] = std::move(insts[i]);
+            }
+            ++out;
+        }
+        insts.resize(out);
     }
     return count;
 }
@@ -5793,6 +5869,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     }
     // Every runtime-visible access to these locals was removed or replaced;
     // keep the local ownership metadata aligned with the rewritten IR.
+    if (!scalarized_container_locals.empty()) {
+        // the write inventories change: the take-over analysis cached from them is computed again when needed
+        func.take_over_params_state.store(0, std::memory_order_release);
+    }
     for (const LocalVar* local : scalarized_container_locals) {
         (void)qore_ir_analysis_cancelled(check_count,
             "IR fixed-aggregate scalar replacement metadata commit");
@@ -7864,14 +7944,6 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
         auto i = definitions.find(value.id);
         return i == definitions.end() ? nullptr : i->second;
     };
-    auto get_loaded_local = [&](QoreIRValue value) -> LocalVar* {
-        QoreIRInstruction* def = get_definition(value);
-        if (!def || def->opcode != QoreIROpcode::LoadLocal || !qore_ir_is_assigned_value(func, value)) {
-            return nullptr;
-        }
-        auto* load = static_cast<QoreIRLocalInstruction*>(def);
-        return load->is_ref || load->is_closure ? nullptr : load->local;
-    };
     auto get_raw_loaded_local = [&](QoreIRValue value) -> LocalVar* {
         QoreIRInstruction* def = get_definition(value);
         if (!def || def->opcode != QoreIROpcode::LoadLocal) {
@@ -8999,6 +9071,27 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
         }
     }
 
+    // true if an instruction of the block in [begin, end) other than the append accesses the local
+    auto accesses_local = [&](const QoreIRBasicBlock* block, size_t begin, size_t end,
+            const QoreIRInstruction& append, LocalVar* local) {
+        for (size_t i = begin; i < end; ++i) {
+            const QoreIRInstruction* candidate = block->instructions[i].get();
+            if (candidate == &append) {
+                continue;
+            }
+            if (candidate->opcode == QoreIROpcode::LoadLocal
+                    || candidate->opcode == QoreIROpcode::StoreLocal
+                    || candidate->opcode == QoreIROpcode::InstantiateLocal
+                    || candidate->opcode == QoreIROpcode::UninstantiateLocal) {
+                const auto* local_inst =
+                    static_cast<const QoreIRLocalInstruction*>(candidate);
+                if (local_inst->local == local) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
     auto has_uninterrupted_local_access = [&](const QoreIRInstruction& append,
             const QoreIRLocalInstruction& store, LocalVar* local) {
         auto load_def = definitions.find(append.operands[0].id);
@@ -9011,29 +9104,39 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
         if (load_pos == positions.end() || append_pos == positions.end()
                 || store_pos == positions.end()
                 || load_pos->second.first != append_pos->second.first
-                || append_pos->second.first != store_pos->second.first
-                || load_pos->second.second >= append_pos->second.second
-                || append_pos->second.second >= store_pos->second.second) {
+                || load_pos->second.second >= append_pos->second.second) {
             return false;
         }
         const QoreIRBasicBlock* block = cfg.blocks[load_pos->second.first];
-        for (size_t i = load_pos->second.second + 1; i < store_pos->second.second; ++i) {
-            const QoreIRInstruction* candidate = block->instructions[i].get();
-            if (candidate == &append) {
-                continue;
+        if (append.opcode == QoreIROpcode::Invoke) {
+            // an append in a try block is the invoke that ends the block of the load; the paired store is in the
+            // invoke's normal continuation, which only the invoke enters, before any other access to the local.  The
+            // exception edge leaves the local as it was: the append helpers change it only once the append succeeded
+            // (issue #6280)
+            const auto& invoke = static_cast<const QoreIRInvokeInstruction&>(append);
+            const size_t store_block_id = store_pos->second.first;
+            if (append_pos->second.second + 1 != block->instructions.size()
+                    || !invoke.normal_target || invoke.normal_target == invoke.exception_target
+                    || cfg.blocks[store_block_id] != invoke.normal_target
+                    || store_block_id == load_pos->second.first
+                    || cfg.predecessors[store_block_id].size() != 1
+                    || cfg.predecessors[store_block_id][0] != load_pos->second.first) {
+                return false;
             }
-            if (candidate->opcode == QoreIROpcode::LoadLocal
-                    || candidate->opcode == QoreIROpcode::StoreLocal
-                    || candidate->opcode == QoreIROpcode::InstantiateLocal
-                    || candidate->opcode == QoreIROpcode::UninstantiateLocal) {
-                const auto* local_inst =
-                    static_cast<const QoreIRLocalInstruction*>(candidate);
-                if (local_inst->local == local) {
-                    return false;
-                }
-            }
+            return !accesses_local(block, load_pos->second.second + 1, block->instructions.size(), append, local)
+                && !accesses_local(cfg.blocks[store_block_id], 0, store_pos->second.second, append, local);
         }
-        return true;
+        if (append_pos->second.first != store_pos->second.first
+                || append_pos->second.second >= store_pos->second.second) {
+            return false;
+        }
+        return !accesses_local(block, load_pos->second.second + 1, store_pos->second.second, append, local);
+    };
+    // true for a local copy-on-write string append: the binary op, or the invoke made for it in a try block
+    auto is_string_append = [](const QoreIRInstruction& inst) {
+        return inst.opcode == QoreIROpcode::AppendStringCow
+            || (inst.opcode == QoreIROpcode::Invoke
+                && static_cast<const QoreIRInvokeInstruction&>(inst).invoke_opcode == QoreIROpcode::AppendStringCow);
     };
 
     auto get_loaded_local = [&](QoreIRValue value) -> LocalVar* {
@@ -9047,7 +9150,7 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
     };
     auto get_paired_append_store = [&](const QoreIRInstruction& append,
             LocalVar* local) -> const QoreIRLocalInstruction* {
-        if (append.opcode != QoreIROpcode::AppendStringCow
+        if (!is_string_append(append)
                 || append.operands.size() != 2 || !append.result.isValid()
                 || get_loaded_local(append.operands[0]) != local) {
             return nullptr;
@@ -9114,7 +9217,7 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                 }
                 bool preserves_freshness =
                     qore_ir_is_read_only_string_use(inst, operand)
-                    || (inst.opcode == QoreIROpcode::AppendStringCow
+                    || (is_string_append(inst)
                         && !inst.operands.empty()
                         && inst.operands[0].id == operand.id
                         && get_paired_append_store(inst, local));
@@ -9125,8 +9228,7 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                 cancelled = true;
                 return state;
             }
-            if (inst.opcode == QoreIROpcode::AppendStringCow
-                    && inst.operands.size() == 2) {
+            if (is_string_append(inst) && inst.operands.size() == 2) {
                 LocalVar* local = get_loaded_local(inst.operands[0]);
                 const QoreIRLocalInstruction* store = local
                     ? get_paired_append_store(inst, local) : nullptr;
@@ -9156,8 +9258,13 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                     func.getValueFacts(inst.operands[0]);
                 auto fresh_candidate = local ? candidate_index.find(local)
                     : candidate_index.end();
+                // qore_rt_string_append_in_place() appends only a string: an operand that can be NOTHING or a
+                // value of another type takes the guarded copy-on-write append, which also appends in place to a
+                // string that the local alone holds (issue #6266)
+                // the invoke of an append in a try block is never marked: it has no in-place code
                 if (mark && !inst.string_append_in_place && store
-                        && local_cow
+                        && local_cow && inst.opcode == QoreIROpcode::AppendStringCow
+                        && inst.string_append_string_operand
                         && fresh_candidate != candidate_index.end()
                         && state.test(fresh_candidate->second) && facts
                         && facts->assigned_state == QoreIRAssignedState::Assigned
@@ -9260,16 +9367,18 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
     }
 
     size_t changed = 0;
+    // the blocks that the graph, which has no exception edges, does not reach are the handlers of try statements and
+    // the blocks that only they reach: nothing is fresh there, so that only their guarded copy-on-write appends are
+    // paired with the local's load and store (issue #6280)
+    const FreshLocalSet none_fresh(candidate_index.size(), false);
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR in-place string append escape analysis")) {
             return changed;
         }
-        if (cfg.reachable[block_id]) {
-            transfer_block(block_id, fresh_in[block_id], true, changed);
-            if (cancelled) {
-                return changed;
-            }
+        transfer_block(block_id, cfg.reachable[block_id] ? fresh_in[block_id] : none_fresh, true, changed);
+        if (cancelled) {
+            return changed;
         }
     }
     return changed;
@@ -9404,14 +9513,13 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
         QoreIRPhiValueKind phi_kind = QoreIRPhiValueKind::QoreValue;
         if (type && !QoreTypeInfo::isReference(type)
                 && !QoreTypeInfo::parseAcceptsReturns(type, NT_NOTHING)) {
-            if (QoreTypeInfo::isType(type, NT_INT)
-                    && !QoreTypeInfo::getReturnEnum(type)) {
+            if (QoreTypeInfo::isPlainType(type, NT_INT)) {
                 representation = QoreIRValueRepresentation::NativeInt;
                 phi_kind = QoreIRPhiValueKind::NativeInt;
-            } else if (QoreTypeInfo::isType(type, NT_FLOAT)) {
+            } else if (QoreTypeInfo::isPlainType(type, NT_FLOAT)) {
                 representation = QoreIRValueRepresentation::NativeFloat;
                 phi_kind = QoreIRPhiValueKind::NativeFloat;
-            } else if (QoreTypeInfo::isType(type, NT_BOOLEAN)) {
+            } else if (QoreTypeInfo::isPlainType(type, NT_BOOLEAN)) {
                 representation = QoreIRValueRepresentation::NativeBool;
                 phi_kind = QoreIRPhiValueKind::NativeBool;
             }
@@ -9957,10 +10065,9 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
                 const QoreTypeInfo* value_type =
                     type ? qore_get_value_type(type) : nullptr;
                 bool native_scalar = value_type
-                    && ((QoreTypeInfo::isType(value_type, NT_INT)
-                            && !QoreTypeInfo::getReturnEnum(value_type))
-                        || QoreTypeInfo::isType(value_type, NT_FLOAT)
-                        || QoreTypeInfo::isType(value_type, NT_BOOLEAN));
+                    && (QoreTypeInfo::isPlainType(value_type, NT_INT)
+                        || QoreTypeInfo::isPlainType(value_type, NT_FLOAT)
+                        || QoreTypeInfo::isPlainType(value_type, NT_BOOLEAN));
                 if (local && !local->closureUse()
                         && !QoreTypeInfo::isReference(type)
                         && native_scalar) {
@@ -10172,10 +10279,9 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
                         qore_get_value_type(refined_facts.type_info);
                     refined_facts.representation = !assigned
                         ? QoreIRValueRepresentation::Boxed
-                        : QoreTypeInfo::isType(value_type, NT_INT)
-                            && !QoreTypeInfo::getReturnEnum(value_type)
+                        : QoreTypeInfo::isPlainType(value_type, NT_INT)
                             ? QoreIRValueRepresentation::NativeInt
-                            : QoreTypeInfo::isType(value_type, NT_FLOAT)
+                            : QoreTypeInfo::isPlainType(value_type, NT_FLOAT)
                                 ? QoreIRValueRepresentation::NativeFloat
                                 : QoreIRValueRepresentation::NativeBool;
                     if (facts.assigned_state != refined_facts.assigned_state
@@ -11451,7 +11557,10 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
             if (qore_ir_is_list_push_instruction(*inst)) {
                 has_list_push = true;
             } else if (enable_in_place_string_append
-                    && inst->opcode == QoreIROpcode::AppendStringCow) {
+                    && (inst->opcode == QoreIROpcode::AppendStringCow
+                        || (inst->opcode == QoreIROpcode::Invoke
+                            && static_cast<const QoreIRInvokeInstruction&>(*inst).invoke_opcode
+                                == QoreIROpcode::AppendStringCow))) {
                 has_string_append = true;
             }
             if (has_list_push
@@ -15013,9 +15122,7 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
         }
         const QoreTypeInfo* value_type =
             qore_get_value_type(facts->type_info);
-        return value_type && QoreTypeInfo::isType(value_type, type)
-            && (type != NT_INT
-                || !QoreTypeInfo::getReturnEnum(value_type));
+        return value_type && QoreTypeInfo::isPlainType(value_type, type);
     };
     //! returns true if the value may be NOTHING: its type allows NOTHING and nothing proves that it is not
     /** The specialization of an operator to native arithmetic converts NOTHING to 0 or 0.0, where the operators give
@@ -15538,7 +15645,9 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
             : exact_type == dateTypeInfo ? NT_DATE
             : exact_type == objectTypeInfo ? NT_OBJECT
             : exact_type == numberTypeInfo ? NT_NUMBER : NT_ALL;
-        return kind != NT_ALL && QoreTypeInfo::isType(declared, kind);
+        // the value of an enum type is the enum's member (a TAG_ENUM value), not a value of its base type, which
+        // QoreTypeInfo::isType() gives for it (qore#6254)
+        return kind != NT_ALL && QoreTypeInfo::isType(declared, kind) && !QoreTypeInfo::getReturnEnum(declared);
     };
     auto exact_local_type = [&](const LocalVar* local)
             -> const QoreTypeInfo* {

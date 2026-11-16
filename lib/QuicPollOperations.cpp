@@ -168,7 +168,8 @@ static void clampPollTimeoutToDeadline(QoreHashNode* poll_info, int64_t deadline
     }
 }
 
-//! Log and clear a readPacketBatch exception (shared by batch recv helpers)
+#ifdef __linux__
+//! Log and clear a readPacketBatch exception (shared by the recvmmsg() batch recv helpers, which only Linux has)
 static void logBatchError(ExceptionSink* xsink, QuicSession* target, int batch_count) {
     QoreStringValueHelper err_str(xsink->getExceptionErr());
     QoreStringValueHelper desc_str(xsink->getExceptionDesc());
@@ -181,6 +182,7 @@ static void logBatchError(ExceptionSink* xsink, QuicSession* target, int batch_c
         *desc_str ? desc_str->c_str() : "unknown");
     xsink->clear();
 }
+#endif
 
 //! Batch-receive and dispatch QUIC packets via recvmmsg (Linux) or recvmsg (other).
 /** Receives all available packets from the socket and dispatches them to their
@@ -433,7 +435,8 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
         path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&src_addr);
         path.remote.addrlen = src_addrlen;
 
-        int rv = target->readPacket(recv_buf, static_cast<size_t>(nread), path, xsink);
+        // an error is reported in xsink
+        target->readPacket(recv_buf, static_cast<size_t>(nread), path, xsink);
         if (*xsink) {
             // Log exception details and continue; a single session error should not
             // stop the server from receiving packets for other sessions
@@ -966,7 +969,7 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
     path.remote.addrlen = src_addrlen;
 
     printd(5, "SocketQuicClientPollOperation::recvAndProcessPacket() received %d bytes\n", (int)nread);
-    int rv = quic_session->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
+    quic_session->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
     if (*xsink) {
         return -1;
     }
@@ -1211,7 +1214,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     // then yield to poll for the next round of datagrams
                     ngtcp2_tstamp next_expiry;
                     {
-                        int rv = sendPendingPackets(next_expiry, xsink);
+                        sendPendingPackets(next_expiry, xsink);
                         if (*xsink) {
                             return nullptr;
                         }
@@ -2113,7 +2116,7 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
     path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&src_addr);
     path.remote.addrlen = src_addrlen;
 
-    int rv = target_session->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
+    target_session->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
     if (*xsink && target_session->isDropped()) {
         // The client's first Initial datagram was lost or reordered (see QuicSession::dropped_):
         // drop the session silently — no CONNECTION_CLOSE, which the client would take as a failed
@@ -2367,7 +2370,7 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                 // We have at least one session; coalesced timer + write + send
                 {
                     ngtcp2_tstamp min_expiry;
-                    int rv = processTimersAndSendAll(min_expiry, xsink);
+                    processTimersAndSendAll(min_expiry, xsink);
                     if (*xsink) {
                         return nullptr;
                     }
@@ -3337,7 +3340,7 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePollIntern(E
                 // Coalesced: timer check + packet generation + send
                 ngtcp2_tstamp next_expiry;
                 {
-                    int rv = sendPendingPackets(next_expiry, xsink);
+                    sendPendingPackets(next_expiry, xsink);
                     if (*xsink) {
                         return nullptr;
                     }

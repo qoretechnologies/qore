@@ -1,0 +1,182 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of qcc executables
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class DeclarationInitializerScopeTest
+
+#! The initializers of class and hashdecl members refer to the program's top-level local variables wherever the
+#! declaration is first used (qore#6268)
+/** A class or a hashdecl is parse-initialized when it is first used, and its member initializers were parsed in the
+    scope of the code being parsed then: when that code was a closure, a top-level local variable that an initializer
+    refers to (code gc = ...; hashdecl Q<X> { string v = gc(); }) was captured by that closure, and the initializer
+    read it from the frame of whatever closure ran it, which crashed (exit 139) in every mode.  Each script below runs
+    in each execution mode in a child process and is compiled with qcc (-O0, -O3): a generic and a non-generic
+    hashdecl, a generic and a non-generic class member, and a class static variable whose declaration is first used in
+    a closure, a function or a method, or at the top level; a top-level local variable assigned again; and two threads,
+    in which the top-level local variables have no value, as in a function.  qcc cannot serialize a member default that
+    refers to a top-level local variable: it must stop with an error that says so, or the executable must give the
+    same output.
+*/
+class DeclarationInitializerScopeTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the declaration of the top-level variable that the initializers call
+        const Gc = "%modern\ncode gc = string sub () { return \"c\"; };\n";
+
+        #! the scripts and their output
+        const Scripts = {
+            "generic-hashdecl": (
+                Gc + "hashdecl Q<X> { string v = gc(); }\n"
+                    "code f1 = auto sub () { hash<Q<string>> q(); return q.v; };\n"
+                    "code f2 = auto sub () { hash<Q<string>> q(); return q.v; };\n"
+                    "printf(\"%y %y %y\\n\", f1(), f2(), f1());\n",
+                "\"c\" \"c\" \"c\"\n",
+            ),
+            "hashdecl": (
+                Gc + "hashdecl Q { string v = gc(); }\n"
+                    "code f1 = auto sub () { hash<Q> q(); return q.v; };\n"
+                    "code f2 = auto sub () { hash<Q> q(); return q.v; };\n"
+                    "printf(\"%y %y %y\\n\", f1(), f2(), f1());\n",
+                "\"c\" \"c\" \"c\"\n",
+            ),
+            "top-level-first": (
+                Gc + "hashdecl Q<X> { string v = gc(); }\n"
+                    "hash<Q<string>> q0();\n"
+                    "code f1 = auto sub () { hash<Q<string>> q(); return q.v; };\n"
+                    "printf(\"%y %y\\n\", q0.v, f1());\n",
+                "\"c\" \"c\"\n",
+            ),
+            "function": (
+                Gc + "hashdecl Q<X> { string v = gc(); }\n"
+                    "string sub fn() { hash<Q<string>> q(); return q.v; }\n"
+                    "code f2 = auto sub () { hash<Q<string>> q(); return q.v; };\n"
+                    "printf(\"%y %y %y\\n\", fn(), f2(), fn());\n",
+                "\"c\" \"c\" \"c\"\n",
+            ),
+            "method": (
+                Gc + "hashdecl Q<X> { string v = gc(); }\n"
+                    "class K { string m() { hash<Q<string>> q(); return q.v; } }\n"
+                    "code f2 = auto sub () { hash<Q<string>> q(); return q.v; };\n"
+                    "K k();\n"
+                    "printf(\"%y %y %y\\n\", k.m(), f2(), k.m());\n",
+                "\"c\" \"c\" \"c\"\n",
+            ),
+            "generic-class-member": (
+                Gc + "class G<X> { public { string v = gc(); } }\n"
+                    "code f1 = auto sub () { G<string> g(); return g.v; };\n"
+                    "code f2 = auto sub () { G<string> g(); return g.v; };\n"
+                    "printf(\"%y %y %y\\n\", f1(), f2(), f1());\n",
+                "\"c\" \"c\" \"c\"\n",
+            ),
+            "class-member": (
+                Gc + "class C { public { string v = gc(); } }\n"
+                    "code f1 = auto sub () { C c(); return c.v; };\n"
+                    "code f2 = auto sub () { C c(); return c.v; };\n"
+                    "printf(\"%y %y %y\\n\", f1(), f2(), f1());\n",
+                "\"c\" \"c\" \"c\"\n",
+            ),
+            # a static variable is initialized before the top-level code assigns the variable, as when the class is
+            # first used at the top level
+            "static-var": (
+                Gc + "class S { public { static string v = gc(); } }\n"
+                    "code f1 = auto sub () { return S::v; };\n"
+                    "printf(\"%y\\n\", f1());\n",
+                "LVALUE-ERROR\n",
+            ),
+            "assigned-again": (
+                Gc + "hashdecl Q<X> { string v = gc(); }\n"
+                    "code f1 = auto sub () { hash<Q<string>> q(); return q.v; };\n"
+                    "printf(\"%y\\n\", f1());\n"
+                    "gc = string sub () { return \"d\"; };\n"
+                    "printf(\"%y\\n\", f1());\n",
+                "\"c\"\n\"d\"\n",
+            ),
+            # a new thread has its own top-level local variables, without a value, as for the code of a function
+            "threads": (
+                Gc + "hashdecl Q<X> { string v = gc(); }\n"
+                    "code f1 = auto sub () { hash<Q<string>> q(); return q.v; };\n"
+                    "code f2 = auto sub () { hash<Q<string>> q(); return q.v; };\n"
+                    "string sub run(code f) { try { return f(); } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+                    "Queue r();\n"
+                    "background r.push(run(f1));\n"
+                    "background r.push(run(f2));\n"
+                    "printf(\"%y\\n\", sort((r.get(), r.get())));\n",
+                "[\"REFERENCE-CALL-ERROR\", \"REFERENCE-CALL-ERROR\"]\n",
+            ),
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("DeclarationInitializerScope", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        addTestCase("declaration initializers", \testScripts());
+        set_return_value(main());
+    }
+
+    #! returns the output of a script: its standard output and the code of an exception that ended it
+    string run(string cmd) {
+        int rc;
+        string out = backquote(cmd + " 2>&1", \rc);
+        # an unhandled exception ends the script with its code only (the rest names the time and the file)
+        if (*string err = (out =~ x/(?:^|\n)([A-Z-]+-ERROR):/)[0]) {
+            return err + "\n";
+        }
+        if (rc) {
+            return sprintf("exit %d: %s", rc, out);
+        }
+        return out;
+    }
+
+    testScripts() {
+        TmpDir tmp("qore-declaration-initializer-scope-");
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach hash<auto> i in (Scripts.pairIterator()) {
+            string file = tmp.path + DirSep + i.key + ".q";
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(i.value[0]);
+            f.close();
+            foreach string mode in (ExecModes) {
+                assertEq(i.value[1], run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, file)),
+                    sprintf("%s: %s", i.key, mode));
+            }
+            foreach string opt in (("-O0", "-O3")) {
+                string exe = file + opt;
+                int rc;
+                string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                    file), \rc);
+                if (is_file(exe)) {
+                    assertEq(i.value[1], run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+                        libqore_dir, exe)), sprintf("%s: qcc %s", i.key, opt));
+                    continue;
+                }
+                # qcc cannot serialize a member default that refers to a top-level local variable: it stops with an
+                # error that says so (a static variable's initializer raises its error when qcc parses the program);
+                # it must not crash
+                bool clean = (rc == 1 || rc == 2)
+                    && (out =~ /AOT cannot serialize (hashdecl|class) '[^']+' member '[^']+' default/
+                        || (i.key == "static-var" && out =~ /LVALUE-ERROR/));
+                assertTrue(clean, sprintf("%s: qcc %s (exit %d): %s", i.key, opt, rc, out));
+            }
+        }
+    }
+}

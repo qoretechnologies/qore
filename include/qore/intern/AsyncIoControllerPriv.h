@@ -291,6 +291,13 @@ class QoreSandboxContext;
 */
 typedef std::shared_ptr<const QoreSandboxContext> AsyncIoSandboxContext;
 
+//! The run-time parse options of the code that registered a callback that is not run in a Program (a timer's), which
+//! the callback runs with; empty if none were captured (qore#6208)
+/** A callback that is a call reference to builtin code sets no options of its own; one that module code registered
+    for a sandboxed caller would otherwise lose the caller's restrictions
+*/
+typedef std::shared_ptr<const QoreThreadRuntimeParseOptions> AsyncIoRuntimeOptions;
+
 //! Returns true if \a ctx belongs to work that the module cleanup handed over
 //! (QoreSandboxContext::module_cleanup_delegate)
 DLLLOCAL inline bool async_io_module_cleanup_delegate(const std::shared_ptr<const QoreSandboxContext>& ctx) {
@@ -342,6 +349,9 @@ public:
         //! The sandbox context of the poll operation's submitter, applied while the item runs; see
         //! AsyncIoSandboxContext
         AsyncIoSandboxContext sandbox_ctx;
+        //! For DT_CALLBACK: the run-time parse options of the code that registered the callback, installed while it
+        //! runs, or empty (see AsyncIoRuntimeOptions)
+        AsyncIoRuntimeOptions runtime_po;
         //! For DT_CONTINUE_POLL: read the operation's state after continuePoll() for its state events
         bool read_state = false;
         //! For DT_CONTINUE_POLL: the ID of the operation in the I/O thread's cache; see OpCache
@@ -388,7 +398,8 @@ public:
         @param sandbox_ctx the sandbox of the code that added the timer, which governs the callback
     */
     DLLLOCAL void dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
-        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        AsyncIoRuntimeOptions runtime_po = AsyncIoRuntimeOptions());
 
     //! Dispatch continuePoll() asynchronously with result delivery back to I/O thread
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -1503,6 +1514,8 @@ private:
         QoreValue udata;                //!< Referenced Qore user data
         std::string owner;              //!< Owner identifier for per-owner callback flush (empty if untracked)
         AsyncIoSandboxContext sandbox_ctx; //!< The sandbox of the code that added the timer, for its callback
+        //! The run-time parse options of the code that added the timer, which its callback runs with (qore#6208)
+        AsyncIoRuntimeOptions runtime_po;
         //! True if module code added the timer for an application with restrictions (see app_pgm_id)
         bool for_app = false;
         //! The ID of the application Program that module code added the timer for, if for_app is set
@@ -2054,6 +2067,8 @@ private:
     QoreLoggerBridge* logger;              //!< Referenced or nullptr
     std::unordered_map<int64_t, TimerInfo> timer_info_map; //!< Timer ID -> user data
     ResolvedCallReferenceNode* timer_callback; //!< Timer callback (referenced, or nullptr)
+    //! the run-time parse options of the code that set timer_callback, which it runs with (qore#6208); guarded by m
+    AsyncIoRuntimeOptions timer_callback_po;
 
     //! Atomic counter for pre-allocating timer IDs across threads
     std::atomic<int64_t> next_ctrl_timer_id{1};
@@ -2162,7 +2177,7 @@ private:
     /** The reference of @p code is taken over when it is held
     */
     DLLLOCAL bool dbgHoldTimerCallback(ResolvedCallReferenceNode* code, const std::string& owner,
-            AsyncIoSandboxContext& sandbox_ctx);
+            AsyncIoSandboxContext& sandbox_ctx, AsyncIoRuntimeOptions& runtime_po);
 #endif
 
     //! Start the I/O thread (caller must hold lock)
@@ -2506,13 +2521,24 @@ private:
     DLLLOCAL void waitCancel(const std::string& key);
 
     //! Log a message (acquires lock to snapshot logger — must NOT be called with lock held)
-    DLLLOCAL void log(int level, const char* fmt, ...) const;
+    /** @return false if there is no logger to take the message (neither the controller's own logger nor a global
+        one); a logger that is not enabled for the level counts as taking it
+    */
+    DLLLOCAL bool log(int level, const char* fmt, ...) const;
+
+    //! Logs a message as @ref log() does; an exception that the logger raises is added to @a logger_xsink
+    DLLLOCAL bool logWithSink(ExceptionSink* logger_xsink, int level, const char* fmt, ...) const;
+
+    //! Logs a message as @ref log() does, with the arguments in a va_list
+    /** @param logger_xsink if not null, receives an exception that the logger raises; otherwise it is discarded
+    */
+    DLLLOCAL bool logV(ExceptionSink* logger_xsink, int level, const char* fmt, va_list args) const;
 
 public:
     //! Logs a message with this controller's own logger only (acquires lock — must NOT be called with lock held)
     /** @return false if the controller has no logger; the message is then not logged
     */
-    DLLLOCAL bool logOwnV(int level, const char* fmt, va_list args) const;
+    DLLLOCAL bool logOwnV(int level, const char* fmt, va_list args, ExceptionSink* logger_xsink = nullptr) const;
 
 private:
 

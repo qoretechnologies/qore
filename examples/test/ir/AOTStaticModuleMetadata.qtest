@@ -9,8 +9,10 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires Util
+%requires ../TestBuildTools.qm
 
 %exec-class AOTStaticModuleMetadataTest
 
@@ -52,6 +54,187 @@ int main(int argc, char** argv) {
     return rc;
 }
 ";
+
+        #! a C++ host that registers the module in a thread with the stack size (in KB) given as its argument
+        /** It prints the error of the registration (from qore_aot_register_into_program_v2(), which reports its
+            errors and warnings on stderr), then "result: <value>" if the module could be used, or "failed" and the
+            error of the parse.  With \c --min-stack, it prints the smallest stack size in bytes that a thread can be
+            created with on this platform (0 if there is no minimum), as the parse_stack_boundary fixture does
+        */
+        const ThreadHostCode = "#include <qore/Qore.h>
+#include <limits.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+extern \"C\" void qore_StatMod_register(QoreProgram*);
+
+static void* work(void*) {
+    QoreForeignThreadHelper foreign;
+    ExceptionSink xsink;
+    QoreProgram* pgm = new QoreProgram(PO_NEW_STYLE);
+    qore_StatMod_register(pgm);
+    pgm->parse(\"%requires StatMod\\nstring sub main() { return StatMod::value(); }\\n\", \"host\", &xsink);
+    if (!xsink) {
+        ValueHolder v(pgm->callFunction(\"main\", nullptr, &xsink), &xsink);
+        if (!xsink && v->getType() == NT_STRING) {
+            printf(\"result: %s\\n\", v->get<const QoreStringNode>()->c_str());
+        }
+    }
+    fflush(stdout);
+    if (xsink) {
+        printf(\"failed\\n\");
+        fflush(stdout);
+        xsink.handleExceptions();
+    }
+    pgm->waitForTerminationAndDeref(&xsink);
+    xsink.clear();
+    return nullptr;
+}
+
+// glibc refuses a smaller stack (EINVAL from pthread_attr_setstacksize()); its minimum depends on the platform
+// (131072 bytes on aarch64, 16384 on x86_64), and on glibc 2.34 and later also on the system (_SC_THREAD_STACK_MIN)
+static size_t min_stack_size() {
+    size_t rv = 0;
+#ifdef PTHREAD_STACK_MIN
+    rv = static_cast<size_t>(PTHREAD_STACK_MIN);
+#endif
+#ifdef _SC_THREAD_STACK_MIN
+    long sys_min = sysconf(_SC_THREAD_STACK_MIN);
+    if (sys_min > 0 && static_cast<size_t>(sys_min) > rv) {
+        rv = static_cast<size_t>(sys_min);
+    }
+#endif
+    return rv;
+}
+
+int main(int argc, char** argv) {
+    if (argc != 2) {
+        return 2;
+    }
+    if (!strcmp(argv[1], \"--min-stack\")) {
+        printf(\"%zu\\n\", min_stack_size());
+        return 0;
+    }
+    qore_init(QL_GPL, \"UTF-8\", true);
+    int rc = 1;
+    pthread_attr_t attr;
+    if (!pthread_attr_init(&attr)) {
+        pthread_t thread;
+        if (!pthread_attr_setstacksize(&attr, static_cast<size_t>(atoi(argv[1])) * 1024)
+                && !pthread_create(&thread, &attr, work, nullptr) && !pthread_join(thread, nullptr)) {
+            rc = 0;
+        }
+        pthread_attr_destroy(&attr);
+    }
+    qore_cleanup();
+    return rc;
+}
+";
+
+        #! the number of source modules in the chain that the optional module starts
+        const OptChainLength = 40;
+
+        #! the smallest stack size (KB) of the runs of ThreadHostCode, where the platform allows it
+        const MinStackKb = 96;
+
+        #! the step (KB) between the stack sizes of the runs of ThreadHostCode up to 1MB
+        const StackStep = 32;
+
+        #! a C++ host that registers the module into a Program, then uses up stack (KB) in a thread of the given size
+        #! (KB) and registers it into another Program
+        /** It prints the error of the second registration (on stderr, from qore_aot_register_into_program_v2()), then
+            "registered", then "result: <value>" if the module could be used, or "failed" and the error of the parse
+        */
+        const RegisterStackHostCode = "#include <qore/Qore.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+extern \"C\" void qore_StatPlain_register(QoreProgram*);
+
+static void register_and_run() {
+    ExceptionSink xsink;
+    QoreProgram* pgm = new QoreProgram(PO_NEW_STYLE);
+    qore_StatPlain_register(pgm);
+    fflush(stderr);
+    printf(\"registered\\n\");
+    fflush(stdout);
+    pgm->parse(\"%requires StatPlain\\nstring sub main() { return StatPlain::value(); }\\n\", \"host\", &xsink);
+    if (!xsink) {
+        ValueHolder v(pgm->callFunction(\"main\", nullptr, &xsink), &xsink);
+        if (!xsink && v->getType() == NT_STRING) {
+            printf(\"result: %s\\n\", v->get<const QoreStringNode>()->c_str());
+        }
+    }
+    fflush(stdout);
+    if (xsink) {
+        printf(\"failed\\n\");
+        fflush(stdout);
+        xsink.handleExceptions();
+    }
+    pgm->waitForTerminationAndDeref(&xsink);
+    xsink.clear();
+}
+
+//! uses about 1KB of stack for each level, then registers the module
+static __attribute__((noinline)) int burn(int n) {
+    volatile char buf[1024];
+    buf[0] = static_cast<char>(n);
+    buf[sizeof buf - 1] = buf[0];
+    if (n > 0) {
+        return burn(n - 1) + buf[sizeof buf - 1];
+    }
+    register_and_run();
+    return buf[0];
+}
+
+static int burn_kb = 0;
+
+static void* work(void*) {
+    QoreForeignThreadHelper foreign;
+    // the first registration, with the whole stack: the module is initialized (its initialization checks the stack
+    // itself); the one made after burn() merges the registered module into another Program
+    ExceptionSink xsink;
+    QoreProgram* first = new QoreProgram(PO_NEW_STYLE);
+    qore_StatPlain_register(first);
+    burn(burn_kb);
+    first->waitForTerminationAndDeref(&xsink);
+    xsink.clear();
+    return nullptr;
+}
+
+int main(int argc, char** argv) {
+    if (argc != 3) {
+        return 2;
+    }
+    burn_kb = atoi(argv[2]);
+    qore_init(QL_GPL, \"UTF-8\", true);
+    int rc = 1;
+    pthread_attr_t attr;
+    if (!pthread_attr_init(&attr)) {
+        pthread_t thread;
+        if (!pthread_attr_setstacksize(&attr, static_cast<size_t>(atoi(argv[1])) * 1024)
+                && !pthread_create(&thread, &attr, work, nullptr) && !pthread_join(thread, nullptr)) {
+            rc = 0;
+        }
+        pthread_attr_destroy(&attr);
+    }
+    qore_cleanup();
+    return rc;
+}
+";
+
+        #! the stack size of the thread of RegisterStackHostCode (KB)
+        const RegisterStackSize = 512;
+
+        #! the stack that the first run of RegisterStackHostCode uses up (KB)
+        const RegisterStackStart = 0;
+
+        #! the most stack (KB) that the runs use up after the first parse stack error until the registration fails
+        const RegisterStackWindow = 16;
     }
 
     private {
@@ -63,7 +246,7 @@ int main(int argc, char** argv) {
     }
 
     constructor() : QUnit::Test("AOTStaticModuleMetadataTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = normalize_dir(ENV.QORE_LIBDIR ?? dirname(qore_bin));
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
@@ -72,12 +255,33 @@ int main(int argc, char** argv) {
             libqore_dir);
 
         addTestCase("a statically registered module is checked with its linked metadata", \staticModuleTest());
+        addTestCase("the optional module of a statically registered module runs short of stack",
+            \staticModuleStackTest());
+        addTestCase("a static registration with less than the parse stack reserve left", \registerStackTest());
         set_return_value(main());
     }
 
     private static list<string> libqoreTargetFlags() {
         *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
         return m ? (m[0],) : ();
+    }
+
+    #! Returns the smallest stack size in KB for the runs of ThreadHostCode with the given step: MinStackKb, or the
+    #! smallest stack size that a thread can be created with on this platform rounded up to a multiple of the step, if
+    #! it is larger
+    /** The host reports the platform's minimum (\c PTHREAD_STACK_MIN, 128KB with glibc on aarch64), where
+        \c pthread_attr_setstacksize() refuses a smaller size, and the host cannot run its thread with it
+    */
+    private int getStackStartKb(string exe, int step_kb) {
+        int status;
+        string output = backquote(sprintf("%s %s --min-stack 2>&1", env, exe), \status);
+        if (status || output !~ /^[0-9]+\n$/) {
+            throw "HOST-ERROR", sprintf("the host cannot report the minimum stack size (exit code %d): %s", status,
+                output);
+        }
+        int min_kb = (output.toInt() + 1023) / 1024;
+        @assert(step_kb > 0);
+        return max(MinStackKb, (min_kb + step_kb - 1) / step_kb * step_kb);
     }
 
     private string run(string cmd) {
@@ -94,6 +298,27 @@ int main(int argc, char** argv) {
     private writeModule(string dir, string name, string directives, string body) {
         write(sprintf("%s/%s.qm", dir, name), sprintf("%%modern\n%s\nmodule %s { version = \"1.0\"; "
             "desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n%s\n", directives, name, body));
+    }
+
+    #! builds a C++ host that links the module object; returns the path of the executable
+    private string buildHost(string dir, string code, string obj) {
+        string host = dir + "/host.cpp";
+        write(host, code);
+        string exe = dir + "/static-host";
+        # CXX can be a command line, such as "ccache c++"
+        list<string> cxx = TestBuildTools::command_words(ENV.CXX, "c++");
+        # only a missing compiler skips the test: a compiler that cannot build the host is a failure
+        if (!TestBuildTools::find_command(cxx[0])) {
+            testSkip(sprintf("no C++ compiler to build the host: %y is not available", cxx[0]));
+        }
+        int status;
+        list<string> args = cxx + ("-std=c++17", "-pthread", "-I" + source_root + "/include",
+            "-I" + libqore_dir + "/include", host, obj, "-L" + libqore_dir, "-Wl,-rpath," + libqore_dir, "-lqore",
+            "-o", exe) + libqoreTargetFlags();
+        string out = backquote((map TestBuildTools::shell_quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, "linked the C++ host: " + out);
+        assertTrue(is_file(exe), "linked the C++ host: " + out);
+        return exe;
     }
 
     staticModuleTest() {
@@ -121,20 +346,7 @@ int main(int argc, char** argv) {
             src_dir + "/StatMod.qm"));
         assertTrue(is_file(obj), "compiled the module object: " + out);
 
-        string host = tmp.path + "/host.cpp";
-        write(host, HostCode);
-        string exe = tmp.path + "/static-host";
-        string cxx = ENV.CXX ?? "c++";
-        out = run(sprintf("%s -std=c++17 -I%s -I%s %s %s -L%s -Wl,-rpath,%s -lqore -o %s %s", cxx,
-            source_root + "/include", libqore_dir + "/include", host, obj, libqore_dir, libqore_dir, exe,
-            libqoreTargetFlags().join(" ")));
-        if (!is_file(exe)) {
-            if (out =~ /not found/) {
-                testSkip("no C++ compiler to build the host: " + out);
-            }
-            assertTrue(False, "linked the C++ host: " + out);
-            return;
-        }
+        string exe = buildHost(tmp.path, HostCode, obj);
 
         # the dependency is the Dep of the module's own directory, as for its source
         out = trim(run(sprintf("%s QORE_MODULE_DIR=%s %s", env, src_dir, exe)));
@@ -146,5 +358,143 @@ int main(int argc, char** argv) {
         assertEq("own-noopt", out.split("\n").last(), out);
         assertRegex("warning: AOT module 'StatMod' linked into this program was compiled when optional module "
             "'StatOpt' was not available, but it is available now", out);
+    }
+
+    #! The optional module of a statically registered module is checked with the stack of the registering thread
+    /** StatMod was compiled without StatOpt, which is available now as the first of a chain of source modules that
+        require each other, so the check of the optional module (which loads it) needs much more stack than the
+        registration itself.  With the stack for it, the module is used and the missing functionality is reported
+        (BINARY-MODULE-STALE); where the check runs short of the thread's stack, it cannot tell, and the registration
+        must fail with the parse stack error: the module must never be used silently as if StatOpt were missing
+        (issue #6047).  The host runs in a process of its own for each stack size, as a process loads a module once.
+    */
+    staticModuleStackTest() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        TmpDir tmp("qore-aot-static-stack-");
+        string src_dir = tmp.path + "/src";
+        string opt_dir = tmp.path + "/opt";
+        mkdir(src_dir);
+        mkdir(opt_dir);
+        writeModule(src_dir, "StatMod", "%try-module StatOpt\n%define NoStatOpt\n%endtry",
+            "public namespace StatMod { public string sub value() {
+%ifdef NoStatOpt
+    return \"noopt\";
+%else
+    return \"opt\";
+%endif
+} }");
+        string obj = tmp.path + "/StatMod.qo";
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -c -o %s %s", env, src_dir, qcc_bin, obj,
+            src_dir + "/StatMod.qm"));
+        assertTrue(is_file(obj), "compiled the module object: " + out);
+        string exe = buildHost(tmp.path, ThreadHostCode, obj);
+        for (int i = 0; i < OptChainLength; ++i) {
+            writeModule(opt_dir, "StatOpt" + (i ? string(i) : ""),
+                i + 1 < OptChainLength ? sprintf("%%requires StatOpt%d", i + 1) : "",
+                sprintf("public namespace StatOpt%s { public bool sub matches(string s) { "
+                    "return s =~ /^a(b+)c[0-9]{2,}(x|y|z)*$/; } }", i ? string(i) : ""));
+        }
+        int used;
+        int stack_errors;
+        # 96KB (or the platform's minimum stack size, rounded up to 32KB, where it is larger: 128KB with glibc on
+        # aarch64, where the host cannot create a thread with a smaller stack) to 1MB in 32KB steps, then larger
+        # stacks, so that a build with large frames (a debug or a sanitizer build) also reaches a size where the chain
+        # of optional modules can be loaded
+        list<int> sizes;
+        for (int kb = getStackStartKb(exe, StackStep); kb <= 1024; kb += StackStep) {
+            push sizes, kb;
+        }
+        sizes += (2048, 4096, 8192);
+        foreach int kb in (sizes) {
+            # only the optional modules are in the module path: the module has no source to load instead
+            out = run(sprintf("%s QORE_MODULE_DIR=%s %s %d", env, opt_dir, exe, kb));
+            string label = sprintf("%dK", kb);
+            if (out =~ /result: noopt/) {
+                # the module is used without StatOpt only with the warning that it is available now
+                assertRegex("AOT module 'StatMod' linked into this program was compiled when optional module "
+                    "'StatOpt' was not available, but it is available now", out, label);
+                ++used;
+            } else {
+                assertRegex("\\bfailed\\b", out, label);
+                assertRegex("PARSE-STACK-LIMIT-EXCEEDED", out, label);
+                ++stack_errors;
+            }
+        }
+        assertGt(0, used, "the module is used with a large stack");
+        assertGt(0, stack_errors, "the check of the optional module runs short of a small stack");
+    }
+
+    #! The registration of a statically linked module itself stops while the parse stack reserve remains
+    /** StatPlain has no dependencies and no optional modules, so its registration loads no module.  The host registers
+        it into a first Program with the whole stack, which initializes it, then into another Program, which merges the
+        registered module into it (queueChildModules(), addToProgram()) with no initialization, whose own stack check
+        would stop it: only the check of registerAOTStaticModuleIntern() can.  The host uses up more of its thread's
+        stack at each run before the second registration, until it fails with PARSE-STACK-LIMIT-EXCEEDED (reported
+        before the host prints "registered"), and the module is then not used.  Each earlier run must use the module.
+        The runs step by 4K, and by 1K after a run where only the parse after the registration fails (the registration
+        needs less stack than the parse, so between the two there is a boundary): the registration must then fail
+        within RegisterStackWindow.  The runs end at the first failure of the registration: with less stack left, the
+        host itself could run out of it.  Without the check, the merge runs with less stack left than any module load
+        is given, and the stack errors are those of the parse after it, if the host does not crash first (issue
+        #6047).
+    */
+    registerStackTest() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        TmpDir tmp("qore-aot-static-register-stack-");
+        string src_dir = tmp.path + "/src";
+        mkdir(src_dir);
+        writeModule(src_dir, "StatPlain", "", "public namespace StatPlain { public string sub value() { "
+            "return \"plain\"; } }");
+        string obj = tmp.path + "/StatPlain.qo";
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -c -o %s %s", env, src_dir, qcc_bin, obj,
+            src_dir + "/StatPlain.qm"));
+        assertTrue(is_file(obj), "compiled the module object: " + out);
+        string exe = buildHost(tmp.path, RegisterStackHostCode, obj);
+        int used;
+        bool stopped;
+        # the run at which a parse stack error was first seen, if only the parse after the registration failed
+        *int boundary;
+        int kb = RegisterStackStart;
+        while (kb < RegisterStackSize) {
+            int status;
+            out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s %d %d 2>&1", env, tmp.path, exe, RegisterStackSize, kb),
+                \status);
+            string label = sprintf("%dK used", kb);
+            assertEq(0, status, label + ": " + out);
+            # the output of the registration: what the host printed before "registered"
+            int end = out.find("registered\n");
+            assertGe(0, end, label + ": " + out);
+            if (out.substr(0, end) =~ /PARSE-STACK-LIMIT-EXCEEDED/) {
+                # the registration failed: the module is not used
+                assertFalse(out =~ /result:/, label + ": " + out);
+                assertRegex("\\bfailed\\b", out, label);
+                stopped = True;
+                break;
+            }
+            if (out =~ /PARSE-STACK-LIMIT-EXCEEDED/) {
+                # the boundary: the registration had just enough stack, and the parse after it, which needs more,
+                # failed; the registration itself must fail within RegisterStackWindow more used, which the runs
+                # approach in 1K steps (without the check, it never does)
+                assertFalse(out =~ /result:/, label + ": " + out);
+                if (!exists boundary) {
+                    boundary = kb;
+                }
+                assertLe(boundary + RegisterStackWindow, kb, sprintf("the registration does not fail within %dK of "
+                    "the first parse stack error at %dK used", RegisterStackWindow, boundary));
+                ++kb;
+                continue;
+            }
+            # with more than the reserve left at the registration and at the parse, the module is used
+            assertEq(NOTHING, boundary, label + ": the module is used again after a parse stack error: " + out);
+            assertRegex("result: plain", out, label + ": " + out);
+            ++used;
+            kb += 4;
+        }
+        assertGt(0, used, "the module is used with enough stack");
+        assertTrue(stopped, "the registration stops while the parse stack reserve remains");
     }
 }

@@ -103,6 +103,9 @@ aωb\r
         addTestCase("RFC 2387 multipart/related header", \multiPartRelatedHeaderTest());
         addTestCase("header line breaks and encoded words", \headerLineBreakTest());
         addTestCase("NUL characters in parsed names", \parsedNameNulTest());
+        addTestCase("encoded word decoding work (issue #6139)", \decodeHeaderWorkTest());
+        addTestCase("quoted-printable decoding work (issue #6139)", \decodeQpWorkTest());
+        addTestCase("boundary not in the parts (issue #6307)", \boundaryNotInPartsTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -1098,6 +1101,27 @@ aωb\r
         assertEq("xx", mime_decode_header("=?UTF-8?Q?x?= =?UTF-8?Q?x?="));
         assertEq("pre x y post", mime_decode_header("pre =?UTF-8?Q?x?= y post"));
 
+        # issue #6139: encoded words are found by offset; text that only looks like an encoded word is kept
+        assertEq("ö ä ü", mime_decode_header("ö =?UTF-8?Q?=C3=A4?= ü"));
+        assertEq("ö ä ü", mime_decode_header(convert_encoding("ö =?UTF-8?Q?=C3=A4?= ü", "ISO-8859-1")));
+        assertEq("ö", mime_decode_header("=?ISO-8859-1?Q?=F6?="));
+        assertEq("=?a", mime_decode_header("=?=?UTF-8?q?a?="));
+        assertEq("a?=", mime_decode_header("=?UTF-8?Q?a?=?="));
+        assertEq("==?a?UTF-8?Q?a?=", mime_decode_header("==?a?UTF-8?Q?a?="));
+        assertEq("ab", mime_decode_header("=?UTF-8?Q?a?==?UTF-8?b?Yg==?="));
+        assertEq("=??Q?a?= =?a?X?b?= =?a?Q??= =?UTF-8?Q? b", mime_decode_header("=??Q?a?= =?a?X?b?= =?a?Q??= "
+            "=?UTF-8?Q? =?UTF-8?Q?b?="));
+        assertEq("a\nb", mime_decode_header("=?UTF-8?Q?a\nb?="));
+        assertThrows("QUOTED-PRINTABLE-DECODE-ERROR", \mime_decode_header(), "=?UTF-8?Q?=1?=");
+
+        # quoted-printable codes are decoded in one pass (issue #6139)
+        assertEq("A=41b", mime_decode_quoted_printable("=41=3D41=62", "UTF-8"));
+        assertEq("ö", mime_decode_quoted_printable("=c3=b6", "UTF-8"));
+        assertEq("ab", mime_decode_quoted_printable("a=\r\nb", "UTF-8", True));
+        assertEq("a b", mime_decode_quoted_printable("a_b", "UTF-8"));
+        assertThrows("QUOTED-PRINTABLE-DECODE-ERROR", "\"4\"", \mime_decode_quoted_printable(), ("=4", "UTF-8"));
+        assertThrows("QUOTED-PRINTABLE-DECODE-ERROR", "\"\"", \mime_decode_quoted_printable(), ("a=", "UTF-8"));
+
         # a part header name or value with a NUL, CR or LF character is refused when the part is added
         MultiPartMixedMessage mpm();
         assertThrows("PART-ERROR", "MIME header \"X-Test\" value \"a\\\\x0d\\\\x0aX-Injected: 1\" contains a line "
@@ -1156,5 +1180,109 @@ aωb\r
         assertEq(0, fd.size());
         fd.addPart("data", "ab");
         assertEq(1, fd.size());
+    }
+
+    # decoding took time that grew with the square of the number of encoded words or quoted-printable codes
+    # (issue #6139): the bytes that the decoders scan are counted (see MimeScanCounter), so that the work for twice as
+    # many is checked to be at most twice as large; a decoder that scans or copies the rest of the text for each word
+    # or code does four times as much work.  The counts are added by hand in the decoders: every operation whose cost
+    # grows with the input size must add its size to the count; otherwise a quadratic regression in it goes unseen.
+    decodeHeaderWorkTest() {
+        checkLinearWork("encoded words", 1000, string sub (int n) { return strmul(" =?UTF-8?Q?=C3=B6?= x", n); },
+            string sub (string hdr) { return mime_decode_header(hdr); },
+            sub (string str, int n) { assertEq(strmul(" ö x", n), str); });
+        checkLinearWork("encoded words without space", 1000,
+            string sub (int n) { return strmul("=?UTF-8?B?w7Y=?=", n) + " ö"; },
+            string sub (string hdr) { return mime_decode_header(hdr); },
+            sub (string str, int n) { assertEq(strmul("ö", n) + " ö", str); });
+    }
+
+    decodeQpWorkTest() {
+        checkLinearWork("quoted-printable codes", 1000, string sub (int n) { return strmul("=C3=B6", n); },
+            string sub (string str) { return mime_decode_quoted_printable(str, "UTF-8"); },
+            sub (string str, int n) { assertEq(strmul("ö", n), str); });
+        checkLinearWork("quoted-printable text", 1000, string sub (int n) { return strmul("a=3Db_=\r\n", n); },
+            string sub (string str) { return mime_decode_quoted_printable(str, "UTF-8"); },
+            sub (string str, int n) { assertEq(strmul("a=b ", n), str); });
+    }
+
+    # checks that the bytes that the decoders scan (see MimeScanCounter) for an input twice the size are at most
+    # about twice the bytes for the input, as for work that grows linearly with the size of the input; the work of a
+    # quadratic algorithm grows by 4 times
+    private checkLinearWork(string name, int n, code make, code run, code check) {
+        list<int> work = map countWork(make, run, check, $1), (n, n * 2);
+        if (m_options.verbose) {
+            printf("%s: %d: %d bytes, %d: %d bytes: ratio %.3f\n", name, n, work[0], n * 2, work[1],
+                work[1] / float(max(work[0], 1)));
+        }
+        assertGt(0, work[0], name);
+        # 2% more for the parts of an input that do not grow with it, and for sizes rounded down
+        assertLe(2 * work[0] + work[0] / 50, work[1], name);
+    }
+
+    # returns the bytes that the decoders scan (see MimeScanCounter) to run the code with an input of the given size;
+    # counting is process-wide, which is fine for this test, which runs one case at a time
+    private int countWork(code make, code run, code check, int n) {
+        auto input = make(n);
+        MimeScanCounter::start();
+        on_error MimeScanCounter::stop();
+        auto result = run(input);
+        int bytes = MimeScanCounter::stop();
+        check(result, n);
+        return bytes;
+    }
+
+    # issue #6307: the boundary is random, and it must not occur in the parts (RFC 2046 section 5.1.1), so a
+    # message's boundary is replaced when a part that contains it is added, including a nested multipart
+    boundaryNotInPartsTest() {
+        # nested multiparts with the same boundary
+        MultiPartAlternativeMessage inner("same-boundary");
+        inner.addPart("inner text", MimeTypeText);
+        inner.addPart("<p>inner html</p>", MimeTypeHtml);
+        hash<MessageInfo> ih = inner.getMsgAndHeaders();
+        MultiPartMixedMessage outer("same-boundary");
+        outer.addPart(ih.body, ih.hdr."Content-Type");
+        outer.addPart("last", MimeTypeText);
+        assertNeq("same-boundary", outer.getBoundary());
+        hash<MessageInfo> oh = outer.getMsgAndHeaders();
+        assertEq(outer.getBoundary(), mime_parse_header_value(oh.hdr."Content-Type").params.boundary);
+        hash<MessageInfo> h = MultiPartMessage::parseBody(outer.getBoundary(), oh.body);
+        assertEq(2, h.part.size());
+        assertEq(2, h.part[0].part.size());
+        assertEq("inner text", h.part[0].part[0].body);
+        assertEq("<p>inner html</p>", h.part[0].part[1].body);
+        assertEq("last", h.part[1].body);
+
+        # part data and part headers that contain the boundary, also in a part spliced at the start
+        foreach hash<auto> c in ((
+                {"data": "text\r\n--edge\r\nContent-Type: text/plain\r\n\r\nsplit"},
+                {"data": "text\r\n--edge--\r\n", "splice": True},
+                {"data": "text", "hdr": {"X-Header": "--edge"}},
+            )) {
+            MultiPartMixedMessage msg("edge");
+            msg.addPart("first", MimeTypeText);
+            assertEq("edge", msg.getBoundary());
+            if (c.splice) {
+                msg.splicePart(c.data, MimeTypeText, "inline", c.hdr);
+            } else {
+                msg.addPart(c.data, MimeTypeText, "inline", c.hdr);
+            }
+            string boundary = msg.getBoundary();
+            assertNeq("edge", boundary);
+            hash<MessageInfo> mh = msg.getMsgAndHeaders();
+            assertEq(boundary, mime_parse_header_value(mh.hdr."Content-Type").params.boundary);
+            h = MultiPartMessage::parseBody(boundary, mh.body);
+            assertEq(c.splice ? (c.data, "first") : ("first", c.data), (map $1.body, h.part));
+        }
+
+        # a boundary that does not occur in the parts is kept
+        MultiPartMixedMessage msg("edge");
+        msg.addPart("text with -edge and edge", MimeTypeText);
+        assertEq("edge", msg.getBoundary());
+
+        # a generated boundary is random: it is not made from the current time
+        string b0 = MultiPartMessage::getBoundary();
+        assertRegex("^------Qore-MIME-Boundary[0-9a-f]{32}------$", b0);
+        assertNeq(b0, MultiPartMessage::getBoundary());
     }
 }

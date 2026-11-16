@@ -1237,8 +1237,29 @@ protected:
             initializer_type_info(old.initializer_type_info), initializer_filter(old.initializer_filter),
             initializer_policy(old.initializer_policy), instance_initializer(old.instance_initializer),
             exp(old.exp.refSelf()),
-            loc(old.loc), parseTypeInfo(old.parseTypeInfo ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr) {
+            loc(old.loc), parseTypeInfo(old.parseTypeInfo ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr),
+            decl_pwo(old.decl_pwo), has_decl_po(old.has_decl_po) {
     }
+
+public:
+    //! records the parse options and warnings of the code that declares the member, which its initializer is
+    //! initialized and runs with
+    DLLLOCAL void bindDeclarationParseOptions(const ParseWarnOptions& pwo) {
+        decl_pwo = pwo;
+        has_decl_po = true;
+    }
+
+    //! the parse options and warnings of the code that declares the member, which its initializer is initialized and
+    //! runs with
+    /** Set by the parser (bindDeclarationParseOptions()) for a member or static variable declared in Qore source; a
+        member without a Qore initializer (builtin, or of a compiled class) has none; see the parseInit() methods,
+        QoreVarInfo::evalInit() and qore_class_private::initMember() (qore#6273, qore#6292)
+    */
+    ParseWarnOptions decl_pwo;
+    //! true if \a decl_pwo is set
+    bool has_decl_po = false;
+
+protected:
 
 public:
     // initialization expression
@@ -2263,8 +2284,6 @@ public:
     DLLLOCAL const QoreVarInfo* parseFindVar(const char* name, const qore_class_private*& qc, ClassAccess& n_access,
             bool toplevel) const;
 
-    DLLLOCAL const QoreClass* findInHierarchy(const qore_class_private& qc);
-
     DLLLOCAL const QoreClass* getClass(qore_classid_t cid, ClassAccess& n_access, bool toplevel) const;
     DLLLOCAL const QoreClass* getClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
     DLLLOCAL const QoreClass* parseGetClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
@@ -2292,8 +2311,6 @@ public:
     DLLLOCAL QoreValue parseFindConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool &found,
             const qore_class_private* class_ctx, bool allow_internal,
             const QoreProgramLocation* consumer_loc = nullptr) const;
-
-    DLLLOCAL int addBaseClassesToSubclass(QoreClass* child, bool is_virtual);
 
     DLLLOCAL void initializeBuiltin();
 };
@@ -2413,13 +2430,11 @@ public:
 
     DLLLOCAL bool isBaseClass(QoreClass* qc, bool toplevel) const;
 
-    DLLLOCAL int addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bool is_virtual) {
-        for (auto& i : *this) {
-            if ((*i).addBaseClassesToSubclass(child, is_virtual))
-                return -1;
-        }
-        return sml.addBaseClassesToSubclass(thisparent, child, is_virtual);
-    }
+    //! adds the classes of the hierarchy of \a thisparent, whose base classes these are, to the hierarchy of \a child
+    /** Walks the hierarchy iteratively, as it can be as long as the code declares it (issue #6047); see
+        qore_class_private::addBaseClassesToSubclass()
+    */
+    DLLLOCAL int addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bool is_virtual);
 
     DLLLOCAL void rescanParents(QoreClass* cls);
 
@@ -3943,6 +3958,7 @@ public:
         scl->addAncestors(m);
     }
 
+    //! adds the static methods of the base classes that the method overrides, to the most distant base class
     DLLLOCAL void parseAddStaticAncestors(QoreMethod* m) {
         if (!scl) {
             return;
@@ -3951,12 +3967,14 @@ public:
         scl->parseAddStaticAncestors(m);
     }
 
+    //! adds the methods of the base classes that the method overrides, to the most distant base class
     DLLLOCAL void parseAddAncestors(QoreMethod* m) {
         //printd(5, "qore_class_private::parseAddAncestors(%p %s) this: %p cls: %p %s scl: %p\n", m, m->getName(), this, cls, name.c_str(), scl);
         assert(strcmp(m->getName(), "constructor"));
 
-        if (!scl)
+        if (!scl) {
             return;
+        }
 
         scl->parseAddAncestors(m);
     }
@@ -4660,10 +4678,12 @@ public:
     DLLLOCAL qore_type_result_e runtimeCheckCompatibleClass(const qore_class_private& oc) const;
     DLLLOCAL qore_type_result_e runtimeCheckCompatibleClassIntern(const qore_class_private& oc) const;
 
-    // find the given class anywhere in the hierarchy regardless of access permissions or location
+    //! finds the given class anywhere in the hierarchy regardless of access permissions or location
+    /** The hierarchy is walked iteratively (see BCList::findInHierarchy()) */
     DLLLOCAL const QoreClass* findInHierarchy(const qore_class_private& qc) {
-        if (equal(qc))
+        if (equal(qc)) {
             return cls;
+        }
         return scl ? scl->findInHierarchy(qc) : nullptr;
     }
 
@@ -5334,6 +5354,16 @@ DLLLOCAL QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSour
 */
 DLLLOCAL QoreProgram* qore_get_function_pgm_context(const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, QoreSourceProgramHolder& holder, QoreProgram* call_pgm);
+
+//! Calls the code that the member \a nme of \a self holds (a closure or a call reference) with \a args, whose values
+//! a call gave (see qore_class_private::evalMethodGivenArgs()): the code's parameters take them over (issue #5958)
+/** @return true if the member holds such code and it was called, or if reading the member raised an exception; the
+    result is then in \a rv; false if the member holds no code, which is then called as evalMethod() calls it
+
+    Defined in QoreClassGivenArgs.cpp, outside the single compilation unit of libqore
+*/
+DLLLOCAL bool qore_class_eval_member_code_given_args(const qore_class_private& qcp, QoreObject* self,
+        const char* nme, QoreListNode* args, const qore_class_private* class_ctx, ExceptionSink* xsink, QoreValue& rv);
 
 class qore_class_private_holder {
     //! the class pointer (handle) to release, if the object was created with one

@@ -34,6 +34,7 @@
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreDeferredRelease.h"
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/qore_program_private.h"
@@ -48,12 +49,67 @@
 #include <atomic>
 #include <climits>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
+#include <type_traits>
 #include <unordered_set>
 
 #include <cassert>
 #include <cstring>
+
+namespace {
+//! The stack of an iterative walk of a class hierarchy (issue #6047)
+/** The first levels are kept in place, so that a walk of the common, shallow hierarchy does not allocate; deeper
+    levels go to a vector.  A reference returned by back() is only valid until the next push().
+*/
+template <typename T>
+class HierarchyWalkStack {
+public:
+    bool empty() const {
+        return !count;
+    }
+
+    T& back() {
+        assert(count);
+        return count <= InPlace ? in_place[count - 1] : overflow[count - InPlace - 1];
+    }
+
+    void push(const T& v) {
+        if (count < InPlace) {
+            in_place[count] = v;
+        } else {
+            overflow.push_back(v);
+        }
+        ++count;
+    }
+
+    void pop() {
+        assert(count);
+        if (count > InPlace) {
+            overflow.pop_back();
+        }
+        --count;
+    }
+
+private:
+    //! the number of levels kept in place
+    static constexpr size_t InPlace = 16;
+    //! not initialized: T is trivially default-constructible, and each level is written when it is pushed
+    T in_place[InPlace];
+    std::vector<T> overflow;
+    size_t count = 0;
+
+    static_assert(std::is_trivially_default_constructible<T>::value, "the levels kept in place are not initialized");
+};
+
+//! A level of a walk of a class hierarchy: a list of base classes and the index of the next one
+struct HierarchyWalkFrame {
+    const BCList* list;
+    size_t next;
+};
+}
+
 
 // global class ID sequence
 DLLLOCAL Sequence classIDSeq(1);
@@ -1374,7 +1430,9 @@ int qore_class_private::initialize() {
 // issue #2657: initialize class hierarchy first before initializing code and members
 int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
     assert(scl);
-    if (scl->initializeHierarchy(cls, qcp_set)) {
+    // the hierarchy is initialized recursively from each class to its most distant base class: a long chain of
+    // inheritance stops while enough stack remains (issue #6047)
+    if (parse_check_stack(loc) || scl->initializeHierarchy(cls, qcp_set)) {
         initialized = true;
         return -1;
     }
@@ -1408,6 +1466,10 @@ int qore_class_private::initializeMembers() {
         parse_resolve_class_members = true;
 
         if (scl) {
+            // recurses to the base classes that are not yet initialized (see initializeHierarchy())
+            if (parse_check_stack(loc)) {
+                return -1;
+            }
             return scl->initializeMembers(cls);
         }
     }
@@ -1483,6 +1545,10 @@ int qore_class_private::initializeIntern() {
 
     // initialize parent classes
     if (scl) {
+        // recurses to the base classes that are not yet initialized (see initializeHierarchy())
+        if (parse_check_stack(loc)) {
+            return -1;
+        }
         int rc = scl->initialize(cls);
         if (rc) {
             return -1;
@@ -1920,6 +1986,43 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
     if (!info.exp.isNothing()) {
         // set runtime location
         QoreProgramLocationHelper l(info.loc);
+        // the initializer runs with the parse options of the code that declares the member, as the code of a method
+        // runs with those of its declaration (with the override of a call of module code applied), not with those
+        // in effect when the object is created, which can differ: those of the Program, which a file with
+        // %push-parse-options does not keep, or of the code that creates the object (qore#6292); both the thread's
+        // options and those of the thread-local RuntimeConfig, which the AST interpreter reads, are set, only when they
+        // differ, as objects are created often
+        struct MemberInitParseOptionsHelper {
+            bool swapped = false;
+            const AbstractStatement* old_stmt = nullptr;
+            const QoreProgramLocation* old_loc = nullptr;
+            QoreParseOptions old_po;
+            RuntimeConfig* rc = nullptr;
+            QoreParseOptions old_rc_po;
+
+            MemberInitParseOptionsHelper(const QoreMemberInfo& info) {
+                if (!info.has_decl_po) {
+                    return;
+                }
+                RuntimeConfig& trc = rc_get_tls_ref();
+                if (runtime_get_parse_options() == info.decl_pwo.parse_options && trc.getParseOptions() == info.decl_pwo.parse_options) {
+                    return;
+                }
+                swap_runtime_parse_options(info.decl_pwo.parse_options, old_stmt, old_loc, old_po);
+                rc = &trc;
+                old_rc_po = rc->getParseOptions();
+                rc->setParseOptions(info.decl_pwo.parse_options);
+                swapped = true;
+            }
+
+            ~MemberInitParseOptionsHelper() {
+                if (!swapped) {
+                    return;
+                }
+                rc->setParseOptions(old_rc_po);
+                update_runtime_statement_location(old_stmt, old_loc, old_po);
+            }
+        } init_po(info);
         // the initializer is evaluated as a statement of its own: a value that it reads or creates is not a
         // temporary of the statement that creates the object (see design/temporary-lifetime.md)
         QoreScopedEvalHolder val(info.exp, true, xsink);
@@ -2922,10 +3025,6 @@ const QoreVarInfo* BCNode::parseFindVar(const char* name, const qore_class_priva
     return vi;
 }
 
-const QoreClass* BCNode::findInHierarchy(const qore_class_private& qc) {
-   // sclass can be 0 if the class could not be found during parse initialization
-   return sclass ? sclass->priv->findInHierarchy(qc) : nullptr;
-}
 
 const QoreClass* BCNode::getClass(qore_classid_t cid, ClassAccess& n_access, bool toplevel) const {
     // sclass can be 0 if the class could not be found during parse initialization
@@ -3078,20 +3177,6 @@ void BCNode::execConstructors(LexicalSemanticPolicy policy, QoreObject* o, BCEAL
     return execConstructorsImpl<true>(policy, o, bceal, rc, xsink);
 }
 
-int BCNode::addBaseClassesToSubclass(QoreClass* child, bool is_virtual) {
-    // issue #2318 must check for duplicate base classes here
-    // sclass may be 0 in case of a parse exception
-    if (!sclass) {
-        return 0;
-    }
-
-    if (sclass->priv->scl && sclass->priv->scl->findInHierarchy(*child->priv)) {
-        parse_error(*loc, "OOPS %s", child->getName());
-        return -1;
-    }
-
-    return sclass->priv->addBaseClassesToSubclass(child, is_virtual || this->is_virtual);
-}
 
 void BCNode::initializeBuiltin() {
     assert(sclass);
@@ -3393,38 +3478,64 @@ void BCList::parseAddAncestors(QoreMethod* m) {
 
     //printd(5, "BCList::parseAddAncestors(%p %s) this: %p size: %d\n", m, name, this, size());
 
-    for (auto& i : *this) {
-        // if there was a parse error finding the base class, then skip
-        QoreClass* qc = (*i).sclass;
-        if (!qc)
+    // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
+    // code declares it (issue #6047)
+    HierarchyWalkStack<HierarchyWalkFrame> stack;
+    stack.push({this, 0});
+    while (!stack.empty()) {
+        HierarchyWalkFrame& f = stack.back();
+        if (f.next == f.list->size()) {
+            stack.pop();
             continue;
+        }
+        const BCNode& n = *(*f.list)[f.next++];
+        // if there was a parse error finding the base class, then skip
+        QoreClass* qc = n.sclass;
+        if (!qc) {
+            continue;
+        }
 
         const QoreMethod* w = qc->priv->parseFindLocalMethod(name);
         //printd(5, "BCList::parseAddAncestors(%p %s) this: %p qc: %p w: %p\n", m, name, this, qc, w);
 
         if (w) {
             qore_method_private::get(*m)->getFunction()->addAncestor(qore_method_private::get(*w)->getFunction(),
-                (*i).access);
+                n.access);
         }
 
-        qc->priv->parseAddAncestors(m);
+        if (qc->priv->scl) {
+            stack.push({qc->priv->scl, 0});
+        }
     }
 }
 
 void BCList::parseAddStaticAncestors(QoreMethod* m) {
     const char* name = m->getName();
-    for (auto& i : *this) {
-        QoreClass* qc = (*i).sclass;
-        // qc may be 0 if there were a parse error with an unknown class earlier
-        if (!qc)
+    // the hierarchy is walked iteratively, as for parseAddAncestors()
+    HierarchyWalkStack<HierarchyWalkFrame> stack;
+    stack.push({this, 0});
+    while (!stack.empty()) {
+        HierarchyWalkFrame& f = stack.back();
+        if (f.next == f.list->size()) {
+            stack.pop();
             continue;
+        }
+        const BCNode& n = *(*f.list)[f.next++];
+        QoreClass* qc = n.sclass;
+        // qc may be 0 if there were a parse error with an unknown class earlier
+        if (!qc) {
+            continue;
+        }
 
         const QoreMethod* w = qc->priv->parseFindLocalStaticMethod(name);
-        if (w)
+        if (w) {
             qore_method_private::get(*m)->getFunction()->addAncestor(qore_method_private::get(*w)->getFunction(),
-                (*i).access);
+                n.access);
+        }
 
-        qc->priv->parseAddStaticAncestors(m);
+        if (qc->priv->scl) {
+            stack.push({qc->priv->scl, 0});
+        }
     }
 }
 
@@ -3464,12 +3575,28 @@ QoreVarInfo* BCList::parseFindStaticVar(const char* vname, const QoreClass*& qc,
 }
 
 const QoreClass* BCList::findInHierarchy(const qore_class_private& qc) {
-    for (auto& i : *this) {
-        const QoreClass* rv = (*i).findInHierarchy(qc);
-        if (rv)
-            return rv;
+    // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
+    // code declares it (issue #6047)
+    HierarchyWalkStack<HierarchyWalkFrame> stack;
+    stack.push({this, 0});
+    while (!stack.empty()) {
+        HierarchyWalkFrame& f = stack.back();
+        if (f.next == f.list->size()) {
+            stack.pop();
+            continue;
+        }
+        const BCNode& n = *(*f.list)[f.next++];
+        // sclass can be 0 if the class could not be found during parse initialization
+        if (!n.sclass) {
+            continue;
+        }
+        if (n.sclass->priv->equal(qc)) {
+            return n.sclass->priv->cls;
+        }
+        if (n.sclass->priv->scl) {
+            stack.push({n.sclass->priv->scl, 0});
+        }
     }
-
     return nullptr;
 }
 
@@ -4615,8 +4742,10 @@ BCSMList::BCSMList(const BCSMList& old) {
 }
 
 BCSMList::~BCSMList() {
+    // the release of a base class can release its own base classes in turn: a long chain of inheritance is released
+    // with a bounded recursion (issue #6047)
     for (auto& i : *this) {
-        qore_class_private::derefClass(*i.first, false, false, false);
+        qore_release_base_class(i.first);
     }
 }
 
@@ -5248,6 +5377,15 @@ QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* 
         if (w) {
             return qore_method_private::evalGivenArgs(*w, xsink, rc, self, args, class_ctx, pgm_ctx);
         }
+        // a member that holds a closure or a call reference is called with the argument list's values, which its
+        // parameters take over (issue #5958); a call through a call reference of another Program (pgm_ctx) is made
+        // as evalMethod() makes it
+        if (!pgm_ctx) {
+            QoreValue rv;
+            if (qore_class_eval_member_code_given_args(*this, self, nme, args, class_ctx, xsink, rv)) {
+                return rv;
+            }
+        }
     }
     // anything else is called as evalMethod() calls it
     return evalMethod(self, nme, args, class_ctx, rc, xsink, nullptr, pgm_ctx);
@@ -5569,6 +5707,63 @@ int qore_class_private::addBaseClassesToSubclass(QoreClass* child, bool is_virtu
     }
     assert(child->priv->scl);
     return child->priv->scl->sml.add(child, cls, is_virtual);
+}
+
+namespace {
+//! A class whose base classes are being added to a subclass by BCList::addBaseClassesToSubclass()
+struct AddBaseClassesFrame {
+    //! the class: thisparent for the first frame, the class's own QoreClass for the others, as in the recursion
+    QoreClass* cls;
+    //! the class's private data
+    qore_class_private* c;
+    //! if it is inherited virtually by the subclass
+    bool is_virtual;
+    //! the index of its next base class
+    size_t next;
+};
+}
+
+int BCList::addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bool is_virtual) {
+    // the classes of the hierarchy, from thisparent to the class whose base classes are being added; each is added to
+    // the subclass after its own base classes, in the order of the recursion that this replaces:
+    // BCNode::addBaseClassesToSubclass() -> qore_class_private::addBaseClassesToSubclass() for each base class, then
+    // the base classes of the class itself from its class list (sml)
+    assert(this == thisparent->priv->scl);
+    HierarchyWalkStack<AddBaseClassesFrame> stack;
+    stack.push({thisparent, thisparent->priv, is_virtual, 0});
+    while (!stack.empty()) {
+        AddBaseClassesFrame& f = stack.back();
+        BCList* l = f.c->scl;
+        if (l && f.next < l->size()) {
+            BCNode& n = *(*l)[f.next++];
+            // issue #2318 must check for duplicate base classes here; sclass may be 0 in case of a parse exception
+            if (!n.sclass) {
+                continue;
+            }
+            if (n.sclass->priv->scl && n.sclass->priv->scl->findInHierarchy(*child->priv)) {
+                parse_error(*n.loc, "OOPS %s", child->getName());
+                return -1;
+            }
+            bool virt = f.is_virtual || n.is_virtual;
+            stack.push({n.sclass->priv->cls, n.sclass->priv, virt, 0});
+            continue;
+        }
+        // the base classes of the class have been added: the class list of the class, then the class itself, unless
+        // it is thisparent, which the caller adds
+        if (l && l->sml.addBaseClassesToSubclass(f.cls, child, f.is_virtual)) {
+            return -1;
+        }
+        QoreClass* cls = f.cls;
+        bool virt = f.is_virtual;
+        stack.pop();
+        if (!stack.empty()) {
+            assert(child->priv->scl);
+            if (child->priv->scl->sml.add(child, cls, virt)) {
+                return -1;
+            }
+        }
+    }
+    return 0;
 }
 
 int qore_class_private::addUserMethod(const char* mname, MethodVariantBase* f, bool n_static) {
@@ -5967,8 +6162,11 @@ int qore_class_private::parseInitPartialIntern() {
 
     int err = 0;
 
-    // initialize parents first for abstract method handling
-    if (scl) {
+    // initialize parents first for abstract method handling; this recurses to the base classes that are not yet
+    // initialized, once for each level of inheritance, so a long chain stops while enough stack remains (issue #6047)
+    if (scl && parse_check_stack(loc)) {
+        err = -1;
+    } else if (scl) {
         for (bclist_t::iterator i = scl->begin(), e = scl->end(); i != e; ++i) {
             if ((*i)->sclass) {
                 if ((*i)->sclass->priv->parseInitPartial() && !err) {
@@ -6687,9 +6885,14 @@ void qore_class_private::parseResolveAbstract() {
     if (!parse_resolve_abstract && !(committed && !sys)) {
         parse_resolve_abstract = true;
 
-        if (!scl)
+        if (!scl) {
             return;
+        }
 
+        // recurses to the base classes whose abstract methods are not yet resolved (see initializeHierarchy())
+        if (parse_check_stack(loc)) {
+            return;
+        }
         scl->parseResolveAbstract();
 
         // search for new concrete variants of abstract variants last
@@ -9157,6 +9360,16 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
     if (exp) {
         printd(5, "QoreMemberInfo::parseInit() this: %p '%s' s'%s' %d\n", this, name, exp.getFullTypeName(),
             exp.getType());
+        // the initializer is code of the class, whatever code makes the class parse it: it sees self and the
+        // top-level local variables (qore#6268)
+        DeclarationParseScopeHelper declaration_scope;
+        SelfLocalVarParseHelper slvph(&selfid);
+        // the initializer is initialized with the parse options and warnings of its declaration, as a constant's is:
+        // the class can be initialized when they are no longer in effect (a file with %push-parse-options) (qore#6292)
+        std::optional<ParseWarnHelper> pwh;
+        if (has_decl_po) {
+            pwh.emplace(decl_pwo);
+        }
         QoreParseContext parse_context(&selfid);
         if (parse_init_value(exp, parse_context) && !err) {
             err = -1;
@@ -9211,6 +9424,14 @@ int QoreVarInfo::parseInit(const char* name) {
     val.set(typeInfo);
 
     if (exp) {
+        // the initializer is code of the class, whatever code makes the class parse it (qore#6268)
+        DeclarationParseScopeHelper declaration_scope;
+        // the initializer is initialized with the parse options and warnings of its declaration, as a constant's is:
+        // the class can be initialized when they are no longer in effect (a file with %push-parse-options) (qore#6292)
+        std::optional<ParseWarnHelper> pwh;
+        if (has_decl_po) {
+            pwh.emplace(decl_pwo);
+        }
         QoreParseContext parse_context;
         if (parse_init_value(exp, parse_context) && !err) {
             err = -1;
@@ -9291,6 +9512,31 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink, bool defer_pen
     // recursing
     eval_init = true;
     if (exp) {
+        // the initializer runs with the parse options of the code that declares the variable, as a constant's does
+        // (qore#6205) and as the code of a function runs with those of its declaration, not with those of the code
+        // that triggers the evaluation: the statement that parses the declaring code, or the code that reads the
+        // variable first; any override of that code is suspended, so that the value is not shaped by the code that
+        // happens to initialize it.  Both the thread's options and those of the thread-local RuntimeConfig, which the
+        // AST interpreter reads, are set
+        struct StaticVarInitRcParseOptionsHelper {
+            RuntimeConfig& rc;
+            QoreParseOptions old_po;
+
+            StaticVarInitRcParseOptionsHelper(RuntimeConfig& rc, const QoreParseOptions& po) : rc(rc),
+                    old_po(rc.getParseOptions()) {
+                rc.setParseOptions(po);
+            }
+
+            ~StaticVarInitRcParseOptionsHelper() {
+                rc.setParseOptions(old_po);
+            }
+        };
+        std::optional<LoadTimeParseOptionsHelper> init_po;
+        std::optional<StaticVarInitRcParseOptionsHelper> init_rc_po;
+        if (has_decl_po) {
+            init_po.emplace(decl_pwo.parse_options);
+            init_rc_po.emplace(rc_get_tls_ref(), decl_pwo.parse_options);
+        }
         // the initializer is evaluated as a statement of its own (see design/temporary-lifetime.md)
         QoreScopedEvalHolder val(exp, true, &init_xsink);
         if (!init_xsink) {
