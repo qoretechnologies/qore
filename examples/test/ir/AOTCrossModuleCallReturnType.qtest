@@ -10,6 +10,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -95,7 +96,7 @@ public namespace XmodConsumer {
 
     constructor() : QUnit::Test("AOTCrossModuleCallReturnTypeTest", "1.0", \ARGV) {
         ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("a call of another module's string function uses the string helper", \testNativeShape());

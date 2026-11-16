@@ -57,6 +57,8 @@ class QoreIoUring;
 #endif
 #include <vector>
 
+#include "qore/intern/WebSocketCloseRecord.h"
+
 // Forward declarations
 struct qore_socket_private;
 
@@ -526,6 +528,22 @@ public:
     */
     DLLLOCAL int sendStreamCloseFrame(int32_t stream_id, const void* data, size_t len, bool end_stream,
             ExceptionSink* xsink);
+
+    //! Returns the record of the close frame of a WebSocket stream (#6077)
+    /** The record is created when the stream's WebSocket frame state is registered, before the stream can carry a
+        close frame, and set when a close frame is buffered on the stream (sendStreamCloseFrame()).  The session keeps
+        it until it ends, and the socket keeps the records of its session after that (see
+        takeWebSocketCloseRecords()), so a stream context created after the stream ended still gets it.
+
+        @param stream_id the stream ID
+        @param create true to create the record if the stream has none (when the frame state is registered)
+
+        @return a reference to the stream's record, or an empty reference if it has none and \a create is false
+    */
+    DLLLOCAL WebSocketCloseRecordRef getWebSocketCloseRecord(int32_t stream_id, bool create = false);
+
+    //! Takes the records of the close frames of the session's WebSocket streams, when the socket releases it
+    DLLLOCAL std::unordered_map<int32_t, WebSocketCloseRecordRef> takeWebSocketCloseRecords();
 
     //! Sets the limit of the data of a stream that is buffered for sending (for example an SSE response stream)
     /** Without a limit, a send returns 1 (buffer full) once more than the default limit (@ref MAX_STREAM_BUFFER)
@@ -1238,6 +1256,10 @@ private:
 
     //! The streams whose close frame was buffered past the send limit (once per stream); erased with the stream
     std::unordered_set<int32_t> close_frame_streams;
+
+    //! The records of the close frames of the WebSocket streams (getWebSocketCloseRecord()), kept for the
+    //! session's life, as a stream context can be created after its stream ended (#6077)
+    std::unordered_map<int32_t, WebSocketCloseRecordRef> ws_close_records;
 
     //! Returns true if the stream's send buffer, with \a pending bytes buffered, takes \a len more bytes
     /** The condition with which sendStreamData() admits data: with the stream's own limit (setStreamSendLimit()),

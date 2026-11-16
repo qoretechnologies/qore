@@ -3,7 +3,6 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%prepend-module-path "${SCRIPT_DIR}/../../../../../build/modules/dbi_test"
 %requires QUnit
 %requires dbitest
 %exec-class DatasourceSerializationOptionsTest

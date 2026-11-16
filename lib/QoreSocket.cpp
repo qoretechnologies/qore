@@ -4138,37 +4138,6 @@ static BinaryNode* qore_socket_exec_recv_binary(QoreSocket* s, qore_offset_t siz
     return bin;
 }
 
-static BinaryNode* qore_socket_exec_recv_some_binary(QoreSocket* s, size_t size, int timeout_ms,
-        const char* owner_name, ExceptionSink* xsink, int source = QORE_SOURCE_SOCKET) {
-    qore_socket_private* priv = qore_socket_private::get(*s);
-    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
-    if (!io_guard) {
-        return nullptr;
-    }
-
-    ValueHolder result(qore_socket_exec_poll(s,
-        new QoreSocketControllerRecvPollOperation(s, QoreSocketControllerRecvPollOperation::Action::RecvSome,
-            size, false, "receiving", "received"),
-        timeout_ms, owner_name, "received", xsink), xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    if (result->isNothing()) {
-        return new BinaryNode;
-    }
-    if (result->getType() != NT_BINARY) {
-        xsink->raiseException("SOCKET-RECV-ERROR", "expected binary data from async receive operation, got '%s'",
-            result->getFullTypeName());
-        return nullptr;
-    }
-
-    BinaryNode* bin = result.release().get<BinaryNode>();
-    if (source > 0) {
-        priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, source, *bin);
-    }
-    return bin;
-}
-
 struct QoreSocketInputStreamRefGuard {
     QoreSocketInputStreamRefGuard(InputStream* is, ExceptionSink* xsink) : is(is), xsink(xsink) {
         this->is->ref();

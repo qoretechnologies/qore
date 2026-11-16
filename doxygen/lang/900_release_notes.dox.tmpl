@@ -107,6 +107,17 @@
     restrictions of a locked child Program, and an independent Program of restricted code takes and locks that code's
     restrictions; see @ref locked_parse_options.
 
+    @par A Deleted Object Keeps Its Class for Overload Selection
+    A deleted object now selects a variant by its class in every execution mode, at parse time and at run time (see
+    @ref overloading_deleted_objects); it matched no class type when the variant was resolved at run time, so such a
+    call raised \c RUNTIME-OVERLOAD-ERROR or selected another variant, depending on the mode and the call form.
+
+    @par Undefined or Invalid Types in cast<>() of NOTHING Are Parse Errors
+    A @ref cast "cast<>()" of a literal or constant @ref nothing to an or-nothing type or under
+    @ref broken-cast "%broken-cast" now raises a parse error for an undefined or invalid type in the target type, or a
+    type that cannot be cast to, as with any other operand (ex: \c cast<*NoSuchClass>(NOTHING),
+    \c cast<*code>(NOTHING)).
+
     @par Completed Objects Are Released After Constructor Argument Errors
     An exception while @ref constructor_argument_cleanup "releasing a completed constructor's arguments" now releases
     the new object normally, running its destructor when no other reference remains; AST execution previously skipped
@@ -787,6 +798,31 @@
     (see @ref call_reference_deleted_object; <a href="https://github.com/qoretechnologies/qore/issues/6083">issue
     6083</a>).
 
+    @par rindex() and rfind() Find a Match at a Multi-Byte Character Position
+    @ref Qore::rindex() "rindex()" and @ref <string>::rfind() "<string>::rfind()" search the characters up to and
+    including the one at the search position in every encoding; in a multi-byte encoding they searched only up to the
+    first byte of that character, so their results change for valid UTF-8 (and other multi-byte) text when that
+    character is not one byte (ex: <tt>rindex("aézaéb", "é", 4)</tt> is 4, not 1) (issue #6246).
+
+    @par brindex() Finds a Match That Ends at the Search Position, bindex() Takes Negative Positions
+    @ref Qore::brindex() "brindex()" finds a match that lies within the bytes up to and including the search
+    position, as @ref Qore::rindex() "rindex()" does with characters; it did not find a match that ends at the
+    position (ex: <tt>brindex("abc", "ab", 1)</tt> is 0, not -1).  @ref Qore::bindex() "bindex()" (and
+    \c QoreString::bindex() and \c QoreString::find() with a \c std::string in the C++ API) searches from a
+    negative position as an offset from the end, or from the start before it, as @ref Qore::index() "index()" does;
+    it gave -1 for a negative position farther from the end than the length of the substring (ex:
+    <tt>bindex("abc", "c", -2)</tt> is 2, not -1) (issue #6271).
+
+    @par <binary>::find() Searches From the Start for a Negative Offset Before It
+    @ref <binary>::find() "<binary>::find()" searches from the start of the binary object for a negative offset
+    before the start, as @ref <string>::find() "<string>::find()" and @ref Qore::bindex() "bindex()" do; it gave -1
+    (ex: <tt>binary("abcab").find(binary("b"), -6)</tt> is 1, not -1) (issue #6281).
+
+    @par Hashdecl Member Initializers Cannot Use the Local Variables of the Code Using the Hashdecl
+    A @ref hashdecl_initializer_scope "hashdecl member initialization expression" that names a local variable of the
+    function, method or closure that first uses the type-safe hash is a parse error, as it already was for class
+    members; 2.2.1 evaluated it with that code's variable (issue #6268).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Module Commands Know the Restrictions of the Code That Issues Them
     A binary module's command handler gets the effective restrictions of the issuing code, not those of the target
@@ -1387,6 +1423,11 @@
         @ref smtpclientintro "SmtpClient" module sends the message to all of them; only the first one was, so an
         untrusted display name must be quoted or given separately from the address
         (<a href="https://github.com/qoretechnologies/qore/issues/6134">issue 6134</a>)
+      - a message in any character encoding is parsed in time proportional to its length, as are encoded words and
+        quoted-printable text by the @ref mimeintro "Mime" module; it grew with the square of the number of header
+        lines (<a href="https://github.com/qoretechnologies/qore/issues/6139">issue 6139</a>)
+      - a parsed message without a \c Subject or a \c From header can be serialized; it raised
+        \c RUNTIME-OVERLOAD-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6267">issue 6267</a>)
       - see @ref mailmessage_v1_5_1 for all changes
 
     - @ref mapperintro "Mapper" module
@@ -1508,6 +1549,9 @@
       - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"
         use @ref httpclientiointro "HttpClientIo"
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - @ref Util::string_ends_with() "string_ends_with()" finds a suffix that ends with a multi-byte character
+        (ex: <tt>string_ends_with("café", "é")</tt> is @ref True "True"), through the fix of
+        @ref <string>::rfind() "<string>::rfind()" (issue #6246)
       - see @ref util_3_0 for all changes
 
     - @ref vscdebugadapterintro "VscDebugAdapter" module
@@ -1867,9 +1911,23 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
+      threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
     - an allocation that fails while a thread enters another %Program (ex: in a binary module's
       \c QoreExternalProgramContextHelper or a parse commit) leaves the thread in the calling %Program and releases
       its thread count in the entered %Program, which could otherwise not be deleted (issue #6198)
+    - @ref Qore::Thread::ThreadPool::stop() "ThreadPool::stop()" and
+      @ref Qore::Thread::ThreadPool::stopWait() "ThreadPool::stopWait()" called from a task of the same pool raise
+      \c THREADPOOL-ERROR; they waited for the worker running the calling task and never returned (issue #6242)
+    - a task of a @ref Qore::Thread::ThreadPool "ThreadPool" that releases the last reference to the pool no longer
+      hangs: the pool's manager thread stops the pool instead of the task's worker, which waited for itself
+      (issue #6253)
+    - the initializer of a class static variable runs with the parse options of its declaration; it ran with those of
+      the code that triggered it, such as a script with other options that parses the declaring code (issue #6273)
+    - reading a character of a UTF-8 string by its offset with the @ref list_element_operator "[] operator" took time
+      linear in the offset, so a loop over the characters of a string was quadratic; a character in the ASCII text at
+      the start of a string is found in constant time, and @ref <string>::length() "<string>::length()" of ASCII text
+      is computed once (issue #6138)
     - the negative of an absolute date with microseconds (ex: <tt>-1970-01-01T00:00:01.5Z</tt>) is
       \c 1969-12-31T23:59:58.5Z; the microseconds were negated as an unsigned value and gave another date (issue #6103)
     - the decimal fraction of an ISO 8601 duration component (ex: \c P0.0000001Y for
@@ -1884,6 +1942,20 @@
       replace a range of it with a shorter string (issue #6188)
     - the @ref splice "splice" and @ref extract "extract" operators no longer read past the end of a list, which could
       crash, when they replace a range of it with fewer elements (issue #6192)
+    - out-of-bounds read of uninitialized heap memory when decoding a character at or after the end of a string in
+      UTF-16, UTF-32 or UCS-2 (potential information disclosure) (issue #6246)
+    - @ref <string>::getUnicode() "<string>::getUnicode()" returns 0 at and after the end of a string in IBM037 and
+      Shift_JIS, as in the other encodings; it raised \c INVALID-ENCODING (issue #6246)
+    - @ref Qore::brindex() "brindex()" finds a match that ends at the search position, and
+      @ref Qore::bindex() "bindex()" with a negative position farther from the end than the length of the substring
+      searches from that offset (or from the start) instead of giving -1; in the C++ API, \c QoreString::findAny()
+      finds any of the given bytes, as documented, instead of the whole string (issue #6271)
+    - @ref <binary>::find() "<binary>::find()" with a negative offset before the start searches from the start
+      instead of giving -1, as the string search functions do (issue #6281)
+    - @ref Qore::rindex() "rindex()" and @ref <string>::rfind() "<string>::rfind()" also find a match at the search
+      position when its character is not one byte, so results change for valid UTF-8 text (ex:
+      <tt>rindex("aézaéb", "é", 4)</tt> is 4, not 1), and a negative position before the start gives the results of
+      a single-byte encoding with them and @ref Qore::index() "index()" in multi-byte encodings (issue #6246)
     - the heartbeat of @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" connections is measured on the
       monotonic clock: a step back of the system clock no longer stops the heartbeat PINGs for the size of the step
       (see @ref Qore::AsyncIoController::addTimerDelay() "AsyncIoController::addTimerDelay()")
@@ -1907,6 +1979,13 @@
     - a float out of the range of an integer, an infinite float and NaN now @ref float_to_int_conversion "convert to an
       integer" as a number does in every mode, saturated with NaN giving 0; the result was undefined and differed
       between the execution modes (issue #6181)
+    - an absolute date from an arbitrary-precision numeric value (ex: a \c softdate assignment) has the right
+      microseconds (\c 1731690000.5n gave a date 16 seconds later), and a value out of range, infinity and NaN
+      @ref conversions "convert to seconds" as an integer conversion does (issue #6212)
+    - @ref Qore::round() "round()", @ref Qore::ceil() "ceil()" and @ref Qore::floor() "floor()" round a float at a
+      precision above 9 or below -9, an int or number at a precision out of the range of a 32-bit int, and a number
+      at a precision above 308 or below -308 (it gave NaN); an int result out of range is the largest or smallest int
+      (\c round(9223372036854775807, -1) ended the process, and \c ceil(5, -25) gave 0) (issue #6212)
     - a @ref find "find expression" nested in the result, in-expression or where expression of another one can now be
       compiled with @ref qcc_tool "qcc"; it was refused as an unsupported expression (issue #5974)
     - @ref qcc_tool "qcc" no longer crashes compiling a user module whose header has a \c del closure, and the compiled
@@ -1928,6 +2007,10 @@
       module or be given to other code, and a static registration of a module that was already loaded could crash at
       exit; it is now checked as a load of the module by path and is never library code (see
       @ref sandbox_static_modules) (<a href="https://github.com/qoretechnologies/qore/issues/5986">issue 5986</a>)
+    - in the IR, JIT and tiered @ref execution_modes "execution modes" and in programs compiled with qcc, a call
+      through a method call reference held as the value of a hash key (<tt>h.r(...)</tt>) whose object had been
+      deleted evaluated its arguments before it raised \c OBJECT-ALREADY-DELETED
+      (<a href="https://github.com/qoretechnologies/qore/issues/6225">issue 6225</a>)
     - a call through \c self of an @ref abstract "abstract method" that another parent class implements raised
       \c RUNTIME-OVERLOAD-ERROR instead of calling the implementation, except in programs compiled with qcc
       (<a href="https://github.com/qoretechnologies/qore/issues/3070">issue 3070</a>)
@@ -2774,6 +2857,16 @@
       @ref Qore::get_local_vars() "get_local_vars()" and @ref Qore::set_local_var_value() "set_local_var_value()"
       from the calls it makes or from a debugger's callbacks in the same thread
       (<a href="https://github.com/qoretechnologies/qore/issues/5871">issue 5871</a>)
+    - in the C++ API, \c QoreString::replace() clamps an offset past the end of the string to its end instead of
+      accessing memory outside the string, and \c QoreString::concat() with a position and a length takes only that
+      many characters in a single-byte encoding instead of the rest of the string (issue #6238)
+    - with a single-byte default encoding (ex: \c ISO-8859-1), @ref Qore::format_number() "format_number()",
+      @ref <number>::format() "<number>::format(string)" and @ref <float>::format() "<float>::format(string)" used
+      the rest of the format string as each separator: <tt>format_number(".,2", 1234567.891)</tt> gave
+      <tt>1.,2234.,2567,289</tt> instead of <tt>1.234.567,89</tt> (issue #6238)
+    - a class or hashdecl member or static class variable initialization expression that uses a top-level local
+      variable no longer crashes the process when the class or hashdecl is first used in a closure and then used
+      elsewhere (see @ref member_initialization and @ref hashdecl_initializer_scope; issue #6268)
 
     @section qore_2_2_1 Qore 2.2.1
 

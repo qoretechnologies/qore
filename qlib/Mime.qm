@@ -247,6 +247,10 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
     - fixed incorrect MIME types for \c weba (now \c "audio/webm") and \c webm (now \c "video/webm")
     - fixed a bug in @ref Mime::mime_decode_transfer_data() "mime_decode_transfer_data()" where the transfer
       encoding was incorrectly used as a character encoding when decoding base64 and quoted-printable data
+    - @ref Mime::mime_decode_header() "mime_decode_header()" and
+      @ref Mime::mime_decode_quoted_printable() "mime_decode_quoted_printable()" take time proportional to the length
+      of the text; it grew with the square of the number of encoded words or codes
+      (<a href="https://github.com/qoretechnologies/qore/issues/6139">issue 6139</a>)
     - improved type safety by adding explicit type annotations to hash declarations
     - added \c %strict-args, \c %require-types, and \c %enable-all-warnings parse directives
 
@@ -1377,25 +1381,78 @@ public namespace Mime {
             str = replace(str, "_", " ");
         }
 
-        int i = 0;
-        while (True) {
-            i = str.find("=", i);
-            if (i == -1)
-                break;
-
-            string hex = toupper(extract str, i + 1, 2);
-            # according to RFC 2045 sec 6.7 rule (1): we have to use upper-case characters
-            if (hex !~ /[0-9A-Z][0-9A-Z]/)
-                throw "QUOTED-PRINTABLE-DECODE-ERROR", sprintf("invalid hex byte code found: %y", hex);
-            # replace the code with the given character
-            splice str, i, 1, chr(int(hex, 16), "us-ascii");
-            ++i;
+        # the bytes are counted for tests (issue #6139): the copies and replacements above, the copy returned, and
+        # each search, piece and code below; every operation here whose cost grows with the input size must add its
+        # size to the count, otherwise a quadratic regression in it goes unseen (see MimeScanCounter)
+        if (scan_counting) {
+            MimeScanCounter::bytes += 5 * str.size();
         }
 
-        return force_encoding(str, encoding);
+        int i = str.find("=");
+        if (i == -1) {
+            return force_encoding(str, encoding);
+        }
+
+        # the decoded text is joined from its pieces: replacing each code in the string copied the rest of it, so
+        # that decoding took time that grew with the square of the number of codes (issue #6139)
+        list<string> rv = ();
+        # the offset of the text that is not decoded yet
+        int start = 0;
+        while (True) {
+            if (scan_counting) {
+                # the search for the code and the text before it
+                MimeScanCounter::bytes += 2 * (i - start) + 3;
+            }
+            if (i > start) {
+                rv += str.substr(start, i - start);
+            }
+
+            # according to RFC 2045 sec 6.7 rule (1): we have to use upper-case characters; the two characters of
+            # the code in upper case must be digits or letters, and their value is that of the hex digits that
+            # they start with
+            int v1 = mime_get_qp_code_char(str, i + 1);
+            int v2 = mime_get_qp_code_char(str, i + 2);
+            if (v1 < 0 || v2 < 0) {
+                throw "QUOTED-PRINTABLE-DECODE-ERROR", sprintf("invalid hex byte code found: %y",
+                    toupper(str.substr(i + 1, 2)));
+            }
+            # write the character of the code
+            rv += chr(v1 > 15 ? 0 : (v2 > 15 ? v1 : v1 * 16 + v2), "us-ascii");
+            start = i + 3;
+
+            i = str.find("=", start);
+            if (i == -1) {
+                if (start < str.size()) {
+                    rv += str.substr(start);
+                }
+                if (scan_counting) {
+                    # the search to the end, the rest, and the decoded text joined
+                    MimeScanCounter::bytes += 2 * (str.size() - start) + str.size();
+                }
+                break;
+            }
+        }
+
+        return force_encoding(join(str.substr(0, 0), rv), encoding);
     }
 
     #! @cond nodoc
+    # returns the value of the character of a quoted-printable code at the given byte offset, in upper case, as a
+    # digit of base 36, or -1 if it is not a digit or a letter or if there is no character there
+    int sub mime_get_qp_code_char(string str, int offset) {
+        int c = get_byte(str, offset) ?? -1;
+        if (c >= 48 && c <= 57) {
+            return c - 48;
+        }
+        if (c >= 65 && c <= 90) {
+            return c - 55;
+        }
+        if (c >= 97 && c <= 122) {
+            return c - 87;
+        }
+        return -1;
+    }
+
     # returns the charset parameter of a Content-Type value, if any; the parameter was taken with any parameters
     # after it (ex: "ISO-8859-1; format=flowed"), which named no character encoding
     *string sub mime_get_charset(*string ct) {
@@ -1467,25 +1524,52 @@ public namespace Mime {
         before every encoded word after the first, and an encoded word was decoded wherever the same word appeared
     */
     public string sub mime_decode_header(string hdr) {
-        string rv = "";
+        # the bytes are counted for tests (issue #6139): each match, copy and decoding; every operation here whose
+        # cost grows with the input size must add its size to the count, otherwise a quadratic regression in it goes
+        # unseen (see MimeScanCounter)
+        if (scan_counting) {
+            MimeScanCounter::bytes += hdr.size();
+        }
+        # one match converts the text to UTF-8 and checks it, and finds out if there is an encoded word at all
+        if (hdr !~ /=\?[^?]+\?(Q|B)\?[^?]+\?=/is) {
+            return "" + hdr;
+        }
+        # all encoded words are found in one match: matching the rest of the header for each word copied the rest,
+        # so that decoding took time that grew with the square of the number of words (issue #6139); each match
+        # gives the text before the word, the charset, the encoding, the encoded text and the end of the word (a
+        # match continues after the last group that it captures), and the last one the text after the last word, if
+        # any
+        *list<*string> l = (hdr =~ x/(.*?)(?:=\?([^?]+)\?([QqBb])\?([^?]+)(\?=)|\z)/gs);
+        if (scan_counting) {
+            # the match, the text captured, and the decoded text joined
+            MimeScanCounter::bytes += 3 * hdr.size();
+        }
+        # the pieces of the decoded text, which are joined at the end, as appending to a string can copy it
+        list<string> rv = ();
         # True if the text decoded last was an encoded word, so that white space before the next one is dropped
         bool after_word = False;
-        while (True) {
-            (*string pre, *string enc, *string he, *string hw, *string rest)
-                = (hdr =~ x/^(.*?)=\?([^?]+)\?(Q|B)\?([^?]+)\?=(.*)$/is);
-            if (!exists enc) {
+        int size = l.size();
+        for (int i = 0; i < size; i += 5) {
+            string pre = l[i];
+            if (i + 1 == size) {
+                # the text after the last word
+                rv += pre;
                 break;
             }
-            # the text before the word; white space between two encoded words is dropped
-            string text = pre ?? "";
-            if (!after_word || text !~ /^[ \t\r\n]*$/) {
-                rv += text;
+            if (scan_counting) {
+                # the match of the text before the word, and the decoding of the word
+                MimeScanCounter::bytes += pre.size() + l[i + 3].size();
             }
-            rv += he.upr() == "Q" ? mime_decode_quoted_printable(hw, enc) : mime_decode_base64_to_string(hw, enc);
+            # the text before the word; white space between two encoded words is dropped
+            if (!pre.empty() && (!after_word || pre !~ /^[ \t\r\n]*$/)) {
+                rv += pre;
+            }
+            rv += l[i + 2].upr() == "Q"
+                ? mime_decode_quoted_printable(l[i + 3], l[i + 1])
+                : mime_decode_base64_to_string(l[i + 3], l[i + 1]);
             after_word = True;
-            hdr = rest ?? "";
         }
-        return rv + hdr;
+        return join("", rv);
     }
     #/@}
 
@@ -1923,6 +2007,48 @@ hash<MimeHeaderValueInfo> h = mime_parse_header_value("attachment; filename=\"a 
         # the length of the part in bytes
         int len;
     }
+
+    #! @cond nodoc
+    # True if the bytes are counted (see MimeScanCounter); a module variable, which is faster to read than a static
+    # class member, so that each place that counts only reads it when counting is off
+    our *bool scan_counting;
+
+    #! internal: counts the bytes that the parsers of this module and of the MailMessage module scan or copy
+    /** For tests only: tests check that the work grows linearly with the size of the input by counting it instead
+        of timing it (issue #6139).  While counting is on (between start() and stop()), a parser adds the number of
+        bytes of each operation that takes time proportional to its size (a search, a copy, a conversion, a regular
+        expression match) to \c bytes; such an operation that is repeated for each line, encoded word or code of an
+        input on the rest of the input makes the count grow with the square of the input size.
+
+        The counts are added by hand at each such operation: every operation whose cost grows with the input size
+        must add its size to the count; otherwise a quadratic regression in it goes unseen (ex: a copy of the rest of
+        the text for each quoted-printable code or for each header line that adds nothing to the count leaves the
+        count linear).
+
+        start() counts the bytes of the parsers of the Mime module; the parsers of the MailMessage module count only
+        while MailMessage::Message::setScanCounting() is on, which calls start() and stop().  Counting is
+        process-wide: it counts the work of all threads and Programs, so it is only for a process that runs one test
+        at a time.
+    */
+    public class MimeScanCounter {
+        public {
+            #! the number of bytes counted
+            static int bytes = 0;
+        }
+
+        #! turns counting on for the parsers of the Mime module and resets the count
+        static start() {
+            MimeScanCounter::bytes = 0;
+            scan_counting = True;
+        }
+
+        #! turns counting off and returns the count
+        static int stop() {
+            scan_counting = False;
+            return MimeScanCounter::bytes;
+        }
+    }
+    #! @endcond
 
     #! MultiPartMessage class implementation
     public class MultiPartMessage {

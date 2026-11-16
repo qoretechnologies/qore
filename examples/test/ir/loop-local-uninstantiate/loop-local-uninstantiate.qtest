@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %include loop-local-uninstantiate-checks.qi
 
@@ -32,7 +33,7 @@ class LoopLocalUninstantiateTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("LoopLocalUninstantiateTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("the list of instantiated locals does not grow in this program", \testGrowthInProgram());

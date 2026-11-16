@@ -532,7 +532,12 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
     for (const auto& block : func.blocks) {
         out << block->name << ":\n";
         for (const auto& inst : block->instructions) {
-            out << "  " << opcodeName(inst->opcode);
+            out << "  ";
+            // the step event that the instruction makes before it (qore_ir_fold_debug_statements())
+            if (qore_ir_folded_debug_step(inst.get())) {
+                out << opcodeName(QoreIROpcode::DebugStatement) << " + ";
+            }
+            out << opcodeName(inst->opcode);
             if (inst->opcode == QoreIROpcode::Invoke) {
                 auto* invoke_inst = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst.get());
                 if (invoke_inst && invoke_inst->invoke_opcode != QoreIROpcode::Invoke) {
