@@ -947,7 +947,7 @@ l50Xb2GWQesIt9k5jF5IOw==
     private Socket holdFreedPort(int port) {
         Socket sock();
         try {
-            sock.bindINET("0.0.0.0", string(port), False, AF_INET, SOCK_DGRAM);
+            sock.bindINET("0.0.0.0", string(port), False, AF_INET, SOCK_DGRAM);  # all-interfaces: holds the freed port against servers binding it on any address
         } catch (hash<ExceptionInfo> ex) {
             testSkip(sprintf("the freed UDP port %d was taken by another process before it could be held: %s: %s",
                 port, ex.err, ex.desc));
