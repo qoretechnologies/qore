@@ -1,18 +1,8 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: children - its checks run in child processes that set their own execution modes
-# test-platform: macos - the JIT code generation of a function with many locals and exits, and its LLVM instruction count
 # Copyright 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
-
-%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires ../ExecModeHarness.qm
-
-%exec-class JITLargeFunctionBlocksTest
+# The cases of the JITLargeFunctionBlocks-<n>.qtest tests: each runs one part of them, so that each takes a short time,
+# and together they run every case (see addPartCase())
 
 #! The size of the LLVM function that the JIT generates for a function with many locals and many exits (qore#5989)
 /** A function with many locals and many exits (here: a try statement after another, each one with an exit on an
@@ -27,7 +17,7 @@
     function was in the order of the product before), that the entry block grows with the locals, and that the whole
     function grows less than with the product when the function grows by the same factor.
 */
-class JITLargeFunctionBlocksTest inherits QUnit::Test {
+class JITLargeFunctionBlocksBase inherits QUnit::Test {
     public {
         #! the number of locals and of try statements of the smaller and of the larger function
         const Small = (50, 20);
@@ -58,17 +48,36 @@ class JITLargeFunctionBlocksTest inherits QUnit::Test {
 
     private {
         string qore_bin;
+
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
     }
 
-    constructor() : QUnit::Test("JITLargeFunctionBlocksTest", "1.0", \ARGV) {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
-        addTestCase("the blocks of a function with many locals and exits are bounded", \testBlocks());
-        addTestCase("the function with shared exits returns the same results as the AST", \testResults());
-        addTestCase("the code that runs the handlers of a function grows with its handlers", \testHandlerSize());
-        addTestCase("a function with many catch blocks that have handlers compiles, and the budget is kept",
+        addPartCase(1, "the blocks of a function with many locals and exits are bounded", \testBlocks());
+        addPartCase(1, "the function with shared exits returns the same results as the AST", \testResults());
+        addPartCase(1, "the code that runs the handlers of a function grows with its handlers", \testHandlerSize());
+        addPartCase(1, "a function with many catch blocks that have handlers compiles, and the budget is kept",
             \testHandlerBudget());
-        addTestCase("the shared exits release the value of a handler's return", \testHandlerReturnOnException());
+        # the runs with the inline code of the handlers take long to compile: each one is a part of its own
+        addPartCase(2, "the function with many catch blocks gives the result of the AST with the handler tables "
+            "forced on", \testHandlerTablesForced(), ("QORE_JIT_OBE_TABLE_BUDGET=0", ("jit", "tiered")));
+        addPartCase(3, "the function with many catch blocks gives the result of the AST in JIT mode with the inline "
+            "handler code forced", \testHandlerTablesForced(), ("QORE_JIT_OBE_TABLE_BUDGET=100000000", "jit"));
+        addPartCase(4, "the function with many catch blocks gives the result of the AST in tiered mode with the "
+            "inline handler code forced", \testHandlerTablesForced(),
+            ("QORE_JIT_OBE_TABLE_BUDGET=100000000", "tiered"));
+        addPartCase(1, "the shared exits release the value of a handler's return", \testHandlerReturnOnException());
         set_return_value(main());
+    }
+
+    #! adds a case if it is in the part that this test runs
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     #! Builds a function with \a locals locals and \a blocks try statements, some of which return early
@@ -297,16 +306,25 @@ printf(\"rv:%d\\n\", t);
         out = runTrace(small, "");
         assertFalse(out =~ /handler budget exceeded/, "a function with 20 catch blocks with handlers is compiled");
 
-        # the result is that of the AST in every mode, whichever tier runs the function, with the tables forced
-        # on and off
+        # the result is that of the AST in every mode, whichever tier runs the function
         string expected = runResultLine(big, "ast");
         foreach string mode in (("ir", "jit", "tiered")) {
             assertEq(expected, runResultLine(big, mode), mode);
         }
-        foreach string env in (("QORE_JIT_OBE_TABLE_BUDGET=0", "QORE_JIT_OBE_TABLE_BUDGET=100000000")) {
-            foreach string mode in (("jit", "tiered")) {
-                assertEq(expected, runResultLineEnv(big, mode, env), env + " " + mode);
-            }
+    }
+
+    #! The function of testHandlerBudget() gives the result of the AST with the tables forced on or off
+    /** @param env the environment that forces the tables on or off
+        @param modes the execution modes to run the function in
+
+        These are cases of their own, in parts of their own, as the inline code of the handlers of this function takes
+        long to compile
+    */
+    testHandlerTablesForced(string env, softlist<string> modes) {
+        string big = getHandlerCode(100);
+        string expected = runResultLine(big, "ast");
+        foreach string mode in (modes) {
+            assertEq(expected, runResultLineEnv(big, mode, env), env + " " + mode);
         }
     }
 

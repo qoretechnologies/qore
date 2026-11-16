@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the JIT code generation of a function with many locals and exits, and its LLVM instruction count
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include JITLargeFunctionBlocks.qc
+
+%exec-class JITLargeFunctionBlocksPart1
+
+#! runs part 1 of 4 of the cases of JITLargeFunctionBlocksBase
+class JITLargeFunctionBlocksPart1 inherits JITLargeFunctionBlocksBase {
+    constructor() : JITLargeFunctionBlocksBase("JITLargeFunctionBlocksPart1", 1) {
+    }
+}
