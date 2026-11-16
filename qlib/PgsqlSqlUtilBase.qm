@@ -448,6 +448,10 @@ $function$
     - with PostgreSQL before 9.5, an insert-first or insert-only upsert of a row that conflicts with a unique key
       other than the upsert key raises the conflict instead of dropping the row (see
       @ref sqlutilv3_11_0 "SqlUtil v3.11.0")
+    - fixed aligning a column to the \c smallserial, \c serial or \c bigserial pseudo-type, which generated an
+      <tt>alter ... type</tt> to the pseudo-type that PostgreSQL rejects, also for a column that already was one: the
+      column gets the pseudo-type's integer type and a sequence of its own as its default
+      (<a href="https://github.com/qoretechnologies/qore/issues/853">issue 853</a>)
 
     @section pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
@@ -1242,6 +1246,15 @@ public class PgsqlColumn inherits SqlUtil::AbstractColumn {
 
         #! A number literal in SQL
         const NumberLiteralRegex = "^[-+]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)([eE][-+]?[0-9]+)?$";
+
+        #! Maps the serial pseudo-types to the integer types of their columns
+        /** @since PgsqlSqlUtilBase 1.19
+        */
+        const SerialTypeMap = {
+            "smallserial": "smallint",
+            "serial": "integer",
+            "bigserial": "bigint",
+        };
     }
 
     #! empty constructor for subclasses
@@ -1320,7 +1333,12 @@ list l = col.getModifySql(t, newcol);
 
         # get new native type declaration string
         string nts = c.getNativeTypeString();
-        if (getNativeTypeString() != nts) {
+        # issue #853: a serial pseudo-type is not a type of a column, which has the integer type of the pseudo-type
+        # with a sequence as its default
+        *string serial_type = SerialTypeMap{c.native_type};
+        if (serial_type) {
+            l += getModifySerialSql(t, serial_type);
+        } else if (getNativeTypeString() != nts) {
             #printf("ME: %s\nDB: %s\n", nts, getNativeTypeString());
             # first drop any default value if it's changing
             if (def_val !== c.def_val)
@@ -1348,6 +1366,83 @@ list l = col.getModifySql(t, newcol);
         if (c.comment != comment)
             l += sprintf("comment on column %s.%s is %s", t.getSqlName(), ddl_name, t.getSqlValue(c.comment));
         return l;
+    }
+
+    #! Returns the SQL that makes the column a column of a serial pseudo-type, as PostgreSQL creates one
+    /** The column gets the integer type of the pseudo-type and a sequence of its own as its default, which starts
+        after the column's greatest value; nothing is done if the column already has that type and a sequence as its
+        default.  A sequence that is already the column's default is kept, and gets the column's new type with
+        PostgreSQL 10 and later.
+
+        @param t the table of the column
+        @param serial_type the integer type of the pseudo-type
+
+        @return the SQL statements
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    private list<string> getModifySerialSql(AbstractTable t, string serial_type) {
+        list<string> l = ();
+        string tn = t.getSqlName();
+        bool as_type = pgsql_get_server_version_num(t.getDatasource()) >= 100000;
+        # the sequence of a default from nextval(), as SQL names it
+        *string seq = getDefaultSequence();
+        if (!seq && exists def_val) {
+            l += sprintf("alter table %s alter %s drop default", tn, ddl_name);
+        }
+        if (native_type != serial_type) {
+            l += sprintf("alter table %s alter %s type %s", tn, ddl_name, serial_type);
+            if (seq && as_type) {
+                l += sprintf("alter sequence %s as %s", seq, serial_type);
+            }
+        }
+        if (seq) {
+            return l;
+        }
+
+        # the sequence is named as PostgreSQL names the sequence of a serial column
+        PgsqlTable pt = cast<PgsqlTable>(t);
+        seq = pgsql_quote_identifier(pt.getSchemaName()) + "."
+            + pgsql_get_sql_identifier(PgsqlColumn::getSerialSequenceName(pgsql_parse_object_name(pt.getName()).name,
+                name));
+        string seq_lit = pgsql_get_string_literal(seq);
+        l += sprintf("create sequence %s%s owned by %s.%s", seq, as_type ? " as " + serial_type : "", tn, ddl_name);
+        l += sprintf("select setval(%s, coalesce(max(%s), 0) + 1, false) from %s", seq_lit, ddl_name, tn);
+        l += sprintf("alter table %s alter %s set default nextval(%s)", tn, ddl_name, seq_lit);
+        return l;
+    }
+
+    #! Returns the sequence of the column's default for SQL if the default is a call to \c nextval(), otherwise
+    #! @ref nothing
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    private *string getDefaultSequence() {
+        *string lit = (def_val =~ x/^nextval\(('(?:[^']|'')*')(?:::regclass)?\)$/)[0];
+        return lit ? pgsql_get_string_literal_value(lit) : NOTHING;
+    }
+
+    #! Returns the name of the sequence of a serial column as PostgreSQL makes it
+    /** \c <table>_<column>_seq, with the longer of the table and column names shortened so that the name is at
+        most 63 characters long
+
+        @param table the name of the table in the catalog
+        @param column the name of the column in the catalog
+
+        @return the name of the sequence in the catalog
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    static string getSerialSequenceName(string table, string column) {
+        # the length of a name, less the "_" between the names and the "_seq" suffix
+        int avail = 63 - 5;
+        while (table.length() + column.length() > avail) {
+            if (table.length() > column.length()) {
+                splice table, -1;
+            } else {
+                splice column, -1;
+            }
+        }
+        return sprintf("%s_%s_seq", table, column);
     }
 
     #! Returns @ref True "True" if a default value read from the server is the declared default value
