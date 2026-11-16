@@ -221,6 +221,16 @@ class ParamReassignReleaseTest inherits QUnit::Test {
             ("dtor leaf", "leaf 4"),
             # an object that the function only reads, or that the caller holds, lives until the call returns
             # parameters bound on the runtime stack (issue #5958)
+            ("dtor tls-rh", "after write tls-rh"),
+            ("dtor tls-rl", "after write tls-rl"),
+            ("dtor tls-rth", "after write tls-rth"),
+            ("dtor tls-r2b", "after write tls-r2 1"),
+            ("after write tls-r2 1", "dtor tls-r2a"),
+            ("dtor tls-rlp", "after write tls-rlp 0"),
+            ("dtor tls-rcr", "after write tls-rcr"),
+            ("after write tls-rkept", "tls rkept tls-rkept"),
+            ("tls rkept tls-rkept", "dtor tls-rkept"),
+            ("dtor tls-rkept", "tls rkept removed"),
             ("dtor tls-h", "after write tls-h"),
             ("dtor tls-l", "after write tls-l"),
             ("dtor tls-2b", "after write tls-2 b"),

@@ -1063,9 +1063,13 @@ sub caller() {
     printf("caller ret %d\n", read_only(new T("caller-ro"), 1));
 }
 
-# parameters bound on the runtime stack (a default argument: no direct parameters) that are written: the frame keeps
-# them in IR storage, and takes the value of a temporary over from the runtime variable (issue #5958); a caller's
-# variable keeps its value
+# parameters bound on the runtime stack (a default argument: no direct parameters) that are written (issue #5958): a
+# parameter that is only reassigned (tls_re_*, tls_two, TlsC::s, the closure) is IR-only, and the frame takes the
+# value of a temporary over from the runtime variable into its slot (takeOverRuntimeStackParams()); one whose element
+# is written (h.k = j, l[1] = j: an lvalue path) or that a handler reads stays on the runtime stack, whose variable
+# holds the temporary (tls_hash, tls_list, TlsC::m, tls_on_exit); a caller's variable keeps its value.  The typed
+# hash is the value of a call: the AST interpreter keeps a typed hash literal (<TlsHash>{...}) in the argument list
+# until the call returns, so a write to the parameter does not release it there
 hashdecl TlsHash {
     *T o;
     int k = 0;
@@ -1082,11 +1086,6 @@ sub tls_list(list<auto> l, string tag, int m = 1) {
         l[1] = j;
     }
     l = ();
-    printf("after write %s\n", tag);
-}
-sub tls_thash(hash<TlsHash> h, string tag, int m = 1) {
-    h.k = m;
-    h = <TlsHash>{};
     printf("after write %s\n", tag);
 }
 sub tls_two(hash<auto> a, hash<auto> b, string tag, int m = 1) {
@@ -1111,10 +1110,48 @@ class TlsC {
         printf("after write %s\n", tag);
     }
 }
+sub tls_re_hash(hash<auto> h, string tag, int m = 1) {
+    h = {};
+    printf("after write %s\n", tag);
+}
+sub tls_re_list(list<auto> l, string tag, int m = 1) {
+    l = ();
+    printf("after write %s\n", tag);
+}
+sub tls_re_thash(hash<TlsHash> h, string tag, int m = 1) {
+    h = <TlsHash>{};
+    printf("after write %s\n", tag);
+}
+# the parameter that takes its argument over is the second one; the first is read only
+sub tls_re_second(hash<auto> a, hash<auto> b, string tag, int m = 1) {
+    b = {};
+    printf("after write %s %d\n", tag, a.size());
+}
+# reassigned in a loop: the first write releases the temporary
+sub tls_re_loop(hash<auto> h, string tag, int m = 3) {
+    for (int j = 0; j < m; ++j) {
+        h = {"k": j};
+        printf("after write %s %d\n", tag, j);
+    }
+}
+hash<TlsHash> sub tls_mk_thash(string n) {
+    return <TlsHash>{"o": new T(n)};
+}
 sub tls_frames() {
+    tls_re_hash({"o": new T("tls-rh")}, "tls-rh");
+    tls_re_list((new T("tls-rl"),), "tls-rl");
+    tls_re_thash(tls_mk_thash("tls-rth"), "tls-rth");
+    tls_re_second({"o": new T("tls-r2a")}, {"o": new T("tls-r2b")}, "tls-r2");
+    tls_re_loop({"o": new T("tls-rlp")}, "tls-rlp");
+    code rcr = \tls_re_hash();
+    rcr({"o": new T("tls-rcr")}, "tls-rcr");
+    hash<auto> rhv = {"o": new T("tls-rkept")};
+    tls_re_hash(rhv, "tls-rkept");
+    printf("tls rkept %s\n", rhv.o.n);
+    remove rhv;
+    printf("tls rkept removed\n");
     tls_hash({"o": new T("tls-h"), "k": 0}, "tls-h");
     tls_list((new T("tls-l"), 0), "tls-l");
-    tls_thash(<TlsHash>{"o": new T("tls-th")}, "tls-th");
     tls_two({"o": new T("tls-2a")}, {"o": new T("tls-2b")}, "tls-2");
     tls_on_exit({"o": new T("tls-oe")}, "tls-oe");
     TlsC c();
