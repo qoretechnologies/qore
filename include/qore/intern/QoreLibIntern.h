@@ -225,6 +225,12 @@ struct QoreParseContext {
     //! --stub external constant. Constants with such dependencies cannot be
     //! folded at compile time; AOT must preserve their initializer expression.
     bool external_stub_constant_ref = false;
+    //! The number of implicit index references (\c $#) that read the index of an enclosing operator or foreach
+    //! statement initialized so far (qore#6341)
+    /** A context statement and a find expression compare it before and after the initialization of their
+        expressions, which run as AST at run time, to know whether they read \c $#
+    */
+    unsigned implicit_element_reads = 0;
 
     DLLLOCAL QoreParseContext(QoreProgram* pgm = getProgram()) : pgm(pgm) {
     }
