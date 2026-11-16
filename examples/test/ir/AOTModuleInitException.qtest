@@ -326,8 +326,10 @@ public namespace %s {
         foreach string name in (("ModOrdA", "ModOrdC")) {
             write(nob_src.path + "/" + name + ".qm", ReadOnlyFile::readTextFile(src.path + "/" + name + ".qm"));
             if (have_qmods) {
-                write(nob_qmod.path + "/" + name + ".qmod", ReadOnlyFile::readTextFile(qmod.path + "/" + name
-                    + ".qmod", "ISO-8859-1"));
+                # a compiled module is copied as binary data
+                File f();
+                f.open2(nob_qmod.path + "/" + name + ".qmod", O_WRONLY | O_CREAT | O_TRUNC);
+                f.write(ReadOnlyFile::readBinaryFile(qmod.path + "/" + name + ".qmod"));
             }
         }
         list<string> no_b = ("ModOrdA", "ModOrdC");
@@ -360,7 +362,9 @@ public namespace %s {
             string exe = sprintf("%s/order-%d", src.path, ++i);
             hash<auto> c = run(sprintf("cd %s && INIT_LOG=%s/compile.log %s %s -O0 -o %s %s/%s", src.path, src.path,
                 env(m.value[0]), qcc_bin, exe, src.path, m.value[2]));
-            if (!assertTrue(is_file(exe), m.key + ": built the executable: " + c.out)) {
+            # assertTrue() returns no value: the file is checked again to skip a mode without an executable
+            assertTrue(is_file(exe), m.key + ": built the executable: " + c.out);
+            if (!is_file(exe)) {
                 continue;
             }
             # without the exception, every module initializes and the program runs
