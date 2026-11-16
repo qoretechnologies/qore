@@ -36478,6 +36478,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.child_expr = v;
         return id;
     }
+    if (dynamic_cast<const QoreUnaryPlusOperatorNode*>(node)) {
+        id.kind = AOTExprKind::UNARY_PLUS;
+        id.child_expr = v;
+        return id;
+    }
     if (dynamic_cast<const QoreNullCoalescingOperatorNode*>(node)) {
         id.kind = AOTExprKind::NULL_COAL;
         id.child_expr = v;

@@ -41,6 +41,7 @@ class AOTDefaultArgExprTreeTest inherits QUnit::Test {
         addTestCase("base class constructor argument expression tree", \testBaseConstructorArg());
         addTestCase("default argument expression tree with a caller-defined-first callee",
             \testCalleeDeclaredLast());
+        addTestCase("unary plus default argument expression tree", \testUnaryPlusDefaultArg());
 
         set_return_value(main());
     }
@@ -99,6 +100,34 @@ public date sub getDelay() {
 
         assertEq("60\n", runModule(src_dir, script_path), mod_name + ": source module");
         assertEq("60\n", runModule(qmod_dir, script_path), mod_name + ": AOT module");
+    }
+
+    #! a default argument with a unary plus that is not folded at parse time (qore#6229)
+    testUnaryPlusDefaultArg() {
+        checkModule("AOTDefArgUnaryPlus", "public class C {
+    int mdefault(auto v = +getDelay().durationSeconds()) {
+        return v;
+    }
+}
+
+public int sub fdefault(auto d = +getDelay().durationSeconds()) {
+    return d;
+}
+
+public int sub fnested(auto d = -(+(-getDelay().durationSeconds()))) {
+    return d;
+}
+
+public string sub verify() {
+    C c();
+    string rv = sprintf(\"%d\", fdefault());
+    if (c.mdefault() != fdefault() || fnested() != fdefault()) {
+        rv = sprintf(\"%d %d %d\", fdefault(), c.mdefault(), fnested());
+    }
+    return rv;
+}
+}
+");
     }
 
     testFunctionDefaultArg() {

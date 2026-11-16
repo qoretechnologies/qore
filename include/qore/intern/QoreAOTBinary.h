@@ -517,6 +517,10 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        releases (two more arguments).  A handler of an earlier format returned its value, which the runtime no
 //!        longer reads; the AOT runtime identity changes with the runtime entry, so a module compiled for an earlier
 //!        format is refused and must be rebuilt (#6074).
+//! v40: an expression that is a unary plus operator is written natively (AOTExprKind::UNARY_PLUS, 129: the operand;
+//!      its node form EN_UNARY_PLUS, 52), so that a default argument with a unary plus that is not folded at parse
+//!      time can be written (#6229); the earlier formats have no such expression, and a reader of them refuses the
+//!      kind.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -559,9 +563,11 @@ constexpr uint16_t QORE_AOT_MODULE_CMD_OPTIONS_VERSION = 37;
 constexpr uint16_t QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION = 38;
 //! First format version whose out-of-line handlers hand their return values over with HandlerReturn (see v39 above).
 constexpr uint16_t QORE_AOT_HANDLER_RETURN_VERSION = 39;
+//! First format version with native unary plus expressions (see v40 above).
+constexpr uint16_t QORE_AOT_NATIVE_UNARY_PLUS_VERSION = 40;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_HANDLER_RETURN_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_NATIVE_UNARY_PLUS_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -2475,6 +2481,7 @@ enum class AOTExprKind : uint8_t {
     FIND               = 127,
     CALLREF_CALL_NAMED = 128, //!< named call reference call (M4 phase 3): as CALLREF_CALL, then u8 name count + a
                               //!< string ref per argument name ("" for a positional argument)
+    UNARY_PLUS         = 129, //!< Unary plus operator: operand(AOTExprKind) (qore#6229)
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };

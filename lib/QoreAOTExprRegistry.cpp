@@ -342,7 +342,7 @@ const QoreAOTExprKindInfo AOT_EXPR_KIND_REGISTRY[256] = {
     {"FIND", 127, true, write_expr_find, read_expr_find, "Find expression"},
     {"CALLREF_CALL_NAMED", 128, true, write_expr_callref_call, read_expr_callref_call_named,
         "Named call reference call"},
-    {nullptr, 129, false, nullptr, nullptr, nullptr},
+    {"UNARY_PLUS", 129, true, write_expr_unary_plus, read_expr_unary_plus, "Unary plus operator"},
     {nullptr, 130, false, nullptr, nullptr, nullptr},
     {nullptr, 131, false, nullptr, nullptr, nullptr},
     {nullptr, 132, false, nullptr, nullptr, nullptr},

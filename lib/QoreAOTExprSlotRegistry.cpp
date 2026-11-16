@@ -475,7 +475,8 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     {"FIND", 127, true, write_slot_FIND, "Find expression"},
     // 128: CALLREF_CALL_NAMED
     {"CALLREF_CALL_NAMED", 128, true, write_slot_CALLREF_CALL, "Named call reference call"},
-    {nullptr, 129, false, nullptr, nullptr},
+    // 129: UNARY_PLUS
+    {"UNARY_PLUS", 129, true, write_slot_UNARY_PLUS, "Unary plus operator"},
     {nullptr, 130, false, nullptr, nullptr},
     {nullptr, 131, false, nullptr, nullptr},
     {nullptr, 132, false, nullptr, nullptr},
