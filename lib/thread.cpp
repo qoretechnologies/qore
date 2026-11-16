@@ -3615,6 +3615,26 @@ void swap_runtime_parse_options(const QoreParseOptions& po, const AbstractStatem
     td->runtime_po = apply_runtime_po_override(td, po);
 }
 
+// the per-statement path of the AST interpreter (AbstractStatement::exec()) inlines update_runtime_statement_location():
+// lowered top-level code switches the options with functions of its own, so that it adds no caller to the functions
+// of that path, which changed the compiler's inlining decisions for it (an extra call per AST statement)
+__attribute__((noinline, cold)) void swap_toplevel_code_parse_options(const QoreParseOptions& po,
+        const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
+    ThreadData* td = thread_data.get();
+    old_stmt = td->runtime_statement;
+    old_loc = td->runtime_loc;
+    old_po = td->runtime_po;
+    td->runtime_po = apply_runtime_po_override(td, po);
+}
+
+__attribute__((noinline, cold)) void restore_toplevel_code_parse_options(const AbstractStatement* stmt,
+        const QoreProgramLocation* loc, const QoreParseOptions& po) {
+    ThreadData* td = thread_data.get();
+    td->runtime_statement = stmt;
+    td->runtime_loc = loc;
+    td->runtime_po = apply_runtime_po_override(td, po);
+}
+
 void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc,
         const QoreParseOptions& po) {
     ThreadData* td = thread_data.get();
