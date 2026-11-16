@@ -2514,7 +2514,8 @@ static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, Excep
     function, ex: *T) accepts any value before its type parameters are substituted, which only the full path does
     (LocalVarValue::resolveLValueTypeInfo()), as the AST interpreter does (qore#5885).  An enum type accepts only its
     members, which are enum values, never a plain value of its base type, which parseAcceptsReturns() accepts
-    (qore#6197).
+    (qore#6197); so does a union with an enum member, whose other members can accept the value only if it is not
+    the base type of the enum (qore#6259).
 */
 static QORE_INTERN_ALWAYS_INLINE bool qore_ir_local_stores_simple_value(const QoreTypeInfo* ti, qore_type_t vt) {
     // the most common case, which needs no look at the type
@@ -2523,7 +2524,7 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_ir_local_stores_simple_value(const Qo
         return true;
     }
     return !qore_type_contains_type_parameter(ti) && QoreTypeInfo::parseAcceptsReturns(ti, vt)
-        && !QoreTypeInfo::getReturnEnum(ti);
+        && !QoreTypeInfo::returnsEnum(ti);
 }
 
 static ClosureVarValue* resolve_closure_var_value(const LocalVar* var) {
