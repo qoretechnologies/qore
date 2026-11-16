@@ -2018,6 +2018,9 @@
       (<tt>int I::C::m() {}</tt> in \c NS for \c NS::I::C), and a path that names no such class, which release builds
       used to resolve by ignoring its first part, is now an error (see
       @ref outofline_methods_in_namespaces "out-of-line methods in namespaces"; issue #6340)
+    - a parse that fails rolls back the local variables that it declared in the top-level block of a %Program, which a
+      later parse could not declare again, and a %Program whose first parse failed can declare them in the next one
+      (issue #678)
     - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
       threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
     - a range of the @ref list_element_operator "[] operator" (ex: <tt>x[-9..1]</tt>) gives only elements of its
