@@ -559,8 +559,9 @@ hash<auto> get_all_thread_data() [flags=RET_VALUE_ONLY,OWN_PROGRAM_STATE;dom=THR
     : get_thread_capability("start_thread");
     @endcode
 
-    @note the capabilities are visible to the code of user modules, and to other code only if it may control threads
-    itself and no sandbox governs it; sandboxed code, and code restricted with
+    @note the capabilities are visible to the code of user modules whose %Program is not sandboxed, and to other code
+    only if it may control threads itself and no sandbox governs it; sandboxed code (also the code of a %Program that
+    sandboxed code created, wherever it runs), and code restricted with
     @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", sees none
 
     @see
