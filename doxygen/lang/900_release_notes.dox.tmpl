@@ -1429,6 +1429,11 @@
         the catalog three times per table (<a href="https://github.com/qoretechnologies/qore/issues/5584">issue
         5584</a>)
 
+    - @ref pop3clientintro "Pop3Client" module
+      - a line of a message that starts with \c "." is returned without the \c "." that the server adds before it
+        (RFC 1939 section 3) (<a href="https://github.com/qoretechnologies/qore/issues/6319">issue 6319</a>)
+      - see @ref pop3client_v2_1 for all changes
+
     - @ref providerindexintro "ProviderIndex" module
       - indexes can be built with worker processes, which
         @ref ProviderIndex::ProviderIndex::cancelWorkers() "ProviderIndex::cancelWorkers()" stops
