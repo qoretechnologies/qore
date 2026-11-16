@@ -23828,6 +23828,16 @@ static QoreValue f_dbg_env_read_race_result(const QoreListNode* params, RuntimeC
 #endif
 
 #ifdef DEBUG
+//! Makes the next step of an entry into another Program at the given site fail with std::bad_alloc
+/** Tests that a failed entry leaves the thread as it was (ProgramThreadCountContextHelper; issue #6198); several sites
+    can be armed, each fails once; -1 disarms all of them
+*/
+static QoreValue f_dbg_fail_next_program_entry(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_fail_next_program_entry(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
+
 //! Makes the next count sandbox call budget recordings fail as if no memory could be allocated
 /** Tests the fail-closed path of the sandbox limits (see design/sandbox-resource-limits.md)
 */
@@ -23923,6 +23933,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_fail_next_program_entry", f_dbg_fail_next_program_entry,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "site");
     qns.addBuiltinVariant("dbg_sandbox_fail_next_budgets", f_dbg_sandbox_fail_next_budgets,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");

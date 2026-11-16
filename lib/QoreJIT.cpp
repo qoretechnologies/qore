@@ -1903,6 +1903,8 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
 
     // Run LLVM optimization passes
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
+    // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
+    QoreIRToLLVM::expandFloatToIntForTarget(*module, llvm::Triple(llvm::sys::getProcessTriple()));
 
     // Dump LLVM IR if requested (after optimization)
     if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
@@ -2467,6 +2469,8 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
 
     // Run LLVM optimization passes
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
+    // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
+    QoreIRToLLVM::expandFloatToIntForTarget(*module, llvm::Triple(llvm::sys::getProcessTriple()));
 
     // Dump LLVM IR if requested (after optimization)
     if (q_env_is_set("QORE_DUMP_LLVM_IR")) {

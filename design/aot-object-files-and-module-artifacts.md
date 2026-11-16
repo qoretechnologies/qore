@@ -864,6 +864,30 @@ default.
 The `qcc-format` stamp controls mass qmod rebuilds. Only changes that can alter
 qmod output or qcc compile semantics should update that stamp.
 
+The stamp and the runtime identity header derived from it are written by the
+commands of the `qcc-format-version` target, which runs in every build and
+rewrites each file only when its content changes
+(`qore_aot_runtime_identity_targets()` in `cmake/QoreMacrosIntern.cmake`).
+libqore depends on it through `qore-aot-runtime-identity`, and every qmod
+depends on it, so both files are current before libqore, qcc or any qmod is
+built, and a build in which no fingerprinted input changed rebuilds nothing.
+They are no custom command outputs: with policy CMP0113 OLD (the build requires
+CMake 3.14), the Makefile generators give a copy of such a rule to every target
+of the directory that depends on the output, so a qmod target wrote the stamp
+again after libqore had been compiled. A fingerprinted source edited while a
+build was running then left that build's qmods newer than the stamp of the new
+identity although qcc had compiled them for the previous one, and the next build
+relinked libqore with the new identity and compiled no qmod
+(`examples/test/cmake/test_aot_runtime_identity_rebuild.py`, qore#6221).
+
+Each in-tree qmod also depends on the identity header itself
+(`QORE_AOT_RUNTIME_IDENTITY_HEADER`, see `QORE_USER_MODULE_AOT_RULES()`), which
+is rewritten exactly when the identity changes: a qmod older than the header was
+compiled for a previous identity, whatever the stamp's modification time says.
+This also rebuilds the qmods of a build tree that the previous rules left with
+qmods newer than the stamp but compiled for the previous identity, and costs
+nothing otherwise, as the header only changes together with the stamp.
+
 The stamp is a content digest -- path, size and SHA-256 per entry -- over a
 curated list of libqore's AOT/IR codegen sources (`_qcc_format_sources` in
 `CMakeLists.txt`). It is precise enough for in-tree iteration but cannot be

@@ -376,6 +376,9 @@ int int(string value, int base = 10) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 int i = int("1");
 int j = int(NULL); // returns 0
     @endcode
+
+    @note a float or number value is truncated toward zero; a value out of the range of an integer gives the largest
+    or the smallest integer, and NaN gives 0 (see @ref float_to_int_conversion)
 */
 int int(*softint value) [flags=CONSTANT,NAMED_ARGS] {
     return value;
