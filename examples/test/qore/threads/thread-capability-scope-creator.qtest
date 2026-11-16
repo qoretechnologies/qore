@@ -23,6 +23,16 @@ int sub host_start_thread(code<nothing()> c) {
     return background c();
 }
 
+#! a capability that takes no argument
+int sub host_count() {
+    return 1;
+}
+
+#! a capability with an optional argument
+int sub host_optional(*auto x) {
+    return exists x ? 3 : 2;
+}
+
 #! tries to set a scope; returns "SET" or the exception's code
 string sub try_set(*auto x) {
     try {
@@ -71,6 +81,9 @@ sub export_to(Program h) {
         addTestCase("sandboxed code starts a thread for a host callable", \hostCallable());
         addTestCase("a Program that a module that sandboxed code loaded creates", \moduleProgram());
         addTestCase("trusted Programs", \trustedPrograms());
+        addTestCase("a capability called with no arguments", \guardWithoutArguments());
+        addTestCase("code of a Program that sandboxed code created is refused as capability code",
+            \sandboxedCodeRefused());
         set_return_value(main());
     }
 
@@ -91,6 +104,9 @@ auto sub async_host(code c) {
 }
 list<auto> sub map_host(code c) {
     return parallel_map(c, (1,));
+}
+auto sub call_guard(code guard) {
+    return guard();
 }
 Program sub module_make(string src) {
     return ScopeProgramMaker::make(src);
@@ -141,6 +157,40 @@ hash<auto> sub module_probe(string src, code set) {
         Program p = sandboxed.callFunction("module_make", ProbeSource);
         assertTrue((p.getParseOptions() & PO_IN_MODULE).toBool());
         assertEq(Governed, p.callFunction("probe", \try_set()));
+    }
+
+    guardWithoutArguments() {
+        ThreadCapabilityScope scope({"count": \host_count(), "optional": \host_optional()});
+        code count = get_thread_capability("count");
+        code optional = get_thread_capability("optional");
+        assertEq(1, count());
+        assertEq(2, optional());
+        assertEq(3, optional(1));
+        # also when sandboxed code that holds a guard calls it
+        assertEq(1, sandboxed.callFunction("call_guard", count));
+        assertEq(2, sandboxed.callFunction("call_guard", optional));
+    }
+
+    sandboxedCodeRefused() {
+        # a function of a Program that sandboxed code created, reached through a trusted Program that imported it or
+        # through an evaluation Program copy, is still code that a sandbox governs
+        Program child = sandboxed.callFunction("mk", ProbeSource);
+        Program host(PO_MODERN);
+        child.callFunction("export_to", host);
+        Program eval = ProgramControl::resolveProgramId(child.getProgramId()).createEvalProgram(PO_MODERN);
+        hash<string, code> refs = {
+            "imported": host.getCallReference("probe2"),
+            "copied": eval.getCallReference("probe"),
+        };
+        foreach string k in (keys refs) {
+            assertThrows("THREAD-CAPABILITY-ERROR", "belongs to a sandboxed Program", sub () {
+                ThreadCapabilityScope scope({"start_thread": refs{k}});
+            }, NOTHING, k + " as capability code");
+            ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
+            code start_thread = get_thread_capability("start_thread");
+            assertThrows("THREAD-CAPABILITY-ERROR", "belongs to a sandboxed Program", start_thread, refs{k},
+                k + " as the code given to a capability");
+        }
     }
 
     trustedPrograms() {

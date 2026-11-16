@@ -78,7 +78,9 @@ capability's code (with `invoke()`) once they have been checked:
 
 The lookup is visible to:
 
-- **user module code** (a Program with `PO_IN_MODULE`, which only the system can set);
+- **user module code** (a Program with `PO_IN_MODULE`) whose Program is not sandboxed: a Program that module code
+  creates inherits `PO_IN_MODULE`, also in a module that sandboxed code loaded, so the option alone does not tell that
+  the code is trusted;
 - **other code** that may control threads itself and that no sandbox governs (the host, unsandboxed applications);
 
 and returns `NOTHING` to code a sandbox governs and to code whose restrictions forbid thread control.  This is defence

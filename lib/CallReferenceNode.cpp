@@ -1110,7 +1110,10 @@ static const UserVariantBase* qore_call_reference_function_variant(const Resolve
 }
 
 int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr, QoreParseOptions& po,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, bool* sandboxed) {
+    if (sandboxed) {
+        *sandboxed = false;
+    }
     // the code of a user function runs in the Program that defines it (see qore_get_function_pgm_context()), which
     // can have been deleted: it is taken with a reference while its options are read
     if (const UserVariantBase* uvb = qore_call_reference_function_variant(rcr)) {
@@ -1124,6 +1127,9 @@ int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr,
                 return -1;
             }
             po = pgm->getParseOptions();
+            if (sandboxed) {
+                *sandboxed = qore_program_is_sandboxed(pgm);
+            }
             return 1;
         }
         if (holder.sourceDeleted()) {
@@ -1135,6 +1141,9 @@ int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr,
         return 0;
     }
     po = pgm->getParseOptions();
+    if (sandboxed) {
+        *sandboxed = qore_program_is_sandboxed(pgm);
+    }
     return 1;
 }
 

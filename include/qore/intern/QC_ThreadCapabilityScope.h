@@ -108,32 +108,34 @@ public:
             args = *evaluated;
         }
         // only code, which is checked, and plain values are passed: a reference, a container or an object could carry
-        // code that the capability would run unchecked
-        ConstListIterator li(args);
-        while (li.next()) {
-            QoreValue v = li.getValue();
-            switch (v.getType()) {
-                case NT_RUNTIME_CLOSURE:
-                case NT_FUNCREF:
-                    if (thread_capability_check_code(v, name.c_str(), "the code given to it", xsink)) {
+        // code that the capability would run unchecked; a call with no arguments has no list
+        if (args) {
+            ConstListIterator li(args);
+            while (li.next()) {
+                QoreValue v = li.getValue();
+                switch (v.getType()) {
+                    case NT_RUNTIME_CLOSURE:
+                    case NT_FUNCREF:
+                        if (thread_capability_check_code(v, name.c_str(), "the code given to it", xsink)) {
+                            return QoreValue();
+                        }
+                        break;
+                    case NT_NOTHING:
+                    case NT_NULL:
+                    case NT_INT:
+                    case NT_FLOAT:
+                    case NT_NUMBER:
+                    case NT_BOOLEAN:
+                    case NT_STRING:
+                    case NT_DATE:
+                    case NT_BINARY:
+                        break;
+                    default:
+                        xsink->raiseException("THREAD-CAPABILITY-ERROR", "capability '%s': argument %d is of type %s; "
+                            "only code and plain values can be given to a capability", name.c_str(),
+                            static_cast<int>(li.index()) + 1, v.getFullTypeName());
                         return QoreValue();
-                    }
-                    break;
-                case NT_NOTHING:
-                case NT_NULL:
-                case NT_INT:
-                case NT_FLOAT:
-                case NT_NUMBER:
-                case NT_BOOLEAN:
-                case NT_STRING:
-                case NT_DATE:
-                case NT_BINARY:
-                    break;
-                default:
-                    xsink->raiseException("THREAD-CAPABILITY-ERROR", "capability '%s': argument %d is of type %s; "
-                        "only code and plain values can be given to a capability", name.c_str(),
-                        static_cast<int>(li.index()) + 1, v.getFullTypeName());
-                    return QoreValue();
+                }
             }
         }
         return code->invoke(args, xsink);
