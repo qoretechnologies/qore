@@ -3198,19 +3198,25 @@ void qore_machine_backtrace() {
 #endif
 
 #ifdef HAVE_NANOSLEEP
-static int qore_nanosleep(int64 ns) {
+int qore_nanosleep_with(int64 ns, int (*sleep_func)(const struct timespec*, struct timespec*)) {
     struct timespec ts;
     ts.tv_sec = ns / 1000000000ll;
     ts.tv_nsec = (ns - ts.tv_sec * 1000000000);
-    int rc;
     while (true) {
-        rc = nanosleep(&ts, 0);
+        struct timespec rem;
+        int rc = sleep_func(&ts, &rem);
         if (rc && errno == EINTR) {
+            // a signal interrupted the sleep: the time that was left is slept, not the whole time again, which
+            // made each signal extend the sleep by up to its full length (issue #6364)
+            ts = rem;
             continue;
         }
-        break;
+        return rc;
     }
-    return rc;
+}
+
+static int qore_nanosleep(int64 ns) {
+    return qore_nanosleep_with(ns, ::nanosleep);
 }
 #endif
 
