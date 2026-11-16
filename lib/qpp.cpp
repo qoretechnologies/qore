@@ -1201,13 +1201,59 @@ static bool qpp_is_digit_separator(const std::string& line, size_t i) {
     return start < i && isdigit(static_cast<unsigned char>(line[start]));
 }
 
+//! returns true if the '"' at \a i starts a raw string literal (R"delim(...)delim", also with the prefixes u8, u, U
+//! and L); then \a close is the sequence that ends it and \a body the offset after its '('
+static bool qpp_raw_string_start(const std::string& line, size_t i, std::string& close, size_t& body) {
+    if (!i || line[i - 1] != 'R') {
+        return false;
+    }
+    size_t k = i - 1;
+    if (k >= 2 && line[k - 2] == 'u' && line[k - 1] == '8') {
+        k -= 2;
+    } else if (k >= 1 && (line[k - 1] == 'u' || line[k - 1] == 'U' || line[k - 1] == 'L')) {
+        --k;
+    }
+    // the prefix is not the end of an identifier ("FOOR"")
+    if (k && (isalnum(static_cast<unsigned char>(line[k - 1])) || line[k - 1] == '_')) {
+        return false;
+    }
+    // the delimiter: at most 16 characters, none of them a space, a parenthesis, a backslash or a quote
+    size_t j = i + 1;
+    for (; j < line.size() && j - i - 1 <= 16; ++j) {
+        char c = line[j];
+        if (c == '(') {
+            close = ")" + line.substr(i + 1, j - i - 1) + "\"";
+            body = j + 1;
+            return true;
+        }
+        if (isspace(static_cast<unsigned char>(c)) || c == ')' || c == '\\' || c == '"') {
+            break;
+        }
+    }
+    return false;
+}
+
 //! returns the line with its comments, string literals and character literals replaced by spaces
-/** a comment that starts in the line ends at its end; a digit separator ("1'000") is not a character literal
+/** a comment or a raw string literal that starts in the line and does not end in it ends at its end; a digit
+    separator ("1'000") is not a character literal
 */
 static std::string qpp_strip_comments_and_literals(const std::string& line) {
     std::string rv = line;
     for (size_t i = 0; i < rv.size(); ++i) {
         char c = rv[i];
+        std::string raw_close;
+        size_t raw_body;
+        if (c == '"' && qpp_raw_string_start(rv, i, raw_close, raw_body)) {
+            size_t e = rv.find(raw_close, raw_body);
+            e = e == std::string::npos ? rv.size() : e + raw_close.size();
+            for (size_t j = i; j < e; ++j) {
+                if (rv[j] != '\n') {
+                    rv[j] = ' ';
+                }
+            }
+            i = e - 1;
+            continue;
+        }
         if (c == '/' && i + 1 < rv.size() && (rv[i + 1] == '/' || rv[i + 1] == '*')) {
             size_t e;
             if (rv[i + 1] == '/') {
@@ -1441,15 +1487,25 @@ static bool qpp_line_is_qore_constant(const std::string& line) {
 */
 class QppCopiedCodeState {
 public:
-    //! returns true if the next line is not compiled
+    //! returns true if the next line is not compiled code: in a comment, a raw string literal or disabled code
     bool inactive() const {
-        return in_block_comment || if0_depth;
+        return in_block_comment || !raw_close.empty() || if0_depth;
     }
 
     //! updates the state with a line of C++ code
     void text(const std::string& line) {
         for (size_t i = 0; i < line.size(); ++i) {
             char c = line[i];
+            if (!raw_close.empty()) {
+                // in a raw string literal, which ends with its close sequence
+                size_t e = line.find(raw_close, i);
+                if (e == std::string::npos) {
+                    return;
+                }
+                i = e + raw_close.size() - 1;
+                raw_close.clear();
+                continue;
+            }
             if (in_block_comment) {
                 if (c == '*' && i + 1 < line.size() && line[i + 1] == '/') {
                     in_block_comment = false;
@@ -1467,6 +1523,12 @@ public:
                 }
                 continue;
             }
+            // a raw string literal, which can span lines
+            size_t raw_body;
+            if (c == '"' && qpp_raw_string_start(line, i, raw_close, raw_body)) {
+                i = raw_body - 1;
+                continue;
+            }
             // a literal; not a digit separator ("1'000")
             if (c == '"' || (c == '\'' && !qpp_is_digit_separator(line, i))) {
                 // skip the literal
@@ -1481,8 +1543,8 @@ public:
 
     //! updates the state with a preprocessor directive that qpp copies into the C++ code
     void directive(const std::string& line) {
-        if (in_block_comment) {
-            // a comment can end in the directive line
+        if (in_block_comment || !raw_close.empty()) {
+            // a comment or a raw string literal can end in the line, which is not a directive
             text(line);
             return;
         }
@@ -1500,9 +1562,14 @@ public:
             return;
         }
         if (!d.compare(0, 2, "if") && d.size() > 2 && isspace(static_cast<unsigned char>(d[2]))) {
-            std::string cond = d.substr(3);
-            trim(cond);
-            if (cond == "0") {
+            // "#if 0" and "#if false", also in parentheses
+            std::string cond;
+            for (char c : d.substr(3)) {
+                if (!isspace(static_cast<unsigned char>(c)) && c != '(' && c != ')') {
+                    cond += c;
+                }
+            }
+            if (cond == "0" || cond == "false") {
                 if0_depth = 1;
             }
         }
@@ -1510,6 +1577,8 @@ public:
 
 private:
     bool in_block_comment = false;
+    //! the sequence that ends the raw string literal that the code is in, if any
+    std::string raw_close;
     unsigned if0_depth = 0;
 };
 
@@ -8902,6 +8971,10 @@ protected:
                         valid = false;
                         continue;
                     }
+                }
+                // a line with "::" has been trimmed at its end; it is copied as a line
+                if (sc.empty() || sc.back() != '\n') {
+                    sc += '\n';
                 }
                 buf += str;
                 buf += sc;

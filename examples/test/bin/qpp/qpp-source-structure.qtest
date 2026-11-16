@@ -83,6 +83,7 @@ const ConstOne = 1;
         addTestCase("undocumented method with a scoped return type fails", \testUndocumentedScopedReturnType());
         addTestCase("undocumented method before its class fails", \testUndocumentedMethodBeforeClass());
         addTestCase("code in '#if 0' is copied", \testIfZero());
+        addTestCase("raw string literals", \testRawStringLiterals());
         addTestCase("statements are not methods", \testStatementsNotMethods());
         addTestCase("doc comments in a block comment are copied", \testDocCommentInBlockComment());
         addTestCase("error line of a last line without a newline", \testLastLineWithoutNewline());
@@ -233,6 +234,77 @@ static int module_value = 42;
 ");
         assertSucceeded(r, "code after a doc comment");
         assertRegex("static int module_value = 42;", r.cpp_text, "the line is kept");
+
+        # a kept line with "::" that does not end the statement is copied with its newline
+        r = runQpp("#ifdef HAVE_X
+//! the default value
+/**
+*/
+static int def_val = Foo::y
+#endif
+static int other = 2;
+");
+        assertSucceeded(r, "code with :: after a doc comment");
+        assertRegex("static int def_val = Foo::y\n#endif\n", r.cpp_text, "the line keeps its newline");
+        r = runQpp("//! the default value
+/**
+*/
+static int def_val2 = Foo::y
+    + 1;
+");
+        assertSucceeded(r, "a continued statement with :: after a doc comment");
+        assertRegex("static int def_val2 = Foo::y\n    \\+ 1;", r.cpp_text,
+            "the statement keeps its lines");
+    }
+
+    testRawStringLiterals() {
+        # a '"' or '/*' in a raw string literal is neither a string nor a comment
+        hash<auto> r = runQpp(ClassStart + "
+static const char* s = R\"x(a\"b/*)x\";
+//! documented
+/** doc
+*/
+int TestCls::get() [flags=CONSTANT] {
+    return 1;
+}
+");
+        assertSucceeded(r, "a raw string literal with a quote and a comment start");
+        assertRegex("TestCls_get", r.cpp_text, "the method after the raw string literal is bound");
+
+        # a raw string literal over lines, with a comment start, a quote and a directive in it
+        r = runQpp(ClassStart + "
+static const char* s2 = u8R\"(line 1 /* '
+#if 0
+)\";
+//! documented
+/** doc
+*/
+int TestCls::get2() [flags=CONSTANT] {
+    return 1;
+}
+");
+        assertSucceeded(r, "a raw string literal over lines");
+        assertRegex("TestCls_get2", r.cpp_text, "the method after the raw string literal over lines is bound");
+
+        # a method in a raw string literal is copied as it is
+        r = runQpp(ClassStart + "
+static const char* s3 = R\"(
+int TestCls::text() [flags=CONSTANT] {
+)\";
+");
+        assertSucceeded(r, "a method in a raw string literal");
+        assertRegex("int TestCls::text\\(\\) \\[flags=CONSTANT\\] \\{", r.cpp_text,
+            "the method in the raw string literal is copied");
+
+        # an identifier that ends in R before a string is not a raw string prefix: the method after it is checked
+        r = runQpp(ClassStart + "
+#define FOOR \"(\"
+static const char* s4 = FOOR\"(\";
+int TestCls::undoc() [flags=CONSTANT] {
+    return 1;
+}
+");
+        assertFailed(r, "an undocumented method after a string that is not a raw string literal");
     }
 
     testEmptyGroup() {
@@ -482,6 +554,17 @@ int t_disabled(int a) {
         assertSucceeded(r, "code in '#if 0'");
         assertRegex("int TestCls::disabled\\(\\) \\[flags=CONSTANT\\] \\{", r.cpp_text,
             "the disabled method is copied");
+
+        # "#if (0)" and "#if false" are disabled code too
+        foreach string cond in ("(0)", "false", "( false )") {
+            r = runQpp(ClassStart + "
+#if " + cond + "
+int TestCls::disabled() [flags=CONSTANT] {
+}
+#endif
+");
+            assertSucceeded(r, "code in '#if " + cond + "'");
+        }
 
         # after the '#endif', a method is checked again
         r = runQpp(ClassStart + "
