@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <string>
 #include <climits>
 #include <pthread.h>
@@ -142,6 +143,21 @@ static void* work(void*) {
         }
         ++kind.parsed;
     }
+    return nullptr;
+}
+
+//! The start routine of a thread that runs F: an exception that F lets escape (std::bad_alloc from a std::string, for
+//! example) would call std::terminate() at the end of the start routine, so it is reported as a failure instead
+template <void* (*F)(void*)>
+static void* guarded(void* arg) noexcept {
+    try {
+        return F(arg);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "%zuK: exception: %s\n", current_size / 1024, e.what());
+    } catch (...) {
+        std::fprintf(stderr, "%zuK: unknown exception\n", current_size / 1024);
+    }
+    ++failures;
     return nullptr;
 }
 
@@ -328,7 +344,7 @@ int main(int argc, char** argv) {
         // each size in a thread of its own, one after the other in this process, which loads each module once
         for (int i = 3; i < argc; ++i) {
             current_size = strtoul(argv[i], nullptr, 10) * 1024;
-            if (run_in_thread(current_size, load_source)) {
+            if (run_in_thread(current_size, guarded<load_source>)) {
                 ++failures;
             }
         }
@@ -337,13 +353,13 @@ int main(int argc, char** argv) {
     if (argc > 2) {
         module_name = argv[1];
         current_size = strtoul(argv[2], nullptr, 10) * 1024;
-        if (run_in_thread(current_size, load_module)) {
+        if (run_in_thread(current_size, guarded<load_module>)) {
             ++failures;
         }
         return end_process(failures ? 1 : 0);
     }
     for (current_size = MIN_STACK_SIZE; current_size <= MAX_STACK_SIZE; current_size += STACK_SIZE_STEP) {
-        if (run_in_thread(current_size, work)) {
+        if (run_in_thread(current_size, guarded<work>)) {
             ++failures;
             break;
         }

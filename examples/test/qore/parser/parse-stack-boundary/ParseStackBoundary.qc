@@ -166,7 +166,8 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         }
         int parsed;
         int stack_errors;
-        for (int kb = 128; kb <= 1024; kb += 32) {
+        # from 128KB, or the platform's minimum stack size if it is larger (see getSweepStartKb())
+        for (int kb = max(128, getSweepStartKb(exe, libdir, 32)); kb <= 1024; kb += 32) {
             int status;
             string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
                 + " QORE_MODULE_DIR=" + quote(mdir) + " " + quote(exe) + " StackChain0 " + kb + " 2>&1", \status);
@@ -190,7 +191,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
     const MinSweepKb = 96;
 
     #! Returns the smallest stack size of a sweep in KB with the given step: MinSweepKb, or the smallest stack size
-    #! that a thread can be created with on this platform rounded up to the step, if it is larger
+    #! that a thread can be created with on this platform rounded up to a multiple of the step, if it is larger
     /** The fixture reports the platform's minimum (\c PTHREAD_STACK_MIN, 128KB with glibc on aarch64), where
         \c pthread_attr_setstacksize() refuses a smaller size, and the fixture cannot run a thread with it
     */
@@ -208,7 +209,8 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         return max(MinSweepKb, rv);
     }
 
-    #! runs the fixture on a source file in a foreign thread with each stack size from 96KB to 1MB in 16KB steps
+    #! runs the fixture on a source file in a foreign thread with each stack size from 96KB (or the platform's minimum)
+    #! to max_kb (1MB by default) in 16KB steps
     /** Each run must parse the source and return the expected value from its run() function, or fail with the parse
         stack error; both must occur within the range of sizes.  Code that was parsed can still run short of stack
         when it runs (\c STACK-LIMIT-EXCEEDED).  A process loads a module once, so each size runs in a process of its
@@ -673,8 +675,9 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         static objects of LLVM under it (a SIGSEGV in LLVM's instruction selection at the end of a deepInitCheck()
         run, with no output, as stdout is a pipe), so the fixture ends with qore_fork_child_quick_exit() after
         qore_cleanup(), as an embedding program must.  A test hook of a debug library holds the compile of a module
-        function in LLVM until the end of the process; without the quick exit, the process waits for it in an
-        atexit() handler of the library and never ends.
+        function in LLVM until the end of the process; without the quick exit, the atexit() handler of the library
+        would wait for it forever, so the debug library ends the process with status 86 and a message on stderr
+        instead (QoreJIT::dbgExitIfAbandonedCompileHeld(), issue #6296).
     */
     private abandonedCompileExitCheck() {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
@@ -703,6 +706,8 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         string output = backquote("env -u QORE_JIT_SYNC_COMPILE QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
             "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_MODULE_DIR="
             + quote(mdir) + " " + quote(exe) + " --source " + quote(source) + " 8192 2>&1", \status);
+        # a fixture that ends with exit() instead of qore_fork_child_quick_exit() exits with 86 and says why
+        assertEq(-1, output.find("abandoned compile held in LLVM"), output);
         assertEq(0, status, output);
         # the output is written before the process ends; the compile was held (the sum of i * 4 for i < 10, twice)
         assertEq("parsed 360", (output =~ x/([^\n]*)\n$/)[0], output);
