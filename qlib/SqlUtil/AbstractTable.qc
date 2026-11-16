@@ -13154,20 +13154,31 @@ on_exit printf("SQL> %s\n", sql);
         @param nname the name of the table
         @param opts the table options
 
-        @throw PERMISSION-DENIED code that a sandbox governs cannot open a connection from a connection string (since
-        SqlUtil 3.11.0)
+        @note this variant is in the \c DATABASE @ref functional_domain_constants "functional domain": code that is
+        restricted with @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" cannot call it, also not through other code
+        (since SqlUtil 3.11.0)
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c DATABASE domain (since SqlUtil 3.11.0)
     */
-    static AbstractTable getTable(string dsstr, string nname, *hash<auto> opts) {
-        # a connection string opens a connection of its own: sandboxed code may use only the datasources that the host
-        # provides
-        if (SandboxManager::isSandboxed()) {
-            throw "PERMISSION-DENIED", "code that a sandbox governs cannot open a database connection from a connection string or configuration; use a datasource that the host provides";
-        }
+    static AbstractTable getTable(string dsstr, string nname, *hash<auto> opts) [dom=DATABASE] {
+        check_caller_database();
         Datasource nds(dsstr);
         return AbstractTable::getTable(nds, nname, opts);
     }
 
-    static AbstractTable getTable(hash<auto> dsh, string nname, *hash<auto> opts) {
+    #! Returns an AbstractTable object for a table in the database that the given datasource configuration names
+    /** @param dsh the datasource configuration
+        @param nname the name of the table
+        @param opts the table options
+
+        @note this variant is in the \c DATABASE @ref functional_domain_constants "functional domain": code that is
+        restricted with @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" cannot call it, also not through other code
+        (since SqlUtil 3.11.0)
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c DATABASE domain (since SqlUtil 3.11.0)
+    */
+    static AbstractTable getTable(hash<auto> dsh, string nname, *hash<auto> opts) [dom=DATABASE] {
+        check_caller_database();
         Datasource nds(dsh);
         return AbstractTable::getTable(nds, nname, opts);
     }

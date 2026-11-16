@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the case code runs as JIT and tiered native code and the host as a qcc-compiled executable
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SqlUtilCallerDatabaseTest
+
+#! Tests that the calling code's DATABASE domain decides whether module code opens a connection for it (qore#6257)
+/** A module is a capability whose code runs with its own options, so SqlUtil and DbDataProvider check the code that
+    calls them (SandboxManager::isCallerRestricted()): code restricted with PO_NO_DATABASE (a sandboxed Qorus
+    interface) cannot open a connection from a connection string or a datasource configuration, also through other
+    module code (DbDataProvider, the deserialization of a table, a module that calls one that opens a table) or a
+    closure that trusted code calls back; the variants of AbstractTable::getTable(), AbstractDatabase::getDatabase()
+    and the Table and Database constructors that take one are in the DATABASE domain, so a direct call is refused
+    when it is parsed and a call made at run time with INVALID-FUNCTION-ACCESS.  Code without the restriction can,
+    also when a sandbox governs it (a trusted Qorus interface), and so can a function of the trusted host that the
+    restricted code calls, as the host's code decides.
+
+    The worker opens a datasource of a driver that does not exist, so an allowed call fails with LOAD-MODULE-ERROR when
+    the connection is used.  It runs in every execution mode, and its case Programs in the same mode; as a
+    qcc-compiled executable, the host's code is native code and the case code, parsed at run time, runs in the default
+    mode.
+*/
+class SqlUtilCallerDatabaseTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+        string module_dir;
+    }
+
+    constructor() : QUnit::Test("SqlUtilCallerDatabase", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "sqlutil-caller-database" + DirSep + "sqlutil-caller-database-worker.q";
+        # the qlib modules and the modules of the test (CallerDbInner, CallerDbOuter)
+        string qlib = get_script_dir() + "/../../../../../qlib:" + dirname(worker);
+        module_dir = ENV.QORE_MODULE_DIR ? qlib + ":" + ENV.QORE_MODULE_DIR : qlib;
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the case Programs that the worker creates run in the same mode, which the worker sets and reports
+            # ("case-mode"); the Programs of the modules choose their own modes, so the native compilation of the
+            # run is not checked
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s "
+                "SQLUTIL_CALLER_DATABASE_MODE=%s %s -b --exec-mode=%s %s", libqore_dir, module_dir, mode, qore_bin,
+                mode, worker), NativeCheck::None), mode);
+        }
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-sqlutil-caller-database-");
+        string exe = tmp.path + DirSep + "worker";
+        string out = backquote(sprintf("QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -O0 -o %s %s 2>&1", libqore_dir,
+            module_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b",
+            libqore_dir, module_dir, exe)));
+    }
+
+    #! the outcome of every case
+    private hash<string, string> getExpected() {
+        hash<string, string> rv;
+        # a call that is allowed opens the datasource
+        const string Allowed = "LOAD-MODULE-ERROR";
+        foreach string caller in (("trusted", "trusted-sandboxed", "restricted", "restricted-sandboxed")) {
+            bool restricted = caller =~ /^restricted/;
+            foreach string call in (("getDatabase", "getDatabase-hash", "getTable", "getTable-hash", "Table",
+                    "Table-hash", "Database", "Database-hash")) {
+                rv{sprintf("%s.direct.%s", caller, call)} = restricted ? "PARSE-EXCEPTION-DATABASE" : Allowed;
+            }
+            # a function of the trusted host decides for itself
+            rv{caller + ".host-function"} = Allowed;
+            rv{caller + ".runtime.getDatabase"} = restricted ? "INVALID-FUNCTION-ACCESS" : Allowed;
+            foreach string call in (("dbdataprovider", "deserialize", "module-chain")) {
+                rv{sprintf("%s.module.%s", caller, call)} = restricted ? "PERMISSION-DENIED" : Allowed;
+                rv{sprintf("%s.callback.%s", caller, call)} = restricted ? "PERMISSION-DENIED" : Allowed;
+            }
+        }
+        rv += {
+            "host.getDatabase": Allowed,
+            "host.dbdataprovider": Allowed,
+        };
+        return rv;
+    }
+
+    private checkOutput(string label, string out, *string mode) {
+        hash<string, string> actual;
+        foreach string line in (out.split("\n")) {
+            *list<*string> kv = (line =~ x/^([a-z][A-Za-z.-]+[A-Za-z])=(.*)$/);
+            if (kv) {
+                actual{kv[0]} = kv[1];
+            }
+        }
+        hash<string, string> expected = getExpected();
+        if (mode) {
+            expected{"case-mode"} = mode;
+        }
+        assertEq(expected, actual, label + ": " + out);
+    }
+}

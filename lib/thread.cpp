@@ -5685,6 +5685,47 @@ bool qore_caller_is_sandboxed() {
     }
 }
 
+//! returns true if the parse options of \a pgm, a Program that is not a module's, restrict \a dom
+static bool qore_program_restricts(const QoreProgram* pgm, const QoreParseOptions& dom) {
+    assert(pgm && !qore_program_is_module_inline(pgm));
+    return qore_program_private::getParseOptions(*pgm).hasAny(dom);
+}
+
+bool qore_caller_restricts_domain(int64 domain) {
+    // only the restricting options are domains; the positive options (PO_ALLOW_*) and PO_IN_MODULE are not
+    const QoreParseOptions dom = QoreParseOptions(domain) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(PO_IN_MODULE);
+    ThreadData* td = thread_data.get();
+    // before the library is initialized, only the embedding application runs
+    if (!dom || !td) {
+        return false;
+    }
+    // the restrictions of a sandboxed caller that the module code runs with (see
+    // qore_set_module_call_runtime_po_override()); the module code passes them on to the module code it calls
+    if (td->runtime_po_caller_restrictions.hasAny(dom)) {
+        return true;
+    }
+    // the calling code is the nearest Program on the call stack that is not a module's: a module's own options are
+    // those of the Program that loaded it first, which say nothing about the code that calls it now
+    const QoreProgram* pgm = td->current_pgm;
+    if (pgm && !qore_program_is_module_inline(pgm)) {
+        return qore_program_restricts(pgm, dom);
+    }
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        const QoreProgram* old_pgm = ch->getOldProgram();
+        if (old_pgm && !qore_program_is_module_inline(old_pgm)) {
+            return qore_program_restricts(old_pgm, dom);
+        }
+    }
+    // a builtin call of a module function made for another Program (QoreProgram::callFunction()): the Program of the
+    // call
+    if (td->call_program_context && !qore_program_is_module_inline(td->call_program_context)) {
+        return qore_program_restricts(td->call_program_context, dom);
+    }
+    // no code of a Program that is not a module's is on the stack: the embedding application calls the module code
+    return false;
+}
+
 //! returns the ID of the current Program of the thread, or QORE_NO_PROGRAM_ID
 static qore_program_id_t qore_current_program_id(ThreadData* td) {
     QoreProgram* pgm = td->current_pgm ? td->current_pgm : td->call_program_context;
