@@ -8155,6 +8155,13 @@ bool QoreTypeInfo::matchCommonType(const QoreTypeInfo*& ctype, const QoreTypeInf
     // see if we have a complex type
     const QoreTypeInfo* bti = ctype->return_vec[0].spec.getBaseTypeInfo();
     if (bti == ntype->return_vec[0].spec.getBaseTypeInfo()) {
+        // an enum value is not a value of its base type or of another enum with the same base type: an enum type and
+        // a different type have no common type, so that a container whose value type is taken from its values keeps
+        // its enum values, and a container of a declared type converts them when they are stored in it (qore#6274)
+        if (ctype->return_vec[0].spec.getEnum() != ntype->return_vec[0].spec.getEnum()) {
+            ctype = autoTypeInfo;
+            return false;
+        }
         // issue #3429: when performing type folding with complex types, do not use subtype "any" but rather use "auto"
         if (bti == hashTypeInfo) {
             // Check if both are hashdecls before degrading to autoHashTypeInfo

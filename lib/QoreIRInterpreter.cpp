@@ -11419,7 +11419,7 @@ dispatch_folded_step_host:
                     if (!vtype) {
                         vtype = vt;
                         vcommon = true;
-                    } else if (vcommon && !QoreTypeInfo::matchLiteralCommonType(vtype, vt)) {
+                    } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
                         vcommon = false;
                     }
                     if (qore_list_private::pushCanonical(**list, stored, xsink)) {
@@ -11484,7 +11484,7 @@ dispatch_folded_step_host:
                         if (!i) {
                             vtype = vt;
                             vcommon = true;
-                        } else if (vcommon && !QoreTypeInfo::matchLiteralCommonType(vtype, vt)) {
+                        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
                             vcommon = false;
                         }
                         qore_hash_private::setKeyValueCanonical(**hash, key.c_str(), stored, xsink);
@@ -11541,7 +11541,7 @@ dispatch_folded_step_host:
                     if (!i) {
                         vtype = vt;
                         vcommon = true;
-                    } else if (vcommon && !QoreTypeInfo::matchLiteralCommonType(vtype, vt)) {
+                    } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
                         vcommon = false;
                     }
                     if (mhck->unique_keys && qore_ir_interpreter_use_unique_hash_literal_insert()) {

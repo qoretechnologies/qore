@@ -6556,7 +6556,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_list(uint64_t* vals, int count, const
         if (!vtype) {
             vtype = vt;
             vcommon = true;
-        } else if (vcommon && !QoreTypeInfo::matchLiteralCommonType(vtype, vt)) {
+        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
             vcommon = false;
         }
         if (qore_list_private::pushCanonical(**list, v, xsink)) {
@@ -6616,7 +6616,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, c
         if (!i) {
             vtype = vt;
             vcommon = true;
-        } else if (vcommon && !QoreTypeInfo::matchLiteralCommonType(vtype, vt)) {
+        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
             vcommon = false;
         }
         qore_hash_private::setKeyValueCanonical(**hash, key_str.c_str(), val, xsink);
@@ -7029,7 +7029,7 @@ static uint64_t qore_rt_make_hash_const_keys_impl(const char** keys, uint64_t* v
         if (!i) {
             vtype = vt;
             vcommon = true;
-        } else if (vcommon && !QoreTypeInfo::matchLiteralCommonType(vtype, vt)) {
+        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
             vcommon = false;
         }
         if (unique_keys) {
@@ -7092,7 +7092,7 @@ static uint64_t qore_rt_make_hash_const_keys_2_unique_impl(
     if (infer_value_type) {
         value_type = val0.getFullTypeInfo();
         bool common_type =
-            QoreTypeInfo::matchLiteralCommonType(value_type, val1.getFullTypeInfo());
+            QoreTypeInfo::matchCommonType(value_type, val1.getFullTypeInfo());
         if (!value_type || value_type == anyTypeInfo || !common_type) {
             value_type = autoTypeInfo;
         }
@@ -7144,10 +7144,10 @@ static uint64_t qore_rt_make_hash_const_keys_3_unique_impl(
     if (infer_value_type) {
         value_type = val0.getFullTypeInfo();
         bool common_type =
-            QoreTypeInfo::matchLiteralCommonType(value_type, val1.getFullTypeInfo());
+            QoreTypeInfo::matchCommonType(value_type, val1.getFullTypeInfo());
         if (common_type) {
             common_type =
-                QoreTypeInfo::matchLiteralCommonType(value_type, val2.getFullTypeInfo());
+                QoreTypeInfo::matchCommonType(value_type, val2.getFullTypeInfo());
         }
         if (!value_type || value_type == anyTypeInfo || !common_type) {
             value_type = autoTypeInfo;

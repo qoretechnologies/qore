@@ -265,7 +265,7 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
             if (vt != vtype && (qore_type_contains_type_parameter(vtype) || qore_type_contains_type_parameter(vt))) {
                 vtype = nullptr;
                 vcommon = false;
-            } else if (!QoreTypeInfo::matchLiteralCommonType(vtype, vt)) {
+            } else if (!QoreTypeInfo::matchCommonType(vtype, vt)) {
                 vcommon = false;
             }
         }
@@ -416,7 +416,7 @@ QoreValue QoreParseHashNode::evalCommon(bool& needs_deref, ExceptionSink* xsink)
         if (!i) {
             vtype = vt;
             vcommon = true;
-        } else if (vcommon && !QoreTypeInfo::matchLiteralCommonType(vtype, vt)) {
+        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
             vcommon = false;
         }
 
