@@ -2488,6 +2488,11 @@ public:
         return active;
     }
 
+    //! returns true if the last entry failed with a C++ exception during or after the entry handler
+    DLLLOCAL bool handlerFailedWithCppException() const {
+        return handler_cpp_exception;
+    }
+
 private:
     //! runs the entry handler of the Program, if any; see enter()
     DLLLOCAL QORE_INTERN_NOINLINE int enterHandlers(ThreadData* td, QoreProgram* pgm, ExceptionSink* xsink);
@@ -2505,6 +2510,8 @@ private:
     QoreValue token;
     //! true while the frame is entered
     bool active = false;
+    //! true if the last entry failed with a C++ exception during or after the entry handler (issue #6255)
+    bool handler_cpp_exception = false;
 };
 
 //! returns true if a call into the given Program must enter it although it is the thread's current Program
@@ -2533,7 +2540,20 @@ public:
     }
     DLLLOCAL ~ProgramThreadCountContextHelper();
 
+    //! enters the Program; a C++ exception of the entry (std::bad_alloc) is raised in \a xsink as a Qore exception
+    /** The entry leaves the thread as it was, enterFailed() is true, and the exception is \c THREAD-ENTRY-HANDLER-ERROR
+        if the entry handler failed, otherwise \c PROGRAM-ENTRY-ERROR; if \a xsink already holds an exception, as when
+        a destructor runs while an exception propagates, no other is added.  The calls that the interpreter makes into
+        other Programs have nothing above them that converts a C++ exception, which would end the process (issue
+        #6255).
+    */
     DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+
+    //! enters the Program as set() does, except that a C++ exception of the entry propagates
+    /** For the C++ API (QoreExternalProgramContextHelper): the exception propagates once the thread is as it was
+        (issue #6198); the helper's destructor then finds nothing to undo.
+    */
+    DLLLOCAL void setRethrow(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
 
     //! Returns the data of the thread in the Program of the given frame and the index of the frame there
     /** @param frame the frame, counted from the caller of the builtin function that looks it up; set to its index
