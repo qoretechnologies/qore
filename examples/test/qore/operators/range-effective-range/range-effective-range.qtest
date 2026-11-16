@@ -1,0 +1,84 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class RangeEffectiveRangeTest
+
+#! Regression test for issue #6306: the effective range of the range operator
+/** The range operator (x[m..n]) must give only elements of its sequence: a range of an empty sequence is empty, of
+    the same type, and the range of a string is resolved against its characters.
+
+    RangeEffective.q (with negative offsets) and RangeEffectiveNoNegative.q (without) slice lists, strings (with
+    multi-byte characters), binaries and buffers of several element types, empty and not, with every combination of
+    a set of bounds as constants and as int, float and untyped values, also when a list range is iterated in place
+    and with the remove operator, and compare each result with that of a reference rule; each prints the number of
+    checks and of failures, which must be the line in its .expected file: RangeEffective.q in every execution mode,
+    on the IR tier and in programs compiled with qcc -O0 and -O3, RangeEffectiveNoNegative.q, which cannot use
+    %modern, in the AST interpreter.
+*/
+class RangeEffectiveRangeTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+    }
+
+    constructor() : QUnit::Test("range operator effective range", "1.0", \ARGV) {
+        {
+            string name = "RangeEffective";
+            string fixture = get_script_dir() + "/" + name + ".q";
+            string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/" + name + ".expected");
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                string execution_mode = mode;
+                addTestCase(name + ": execution mode " + mode, sub () {
+                    assertEq(expected, ExecModeHarness::run(command(execution_mode, fixture)));
+                });
+            }
+            addTestCase(name + ": IR tier", sub () {
+                assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered", fixture)));
+            });
+            addTestCase(name + ": qcc -O0", sub () { checkQcc(name, fixture, expected, 0); });
+            addTestCase(name + ": qcc -O3", sub () { checkQcc(name, fixture, expected, 3); });
+        }
+        {
+            # code without negative offsets cannot use %modern, which the other execution modes require
+            string name = "RangeEffectiveNoNegative";
+            string fixture = get_script_dir() + "/" + name + ".q";
+            string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/" + name + ".expected");
+            addTestCase(name + ": execution mode ast", sub () {
+                assertEq(expected, ExecModeHarness::run(command("ast", fixture)));
+            });
+        }
+
+        set_return_value(main());
+    }
+
+    private string command(string mode, string fixture) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    private checkQcc(string name, string fixture, string expected, int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/" + name;
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}
