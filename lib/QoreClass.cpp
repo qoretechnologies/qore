@@ -66,16 +66,16 @@ namespace {
 template <typename T>
 class HierarchyWalkStack {
 public:
-    DLLLOCAL bool empty() const {
+    bool empty() const {
         return !count;
     }
 
-    DLLLOCAL T& back() {
+    T& back() {
         assert(count);
         return count <= InPlace ? in_place[count - 1] : overflow[count - InPlace - 1];
     }
 
-    DLLLOCAL void push(const T& v) {
+    void push(const T& v) {
         if (count < InPlace) {
             in_place[count] = v;
         } else {
@@ -84,7 +84,7 @@ public:
         ++count;
     }
 
-    DLLLOCAL void pop() {
+    void pop() {
         assert(count);
         if (count > InPlace) {
             overflow.pop_back();
@@ -2000,7 +2000,7 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
             RuntimeConfig* rc = nullptr;
             QoreParseOptions old_rc_po;
 
-            DLLLOCAL MemberInitParseOptionsHelper(const QoreMemberInfo& info) {
+            MemberInitParseOptionsHelper(const QoreMemberInfo& info) {
                 if (!info.has_decl_po) {
                     return;
                 }
@@ -2015,7 +2015,7 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
                 swapped = true;
             }
 
-            DLLLOCAL ~MemberInitParseOptionsHelper() {
+            ~MemberInitParseOptionsHelper() {
                 if (!swapped) {
                     return;
                 }
