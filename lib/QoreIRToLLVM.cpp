@@ -1251,6 +1251,15 @@ static bool qore_ir_native_closure_call_eligible(bool call_gives_args,
         const QoreIRFunction* ir_func, const std::vector<QoreIRValue>& operands,
         int arg_start, int nargs,
         const std::vector<BatchCalleeParamKind>& param_kinds) {
+    // the native code of a closure takes a reference of its own to each argument; whether a parameter of the closure
+    // takes its argument over is known only from its IR, which the AOT compiler does not cache for a closure: a call
+    // that gives the closure an argument is made by the consume path then (issue #6262)
+    if (call_gives_args) {
+        const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+        if (!uvb || !uvb->getCachedIR()) {
+            return false;
+        }
+    }
     if (!qore_ir_fast_entry_operands_need_no_binding(call_gives_args, variant, expr, ir_func,
             operands, arg_start, nargs)) {
         return false;
@@ -8465,8 +8474,81 @@ bool QoreIRToLLVM::callGivesArgs(const QoreIRInstruction* inst) const {
                 && !(value_id < reused_call_args.size() && reused_call_args[value_id])) {
             return true;
         }
+        if (givenReferenceReadSlot(inst, value_id)) {
+            return true;
+        }
     }
     return false;
+}
+
+//! Returns true if the call \a inst calls a variant known when it is compiled, none of whose parameters takes its
+//! argument over: a function or a static method whose IR is known, or a builtin variant
+/** A read through a reference that such a call takes as an argument is released when it returns, as the AST
+    interpreter releases its argument list, which no write of a parameter can observe; it is not given to the callee,
+    so that the call is made as before (see givenReferenceReadSlot()).  A method may be overridden and is not known.
+*/
+static bool qore_ir_call_takes_no_arg_over(const QoreIRInstruction* inst) {
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    switch (inst->opcode) {
+        case QoreIROpcode::CallDirect:
+            variant = static_cast<const QoreIRCallDirectInstruction*>(inst)->variant;
+            break;
+        case QoreIROpcode::CallStaticDirect:
+            variant = static_cast<const QoreIRCallStaticDirectInstruction*>(inst)->variant;
+            break;
+        case QoreIROpcode::Invoke: {
+            const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst);
+            const AbstractQoreNode* node = inv->expr.hasNode() ? inv->expr.getInternalNode() : nullptr;
+            if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
+                const auto* call = node ? qore_get_function_call_node(node) : nullptr;
+                variant = call ? call->getVariant() : nullptr;
+            } else if (inv->invoke_opcode == QoreIROpcode::CallStaticDirect) {
+                const auto* call = node ? qore_get_static_method_call_node(node) : nullptr;
+                variant = call ? call->getVariant() : nullptr;
+            }
+            break;
+        }
+        default:
+            break;
+    }
+    if (!variant) {
+        return false;
+    }
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    if (!uvb) {
+        return true;
+    }
+    return uvb->getCachedIR() && !qore_ir_fast_entry_refuses_given_args(true, variant);
+}
+
+// documented in QoreIRToLLVM.h
+llvm::AllocaInst* QoreIRToLLVM::givenReferenceReadSlot(const QoreIRInstruction* inst, uint32_t value_id) const {
+    auto ref_read_it = reference_read_slots.find(value_id);
+    if (ref_read_it == reference_read_slots.end() || !ref_read_it->second
+            // a read that took a reference of its own in a cleanup slot too gives that slot (overwritten_local_reads)
+            || invoke_alloca_map.count(value_id)
+            || (value_id < reused_call_args.size() && reused_call_args[value_id])) {
+        return nullptr;
+    }
+    auto uses_it = operand_remaining_uses.find(value_id);
+    if (uses_it == operand_remaining_uses.end() || uses_it->second > 1) {
+        return nullptr;
+    }
+    // defined in the call's block, or in the call's statement (see releaseConsumedCallArgs())
+    auto def_it = value_def_block.find(value_id);
+    if (def_it == value_def_block.end()) {
+        return nullptr;
+    }
+    if (def_it->second != current_lowering_block_) {
+        auto scope_it = value_def_temp_scope.find(value_id);
+        if (scope_it == value_def_temp_scope.end() || !scope_it->second || scope_it->second != inst->temp_scope_id) {
+            return nullptr;
+        }
+    }
+    if (qore_ir_call_takes_no_arg_over(inst)) {
+        return nullptr;
+    }
+    return ref_read_it->second;
 }
 
 llvm::Value* QoreIRToLLVM::buildArgCleanupArray(const QoreIRInstruction* inst,
@@ -8513,6 +8595,21 @@ llvm::Value* QoreIRToLLVM::buildArgCleanupArray(const QoreIRInstruction* inst,
                     has_cleanup = true;
                 } else {
                     cleanup_ptr = null_ptr;
+                }
+            } else if (llvm::AllocaInst* read_slot = givenReferenceReadSlot(inst, value_id)) {
+                // the slot of a read through a reference is given only if it holds the value: the local held a
+                // reference when it was read (see givenReferenceReadSlot())
+                std::string val_error;
+                llvm::Value* arg_val = getVal(value_id, val_error);
+                if (arg_val) {
+                    llvm::Value* held = builder->CreateICmpEQ(builder->CreateLoad(i64_type, read_slot),
+                        boxValue(arg_val, value_id));
+                    // otherwise a slot that holds NOTHING, which the call leaves alone: a cleanup slot that is given
+                    // is never null (see emitArgCleanupClear())
+                    llvm::AllocaInst* no_slot = ab.CreateAlloca(i64_type, nullptr, "no_given_reference_read");
+                    ab.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), no_slot);
+                    cleanup_ptr = builder->CreateSelect(held, read_slot, no_slot);
+                    has_cleanup = true;
                 }
             }
         }

@@ -1075,6 +1075,17 @@ private:
     //! Returns true if the call \a inst gives the callee the cleanup slot of an argument (buildArgCleanupArray()):
     //! such a call does not call the fast entry of a callee whose parameter takes its argument over (issue #5958)
     bool callGivesArgs(const QoreIRInstruction* inst) const;
+    //! Returns the slot of the reference that the read of argument \a value_id through a reference took, if the call
+    //! \a inst gives it to the callee (buildArgCleanupArray()), or nullptr
+    /** The value read through a reference by a local with a reference flag is kept in the slot of its read site
+        (reference_read_slots), which holds it only if the local held a reference when the value was read; the call
+        gives the slot when it holds the value, as it gives the cleanup slot of a temporary, so that a parameter that
+        the callee writes holds the only reference that the read took, as in the AST interpreter, whose argument list
+        holds the value read and moves it into the parameter (issue #6262).  The conditions are those of its release
+        when the call returns (releaseConsumedCallArgs()); a call of a function or a static method none of whose
+        parameters takes its argument over does not give it (qore_ir_call_takes_no_arg_over())
+    */
+    llvm::AllocaInst* givenReferenceReadSlot(const QoreIRInstruction* inst, uint32_t value_id) const;
 
     //! Emits the read of a local with a reference flag: the cached value, or the referenced value if it is a reference
     /** The referenced value is read only when the flag is set (qore_rt_read_reference_local()); it is owned and kept,
