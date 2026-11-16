@@ -9138,6 +9138,44 @@ void QoreMemberInfo::addContextAccessForClass(const qore_class_private* class_ct
     }
 }
 
+//! returns true if an ancestor of the class declares the member with an initialization expression (qore#526)
+/** A member that redeclares such a member reads the value that the ancestor's initializer assigns, which runs first,
+    from any level and any parent list: the nearest declaration need not have an initializer.  A private:internal
+    member is kept in its class's own slot, so it does not count.  An ancestor that another ancestor inherits with
+    private:internal access is not visible to the class, so it does not count either; the class's own parents are
+    visible to it whatever their inheritance access.
+
+    Known limitation: in a hierarchy where an ancestor is reached both through private:internal inheritance and
+    through another path, the member is taken as initialized, while the runtime does not initialize it (the
+    behavior before qore#526 is kept: no parse error)
+
+    @param visited the ancestors already searched (a class can be reached on several paths)
+    @param own_parents true for the parents of the class that redeclares the member
+*/
+static bool qore_ancestor_member_initialized(const qore_class_private* cls, const char* name,
+        std::set<const qore_class_private*>& visited, bool own_parents) {
+    if (!cls->scl) {
+        return false;
+    }
+    for (const BCNode* node : *cls->scl) {
+        if (!node->sclass || (!own_parents && node->access == Internal)) {
+            continue;
+        }
+        const qore_class_private* parent = qore_class_private::get(*node->sclass);
+        if (!visited.insert(parent).second) {
+            continue;
+        }
+        const QoreMemberInfo* mi = parent->members.find(name);
+        if (mi && mi->local() && !mi->exp.isNothing() && mi->getAccess() != Internal) {
+            return true;
+        }
+        if (qore_ancestor_member_initialized(parent, name, visited, false)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
     if (init) {
         return 0;
@@ -9158,8 +9196,22 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
         printd(5, "QoreMemberInfo::parseInit() this: %p '%s' s'%s' %d\n", this, name, exp.getFullTypeName(),
             exp.getType());
         QoreParseContext parse_context(&selfid);
-        if (parse_init_value(exp, parse_context) && !err) {
-            err = -1;
+        {
+            // a member used in its own initialization expression has no value yet (qore#526); the expression can
+            // be parsed on demand while another one is parsed
+            QoreParseInitializerTargetBarrier init_barrier;
+            // a member that redeclares one of an ancestor class whose initializer sets it reads that value, which is
+            // assigned first; without such an initializer, the member has no value either
+            const qore_class_private* mcls = getClass();
+            std::set<const qore_class_private*> visited;
+            bool ancestor_initialized = mcls && qore_ancestor_member_initialized(mcls, name, visited, true);
+            QoreParseInitializerTarget init_target(ancestor_initialized ? nullptr : parse_get_class(), name);
+            if (parse_init_value(exp, parse_context) && !err) {
+                err = -1;
+            }
+            if (init_target.raiseUseError("member", name) && !err) {
+                err = -1;
+            }
         }
         const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
         if (parse_context.lvids) {
@@ -9212,8 +9264,17 @@ int QoreVarInfo::parseInit(const char* name) {
 
     if (exp) {
         QoreParseContext parse_context;
-        if (parse_init_value(exp, parse_context) && !err) {
-            err = -1;
+        {
+            // a static variable used in its own initialization expression has no value yet (qore#526); the
+            // expression can be parsed on demand while another one is parsed
+            QoreParseInitializerTargetBarrier init_barrier;
+            QoreParseInitializerTarget init_target(this);
+            if (parse_init_value(exp, parse_context) && !err) {
+                err = -1;
+            }
+            if (init_target.raiseUseError("class static variable", name) && !err) {
+                err = -1;
+            }
         }
         const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
         if (parse_context.lvids) {

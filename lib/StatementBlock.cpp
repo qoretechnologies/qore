@@ -151,13 +151,61 @@ protected:
     bool bs;
 };
 
-VariableBlockHelper::VariableBlockHelper() : closure_parse_env(thread_get_closure_parse_env()) {
+//! the initialization expressions being parsed in the current variable block of the thread (qore#526)
+static thread_local QoreParseInitializerTarget* parse_initializer_targets = nullptr;
+
+QoreParseInitializerTarget::QoreParseInitializerTarget(const void* target, const char* member) : target(target),
+        member(member), cenv(thread_get_closure_parse_env()), prev(parse_initializer_targets) {
+    parse_initializer_targets = this;
+}
+
+QoreParseInitializerTarget::~QoreParseInitializerTarget() {
+    assert(parse_initializer_targets == this);
+    parse_initializer_targets = prev;
+}
+
+int QoreParseInitializerTarget::raiseUseError(const QoreProgramLocation* use_loc, const char* what,
+        const char* name) {
+    if (!use_loc) {
+        return 0;
+    }
+    qore_program_private::makeParseException(getProgram(), *use_loc, "PARSE-EXCEPTION",
+        new QoreStringNodeMaker("%s '%s' is used in its own initialization expression, where it has no value yet",
+            what, name));
+    return -1;
+}
+
+void QoreParseInitializerTarget::parseUse(const void* target, const char* member, const QoreProgramLocation* loc) {
+    if (!target) {
+        return;
+    }
+    for (QoreParseInitializerTarget* t = parse_initializer_targets; t; t = t->prev) {
+        if (t->target != target || (member ? !t->member || strcmp(member, t->member) : (bool)t->member)) {
+            continue;
+        }
+        // a use in a closure created in the expression is read when the closure is called
+        if (!t->use_loc && thread_get_closure_parse_env() == t->cenv) {
+            t->use_loc = loc;
+        }
+        return;
+    }
+}
+
+QoreParseInitializerTarget* QoreParseInitializerTarget::swapCurrent(QoreParseInitializerTarget* targets) {
+    QoreParseInitializerTarget* rv = parse_initializer_targets;
+    parse_initializer_targets = targets;
+    return rv;
+}
+
+VariableBlockHelper::VariableBlockHelper() : closure_parse_env(thread_get_closure_parse_env()),
+        initializer_targets(QoreParseInitializerTarget::swapCurrent(nullptr)) {
    new VNode(0);
    thread_set_closure_parse_env(nullptr);
    //printd(5, "VariableBlockHelper::VariableBlockHelper() this=%p pushed %p\n", this, 0);
 }
 
 VariableBlockHelper::~VariableBlockHelper() {
+   QoreParseInitializerTarget::swapCurrent(initializer_targets);
    thread_set_closure_parse_env(closure_parse_env);
    std::unique_ptr<VNode> vnode(getVStack());
    assert(vnode.get());

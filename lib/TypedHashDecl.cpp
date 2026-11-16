@@ -140,8 +140,13 @@ int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
     }
 
     QoreParseContext parse_context;
-    if (parse_init_value(exp, parse_context) && !err) {
-        err = -1;
+    {
+        // the expression can be parsed on demand while an initialization expression is parsed; it runs when the hash
+        // is created (qore#526)
+        QoreParseInitializerTargetBarrier init_barrier;
+        if (parse_init_value(exp, parse_context) && !err) {
+            err = -1;
+        }
     }
     const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
     if (parse_context.lvids) {
