@@ -2053,7 +2053,7 @@ public:
         freeze.
     */
     DLLLOCAL bool hasInternalEntries() const {
-        return has_internal_entries;
+        return has_internal_entries.load(std::memory_order_acquire);
     }
 
     using base_t::moveAllTo;
@@ -2101,7 +2101,7 @@ public:
         delete index.exchange(nullptr, std::memory_order_acq_rel);
         retired_indexes.clear();
         frozen = false;
-        has_internal_entries = false;
+        has_internal_entries.store(false, std::memory_order_relaxed);
     }
 
     DLLLOCAL int parseInit(LocalVar& selfid);
@@ -2110,8 +2110,8 @@ public:
     //! debug builds: checks the index against the list; returns an error message, or an empty string
     DLLLOCAL std::string dbgCheckIndex() const;
 
-    //! debug builds: adds a member after the freeze without the assertion, to test the fallback that publishes a new
-    //! index (see afterChange()); returns the number of indexes replaced so far
+    //! debug builds: adds a member after the freeze, to test that a new index is published (see afterChange()) while
+    //! threads read the members; returns the number of indexes replaced so far
     DLLLOCAL size_t dbgLateAdd(char* name, QoreMemberInfo* info) {
         base_t::addNoCheck(name, info);
         afterChange();
@@ -2132,12 +2132,17 @@ private:
     bool init = false;
     //! true once the members are frozen (freeze())
     bool frozen = false;
-    //! true if the frozen map has an entry of a private:internal member (hasInternalEntries())
-    bool has_internal_entries = false;
+    //! true if the frozen map has an entry of a private:internal member (hasInternalEntries()); read without a lock
+    std::atomic<bool> has_internal_entries{false};
 
+    //! A change of a frozen map: legal, as a module can add a builtin member to a class it has published
+    /** module-jni adds the fields of a Java class to its QoreClass when the class is first used, after it is published
+        (QoreClass::addBuiltinMemberWithAccessors()).  The change publishes a new index (afterChange()), which readers
+        load atomically; the indexes it replaces are kept until the map is destroyed, as a reader can still hold one.
+        The member list itself is changed as it was before the index (#6272): a module adds members to a published
+        class before code that uses the new members can run, and serializes its own additions to one class.
+    */
     DLLLOCAL void assertChangeAllowed() const {
-        // a frozen class is visible to running code, which reads its members without a lock (#6272)
-        assert(!frozen);
     }
 
     DLLLOCAL void afterChange() {
@@ -2148,14 +2153,17 @@ private:
 
     //! builds an index from the complete list and publishes it, keeping the replaced one
     DLLLOCAL void publishIndex() {
-        has_internal_entries = false;
+        bool internal = false;
         for (auto& i : member_list) {
             if (i.second && (i.second->access == Internal || i.second->access == Inaccessible
                     || i.second->getContextSize())) {
-                has_internal_entries = true;
+                internal = true;
                 break;
             }
         }
+        // published before the index that holds the new member, so that a reader that finds the member through the
+        // index also sees the flag that it requires (a fold of the lookup is only made without internal entries)
+        has_internal_entries.store(internal, std::memory_order_release);
         MemberIndex* idx = nullptr;
         if (member_list.size() >= IndexThreshold) {
             idx = new MemberIndex;
