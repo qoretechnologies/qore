@@ -11,6 +11,11 @@
 %requires MysqlSqlUtil
 %requires ./PgsqlTestIsolation.qm
 %requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+
+%try-module oracle
+%define NoOracle
+%endtry
 
 %try-module sqlite3
 %define NoSqlite3
@@ -72,19 +77,23 @@ class SetOpVersionDatasource inherits Qore::SQL::AbstractDatasource {
 
 #! Tests the set operator select options: union, union_all, intersect and except (issue #2961)
 /** The selects run on SQLite, and, in a schema or database of their own, on PostgreSQL when
-    \c QORE_DB_CONNSTR_PGSQL is set and on MySQL or MariaDB when \c QORE_DB_CONNSTR_MYSQL is set
+    \c QORE_DB_CONNSTR_PGSQL is set, on MySQL or MariaDB when \c QORE_DB_CONNSTR_MYSQL is set, and on Oracle when
+    \c QORE_DB_CONNSTR_ORACLE is set (a schema of its own needs \c QORE_DB_CONNSTR_ORACLE_SYS)
 */
 class SqlUtilSetOperatorsTest inherits QUnit::Test {
     private {
         *Datasource pgsql;
         *Datasource mysql;
         string mysql_skip = "QORE_DB_CONNSTR_MYSQL is not set";
+        *Datasource oracle;
+        string oracle_skip = "QORE_DB_CONNSTR_ORACLE is not set";
     }
 
     constructor() : Test("SqlUtilSetOperators", "1.0", \ARGV) {
         addTestCase("SQLite: set operators", \sqliteTest());
         addTestCase("PostgreSQL: set operators", \pgsqlTest());
         addTestCase("MySQL: set operators", \mysqlTest());
+        addTestCase("Oracle: set operators", \oracleTest());
         addTestCase("MySQL: server versions without intersect and except", \mysqlVersionTest());
         addTestCase("invalid set operator arguments", \errorTest());
         set_return_value(main());
@@ -116,6 +125,23 @@ class SqlUtilSetOperatorsTest inherits QUnit::Test {
             }
         }
 %endif
+%ifndef NoOracle
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            try {
+                Datasource ds(OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE,
+                    "SqlUtilSetOperators"));
+                if (ds.getDriverName() != "oracle") {
+                    oracle_skip = sprintf("the connection uses driver %y", ds.getDriverName());
+                } else {
+                    ds.open();
+                    oracle = ds;
+                    setupTables(oracle);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                oracle_skip = sprintf("cannot connect to Oracle: %s: %s", ex.err, ex.desc);
+            }
+        }
+%endif
     }
 
     globalTearDown() {
@@ -129,13 +155,19 @@ class SqlUtilSetOperatorsTest inherits QUnit::Test {
             delete mysql;
         }
         MysqlRunDatabase::teardown();
+        if (oracle) {
+            oracle.rollback();
+            delete oracle;
+        }
+        OracleRunSchema::teardown();
     }
 
     private static setupTables(Datasource ds) {
         ds.exec("create table so_a (id integer not null primary key, name varchar(10))");
         ds.exec("create table so_b (id integer not null primary key, name varchar(10))");
-        ds.exec("insert into so_a values (1, 'a'), (2, 'b'), (3, 'c')");
-        ds.exec("insert into so_b values (2, 'b'), (3, 'x'), (4, 'd')");
+        # one row at a time, as older databases have no multi-row insert
+        map ds.exec("insert into so_a values (%v, %v)", $1[0], $1[1]), ((1, "a"), (2, "b"), (3, "c"));
+        map ds.exec("insert into so_b values (%v, %v)", $1[0], $1[1]), ((2, "b"), (3, "x"), (4, "d"));
         ds.commit();
     }
 
@@ -166,11 +198,21 @@ class SqlUtilSetOperatorsTest inherits QUnit::Test {
         checkSetOperators(mysql, version >= 100000 ? version >= 100300 : version >= 80031);
     }
 
+    oracleTest() {
+        if (!oracle) {
+            testSkip(oracle_skip);
+        }
+        on_exit oracle.rollback();
+        # Oracle's EXCEPT is MINUS
+        checkSetOperators(oracle, True, "minus");
+    }
+
     #! checks the set operators on a database
     /** @param ds the database
         @param all True if the database has intersect and except
+        @param except_sql the SQL keyword of the except operator
     */
-    private checkSetOperators(Datasource ds, bool all) {
+    private checkSetOperators(Datasource ds, bool all, string except_sql = "except") {
         Table a(ds, "so_a");
         Table b(ds, "so_b");
         string sql;
@@ -236,7 +278,7 @@ class SqlUtilSetOperatorsTest inherits QUnit::Test {
             "except": {"table": b, "select": {"columns": ("id", "name"), "where": {"name": "b"}}},
             "orderby": "id",
         }, \sql));
-        assertRegex(" except select ", sql);
+        assertRegex(" " + except_sql + " select ", sql);
 
         # the operators are applied from left to right in the order of the keys: (a union b) except a, and
         # (a except b) union b
