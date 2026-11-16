@@ -744,12 +744,7 @@ public:
         @param name the module name with an optional version specification
         @param pgm the Program being parsed
         @param reexport if the module is reexported
-        @param loc the location of the directive, if known, for the warnings of the module loader; when it is given,
-        a parse of this or another module that ran short of the stack of this thread (QORE_PARSE_STACK_ERR) is a parse
-        error of \a pgm, and not an error of the load in \a xsink, so that a parse directive that handles the errors of
-        its load (\c %%try-module) does not handle it as a module that is not available
-
-        @return 0 if the module was loaded, -1 if not
+        @param loc the location of the directive, if known, for the warnings of the module loader
     */
     DLLLOCAL int parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
             bool reexport = false, const QoreProgramLocation* loc = nullptr);
@@ -1142,18 +1137,15 @@ public:
         design/qore-module-structure.md "Child Modules" for the contract implemented here.
 
         A child declaration is optional, so no child status fails the parent; a child that is present but
-        cannot be loaded is reported and skipped.  A child that cannot be parsed within the stack of this thread
-        (QORE_PARSE_STACK_ERR) is not one that cannot be loaded: it stays pending, and the attach fails with the
-        error.
+        cannot be loaded is reported and skipped.
 
         @param mi the parent module
-        @param xsink exception sink; used only for interruptions of the attach itself and the parse stack error of a
-        child
+        @param xsink exception sink; used only for interruptions of the attach itself
         @param wsink warning sink for children that could not be attached
         @param warning_mask the warning mask in effect for the load
 
         @return 0 for OK (including for absent, skipped, and failed children), -1 if the attach was
-        interrupted or a child could not be parsed within the stack of this thread
+        interrupted
     */
     DLLLOCAL int attachChildModules(QoreAbstractModule& mi, ExceptionSink& xsink, ExceptionSink& wsink,
             int warning_mask);
@@ -1376,17 +1368,14 @@ protected:
     /** Each module is loaded if possible, as a %try-module directive in the source module would; the module
         manager lock must be held.
 
-        @param xsink receives an error that depends on the stack of the thread (qore_has_thread_stack_error()),
-        raised while a module was loaded: the module may be available, so the check cannot be made in this thread,
-        and the caller fails the load (issue #6047); any other error means that the module is not available
         @param specs module requests as written in %try-module directives (a name and an optional version
         constraint)
         @param path_pgm supplies module search paths for the load
         @param available receives the first request that can be loaded
-        @return true if a module can be loaded now; false if none can, or if an error was raised in \a xsink
+        @return true if a module can be loaded now
     */
-    DLLLOCAL bool findAvailableOptionalModule(ExceptionSink& xsink, const std::vector<std::string>& specs,
-            QoreProgram* path_pgm, std::string& available);
+    DLLLOCAL bool findAvailableOptionalModule(const std::vector<std::string>& specs, QoreProgram* path_pgm,
+            std::string& available);
 
     DLLLOCAL QoreAbstractModule* loadBinaryModuleFromDesc(ExceptionSink& xsink, DLHelper* dlh,
             QoreModuleInfo& mod_info, const char* path, const char* feature = nullptr, bool reexport = false,

@@ -48,7 +48,7 @@ static Outcome parse_code(const std::string& code) {
     QoreValue err = xsink.getExceptionErr();
     QoreValue desc = xsink.getExceptionDesc();
     bool expected = err.getType() == NT_STRING && desc.getType() == NT_STRING
-        && !std::strcmp(err.get<const QoreStringNode>()->c_str(), "PARSE-STACK-LIMIT-EXCEEDED")
+        && !std::strcmp(err.get<const QoreStringNode>()->c_str(), "PARSE-EXCEPTION")
         && std::strstr(desc.get<const QoreStringNode>()->c_str(), STACK_ERROR);
     if (!expected) {
         std::fprintf(stderr, "unexpected parse error: %s\n",

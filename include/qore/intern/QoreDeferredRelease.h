@@ -37,8 +37,6 @@
 class AbstractQoreNode;
 class AbstractStatement;
 class ExceptionSink;
-class QoreClass;
-class typed_hash_decl_private;
 
 //! The number of nested releases that a thread makes on its stack before it defers the deeper ones
 /** Releasing the last reference to a container or a parse node releases what it holds, which releases what that
@@ -115,21 +113,5 @@ DLLLOCAL void qore_release_simple_node(AbstractQoreNode* node);
     @param statement the statement to delete; may be nullptr
 */
 DLLLOCAL void qore_delete_statement(AbstractStatement* statement);
-
-//! Releases the reference of a subclass to one of its base classes; deferred like qore_release_node()
-/** A class holds a reference to each class in its hierarchy (BCSMList), and the last release of a class releases its
-    references in turn, so a long chain of inheritance recurses like nested code when it is freed (issue #6047).
-
-    @param qc the base class handle, released with qore_class_private::derefClass()
-*/
-DLLLOCAL void qore_release_base_class(QoreClass* qc);
-
-//! Releases the reference of a hashdecl to its parent hashdecl; deferred like qore_release_node()
-/** The last release of a hashdecl releases its parent in turn, so a long chain of hashdecl inheritance recurses like
-    nested code when it is freed (issue #6047).
-
-    @param parent the parent hashdecl, released with typed_hash_decl_private::deref()
-*/
-DLLLOCAL void qore_release_parent_hashdecl(typed_hash_decl_private* parent);
 
 #endif // _QORE_INTERN_QOREDEFERREDRELEASE_H

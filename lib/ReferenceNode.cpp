@@ -514,11 +514,6 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
             }
             break;
         }
-        // an operand that parse initialization did not initialize, as it ran short of stack, is NOTHING; the parse
-        // has failed (see parse_init_value())
-        if (ntype == NT_NOTHING) {
-            break;
-        }
         assert(ntype == NT_OPERATOR);
         direct_var_ref = false;
         {

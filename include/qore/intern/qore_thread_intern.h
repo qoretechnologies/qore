@@ -3076,53 +3076,14 @@ DLLLOCAL extern QorePThreadAttr ta_default;
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 #endif
 
-//! The stack limit of the current thread (ThreadData::stack_limit), or 0 if it has none or no thread data
-/** Set with the limit (ThreadData::setStackLimit()), so that q_thread_stack_reserve_exceeded() is a TLS read and a
-    comparison inline; atomic only because the primary thread's limit can be set by another thread
-    (enforcePrimaryStackSize()), and constant-initialized, so that its reads need no TLS initialization guard.
-
-    It has the default TLS model: an initial-exec variable marks the whole library STATIC_TLS, and glibc cannot then
-    load libqore with dlopen() (as an embedding runtime such as Python or a JVM does), as its TLS is larger than the
-    static TLS that glibc keeps in reserve for such libraries (see examples/test/qore/misc/libqore-dlopen)
-*/
-DLLLOCAL extern constinit thread_local std::atomic<size_t> q_thread_stack_limit_tls;
-
-//! Returns true if the current thread's stack is smaller than the default thread stack size
-/** The default thread stack size is the size that new Qore threads are created with: STACK_SIZE unless
-    set_default_thread_stack_size() changed it, read with q_thread_get_stack_size().  The stack size of the current
-    thread is the one determined when its thread data was created (ThreadData::stack_size).  The primary thread is never
-    smaller, whatever its size: its stack is the process's, which code that runs in it cannot choose.
-
-    The total stack size is compared, not the stack that remains: a thread whose stack is at least the default size is
-    assumed to have enough stack for a module, so that a module that exceeds it (\c STACK-LIMIT-EXCEEDED) is assumed
-    to have a bug, while in a smaller thread, the error depends on the thread (see qore_find_thread_stack_error())
-*/
-DLLLOCAL bool q_thread_stack_smaller_than_default();
-
 //! Returns true if less than the given number of bytes remain above the current thread's stack limit
 /** For native code that recurses without an exception sink to report check_stack()'s exception, such as IR
-    lowering and parse initialization: it stops before the next recursion step could exhaust the stack.  Always false
-    for a thread with no stack limit, and where the stack is not managed.
+    lowering: it stops before the next recursion step could exhaust the stack.  Always false for a thread with no
+    stack limit, and where the stack is not managed.
 
     @param reserve the stack, in bytes, that the caller needs before it reaches its next check
 */
-DLLLOCAL inline bool q_thread_stack_reserve_exceeded(size_t reserve) {
-#ifdef QORE_MANAGE_STACK
-    size_t limit = q_thread_stack_limit_tls.load(std::memory_order_relaxed);
-    // a thread with no stack guard has no limit (see QTF_NO_STACK_GUARD)
-    if (!limit) {
-        return false;
-    }
-    size_t pos = get_stack_pos();
-#ifdef STACK_DIRECTION_DOWN
-    return pos < limit + reserve;
-#else
-    return pos + reserve > limit;
-#endif
-#else
-    return false;
-#endif
-}
+DLLLOCAL bool q_thread_stack_reserve_exceeded(size_t reserve);
 
 //! Accounts for the stack that the recursion replaced by a deferred deletion would have used
 /** A deletion nested too deeply is deferred to a loop that makes it from a shallower frame (see

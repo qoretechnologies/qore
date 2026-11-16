@@ -12,7 +12,6 @@ runtime data can nest without limit, so every kind of nested structure needs a b
 | Lists and hashes | `qore_container_free_helper` (`include/qore/intern/qore_container_free.h`), depth 16 | Depth-first, as with recursion: the explicit stack replays it |
 | Objects and closure-bound variables | `RObject::deleteOrDefer()`, combined depth 16 (see `design/dgc.md`, "Deleting long chains") | Depth-first, as with recursion |
 | Code: parse and expression nodes, statements | `qore_release_node()`, `qore_release_simple_node()` and `qore_delete_statement()` (`include/qore/intern/QoreDeferredRelease.h`), depth 16 | Shallower before deeper: see below |
-| Class hierarchies and hashdecl inheritance: a subclass's references to its base classes, a hashdecl's reference to its parent | `qore_release_base_class()` (`BCSMList::~BCSMList()`) and `qore_release_parent_hashdecl()` (`typed_hash_decl_private::releaseParentHashDecl()`), through the same `release()` as code, depth 16 | Shallower before deeper, as for code |
 | Other runtime values: references, call references, closures, weak references, numbers, enums, buffers, plugin values | Not bounded themselves: a chain of closures is bounded by its closure-bound variables | Unchanged |
 
 `qore_release_node()` defers only code. `qore_is_code_node_type()` decides by node type, with no virtual call or cast

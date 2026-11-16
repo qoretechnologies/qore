@@ -91,10 +91,7 @@
 // use the call stack for each level of the tree
 #define QORE_MAX_PARSE_DEPTH 1000
 
-// The parser's initial stack is in the frame of yyparse(), which is on the call stack once for each module that a
-// parse loads from its source (the module is parsed while the parse that requires it waits); a stack of 300 symbols
-// made the frame about 25KB.  A parse that nests more deeply grows the stack on the heap (see below).
-#define YYINITDEPTH 64
+#define YYINITDEPTH 300
 // The parser grows its stack on the heap, which bison only does for a C++ parser whose semantic value and location
 // types can be copied with memcpy() (checked below). The stack holds a symbol for each pending operator of a nested
 // expression, and when the parser reduces them, it nests one node in the next without reading another token, so
