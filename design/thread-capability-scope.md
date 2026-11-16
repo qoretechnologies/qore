@@ -47,7 +47,10 @@ svc.start();
 - `ThreadCapabilityScope::constructor(hash<auto> capabilities, *bool replace)` (each value must be code) makes the thread's set the
   outer set with `capabilities` added or replaced by name (with `replace`: `capabilities` only); destroying the object
   restores the outer set.  The class is in the `THREAD_CONTROL` domain: code whose Program, or whose caller's
-  restrictions (module code running for a restricted caller), forbid thread control cannot set a scope.
+  restrictions (module code running for a restricted caller), forbid thread control cannot set a scope.  The caller's
+  restrictions reach only a module that the restricted Program loaded first; the code of a module that the host loaded
+  runs with its own options and can set a scope for a restricted caller that no sandbox governs, as it can start
+  threads for it (`PO_NO_THREAD_CONTROL` without a sandbox is no thread boundary for library modules; see below).
 - A scope cannot be set by code that a sandbox governs, and each capability's code must pass the guard's check
   (below): a host cannot pass on, by mistake, a closure of the restricted code it runs.  Its signature is not checked
   by the scope; the module that looks it up checks it as it checks an option.
