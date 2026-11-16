@@ -368,7 +368,8 @@ class HttpClientPollGoalTest inherits QUnit::Test {
 
         if (spop) {
             hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
-            assertTrue(exists result.ex, "the request fails in its poll operation");
+            # reported as the poll operations report a disconnect, through the deferred error of the submit
+            assertEq("SOCKET-NOT-OPEN", result.ex.err, "the request fails in its poll operation");
             assertFalse(spop.goalReached(), "a request that failed has not reached its goal");
         }
     }
