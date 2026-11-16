@@ -18028,6 +18028,45 @@ static QoreValue f_dbg_run_method_cache_lifetime_tests(const QoreListNode* param
 #endif
 
 #ifdef DEBUG
+//! The variant search without diagnostics returns the type arguments of a generic variant without parameters
+/** QoreFunction::parseFindVariantNoDiagnostics() returned an empty instantiation for a call without arguments: the
+    search keeps the instantiation of the variant found to return it at its end, and the variant found without
+    arguments was not kept there (the AOT fallback resolution of a call, QoreAOTBinary.cpp)
+*/
+static void ut_parse_find_variant_no_args_type_param_inst(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreProgram* pgm = new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+    pgm->parse("%modern\n"
+        "string sub ut_zero_arg_generic<T = int>() { return \"T\"; }\n",
+        "zero-arg-generic-test", &xsink, nullptr, 0);
+    UT_ASSERT(c, !xsink, "the program with a generic function without parameters parses");
+    const QoreExternalFunction* ext = xsink ? nullptr : pgm->findFunction("ut_zero_arg_generic");
+    UT_ASSERT(c, ext, "the generic function is found");
+    if (ext) {
+        const QoreFunction* func = reinterpret_cast<const QoreFunction*>(ext);
+        QoreProgramContextHelper pch(pgm);
+        QoreTypeParamInstantiation inst;
+        const AbstractQoreFunctionVariant* variant = func->parseFindVariantNoDiagnostics(type_vec_t(), nullptr,
+            nullptr, &inst);
+        UT_ASSERT(c, variant, "the variant without parameters is found for a call without arguments");
+        UT_ASSERT_EQ(c, static_cast<size_t>(1), inst.type_args.size(),
+            "the instantiation of the variant found is returned");
+        UT_ASSERT(c, inst.type_args.size() == 1 && inst.type_args[0] == bigIntTypeInfo,
+            "the type parameter is bound to its default type");
+    }
+    xsink.handleExceptions();
+    xsink.clear();
+    pgm->waitForTerminationAndDeref(&xsink);
+}
+
+//! Debug-only: runs the unit tests of the parse-time variant search
+static QoreValue f_dbg_run_variant_search_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ut_parse_find_variant_no_args_type_param_inst(c);
+    return make_unit_test_result(c, xsink);
+}
+
 //! Debug-only: runs the unit tests of the once-only LLVM target initialization
 static QoreValue f_dbg_run_llvm_target_init_tests(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -23806,6 +23845,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_run_connect_error_tests", f_dbg_run_connect_error_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
 #endif
+    qns.addBuiltinVariant("dbg_run_variant_search_tests", f_dbg_run_variant_search_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_run_http1_duplex_tests", f_dbg_run_http1_duplex_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_poll_close_before_open_state", f_dbg_poll_close_before_open_state, QCF_NO_FLAGS,

@@ -107,6 +107,11 @@
     restrictions of a locked child Program, and an independent Program of restricted code takes and locks that code's
     restrictions; see @ref locked_parse_options.
 
+    @par A Deleted Object Keeps Its Class for Overload Selection
+    A deleted object now selects a variant by its class in every execution mode, at parse time and at run time (see
+    @ref overloading_deleted_objects); it matched no class type when the variant was resolved at run time, so such a
+    call raised \c RUNTIME-OVERLOAD-ERROR or selected another variant, depending on the mode and the call form.
+
     @par Completed Objects Are Released After Constructor Argument Errors
     An exception while @ref constructor_argument_cleanup "releasing a completed constructor's arguments" now releases
     the new object normally, running its destructor when no other reference remains; AST execution previously skipped

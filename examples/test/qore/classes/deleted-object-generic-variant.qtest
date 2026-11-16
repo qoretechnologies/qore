@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class DeletedObjectGenericVariantTest
+
+#! A call with explicit type arguments of a generic variant beside a variant without type parameters selects the same
+#! variant in every mode, at parse time and at run time (qore#6152)
+/** The run-time search keeps a variant without type parameters as a candidate of a call with explicit type arguments,
+    while the parse-time search left it out: m<Obj>(o) with m<X>(X x) and m(auto x) was committed to m<X>(X x) at parse
+    time and resolved among both variants at run time. Both searches now take the same candidates, and an untyped
+    parameter does not tie with a typed one at parse time, so the call is committed to m<X>(X x) as m(Obj x) beside
+    m(auto x) is. A deleted object keeps its class for the selection (qore#6159), so it selects m<X>(X x) as a live
+    object does, also when the call is resolved at run time. The probes (deleted-object-generic-variant/probes.q) call
+    generic methods, static methods and functions with explicit type arguments, with typed, untyped, named and captured
+    arguments and from a generic class (also with the class's type parameter as the type argument), with non-generic
+    overloads, inferred type arguments and a generic class's own method as controls; also with an argument that only the
+    variant without type parameters accepts, with a method of a child class beside a generic method of its parent class,
+    without arguments, and with explicit type arguments that no generic variant takes, for a live and a deleted object,
+    and through shared call sites with live and deleted objects in turn, other receivers, the calling generic function's
+    type parameter and four threads.  Also a method type parameter bounded by the class's type parameter (qore#6155):
+    m<X: T>() is checked with the receiver's type arguments, in the class (m<T>(a), and a static method called from a
+    method of the class) and from outside it, within and outside the bound, with a default type that names T, and with
+    a receiver that names the calling code's type parameter (Bounded<U>::sm(a)), which does not satisfy the bound.
+    The probes run in each execution mode in a child process, with tiered execution at the IR
+    tier and promoted to native code, and as qcc-compiled executables (-O0, -O3).
+*/
+class DeletedObjectGenericVariantTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the results of the calls made with a live and with a deleted object, which keeps its class (qore#6159)
+        const Common = (map "\"X\"", xrange(12)).join("|") + "|" + (map "\"Obj\"", xrange(5)).join("|")
+            + "|\"plain-auto\"|\"plain-auto\"|\"X\"|\"T\"|\"child-auto\"";
+        const Live = Common + "|PARSE-TYPE-ERROR|PARSE-TYPE-ERROR|PARSE-TYPE-ERROR|\"X\"|\"plain\"|\"plain-T\""
+            "|\"X\"|\"X\"|\"plain\"|1|1|RUNTIME-OVERLOAD-ERROR|\"plain\"|\"splain\"|\"sX\"|\"s\""
+            "|\"splain\"|RUNTIME-OVERLOAD-ERROR|\"splain\"";
+        #! the calls through shared call sites: live and deleted objects in turn, other receivers, type arguments of
+        #! the calling generic function, and four threads
+        const Deleted = Common + "|base-X,base-X,base-X,base-X,base-X,base-X|base-X,override-auto,base-X,"
+            "override-auto|base-X,override-auto|X,plain-auto,X|[True, True, True, True]";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("DeletedObjectGenericVariant", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        for (int i = 0; i < 4; ++i) {
+            expected += sprintf("%d: deleted: %s\n%d: live: %s\n", i, Deleted, i, Live);
+        }
+
+        addTestCase("explicit type arguments beside a variant without type parameters", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-deleted-object-generic-variant-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "deleted-object-generic-variant" + DirSep
+            + "probes.q")
+            + "\nfor (int i = 0; i < 4; ++i) {\n    printf(\"%d: deleted: %s\\n%d: live: %s\\n\", i, probes(True), "
+            "i, probes(False));\n}\n");
+        f.close();
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=2 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), "tiered, IR tier");
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                libqore_dir, exe)), "qcc " + opt);
+            assertEq(expected, backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe)), "qcc " + opt + ", JIT");
+        }
+    }
+}

@@ -717,12 +717,109 @@ static bool qore_signature_type_arg_satisfies_bound(const QoreTypeInfo* bound, c
     return rc != QTI_NOT_EQUAL && !may_not_match;
 }
 
-static bool qore_finalize_signature_type_args(const UserSignature* sig, type_vec_t& bindings) {
+//! At parse time, where to report a bound that nothing binds at parse time (see QoreParseBoundDeferredHelper)
+static thread_local bool* qore_parse_bound_deferred = nullptr;
+
+//! Marks the inference of the type arguments of a parse-time variant search (issue #6155)
+/** A bound that names a type parameter that nothing binds at parse time (m<X: T>() called in the code of its class
+    Box<T>) does not reject the variant then: \a bound_deferred is set, and the caller resolves the variant at run time,
+    where the bound is checked.  Only qore_finalize_dependent_signature_type_args() reads it, so the run-time inference
+    of a call takes no extra work.
+*/
+class QoreParseBoundDeferredHelper {
+public:
+    DLLLOCAL QoreParseBoundDeferredHelper(bool& bound_deferred) : old(qore_parse_bound_deferred) {
+        qore_parse_bound_deferred = &bound_deferred;
+    }
+
+    DLLLOCAL ~QoreParseBoundDeferredHelper() {
+        qore_parse_bound_deferred = old;
+    }
+
+private:
+    bool* old;
+};
+
+//! Resolves the signature of a generic variant before QoreParseBoundDeferredHelper is set
+/** Resolving a signature can run code (the default values of its parameters), which must not see the parse-time
+    deferral of the bounds
+
+    @return false if the signature cannot be resolved
+*/
+static bool qore_parse_resolve_generic_signature(const AbstractQoreFunctionVariant* variant) {
+    const UserSignature* sig = qore_get_variant_generic_signature(variant);
+    return !sig || !const_cast<UserSignature*>(sig)->resolve();
+}
+
+//! Substitutes the type parameters of the receiver's class in the bound or default type of a type parameter of a
+//! signature (issue #6155: m<X: T>() in a class Box<T>)
+/** With the receiver's type arguments if it is given, or else at run time (\a bound_deferred is nullptr) with the
+    instantiation that is running (a static method called from a method of the class); the type returned still names
+    a type parameter if nothing binds it here: in generic code at parse time, which binds it when it runs, or a
+    receiver that names a type parameter of the calling code (B<U>::sm() in a class G<U>), whose binding is not the
+    running instantiation of the callee: the bound is then not satisfied
+*/
+static QORE_INTERN_NOINLINE const QoreTypeInfo* qore_signature_type_param_type(const QoreTypeInfo* ti,
+        const QoreTypeInfo* receiver_type_info, const bool* bound_deferred) {
+    if (receiver_type_info) {
+        ti = qore_substitute_type_params_if_needed(ti, receiver_type_info);
+    } else if (!bound_deferred && qore_type_contains_type_parameter(ti)) {
+        ti = qore_substitute_type_params_if_needed(ti);
+    }
+    return ti;
+}
+
+//! Finalizes the type arguments of a signature with a bound or default type that names a type parameter (issue #6155)
+/** See qore_finalize_signature_type_args(); the bound and the default type of each type parameter are substituted with
+    qore_signature_type_param_type(); at parse time (QoreParseBoundDeferredHelper), a bound that still names a type
+    parameter is not checked
+*/
+static QORE_INTERN_NOINLINE bool qore_finalize_dependent_signature_type_args(const UserSignature* sig,
+        type_vec_t& bindings, const QoreTypeInfo* receiver_type_info) {
+    bool* bound_deferred = qore_parse_bound_deferred;
+    for (size_t i = 0, e = sig->getTypeParameterCount(); i < e; ++i) {
+        const QoreTypeInfo* bound = sig->getTypeParameterBoundTypeInfo(i);
+        if (bound && qore_type_contains_type_parameter(bound)) {
+            bound = qore_signature_type_param_type(bound, receiver_type_info, bound_deferred);
+        }
+        if (!bindings[i]) {
+            const QoreTypeInfo* def = sig->getTypeParameterDefaultTypeInfo(i);
+            bindings[i] = def && qore_type_contains_type_parameter(def)
+                ? qore_signature_type_param_type(def, receiver_type_info, bound_deferred)
+                : def;
+        }
+        if (!bindings[i]) {
+            bindings[i] = bound ? bound : autoTypeInfo;
+        }
+        if (bound_deferred && bound && qore_type_contains_type_parameter(bound)) {
+            *bound_deferred = true;
+            continue;
+        }
+        if (!qore_signature_type_arg_satisfies_bound(bound, bindings[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//! Finalizes the type arguments of a signature: binds each type parameter that is not bound yet to its default type,
+//! or else to its bound or auto, and checks each type argument against its bound
+/** A bound or default type that names a type parameter is left to qore_finalize_dependent_signature_type_args()
+*/
+static bool qore_finalize_signature_type_args(const UserSignature* sig, type_vec_t& bindings,
+        const QoreTypeInfo* receiver_type_info) {
     bindings.resize(sig->getTypeParameterCount(), nullptr);
     for (size_t i = 0, e = sig->getTypeParameterCount(); i < e; ++i) {
         const QoreTypeInfo* bound = sig->getTypeParameterBoundTypeInfo(i);
+        if (bound && qore_type_contains_type_parameter(bound)) {
+            return qore_finalize_dependent_signature_type_args(sig, bindings, receiver_type_info);
+        }
         if (!bindings[i]) {
-            bindings[i] = sig->getTypeParameterDefaultTypeInfo(i);
+            const QoreTypeInfo* def = sig->getTypeParameterDefaultTypeInfo(i);
+            if (def && qore_type_contains_type_parameter(def)) {
+                return qore_finalize_dependent_signature_type_args(sig, bindings, receiver_type_info);
+            }
+            bindings[i] = def;
         }
         if (!bindings[i]) {
             bindings[i] = bound ? bound : autoTypeInfo;
@@ -734,6 +831,7 @@ static bool qore_finalize_signature_type_args(const UserSignature* sig, type_vec
     return true;
 }
 
+//! Infers the type arguments of a generic variant from the argument types and the explicit type arguments
 static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* variant, const type_vec_t& arg_types,
         const std::vector<bool>* supplied, const QoreTypeInfo* receiver_type_info,
         QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args = nullptr,
@@ -789,7 +887,7 @@ static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* va
         }
     }
 
-    if (!qore_finalize_signature_type_args(sig, bindings)) {
+    if (!qore_finalize_signature_type_args(sig, bindings, receiver_type_info)) {
         return false;
     }
 
@@ -809,6 +907,47 @@ static const QoreTypeInfo* qore_get_runtime_value_type_info(const QoreValue& v) 
         }
     }
     return v.getFullTypeInfo();
+}
+
+//! Infers the type arguments of a candidate variant of a call at parse time, keeping the candidates that the run-time
+//! search keeps (issue #6152)
+/** The run-time search (match_call_arguments(), QoreFunction::runtimeFindVariant()) takes the explicit type arguments
+    of a call only for a generic variant: a variant without type parameters is a candidate of the call as well, and is
+    selected when it matches the arguments better, as m(auto x) for m<Obj>(o) beside m<X>(X x) when o is a deleted
+    object.  So it is a candidate at parse time too when \a keep_plain is set: when a generic variant takes the explicit
+    type arguments (QoreFunction::parseHasExplicitTypeArgsVariant()); otherwise the explicit type arguments match no
+    variant, as before.
+*/
+static inline bool qore_parse_infer_candidate_type_args(const AbstractQoreFunctionVariant* variant,
+        const type_vec_t& arg_types, const std::vector<bool>* supplied, const QoreTypeInfo* receiver_type_info,
+        QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args, bool keep_plain,
+        bool& bound_deferred) {
+    if (keep_plain && !qore_get_variant_generic_signature(variant)) {
+        if (type_param_inst) {
+            type_param_inst->clear();
+        }
+        return true;
+    }
+    if (!qore_parse_resolve_generic_signature(variant)) {
+        return false;
+    }
+    QoreParseBoundDeferredHelper bound_deferred_helper(bound_deferred);
+    return qore_infer_signature_type_args(variant, arg_types, supplied, receiver_type_info, type_param_inst,
+        explicit_type_args);
+}
+
+//! Returns true if a variant none of whose parameters has a type cannot be selected at run time instead of the
+//! variant chosen so far, which matches as many arguments with a higher score
+/** An untyped parameter (auto) matches every value with QTI_WILDCARD at run time, while a typed parameter that the
+    type of its argument is accepted by matches the value with QTI_AMBIGUOUS or more (QTI_IGNORE for an omitted
+    argument with a default, as for the untyped parameter); so the chosen variant, which has a typed parameter with a
+    higher parse score, has the higher score at run time for every value of the arguments' types: it is committed at
+    parse time instead of resolving the call at run time.  An argument without a value is handled by
+    QoreFunction::parseOtherVariantMayMatch().
+*/
+static bool qore_untyped_variant_cannot_win(const AbstractQoreFunctionVariant* chosen, bool variant_untyped,
+        int variant_pmatch, int pmatch, int max_pscore, int score) {
+    return chosen && variant_untyped && variant_pmatch == pmatch && max_pscore < score;
 }
 
 static bool qore_infer_signature_type_args_runtime(const AbstractQoreFunctionVariant* variant,
@@ -1890,8 +2029,9 @@ CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArgumentsImp
         const AbstractQoreFunctionVariant* v = variant;
         ExceptionSink xsink2;
         CodeEvaluationArgRestoreHelper saved(xsink);
-        // A parse-time commitment may fail because a value is NOTHING or a deleted object. Retry with the
-        // caller's original arguments; the newly selected variant supplies its own argument-binding entry.
+        // A parse-time commitment may fail because a value is NOTHING (a deleted object keeps its class, issue #6159).
+        // Retry with the caller's original arguments; the newly selected variant supplies its own argument-binding
+        // entry.
         if (prepareDefaultArgsImpl<ARG_OTHER>(&xsink2, sig, is_copy, self, &saved.args, policy)) {
             saved.restore(tmp);
             // A closure keeps the generic bindings of the code that created it when an argument is rejected.
@@ -2796,6 +2936,16 @@ int UserSignature::resolveTypes() {
     int err = 0;
 
     if (!type_params.empty()) {
+        // a method signature loaded from an AOT binary is resolved when it is first used, outside of the parse
+        // context of its class: the type parameters of the class are made visible to the defaults and bounds of the
+        // signature's type parameters (m<X: T>() in a class Box<T>, issue #6155)
+        std::unique_ptr<QoreParseClassHelper> class_helper;
+        if (selfid && !parse_get_class_priv()) {
+            const QoreClass* self_class = QoreTypeInfo::getUniqueReturnClass(selfid->getTypeInfo());
+            if (self_class && self_class->hasTypeParameters()) {
+                class_helper.reset(new QoreParseClassHelper(const_cast<QoreClass*>(self_class)));
+            }
+        }
         type_param_default_types.assign(type_params.size(), nullptr);
         type_param_bound_types.assign(type_params.size(), nullptr);
         for (size_t i = 0, e = type_params.size(); i < e; ++i) {
@@ -3099,7 +3249,10 @@ static bool make_explicit_signature_type_args_inst(const AbstractQoreFunctionVar
         }
         bindings[i] = explicit_type;
     }
-    if (!qore_finalize_signature_type_args(sig, bindings)) {
+    // parse time: a bound that names a type parameter is not checked here
+    bool bound_deferred = false;
+    QoreParseBoundDeferredHelper bound_deferred_helper(bound_deferred);
+    if (!qore_finalize_signature_type_args(sig, bindings, nullptr)) {
         return false;
     }
 
@@ -3112,6 +3265,12 @@ static const QoreTypeParamInstantiation* get_parse_display_type_param_inst(
         const AbstractQoreFunctionVariant* variant, const type_vec_t& arg_types, const std::vector<bool>* supplied,
         const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation& type_param_inst,
         const type_vec_t* explicit_type_args) {
+    if (!qore_parse_resolve_generic_signature(variant)) {
+        return nullptr;
+    }
+    // parse time: a bound that names a type parameter is not checked here
+    bool bound_deferred = false;
+    QoreParseBoundDeferredHelper bound_deferred_helper(bound_deferred);
     if (qore_infer_signature_type_args(variant, arg_types, supplied, receiver_type_info, &type_param_inst,
             explicit_type_args)) {
         return &type_param_inst;
@@ -3769,10 +3928,12 @@ static const QoreTypeInfo* qore_variant_match_arg_type(const QoreTypeInfo* param
 
 static bool qore_score_class_receiver_inference_candidate(const AbstractQoreFunctionVariant* variant,
         const type_vec_t& arg_types, const std::vector<bool>* supplied, const QoreTypeInfo* receiver_type_info,
-        const type_vec_t* explicit_type_args, int& score, int& nperfect, int& score_len) {
+        const type_vec_t* explicit_type_args, bool keep_plain, int& score, int& nperfect, int& score_len) {
     QoreTypeParamInstantiation method_inst;
-    if (!qore_infer_signature_type_args(variant, arg_types, supplied, receiver_type_info, &method_inst,
-            explicit_type_args)) {
+    // a bound that is checked when the call runs keeps the variant here (issue #6155)
+    bool bound_deferred = false;
+    if (!qore_parse_infer_candidate_type_args(variant, arg_types, supplied, receiver_type_info, &method_inst,
+            explicit_type_args, keep_plain, bound_deferred)) {
         return false;
     }
 
@@ -3856,6 +4017,11 @@ const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProg
         return nullptr;
     }
 
+    // as in parseFindVariant(): variants without type parameters are candidates of a call with explicit type arguments
+    // that a generic variant takes (issue #6152); the receiver type is what is inferred here, so a bound that names
+    // the class's type parameters is checked when the call runs (issue #6155)
+    const bool keep_plain = explicit_type_args && !explicit_type_args->empty()
+        && parseHasExplicitTypeArgsVariant(class_ctx, explicit_type_args, nullptr);
     ClassReceiverInferenceResult best;
     bool saw_failed_bindings = false;
     type_vec_t failed_bindings;
@@ -3943,7 +4109,7 @@ const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProg
             int candidate_nperfect;
             int candidate_score_len;
             if (!qore_score_class_receiver_inference_candidate(*i, *candidate_arg_types, supplied,
-                    receiver_type_info, explicit_type_args, candidate_score, candidate_nperfect,
+                    receiver_type_info, explicit_type_args, keep_plain, candidate_score, candidate_nperfect,
                     candidate_score_len)) {
                 continue;
             }
@@ -4817,6 +4983,10 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
     const AbstractQoreFunctionVariant* pvariant = nullptr;
     NamedArgCandidateBinding best_binding;
     QoreTypeParamInstantiation best_type_param_inst;
+    // variants without type parameters are candidates of a call with explicit type arguments that a generic variant
+    // takes, as at run time (issue #6152)
+    const bool keep_plain = explicit_type_args && !explicit_type_args->empty()
+        && parseHasExplicitTypeArgsVariant(class_ctx, explicit_type_args, receiver_type_info);
 
     QoreFunction* aqf = nullptr;
     const qore_class_private* last_class = nullptr;
@@ -4879,8 +5049,11 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
             }
 
             QoreTypeParamInstantiation candidate_inst;
-            if (!qore_infer_signature_type_args(*i, cb.arg_types, &cb.supplied, receiver_type_info,
-                    &candidate_inst, explicit_type_args)) {
+            // a bound that nothing binds at parse time is checked when the call runs, which selects the variant
+            // then (issue #6155)
+            bool bound_deferred = false;
+            if (!qore_parse_infer_candidate_type_args(*i, cb.arg_types, &cb.supplied, receiver_type_info,
+                    &candidate_inst, explicit_type_args, keep_plain, bound_deferred)) {
                 continue;
             }
             if (!first_bound) {
@@ -4896,7 +5069,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
             int pscore = 0;
             int max_pscore = 0;
             int variant_nperfect = 0;
-            bool variant_runtime_match = false;
+            bool variant_runtime_match = bound_deferred;
             bool variant_soft_match = false;
             bool ok = true;
             bool needs_type_param_substitution = sig->needsTypeParameterSubstitution();
@@ -4904,12 +5077,17 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
             // is only known at runtime is bound by name here and type-checked at runtime like a positional
             // argument, so only multi-variant targets need a runtime-resolved variant
             bool single_variant = ilist.size() == 1 && aqf->vlist.singular();
+            // true if no parameter of the variant has a type (see qore_untyped_variant_cannot_win())
+            bool variant_untyped = true;
 
             for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
                 const QoreTypeInfo* t = needs_type_param_substitution
                     ? qore_substitute_type_params_if_needed(sig->getParamTypeInfo(pi), receiver_type_info,
                         &candidate_inst)
                     : sig->getParamTypeInfo(pi);
+                if (QoreTypeInfo::hasType(t)) {
+                    variant_untyped = false;
+                }
                 bool pos_supplied = pi < cb.supplied.size() && cb.supplied[pi];
                 const QoreTypeInfo* a = pos_supplied && pi < cb.arg_types.size() ? cb.arg_types[pi] : nullptr;
                 bool pos_has_arg = pos_supplied && QoreTypeInfo::hasType(a);
@@ -5029,7 +5207,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 tie = false;
                 best_type_param_inst = candidate_inst;
                 best_binding = std::move(cb);
-            } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)) {
+            } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)
+                    && !qore_untyped_variant_cannot_win(variant, variant_untyped, variant_pmatch, pmatch, max_pscore,
+                        score)) {
                 if (variant_soft_match && variant) {
                     has_possible_match = true;
                 } else {
@@ -5126,7 +5306,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
             desc->concat("; use positional arguments instead. The following variants were considered:");
         } else {
             if (best_failure.reason == NamedArgBindFailureReason::None && explicit_type_args
-                    && !explicit_type_args->empty()) {
+                    && !explicit_type_args->empty() && !keep_plain) {
                 desc->concat("the explicit type arguments did not match any named-callable variant; ");
             }
             if (best_failure.reason == NamedArgBindFailureReason::UnknownName) {
@@ -5287,8 +5467,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
         // time (see parseFindVariant())
         const QoreTypeInfo* union_rt = deferred_rt
             ? qore_deferred_chosen_return_type(variant, receiver_type_info, type_param_inst) : nullptr;
-        if (parseOtherVariantMayMatch(variant, best_binding.arg_types, class_ctx, po, &pwv, &best_binding.supplied,
-                deferred_rt ? &union_rt : nullptr)) {
+        if (parseOtherVariantMayMatch(variant, receiver_type_info,
+                type_param_inst ? type_param_inst : &best_type_param_inst, best_binding.arg_types, class_ctx, po,
+                &pwv, &best_binding.supplied, deferred_rt ? &union_rt : nullptr)) {
             printd(5, "QoreFunction::parseFindVariantNamed() %s(): another variant could match at run time\n",
                 getName());
             if (allow_runtime_names) {
@@ -5360,6 +5541,10 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
     const AbstractQoreFunctionVariant* variant = nullptr;
     const AbstractQoreFunctionVariant* pvariant = nullptr;
     QoreTypeParamInstantiation best_type_param_inst;
+    // variants without type parameters are candidates of a call with explicit type arguments that a generic variant
+    // takes, as at run time (issue #6152)
+    const bool keep_plain = explicit_type_args && !explicit_type_args->empty()
+        && parseHasExplicitTypeArgsVariant(class_ctx, explicit_type_args, receiver_type_info);
     unsigned num_args = argTypeInfo.size();
 
     QoreFunction* aqf = nullptr;
@@ -5391,16 +5576,18 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
             bool uses_extra_args = (*i)->hasVarargs();
 
             QoreTypeParamInstantiation candidate_inst;
-            if (!qore_infer_signature_type_args(*i, argTypeInfo, nullptr, receiver_type_info, &candidate_inst,
-                    explicit_type_args)) {
+            // a bound that nothing binds at parse time is checked when the call runs, which selects the variant
+            // then (issue #6155)
+            bool bound_deferred = false;
+            if (!qore_parse_infer_candidate_type_args(*i, argTypeInfo, nullptr, receiver_type_info, &candidate_inst,
+                    explicit_type_args, keep_plain, bound_deferred)) {
                 continue;
             }
 
             if (!num_args && !sig->numParams()) {
                 variant = *i;
-                if (type_param_inst) {
-                    *type_param_inst = std::move(candidate_inst);
-                }
+                // the instantiation of the variant found is returned at the end of the search
+                best_type_param_inst = std::move(candidate_inst);
                 break;
             }
 
@@ -5409,16 +5596,21 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
                 int pscore = 0;
                 int max_pscore = 0;
                 int variant_nperfect = 0;
-                bool variant_runtime_match = false;
+                bool variant_runtime_match = bound_deferred;
                 bool variant_soft_match = false;
                 bool ok = true;
                 bool needs_type_param_substitution = sig->needsTypeParameterSubstitution();
+                // true if no parameter of the variant has a type (see qore_untyped_variant_cannot_win())
+                bool variant_untyped = true;
 
                 for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
                     const QoreTypeInfo* t = needs_type_param_substitution
                         ? qore_substitute_type_params_if_needed(sig->getParamTypeInfo(pi), receiver_type_info,
                             &candidate_inst)
                         : sig->getParamTypeInfo(pi);
+                    if (QoreTypeInfo::hasType(t)) {
+                        variant_untyped = false;
+                    }
                     bool pos_has_arg = num_args && num_args > pi;
                     const QoreTypeInfo* a = pos_has_arg ? argTypeInfo[pi] : nullptr;
                     if (pos_has_arg) {
@@ -5521,7 +5713,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
                             *type_param_inst = candidate_inst;
                         }
                     }
-                } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)) {
+                } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)
+                        && !qore_untyped_variant_cannot_win(variant, variant_untyped, variant_pmatch, pmatch,
+                            max_pscore, score)) {
                     if (variant_soft_match && variant) {
                         has_possible_match = true;
                     } else {
@@ -5554,7 +5748,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
         variant = pvariant;
     }
     // a variant is committed only when no other variant could be resolved at run time (see parseFindVariant())
-    if (variant && parseOtherVariantMayMatch(variant, argTypeInfo, class_ctx, parse_get_parse_options())) {
+    if (variant && parseOtherVariantMayMatch(variant, receiver_type_info, &best_type_param_inst, argTypeInfo,
+            class_ctx, parse_get_parse_options())) {
         variant = nullptr;
     }
 
@@ -5674,19 +5869,76 @@ static const QoreTypeInfo* qore_union_return_type(const QoreTypeInfo* a, const Q
     return nullptr;
 }
 
-bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen, const type_vec_t& argTypeInfo,
-        const qore_class_private* class_ctx, QoreParseOptions po, const arg_value_vec_t* args_with_value,
-        const std::vector<bool>* named_positions, const QoreTypeInfo** union_rt) const {
+bool QoreFunction::parseHasExplicitTypeArgsVariant(const qore_class_private* class_ctx,
+        const type_vec_t* explicit_type_args, const QoreTypeInfo* receiver_type_info) const {
+    QoreParseOptions po = parse_get_parse_options();
+    const type_vec_t no_args;
+    const qore_class_private* last_class = nullptr;
+    bool internal_access = false;
+    for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
+        bool stop;
+        QoreFunction* aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        if (!aqf) {
+            break;
+        }
+        for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
+            const AbstractQoreFunctionVariant* v = *i;
+            if ((last_class && skip_method_variant(v, class_ctx, internal_access))
+                    || !qore_get_variant_generic_signature(v)) {
+                continue;
+            }
+            bool strict_args = static_cast<bool>(v->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
+            if (strict_args && (v->getFlags() & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
+                continue;
+            }
+            // the explicit type arguments only: their number, types and bounds
+            // a bound that nothing binds at parse time is checked when the call runs (issue #6155)
+            if (!qore_parse_resolve_generic_signature(v)) {
+                continue;
+            }
+            bool bound_deferred = false;
+            QoreParseBoundDeferredHelper bound_deferred_helper(bound_deferred);
+            if (qore_infer_signature_type_args(v, no_args, nullptr, receiver_type_info, nullptr,
+                    explicit_type_args)) {
+                return true;
+            }
+        }
+        if (stop) {
+            break;
+        }
+    }
+    return false;
+}
+
+//! Returns the type of a parameter of a variant chosen at parse time, with its type parameters substituted with the
+//! receiver type and the variant's type arguments (issue #6152)
+/** Parse-time only: out of line, so that the inlining of the run-time code of this unit does not change. */
+static __attribute__((noinline, cold)) const QoreTypeInfo* qore_parse_substitute_chosen_param_type(
+        const AbstractFunctionSignature* sig, unsigned pi, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* type_param_inst) {
+    const QoreTypeInfo* t = sig->getParamTypeInfo(pi);
+    return sig->needsTypeParameterSubstitution()
+        ? qore_substitute_type_params_if_needed(t, receiver_type_info, type_param_inst)
+        : t;
+}
+
+bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen,
+        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* chosen_type_param_inst,
+        const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, QoreParseOptions po,
+        const arg_value_vec_t* args_with_value, const std::vector<bool>* named_positions,
+        const QoreTypeInfo** union_rt) const {
     // *union_rt starts as the return type of the chosen variant (qore_deferred_chosen_return_type())
     bool found = false;
     unsigned num_args = argTypeInfo.size();
     AbstractFunctionSignature* chosen_sig = chosen->getSignature();
-    // true if the chosen variant accepts no value for the given parameter
-    auto chosen_sig_accepts_nothing = [chosen_sig] (unsigned pi) -> bool {
+    // true if the chosen variant accepts no value for the given parameter; the parameter of a type parameter takes
+    // the type of its type argument, as the value of the argument is checked against it at run time (issue #6152)
+    auto chosen_sig_accepts_nothing = [chosen_sig, receiver_type_info, chosen_type_param_inst] (unsigned pi) -> bool {
         if (pi >= chosen_sig->numParams()) {
             return true;
         }
-        const QoreTypeInfo* t = chosen_sig->getParamTypeInfo(pi);
+        const QoreTypeInfo* t = qore_parse_substitute_chosen_param_type(chosen_sig, pi, receiver_type_info,
+            chosen_type_param_inst);
         return !QoreTypeInfo::hasType(t) || chosen_sig->hasDefaultArg(pi)
             || QoreTypeInfo::parseAcceptsReturns(t, NT_NOTHING);
     };
@@ -5846,11 +6098,14 @@ static bool qore_type_accepts_values_as_returned(const QoreTypeInfo* ti) {
     returns int)
 */
 static bool qore_runtime_call_type_args(const AbstractQoreFunctionVariant* variant,
-        const type_vec_t* explicit_type_args, QoreTypeParamInstantiation& type_param_inst) {
+        const type_vec_t* explicit_type_args, QoreTypeParamInstantiation& type_param_inst, bool keep_plain,
+        const QoreTypeInfo* receiver_type_info) {
     type_param_inst.clear();
     const UserSignature* sig = qore_get_variant_generic_signature(variant);
     if (!sig) {
-        return !explicit_type_args || explicit_type_args->empty();
+        // a variant without type parameters is a candidate of a call with explicit type arguments that a generic
+        // variant takes, as at run time (issue #6152; see qore_parse_infer_candidate_type_args())
+        return keep_plain || !explicit_type_args || explicit_type_args->empty();
     }
     if (const_cast<UserSignature*>(sig)->resolve()) {
         return false;
@@ -5862,7 +6117,12 @@ static bool qore_runtime_call_type_args(const AbstractQoreFunctionVariant* varia
     type_param_inst.owner = sig;
     type_param_inst.type_args.reserve(count);
     for (size_t i = 0; i < count; ++i) {
+        // a bound that nothing binds at parse time is checked when the call runs (issue #6155)
+        bool bound_deferred = false;
         const QoreTypeInfo* bound = sig->getTypeParameterBoundTypeInfo(i);
+        if (bound && qore_type_contains_type_parameter(bound)) {
+            bound = qore_signature_type_param_type(bound, receiver_type_info, &bound_deferred);
+        }
         if (explicit_type_args && i < explicit_type_args->size()) {
             const QoreTypeInfo* explicit_type = (*explicit_type_args)[i];
             if (!explicit_type || !QoreTypeInfo::hasType(explicit_type)) {
@@ -5871,6 +6131,7 @@ static bool qore_runtime_call_type_args(const AbstractQoreFunctionVariant* varia
             // an explicit type argument that names a type parameter of the code that makes the call is bound at run
             // time, when it may satisfy the bound: the variant is kept
             if (!qore_type_contains_type_parameter(explicit_type)
+                    && !qore_type_contains_type_parameter(bound)
                     && !qore_signature_type_arg_satisfies_bound(bound, explicit_type)) {
                 return false;
             }
@@ -5889,6 +6150,10 @@ const QoreTypeInfo* QoreFunction::parseRuntimeCallReturnType(const qore_class_pr
         return rt;
     }
     QoreParseOptions po = parse_get_parse_options();
+    // variants without type parameters can be selected by a call with explicit type arguments that a generic variant
+    // takes (issue #6152)
+    const bool keep_plain = explicit_type_args && !explicit_type_args->empty()
+        && parseHasExplicitTypeArgsVariant(class_ctx, explicit_type_args, receiver_type_info);
     const QoreTypeInfo* rv = nullptr;
     bool found = false;
     const qore_class_private* last_class = nullptr;
@@ -5911,7 +6176,7 @@ const QoreTypeInfo* QoreFunction::parseRuntimeCallReturnType(const qore_class_pr
                 continue;
             }
             QoreTypeParamInstantiation inst;
-            if (!qore_runtime_call_type_args(v, explicit_type_args, inst)) {
+            if (!qore_runtime_call_type_args(v, explicit_type_args, inst, keep_plain, receiver_type_info)) {
                 continue;
             }
             const QoreTypeInfo* vrt = qore_substitute_type_params_if_needed(v->parseGetReturnTypeInfo(),
@@ -5954,8 +6219,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
         return !QoreTypeInfo::hasType(t) || sig->hasDefaultArg(p) || QoreTypeInfo::parseAcceptsReturns(t, NT_NOTHING);
     };
     // for a committed variant, the positions where an argument can make it resolved again: an argument without a
-    // value that it does not accept, or a deleted object for a typed parameter; another variant is selected then
-    // only if it accepts that argument there
+    // value that it does not accept; another variant is selected then only if it accepts that argument there.  An
+    // object for a typed parameter is counted as well, though a deleted object keeps its class for the selection of
+    // a variant (issue #6159): it can only keep a named call from being bound at parse time
     std::vector<bool> nothing_trigger(supplied.size(), false), object_trigger(supplied.size(), false);
     if (committed) {
         bool may_reresolve = false;
@@ -6073,8 +6339,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
 // args_with_value tells which arguments always have a value (parse_arg_always_has_value()), so that a literal, a
 // call or a definitely assigned local variable does not keep the call from being committed.  The arguments can then
 // not match the committed variant only because of the state of a value (no value in an unassigned member or
-// variable, a deleted object), which CodeEvaluationHelper::init() handles by resolving the variant again (issue
-// #5686).
+// variable), which CodeEvaluationHelper::init() handles by resolving the variant again (issue #5686); a deleted object
+// keeps its class for the selection of a variant, at parse time and at run time (issue #6159).
 const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProgramLocation* loc,
         const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
         const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst,
@@ -6101,6 +6367,10 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     // pointer to the last possible variant matched
     const AbstractQoreFunctionVariant* pvariant = nullptr;
     QoreTypeParamInstantiation best_type_param_inst;
+    // variants without type parameters are candidates of a call with explicit type arguments that a generic variant
+    // takes, as at run time (issue #6152)
+    const bool keep_plain = explicit_type_args && !explicit_type_args->empty()
+        && parseHasExplicitTypeArgsVariant(class_ctx, explicit_type_args, receiver_type_info);
     // every argument counts, also one whose type is nothing, as at run time (issue #1897; see runtimeFindVariant())
     unsigned num_args = argTypeInfo.size();
 
@@ -6158,8 +6428,11 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
             ++cnt;
 
             QoreTypeParamInstantiation candidate_inst;
-            if (!qore_infer_signature_type_args(*i, argTypeInfo, nullptr, receiver_type_info, &candidate_inst,
-                    explicit_type_args)) {
+            // a bound that nothing binds at parse time is checked when the call runs, which selects the variant
+            // then (issue #6155)
+            bool bound_deferred = false;
+            if (!qore_parse_infer_candidate_type_args(*i, argTypeInfo, nullptr, receiver_type_info, &candidate_inst,
+                    explicit_type_args, keep_plain, bound_deferred)) {
                 continue;
             }
 
@@ -6182,16 +6455,21 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                 int pscore = 0;
                 int max_pscore = 0;
                 int variant_nperfect = 0;
-                bool variant_runtime_match = false;
+                bool variant_runtime_match = bound_deferred;
                 bool variant_soft_match = false;  // true if union type partial match (may do runtime dispatch)
                 bool ok = true;
                 bool needs_type_param_substitution = sig->needsTypeParameterSubstitution();
+                // true if no parameter of the variant has a type (see qore_untyped_variant_cannot_win())
+                bool variant_untyped = true;
 
                 for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
                     const QoreTypeInfo* t = needs_type_param_substitution
                         ? qore_substitute_type_params_if_needed(sig->getParamTypeInfo(pi), receiver_type_info,
                             &candidate_inst)
                         : sig->getParamTypeInfo(pi);
+                    if (QoreTypeInfo::hasType(t)) {
+                        variant_untyped = false;
+                    }
                     bool pos_has_arg = num_args && num_args > pi;
                     const QoreTypeInfo* a = pos_has_arg ? argTypeInfo[pi] : nullptr;
                     if (pos_has_arg) {
@@ -6334,7 +6612,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                             *type_param_inst = candidate_inst;
                         }
                     }
-                } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)) {
+                } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)
+                        && !qore_untyped_variant_cannot_win(variant, variant_untyped, variant_pmatch, pmatch,
+                            max_pscore, score)) {
                     if (variant_soft_match && variant) {
                         // soft-match variant (union type partial match) cannot override a
                         // definitively-selected variant — the definitive variant handles ALL
@@ -6388,8 +6668,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     // value then whatever its type (issue #5686)
     const QoreTypeInfo* union_rt = deferred_rt && variant
         ? qore_deferred_chosen_return_type(variant, receiver_type_info, type_param_inst) : nullptr;
-    if (variant && npv + cnt > 1 && parseOtherVariantMayMatch(variant, argTypeInfo, class_ctx, po, args_with_value,
-            nullptr, deferred_rt ? &union_rt : nullptr)) {
+    if (variant && npv + cnt > 1 && parseOtherVariantMayMatch(variant, receiver_type_info, &best_type_param_inst,
+            argTypeInfo, class_ctx, po, args_with_value, nullptr, deferred_rt ? &union_rt : nullptr)) {
         printd(5, "QoreFunction::parseFindVariant() %s(): another variant could match at run time\n", getName());
         // the call has the type of a value of any of the variants that could be resolved (issue #5686)
         if (deferred_rt) {
@@ -6408,7 +6688,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
         if (!cnt) {
             desc->concat("no variants were accessible in this context");
         } else {
-            if (explicit_type_args && !explicit_type_args->empty()) {
+            if (explicit_type_args && !explicit_type_args->empty() && !keep_plain) {
                 desc->concat("the explicit type arguments did not match any accessible variant; ");
             }
             desc->concat("the following variants were tested:");
