@@ -24631,6 +24631,14 @@ static QoreValue f_dbg_hold_next_thread_finish(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Holds the next background thread that ends for up to the given milliseconds in a thread-local destructor, after its
+//! thread function has returned (issue #6412)
+static QoreValue f_dbg_hold_next_thread_tls_exit(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_hold_next_thread_tls_exit(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
+
 //! Waits until a finishing background thread is held by dbg_hold_next_thread_finish(); returns False on timeout
 static QoreValue f_dbg_wait_thread_finish_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_dbg_wait_thread_finish_held(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
@@ -24756,6 +24764,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_hold_next_thread_finish", f_dbg_hold_next_thread_finish, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
+    qns.addBuiltinVariant("dbg_hold_next_thread_tls_exit", f_dbg_hold_next_thread_tls_exit, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
     qns.addBuiltinVariant("dbg_wait_thread_finish_held", f_dbg_wait_thread_finish_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");

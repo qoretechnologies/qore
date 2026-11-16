@@ -23,14 +23,25 @@
 class ExitFinishingThreadTest inherits QUnit::Test {
     constructor() : QUnit::Test("ExitFinishingThreadTest", "1.0") {
         addTestCase("exit() waits for a finishing background thread", \exitTest());
+        addTestCase("exit() waits for the thread-local destructors of a finished background thread", \exitTlsTest());
         set_return_value(main());
     }
 
     exitTest() {
+        runChild("exit-child.q");
+    }
+
+    #! the thread-local destructors of a background thread run after it has left its thread function: exit() waits
+    #! for them too, as the reaper joins the thread before the thread leaves the background thread count (#6412)
+    exitTlsTest() {
+        runChild("exit-tls-child.q");
+    }
+
+    private runChild(string name) {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("needs a debug build (dbg_hold_next_thread_finish())");
         }
-        string script = get_script_dir() + DirSep + "exit-child.q";
+        string script = get_script_dir() + DirSep + name;
         for (int i = 0; i < 3; ++i) {
             int status;
             string out = backquote(sprintf("%s %s 2>&1", TestInterpreter::qore_interpreter(), script), \status);
