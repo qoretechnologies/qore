@@ -1354,17 +1354,27 @@ static bool qpp_line_has_qpp_only_syntax(const std::string& orig_line) {
     // are "name=value" or the flags "const" and "doconly" ("[flags=CONSTANT]", "[const;flags=RET_VALUE_ONLY]"); an
     // array bound after a declarator ("-> int(&)[N]", "int (*name(int))[N]", "f(x)[0]") or a C++ attribute ("[[")
     // has none
-    for (size_t close = line.find(')'); close != std::string::npos; close = line.find(')', close + 1)) {
-        size_t i = line.find_first_not_of(" \t", close + 1);
-        if (i == std::string::npos || line[i] != '[' || (i + 1 < line.size() && line[i + 1] == '[')) {
-            continue;
+    // only after the ')' that closes the first '(', where qpp attributes are: an inner cast or call followed by a
+    // lambda with an init-capture ("run((Fn)[self = i]() {") is C++
+    {
+        int depth = 0;
+        size_t close = std::string::npos;
+        for (size_t i = paren; i < line.size(); ++i) {
+            if (line[i] == '(') {
+                ++depth;
+            } else if (line[i] == ')' && !--depth) {
+                close = i;
+                break;
+            }
         }
-        size_t end = line.find(']', i + 1);
-        if (end == std::string::npos) {
-            continue;
-        }
-        if (qpp_is_attribute_list(std::string(line, i + 1, end - i - 1))) {
-            return true;
+        if (close != std::string::npos) {
+            size_t i = line.find_first_not_of(" \t", close + 1);
+            if (i != std::string::npos && line[i] == '[' && (i + 1 >= line.size() || line[i + 1] != '[')) {
+                size_t end = line.find(']', i + 1);
+                if (end != std::string::npos && qpp_is_attribute_list(std::string(line, i + 1, end - i - 1))) {
+                    return true;
+                }
+            }
         }
     }
     // a type that only Qore has, in a type position: the word followed by a name

@@ -547,6 +547,12 @@ int TestCls::f(int a) // (a) [see note]
 }
 int TestCls::g(const char* s = \"*string x(\") {
 }
+int (*TestCls::rows(int))[N] {
+}
+static void TestCls_helper(int i) {
+TestCls::run((Fn)[self = i]() {
+    });
+}
 auto TestCls::table() -> int(&)[3] {
 }
 int TestCls::sub(int a)[[deprecated]] {
@@ -592,6 +598,11 @@ int (*Tpl<T>::name2(int))[N] {
 int (*Cls::operator[](size_t i))[N] {
 }
 int (*(name3)(int))[N] {
+}
+static void helper2(int i) {
+run((Fn)[self = i]() {
+    });
+g()[a==b] = 1;
 }
 static int hex = 0x1F'FF; static double f = 1'000.5; /*
 int t_hidden(softint a) {
