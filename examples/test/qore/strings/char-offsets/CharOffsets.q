@@ -59,6 +59,14 @@ bool sub fits(string enc, list<int> cps) {
     }
 }
 
+# true if every platform's iconv can hold the code points in the encoding: UCS-2 has no characters outside the BMP,
+# but some iconv implementations (ex: macOS libiconv) convert them to surrogate pairs; the text is checked wherever
+# it converts, but its summary line is printed only where every platform converts it, so that the output is the same
+# on every platform (a mismatch is printed everywhere)
+bool sub portable(string enc, list<int> cps) {
+    return !enc.equalPartial("UCS-2") || !(select cps, $1 > 0xffff);
+}
+
 int sub ref_get_unicode(list<int> cps, int offset) {
     int n = cps.size();
     if (offset < 0) {
@@ -177,7 +185,12 @@ foreach hash<auto> t in (Texts.pairIterator()) {
                 }
             }
         }
-        printf("%s %s: %d checks, %d mismatches\n", t.key, enc, checks, mismatches.size());
+        if (portable(enc, cps)) {
+            printf("%s %s: %d checks, %d mismatches\n", t.key, enc, checks, mismatches.size());
+        } else if (mismatches) {
+            printf("%s %s (converted on this platform): %d checks, %d mismatches\n", t.key, enc, checks,
+                mismatches.size());
+        }
         map printf("  %s\n", $1), mismatches;
         errors += mismatches.size();
     }
