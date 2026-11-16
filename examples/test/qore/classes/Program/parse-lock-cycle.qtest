@@ -12,6 +12,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
 
 %exec-class ParseLockCycleTest
 
@@ -47,7 +48,7 @@ cycle3: PROGRAM-ERROR; parsed; parsed
     }
 
     constructor() : QUnit::Test("ParseLockCycle", "1.0") {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         script = get_script_dir() + "/parse-lock-cycle/parse-lock-cycle.q";
 
