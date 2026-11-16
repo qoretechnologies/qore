@@ -3025,6 +3025,9 @@
       @ref <number>::format() "<number>::format(string)" and @ref <float>::format() "<float>::format(string)" used
       the rest of the format string as each separator: <tt>format_number(".,2", 1234567.891)</tt> gave
       <tt>1.,2234.,2567,289</tt> instead of <tt>1.234.567,89</tt> (issue #6238)
+    - a @ref number_type "number" divisor that is not zero but converts to the float \c 0.0 (ex: \c 1e-400n) raised
+      \c DIVISION-BY-ZERO with @ref divide_equals_operator "/=" and was a parse error as a constant divisor of
+      @ref division_operator "/", while \c / with the divisor in a variable divided (issue #6387)
     - a class or hashdecl member or static class variable initialization expression that uses a top-level local
       variable no longer crashes the process when the class or hashdecl is first used in a closure and then used
       elsewhere (see @ref member_initialization and @ref hashdecl_initializer_scope; issue #6268)
