@@ -43,6 +43,7 @@
 #include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/BreakStatement.h"
 #include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/ql_type.h"
@@ -10874,8 +10875,9 @@ private:
 };
 
 //! Returns the number of step events that the operations of the IR of function \a name of \a pgm keep
-//! (qore_ir_folded_debug_step()), or -1 if the function has no IR
-static int ut_folded_debug_steps(QoreProgram* pgm, const char* name) {
+//! (qore_ir_folded_debug_step()) for the statements that start on lines \a first_line to \a last_line, or -1 if the
+//! function has no IR
+static int ut_folded_debug_steps(QoreProgram* pgm, const char* name, int first_line, int last_line) {
     const QoreFunction* qf = reinterpret_cast<const QoreFunction*>(pgm->findFunction(name));
     const AbstractQoreFunctionVariant* variant = qf && qf->numVariants() == 1 ? qf->first() : nullptr;
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
@@ -10886,7 +10888,9 @@ static int ut_folded_debug_steps(QoreProgram* pgm, const char* name) {
     int count = 0;
     for (const auto& block : ir->blocks) {
         for (const auto& inst : block->instructions) {
-            if (qore_ir_folded_debug_step(inst.get())) {
+            const QoreIRDebugStatementInstruction* step = qore_ir_folded_debug_step(inst.get());
+            const QoreProgramLocation* loc = step && step->statement ? step->statement->loc : nullptr;
+            if (loc && loc->start_line >= first_line && loc->start_line <= last_line) {
                 ++count;
             }
         }
@@ -11041,8 +11045,11 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
     // statement of a folded statement, with its column (8); the AST interpreter does not set the runtime location of
     // a statement before its event.  With PO_ALLOW_DEBUGGER, the event keeps the location that an instruction before
     // the statement's DebugStatement instruction on the same line set (lines 13-15, without columns), as the runtime
-    // location is set only when the line changes: only its line is checked
+    // location is set only when the line changes: only its line is checked.  The same holds for the statement in the
+    // Program without PO_ALLOW_DEBUGGER when it is not folded, as when its operation has an exception target of its
+    // own in the try block (qore#6197; see qore_ir_fold_debug_statements())
     {
+        bool raise_folded = mode != QEM_AST && !allow_debugger && ut_folded_debug_steps(pgm, "work", 13, 13) == 1;
         FoldedStepDebugProgram::LineColumn statement, runtime, ex;
         dbg.getRaiseLocations(statement, runtime, ex);
         FoldedStepDebugProgram::LineColumn expected_loc = {13, 8};
@@ -11058,7 +11065,7 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
                 "statement's line").c_str());
             UT_ASSERT(c, ex == runtime, (what + "the exception raised by the debugger at the step event is in the "
                 "runtime location of the event").c_str());
-            if (!allow_debugger) {
+            if (raise_folded) {
                 UT_ASSERT_EQ(c, 8, runtime.column, (what + "the runtime location of the step event of the folded "
                     "statement is at the statement's column").c_str());
                 UT_ASSERT_EQ(c, 8, ex.column, (what + "the exception raised by the debugger at the step event of "
@@ -11070,11 +11077,17 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
         xsink.handleExceptions();
         xsink.clear();
     }
-    // the four statements of fused local int operations (a += 2, ++a, a += b, b = ++a) keep their step events in the
-    // IR of the IR and JIT tiers of the Program without PO_ALLOW_DEBUGGER, and none in the other one
+    // the three statements of fused local int operations before the try block (a += 2, ++a, a += b) keep their step
+    // events in the IR of the IR and JIT tiers of the Program without PO_ALLOW_DEBUGGER, and none in the other one.
+    // The statement in the try block, b = ++a, is folded only if its operation has no exception target of its own
+    // (qore_ir_fold_debug_statements()): the checks of its events and of the debugger's exception above hold either
+    // way (ut_ir_fold_debug_statements_exception_target() checks that an operation with an exception target is not
+    // folded)
     if (mode != QEM_AST) {
-        UT_ASSERT_EQ(c, allow_debugger ? 0 : 4, ut_folded_debug_steps(pgm, "work"),
+        UT_ASSERT_EQ(c, allow_debugger ? 0 : 3, ut_folded_debug_steps(pgm, "work", 9, 11),
             "the statements of the target function are folded only without PO_ALLOW_DEBUGGER");
+        UT_ASSERT_EQ(c, 0, allow_debugger ? ut_folded_debug_steps(pgm, "work", 1, 30) : 0,
+            "no statement of the reference function is folded");
     }
 
     dbg.removeProgram(pgm);
@@ -11082,6 +11095,81 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
     UT_ASSERT(c, !xsink, "debugger cleanup succeeds");
     pgm->waitForTerminationAndDeref(&xsink);
     UT_ASSERT(c, !xsink, "folded debug step target program cleanup succeeds");
+}
+
+//! qore_ir_fold_debug_statements() moves the step event of a statement into a fused local int operation that follows
+//! it only if the operation has no exception target of its own
+/** An operation in a try block can have the handler of the try block as its exception target, for the exceptions
+    that it raises itself (qore#6197).  The operation cannot take the exception path of the step event as its own
+    then: it is not folded, and the step event stays an instruction of its own, with its own exception path.  An
+    operation without an exception target takes the event, and the event's exception path becomes the operation's, so
+    that the edges of the block are unchanged.
+*/
+static void ut_ir_fold_debug_statements_exception_target(UnitTestCounters& c) {
+    // the statement of the step events; its location is one of the Program of the running code
+    BreakStatement statement(1, 1);
+    LocalVar target("a", bigIntTypeInfo);
+    LocalVar source("b", bigIntTypeInfo);
+    int dpgm = 0;
+    for (QoreIROpcode op : {QoreIROpcode::IncrementLocalInt, QoreIROpcode::AddAssignLocalInt}) {
+        for (bool op_target : {false, true}) {
+            std::string what = std::string(op == QoreIROpcode::IncrementLocalInt ? "IncrementLocalInt" :
+                "AddAssignLocalInt") + (op_target ? " with an exception target: " : " without an exception target: ");
+            QoreIRFunction func("fold_debug_statements_exception_target");
+            // a function lowered for a debugger's step events (the IR interpreter and the JIT)
+            func.source_dpgm_addr = &dpgm;
+            func.blocks.push_back(std::make_unique<QoreIRBasicBlock>("entry"));
+            func.blocks.push_back(std::make_unique<QoreIRBasicBlock>("handler"));
+            QoreIRBasicBlock* entry = func.blocks[0].get();
+            QoreIRBasicBlock* handler = func.blocks[1].get();
+            // the step event, whose exception path (an exception that the debugger raises) is the try block's handler
+            auto step = std::make_unique<QoreIRDebugStatementInstruction>(&statement);
+            step->exception_target = handler;
+            QoreIRDebugStatementInstruction* step_ptr = step.get();
+            std::unique_ptr<QoreIRInstruction> host;
+            if (op == QoreIROpcode::IncrementLocalInt) {
+                auto inc = std::make_unique<QoreIRIncrementLocalIntInstruction>(&target, 1);
+                inc->ir_only = true;
+                host = std::move(inc);
+            } else {
+                auto add = std::make_unique<QoreIRAddAssignLocalIntInstruction>(&target, &source);
+                add->target_ir_only = true;
+                host = std::move(add);
+            }
+            // the operation's own exception path: the handler of the try block that contains it
+            host->exception_target = op_target ? handler : nullptr;
+            QoreIRInstruction* host_ptr = host.get();
+            entry->instructions.push_back(std::move(step));
+            entry->instructions.push_back(std::move(host));
+            entry->instructions.push_back(std::make_unique<QoreIRInstruction>(QoreIROpcode::Return));
+
+            size_t folded = qore_ir_fold_debug_statements(func);
+            if (op_target) {
+                UT_ASSERT_EQ(c, (size_t)0, folded, (what + "no step event is moved").c_str());
+                UT_ASSERT_EQ(c, (size_t)3, entry->instructions.size(), (what + "the block keeps the step event's "
+                    "instruction").c_str());
+                UT_ASSERT(c, entry->instructions.size() == 3 && entry->instructions[0].get() == step_ptr
+                    && entry->instructions[1].get() == host_ptr, (what + "the step event stays before the "
+                    "operation").c_str());
+                UT_ASSERT(c, !qore_ir_folded_debug_step(host_ptr), (what + "the operation keeps no step "
+                    "event").c_str());
+                UT_ASSERT(c, !step_ptr->folded_host, (what + "the step event is an instruction of its own").c_str());
+            } else {
+                UT_ASSERT_EQ(c, (size_t)1, folded, (what + "the step event is moved").c_str());
+                UT_ASSERT(c, entry->instructions.size() == 2 && entry->instructions[0].get() == host_ptr,
+                    (what + "the operation is the first instruction of the block").c_str());
+                UT_ASSERT(c, qore_ir_folded_debug_step(host_ptr) == step_ptr, (what + "the operation keeps the step "
+                    "event").c_str());
+                UT_ASSERT(c, step_ptr->folded_host == host_ptr, (what + "the step event runs before the "
+                    "operation").c_str());
+            }
+            // the exception path of the block is the same either way
+            UT_ASSERT(c, host_ptr->exception_target == handler, (what + "the operation has the exception path of the "
+                "step event").c_str());
+            UT_ASSERT(c, step_ptr->exception_target == handler, (what + "the step event keeps its exception "
+                "path").c_str());
+        }
+    }
 }
 
 static void ut_debug_step_folded_statements(UnitTestCounters& c, QoreProgram* /* parent */) {
@@ -19552,6 +19640,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_debug_step_every_statement(c, rc.getProgram());
     ut_debug_step_folded_statements(c, rc.getProgram());
+    ut_ir_fold_debug_statements_exception_target(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
@@ -19953,6 +20042,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_debug_step_every_statement(c, rc.getProgram());
     ut_debug_step_folded_statements(c, rc.getProgram());
+    ut_ir_fold_debug_statements_exception_target(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
