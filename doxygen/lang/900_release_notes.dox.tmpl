@@ -844,6 +844,20 @@
     function, method or closure that first uses the type-safe hash is a parse error, as it already was for class
     members; 2.2.1 evaluated it with that code's variable (issue #6268).
 
+    @par Modulo-Equals by Zero Raises DIVISION-BY-ZERO
+    @ref modulo_equals_operator "%=" with a divisor of zero raises \c DIVISION-BY-ZERO as the other division operators
+    do, following the rule for @ref undefined_arithmetic "undefined arithmetic"; 2.2.1 assigned \c 0 (issue #1034).
+
+    @par Every Number Division by Zero Raises DIVISION-BY-ZERO
+    A @ref number_type "number" dividend of \c 0, infinity or NaN divided by zero raises \c DIVISION-BY-ZERO, as any
+    other dividend does (see @ref undefined_arithmetic); 2.2.1 gave NaN or infinity (ex: <tt>0n / 0n</tt>), also for
+    constant operands, which now raise the exception when they are parsed (issue #1034).
+
+    @par pow() of a Negative Float and a Fractional Exponent Returns NaN
+    @ref Qore::pow() "pow()" of a negative float and an exponent that is not an integer returns NaN, as the other math
+    functions do for an argument outside their domain (see @ref undefined_arithmetic); 2.2.1 raised
+    \c INVALID-POW-ARGUMENTS (issue #1034).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Strict Number Parsing
     @ref parse_int(string, string, bool) "parse_int()", @ref parse_float(string, string, bool) "parse_float()" and
@@ -3004,6 +3018,10 @@
       where clause or the \c "groupby" option, which gave invalid SQL such as <tt>order by distinct ddt_number</tt>
       (<a href="https://github.com/qoretechnologies/qore/issues/6331">issue 6331</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/6332">issue 6332</a>)
+    - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
+      between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
+    - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
+      raised \c DIVISION-BY-ZERO for a divisor that is not zero (issue #1034)
 
     @section qore_2_2_1 Qore 2.2.1
 

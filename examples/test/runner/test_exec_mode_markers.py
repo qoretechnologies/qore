@@ -264,6 +264,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   and arm a debug hook in them
         # - generic-static-call-type-params (#6186, #6285, #6308, #6256): its probes run in child processes that set
         #   their own --exec-mode, in qcc executables and in a qcc-compiled module
+        # - UndefinedArithmetic-<n> (#1034): their probes run in child processes that set their own --exec-mode, in qcc
+        #   executables and in a qcc-compiled module
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
@@ -280,6 +282,9 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/deleted-object-overload.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",
                                  "examples/test/qore/operators/float-int-conversion.qtest",
+                                 "examples/test/qore/operators/UndefinedArithmetic-1.qtest",
+                                 "examples/test/qore/operators/UndefinedArithmetic-2.qtest",
+                                 "examples/test/qore/operators/UndefinedArithmetic-3.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",

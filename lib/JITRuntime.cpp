@@ -16983,9 +16983,9 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                         }
                         break;
                     case LVCompoundOp::ModAssign:
+                        // a divisor of zero raises DIVISION-BY-ZERO, as for % (qore#1034)
                         if (!rv) {
-                            lvh.assign(0ll, "<%= operator>");
-                            res = 0ll;
+                            qore_raise_modulo_by_zero(xsink);
                         } else {
                             res = lvh.modulaEqualsBigInt(rv, "<%= operator>");
                         }
