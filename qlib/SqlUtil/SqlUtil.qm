@@ -191,6 +191,9 @@ module SqlUtil {
       SQL for an object that exists
     - added @ref SqlUtil::AbstractTable::getInsertArgs() "AbstractTable::getInsertArgs()", which gives the values that
       an insert of a row binds, so a statement prepared with the insert's SQL can insert more rows
+    - added the \c "union", \c "union_all", \c "intersect" and \c "except" select options, which combine a select with
+      other selects, and @ref SqlUtil::AbstractTable::SetOperatorSql "AbstractTable::SetOperatorSql" (see
+      @ref select_option_set_operators) (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>)
     - a template table built from a description (the @ref SqlUtil::Table "Table" constructor with a description,
       @ref SqlUtil::AbstractDatabase::makeTable() "AbstractDatabase::makeTable()" and
       @ref SqlUtil::Tables::populate() "Tables::populate()") is created by the driver as a template, which reads
@@ -859,6 +862,8 @@ hash soh = (
     - @ref select_option_partition "partition": a canonical physical-partition name restricting the primary table
       reference on drivers advertising @ref SqlUtil::AbstractTable::supportsPartitionRead() "supportsPartitionRead()"
     - @ref select_option_superquery "superquery": (@ref hash_type "hash") specifies that the rest of the argument belong to a subquery and the hash arguments under this key will select from the subquery
+    - @ref select_option_set_operators "union", "union_all", "intersect", "except": (@ref hash_type "hash" or
+      @ref list_type "list") combine the results with those of other selects
     - @ref select_option_forupdate_no_key "forupdate_no_key": (@c bool) explicitly permits concurrent key-share locks
     - @ref select_option_forupdate "forupdate": (\c bool_type "bool") adds a \c "for update" clause to a select query
 
@@ -1161,6 +1166,55 @@ hash<auto> sh = {
 *list<auto> rows = table.vselectRows("select serviceid,service_methodid from (select serviceid,service_methodid,max(service_methodid) over (partition by serviceid) as max_methodid from schema.service_methods) subquery where max_methodid = service_methodid");
     @endcode
     @note that MySQL does not support SQL windowing functions so the above example would fail on MySQL.
+
+    @subsubsection select_option_set_operators Select Options "union", "union_all", "intersect" and "except"
+    <b>Set Operator Example:</b>
+    @code{.py}
+hash<auto> sh = {
+    "columns": ("id", "name"),
+    "where": {"type": "user"},
+    # the rows of another table with a select of their own
+    "union": {"table": archive_table, "select": {"columns": ("id", "name"), "where": {"type": "user"}}},
+    # the ordering and paging options apply to the combined result
+    "orderby": "name",
+    "limit": 100,
+};
+*list<auto> rows = table.selectRows(sh);
+    @endcode
+    The set operators combine the rows of the select with those of other selects, which must select as many columns
+    of compatible types:
+    |!Option|!SQL|!Result
+    |\c union|\c UNION|the rows of either select, without duplicates
+    |\c union_all|<tt>UNION ALL</tt>|the rows of both selects, with duplicates
+    |\c intersect|\c INTERSECT|the rows of both selects, without duplicates
+    |\c except|\c EXCEPT (\c MINUS on Oracle)|the rows of the first select that the other does not have, without duplicates
+
+    The value of an option is a select or a list of selects; each select is:
+    - a @ref select_option_hash "select option hash", which selects from the same table, or
+    - a hash with a \c "table" key, giving the other table as an @ref SqlUtil::AbstractTable "AbstractTable" or
+      @ref SqlUtil::Table "Table" object or a table name, and a \c "select" key with the select option hash; the
+      other table must use the same datasource
+
+    The operators are applied from left to right, in the order of the keys of the select option hash and of the
+    selects in a list, each to the result of the operators before it, which is selected from as a derived table; so
+    the result is the same on every database, whatever the precedence of the operators in its SQL.  The ordering and
+    paging options (@ref select_option_orderby "orderby", @ref select_option_desc "desc",
+    @ref select_option_limit "limit" and @ref select_option_offset "offset") of the select option hash apply to the
+    combined result, which is selected from as a @ref select_option_superquery "superquery"; they name the columns of
+    the result.  A select of a set operator can have ordering and paging options of its own, which apply to its own
+    rows.  The values of the selects are bound in the order of the SQL.
+
+    The above example results in SQL like the following:
+    @code{.py}
+*list<auto> rows = table.vselectRows("select * from (select id, name from users where type = %v union select id, name from archive_users where type = %v) subquery order by name limit %v", ("user", "user", 100));
+    @endcode
+
+    @note
+    - the \c "superquery", \c "forupdate" and \c "forupdate_no_key" options cannot be combined with set operators
+    - \c INTERSECT and \c EXCEPT need MySQL 8.0.31 or MariaDB 10.3 or later; Firebird has only \c UNION; a set
+      operator that the database does not support raises \c SET-OPERATOR-ERROR
+
+    @since %SqlUtil 3.11.0
 
     @subsubsection select_option_forupdate Select Option "forupdate"
     <b>For Update Example:</b>

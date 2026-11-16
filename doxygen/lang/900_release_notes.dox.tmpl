@@ -1000,6 +1000,12 @@
     declared by the caller with @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration"; see
     @ref sql_mutation_admission "Observer Semantics".
 
+    @par Set Operators in SqlUtil Selects
+    The \c "union", \c "union_all", \c "intersect" and \c "except" select options of @ref sqlutilintro "SqlUtil"
+    combine a select with selects of the same or other tables, with each database's SQL (ex: \c MINUS on Oracle),
+    and order and page the combined result; see @ref select_option_set_operators
+    (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>).
+
     @par Language and Runtime
     @parblock
     - @ref modern "%modern" bundles new-style syntax, required types, strict arguments, strong encapsulation and all
