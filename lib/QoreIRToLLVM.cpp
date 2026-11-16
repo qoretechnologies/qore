@@ -29971,8 +29971,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             capture_cleanups.push_back(capture_cleanup);
                         }
                         call_args.push_back(xsink_arg);
+                        // the temporary arguments that the call consumes are released in the closure's frame, as
+                        // the AST interpreter's call releases them (issue #6063)
+                        bool has_arg_cleanups = false;
+                        llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, native_nargs,
+                            has_arg_cleanups);
                         llvm::Value* result = emitNativeCall(fast_fn, call_args, immediate_variant, module,
-                            llvm_func, "jit_native_closure_result");
+                            llvm_func, "jit_native_closure_result", has_arg_cleanups ? arg_cleanups : nullptr,
+                            native_nargs);
                         auto decref = module.getOrInsertFunction("qore_rt_decref",
                             llvm::FunctionType::get(void_type,
                                 {i64_type, ptr_type}, false));
@@ -30123,6 +30129,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                         ? i1_type : i64_type);
                         }
                     }
+                    // the cleanup slots of the arguments given to the call, which the dispatch releases in the
+                    // closure's frame (issue #6063), or null; the AOT context; the exception sink
+                    param_types.push_back(ptr_type);
                     param_types.push_back(ptr_type);
                     param_types.push_back(ptr_type);
                     llvm::Type* dispatch_return_type = closure_return_kind
@@ -30277,6 +30286,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 return false;
                             }
                         }
+                    }
+                    {
+                        bool has_arg_cleanups = false;
+                        llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, native_nargs,
+                            has_arg_cleanups);
+                        call_args.push_back(has_arg_cleanups ? arg_cleanups
+                            : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)));
                     }
                     call_args.push_back(aot_ctx_arg);
                     call_args.push_back(xsink_arg);

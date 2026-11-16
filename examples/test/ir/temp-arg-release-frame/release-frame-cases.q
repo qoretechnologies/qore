@@ -195,6 +195,8 @@ sub case_abstract() { AbsB a = new AbsD(); a.am(new Rec("a")); }
 sub case_auto_receiver() { auto o = new C(); o.m(new Rec("a")); }
 sub case_object_receiver() { object o = new C(); o.m(new Rec("a")); }
 sub case_polymorphic_loop() { foreach B o in ((new B(), new D(), new B(), new D())) { o.v(new Rec("a" + $#)); } }
+sub case_local_closure() { code f = sub (auto a) {}; f(new Rec("a")); f(new Rec("b")); }
+sub case_immediate_closure() { (sub (auto a) {})(new Rec("a")); }
 sub case_member_closure() { M mm(); mm.f(new Rec("a")); }
 
 sub case_try_function() { try { nocall(new Dtor()); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } }
@@ -218,6 +220,7 @@ sub case_throw_static_call_reference() { smr(new Dtor()); }
 sub case_throw_constructor() { new K(new Dtor()); }
 sub case_throw_self_call() { S s(); s.throwSelf(); }
 sub case_throw_virtual() { B b = new D(); b.v(new Dtor()); }
+sub case_throw_local_closure() { code f = sub (auto a) {}; f(new Dtor()); }
 sub case_throw_member_closure() { M mm(); mm.f(new Dtor()); }
 
 sub begin() {
@@ -266,6 +269,9 @@ sub main() {
     end("object receiver");
     begin(); try { case_polymorphic_loop(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
     end("polymorphic loop");
+    begin(); try { case_local_closure(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("local closure");
+    begin(); try { case_immediate_closure(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
+    end("immediate closure");
     begin(); try { case_member_closure(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("member closure");
     begin(); case_try_function(); end("try function");
     begin(); case_try_method(); end("try method");
@@ -293,6 +299,8 @@ sub main() {
     begin(); try { case_throw_self_call(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
     end("throw self call");
     begin(); try { case_throw_virtual(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("throw virtual");
+    begin(); try { case_throw_local_closure(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
+    end("throw local closure");
     begin(); try { case_throw_member_closure(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
     end("throw member closure");
 }
