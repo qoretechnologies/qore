@@ -4417,6 +4417,11 @@ public:
                     && func->blocks.size() < tun.min_fn_blocks) {
                 return false;
             }
+            if (dbg) {
+                // the size that the thresholds are compared with, before the splits below
+                fprintf(stderr, "AOT-OUTLINE-FN: '%s' over the thresholds (blocks=%zu insts=%zu)\n",
+                    func->getDisplayName().c_str(), func->blocks.size(), total_insts);
+            }
         }
         fn = func;
 
@@ -4814,6 +4819,9 @@ private:
         std::unique_ptr<QoreIRBasicBlock> return_block_owned;
         {
             auto call = std::make_unique<QoreIRCallAOTHelperInstruction>(helper_name);
+            // the coordinator releases its references to the values of the locals that the helper can assign
+            // before the call (qore#6300)
+            call->shared_locals = region.shared_locals;
             call->result = fn->createValue();
             if (call->result.id > fn->max_value_id) {
                 fn->max_value_id = call->result.id;
@@ -7454,7 +7462,8 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                     break;
                 }
                 AOTStringExpressionNodeInfo node;
-                if (QoreTypeInfo::isType(ti, NT_STRING)) {
+                // a value of a string enum type is the enum's member, not a string (qore#6254)
+                if (QoreTypeInfo::isType(ti, NT_STRING) && !QoreTypeInfo::getReturnEnum(ti)) {
                     node.kind = AOTStringExpressionNodeKind::StringParam;
                 } else if (QoreTypeInfo::isType(ti, NT_INT)) {
                     node.kind = AOTStringExpressionNodeKind::IntParam;
@@ -10329,7 +10338,9 @@ static bool qore_aot_get_composed_int(const QoreIRFunction& func,
             return false;
         }
         const QoreTypeInfo* type = param->second->getTypeInfo();
-        if (QoreTypeInfo::isListType(type) || QoreTypeInfo::isType(type, NT_STRING)) {
+        // a value of a string enum type is the enum's member, not a string (qore#6254)
+        if (QoreTypeInfo::isListType(type)
+                || (QoreTypeInfo::isType(type, NT_STRING) && !QoreTypeInfo::getReturnEnum(type))) {
             if (base_param >= 0) {
                 return false;
             }
@@ -11337,7 +11348,8 @@ static bool qore_aot_collect_int_expression_summaries(
                 }
             } else if (QoreTypeInfo::getBaseType(type) == NT_LIST) {
                 param_info.boxed_kind = BoxedSourceParamKind::List;
-            } else if (QoreTypeInfo::getBaseType(type) == NT_STRING) {
+            } else if (QoreTypeInfo::getBaseType(type) == NT_STRING && !QoreTypeInfo::getReturnEnum(type)) {
+                // a value of a string enum type is the enum's member, not a string (qore#6254)
                 param_info.boxed_kind = BoxedSourceParamKind::String;
             } else if (QoreTypeInfo::getBaseType(type) == NT_HASH) {
                 param_info.boxed_kind =
@@ -13476,7 +13488,8 @@ bool qore_ir_resolve_batch_function_summaries(
                         type, NT_NOTHING)) {
                 return BatchCalleeBoxedReturnKind::Unknown;
             }
-            if (QoreTypeInfo::isType(type, NT_STRING)) {
+            // a value of a string enum type is the enum's member, not a string (qore#6254)
+            if (QoreTypeInfo::isType(type, NT_STRING) && !QoreTypeInfo::getReturnEnum(type)) {
                 return BatchCalleeBoxedReturnKind::String;
             }
             if (QoreTypeInfo::isType(type, NT_LIST)) {
@@ -13494,7 +13507,7 @@ bool qore_ir_resolve_batch_function_summaries(
             if (QoreTypeInfo::isType(type, NT_OBJECT)) {
                 return BatchCalleeBoxedReturnKind::Object;
             }
-            if (QoreTypeInfo::isType(type, NT_NUMBER)) {
+            if (QoreTypeInfo::isType(type, NT_NUMBER) && !QoreTypeInfo::getReturnEnum(type)) {
                 return BatchCalleeBoxedReturnKind::Number;
             }
             return BatchCalleeBoxedReturnKind::Unknown;
@@ -13629,7 +13642,8 @@ bool qore_ir_resolve_batch_function_summaries(
                         BatchCalleeBoxedReturnKind return_kind =
                             BatchCalleeBoxedReturnKind::Unknown;
                         if (QoreTypeInfo::isType(
-                                facts->type_info, NT_STRING)) {
+                                facts->type_info, NT_STRING)
+                                && !QoreTypeInfo::getReturnEnum(facts->type_info)) {
                             return_kind =
                                 BatchCalleeBoxedReturnKind::String;
                         } else if (QoreTypeInfo::isType(
@@ -13650,7 +13664,8 @@ bool qore_ir_resolve_batch_function_summaries(
                             return_kind =
                                 BatchCalleeBoxedReturnKind::Object;
                         } else if (QoreTypeInfo::isType(
-                                facts->type_info, NT_NUMBER)) {
+                                facts->type_info, NT_NUMBER)
+                                && !QoreTypeInfo::getReturnEnum(facts->type_info)) {
                             return_kind =
                                 BatchCalleeBoxedReturnKind::Number;
                         }
@@ -18762,6 +18777,12 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     native_key.c_str(), llvm_error.c_str());
             }
             if (llvm::Function* fn = module.getFunction(llvm_symbol)) {
+                if (!fn->use_empty()) {
+                    // code of the module calls the closure's native function: it cannot be skipped (qore#6313)
+                    delete ir_func;
+                    setAOTCompileFatal(fatal_error, "closure", native_key, "lowering", llvm_error.c_str());
+                    return false;
+                }
                 fn->eraseFromParent();
             }
             delete ir_func;
@@ -26439,6 +26460,9 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         size_t check_count = 0;
         for (const auto& [variant, info] : *fast_entries) {
             if (++check_count % 100 == 0 && qore_check_cancel(nullptr, "AOT module fast-entry table")) {
+                // a module without fast entries is correct: a call compiled against one of them finds none when it
+                // looks it up (qore_aot_find_cross_module_fast_entry()), and takes the runtime path for good, as for
+                // a module loaded from source or rebuilt with another ABI (qore_rt_try_get_cross_module_fast_entry())
                 infos.clear();
                 break;
             }

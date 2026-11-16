@@ -223,10 +223,19 @@ static const QoreTypeInfo* qore_cast_get_complex_softlist_value_type(const QoreT
     return nullptr;
 }
 
+// the result of a soft list conversion: acceptAssignment() leaves the value referenced when it raises an exception
+static QoreValue qore_cast_softlist_result(QoreValue& value, ExceptionSink* xsink) {
+    if (*xsink) {
+        value.discard(xsink);
+        return QoreValue();
+    }
+    return value;
+}
+
 static QoreValue qore_cast_coerce_softlist_value(const QoreTypeInfo* type_info, QoreValue value,
         ExceptionSink* xsink) {
     QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink);
-    return *xsink ? QoreValue() : value;
+    return qore_cast_softlist_result(value, xsink);
 }
 
 // if del is true, then the returned QoreString* should be deleted, if false, then it must not be
@@ -1226,7 +1235,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::evalImplInt
         if constexpr (Lexical) {
             QoreValue value = rv.takeReferencedValue();
             QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink, getSemanticPolicy());
-            return *xsink ? QoreValue() : value;
+            return qore_cast_softlist_result(value, xsink);
         } else {
             return qore_cast_coerce_softlist_value(type_info, rv.takeReferencedValue(), xsink);
         }
@@ -1236,7 +1245,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::evalImplInt
         if constexpr (Lexical) {
             QoreValue value = rv.takeReferencedValue();
             QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink, getSemanticPolicy());
-            return *xsink ? QoreValue() : value;
+            return qore_cast_softlist_result(value, xsink);
         } else {
             return qore_cast_coerce_softlist_value(type_info, rv.takeReferencedValue(), xsink);
         }
@@ -1285,7 +1294,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::castValueIm
         if constexpr (Lexical) {
             QoreValue value = inner;
             QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink, getSemanticPolicy());
-            return *xsink ? QoreValue() : value;
+            return qore_cast_softlist_result(value, xsink);
         } else {
             return qore_cast_coerce_softlist_value(type_info, inner, xsink);
         }
@@ -1296,7 +1305,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::castValueIm
         if constexpr (Lexical) {
             QoreValue value = ref_inner;
             QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink, getSemanticPolicy());
-            return *xsink ? QoreValue() : value;
+            return qore_cast_softlist_result(value, xsink);
         } else {
             return qore_cast_coerce_softlist_value(type_info, ref_inner, xsink);
         }

@@ -153,6 +153,10 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
       @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()", which returns lower-case header
       names) was serialized twice; part headers are now normalized to a single value per field, and the
       \c Content-Length part header, which is generated automatically, is rejected in any case
+    - @ref Mime::MultiPartMessage::getBoundary() "MultiPartMessage::getBoundary()" returns a random boundary,
+      and a message's boundary is replaced when a part added to it contains the boundary, as the boundary must not
+      occur in the parts (RFC 2046 section 5.1.1); the boundary was made from the current time and was not checked
+      against the parts (<a href="https://github.com/qoretechnologies/qore/issues/6307">issue 6307</a>)
     - multipart boundary parameters are quoted as required by RFC 2046, including generated
       boundaries containing a timezone colon; invalid boundary characters and lengths are rejected
     - added \c "application/fhir+json" to @ref Mime::MimeTypesJson "MimeTypesJson"
@@ -197,8 +201,11 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
       was encoded; one space was dropped before every encoded word after the first, and an encoded word was decoded
       wherever the same word appeared
     - @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" decodes a text part written as it is
-      (\c 7bit, \c 8bit or \c binary) in the charset that it declares; it was decoded in the default encoding, so
-      text in another charset was not converted
+      (\c 7bit, \c 8bit or \c binary) in the charset that it declares, with its type in any case (ex:
+      \c "TEXT/PLAIN"); it was decoded in the default encoding, so text in another charset was not converted
+    - @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" finds the \c boundary parameter of a
+      nested multipart part in any case (RFC 2045 section 5.1); a part with \c "BOUNDARY=" could not be parsed
+      (<a href="https://github.com/qoretechnologies/qore/issues/114">issue 114</a>)
     - the \c charset parameter of a \c Content-Type value is read without the parameters after it; with
       \c "text/plain; charset=ISO-8859-1; format=flowed", the charset was \c "ISO-8859-1; format=flowed", which
       names no character encoding
@@ -2093,7 +2100,9 @@ hash<MimeHeaderValueInfo> h = mime_parse_header_value("attachment; filename=\"a 
 
         #! creates the object
         /** @param mptype the type of multi-part message: see @ref MultiPartConstants for possible values
-            @param boundary the boundary to use between parts, following RFC 2046 section 5.1.1
+            @param boundary the boundary to use between parts, following RFC 2046 section 5.1.1; it is replaced with
+            a random boundary (see @ref getBoundary()) when a part added to the message contains it, as the boundary
+            must not occur in the parts
             @throw MULTIPART-BOUNDARY-ERROR the boundary is empty, exceeds 70 characters, contains
             invalid characters, or ends in a space
          */
@@ -2133,7 +2142,8 @@ hash<MimeHeaderValueInfo> h = mime_parse_header_value("attachment; filename=\"a 
         }
 
         #! returns the message boundary string used
-        /** @return the message boundary string used
+        /** @return the message boundary string used; it is replaced when a part that contains it is added to the
+            message, so it must be read after the parts are added
 
             @since %Mime 1.4
         */
@@ -2181,9 +2191,15 @@ hash<MimeHeaderValueInfo> h = mime_parse_header_value("attachment; filename=\"a 
         }
         #! @endcond
 
-        #! returns a string embedded with the current timestamp designed to be used as MultiPart boundary string
+        #! returns a random string designed to be used as a MultiPart boundary string
+        /** @return a boundary string of 62 characters with 128 random bits from @ref Qore::get_random_bytes(), the
+            generator of the crypto library, so that a boundary cannot be predicted or repeated
+
+            @since %Mime 1.9 the boundary is random; it was made from the current time, so it could be predicted
+            and was repeated by the messages created at the same time
+        */
         static string getBoundary() {
-            return "------Qore-MIME-Boundary" + now_us().format("YYYYMMDDHHmmSS.usZ") + "------";
+            return "------Qore-MIME-Boundary" + make_hex_string(get_random_bytes(16)) + "------";
         }
 
         #! returns a string of random characters
@@ -2409,16 +2425,19 @@ hash: (2 members)
 
                     # decode the part's body
                     pstr = mime_decode_transfer_data(pstr, pcte, pct, True);
-                    if (pstr.typeCode() == NT_BINARY && pct =~ /text/) {
+                    if (pstr.typeCode() == NT_BINARY && pct =~ /text/i) {
                         # the text is in the charset that the part declares; it was taken as text in the default
-                        # encoding, so text in another charset written as it is (8bit) was not converted
+                        # encoding, so text in another charset written as it is (8bit) was not converted; the type
+                        # is matched in any case, as are the parameter names (RFC 2045 section 5.1): a part of type
+                        # "TEXT/PLAIN" was returned as binary data (issue #114)
                         *string charset = mime_get_charset(pct);
                         pstr = charset ? binary_to_string(pstr, charset) : binary_to_string(pstr);
                     }
 
                     # see if the part has parts itself
                     if (pct =~ /multipart\//i) {
-                        *string part_boundary = (pct =~ x/[Bb]oundary="?([^"]+)"?/)[0];
+                        # the parameter name is matched in any case (RFC 2045 section 5.1; issue #114)
+                        *string part_boundary = (pct =~ x/boundary="?([^"]+)"?/i)[0];
                         if (!exists part_boundary)
                             throw "MULTIPART-PARSEBODY-ERROR", sprintf("cannot parse part %d Content-Type: %y; could "
                                 "not find message boundary", pnum, pct);
@@ -2545,12 +2564,42 @@ hash: (2 members)
 
         # don't reimplement this method; fix/enhance it in the module
         private splicePartIntern(data mime_data, hash<auto> hdr) {
-            splice l, 0, 0, MultiPartMessage::getPart(mime_data, hdr);
+            hash<MessagePartInfo> part = MultiPartMessage::getPart(mime_data, hdr);
+            splice l, 0, 0, part;
+            checkBoundary(part);
         }
 
         # don't reimplement this method; fix/enhance it in the module
         private addPartIntern(data mime_data, hash<auto> hdr) {
-            l += MultiPartMessage::getPart(mime_data, hdr);
+            hash<MessagePartInfo> part = MultiPartMessage::getPart(mime_data, hdr);
+            l += part;
+            checkBoundary(part);
+        }
+
+        #! replaces the boundary with a new random one if it occurs in the given part
+        /** RFC 2046 section 5.1.1: the boundary must not occur in the encapsulated parts, or a part containing it
+            (for example a nested multipart with the same boundary) would end the part when the message is parsed;
+            the boundary is replaced if a part contains a dash-boundary (\c "--" + the boundary), including a
+            boundary given to the constructor, and the new boundary is checked against all the parts
+        */
+        private checkBoundary(hash<MessagePartInfo> part) {
+            if (!MultiPartMessage::partContains(part, binary("--" + boundary))) {
+                return;
+            }
+            while (True) {
+                boundary = MultiPartMessage::getBoundary();
+                binary dash = binary("--" + boundary);
+                if (!(select l, MultiPartMessage::partContains($1, dash))) {
+                    break;
+                }
+            }
+            ct = sprintf("multipart/%s; boundary=\"%s\"", mptype, boundary);
+        }
+
+        #! returns True if the data or the headers of the part contain the given dash-boundary
+        private static bool partContains(hash<MessagePartInfo> part, binary dash) {
+            binary bd = part.data.typeCode() == NT_STRING ? binary(part.data) : part.data;
+            return bd.find(dash) >= 0 || MultiPartMessage::serializeHeaders(part.hdr).find(dash) >= 0;
         }
 
         #! collapses case variants of the same part header field to a single value

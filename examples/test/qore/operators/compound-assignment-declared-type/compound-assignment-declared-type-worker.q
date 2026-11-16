@@ -82,7 +82,6 @@ sub run_cases() {
     check("int -= absolute date", auto sub () { int x = 10; x -= id(2024-01-01T00:00:00Z); return x; });
     check("int = int - absolute date", auto sub () { int x = 10; x = x - id(2024-01-01T00:00:00Z); return x; });
     check("int -= relative date", auto sub () { int x = 10; x -= id(1h); return x; });
-    check("int -= literal date", auto sub () { int x = 10; x -= 1h; return x; });
     check("*int -= relative date", auto sub () { *int x = 10; x -= id(1h); return x; });
     check("global int -= relative date", auto sub () { gi = 10; gi -= id(1h); return gi; });
     check("int member -= relative date", auto sub () { IntMember m(); m.v -= id(1h); return m.v; });

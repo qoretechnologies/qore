@@ -87,6 +87,8 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
             \staticProgramThreadStartTest());
         addTestCase("a sandbox time limit cannot be enforced for a call made when the library is cleaned up",
             \staticProgramSandboxLimitTest());
+        addTestCase("a background compile in LLVM is waited for when the library is left to a blocked foreign thread",
+            \staticProgramForeignThreadHeldCompileTest());
         addTestCase("a thread of another runtime that is blocked in Qore code does not hold up the end of the process",
             \staticProgramForeignThreadTest());
         addTestCase("a thread of another runtime that is blocked in the code of a user module does not hold up the end "
@@ -279,6 +281,50 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
             assertEq(Qore::False, output =~ /unexpected|exception/i, "normal end: no error output: " + mode);
             assertEq(0, runChild("exit(0);", 0, "staticpgmcode", options, NOTHING, tenv), "exit(0): " + mode);
             assertEq(7, runChild("exit(7);", 7, "staticpgmcode", options, NOTHING, tenv), "exit(7): " + mode);
+        }
+    }
+
+    #! a background JIT compile in LLVM is waited for when qore_cleanup() leaves the library to a foreign thread
+    /** qore_cleanup() returns early when a foreign thread is blocked in a Program (see
+        staticProgramForeignThreadTest()), and it returned without waiting for a background compile that it had
+        detached in LLVM: a program that returned from main() then ran exit(), which destroyed LLVM's static objects
+        under the compile (issue #6296).  The script holds the compile of a function in LLVM until the end (a test
+        hook of a debug library); qore_cleanup() lets it go and waits for it, which QORE_JIT_TIMING reports
+    */
+    private staticProgramForeignThreadHeldCompileTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_hold_bg_compile() requires library debugging");
+        }
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        TmpDir dir("qore-cleanup-held-compile-");
+        string script = dir.path + "/held.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n"
+            "int sub held(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += i * 4; } return s; }\n"
+            # the compile of held() stops in LLVM and is still there at the end of the process
+            "call_function(\"dbg_hold_bg_compile\", \"llvm\", \"held\");\n"
+            "int t = held(10) + held(10);\n"
+            "printf(\"held: %y result: %d\\n\", call_function(\"dbg_wait_bg_compile_held\", \"llvm\", 60000), t);\n");
+        f.close();
+        string out_file = dir.path + "/out.log";
+        # functions are compiled in the background at their first call
+        foreach string mode in (("jit", "tiered")) {
+            int rc = system(sprintf("env -u QORE_JIT_SYNC_COMPILE %sQORE_STATICPGM_FOREIGN_THREAD=1 QORE_JIT_TIMING=1 "
+                "QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s%s --exec-mode=%s -l staticpgmcode %s >%s 2>&1",
+                env_prefix, kill_after, qore_exe, mode, script, out_file));
+            string output = File::readTextFile(out_file);
+            assertEq(0, rc, sprintf("%s: the process ends normally: %s", mode, output));
+            assertTrue(output =~ /^held: True result: 360$/m, sprintf("%s: the compile was held: %s", mode, output));
+            assertTrue(output.find("[BG-JIT] waited for the abandoned compile in qore_cleanup()") >= 0,
+                sprintf("%s: qore_cleanup() waited for the compile: %s", mode, output));
+            # the library was left to the foreign thread: the JIT is not released
+            assertEq(-1, output.find("released the JIT in shutdown()"), sprintf("%s: the JIT is kept: %s", mode,
+                output));
         }
     }
 

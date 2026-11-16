@@ -3211,6 +3211,7 @@ load_module("mysql");
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: API incompatibility, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw PARSE-STACK-LIMIT-EXCEEDED the module, or a module that it loads, cannot be parsed within the stack of the current thread; see @ref parse_nesting_limit
 
     @see
     - get_module_hash()
@@ -3243,6 +3244,7 @@ load_module("mysql");
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: API incompatibility, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw PARSE-STACK-LIMIT-EXCEEDED the module, or a module that it loads, cannot be parsed within the stack of the current thread; see @ref parse_nesting_limit
 
     @see
     - get_module_hash()

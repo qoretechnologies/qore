@@ -262,7 +262,7 @@ public class ElevenLabsDataProviderBase inherits DataProvider::AbstractDataProvi
         @return a hash with \c body and other response info
     */
     private hash<auto> doMultipartPost(string path, hash<auto> fields, string filename = "audio.mp3") {
-        string mpboundary = replace(make_base64_string(string(now_us())), "=", "");
+        string mpboundary = MultiPartMessage::getBoundary();
 
         # Build multipart body
         binary msg = binary();

@@ -1,0 +1,153 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires Schema
+%requires SchemaReverse
+
+# a run on PostgreSQL has its own schema
+%requires ../SqlUtil/PgsqlTestIsolation.qm
+
+%exec-class SchemaReverseNullDefaultTest
+
+/** A column declared with "default null" has no default value (issue #1746): PostgreSQL reports it for some types as
+    a cast NULL (ex: NULL::character varying, NULL::numeric), and SQLite keeps the text as given (ex: null, (NULL)).
+    The column description, SchemaReverse and schema alignment must not take it as a default.
+
+    PostgreSQL is tested with the connection in \c QORE_DB_CONNSTR_PGSQL in a schema of its own; SQLite in memory.
+*/
+class SchemaReverseNullDefaultTest inherits QUnit::Test {
+    private {
+        hash<string, Datasource> dsh;
+        hash<string, string> skip_reasons;
+        bool pgsql_isolated;
+
+        #! the columns declared with "default null" in each database, and the column with a string default "NULL"
+        const NullColumns = {
+            "pgsql": ("a", "b", "c", "d", "e", "h"),
+            "sqlite3": ("a", "b", "c"),
+        };
+    }
+
+    constructor() : QUnit::Test("SchemaReverseNullDefaultTest", "1.0") {
+        addTestCase("pgsql: the column description has no NULL default", \testDescribe(), "pgsql");
+        addTestCase("pgsql: SchemaReverse gives no NULL default", \testReverse(), "pgsql");
+        addTestCase("pgsql: alignment does not drop a NULL default", \testAlign(), "pgsql");
+        addTestCase("sqlite3: the column description has no NULL default", \testDescribe(), "sqlite3");
+        addTestCase("sqlite3: SchemaReverse gives no NULL default", \testReverse(), "sqlite3");
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        setUpConnection("pgsql");
+        setUpConnection("sqlite3");
+    }
+
+    globalTearDown() {
+        map $1.rollback(), dsh.iterator();
+        remove dsh;
+        if (pgsql_isolated) {
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    private setUpConnection(string label) {
+        string connstr;
+        if (label == "sqlite3") {
+            connstr = "sqlite3:x@:memory:";
+        } else {
+            if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+                skip_reasons{label} = "QORE_DB_CONNSTR_PGSQL is not set";
+                return;
+            }
+            connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        }
+        Datasource ds;
+        try {
+            ds = new Datasource(connstr);
+            if (ds.getDriverName() != label) {
+                skip_reasons{label} = sprintf("the connection uses driver %y, not %y", ds.getDriverName(), label);
+                return;
+            }
+            if (label == "pgsql") {
+                PgsqlRunSchema::setup(connstr, "SchemaReverseNullDefault");
+                pgsql_isolated = True;
+            }
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            skip_reasons{label} = sprintf("%s: %s", ex.err, ex.desc);
+            return;
+        }
+        on_error ds.rollback();
+        on_success ds.commit();
+        if (label == "pgsql") {
+            ds.exec("create table dn (id int primary key, a varchar(10) default null, b text default null, "
+                "c numeric(10,2) default null, d int default null, e timestamp default (null)::timestamp, "
+                "f varchar(10) default 'x', g varchar(10) default 'NULL', h char(3) default null::bpchar)");
+        } else {
+            ds.exec("create table dn (id int primary key, a varchar(10) default null, b varchar(10) default (NULL), "
+                "c int default ( null ), f varchar(10) default 'x', g varchar(10) default 'NULL')");
+        }
+        dsh{label} = ds;
+    }
+
+    private Datasource getDs(string label) {
+        if (*Datasource ds = dsh{label}) {
+            return ds;
+        }
+        testSkip(skip_reasons{label} ?? sprintf("no %s connection", label));
+    }
+
+    private AbstractTable getTable(string label) {
+        Datasource ds = getDs(label);
+        return (new Database(ds)).getTable("dn");
+    }
+
+    testDescribe(string label) {
+        Columns cols = getTable(label).describe();
+        foreach string cn in (NullColumns{label}) {
+            assertNothing(cols{cn}.def_val, sprintf("%s: column %y", label, cn));
+        }
+        # a real default and a string default "NULL" are kept
+        assertTrue(cols.f.def_val =~ /x/, sprintf("%s: column \"f\": %y", label, cols.f.def_val));
+        assertTrue(cols.g.def_val =~ /NULL/, sprintf("%s: column \"g\": %y", label, cols.g.def_val));
+    }
+
+    testReverse(string label) {
+        Datasource ds = getDs(label);
+        SchemaReverse::TableReverse tr(ds, "dn");
+        hash<auto> columns = tr.toQore().columns;
+        foreach string cn in (NullColumns{label}) {
+            assertFalse(columns{cn}.hasKey("default_value"), sprintf("%s: column %y: %y", label, cn, columns{cn}));
+        }
+        assertTrue(columns.f.hasKey("default_value"), sprintf("%s: column \"f\": %y", label, columns.f));
+        assertTrue(columns.g.hasKey("default_value"), sprintf("%s: column \"g\": %y", label, columns.g));
+    }
+
+    testAlign(string label) {
+        Datasource ds = getDs(label);
+        Database db(ds);
+        AbstractTable live = db.getTable("dn");
+        # the description that the table was created with, without the NULL defaults
+        hash<auto> desc = {
+            "columns": {
+                "id": {"qore_type": Type::Int, "native_type": "integer", "notnull": True},
+                "a": c_varchar(10),
+                "b": {"qore_type": Type::String, "native_type": "text"},
+                "c": c_number(10, 2),
+                "d": {"qore_type": Type::Int, "native_type": "integer"},
+                "e": c_timestamp(),
+                "f": c_varchar(10) + {"default_value": "x"},
+                "g": c_varchar(10) + {"default_value": "NULL"},
+                "h": c_char(3),
+            },
+            "primary_key": {"name": "dn_pkey", "columns": "id"},
+        };
+        list<auto> sql = live.getAlignSql(db.makeTable("dn", desc));
+        assertEq((), (select sql, $1 =~ /default/i), sprintf("%s: %y", label, sql));
+    }
+}

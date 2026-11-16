@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - AOT code generation of the string fast paths and of string and number locals for enum types
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class StringEnumCompiledPathsTest
+
+#! Regression test for issue #6254: values of string and number enum types in the string fast paths of qcc programs
+/** The type of a string or number enum gives its base type to the type tests of the compiled modes (isType()), but its
+    values are the enum's members (TAG_ENUM values), not strings or numbers.  Programs compiled with qcc took the exact
+    string types of locals, parameters and call results declared with a string enum type: the string fast paths read
+    the values as no string (size() gave 0 and empty() True), and a string variable assigned an enum value kept the
+    enum value, where the AST interpreter converts it to a string.
+
+    StringEnumCompiledPaths.q reads string and number enum values through these paths and prints their types and
+    values; its output must be the one in StringEnumCompiledPaths.expected in every execution mode, on the IR tier and
+    in programs compiled with qcc -O0 and -O3.
+*/
+class StringEnumCompiledPathsTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/StringEnumCompiledPaths.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/StringEnumCompiledPaths.expected");
+    }
+
+    constructor() : QUnit::Test("string and number enum values in the string paths of the compiled modes", "1.0",
+            \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/string-enum-compiled-paths";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

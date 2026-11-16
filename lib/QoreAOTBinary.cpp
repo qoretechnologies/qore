@@ -20331,6 +20331,13 @@ bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
             continue;
         }
         qore_class_private* priv = qore_class_private::get(*qc);
+        // initializeMembers() recurses to the base classes whose members are not yet imported, and stops while the
+        // parse stack reserve remains (issue #6047); no parse reports that here, so the load fails with the error
+        if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
+            thread_stack_exceeded = true;
+            error = QORE_PARSE_STACK_DESC;
+            return false;
+        }
         // initializeMembers() checks parse_resolve_class_members flag to avoid re-initialization,
         // iterates base class list, and calls parseImportMembers() for each base class
         priv->initializeMembers();

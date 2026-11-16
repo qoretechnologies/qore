@@ -61,6 +61,7 @@ public class Main inherits QUnit::Test {
         addTestCase("Test parsed header lines and body (issue #6139)", \testParsedHeaderLines(), NOTHING);
         addParseWorkCases();
         addTestCase("Test parsed messages without optional headers (issue #6267)", \testMissingHeaders(), NOTHING);
+        addTestCase("Test multipart boundary (issue #6307)", \testBoundary(), NOTHING);
 
         set_return_value(main());
     }
@@ -2459,7 +2460,7 @@ lorem ipsum\r
             assertEq(m.getBCC(), m2.getBCC(), i.key);
             assertEq(m.getBody(), m2.getBody(), i.key);
             assertEq(m.getAttachments().size(), m2.getAttachments().size(), i.key);
-            # each serialization makes a new multipart boundary, which is made from the time
+            # the two messages can have different multipart boundaries (a boundary is random: issue #6307)
             assertEq(normalizeBoundary(m.serializeRaw()), normalizeBoundary(m2.serializeRaw()), i.key);
         }
 
@@ -2472,5 +2473,79 @@ lorem ipsum\r
         assertFalse(info.hasKey("subject"));
         assertFalse(info.hasKey("from"));
         assertRegex("Sender: ''", m.toString());
+    }
+
+    # issue #6307: the multipart boundary of a message is random, and another one is used when a part of the message
+    # contains it (RFC 2046 section 5.1.1)
+    testBoundary() {
+        # a message attached to another one with the same boundary (as messages created in the same second had)
+        Message m1(Sender, Subject);
+        Message m2(Sender, Subject);
+        m1.addTO(To);
+        m1.setBody("body one");
+        m1.attach("one.txt", MimeTypeText, "attachment one");
+        string fwd = m1.serialize();
+        m2.mpboundary = m1.mpboundary;
+        m2.addTO(To);
+        m2.setBody("body two");
+        m2.attach("fwd.eml", "message/rfc822", fwd, ContentEncoding::QuotedPrintable);
+        m2.attach("two.txt", MimeTypeText, "attachment two");
+        Message p(m2.serialize());
+        assertEq("body two", p.getBody());
+        list<Attachment> atts = p.getAttachments();
+        assertEq(("fwd.eml", "two.txt"), (map $1.getName(), atts));
+        # the quoted-printable attachment is decoded with LF line breaks
+        assertEq(replace(fwd, "\r\n", "\n"), replace(atts[0].getData(), "\r\n", "\n"));
+        assertEq("attachment two", atts[1].getData());
+
+        # a message body that contains the boundary
+        Message m3(Sender, Subject);
+        m3.addTO(To);
+        m3.setBody("text\r\n--" + m3.mpboundary + "\r\nContent-Type: text/plain\r\n\r\nsplit",
+            ContentEncoding::QuotedPrintable);
+        m3.attach("three.txt", MimeTypeText, "attachment three");
+        p = new Message(m3.serialize());
+        assertEq(replace(m3.getBody(), "\r\n", "\n"), replace(p.getBody(), "\r\n", "\n"));
+        assertEq(("three.txt",), (map $1.getName(), p.getAttachments()));
+
+        # mpboundary is the boundary written when it is replaced because a part contains it, with attachments
+        Message m4(Sender, Subject);
+        m4.addTO(To);
+        m4.mpboundary = "fixed-boundary";
+        m4.setBody("text\r\n--fixed-boundary\r\nsplit", ContentEncoding::QuotedPrintable);
+        m4.attach("four.txt", MimeTypeText, "attachment four");
+        checkWrittenBoundary(m4, "fixed-boundary", "mixed");
+
+        # and with alternative parts and no attachments
+        string raw = "From: " + Sender + "\r\nTo: " + To + "\r\nSubject: alt\r\nMIME-Version: 1.0\r\n"
+            "Content-Type: multipart/alternative; boundary=\"b1\"\r\n\r\n"
+            "--b1\r\nContent-Type: text/plain\r\n\r\ntext\r\n--fixed-boundary\r\nsplit\r\n"
+            "--b1\r\nContent-Type: text/html\r\n\r\n<p>html</p>\r\n--b1--\r\n";
+        Message m5(raw);
+        m5.mpboundary = "fixed-boundary";
+        checkWrittenBoundary(m5, "fixed-boundary", "alternative");
+        # a boundary that does not occur in the parts is kept and written
+        m5.mpboundary = "other-boundary";
+        checkWrittenBoundary(m5, NOTHING, "alternative");
+        assertEq("other-boundary", m5.mpboundary);
+
+        # messages created at the same time have different boundaries
+        assertNeq((new Message(Sender, Subject)).mpboundary, (new Message(Sender, Subject)).mpboundary);
+    }
+
+    # serializes the message and checks that Message::mpboundary is the boundary of its Content-Type header and of
+    # its delimiter lines
+    private checkWrittenBoundary(Message msg, *string replaced, string type) {
+        string str = msg.serialize();
+        if (replaced) {
+            assertNeq(replaced, msg.mpboundary);
+        }
+        *string ct_boundary = (str =~ x/\r\nContent-Type: multipart\/([a-z]+); boundary="([^"]+)"\r\n/)[1];
+        assertEq(type, (str =~ x/\r\nContent-Type: multipart\/([a-z]+);/)[0]);
+        assertEq(msg.mpboundary, ct_boundary);
+        assertGt(0, str.find("\r\n--" + msg.mpboundary + "\r\n"));
+        assertGt(0, str.find("\r\n--" + msg.mpboundary + "--"));
+        hash<MessageInfo> mh = MultiPartMessage::parseBody(msg.mpboundary, str);
+        assertEq(2, mh.part.size());
     }
 }

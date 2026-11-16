@@ -11691,8 +11691,9 @@ bool QoreIRLowering::listSelectorSeqAlwaysApplies(const QoreValue& expr) const {
 QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOperatorNode* op, QoreIRValue seq,
         const std::vector<QoreValue>& selectors, std::string& error) {
     assert(!selectors.empty());
-    const int64_t string_index_char = op->hasStringIndexChar()
-        ? static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar) : 0;
+    // %no-string-index-char is refused under %modern, so lowered code always has string index chars
+    assert(op->hasStringIndexChar());
+    const int64_t string_index_char = static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar);
 
     // a sequence that is always a list, a string or a binary object gets the selectors applied by the step that makes
     // the result; for any other sequence a Begin step makes the empty result first, or NOTHING if no selector applies
@@ -12149,15 +12150,11 @@ bool QoreIRLowering::getLazySelectorSource(const QoreValue& expr, LazySelectorSo
 }
 
 int64_t QoreIRLowering::selectorIteratorFlags(const LazySelectorSource& src) {
-    int64_t flags = 0;
-    if (src.op->hasStringIndexChar()) {
-        flags |= static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar);
-    }
-    // the negative offsets of the operator, as the AST interpreter's iterator resolves its indices with them
-    if (src.op->hasNegativeOffsets()) {
-        flags |= static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
-    }
-    return flags;
+    // string index chars and negative offsets, as the AST interpreter's iterator resolves its indices with them:
+    // %no-string-index-char and %no-negative-offsets are refused under %modern, so lowered code always has both
+    assert(src.op->hasStringIndexChar() && src.op->hasNegativeOffsets());
+    return static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar)
+        | static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
 }
 
 QoreIRValue QoreIRLowering::lowerSourceIterator(const QoreValue& expr, const LazySelectorSource& src, bool iterate,
@@ -12209,12 +12206,10 @@ bool QoreIRLowering::getForeachSource(const QoreValue& list, ForeachSourceOperat
         src.kind = QoreIRIteratorSourceKind::Indexes;
         src.operand = op->getLeft();
         src.first = op->getRight();
-        if (op->hasStringIndexChar()) {
-            src.flags |= static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar);
-        }
-        if (op->hasNegativeOffsets()) {
-            src.flags |= static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
-        }
+        // %no-string-index-char and %no-negative-offsets are refused under %modern
+        assert(op->hasStringIndexChar() && op->hasNegativeOffsets());
+        src.flags |= static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar)
+            | static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
     } else {
         return false;
     }
@@ -14602,11 +14597,13 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             const QoreTypeInfo* analyzed_base_type = have_base_analysis
                 && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
                 ? selectAnalysisType(base_analysis) : nullptr;
+            // a value of a string enum type is the enum's member, not a string (qore#6254)
             bool pseudo_base_known_string = have_base_analysis
                 && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
                 && analyzed_base_type
                 && QoreTypeInfo::isType(
-                    qore_get_value_type(analyzed_base_type), NT_STRING);
+                    qore_get_value_type(analyzed_base_type), NT_STRING)
+                && !QoreTypeInfo::getReturnEnum(analyzed_base_type);
             bool pseudo_base_known_assigned_string = pseudo_base_known_string
                 && (base_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
                     || (base_analysis.hasFlag(
@@ -14663,11 +14660,13 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                                     QoreParseAnalysis::DefinitelyAssigned)
                                 && !QoreTypeInfo::parseAcceptsReturns(
                                     arg_type, NT_NOTHING)));
-                    bool known_assigned_int = assigned && arg_type
+                    // a value of an enum type is the enum's member, not a value of its base type (qore#6254)
+                    bool arg_enum = arg_type && QoreTypeInfo::getReturnEnum(arg_type);
+                    bool known_assigned_int = assigned && arg_type && !arg_enum
                         && QoreTypeInfo::isType(
                             qore_get_value_type(arg_type), NT_INT);
                     if (!ai) {
-                        pseudo_arg0_known_string = have_analysis && arg_type
+                        pseudo_arg0_known_string = have_analysis && arg_type && !arg_enum
                             && QoreTypeInfo::isType(
                                 qore_get_value_type(arg_type), NT_STRING);
                         pseudo_arg0_known_assigned_string = assigned && pseudo_arg0_known_string;
@@ -16328,7 +16327,9 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
                 && arg_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
                 && (arg_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
                     || arg_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
-                && QoreTypeInfo::isType(selectAnalysisType(arg_analysis), NT_STRING)) {
+                && QoreTypeInfo::isType(selectAnalysisType(arg_analysis), NT_STRING)
+                // a value of a string enum type is the enum's member, not a string (qore#6254)
+                && !QoreTypeInfo::getReturnEnum(selectAnalysisType(arg_analysis))) {
             std::vector<QoreIRValue> operands;
             if (!lowerCallArgs(parse_args, args, operands, error)) {
                 return QoreIRValue();
