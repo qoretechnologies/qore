@@ -173,9 +173,10 @@ class DeepNestingTest inherits QUnit::Test {
                         if (kind != "list" && kind != "hash") {
                             assertEq(getResult(kind, SmallStackDepth), outcome.result, label);
                         }
+                    } else if (outcome.err == "PARSE-STACK-LIMIT-EXCEEDED") {
+                        assertEq(StackParseError, outcome.desc, label);
                     } else if (outcome.err == "PARSE-EXCEPTION") {
-                        assertTrue(outcome.desc == StackParseError || outcome.desc == DepthError,
-                            sprintf("%s: %s", label, outcome.desc));
+                        assertEq(DepthError, outcome.desc, label);
                     } else {
                         assertEq("STACK-LIMIT-EXCEEDED", outcome.err, sprintf("%s: %s", label, outcome.desc));
                     }

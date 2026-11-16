@@ -10537,12 +10537,39 @@ static bool aotRequiredDepUnavailable(const char* dep) {
     return !QMM.findModule(dep);
 }
 
+//! An error that depends on the stack of the thread loading a module (see qore_has_thread_stack_error())
+/** Kept with its code, as it is not an error of the module, and a module that cannot be loaded for this reason is not
+    a module that is not available: %try-module must not replace it with its fallback code (issue #6047)
+*/
+struct AOTThreadStackError {
+    //! the error code: QORE_PARSE_STACK_ERR or STACK-LIMIT-EXCEEDED; nullptr if there is none
+    const char* err = nullptr;
+    //! the description of the error
+    std::string desc;
+
+    //! Takes the first such error from the sink, if any; returns true if there was one, and clears the sink then
+    bool take(ExceptionSink& xsink) {
+        const QoreException* e = qore_find_thread_stack_error(xsink);
+        if (!e) {
+            return false;
+        }
+        QoreStringDataHelper code(e->err);
+        err = !strcmp(code.c_str(), QORE_PARSE_STACK_ERR) ? QORE_PARSE_STACK_ERR : "STACK-LIMIT-EXCEEDED";
+        QoreStringValueHelper d(e->desc);
+        desc = d->c_str();
+        xsink.clear();
+        return true;
+    }
+};
+
 struct AOTDependencyLoadResult {
     std::string dependency;
     bool cancelled = false;
+    //! a dependency could not be loaded within the stack of this thread
+    AOTThreadStackError stack_error;
 
     explicit operator bool() const {
-        return dependency.empty() && !cancelled;
+        return dependency.empty() && !cancelled && !stack_error.err;
     }
 };
 
@@ -10577,6 +10604,11 @@ static AOTDependencyLoadResult aotLoadModuleDependencies(ExceptionSink& xsink,
                 : QMM.loadProviderModule(xsink, dep.c_str(), local_pgm);
             if (rc >= 0 && !xsink) {
                 continue;
+            }
+            // a dependency that cannot be loaded within the stack of this thread fails the load with its error
+            if (result.stack_error.take(xsink)) {
+                result.dependency = dep;
+                return false;
             }
             xsink.clear();
             if (aotRequiredDepUnavailable(dep.c_str())) {
@@ -11090,6 +11122,8 @@ static thread_local QoreProgram* aot_module_init_loader_pgm = nullptr;
     The codes:
     - \c AOT-MODULE-RESTRICTED: the module uses functionality that the restrictions inherited from the Program loading
       it do not allow (see design/module-parse-option-masks.md)
+    - \c PARSE-STACK-LIMIT-EXCEEDED and \c STACK-LIMIT-EXCEEDED: a module that the module loads could not be loaded
+      within the stack of this thread (see aotThreadStackInitError())
 */
 struct QoreAOTModuleInitError {
     //! the description returned by qore_aot_module_init_v3(), only compared, never dereferenced
@@ -11098,6 +11132,18 @@ struct QoreAOTModuleInitError {
     const char* err = nullptr;
 };
 static thread_local QoreAOTModuleInitError aot_module_init_error;
+
+//! Returns the description of an initialization error that depends on the stack of this thread, with its code
+/** The code is recorded for qore_aot_raise_init_error() (see QoreAOTModuleInitError); the description starts with the
+    error's own description.
+*/
+static QoreStringNode* aotThreadStackInitError(const AOTThreadStackError& e, const char* mod_name) {
+    QoreStringNode* err = new QoreStringNodeMaker("%s (while loading AOT module '%s')", e.desc.c_str(),
+        mod_name ? mod_name : "<unknown>");
+    aot_module_init_error.desc = err;
+    aot_module_init_error.err = e.err;
+    return err;
+}
 
 QoreAOTModuleInitLoaderHelper::QoreAOTModuleInitLoaderHelper(QoreProgram* loader)
         : old_loader(aot_module_init_loader_pgm) {
@@ -12249,8 +12295,12 @@ static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm,
     - If the module fails to load, KEEP the fallback code (typically %define directives)
       so that conditional compilation works correctly
 */
-static std::string stripRequiresDirectives(const char* source, int source_len,
-        QoreProgram* target_pgm = nullptr) {
+//! Strips the module directives from the embedded source of an AOT module, loading the modules of %try-module
+/** @param stack_error set to the error of a module of a %try-module that could not be loaded within the stack of this
+    thread, which is not a module that is not available: the source returned is then incomplete and must not be parsed
+*/
+static std::string stripRequiresDirectives(const char* source, int source_len, QoreProgram* target_pgm,
+        AOTThreadStackError& stack_error) {
     std::string result;
     result.reserve(source_len);
 
@@ -12319,6 +12369,9 @@ static std::string stripRequiresDirectives(const char* source, int source_len,
                 }
                 int rc = MM.runTimeLoadModule(&xsink, mod_name.c_str(), load_target);
                 loaded = (rc >= 0 && !xsink);
+                if (stack_error.take(xsink)) {
+                    return result;
+                }
                 xsink.clear();
             }
 
@@ -12871,6 +12924,13 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         // Try to load the module (it may already be loaded, which is fine)
         int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
         if (rc < 0 || xsink) {
+            // a dependency that cannot be loaded within the stack of this thread fails the load with its error
+            AOTThreadStackError stack_error;
+            if (stack_error.take(xsink)) {
+                QoreStringNode* err = aotThreadStackInitError(stack_error, mod_name);
+                local_pgm->waitForTerminationAndDeref(nullptr);
+                return err;
+            }
             xsink.clear();
             // A genuinely-missing dependency is a hard error (this init path runs with the
             // module-loading mutex unlocked, so use the locking lookup); only a circular/in-progress
@@ -12902,7 +12962,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         // imported above.  This init function runs without the module manager's mutex (loadBinaryModuleFromDesc()
         // releases it for the module's initialization), but the module's load is still in progress, so a %requires
         // of a module that requires this one would wait for it.
-        std::string stripped_src = stripRequiresDirectives(source, source_len, local_pgm);
+        AOTThreadStackError stack_error;
+        std::string stripped_src = stripRequiresDirectives(source, source_len, local_pgm, stack_error);
+        if (stack_error.err) {
+            mod_ctx.close();
+            QoreStringNode* err = aotThreadStackInitError(stack_error, mod_name);
+            local_pgm->waitForTerminationAndDeref(nullptr);
+            return err;
+        }
 
         printd(2, "AOT module '%s': source_len=%d stripped_len=%d deps=%d\n",
             mod_name, source_len, (int)stripped_src.size(), (int)deps.size());
@@ -12954,6 +13021,13 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     }
 
     if (xsink.isException()) {
+        // the parse of the module ran short of the stack of this thread: the error keeps its code
+        AOTThreadStackError stack_error;
+        if (stack_error.take(xsink)) {
+            QoreStringNode* err = aotThreadStackInitError(stack_error, mod_name);
+            local_pgm->waitForTerminationAndDeref(nullptr);
+            return err;
+        }
         QoreStringNode* err = new QoreStringNode("AOT module parse error: ");
         // Get error description
         QoreValue ex_err = xsink.getExceptionErr();
@@ -13734,7 +13808,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         import_deps_present, local_pgm);
     if (!load_result) {
         QoreStringNode* err;
-        if (load_result.cancelled) {
+        if (load_result.stack_error.err) {
+            err = aotThreadStackInitError(load_result.stack_error, mod_name);
+        } else if (load_result.cancelled) {
             err = new QoreStringNodeMaker("AOT module '%s' (%s) dependency loading was cancelled",
                 mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>");
         } else {
@@ -13789,8 +13865,17 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
             return new QoreStringNode("AOT module v2: failed to set parse context");
         }
         if (deser_failed) {
-            QoreStringNode* err = new QoreStringNode("AOT module metadata deserialization error: ");
-            err->concat(deser_error.c_str());
+            QoreStringNode* err;
+            if (deserializer.threadStackExceeded()) {
+                // the load ran short of the stack of this thread: the error keeps its code
+                AOTThreadStackError e;
+                e.err = QORE_PARSE_STACK_ERR;
+                e.desc = deser_error;
+                err = aotThreadStackInitError(e, mod_name);
+            } else {
+                err = new QoreStringNode("AOT module metadata deserialization error: ");
+                err->concat(deser_error.c_str());
+            }
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
@@ -15598,6 +15683,16 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // an error of a previous initialization in this thread that was not raised is forgotten
     aot_module_init_error = QoreAOTModuleInitError();
 
+    // the module is loaded in the stack of the code that loads it, as a source module is parsed in it, and loads its
+    // dependencies in turn: the load stops while the parse stack reserve remains (issue #6047; see
+    // QoreModuleManager::parseLoadModule())
+    if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
+        AOTThreadStackError e;
+        e.err = QORE_PARSE_STACK_ERR;
+        e.desc = QORE_PARSE_STACK_DESC;
+        return aotThreadStackInitError(e, mod_name);
+    }
+
     ExceptionSink xsink;
 
     QoreProgram* parent_pgm = getProgram();
@@ -15783,7 +15878,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         import_deps_present, local_pgm);
     if (!load_result) {
         QoreStringNode* err;
-        if (load_result.cancelled) {
+        if (load_result.stack_error.err) {
+            err = aotThreadStackInitError(load_result.stack_error, mod_name);
+        } else if (load_result.cancelled) {
             err = new QoreStringNodeMaker("AOT module '%s' (%s) dependency loading was cancelled",
                 mod_name ? mod_name : "<unknown>", module_context_desc.c_str());
         } else {
@@ -15839,8 +15936,17 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             return new QoreStringNode("AOT module v3: failed to set parse context");
         }
         if (deser_failed) {
-            QoreStringNode* err = new QoreStringNode("AOT module metadata deserialization error: ");
-            err->concat(deser_error.c_str());
+            QoreStringNode* err;
+            if (deserializer.threadStackExceeded()) {
+                // the load ran short of the stack of this thread: the error keeps its code
+                AOTThreadStackError e;
+                e.err = QORE_PARSE_STACK_ERR;
+                e.desc = deser_error;
+                err = aotThreadStackInitError(e, mod_name);
+            } else {
+                err = new QoreStringNode("AOT module metadata deserialization error: ");
+                err->concat(deser_error.c_str());
+            }
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
