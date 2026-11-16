@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - threads, thread pool tasks and AsyncIoController timer and task workers running compiled code
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class CompiledModernInvariantsTest
+
+#! Compiled code has negative offsets, strict arguments and string index characters wherever it runs
+/** Only %modern code is compiled (IR, JIT, AOT), and %modern implies negative offsets and strict arguments and refuses
+    the options that turn off string index characters, so compiled code no longer looks the options up; a debug build
+    asserts that they hold.  The same expressions give the same values in every execution mode, in the main thread and
+    in the threads that run code for it: a background thread, a thread pool task, and the timer and task workers of the
+    AsyncIoController, which run code with the options of the code that started it or registered it (qore#6208).
+*/
+class CompiledModernInvariantsTest inherits QUnit::Test {
+    public {
+        #! computes the values in each thread and prints them, or whether they are the same as in the main thread
+        const Script = "%modern
+%no-child-restrictions
+
+nothing sub noargs() {}
+
+string sub probe() {
+    list<int> l = (1, 2, 3);
+    string s = \"abc\";
+    binary b = binary(\"xyz\");
+    string strict;
+    try {
+        call_function(\"noargs\", 1);
+        strict = \"accepted\";
+    } catch (hash<ExceptionInfo> ex) {
+        strict = ex.err;
+    }
+    return sprintf(\"%y\", (l[-1], s[-1], b[-1], l[-2..-1], s[1], strict));
+}
+
+Queue q();
+string main_val = probe();
+background sub () { q.push(probe()); }();
+string bg = q.get();
+ThreadPool tp(1);
+tp.submit(sub () { q.push(probe()); });
+string pool = q.get();
+AsyncIoController::addTimerDelay(0s, sub () { q.push(probe()); });
+string timer = q.get();
+AsyncIoController::submitTask(sub () { q.push(probe()); });
+string task = q.get();
+tp.stopWait();
+printf(\"main: %s\\n\", main_val);
+foreach hash<auto> h in ({\"background\": bg, \"pool\": pool, \"timer\": timer, \"task\": task}.pairIterator()) {
+    printf(\"%s: %s\\n\", h.key, h.value == main_val ? \"same\" : h.value);
+}
+";
+
+        #! the output: negative offsets on lists, strings and binaries, a range with negative offsets, a string index
+        #! character, and the excess argument refused by strict arguments, the same in every thread
+        const Expected = "main: [3, c'c', 122, [2, 3], c'b', \"RUNTIME-OVERLOAD-ERROR\"]
+background: same
+pool: same
+timer: same
+task: same
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("CompiledModernInvariantsTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("the same values in every execution mode and thread", \invariantsTest());
+        set_return_value(main());
+    }
+
+    invariantsTest() {
+        TmpDir tmp("qore-compiled-modern-invariants-");
+        string script = tmp.path + "/invariants.q";
+        File f();
+        f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+                libqore_dir, libqore_dir, qore_bin, mode, script));
+            assertEq(Expected, output, "execution mode " + mode);
+        }
+    }
+}
