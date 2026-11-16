@@ -75,7 +75,9 @@ printf(\"%y\\n\", (C1, C2, C3, C4, K::KC, K::SV, k.m, k.r, k.c, k.s));
         foreach string opt in (("-O0", "-O3")) {
             string exe = sprintf("%s/members%s", tmp.path, opt);
             string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, opt, exe, script));
-            if (!assertTrue(is_file(exe), sprintf("qcc %s built the executable: %s", opt, out))) {
+            # assertTrue() returns no value: the file is checked again to skip an option without an executable
+            assertTrue(is_file(exe), sprintf("qcc %s built the executable: %s", opt, out));
+            if (!is_file(exe)) {
                 continue;
             }
             assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "qcc " + opt);
