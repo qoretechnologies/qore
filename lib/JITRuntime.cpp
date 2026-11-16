@@ -4368,7 +4368,9 @@ static const QoreTypeInfo* qore_rt_resolve_call_type_path(QoreAOTTypeResolver& r
 // Eliminates the need for EXPR_TREE serialization of cast operator nodes.
 // Generic: the path has type parameters (generic code), which are substituted with their types in the current call;
 // the code generator decides it when it emits the cast (qore#5661)
-template <bool Generic>
+// OrNothingPath: the path is that of an or-nothing cast ("*list<int>"), whose value has the or-nothing type
+// (qore#6174); see qore_rt_cast_by_type_path_dispatch()
+template <bool Generic, bool OrNothingPath>
 static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         const char* type_path, int64_t or_nothing, ExceptionSink* xsink, QoreProgram* pgm) {
     QoreValue inner = qore_rt_cast_normalize_weak_ref(fromBits(inner_bits));
@@ -4393,7 +4395,7 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
     // `list<string>` and `*list<string>` share the base type and differ
     // only in the or-nothing flag.
     const char* resolve_path = type_path;
-    if (or_nothing && resolve_path[0] == '*') {
+    if constexpr (OrNothingPath) {
         ++resolve_path;
     }
     std::string error;
@@ -4505,8 +4507,10 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         }
         QoreHashNode* init_hash = inner.get<QoreHashNode>()->hashRefSelf();
         // the values are converted to the value type as by an assignment, as in
-        // QoreComplexHashCastOperatorNode::castValue()
-        QoreValue result = qore_hash_private::newComplexHashFromHash(ti, init_hash, xsink, true);
+        // QoreComplexHashCastOperatorNode::castValue(); the hash of an or-nothing cast has the or-nothing type, as
+        // there, which the path resolved has not (qore#6174)
+        QoreValue result = qore_hash_private::newComplexHashFromHash(OrNothingPath
+            ? get_or_nothing_type_check(ti) : ti, init_hash, xsink, true);
         return toBits(result);
     }
 
@@ -4534,7 +4538,22 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         if (inner.isNothing() && or_nothing) {
             return toBits(QoreValue());
         }
+        // the list of an or-nothing cast has the or-nothing type, as in QoreComplexListCastOperatorNode::castValue(),
+        // which the path resolved has not (qore#6174)
+        const QoreTypeInfo* cast_ti = OrNothingPath ? get_or_nothing_type_check(ti) : ti;
         if (inner.getType() != NT_LIST) {
+            // a soft list cast converts any other value as by an assignment (a one-element list, or an empty list
+            // for NOTHING), as in QoreComplexListCastOperatorNode::castValue() (qore#6174)
+            if (QoreTypeInfo::getUniqueReturnComplexSoftList(ti)) {
+                QoreValue value = inner.refSelf();
+                QoreTypeInfo::acceptAssignment(cast_ti, "<cast operator>", value, xsink);
+                // acceptAssignment() leaves the value referenced when it raises an exception
+                if (*xsink) {
+                    value.discard(xsink);
+                    return toBits(QoreValue());
+                }
+                return toBits(value);
+            }
             xsink->raiseException("RUNTIME-CAST-ERROR",
                 "cannot cast from type '%s' to '%s'",
                 inner.getTypeName(), cast_type_name);
@@ -4542,7 +4561,7 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         }
         // List cast: return the value with the desired element type.
         // newComplexListFromValue takes ownership of inner's ref.
-        QoreValue result = qore_list_private::newComplexListFromValue(ti,
+        QoreValue result = qore_list_private::newComplexListFromValue(cast_ti,
             inner.refSelf(), xsink);
         return toBits(result);
     }
@@ -4624,21 +4643,34 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
     return toBits(QoreValue());
 }
 
+//! Casts by a type path; the path of an or-nothing cast is resolved without its "*" (see above)
+/** the or-nothing path is told apart with the test that stripped the "*" before (qore#6174), so that the other casts
+    make no added check
+*/
+template <bool Generic>
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_cast_by_type_path_dispatch(uint64_t inner_bits,
+        const char* type_path, int64_t or_nothing, ExceptionSink* xsink, QoreProgram* pgm) {
+    if (or_nothing && type_path && *type_path == '*') {
+        return qore_rt_cast_by_type_path_in_program<Generic, true>(inner_bits, type_path, or_nothing, xsink, pgm);
+    }
+    return qore_rt_cast_by_type_path_in_program<Generic, false>(inner_bits, type_path, or_nothing, xsink, pgm);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path(uint64_t inner_bits,
         const char* type_path, int64_t or_nothing, ExceptionSink* xsink) {
-    return qore_rt_cast_by_type_path_in_program<false>(inner_bits, type_path, or_nothing, xsink, getProgram());
+    return qore_rt_cast_by_type_path_dispatch<false>(inner_bits, type_path, or_nothing, xsink, getProgram());
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path_aot(QoreAOTContext* ctx, uint64_t inner_bits,
         const char* type_path, int64_t or_nothing, ExceptionSink* xsink) {
     QoreProgram* pgm = ctx && ctx->pgm ? ctx->pgm : getProgram();
-    return qore_rt_cast_by_type_path_in_program<false>(inner_bits, type_path, or_nothing, xsink, pgm);
+    return qore_rt_cast_by_type_path_dispatch<false>(inner_bits, type_path, or_nothing, xsink, pgm);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_cast_by_generic_type_path_aot(QoreAOTContext* ctx, uint64_t inner_bits,
         const char* type_path, int64_t or_nothing, ExceptionSink* xsink) {
     QoreProgram* pgm = ctx && ctx->pgm ? ctx->pgm : getProgram();
-    return qore_rt_cast_by_type_path_in_program<true>(inner_bits, type_path, or_nothing, xsink, pgm);
+    return qore_rt_cast_by_type_path_dispatch<true>(inner_bits, type_path, or_nothing, xsink, pgm);
 }
 
 // --- Call reference creation helper ---
