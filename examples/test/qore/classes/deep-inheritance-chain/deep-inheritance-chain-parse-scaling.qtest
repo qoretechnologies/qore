@@ -9,13 +9,13 @@
 
 %exec-class DeepInheritanceChainParseScalingTest
 
-#! Test for issue #6106: the time to parse a chain of classes grows about linearly with its length
+#! Test for issue #6106: the time to parse a chain of classes grows about quadratically with its length
 /** Each class of a chain walked the whole hierarchy again for each of its ancestors to add them to its list of base
     classes, and initialized the hierarchy of each ancestor again, adding the ancestors of their methods again: the
     parse time grew about with the fourth power of the length of the chain (a chain four times as long took about 200
     times as long to parse).  This test parses chains of Short and of Long classes and checks that the longer one
-    does not take more than MaxRatio times as long, a bound far above the ratio of the lengths (the list of base
-    classes of each class still has all of its ancestors) and far below the ratio of the fourth powers.  The best time
+    does not take more than MaxRatio times as long, a bound above the ratio of the squares of the lengths (each class
+    still has a list of all of its ancestors) and far below the ratio of the fourth powers.  The best time
     of several parses is taken for each length, so that the load of the machine does not decide the result.
 */
 class DeepInheritanceChainParseScalingTest inherits QUnit::Test {
