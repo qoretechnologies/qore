@@ -237,6 +237,9 @@ table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {
 
 
     @section xdbcfirebirdsqlutilbasev_0_2 XdbcFirebirdSqlUtilBase Module v0.2
+    - the \c "intersect" and \c "except" @ref select_option_set_operators "set operators" of a select, which Firebird
+      does not have, raise \c SET-OPERATOR-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>)
     - added support for the \c on_delete and \c on_update referential actions of foreign constraints; \c RESTRICT,
       which Firebird has no clause for, is refused with \c FOREIGN-CONSTRAINT-ERROR (see
       @ref xdbcfirebird_fk_actions)
@@ -3329,6 +3332,19 @@ string str = table.getSqlValue(date);
             if (info.query_hash.limit) {
                 sql += sprintf(" fetch next %d rows only", info.query_hash.limit.toInt());
             }
+        }
+
+        #! Returns the SQL keyword of a set operator; Firebird has only \c UNION
+        /** @throw SET-OPERATOR-ERROR the set operator is \c "intersect" or \c "except", which Firebird does not have
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        private string getSetOperatorSql(string op) {
+            if (op == "intersect" || op == "except") {
+                throw "SET-OPERATOR-ERROR", sprintf("%s: Firebird does not support the %y set operator", getDesc(),
+                    op);
+            }
+            return AbstractTable::getSetOperatorSql(op);
         }
 
         #! returns @ref True if the database requires a wildcard \c "*" to be prefixed with the table name when it appears with other column arguments in a select statement

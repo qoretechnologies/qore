@@ -1,0 +1,312 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires MysqlSqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%exec-class SqlUtilSetOperatorsTest
+
+#! a datasource that gives a server version and records the SQL that it is given, so MySQL SQL is made without a server
+class SetOpVersionDatasource inherits Qore::SQL::AbstractDatasource {
+    public {
+        int version;
+    }
+
+    constructor(int version) {
+        self.version = version;
+    }
+
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "mtest"; }
+    *string getUserName() { return "muser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return "mysql"; }
+    auto getServerVersion() { return version; }
+    auto getClientVersion() {}
+    string getConfigString() { return "mysql:muser@mtest"; }
+    hash<auto> getConfigHash() { return {"type": "mysql", "user": "muser", "db": "mtest"}; }
+    auto getOption(string opt) {}
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+
+    auto exec(string sql, ...) { return 0; }
+    auto vexec(string sql, *softlist<auto> vargs) { return 0; }
+    auto execRaw(string sql) { return 0; }
+    auto select(string sql, ...) {}
+    auto vselect(string sql, *softlist<auto> vargs) {}
+    auto selectRow(string sql, ...) {}
+    auto vselectRow(string sql, *softlist<auto> vargs) {}
+    auto selectRows(string sql, ...) {}
+    auto vselectRows(string sql, *softlist<auto> vargs) {}
+    auto selectTyped(string sql, ...) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+}
+
+#! Tests the set operator select options: union, union_all, intersect and except (issue #2961)
+/** The selects run on SQLite, and, in a schema or database of their own, on PostgreSQL when
+    \c QORE_DB_CONNSTR_PGSQL is set and on MySQL or MariaDB when \c QORE_DB_CONNSTR_MYSQL is set
+*/
+class SqlUtilSetOperatorsTest inherits QUnit::Test {
+    private {
+        *Datasource pgsql;
+        *Datasource mysql;
+        string mysql_skip = "QORE_DB_CONNSTR_MYSQL is not set";
+    }
+
+    constructor() : Test("SqlUtilSetOperators", "1.0", \ARGV) {
+        addTestCase("SQLite: set operators", \sqliteTest());
+        addTestCase("PostgreSQL: set operators", \pgsqlTest());
+        addTestCase("MySQL: set operators", \mysqlTest());
+        addTestCase("MySQL: server versions without intersect and except", \mysqlVersionTest());
+        addTestCase("invalid set operator arguments", \errorTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "SqlUtilSetOperators");
+            pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+            setupTables(pgsql);
+        }
+%endif
+%ifndef NoMysql
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            try {
+                *string connstr = MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL,
+                    "SqlUtilSetOperators");
+                Datasource ds(connstr);
+                if (ds.getDriverName() != "mysql") {
+                    mysql_skip = sprintf("the connection uses driver %y", ds.getDriverName());
+                } else {
+                    ds.open();
+                    mysql = ds;
+                    setupTables(mysql);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                mysql_skip = sprintf("cannot connect to MySQL: %s: %s", ex.err, ex.desc);
+            }
+        }
+%endif
+    }
+
+    globalTearDown() {
+        if (pgsql) {
+            pgsql.rollback();
+            delete pgsql;
+            PgsqlRunSchema::teardown();
+        }
+        if (mysql) {
+            mysql.rollback();
+            delete mysql;
+        }
+        MysqlRunDatabase::teardown();
+    }
+
+    private static setupTables(Datasource ds) {
+        ds.exec("create table so_a (id integer not null primary key, name varchar(10))");
+        ds.exec("create table so_b (id integer not null primary key, name varchar(10))");
+        ds.exec("insert into so_a values (1, 'a'), (2, 'b'), (3, 'c')");
+        ds.exec("insert into so_b values (2, 'b'), (3, 'x'), (4, 'd')");
+        ds.commit();
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        setupTables(ds);
+        checkSetOperators(ds, True);
+        ds.rollback();
+    }
+
+    pgsqlTest() {
+        if (!pgsql) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set or no pgsql module");
+        }
+        on_exit pgsql.rollback();
+        checkSetOperators(pgsql, True);
+    }
+
+    mysqlTest() {
+        if (!mysql) {
+            testSkip(mysql_skip);
+        }
+        on_exit mysql.rollback();
+        int version = mysql.getServerVersion();
+        checkSetOperators(mysql, version >= 100000 ? version >= 100300 : version >= 80031);
+    }
+
+    #! checks the set operators on a database
+    /** @param ds the database
+        @param all True if the database has intersect and except
+    */
+    private checkSetOperators(Datasource ds, bool all) {
+        Table a(ds, "so_a");
+        Table b(ds, "so_b");
+        string sql;
+
+        # union of two tables, the other one with a where clause; the ordering applies to the result
+        assertEq(({"id": 1, "name": "a"}, {"id": 2, "name": "b"}, {"id": 3, "name": "c"}, {"id": 3, "name": "x"},
+            {"id": 4, "name": "d"}), a.selectRows({
+            "columns": ("id", "name"),
+            "union": {"table": b, "select": {"columns": ("id", "name"), "where": {"id": op_gt(2)}}},
+            "orderby": ("id", "name"),
+        }, \sql));
+        assertRegex(" union select ", sql);
+
+        # union all with descending order and a limit of the result, the other table by name
+        assertEq(({"id": 4, "name": "d"}, {"id": 3, "name": "c"}, {"id": 3, "name": "x"}), a.selectRows({
+            "columns": ("id", "name"),
+            "union_all": {"table": "so_b", "select": {"columns": ("id", "name")}},
+            "orderby": ("-id", "name"),
+            "limit": 3,
+        }, \sql));
+        assertRegex(" union all select ", sql);
+
+        # the values of the selects are bound in the order of the SQL: a where clause in both selects
+        assertEq(({"id": 1}, {"id": 4}), a.selectRows({
+            "columns": ("id",),
+            "where": {"name": "a"},
+            "union": {"table": b.getTable(), "select": {"columns": ("id",), "where": {"name": "d"}}},
+            "orderby": "id",
+        }));
+
+        # selects of the same table, a list of them, one with ordering and paging of its own
+        assertEq((1, 2, 3), map $1.id, a.selectRows({
+            "columns": ("id",),
+            "where": {"id": 1},
+            "union": (
+                {"columns": ("id",), "where": {"id": 3}},
+                {"columns": ("id",), "orderby": "id", "limit": 1, "offset": 1},
+            ),
+            "orderby": "id",
+        }));
+
+        if (!all) {
+            assertThrows("SET-OPERATOR-ERROR", sub () {
+                a.selectRows({"columns": ("id",), "intersect": {"table": b, "select": {"columns": ("id",)}}});
+            });
+            assertThrows("SET-OPERATOR-ERROR", sub () {
+                a.selectRows({"columns": ("id",), "except": {"table": b, "select": {"columns": ("id",)}}});
+            });
+            return;
+        }
+
+        # intersect
+        assertEq(({"id": 2, "name": "b"},), a.selectRows({
+            "columns": ("id", "name"),
+            "intersect": {"table": b, "select": {"columns": ("id", "name")}},
+        }, \sql));
+        assertRegex(" intersect select ", sql);
+
+        # except
+        assertEq(({"id": 3, "name": "c"},), a.selectRows({
+            "columns": ("id", "name"),
+            "where": {"id": op_ge(2)},
+            "except": {"table": b, "select": {"columns": ("id", "name"), "where": {"name": "b"}}},
+            "orderby": "id",
+        }, \sql));
+        assertRegex(" except select ", sql);
+
+        # the operators are applied from left to right in the order of the keys: (a union b) except a, and
+        # (a except b) union b
+        assertEq((4,), map $1.id, a.selectRows({
+            "columns": ("id",),
+            "union": {"table": b, "select": {"columns": ("id",)}},
+            "except": {"columns": ("id",)},
+            "orderby": "id",
+        }));
+        assertEq((1, 2, 3, 4), map $1.id, a.selectRows({
+            "columns": ("id",),
+            "except": {"table": b, "select": {"columns": ("id",)}},
+            "union": {"table": b, "select": {"columns": ("id",)}},
+            "orderby": "id",
+        }));
+
+        # union first, then intersect: intersect does not take precedence
+        assertEq((2, 3), map $1.id, a.selectRows({
+            "columns": ("id",),
+            "where": {"id": 1},
+            "union": {"table": b, "select": {"columns": ("id",), "where": {"id": op_lt(4)}}},
+            "intersect": {"columns": ("id",), "where": {"id": op_ge(2)}},
+            "orderby": "id",
+        }));
+    }
+
+    mysqlVersionTest() {
+        # version -> True if intersect and except are supported
+        foreach hash<auto> c in (
+            {"version": 80030, "ok": False},
+            {"version": 80031, "ok": True},
+            {"version": 100299, "ok": False},
+            {"version": 100300, "ok": True},
+            ) {
+            Table t(new SetOpVersionDatasource(c.version), {"columns": {"id": {"qore_type": "integer"}}}, "t");
+            foreach string op in ("intersect", "except") {
+                code get = sub () { t.getSelectSql({op: {}}); };
+                if (c.ok) {
+                    assertEq(sprintf("select * from mtest.t %s select * from mtest.t", op), t.getSelectSql({op: {}}),
+                        sprintf("%d %s", c.version, op));
+                } else {
+                    assertThrows("SET-OPERATOR-ERROR", "8.0.31.*10.3", get, NOTHING, sprintf("%d %s", c.version,
+                        op));
+                }
+            }
+            # union is always supported
+            assertEq("select * from mtest.t union select * from mtest.t", t.getSelectSql({"union": {}}));
+        }
+    }
+
+    errorTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        setupTables(ds);
+        Table a(ds, "so_a");
+        code do_select = sub (hash<auto> sh) { a.selectRows(sh); };
+        assertThrows("SELECT-ERROR", "superquery.*cannot be combined", do_select,
+            {"union": {}, "superquery": {"columns": "id"}});
+        assertThrows("SELECT-ERROR", "forupdate.*cannot be combined", do_select, {"union": {}, "forupdate": True});
+        assertThrows("OPTION-ERROR", "expecting \"hash\"", do_select, {"union": ("x",)});
+        assertThrows("SELECT-ERROR", "unknown keys", do_select, {"union": {"table": "so_b", "columns": "id"}});
+        assertThrows("SELECT-ERROR", "expects an AbstractTable", do_select, {"union": {"table": 1, "select": {}}});
+        assertThrows("OPTION-ERROR", do_select, {"union": {"x": 1}});
+        # another datasource
+        Datasource other("sqlite3:x@:memory:");
+        setupTables(other);
+        assertThrows("DATASOURCE-ERROR", do_select, {"union": {"table": new Table(other, "so_b"), "select": {}}});
+        ds.rollback();
+        other.rollback();
+    }
+}
