@@ -1870,6 +1870,12 @@
     - an allocation that fails while a thread enters another %Program (ex: in a binary module's
       \c QoreExternalProgramContextHelper or a parse commit) leaves the thread in the calling %Program and releases
       its thread count in the entered %Program, which could otherwise not be deleted (issue #6198)
+    - @ref Qore::Thread::ThreadPool::stop() "ThreadPool::stop()" and
+      @ref Qore::Thread::ThreadPool::stopWait() "ThreadPool::stopWait()" called from a task of the same pool raise
+      \c THREADPOOL-ERROR; they waited for the worker running the calling task and never returned (issue #6242)
+    - a task of a @ref Qore::Thread::ThreadPool "ThreadPool" that releases the last reference to the pool no longer
+      hangs: the pool's manager thread stops the pool instead of the task's worker, which waited for itself
+      (issue #6253)
     - the negative of an absolute date with microseconds (ex: <tt>-1970-01-01T00:00:01.5Z</tt>) is
       \c 1969-12-31T23:59:58.5Z; the microseconds were negated as an unsigned value and gave another date (issue #6103)
     - the decimal fraction of an ISO 8601 duration component (ex: \c P0.0000001Y for

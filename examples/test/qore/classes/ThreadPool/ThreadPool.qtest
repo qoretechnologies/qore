@@ -45,6 +45,8 @@ class ThreadPoolTest inherits QUnit::Test {
         addTestCase("a detached worker does not count against max_threads", \detachMaxThreadsTest());
         addTestCase("stopWait() waits for a detached worker", \detachStopWaitTest());
         addTestCase("stop() waits for a detached worker", \detachStopTest());
+        addTestCase("stop() and stopWait() from a task of the same pool", \stopFromOwnTaskTest());
+        addTestCase("a task that releases the last reference to its pool", \destroyFromOwnTaskTest());
         set_return_value(main());
     }
 
@@ -271,5 +273,120 @@ class ThreadPoolTest inherits QUnit::Test {
 
         # signal background task to exit
         c.dec();
+    }
+
+    #! stop() and stopWait() called from a task of the same pool raise an exception instead of waiting for
+    #! themselves without end (qore#6242); another thread can stop the pool, also on the task's request
+    stopFromOwnTaskTest() {
+        foreach string method in (("stop", "stopWait")) {
+            ThreadPool tp(1);
+            Queue q();
+            tp.submit(sub () {
+                try {
+                    call_object_method(tp, method);
+                    q.push("returned");
+                } catch (hash<ExceptionInfo> ex) {
+                    q.push(ex.err);
+                }
+            });
+            assertEq("THREADPOOL-ERROR", q.get(30000), method + "() from a task of the pool");
+            # a task can have another thread stop its pool
+            Counter c(1);
+            tp.submit(sub () {
+                background sub () {
+                    tp.stop();
+                    c.dec();
+                }();
+            });
+            c.waitForZero();
+            # the pool has stopped: it takes no more tasks
+            assertThrows("THREADPOOL-ERROR", \tp.submit(), sub () {}, method + "(): the pool is stopped");
+        }
+        # a task of another pool stops a pool normally
+        ThreadPool other(1);
+        ThreadPool tp(1);
+        Queue q();
+        other.submit(sub () {
+            tp.stop();
+            q.push("stopped");
+        });
+        assertEq("stopped", q.get(30000), "stop() from a task of another pool");
+        other.stop();
+    }
+
+    #! a task of a pool that releases the last reference to the pool's object: the pool is stopped without waiting
+    #! for the task (qore#6253; the destructor waited for the worker running it without end)
+    destroyFromOwnTaskTest() {
+        Queue go();
+        Queue done();
+        # the closure is the only holder of the pool when the function has returned
+        code make = sub () {
+            ThreadPool tp(1);
+            tp.submit(sub () {
+                go.get();
+                # the last reference: the pool's destructor runs in this task
+                remove tp;
+                done.push("released");
+            });
+        };
+        make();
+        go.push(1);
+        assertEq("released", done.get(30000));
+
+        # the closure of the task holds the last reference: it is released with the task's data, after the task
+        # has run, and a queued task is canceled
+        {
+            Queue go2();
+            Queue done2();
+            code make2 = sub () {
+                ThreadPool tp(1);
+                tp.submit(sub () {
+                    go2.get();
+                    done2.push(tp.toString() ? "ran" : "");
+                });
+                tp.submit(sub () { done2.push("queued task ran"); }, sub () { done2.push("canceled"); });
+            };
+            make2();
+            go2.push(1);
+            assertEq("ran", done2.get(30000), "the task holding the pool ran");
+            assertEq("canceled", done2.get(30000), "the queued task was canceled");
+        }
+
+        # a detached worker releases the last reference to its pool
+        {
+            Queue go3();
+            Queue done3();
+            code make3 = sub () {
+                ThreadPool tp(1);
+                tp.submit(sub () {
+                    go3.get();
+                    tp.detachCurrentThread();
+                    remove tp;
+                    done3.push("released");
+                });
+            };
+            make3();
+            go3.push(1);
+            assertEq("released", done3.get(30000), "a detached worker released its pool");
+        }
+
+        # the thread-local data of the task holds the last reference: it is released when the worker clears that data
+        # after the task; the destructor cancels the queued task
+        {
+            Queue go4();
+            Queue done4();
+            ThreadPool tp4(1);
+            tp4.submit(sub () {
+                go4.get();
+                save_thread_data("tp", tp4);
+                # the variable is shared with this test: only the thread-local data holds the pool now
+                remove tp4;
+                done4.push("saved");
+            });
+            tp4.submit(sub () { done4.push("queued task ran"); }, sub () { done4.push("canceled"); });
+            go4.push(1);
+            assertEq("saved", done4.get(30000), "the task saved its pool in its thread-local data");
+            assertEq("canceled", done4.get(30000), "the pool released with the thread-local data was destroyed");
+        }
     }
 }
