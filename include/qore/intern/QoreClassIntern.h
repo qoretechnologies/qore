@@ -1483,6 +1483,9 @@ public:
     // accessing the object's data
     DLLLOCAL void addContextAccess(const QoreMemberInfo& mi, const qore_class_private* qc);
 
+    // issue #6393: copies the context entries of the given member, which shares the storage of this member
+    DLLLOCAL void addContextMap(const QoreMemberInfo& mi);
+
     DLLLOCAL void addContextAccessForClass(const qore_class_private* class_ctx,
             const qore_class_private* member_class_ctx);
 

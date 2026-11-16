@@ -262,6 +262,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   a debug hook in them
         # - JITFinalizeCancellation (#6305, #6313): its checks run in child processes that set their own --exec-mode
         #   and arm a debug hook in them
+        # - private-internal-redeclared-member (#6393): its probes run in child processes in the default mode and that
+        #   set their own --exec-mode, and in qcc
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
@@ -297,6 +299,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/misc/hashdecl-default-closure-typeparam.qtest",
                                  "examples/test/qore/misc/declaration-initializer-scope.qtest",
                                  "examples/test/qore/classes/or-nothing-container-casts.qtest",
+                                 "examples/test/qore/classes/private-internal-redeclared-member.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
