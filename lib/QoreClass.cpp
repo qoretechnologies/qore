@@ -914,6 +914,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         deref_source_program(old.deref_source_program),
         from_module(old.from_module),
         lang(old.lang) {
+    hierarchy_initialized = old.hierarchy_initialized;
     system_constructor = old.system_constructor ? old.system_constructor->copy(cls) : nullptr;
 
     // set pointer to new copy
@@ -1046,6 +1047,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         from_module(old.from_module),
         lang(old.lang) {
     QORE_TRACE("qore_class_private::qore_class_private(const qore_class_private& old)");
+    // the copy is committed: a later parse must not write its parse state (issue #6106)
+    hierarchy_initialized = old.hierarchy_initialized;
     if (!old.initialized)
         const_cast<qore_class_private&>(old).initialize();
 
@@ -1405,7 +1408,22 @@ int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
         }
     }
 
-    hierarchy_initialized = true;
+    // a committed or builtin class can be in use by other threads, so its parse state is never written here; one
+    // with a base class that could not be resolved, or with a base class that is initialized again for this reason,
+    // is initialized again, so that the error is reported again for each subclass, as before
+    if (!committed && !sys) {
+        bool resolved = true;
+        for (auto& i : *scl) {
+            const qore_class_private* bc = i->sclass ? i->sclass->priv : nullptr;
+            if (!bc || (bc->scl && !bc->hierarchy_initialized && !bc->committed && !bc->sys)) {
+                resolved = false;
+                break;
+            }
+        }
+        if (resolved) {
+            hierarchy_initialized = true;
+        }
+    }
     return 0;
 }
 
@@ -1699,8 +1717,11 @@ void qore_class_private::finalizeBuiltin(const char* nspath) {
     // A builtin class is shared by every Program and can be used by other threads as soon as it is registered, which a
     // binary module loaded at runtime does while other threads run: the parse state that a parse would otherwise
     // resolve the first time it reaches the class is resolved now, before the class is published, so that no later
-    // parse writes it while the class is in use
-    parseResolveHierarchy();
+    // parse writes it while the class is in use; its hierarchy is marked initialized here, as initializeHierarchy()
+    // does not write the parse state of a builtin class (issue #6106)
+    if (!parseResolveHierarchy()) {
+        hierarchy_initialized = true;
+    }
     parseResolveAbstract();
     // the one-time runtime initialization that a parse commit would otherwise make the first time it reaches the
     // class, writing flags that share a word with the ones that method calls read

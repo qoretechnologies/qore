@@ -20478,6 +20478,8 @@ bool QoreAOTBinaryDeserializer::commitClassesPrepare(std::string& error) {
         // parsing a subclass while other threads run the class - repeats the resolution and writes the class's
         // parse state while it is in use.
         priv->parse_resolve_hierarchy = true;
+        // and its hierarchy is not initialized again for a subclass (issue #6106)
+        priv->hierarchy_initialized = true;
     }
 
     return true;
