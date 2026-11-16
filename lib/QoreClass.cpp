@@ -9311,12 +9311,12 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink, bool defer_pen
             RuntimeConfig& rc;
             QoreParseOptions old_po;
 
-            DLLLOCAL StaticVarInitRcParseOptionsHelper(RuntimeConfig& rc, const QoreParseOptions& po) : rc(rc),
+            StaticVarInitRcParseOptionsHelper(RuntimeConfig& rc, const QoreParseOptions& po) : rc(rc),
                     old_po(rc.getParseOptions()) {
                 rc.setParseOptions(po);
             }
 
-            DLLLOCAL ~StaticVarInitRcParseOptionsHelper() {
+            ~StaticVarInitRcParseOptionsHelper() {
                 rc.setParseOptions(old_po);
             }
         };

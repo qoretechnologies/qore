@@ -191,13 +191,13 @@ namespace {
 */
 class HashDeclDefaultReceiverHelper {
 public:
-    DLLLOCAL HashDeclDefaultReceiverHelper(const HashDeclMemberInfo& mi) : set(mi.getDefaultReceiverTypeInfo()) {
+    HashDeclDefaultReceiverHelper(const HashDeclMemberInfo& mi) : set(mi.getDefaultReceiverTypeInfo()) {
         if (set) {
             old = runtime_set_receiver_type_info(mi.getDefaultReceiverTypeInfo());
         }
     }
 
-    DLLLOCAL ~HashDeclDefaultReceiverHelper() {
+    ~HashDeclDefaultReceiverHelper() {
         if (set) {
             runtime_set_receiver_type_info(old);
         }
