@@ -3328,6 +3328,27 @@ bool qore_ir_collect_take_over_params(const QoreIRFunction& ir_func, std::unorde
 }
 
 // documented in QoreIR.h
+bool qore_ir_function_may_deopt(const QoreIRFunction& ir_func) {
+    for (const auto& block : ir_func.blocks) {
+        for (const auto& inst : block->instructions) {
+            switch (inst->opcode) {
+                case QoreIROpcode::GuardInt:
+                case QoreIROpcode::GuardFloat:
+                case QoreIROpcode::GuardType:
+                case QoreIROpcode::GuardNotNothing:
+                    if (static_cast<const QoreIRGuardInstruction*>(inst.get())->deopt_target) {
+                        return true;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+    return false;
+}
+
+// documented in QoreIR.h
 void qore_ir_compute_param_take_over(QoreIRFunction& ir_func, LocalVar* const* params, unsigned num_params) {
     ir_func.param_take_over = qore_ir_collect_take_over_params(ir_func, params, num_params, nullptr);
 }

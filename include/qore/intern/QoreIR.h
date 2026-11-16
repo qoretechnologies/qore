@@ -110,6 +110,13 @@ DLLLOCAL bool qore_ir_local_may_hold_reference(const LocalVar* lv);
 */
 DLLLOCAL bool qore_ir_local_is_written(const QoreIRFunction& ir_func, const LocalVar* lv);
 
+//! Returns true if \a ir_func can leave the function by a deoptimization: it has a guard with a deopt target
+/** The deoptimization runs the function again from its parameters' runtime variables, so such a function takes no
+    parameter over (native code: QoreIRToLLVM::preCreateLocalAllocas(); the IR interpreter:
+    buildInterpreterAnalysis()); no lowering makes such a function today, which a debug build asserts
+*/
+DLLLOCAL bool qore_ir_function_may_deopt(const QoreIRFunction& ir_func);
+
 //! Sets QoreIRFunction::param_take_over of \a ir_func for the \a num_params parameters \a params of its signature
 /** The AST interpreter's parameter takes the caller's temporary argument over (UserVariantBase::setupCall()), so a
     write to the parameter releases the argument, and the destructor of an object that the caller no longer holds runs

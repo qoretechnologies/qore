@@ -3308,30 +3308,6 @@ void QoreIRToLLVM::emitAssignedClosureLocalInstantiation(const LocalVar* root_lo
     }
 }
 
-//! Returns true if native code for \a ir_func can leave the function by a deoptimization (a guard with a deopt target)
-/** The normal entry takes no parameter over in such a function (see take_over_params in preCreateLocalAllocas()):
-    the deoptimization runs the function again with the parameters' runtime variables, which taking them over empties
-*/
-static bool qore_ir_function_may_deopt(const QoreIRFunction& ir_func) {
-    for (const auto& block : ir_func.blocks) {
-        for (const auto& inst : block->instructions) {
-            switch (inst->opcode) {
-                case QoreIROpcode::GuardInt:
-                case QoreIROpcode::GuardFloat:
-                case QoreIROpcode::GuardType:
-                case QoreIROpcode::GuardNotNothing:
-                    if (static_cast<const QoreIRGuardInstruction*>(inst.get())->deopt_target) {
-                        return true;
-                    }
-                    break;
-                default:
-                    break;
-            }
-        }
-    }
-    return false;
-}
-
 void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* llvm_func) {
     llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
     llvm::IRBuilder<> alloca_builder(entry, entry->begin());
@@ -3354,13 +3330,12 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
     // function that can deoptimize takes none over: the deoptimization runs it again from the runtime variables.  No
     // lowering makes such a function today (a guard has a deopt target only in a try block, where the values that a
     // guard checks are made by invokes, which end their block, so no guard is made for them): a debug build asserts
-    // it, so that a lowering that makes one is found; a release build calls the function without the take-over
+    // it, so that a lowering that makes one is found; a release build calls the function without the take-over and
+    // reports nothing (printd() is compiled only in a debug build)
     std::unordered_set<const void*> take_over_params;
     if (current_ir_func && !fast_entry_args && !current_ir_func->param_local_vars.empty()
             && qore_ir_collect_take_over_params(*current_ir_func, &take_over_params)
             && qore_ir_function_may_deopt(*current_ir_func)) {
-        printd(0, "QoreIRToLLVM::preCreateLocalAllocas() '%s': a function that can deoptimize has parameters that "
-            "take their arguments over; they are not taken over (issue #5958)\n", current_ir_func->name.c_str());
         assert(false && "a function with a deopt-target guard has parameters that take their arguments over");
         take_over_params.clear();
     }

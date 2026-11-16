@@ -3386,6 +3386,14 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_param_slot_ids = std::move(param_slot_ids);
     func.interpreter_param_local_vars = std::move(param_local_vars);
     func.interpreter_locals_ir_only = std::move(locals_ir_only);
+    // a guard with a deopt target leaves the frame for a run of the function from the parameters' runtime variables,
+    // which the move empties: such a function moves nothing.  No lowering makes one today (see
+    // qore_ir_function_may_deopt()): a debug build asserts it; a release build keeps the parameters on their variables
+    // until the frame loads them, as without the take-over, and reports nothing
+    if (!take_over_param_moves.empty() && qore_ir_function_may_deopt(func)) {
+        assert(false && "a function with a deopt-target guard has parameters that take their arguments over");
+        take_over_param_moves.clear();
+    }
     func.interpreter_take_over_param_moves = std::move(take_over_param_moves);
     func.interpreter_reference_slots = std::move(reference_slots);
     func.interpreter_real_slots = std::move(real_slots);
