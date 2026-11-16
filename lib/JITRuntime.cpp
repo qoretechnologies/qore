@@ -4876,10 +4876,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
     if (!method) {
         method = obj_class->findStaticMethod(method_name, access);
         if (!method) {
-            // issue #995: a pseudo-method of objects, as in ParseObjectMethodReferenceNode::makeReferenceForClass()
-            QoreClass* pqc;
-            if (pseudo_classes_find_method(NT_OBJECT, method_name, pqc)) {
-                return toBits(qore_make_pseudo_method_reference(&loc_builtin, obj_val, method_name, xsink));
+            // issue #995: a pseudo-method of objects or a member, looked up by name when called, as in
+            // ParseObjectMethodReferenceNode::makeReferenceForClass()
+            if (qore_object_has_pseudo_or_member_method(qore_class_private::get(*obj_class), method_name,
+                    runtime_get_class())) {
+                return toBits(QoreValue(new RunTimeObjectMethodReferenceNode(&loc_builtin, obj, method_name)));
             }
             xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR",
                 "cannot resolve reference to %s::%s(): unknown method", obj->getClassName(), method_name);

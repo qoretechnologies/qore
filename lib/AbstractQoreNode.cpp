@@ -1210,8 +1210,9 @@ bool needs_scan(const AbstractQoreNode* n) {
         case NT_OBJECT: return true;
         case NT_RUNTIME_CLOSURE: return static_cast<const QoreClosureBase*>(n)->needsScan();
         case NT_FUNCREF: {
-            const auto* callback = qore_get_sandbox_bound_callback(n);
-            return callback && needs_scan(callback);
+            // a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)
+            const AbstractQoreNode* held = qore_get_call_reference_scan_node(n);
+            return held && needs_scan(held);
         }
         case NT_REFERENCE: return lvalue_ref::get(static_cast<const ReferenceNode*>(n))->needsScan();
     }

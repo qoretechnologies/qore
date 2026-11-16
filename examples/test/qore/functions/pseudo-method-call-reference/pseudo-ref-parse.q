@@ -23,3 +23,6 @@ check("auto value", "auto a = 1; code c = \\a.noSuchMethod();");
 check("object pseudo-method", "class C {} C o(); code c = \\o.className();");
 check("unknown object method", "class C {} C o(); code c = \\o.noSuchMethod();");
 check("pseudo-method of an object value", "object o = new Mutex(); code c = \\o.className();");
+check("code member of a hash", "hash<auto> h = {}; code c = \\h.f();");
+check("code member of an optional hash", "*hash<auto> h; code c = \\h.f();");
+check("code member of an object", "class C { public { code f; } } C o(); code c = \\o.f();");

@@ -5297,6 +5297,14 @@ static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_
     QoreClass* qc = nullptr;
     const QoreMethod* w = pseudo_classes_find_method(NT_OBJECT, nme, qc);
     if (w) {
+        // a pseudo-method that depends on the class context (hasCallableMethod()) runs in the class context of the
+        // call: that of the code that made a call reference to it, which a call through the reference gives, and
+        // which can differ from the context it is called in (issue #995); a direct call has its own context
+        if (class_ctx != runtime_get_class()) {
+            ClassOnlySubstitutionHelper csh(class_ctx);
+            return qore_method_private::evalPseudoMethodWithPolicy<Lexical>(policy, *w, xsink, rc, nullptr, self,
+                args);
+        }
         return qore_method_private::evalPseudoMethodWithPolicy<Lexical>(policy, *w, xsink, rc, nullptr, self, args);
     } else if (qcp.methodGate && !qcp.methodGate->inMethod(self)) { // call methodGate with unknown method name and arguments
         return qcp.evalMethodGateImpl<Lexical>(policy, self, nme, args, xsink);

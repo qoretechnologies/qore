@@ -542,28 +542,32 @@ private:
     DLLLOCAL virtual ~RunTimeObjectMethodReferenceNode();
 };
 
-//! a run-time call reference to a pseudo-method of a value (issue #995): \c \\l.size() for a list \c l, or a
-//! pseudo-method of an object that its class does not have, such as \c \\o.className()
-/** The reference holds the value, an object weakly, as a method reference does, so that an object can hold a
-    reference to its own pseudo-method; a call evaluates the pseudo-method with it as a direct call does
-    (pseudo_classes_eval())
+//! a run-time call reference to a pseudo-method of a value that is not an object (issue #995): \c \\l.size() for a
+//! list \c l
+/** The reference holds the value; a call calls the method as a direct call with the value does: a code member of a
+    hash with the name of the method, or the pseudo-method of the value's type (pseudo_classes_eval()).  A reference
+    to a pseudo-method of an object is a RunTimeObjectMethodReferenceNode, whose call looks the method up by name as a
+    direct call does.  The value is scanned for recursive references (qore_get_call_reference_scan_node())
 */
 class RunTimePseudoMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
-    //! raises the exception of a direct call of the pseudo-method on an object that has been deleted
-    /** @return -1 if the exception was raised, 0 if not
-    */
-    DLLLOCAL int checkObject(ExceptionSink* xsink) const;
-
-    //! creates the reference; takes a new reference to \a n_val (a weak reference to an object)
+    //! creates the reference; takes a new reference to \a n_val, which is not an object
     DLLLOCAL RunTimePseudoMethodReferenceNode(const QoreProgramLocation* loc, QoreValue n_val, const char* n_method);
 
     DLLLOCAL virtual QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const;
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const override;
+    //! a call with named arguments, bound to the parameters of the pseudo-method as a direct call does
+    DLLLOCAL QoreValue dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy, ExceptionSink* xsink) const override;
 
     DLLLOCAL virtual bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
         return RunTimePseudoMethodReferenceNode::is_equal_hard(v, xsink);
+    }
+
+    //! returns the value that the reference holds
+    DLLLOCAL const QoreValue& getValue() const {
+        return val;
     }
 
     //! two references are equal if they refer to the same pseudo-method of the same value (hard comparison)
@@ -577,20 +581,31 @@ protected:
     DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
 
 private:
-    //! the value; an object is held with a weak reference
+    //! the value
     QoreValue val;
     std::string method;
+    //! the class context of the code that created the reference, for a call with named arguments
+    const qore_class_private* cctx;
+
+    //! returns the code member of a hash value with the name of the method, which a direct call calls, or nullptr
+    DLLLOCAL const ResolvedCallReferenceNode* getHashMember() const;
 
     DLLLOCAL virtual ~RunTimePseudoMethodReferenceNode();
 };
 
-//! makes a call reference to the pseudo-method \a method of \a val (issue #995)
-/** raises an exception as a direct call of the pseudo-method does if the value's type has no such pseudo-method
+//! makes a call reference to the method \a method of \a val, which is not an object (issue #995)
+/** raises an exception as a direct call of the pseudo-method does if the value's type has no such pseudo-method and
+    the value is not a hash with a code member of the name
 
     @return the reference, or no value if an exception was raised
 */
 DLLLOCAL QoreValue qore_make_pseudo_method_reference(const QoreProgramLocation* loc, QoreValue val,
         const char* method, ExceptionSink* xsink);
+
+//! returns true if an object of the class has a method of the name for a call reference that a class method does not
+//! provide: a pseudo-method of objects, or a member, which a direct call calls if it holds code (issue #995)
+DLLLOCAL bool qore_object_has_pseudo_or_member_method(const qore_class_private* cls, const char* method,
+        const qore_class_private* class_ctx);
 
 //! a run-time call reference to a method of a particular object where the method's class
 // is known when the method reference node object is created

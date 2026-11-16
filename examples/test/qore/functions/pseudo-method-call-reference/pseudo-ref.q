@@ -11,7 +11,60 @@ class Ble {
 class Holder {
     public {
         *code c;
+        string name = "holder";
     }
+
+    constructor(*string n) {
+        if (n) {
+            name = n;
+        }
+    }
+
+    destructor() {
+        if (name != "holder") {
+            printf("destructor %s\n", name);
+        }
+    }
+}
+
+#! has a code member named like a pseudo-method
+class Mem {
+    public {
+        code className = string sub () { return "member"; };
+    }
+}
+
+#! makes references to pseudo-methods that depend on the class context
+class K {
+    private int pm() {
+        return 3;
+    }
+
+    bool hcmDirect() {
+        return self.hasCallableMethod("pm");
+    }
+
+    code hcmRef() {
+        return \self.hasCallableMethod();
+    }
+
+    bool callInside(code c) {
+        return c("pm");
+    }
+}
+
+#! a cycle through a reference to a pseudo-method of a hash that holds the object
+sub hash_cycle() {
+    Holder o("hash cycle");
+    hash<auto> h = {"o": o};
+    o.c = \h.size();
+}
+
+#! a cycle through a reference to a pseudo-method of a list that holds the object
+sub list_cycle() {
+    Holder o("list cycle");
+    list<auto> l = (o,);
+    o.c = \l.size();
 }
 
 sub tryit(string label, code c) {
@@ -94,6 +147,33 @@ tryit("auto object method", auto sub () { return (\ao.huj())(); });
     hh.c = \hh.className();
     tryit("object holding its own reference", auto sub () { return hh.c(); });
 }
+# a cycle through the value of a reference is collected when it can no longer be reached
+hash_cycle();
+list_cycle();
+printf("after the cycles\n");
+
+# a code member with the name of the method is called, as by a direct call
+hash<auto> hm = {"size": int sub () { return 99; }, "f": int sub (int x) { return x * 2; }};
+tryit("hash code member, direct call", auto sub () { return hm.size(); });
+tryit("hash code member, reference", auto sub () { return (\hm.size())(); });
+auto ahm = hm;
+tryit("hash code member with arguments, direct call", auto sub () { return ahm.f(3); });
+tryit("hash code member with arguments, reference", auto sub () { return (\ahm.f())(3); });
+Mem mem();
+tryit("object code member, direct call", auto sub () { return mem.className(); });
+tryit("object code member, reference", auto sub () { return (\mem.className())(); });
+
+# the class context of the code that made the reference
+K k();
+tryit("class context, direct call", auto sub () { return k.hcmDirect(); });
+tryit("class context, reference made in the class", auto sub () { return k.hcmRef()("pm"); });
+tryit("class context, reference made outside the class", auto sub () { return k.callInside(\k.hasCallableMethod()); });
+
+# named arguments
+string hw = "hello world";
+tryit("named arguments, direct call", auto sub () { return hw.substr(start: 6); });
+tryit("named arguments, reference", auto sub () { return (\hw.substr())(start: 6); });
+
 # the reference holds its value: a list holding an object
 {
     list<auto> lo = (new Ble(), 1);

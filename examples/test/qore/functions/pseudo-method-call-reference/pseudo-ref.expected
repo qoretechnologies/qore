@@ -33,4 +33,18 @@ temporary object: "Ble"
 auto object pseudo-method: "Ble"
 auto object method: 1
 object holding its own reference: "Holder"
+destructor hash cycle
+destructor list cycle
+after the cycles
+hash code member, direct call: 99
+hash code member, reference: 99
+hash code member with arguments, direct call: 6
+hash code member with arguments, reference: 6
+object code member, direct call: "member"
+object code member, reference: "member"
+class context, direct call: True
+class context, reference made in the class: True
+class context, reference made outside the class: False
+named arguments, direct call: "world"
+named arguments, reference: "world"
 list held by the reference: 2
