@@ -227,6 +227,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   under valgrind
         # - float-int-conversion (#6181): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - QUnit result-counts (#2297): the test whose results it counts runs in child processes without an
+        #   execution mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
@@ -265,6 +267,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-7.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-8.qtest",
                                  "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest",
+                                 "examples/test/qlib/QUnit/result-counts.qtest",
                                  "modules/dataframe/test/dataframe-default-encoding.qtest",
                                  "modules/dataframe/test/dataframe-default-encoding-names.qtest",
                                  "modules/dataframe/test/dataframe-aot-plugin-helpers.qtest",

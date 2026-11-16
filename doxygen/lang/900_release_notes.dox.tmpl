@@ -1867,6 +1867,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the summary and the junit report of a @ref qunitintro "QUnit" test count skipped test cases, which they gave
+      as succeeded, and the junit report has a \c testsuite element and counts assertion failures apart from errors
+      (see @ref unittestformats; issue #2297)
     - an allocation that fails while a thread enters another %Program (ex: in a binary module's
       \c QoreExternalProgramContextHelper or a parse commit) leaves the thread in the calling %Program and releases
       its thread count in the entered %Program, which could otherwise not be deleted (issue #6198)

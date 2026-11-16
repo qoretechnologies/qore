@@ -160,6 +160,20 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
     - plaintext - human readable format, prints one statement per test
     - junit - machine readable format for further processing
 
+    The summary of the plain formats gives the number of test cases run and how many of them succeeded, failed an
+    assertion, ended with an unexpected exception (errors) or were skipped, for example:
+    @verbatim
+Ran 4 test cases, 1 succeeded, 1 failed, 1 error, 1 skipped (2 assertions, 1 succeeded)
+    @endverbatim
+
+    The junit format prints the JUnit XML report as read by Jenkins and GitLab: a \c testsuites element with one
+    \c testsuite element for the test, both with the \c tests, \c failures, \c errors, \c skipped and \c time
+    attributes, and a \c testcase element for each test case, which has a \c failure element when the test case
+    failed an assertion, an \c error element when it raised an unexpected exception, and a \c skipped element when
+    it was skipped; the \c message attribute of \c failure and \c error gives where the test case failed and their
+    text gives the details.  In all formats, @ref QUnit::Test::main() "Test::main()" returns the number of test
+    cases that failed or ended with an error, which a test script gives as its exit status.
+
     @section qunit_stack_dump Call Stacks of a Test That Hangs
 
     When a test object is created, a handler for \c SIGUSR1 is installed that prints the call stacks of all threads
@@ -217,6 +231,14 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
     - skip reasons (failed prerequisite, filter exclusion, or a user
       @ref QUnit::Test::testSkip() reason) are now shown on the test report line
     - where a test case was skipped is shown only with verbosity 3 (\c -vvv), as its reason is on the report line
+    - fixed the counts of test cases (<a href="https://github.com/qoretechnologies/qore/issues/2297">issue 2297</a>):
+      skipped test cases were counted as succeeded in the summary and were not counted in the junit report; the
+      summary gives failed test cases apart from errors, and a test case that fails a condition such as
+      @ref QUnit::Test::equals() "Test::equals()" called outside an assertion, or that raises another exception
+      whose code matches \c TEST-*EXCEPTION, is counted as failed or as an error instead of being left out
+    - the junit report has the standard layout (see @ref unittestformats): a \c testsuite element in the
+      \c testsuites element, with the \c failures, \c errors, \c skipped and \c time attributes, and
+      \c failure, \c error and \c skipped elements in the \c testcase elements
 
     @section qunit_v0_4_3 Version 0.4.3
     - added constructors for use with languages that don't support lvalue references (ex: %Python)
@@ -675,6 +697,11 @@ public class TestCase {
         *list<string> m_depends;
     }
 
+    private:internal {
+        #! when the test case started to run, for the time of its result
+        *date m_start;
+    }
+
     #! creates the TestCase object from the given arguments
     constructor(string name, code code, *softlist<auto> args, *softlist<string> depends) {
         m_name = name;
@@ -690,6 +717,7 @@ public class TestCase {
 
     #! runs the TestCase
     run(QUnit::Test test) {
+        m_start = now_us();
         # Attempt to run the test function
         try {
             setupThread();
@@ -745,7 +773,10 @@ public class TestCase {
 
     #! handles exceptions raised while running the TestCase
     checkException(QUnit::Test test, hash<auto> e) {
-        if (e.err =~ /TEST-.*EXCEPTION/) {
+        # a failed assertion raises TEST-EXCEPTION, and a condition such as equals() called outside an assertion
+        # raises TEST-FAILED-EXCEPTION; any other exception, also one whose code merely looks like these, is an
+        # error, so that every test case has exactly one result
+        if (e.err == "TEST-SKIPPED-EXCEPTION" || e.err == "TEST-EXCEPTION" || e.err == "TEST-FAILED-EXCEPTION") {
             *string assertion_name = e.arg.name;
             *string pos = e.arg.pos;
             if (!pos)
@@ -754,17 +785,24 @@ public class TestCase {
                 string txt = sprintf("%s: Skip %srequested", getTimestamp(),
                     assertion_name ? sprintf("of %y ", assertion_name) : NOTHING);
                 test.addTestResult(self, TestReporter::TEST_SKIPPED, txt, pos, e.desc);
-            } else if (e.err == "TEST-EXCEPTION") {
+            } else {
                 string txt = sprintf("%s: Assertion %sfailure", getTimestamp(),
                     assertion_name ? sprintf("%y ", assertion_name) : NOTHING);
-                test.addTestResult(self, TestReporter::TEST_FAILURE, txt, pos, e.desc);
+                test.addTestResult(self, TestReporter::TEST_FAILURE, txt, pos, e.desc, e.err);
             }
         } else {
             # show little higher traceback record in this case
             string pos = get_ex_pos(e);
             string errtxt = sprintf("%s: Unexpected exception: %s", getTimestamp(), e.err);
-            test.addTestResult(self, TestReporter::TEST_ERROR, errtxt, pos, get_exception_string(e));
+            test.addTestResult(self, TestReporter::TEST_ERROR, errtxt, pos, get_exception_string(e), e.err);
         }
+    }
+
+    #! returns the time in seconds since the test case started to run, or 0.0 if it has not run
+    /** @since %QUnit 0.5.2
+    */
+    float getElapsedSeconds() {
+        return m_start ? (now_us() - m_start).durationSecondsFloat() : 0.0;
     }
 
     #! returns the test case name
@@ -904,6 +942,11 @@ public class TestReporter {
 
         #! total number of shards when sharding is enabled; 0/1 disables sharding
         int m_shard_count = 0;
+    }
+
+    private:internal {
+        #! when the test started to run its test cases, for the junit report
+        date m_suite_start = now_us();
     }
 
     public {
@@ -1132,11 +1175,24 @@ public class TestReporter {
     }
 
     private printPlaintextSummary() {
-        int err = errors();
-        string serrors = sprintf(", %d error%s", err, err == 1 ? "" : "s");
-        string sskipped = sprintf(", %d skipped", skipped());
-        int succeeded = testCount() - errors() - skipped();
-        string ssucceeded = sprintf(", %d succeeded", succeeded);
+        # each test case has one result, so the counts add up to the number of test cases
+        int succeeded = countResults(TEST_SUCCESS);
+        int failed = countResults(TEST_FAILURE);
+        int err = countResults(TEST_ERROR);
+        int skipped = countResults(TEST_SKIPPED);
+        string counts;
+        if (succeeded) {
+            counts += sprintf(", %d succeeded", succeeded);
+        }
+        if (failed) {
+            counts += sprintf(", %d failed", failed);
+        }
+        if (err) {
+            counts += sprintf(", %d error%s", err, err == 1 ? "" : "s");
+        }
+        if (skipped) {
+            counts += sprintf(", %d skipped", skipped);
+        }
         string assert_str = sprintf(" (%d assertion%s", num_asserts, num_asserts == 1 ? "" : "s");
         if (num_asserts != num_asserts_ok)
             assert_str += sprintf(", %d succeeded", num_asserts_ok);
@@ -1144,8 +1200,7 @@ public class TestReporter {
             assert_str += sprintf(", %d skipped", num_asserts_skip);
         assert_str += ")";
         int cnt = testCount();
-        printf("Ran %d test case%s%s%s%s%s\n", cnt, cnt == 1 ? "" : "s", succeeded > 0 ? ssucceeded : "",
-            errors() > 0 ? serrors : "", skipped() > 0 ? sskipped : "", assert_str);
+        printf("Ran %d test case%s%s%s\n", cnt, cnt == 1 ? "" : "s", counts, assert_str);
     }
 
     private printPlaintextOneTest(hash<auto> testcase) {
@@ -1178,64 +1233,111 @@ public class TestReporter {
         }
     }
 
+    #! prints the results in the JUnit XML format
+    /** The report has one \c testsuite element for the test in a \c testsuites element; each test case is a
+        \c testcase element, with a \c failure element for a failed assertion, an \c error element for an
+        unexpected exception and a \c skipped element for a skipped test case
+    */
     private printJunitSummary() {
 %ifdef NO_XML
         stderr.printf("No XML module found. Use --format=plain instead.\n");
         exitOptionError("the junit format requires the xml module");
 %else
-        hash junit;
-        junit.testsuites."^attributes^" = (
-            "name" : m_name,
-            "tests"  : testCount(),
-            "errors" : errors(),
-            "skipped" : skipped(),
-        );
-        junit.testsuites.testcase = ();
-
-        ListIterator it(m_results);
-        while (it.next()) {
-            hash testcase;
-
-            testcase."^attributes^".name = it.getValue().testcase.getName();
-            string errmsg = sprintf("%s at %s:\n%s", it.getValue().error, it.getValue().pos, it.getValue().detail);
-
-            int status = it.getValue().result;
-            testcase."^attributes^"."status" = RESULT_TYPE_DESCRIPTION{status}.desc;
-
-            if (status != TEST_SUCCESS) {
-                string tag = RESULT_TYPE_DESCRIPTION{status}.junittag;
-                hash result = ("message" : errmsg, "type" : RESULT_TYPE_DESCRIPTION{status}.desc );
-                testcase{tag}."^attributes^" = result;
+        # the hashes are built key by key: a hash literal takes the type of its values, which the keys added to it
+        # later would not have
+        float total_time = 0.0;
+        list<hash<auto>> testcases = ();
+        foreach hash<auto> result in (m_results) {
+            float time = result.time ?? 0.0;
+            total_time += time;
+            hash<auto> testcase;
+            testcase."^attributes^".name = result.testcase.getName();
+            testcase."^attributes^".classname = m_name;
+            testcase."^attributes^".time = TestReporter::junitTime(time);
+            switch (result.result) {
+                case TEST_FAILURE:
+                case TEST_ERROR: {
+                    # the message attribute is the summary; the element's text has the details
+                    hash<auto> elem;
+                    elem."^attributes^".message = TestReporter::xmlText(result.pos
+                        ? sprintf("%s at %s", result.error, result.pos)
+                        : result.error ?? "");
+                    if (result.err) {
+                        elem."^attributes^".type = result.err;
+                    }
+                    elem."^value^" = TestReporter::xmlText(result.detail ?? "");
+                    testcase{RESULT_TYPE_DESCRIPTION{result.result}.junittag} = elem;
+                    break;
+                }
+                case TEST_SKIPPED: {
+                    hash<auto> elem;
+                    if (result.detail.val()) {
+                        elem."^attributes^".message = TestReporter::xmlText(result.detail);
+                    }
+                    testcase.skipped = elem;
+                    break;
+                }
             }
-            push junit."testsuites"."testcase", testcase;
+            testcases += testcase;
         }
+
+        hash<auto> counts;
+        counts.tests = testCount();
+        counts.failures = countResults(TEST_FAILURE);
+        counts.errors = countResults(TEST_ERROR);
+        counts.skipped = countResults(TEST_SKIPPED);
+        counts.time = TestReporter::junitTime(total_time);
+
+        hash<auto> suite;
+        suite."^attributes^".name = m_name;
+        suite."^attributes^" += counts;
+        suite."^attributes^".timestamp = m_suite_start.format("YYYY-MM-DD") + "T"
+            + m_suite_start.format("HH:mm:SS");
+        suite."^attributes^".hostname = gethostname();
+        if (testcases) {
+            suite.testcase = testcases;
+        }
+        hash<auto> junit;
+        junit.testsuites."^attributes^".name = m_name;
+        junit.testsuites."^attributes^" += counts;
+        junit.testsuites.testsuite = suite;
 
         printf("%s\n", make_xml(junit, XGF_ADD_FORMATTING));
 %endif
     }
 
-    #! returns the number of errors encountered during test execution
-    int errors() {
-        int errs = 0;
-        ListIterator it(m_results);
-        while (it.next()) {
-            if (!(TEST_SUCCESS: "", TEST_SKIPPED: "").hasKey(it.getValue(){"result"})) {
-                errs++;
-            }
-        }
-        return errs;
+    #! returns a time in seconds as given in the JUnit XML format
+    private:internal static string junitTime(float secs) {
+        return sprintf("%.3f", secs);
     }
 
-    #! returns the number of tests skipped
-    int skipped() {
-        int errs = 0;
-        ListIterator it(m_results);
-        while (it.next()) {
-            if (!it.getValue(){"result"} == TEST_SKIPPED) {
-                errs++;
+    #! returns the string without the characters that XML 1.0 does not allow
+    private:internal static string xmlText(string str) {
+        str =~ s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g;
+        return str;
+    }
+
+    #! returns the number of test results of the given kind
+    private:internal int countResults(int result) {
+        int cnt = 0;
+        foreach hash<auto> r in (m_results) {
+            if (r.result == result) {
+                ++cnt;
             }
         }
-        return errs;
+        return cnt;
+    }
+
+    #! returns the number of test cases that failed an assertion or raised an unexpected exception
+    /** This is the value returned by @ref QUnit::Test::main() "Test::main()"; skipped test cases are not counted
+    */
+    int errors() {
+        return countResults(TEST_FAILURE) + countResults(TEST_ERROR);
+    }
+
+    #! returns the number of test cases skipped
+    int skipped() {
+        return countResults(TEST_SKIPPED);
     }
 
     #! returns the total number of test results
@@ -1244,11 +1346,20 @@ public class TestReporter {
     }
 
     #! adds a test result
-    addTestResult(TestCase tc, int success, *string error, *string pos, *string detail) {
+    /** @param tc the test case
+        @param success the result: \c TEST_SUCCESS, \c TEST_FAILURE, \c TEST_ERROR or \c TEST_SKIPPED
+        @param error the description of a failure, error or skip
+        @param pos where the test case failed, raised an error or was skipped
+        @param detail the details of a failure or error, or the reason of a skip
+        @param err the exception code of a failure or error, given as its type in the junit report (since
+        %QUnit 0.5.2)
+    */
+    addTestResult(TestCase tc, int success, *string error, *string pos, *string detail, *string err) {
         if (!(RESULT_TYPE_DESCRIPTION.hasKey(success))) {
             throw "TESTING-EXCEPTION", "Invalid test result type!";
         }
-        hash<auto> testcase = ("testcase": tc, "result": success, "error": error, "pos": pos, "detail": detail);
+        hash<auto> testcase = ("testcase": tc, "result": success, "error": error, "pos": pos, "detail": detail,
+            "err": err, "time": tc.getElapsedSeconds());
 
         printTestReport(testcase);
 
