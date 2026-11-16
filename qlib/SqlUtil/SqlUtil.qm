@@ -204,6 +204,10 @@ module SqlUtil {
       @ref SqlUtil::AbstractDatabase::getDropProcedureSqlIfExists() "getDropProcedureSqlIfExists()" and
       @ref SqlUtil::AbstractDatabase::getDropSequenceSqlIfExists() "getDropSequenceSqlIfExists()", which returned no
       SQL for an object that exists
+    - a @ref sql_cop_funcs "column operator" or a where operator in the set clause of
+      @ref SqlUtil::AbstractTable::update() "AbstractTable::update()" raises \c UPDATE-ERROR, which names the
+      @ref sql_uop_funcs "update operators" to use instead (ex: @ref SqlUtil::uop_plus() "uop_plus()"); it raised
+      \c INVALID-MEMBER (<a href="https://github.com/qoretechnologies/qore/issues/2962">issue 2962</a>)
     - added @ref SqlUtil::AbstractTable::getInsertArgs() "AbstractTable::getInsertArgs()", which gives the values that
       an insert of a row binds, so a statement prepared with the insert's SQL can insert more rows
     - a template table built from a description (the @ref SqlUtil::Table "Table" constructor with a description,
