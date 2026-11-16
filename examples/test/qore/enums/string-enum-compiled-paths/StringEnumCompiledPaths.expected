@@ -1,0 +1,51 @@
+size(): integer 2
+strlen() method: integer 2
+length() method: integer 2
+strlen(): integer 2
+length(): integer 2
+empty(): bool False
+val(): bool True
+sizep(): bool True
+strp(): bool True
+intp(): bool True
+lwr(): string "yy"
+upr(): string "YY"
+toInt(): integer 12
+startsWith(): bool True
+endsWith(): bool True
+contains(): bool True
+find(): integer 0
+rfind(): integer 1
+substr(): string "y"
+substr() with a length: string "y"
+size() of a call: integer 2
+size() of an enum local: integer 2
+size() of a list element: integer 2
+size() of a hash value: integer 2
+map size(): ["integer", "integer"] [2, 2]
+startsWith() argument: bool True
+endsWith() argument: bool True
+contains() argument: bool True
+find() argument: integer 1
+rfind() argument: integer 4
+substr() enum offset: string "bc"
+substr() enum length: string "ab"
+string local: string "yy"
+string local size(): integer 2
+string local from a call: string "yy"
+string local from a call size(): integer 2
+string local in a loop: string "yy"
+number local: number 2.5
+number local from a call: number 2.5
+number local + 1: number 3.5
+enum local: enum<ES> "yy"
+enum call: enum<ES> "yy"
+number enum call: enum<EN> 2.5
+number enum local: enum<EN> 2.5
++: string "yyz"
+[0]: char y
+regex: bool True
+==: bool True
+sprintf(): string "<yy>"
+number + 1: number 3.5
+number toString(): string "2.5"
