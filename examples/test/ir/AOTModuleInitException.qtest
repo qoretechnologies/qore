@@ -86,6 +86,10 @@ printf(\"%s\\n\", ModInitUser::f());
     constructor() : QUnit::Test("AOTModuleInitExceptionTest", "1.0", \ARGV) {
         qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        # the commands run in other directories (cd <dir> && ...): a relative directory is made absolute
+        if (libqore_dir !~ /^\//) {
+            libqore_dir = getcwd() + "/" + libqore_dir;
+        }
         qcc_bin = TestInterpreter::qcc_compiler();
         addTestCase("interpreted program", \interpretedTest());
         addTestCase("qcc executables", \executableTest());
