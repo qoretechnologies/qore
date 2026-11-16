@@ -284,7 +284,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         for (int attempt = 1; ; ++attempt) {
             # a dual-stack socket on the wildcard address: no IPv4 or IPv6 socket can bind the port
             Socket tcp();
-            if (tcp.bind(0, False)) {
+            if (tcp.bind(0, False)) {  # all-interfaces: the wildcard bind holds the port for IPv4 and IPv6 clients
                 throw "BIND-ERROR", strerror();
             }
             int port = tcp.getSocketInfo().port;
