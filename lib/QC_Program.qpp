@@ -3735,8 +3735,10 @@ pgm.setThreadEntryHandler(
     If \a on_enter raises an exception, the thread does not run the Program's code: the call that entered the
     Program raises the exception instead, and no \a on_exit runs for that entry (a thread started in the Program
     ends without running its code).  An exception raised by \a on_exit is raised after any exception that was already
-    propagating; the Program has been left in any case.  If \a on_exit cannot be run because no memory can be
-    allocated, the exit raises \c THREAD-ENTRY-HANDLER-ERROR in the same way.
+    propagating; the Program has been left in any case.  If \a on_enter or \a on_exit cannot be run because no
+    memory can be allocated, the entry or the exit raises \c THREAD-ENTRY-HANDLER-ERROR in the same way, also in
+    a call into the Program from Qore code (any other step of an entry that fails so raises
+    \c PROGRAM-ENTRY-ERROR).
 
     @par Restrictions
     This method requires both @ref Qore::Program::setThreadInit() "setThreadInit()"'s functional domain (@ref
