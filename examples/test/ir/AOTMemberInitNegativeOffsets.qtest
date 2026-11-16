@@ -17,8 +17,9 @@
 
 #! The square brackets operator of compiled code has negative offsets (qore#6294)
 /** A reader of compiled code creates the operator without calling its parseInit(), which sets negative offsets for
-    %modern code, so the operator had none: the member initializer int m = gl()[-1] of a qcc executable gave no value
-    (RUNTIME-TYPE-ERROR).  The executable gives the values that the interpreter gives.
+    %modern code and finds an offset list with a range, so the operator had neither: the member initializer
+    int m = gl()[-1] of a qcc executable gave no value (RUNTIME-TYPE-ERROR), and gl()[(0, 1..2)] took the range as a
+    single offset.  The executable gives the values that the interpreter gives.
 */
 class AOTMemberInitNegativeOffsetsTest inherits QUnit::Test {
     public {
@@ -35,13 +36,14 @@ class K {
         int m = gl()[-1];
         list<int> r = gl()[-2..-1];
         string c = \"xyz\"[-1];
+        list<auto> s = gl()[(0, 1..2)];
     }
 }
 K k();
-printf(\"%y\\n\", (C1, C2, C3, C4, K::KC, K::SV, k.m, k.r, k.c));
+printf(\"%y\\n\", (C1, C2, C3, C4, K::KC, K::SV, k.m, k.r, k.c, k.s));
 ";
 
-        const Expected = "[3, 3, c'c', [2, 3], 6, 3, 3, [2, 3], c'z']\n";
+        const Expected = "[3, 3, c'c', [2, 3], 6, 3, 3, [2, 3], \"z\", [1, 2, 3]]\n";
     }
 
     private {

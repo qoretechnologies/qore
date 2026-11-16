@@ -322,6 +322,21 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
     return err;
 }
 
+void QoreSquareBracketsOperatorNode::setCompiledCodeOptions() {
+    string_index_char = true;
+    negative_offsets = true;
+    // an offset list with a range is evaluated as a list of ranges (see parseCheckValueTypes()); the value types of a
+    // list read from compiled code are not set, so its values are checked
+    if (right.getType() == NT_PARSE_LIST) {
+        for (const QoreValue& v : right.get<const QoreParseListNode>()->getValues()) {
+            if (v.getType() == NT_OPERATOR && dynamic_cast<const QoreRangeOperatorNode*>(v.getInternalNode())) {
+                rhs_list_range = true;
+                break;
+            }
+        }
+    }
+}
+
 int QoreSquareBracketsOperatorNode::parseCheckValueTypes(const QoreParseListNode* pln) {
     const type_vec_t& vtypes = pln->getValueTypes();
     const QoreParseListNode::nvec_t& vl = pln->getValues();
