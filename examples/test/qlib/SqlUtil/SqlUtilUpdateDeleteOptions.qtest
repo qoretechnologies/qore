@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class SqlUtilUpdateDeleteOptionsTest
+
+#! Tests the options of updates and deletes (issue #757)
+/** The \c "returning" option, which only an insert supports, and unknown options raise \c OPTION-ERROR with an
+    update or a delete, which ignored them, and the statement is not executed.  The tests run on SQLite, whose
+    driver does not support \c "returning" with an insert either, and, when \c QORE_DB_CONNSTR_PGSQL is set, on
+    PostgreSQL, whose driver supports it with an insert, in a schema of their own.
+*/
+class SqlUtilUpdateDeleteOptionsTest inherits QUnit::Test {
+    private {
+        *Datasource sqlite;
+        *Datasource pgsql;
+    }
+
+    constructor() : Test("SqlUtilUpdateDeleteOptions", "1.0", \ARGV) {
+        addTestCase("SQLite: update and delete options", \sqliteOptions());
+        addTestCase("PostgreSQL: update and delete options", \pgsqlOptions());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoSqlite3
+        sqlite = new Datasource("sqlite3:x@:memory:");
+        setupTable(sqlite);
+%endif
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "SqlUtilUpdateDeleteOptions");
+            pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+            setupTable(pgsql);
+        }
+%endif
+    }
+
+    globalTearDown() {
+        if (pgsql) {
+            pgsql.rollback();
+            delete pgsql;
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    private setupTable(Datasource ds) {
+        ds.exec("create table udo_t (id integer not null primary key, name varchar(20))");
+        ds.exec("insert into udo_t values (1, 'a'), (2, 'b')");
+        ds.commit();
+    }
+
+    sqliteOptions() {
+        if (!sqlite) {
+            testSkip("no sqlite3 module");
+        }
+        checkOptions(sqlite);
+        # the driver does not support "returning" with an insert either
+        Table t(sqlite, "udo_t");
+        assertThrows("RETURNING-ERROR", sub () { t.insert({"id": 3, "name": "c"}, {"returning": "id"}); });
+        sqlite.rollback();
+    }
+
+    pgsqlOptions() {
+%ifdef NoPgsql
+        testSkip("no pgsql module");
+%endif
+        if (!pgsql) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        on_exit pgsql.rollback();
+        checkOptions(pgsql);
+        # the driver supports "returning" with an insert
+        Table t(pgsql, "udo_t");
+        assertEq({"name": "c"}, t.insert({"id": 3, "name": "c"}, {"returning": "name"}));
+        pgsql.rollback();
+    }
+
+    private checkOptions(Datasource ds) {
+        Table t(ds, "udo_t");
+        hash<auto> returning = {"returning": "name"};
+        hash<auto> unknown = {"x": 1};
+        string sql;
+
+        # update
+        assertThrows("OPTION-ERROR", "returning.*not supported with update",
+            sub () { t.update({"name": "x"}, {"id": 1}, \sql, returning); });
+        assertThrows("OPTION-ERROR", "returning.*not supported with update",
+            sub () { t.update({"name": "x"}, {"id": 1}, returning); });
+        assertThrows("OPTION-ERROR", "returning.*not supported with update",
+            sub () { t.updateCommit({"name": "x"}, {"id": 1}, returning); });
+        assertThrows("OPTION-ERROR", "returning.*not supported with update",
+            sub () { t.updateWithInfo({"name": "x"}, {"id": 1}, returning); });
+        assertThrows("OPTION-ERROR", "unknown key \"x\"", sub () { t.update({"name": "x"}, {"id": 1}, unknown); });
+
+        # delete
+        assertThrows("OPTION-ERROR", "returning.*not supported with delete",
+            sub () { t.del({"id": 1}, \sql, returning); });
+        assertThrows("OPTION-ERROR", "returning.*not supported with delete", sub () { t.del({"id": 1}, returning); });
+        assertThrows("OPTION-ERROR", "returning.*not supported with delete",
+            sub () { t.delCommit({"id": 1}, returning); });
+        assertThrows("OPTION-ERROR", "returning.*not supported with delete",
+            sub () { t.delWithInfo({"id": 1}, returning); });
+        assertThrows("OPTION-ERROR", "unknown key \"x\"", sub () { t.del({"id": 1}, unknown); });
+
+        # upsert refused the option already
+        assertThrows("OPTION-ERROR", "unknown key \"returning\"",
+            sub () { t.upsert({"id": 1, "name": "x"}, AbstractTable::UpsertAuto, returning); });
+
+        # nothing was changed
+        ds.rollback();
+        assertEq(({"id": 1, "name": "a"}, {"id": 2, "name": "b"}), t.selectRows({"orderby": "id"}));
+
+        # the options that an update and a delete support
+        list<string> calls = ();
+        hash<auto> opt = {"sqlarg_callback": sub (string sql, *list<auto> args) { calls += sql; }};
+        assertEq(1, t.update({"name": "x"}, {"id": 1}, opt));
+        assertEq(1, t.del({"id": 2}, opt));
+        assertEq(2, calls.size());
+        assertRegex("^update ", calls[0]);
+        assertRegex("^delete ", calls[1]);
+        # an option without a value is ignored
+        assertEq(1, t.update({"name": "y"}, {"id": 1}, {"returning": NOTHING}));
+        ds.rollback();
+    }
+}

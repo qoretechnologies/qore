@@ -166,6 +166,10 @@ module SqlUtil {
     - @ref SqlUtil::AbstractTable::dropCommit() "AbstractTable::dropCommit()" commits each statement of the drop on
       its own, so a partitioned table that its driver drops one partition per statement stays within the database's
       lock limits however many partitions it has
+    - @ref SqlUtil::AbstractTable::update() "AbstractTable::update()", @ref SqlUtil::AbstractTable::del() "del()"
+      and their variants raise \c OPTION-ERROR for an unknown option and for the \c "returning" option, which only
+      an insert supports; they ignored them, so an update with \c "returning" returned the row count and no values
+      (<a href="https://github.com/qoretechnologies/qore/issues/757">issue 757</a>)
     - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" and the
       @ref SqlUtil::Table "Table" constructor to accept a description from
       @ref SqlUtil::AbstractTable::getDescriptionHash() "AbstractTable::getDescriptionHash()" with an added column that

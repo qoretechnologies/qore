@@ -493,6 +493,12 @@
     as before SqlUtil 1.7.2; add such an index to the template or use the \c omit option to keep it; see
     @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" and @ref sqlutilv3_11_0.
 
+    @par SqlUtil Updates and Deletes Check Their Options
+    @ref SqlUtil::AbstractTable::update() "AbstractTable::update()", @ref SqlUtil::AbstractTable::del() "del()" and
+    their variants raise \c OPTION-ERROR for an unknown option and for \c "returning", which only an insert supports;
+    they ignored them (<a href="https://github.com/qoretechnologies/qore/issues/757">issue 757</a>); see
+    @ref sqlutilv3_11_0.
+
     @par Schema and Table Drops Commit Each Statement
     @ref Schema::AbstractSchema::drop() "AbstractSchema::drop()" and
     @ref SqlUtil::AbstractTable::dropCommit() "AbstractTable::dropCommit()" commit each statement, and on PostgreSQL
