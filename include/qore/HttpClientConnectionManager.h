@@ -247,6 +247,10 @@ public:
         HttpClientConnectionBase::checkSandboxUse()); otherwise a new connection is made, which the sandbox decides
         on.
 
+        The library acquires every connection of a request through this virtual method (and its streaming-send and
+        asynchronous variants), so a subclass can override it to supply the connections; an override returns a
+        connection with a reference of the caller.
+
         @param scheme URL scheme ("http" or "https"); used to determine SSL requirement
         @param host target hostname (used for the Host header and pool key)
         @param port target TCP port (used for the pool key)
@@ -263,7 +267,7 @@ public:
 
         @since %Qore 3.0
     */
-    DLLEXPORT HttpClientConnectionBase* acquireConnectionRef(const char* scheme, const char* host, int port,
+    DLLEXPORT virtual HttpClientConnectionBase* acquireConnectionRef(const char* scheme, const char* host, int port,
         ExceptionSink* xsink);
 
     //! Acquires a connection for incremental request-body streaming and returns a reference of the caller
@@ -280,8 +284,8 @@ public:
 
         @since %Qore 3.0
     */
-    DLLEXPORT HttpClientConnectionBase* acquireConnectionForStreamingSendRef(const char* scheme, const char* host,
-        int port, ExceptionSink* xsink);
+    DLLEXPORT virtual HttpClientConnectionBase* acquireConnectionForStreamingSendRef(const char* scheme,
+        const char* host, int port, ExceptionSink* xsink);
 
     //! Acquires a connection without blocking for it to become READY and returns a reference of the caller
     /** Like @ref acquireConnectionRef but, on a pool miss, returns the newly created connection while it is still in
@@ -300,8 +304,8 @@ public:
 
         @since %Qore 3.0
     */
-    DLLEXPORT HttpClientConnectionBase* acquireConnectionAsyncRef(const char* scheme, const char* host, int port,
-        ExceptionSink* xsink);
+    DLLEXPORT virtual HttpClientConnectionBase* acquireConnectionAsyncRef(const char* scheme, const char* host,
+        int port, ExceptionSink* xsink);
 
     //! Completes an asynchronous acquisition once the connection reports ready.
     /** For an ALPN-negotiating manager, @ref acquireConnectionAsyncRef returns a
