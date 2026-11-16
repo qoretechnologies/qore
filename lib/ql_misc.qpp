@@ -527,6 +527,18 @@ hashdecl ModuleParseOptionMaskInfo {
     list<string> add;
 }
 
+//! the character set and the media type that an HTTP server reports for the Content-Type of a request
+/** see @ref Qore::get_http_content_type_info() "get_http_content_type_info()"
+
+    @since %Qore 3.0
+*/
+hashdecl HttpContentTypeInfo {
+    //! the character set: the \c charset parameter as given, else the encoding that the body is read in
+    string charset;
+    //! the media type without its \c charset parameter; missing if only a \c charset parameter is left
+    *string body_content_type;
+}
+
 //! a hash describing a parsed URL
 /** @since %Qore 0.9.3
 */
@@ -1703,6 +1715,87 @@ data body = decode_http_body(resp.headers."content-type", resp.body);
 data decode_http_body(*string content_type, binary body, string assumed_encoding = "ISO-8859-1") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return qore_decode_http_body(content_type ? content_type->c_str() : nullptr, body,
         QEM.findCreate(assumed_encoding));
+}
+
+//! Returns the character set and the media type that an HTTP server reports for the Content-Type of a request
+/** An HTTP server reports them in the header information of a request (the \c "charset" and
+    \c "body-content-type" keys of the info hash of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()",
+    and of \c cx."header-info" in an @ref HttpServer::HttpServer "HttpServer" request handler) for every HTTP version:
+
+    - with a \c charset parameter, the character set is its value, and the media type is the field value without
+      the parameter (missing if nothing else is left)
+    - otherwise the character set is the encoding that the body is read in (as determined for
+      @ref Qore::get_http_body_encoding() "get_http_body_encoding()" before the body is known, else
+      \a assumed_encoding), and the media type is the whole field value
+
+    @param content_type the \c Content-Type header value
+    @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
+
+    @return the character set and the media type of the request
+
+    @par Example:
+    @code{.py}
+hash<HttpContentTypeInfo> info = get_http_content_type_info("application/json;charset=utf-8");
+# info.charset: "utf-8", info.body_content_type: "application/json"
+    @endcode
+
+    @since %Qore 3.0
+*/
+hash<HttpContentTypeInfo> get_http_content_type_info(string content_type, string assumed_encoding = "ISO-8859-1") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // the rule reads the bytes of the field value, which the servers have in UTF-8 or ASCII
+    TempEncodingHelper ct(content_type, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreHttpContentTypeInfo cti = qore_get_http_content_type_info(ct->c_str(), QEM.findCreate(assumed_encoding));
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclHttpContentTypeInfo, xsink), xsink);
+    rv->setKeyValue("charset", new QoreStringNode(cti.charset.c_str(), cti.charset.size(), QCS_DEFAULT), xsink);
+    if (cti.has_body_content_type) {
+        rv->setKeyValue("body_content_type", new QoreStringNode(cti.body_content_type.c_str(),
+            cti.body_content_type.size(), QCS_DEFAULT), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns the response encoding that an HTTP server reports for the Accept-Charset of a request
+/** An HTTP server reports it in the header information of a request (the \c "accept-charset" key of the info hash
+    of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()", and of \c cx."header-info" in an
+    @ref HttpServer::HttpServer "HttpServer" request handler, which uses it as \c cx."response-encoding") for every
+    HTTP version:
+    - \c "utf8" if the value, or an element of it directly after a comma (without whitespace), begins with \c "*",
+      \c "utf8" or \c "utf-8" (case-insensitive; quality values are not considered)
+    - otherwise the value up to its first comma or semicolon, without leading and trailing whitespace
+    - \c "utf8" if that is empty or there is no value (RFC 2616 section 14.2: any character set is acceptable then)
+
+    @param accept_charset the \c Accept-Charset header value, if any
+
+    @return the response encoding of the request
+
+    @par Example:
+    @code{.py}
+string enc = get_http_accept_charset("iso-8859-2;q=0.9");
+# enc: "iso-8859-2"
+    @endcode
+
+    @since %Qore 3.0
+*/
+string get_http_accept_charset(*string accept_charset) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (!accept_charset) {
+        return new QoreStringNode("utf8");
+    }
+    // the rule reads the bytes of the field value, which the servers have in UTF-8 or ASCII
+    TempEncodingHelper ac(accept_charset, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // leading blanks are skipped, as the header parser does before it applies the rule
+    const char* p = ac->c_str();
+    while (*p == ' ' || *p == '\t') {
+        ++p;
+    }
+    std::string rv = qore_get_http_accept_charset(p);
+    // according to RFC 2616 section 14.2, any character set is acceptable without one; UTF-8 is used
+    return rv.empty() ? new QoreStringNode("utf8") : new QoreStringNode(rv.c_str(), rv.size(), QCS_DEFAULT);
 }
 
 //! Returns the URL string passed without any password information

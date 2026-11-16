@@ -99,6 +99,7 @@ DLLLOCAL void init_alloc_tracking_functions(QoreNamespace& ns);
 #include "qore/intern/ql_string.h"
 #include "qore/intern/ql_pwd.h"
 #include "qore/intern/ql_misc.h"
+#include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/ql_websocket.h"
 #include "qore/intern/ql_list.h"
 #include "qore/intern/ql_thread.h"
@@ -286,6 +287,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclHashSerializationInfo,
     * hashdeclListSerializationInfo,
     * hashdeclUrlInfo,
+    * hashdeclHttpContentTypeInfo,
     * hashdeclModuleParseOptionMaskInfo,
     * hashdeclFtpResponseInfo,
     * hashdeclExtraPollFdInfo,
@@ -1604,6 +1606,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclHashSerializationInfo = init_hashdecl_HashSerializationInfo(qns);
     hashdeclListSerializationInfo = init_hashdecl_ListSerializationInfo(qns);
     hashdeclUrlInfo = init_hashdecl_UrlInfo(qns);
+    hashdeclHttpContentTypeInfo = init_hashdecl_HttpContentTypeInfo(qns);
     hashdeclModuleParseOptionMaskInfo = init_hashdecl_ModuleParseOptionMaskInfo(qns);
     hashdeclFtpResponseInfo = init_hashdecl_FtpResponseInfo(qns);
     preinitAbstractPollableIoObjectClass();
