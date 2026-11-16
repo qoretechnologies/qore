@@ -36,6 +36,7 @@
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/OnBlockExitStatement.h>
 #include "qore/intern/QorePseudoMethods.h"
+#include "qore/intern/QoreIRPointerSlot.h"
 #include <qore/intern/QoreRegex.h>
 #include <qore/intern/StaticClassVarRefNode.h>
 #include <qore/intern/QoreRegexSubst.h>
@@ -1243,44 +1244,13 @@ private:
     }
 };
 
-//! Returns true if an IR value slot can hold the pointer of an object that the frame owns (see ir_pointer_value())
-/** An iterator, a suspended exception, the state of a context statement or of a foreach over a reference, each
-    allocated with new, is kept in an IR value slot as an inline integer.  The address itself does not always fit an inline integer (48 bits, signed): on aarch64 Linux the heap can be above
-    2^47, and the QoreValue was then a heap integer that nothing released, as the slot is cleared with an integer when
-    the object is deleted (issue #6345).  The address of an object allocated with new is a multiple of
-    __STDCPP_DEFAULT_NEW_ALIGNMENT__ (16), so it is kept shifted right by 4 bits, which fits any address below 2^51;
-    a QoreValue holds a node's address in 48 bits, so every address that the library can run with fits.  An address
-    that does not fit is refused with an exception rather than truncated.
-*/
-static_assert(__STDCPP_DEFAULT_NEW_ALIGNMENT__ >= 16, "an IR pointer slot drops the 4 low bits of the address");
-static inline bool ir_pointer_fits(const void* p) {
-    uintptr_t addr = reinterpret_cast<uintptr_t>(p);
-    return !(addr & 0xf) && (addr >> 4) <= static_cast<uintptr_t>(QoreValue::InlineIntMax);
-}
+// the iterators whose addresses an IR value slot holds (see QoreIRPointerSlot.h)
+QORE_IR_POINTER_SLOT_TYPE_CHECK(FunctionalOperatorInterface);
 
 //! Raises the exception for an object whose address an IR value slot cannot hold (see ir_pointer_fits())
 static void ir_pointer_raise(const void* p, ExceptionSink* xsink) {
-    xsink->raiseException("IR-POINTER-ERROR", "the address %p of an object of the IR interpreter is not 16-byte "
-        "aligned or is above 2^51, which the interpreter cannot keep in a value slot", p);
-}
-
-//! Returns the value that an IR value slot holds for the pointer of an object that the frame owns
-/** The caller has checked that it fits (ir_pointer_fits())
-*/
-static inline QoreValue ir_pointer_value(const void* p) {
-    assert(ir_pointer_fits(p));
-    return QoreValue(static_cast<int64_t>(reinterpret_cast<uintptr_t>(p) >> 4));
-}
-
-//! Returns the pointer that an IR value slot holds (see ir_pointer_value())
-template <typename T>
-static inline T* ir_value_pointer(const QoreValue& v) {
-    return reinterpret_cast<T*>(static_cast<uintptr_t>(v.getAsBigInt()) << 4);
-}
-
-//! Returns the handle that the runtime functions take for the object whose pointer an IR value slot holds
-static inline uint64_t ir_value_handle(const QoreValue& v) {
-    return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(ir_value_pointer<void>(v)));
+    xsink->raiseException("IR-POINTER-ERROR", "the address %p of an object of the IR interpreter is not 8-byte "
+        "aligned or is above 2^50, which the interpreter cannot keep in a value slot", p);
 }
 
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
