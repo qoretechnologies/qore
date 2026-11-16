@@ -73,6 +73,35 @@ This generalizes the existing Phase 1.5 init-expression outliner
    `getOrInsertFunction` resolves. Helpers return Nothing (v1 regions
    produce no value); no runtime descriptor is emitted (same as init
    helpers — the coordinator drives them via direct native calls).
+
+   **Slot-keyed symbols stay the coordinator's.**  A helper runs with the
+   coordinator's slot map and context, so a symbol named after an
+   expression slot belongs to the coordinator, not to the helper.  The
+   dispatch functions of the closures that a helper creates and calls
+   (`<owner>_closure_dispatch_<slot>`,
+   `<owner>_closure_native_dispatch_<slot>`,
+   `<owner>_closure_native_guarded_dispatch_<slot>` and their `_throwing`
+   adapters) are declared at the call site and defined after lowering by
+   `compileAOTClosureBodiesForOwner()`, which walks the coordinator's
+   `CLOSURE_CREATE` slots under the coordinator's symbol.  A helper
+   therefore names them after `QoreIRFunction::getAOTSymbolOwner()` (the
+   coordinator's symbol, set in `aot_symbol_owner` when the helper is made;
+   init-expression helpers set it too), never after its own name: a
+   helper-named dispatch was never defined, and every executable or module
+   with a closure call in an outlined region failed to link (qore#6310).
+   Helpers are lowered without the batch callee map, so a helper's call
+   site may declare a boxed result for a closure whose effect summary gives
+   the definition a native int, float or bool result; the call site records
+   its result kind on the declaration (`qore.closure.return_kind`) and the
+   definition boxes the native result of the closure body for a boxed
+   declaration, instead of returning a native value that the helper would
+   read as a boxed one.
+
+   Closure creation is allowed in regions on purpose: generated giant
+   functions use closures (`map` with a closure, callbacks), and keeping
+   them out of regions would leave those functions unpartitioned; the
+   restriction that remains is the one on closure-use locals crossing the
+   boundary (decision 5).
 5. **Region discovery: SESE interval sweep over the block layout.**
    First, a reversible *block-split pre-pass* breaks blocks at
    statement-end markers (`DiscardTemps`/`CheckException`/
@@ -245,6 +274,12 @@ the one giant function regardless of the optimization level.
   reference args and container locals, object lifetime/destructor order,
   disabled-mode equivalence, no-safe-partition fallback (loop with
   embedded returns), and deterministic helper naming.
+- `examples/test/ir/AOTOutlinedClosure.qtest` — closures created and
+  called in outlined regions (qore#6310): the issue's function at the
+  default thresholds (executables and a module, -O0 and -O3) and small
+  functions with forced thresholds whose regions hold closures with
+  native results and capturing, stored, returned and nested closures; it checks with `QORE_AOT_DUMP_IR` that the
+  helpers create the closures and compares the results with the AST.
 - The full `examples/test/ir/` suite passes both normally and with
   outlining forced onto nearly every function
   (`QORE_AOT_OUTLINE_FN_MIN_INSTS=60`).

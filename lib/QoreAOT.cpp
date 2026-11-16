@@ -3355,6 +3355,8 @@ static bool outlineInitExpression(QoreIRFunction* outer,
         helper_names[op_idx] = helper_name;
         AOTOutlinedHelper h;
         h.ir_func = std::make_unique<QoreIRFunction>(helper_name);
+        // the helper uses the outer function's slot map, and its slot symbols are named after the outer function
+        h.ir_func->aot_symbol_owner = outer->getAOTSymbolOwner();
         auto* h_block = h.ir_func->createBlock("entry");
         // Transfer ownership of each subgraph instruction to the helper.
         uint32_t helper_max_val_id = 0;
@@ -4758,6 +4760,8 @@ private:
         AOTOutlinedHelper h;
         h.ir_func = std::make_unique<QoreIRFunction>(helper_name);
         QoreIRFunction* helper = h.ir_func.get();
+        // the helper uses the coordinator's slot map, and its slot symbols are defined with the coordinator
+        helper->aot_symbol_owner = fn->getAOTSymbolOwner();
 
         // Move the region's blocks into the helper.
         helper->blocks.assign(
@@ -17962,6 +17966,11 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
     if (guarded && return_kind != BatchCalleeReturnKind::Boxed) {
         return false;
     }
+    // the fast body's native result can be boxed for a boxed ABI, but not converted to another native kind
+    if (fast_fn && return_kind != BatchCalleeReturnKind::Boxed
+            && fast_return_kind != BatchCalleeReturnKind::Boxed && fast_return_kind != return_kind) {
+        return false;
+    }
 
     auto* i64_ty = llvm::Type::getInt64Ty(ctx);
     auto* i32_ty = llvm::Type::getInt32Ty(ctx);
@@ -18065,13 +18074,9 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
         llvm::Value* fast_result = builder.CreateCall(fast_fn, fast_args);
         builder.CreateCall(module.getOrInsertFunction("qore_rt_pop_native_call_frame",
             llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), {ptr_ty}, false)), {frame_storage});
-        if (!guarded) {
-            builder.CreateRet(fast_result);
-            if (!guarded_captures) {
-                return true;
-            }
-            builder.SetInsertPoint(guarded_fallback_bb);
-        } else {
+        // a boxed ABI over a fast body with a native result (a guarded dispatch, or a call site that was lowered
+        // without the closure's effect summary, as in an outlined helper: qore#6310) boxes the result
+        if (return_kind == BatchCalleeReturnKind::Boxed) {
             if (fast_return_kind == BatchCalleeReturnKind::NativeInt) {
                 auto box_int = module.getOrInsertFunction("qore_rt_box_big_int",
                     llvm::FunctionType::get(i64_ty, {i64_ty}, false));
@@ -18084,9 +18089,12 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
                     llvm::ConstantInt::get(i64_ty, val_true),
                     llvm::ConstantInt::get(i64_ty, val_false));
             }
-            builder.CreateRet(fast_result);
-            builder.SetInsertPoint(guarded_fallback_bb);
         }
+        builder.CreateRet(fast_result);
+        if (!guarded && !guarded_captures) {
+            return true;
+        }
+        builder.SetInsertPoint(guarded_fallback_bb);
     }
 
     llvm::Value* args_array = llvm::ConstantPointerNull::get(
@@ -18321,11 +18329,28 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             }
             return true;
         };
+        // the result kind of the call sites' ABI: a call site that was lowered without the closure's effect summary
+        // (an outlined helper) declares a boxed result where the summary gives a native one (qore#6310)
+        BatchCalleeReturnKind declared_return_kind = dispatch_return_kind;
+        if (native_dispatch) {
+            llvm::Attribute return_kind_attr = native_dispatch->getFnAttribute("qore.closure.return_kind");
+            if (return_kind_attr.isStringAttribute()) {
+                llvm::StringRef value = return_kind_attr.getValueAsString();
+                unsigned kind;
+                if (value.getAsInteger(10, kind)
+                        || kind > static_cast<unsigned>(BatchCalleeReturnKind::NativeBool)) {
+                    setAOTCompileFatal(fatal_error, "closure", native_dispatch_name,
+                        "typed dispatch lowering", "invalid declared result kind");
+                    return false;
+                }
+                declared_return_kind = static_cast<BatchCalleeReturnKind>(kind);
+            }
+        }
         auto define_native_dispatch = [&](llvm::Function* fast_fn) {
             return defineAOTClosureNativeDispatch(ctx, module,
                 native_dispatch, fast_fn, expr_index,
-                dispatch_param_kinds, dispatch_return_kind, false,
-                BatchCalleeReturnKind::Boxed, dispatch_capture_kinds,
+                dispatch_param_kinds, declared_return_kind, false,
+                dispatch_return_kind, dispatch_capture_kinds,
                 dispatch_guarded_captures);
         };
         if (!variant || disable_native_closures) {

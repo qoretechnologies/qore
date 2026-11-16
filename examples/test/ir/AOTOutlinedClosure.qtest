@@ -1,0 +1,428 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in children that set their own execution modes, qcc executables and modules
+# test-platform: macos - the AOT code generation and linking of closures in outlined function-body helpers
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class AOTOutlinedClosureTest
+
+#! A closure created in an outlined region of a function is called through a dispatch function that is defined (qore#6310)
+/** qcc outlines regions of a large function (over \c QORE_AOT_OUTLINE_FN_MIN_INSTS IR instructions, 3000 by default,
+    or \c QORE_AOT_OUTLINE_FN_MIN_BLOCKS blocks) into helpers that use the slot map of the function (the coordinator).
+    A closure that a helper creates and calls is called through a dispatch function that is defined with the closure
+    bodies of the coordinator, under the coordinator's symbol; the helper named the dispatch function after itself, so
+    the executable or module failed to link with an undefined
+    \c <coordinator>_outline_<n>_closure_native_dispatch_<slot> symbol.  The definition must also return the result
+    in the form that the helper declares: a helper is lowered without the closure's effect summary and declares a
+    boxed result where the definition's closure body returns a native int, float or bool.
+
+    This test checks that executables and modules made by qcc at -O0 and -O3 link, and that their results match the
+    AST (and the ir, jit and tiered modes): for the function of the issue at the default thresholds, with the closure
+    in the first and in the second region, also in a module, and for small functions with forced thresholds whose
+    outlined regions create closures without captures that return native values, closures that capture locals of the
+    region, several closures stored in locals, closures returned to the caller that share a captured local, and nested
+    closures.  It checks with the IR dump of qcc that the closures are created in the helpers.
+*/
+class AOTOutlinedClosureTest inherits QUnit::Test {
+    public {
+        #! the filler statements of the function at the default thresholds (the issue's function had 120)
+        const Filler = 120;
+
+        #! the environment that outlines the small functions
+        const ForceEnv = "QORE_AOT_OUTLINE_FN_MIN_INSTS=20 QORE_AOT_OUTLINE_FN_MIN_BLOCKS=1 "
+            "QORE_AOT_OUTLINE_FN_TARGET_INSTS=20";
+
+        #! the functions of the script with forced thresholds
+        const FormFunctions = ("imm", "typed", "captures", "multi", "mk", "nested");
+
+        #! the execution modes compared with the AST
+        const Modes = ("ir", "jit", "tiered");
+        #! the qcc optimization levels
+        const OptLevels = ("-O0", "-O3");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        #! the library path of the qcc compiles and of the executables
+        string lib_env;
+    }
+
+    constructor() : QUnit::Test("AOTOutlinedClosureTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        addTestCase("the function of the issue at the default thresholds", \testDefaultThresholds());
+        addTestCase("a module's function over the default threshold", \testModule());
+        addTestCase("the minimal function of the issue with forced thresholds", \testMinimal());
+        addTestCase("captures, several, returned and nested closures in outlined regions", \testForms());
+        set_return_value(main());
+    }
+
+    #! Returns the code of the namespace with the function of the issue, with the closure after \a pos filler statements
+    /** @param pos the filler statements before the statement with the closure
+        @param pub the prefix of the declarations that a module exports
+    */
+    private static string getIssueCode(int pos, string pub) {
+        string code = sprintf("%snamespace OutlineClosure {
+%slist sub f() {
+    list out;
+", pub, pub);
+        for (int i = 0; i <= Filler; ++i) {
+            if (i == pos) {
+                code += "    out += map (auto sub () { return 1; })(), (1, 2);\n";
+            }
+            if (i < Filler) {
+                code += sprintf("    out += map $1 + %d, (1, 2);\n", i);
+            }
+        }
+        code += sprintf("    foreach auto v in (out) {
+    }
+    return out;
+}
+
+%sstring sub run() {
+    list l = f();
+    int sum = foldl $1 + $2, l;
+    return sprintf(\"rv:%%d %%d %%y\\n\", l.size(), sum, l[0..3]);
+}
+}
+", pub);
+        return code;
+    }
+
+    #! Returns the script with the function of the issue, with the closure after \a pos filler statements
+    private static string getIssueScript(int pos) {
+        return "%modern\n\n" + getIssueCode(pos, "") + "\nprint(OutlineClosure::run());\n";
+    }
+
+    #! Returns the script of the issue's minimal function
+    private static string getMinimalScript() {
+        return "%modern
+
+list sub f() {
+    list out;
+    out += map (auto sub () { return 1; })(), (1, 2);
+    foreach auto v in (out) {
+    }
+    return out;
+}
+
+printf(\"rv:%y\\n\", f());
+";
+    }
+
+    #! Returns a script whose small functions create closures in the regions that forced thresholds outline
+    /** The captured locals are declared in blocks, which the regions contain: a region is not made when a local that
+        a closure uses crosses its boundary (see design/aot-function-outlining.md).
+    */
+    private static string getFormsScript() {
+        return "%modern
+
+string log;
+
+# the function of the issue: an immediately called closure in an operator expression
+list sub imm() {
+    list out;
+    out += map (auto sub () { return 1; })(), (1, 2);
+    foreach auto v in (out) {
+        log += \"v\" + v;
+    }
+    return out;
+}
+
+# immediately called closures without captures that return native int, float and bool values
+list sub typed(int n) {
+    list out;
+    out += (int sub (int x) { return x + 1; })(n);
+    out += (float sub (float x) { return x * 1.5; })(n);
+    out += (bool sub (int x) { return x > 1; })(n);
+    out += (int sub () { return 42; })();
+    foreach auto v in (out) {
+        log += \"t\";
+    }
+    return out;
+}
+
+# immediately called closures that capture locals of the region, one of them raising an exception
+list sub captures(int n) {
+    list out;
+    log += \"a\";
+    {
+        int k = n * 10;
+        string s = \"s\" + n;
+        out += (int sub (int x) { return x + k; })(3);
+        out += (string sub () { return s + k; })();
+        k += 1;
+        out += (int sub () { return k; })();
+        try {
+            out += (int sub () { if (k > 15) { throw \"BIG\", sprintf(\"k=%d\", k); } return -k; })();
+        } catch (hash<ExceptionInfo> ex) {
+            out += ex.err + \":\" + ex.desc;
+        }
+    }
+    log += \"b\";
+    foreach auto v in (out) {
+        log += \"c\";
+    }
+    return out;
+}
+
+# several closures stored in locals and called in the region; one is passed to another, one captures nothing
+list sub multi(int n) {
+    list out;
+    log += \"a\";
+    {
+        int b = n + 2;
+        code add = int sub (int x) { return x + b; };
+        code mul = int sub (int x) { return x * b; };
+        out += add(1);
+        out += mul(3);
+        out += (int sub (code f, int x) { return f(x) + 1; })(add, 5);
+        b = 100;
+        out += add(1);
+        # without captures: a guarded stored closure call
+        code dbl = int sub (int x) { return x * 2; };
+        out += dbl(b + 1);
+    }
+    log += \"b\";
+    foreach auto v in (out) {
+        log += \"c\";
+    }
+    return out;
+}
+
+# closures created in the region and returned to the caller; they share a captured local
+list<code> sub mk(int n) {
+    list<code> l;
+    log += \"a\";
+    {
+        int b = n;
+        l += int sub () { return b * 2; };
+        l += int sub (int x) { b += x; return b; };
+    }
+    log += \"b\";
+    foreach code f in (l) {
+        log += f ? \"c\" : \"-\";
+    }
+    return l;
+}
+
+# nested closures
+list sub nested(int n) {
+    list out;
+    log += \"a\";
+    {
+        int a = n + 1;
+        out += (int sub (int x) { return (int sub (int y) { return y * a; })(x) + a; })(4);
+        code outer = code sub (int x) { code inner = int sub () { return x + a; }; return inner; };
+        out += outer(7)();
+    }
+    log += \"b\";
+    foreach auto v in (out) {
+        log += \"c\";
+    }
+    return out;
+}
+
+for (int c = 0; c < 3; ++c) {
+    log = \"\";
+    list<code> l = mk(c);
+    printf(\"rv%d:%y %y %y %y %y %y %y %y %y %s\\n\", c, imm(), typed(c), captures(c), multi(c), nested(c), l[0](),
+        l[1](5), l[1](5), l[0](), log);
+}
+";
+    }
+
+    #! Writes \a code to \a path
+    private static writeFile(string path, string code) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(code);
+        f.close();
+    }
+
+    #! Returns the output of the script \a path in \a mode
+    private string runMode(string path, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s", qore_bin, mode, path));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        return r.stdout;
+    }
+
+    #! Returns the reference output of the script \a path (the AST's), checking that it matches \a re
+    private string getExpected(string path, string re) {
+        string expected = runMode(path, "ast");
+        assertRegex(re, expected, "the AST prints the result lines");
+        foreach string mode in (Modes) {
+            assertEq(expected, runMode(path, mode), sprintf("%s: %s", path, mode));
+        }
+        return expected;
+    }
+
+    #! Compiles \a src with qcc to \a out with the options \a opts in the environment \a env
+    /** @return the output of qcc
+    */
+    private string compile(string src, string out, string opts, string env) {
+        int rc;
+        string output = backquote(sprintf("%s QORE_AOT_DEBUG=1 %s %s %s -o %s %s 2>&1", lib_env, env, qcc_bin, opts,
+            out, src), \rc);
+        assertEq(0, rc, sprintf("qcc %s %s: exit status (output: %s)", opts, src, output.substr(-2000)));
+        return output;
+    }
+
+    #! Returns True if the qcc output \a out says that the function \a name was outlined
+    private static bool outlined(string out, string name) {
+        return out.regex(sprintf("AOT-OUTLINE-FN: '%s' outlined [1-9][0-9]* regions", name));
+    }
+
+    #! Returns the names of the outlined helpers whose IR in the qcc dump \a out creates a closure
+    /** The helpers are named <tt><coordinator symbol>_outline_<n></tt>
+    */
+    private static hash<string, bool> getClosureHelpers(string out) {
+        hash<string, bool> rv = {};
+        *string helper;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = line.regexExtract("^=== IR for (.*) ===$");
+            if (m) {
+                helper = m[0] =~ /_outline_[0-9]+$/ ? m[0] : NOTHING;
+                continue;
+            }
+            if (helper && line =~ /create\.closure/) {
+                rv{helper} = True;
+            }
+        }
+        return rv;
+    }
+
+    #! Returns True if a helper of the function \a name in \a helpers creates a closure
+    /** The symbol of a function in a namespace has \c "__" in place of each \c "::", and the symbol of a function of
+        a module starts with \c "_qaot_<module>_"; the names are made of word characters
+    */
+    private static bool helperCreatesClosure(hash<string, bool> helpers, string name) {
+        string pattern = "^(_qaot_[A-Za-z0-9_]+_)?" + replace(name, "::", "__") + "_";
+        foreach string helper in (keys helpers) {
+            if (helper.regex(pattern)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns the output of the executable \a exe
+    private string runExe(string exe) {
+        int rc;
+        # -b must be the first argument of a compiled program
+        string out = backquote(sprintf("%s %s -b", lib_env, exe), \rc);
+        assertEq(0, rc, sprintf("%s: exit status (output: %y)", exe, out));
+        return out;
+    }
+
+    #! Checks that the executables made from \a src at each optimization level print \a expected
+    /** @param names the functions that must be outlined (with \a outline) or not
+        @param outline True if the functions \a names must be outlined, False if they must not be
+        @param closure_in_helper True if a helper of each function in \a names must create a closure, False if no
+        helper may create one (only with \a outline; the default is \a outline)
+    */
+    private checkExecutables(string src, string expected, softlist<string> names, bool outline, string env,
+            string what, *bool closure_in_helper) {
+        bool in_helper = closure_in_helper ?? outline;
+        foreach string opt in (OptLevels) {
+            string exe = src + opt;
+            string out = compile(src, exe, opt, (outline ? "QORE_AOT_DUMP_IR=1 " : "") + env);
+            hash<string, bool> helpers = getClosureHelpers(out);
+            foreach string name in (names) {
+                assertEq(outline, outlined(out, name), sprintf("%s %s: %s outlined", what, opt, name));
+                if (outline) {
+                    assertEq(in_helper, helperCreatesClosure(helpers, name), sprintf("%s %s: a helper of %s "
+                        "creates a closure (helpers: %y)", what, opt, name, keys helpers));
+                }
+            }
+            assertEq(expected, runExe(exe), sprintf("%s: qcc %s", what, opt));
+        }
+    }
+
+    testDefaultThresholds() {
+        TmpDir dir("qore-aot-outline-closure-");
+        # the closure in the first region and in the second; after 110 filler statements, the function is outlined,
+        # but the closure stays in the coordinator
+        foreach int pos in ((0, 60, 110)) {
+            string src = join_paths(dir.path, sprintf("issue%d.qr", pos));
+            writeFile(src, getIssueScript(pos));
+            string expected = getExpected(src, "^rv:242 [0-9]+ \\[[0-9, ]+\\]\n$");
+            checkExecutables(src, expected, "OutlineClosure::f", True, "", sprintf("closure after %d statements", pos),
+                pos != 110);
+        }
+        # without outlining
+        string src = join_paths(dir.path, "issue0.qr");
+        checkExecutables(src, getExpected(src, "^rv:242 "), "OutlineClosure::f", False, "QORE_AOT_OUTLINE_FN=0",
+            "not outlined");
+    }
+
+    testModule() {
+        TmpDir dir("qore-aot-outline-closure-");
+        string script = join_paths(dir.path, "issue.qr");
+        writeFile(script, getIssueScript(0));
+        string expected = getExpected(script, "^rv:242 ");
+        string src = join_paths(dir.path, "OutlineClosure.qm");
+        writeFile(src, "%modern
+
+module OutlineClosure {
+    version = \"1.0\";
+    desc = \"closures in outlined function-body helpers\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+" + getIssueCode(0, "public "));
+        string prog = join_paths(dir.path, "probe.qr");
+        writeFile(prog, sprintf("%%modern\n%%append-module-path %s/mods\n%%requires OutlineClosure\n"
+            "print(OutlineClosure::run());\n", dir.path));
+        mkdir(join_paths(dir.path, "mods"));
+        string qmod = join_paths(dir.path, "mods", "OutlineClosure.qmod");
+        foreach string opt in (OptLevels) {
+            string out = compile(src, qmod, opt + " --module", "QORE_AOT_DUMP_IR=1");
+            assertTrue(outlined(out, "OutlineClosure::f"), sprintf("module %s: f outlined", opt));
+            assertTrue(helperCreatesClosure(getClosureHelpers(out), "OutlineClosure::f"),
+                sprintf("module %s: a helper of f creates the closure", opt));
+            assertEq(expected, runMode(prog, "ast"), "module qcc " + opt);
+            unlink(qmod);
+        }
+    }
+
+    testMinimal() {
+        TmpDir dir("qore-aot-outline-closure-");
+        string src = join_paths(dir.path, "minimal.qr");
+        writeFile(src, getMinimalScript());
+        string expected = getExpected(src, "^rv:\\[1, 1\\]\n$");
+        checkExecutables(src, expected, "f", True, ForceEnv, "minimal");
+        checkExecutables(src, expected, "f", True, ForceEnv + " QORE_AOT_OUTLINE_FN_TARGET_INSTS=30",
+            "minimal, target 30");
+    }
+
+    testForms() {
+        TmpDir dir("qore-aot-outline-closure-");
+        string src = join_paths(dir.path, "forms.qr");
+        writeFile(src, getFormsScript());
+        string expected = getExpected(src, "^(rv[0-2]:[^\n]+\n){3}$");
+        # the exception is raised by the closure in the third call only
+        assertEq(1, expected.split("BIG:k=21").size() - 1, "the closure raises the exception once");
+        # the returned closures share their captured local
+        assertRegex("\nrv1:.* 2 6 11 22 ", expected, "the returned closures share the captured local");
+        checkExecutables(src, expected, FormFunctions, True, ForceEnv, "forms");
+        checkExecutables(src, expected, FormFunctions, False, "QORE_AOT_OUTLINE_FN=0", "forms, not outlined");
+    }
+}
