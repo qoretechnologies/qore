@@ -2634,7 +2634,7 @@ void UserSignature::setupFromAOTMetadata(
     qore_program_private* pp = qore_program_private::get(*pgm);
     qore_program_private* local_pp = localOwnerPgm
         ? qore_program_private::get(*localOwnerPgm) : pp;
-    // Override the default `loc = getLocation(0, 0)` (null-file, line 0)
+    // Override the default `loc = getLocation(0, 0)` (line 0, with the file of the thread's parse, if any)
     // with a program-interned `(file, first_line, last_line)` location when
     // the caller knows the declaring source path.  The parser sets this to
     // the function's real file+line via getLocation(first_line, last_line);
@@ -2642,14 +2642,19 @@ void UserSignature::setupFromAOTMetadata(
     // (see QORE_AOT_FEAT_SIG_LINES) so `xsink->overrideLocation()` reports
     // `<file>:<line> (Qore)` instead of `:0 (Qore)` with no filename.
     if (parseLocFile && *parseLocFile) {
-        // Intern the file string in the program's string pool — `parseLocFile`
+        // Intern the file string in the program's runtime pool — `parseLocFile`
         // typically points into the AOT binary reader's decompressed body,
         // which is freed when the deserializer returns.  QoreProgramLocation
         // stores a raw `const char*`, so without interning the location's
-        // `file` dangles.
-        const char* interned = pp->addString(parseLocFile);
-        QoreProgramLocation tmp(interned, parseLocFirstLine, parseLocLastLine);
-        loc = pp->getLocation(tmp, parseLocFirstLine, parseLocLastLine);
+        // `file` dangles.  The runtime pool is never rolled back with a failed
+        // parse, which did not add the location (issue #6354).
+        QoreProgramLocation tmp(parseLocFile, parseLocFirstLine, parseLocLastLine);
+        loc = pp->getRuntimeLocation(tmp, parseLocFirstLine, parseLocLastLine);
+    } else {
+        // the default location of the constructor (lines 0, with the file of the thread's parse) is in the pool of
+        // parsed code, which a failed parse can roll back: the code deserialized from AOT data takes the same location
+        // from the runtime pool, without reading the old one (issue #6354)
+        loc = pp->getRuntimeLocation(0, 0);
     }
     paramReadOnlyList.assign(nparams, false);
     for (size_t i = 0, e = std::min(nparams, paramFlags.size()); i < e; ++i) {
