@@ -1854,8 +1854,12 @@ void QoreUserModuleDefContextHelper::setNameInit(const char* name) {
 
     assert(!po);
 
-    po = pgm->pwo.parse_options;
-    pgm->pwo.parse_options |= MOD_HEADER_PO;
+    {
+        // the options saved are the ones that the header's restrictions are added to (issue #6078)
+        std::lock_guard<std::recursive_mutex> lg(pgm->pwo.parse_options.writeLock());
+        po = pgm->pwo.parse_options;
+        pgm->pwo.parse_options |= MOD_HEADER_PO;
+    }
     // the header's own restrictions do not apply to the functional domains declared on user code
     qore_program_private::setModuleHeaderDomains(*pgm->pgm, static_cast<int64>(MOD_HEADER_PO) & ~po.getLo());
 }
@@ -4022,7 +4026,11 @@ static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram*
     if (trusted || !parent_pgm || &module_pgm == parent_pgm) {
         return;
     }
-    QoreSandboxManager* sm = qore_program_private::get(*parent_pgm)->getSandboxManagerRef();
+    // the loading Program's own manager, not the sandbox that it keeps of the code that created it (see
+    // qore_program_private::creator_sandbox_manager), which governs the module's callers through the walk of their
+    // call stack; a module that sandboxed code, or code acting for it, loads gets the sandbox of that code below (all
+    // purposes, as before: also in a Program that trusted code created in a system-policy capability)
+    QoreSandboxManager* sm = qore_program_private::get(*parent_pgm)->getOwnSandboxManagerRef();
     // loaded by library code for code that is not trusted: governed by the sandbox of that code
     if (!sm) {
         sm = qore_module_init_lift_manager_ref();
@@ -4927,11 +4935,12 @@ int QoreModuleManager::addModuleParseOptionMask(const char* name, const QoreModu
     // the mask can complete %modern (it can add parts of it, such as PO_STRONG_ENCAPSULATION), which cannot be in
     // effect with a compatibility option of the module that %modern does not allow (issue #5682); the mask is refused
     // before anything is changed
-    // the options that are checked are the ones that are applied: they are read once (the parse options of a Program
-    // are not locked against a concurrent change by C++ code, so they are not read again between the check and the
-    // change)
+    // the options that are checked are the ones that are applied: the write lock is held from the read to the change,
+    // so that no other change comes between them (issue #6078)
+    std::unique_lock<std::recursive_mutex> wl;
     QoreParseOptions masked;
     if (mpgm && !mask.empty()) {
+        wl = std::unique_lock<std::recursive_mutex>(qore_program_private::getParseOptionsWriteLock(*mpgm));
         QoreParseOptions current = mpgm->getParseOptions();
         masked = mask.apply(current);
         if (qore_program_private_base::isModern(masked)

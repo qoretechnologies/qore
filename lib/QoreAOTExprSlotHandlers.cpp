@@ -236,7 +236,8 @@ static bool write_slot_CONST_NULL(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
-//! DOT_EVAL_TARGET: ref1 = class path, ref2 = method name[\nvariant class\nvariant signature], flags = is_pseudo
+//! DOT_EVAL_TARGET: ref1 = class path, ref2 = method name[\nvariant class\nvariant signature],
+//! flags = QORE_AOT_DOT_EVAL_TARGET_*
 static bool write_slot_DOT_EVAL_TARGET(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
     ctx.writer.writeStringRef(ctx.expr.ref2.c_str());

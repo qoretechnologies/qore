@@ -38,15 +38,18 @@
 #include <qore/QoreSandboxManager.h>
 
 bool thread_capabilities_visible() {
-    // user module code, which the set is for; only the system can create a Program with PO_IN_MODULE
+    // the code of a user module, which the set is for, when the module's Program is not sandboxed: PO_IN_MODULE does
+    // not tell that the code is trusted, as a Program that module code creates inherits it, also in a module that
+    // sandboxed code loaded (which is sandboxed, as is a Program that code acting for sandboxed code creates); the
+    // code of a sandboxed module is judged by the rules below like any other code
     QoreProgram* pgm = getProgram();
-    if (pgm && pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
+    if (pgm && pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE)) && !qore_program_is_sandboxed(pgm)) {
         return true;
     }
     // other code sees it only if it may control threads itself and no sandbox governs it, as for the creator of a
-    // scope (thread_capability_check_creator()): also a Program that sandboxed code created, which is sandboxed by
-    // its flag only and has no manager that a lookup would find, and not a sandbox that the thread only inherited from
-    // the code that started it, which does not count by itself
+    // scope (thread_capability_check_creator()): also a Program that sandboxed code created, which keeps the sandbox
+    // of that code (and is sandboxed by its flag), and not a sandbox that the thread only inherited from the code
+    // that started it, which does not count by itself
     if (runtime_check_parse_option(PO_NO_THREAD_CONTROL)) {
         return false;
     }
@@ -174,6 +177,15 @@ ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
       thread that sandboxed code started (such as a thread that a sandboxed service started with the host's API);
       the sandboxed code that runs in that thread still cannot set a scope, and the capabilities' code must still be
       code that no sandbox governs
+    - the code of a %Program that sandboxed code created, or committed code in, is governed by the sandbox that the
+      %Program keeps of that code wherever it runs (see @ref sandbox_program_capability): it cannot set a scope and
+      sees no capabilities, also when trusted code calls it without the Program object (an imported function, a
+      function copied into an evaluation %Program); the code of a user module sees the capabilities only if the
+      module's %Program is not sandboxed
+    - a Program object is a capability: sandboxed code that a host gives an unsandboxed %Program object, or a call
+      reference to @ref Qore::call_async() "call_async()", can start a thread that runs host code, which can set a
+      scope (see @ref Qore::Program "Program"); a host's call reference to @ref Qore::parallel_map() "parallel_map()"
+      or @ref Qore::parallel_foreach() "parallel_foreach()" that sandboxed code calls does not give that
 */
 ThreadCapabilityScope::constructor(hash<auto> capabilities, *bool replace) {
     // the set of a scope stays in effect for the code that runs on the thread after the call that set it, the host's

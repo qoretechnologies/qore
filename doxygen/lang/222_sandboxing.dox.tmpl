@@ -134,7 +134,8 @@ Program p(opts);
       caller.  The code of any other %Program that a sandboxed %Program calls, such as a function imported with
       @ref Qore::Program::importFunction() "Program::importFunction()" or a method of a class imported with
       @ref Qore::Program::importClass() "Program::importClass()", runs with the options of the %Program that defined
-      it; only the caller's @ref Qore::SandboxManager "SandboxManager" governs it
+      it; only the caller's @ref Qore::SandboxManager "SandboxManager" governs it.  The same holds for code that
+      runs through a @ref Qore::Program "Program" object that the code holds (see @ref sandbox_program_capability)
     - <b>Threads started by module code</b>: @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and the other
       thread parse options are checked when the code of the %Program is parsed, so they do not guarantee that the
       %Program cannot cause concurrent execution; see @ref sandbox_po_threads
@@ -235,7 +236,10 @@ auto result = p.callFunction("main");
     invoking the reference later also enforces its creation policy, even when trusted code makes the call and
     the method is implemented in a shared module. The nearest calling Program's policy still applies; an access
     must satisfy both it and every active creation policy. Copies, asynchronous callbacks, and bound callbacks
-    preserve this protection. A manager's interrupt and thread limits remain effective as well.
+    preserve this protection. A manager's interrupt and thread limits remain effective as well. A call reference
+    that sandboxed code gets from another Program with @ref Qore::Program::getCallReference() is created under the
+    caller's sandbox in the same way as one that it makes with the <tt>\\</tt> operator (see
+    @ref sandbox_program_capability).
 
     Creation provenance does not track later changes to a shared object. When a tenant configures an existing
     handler, keep its interface Program wrapper or bind its callback while executing in that interface:
@@ -269,6 +273,60 @@ authenticate();
     Native modules invoke callbacks with ResolvedCallReferenceNode::invoke(), or apply QoreSandboxProvenanceHelper
     around direct native implementations. Foreign runtime I/O that does not use Qore's policy checks remains outside
     this mechanism; provenance is execution context, not data taint tracking.
+
+    @subsection sandbox_program_capability Program Objects Are Capabilities
+
+    A @ref Qore::Program "Program" object is a capability: code that holds one can use everything that the
+    %Program can do.  The methods that run the %Program's code or return its callables, such as
+    @ref Qore::Program::callFunction() "Program::callFunction()",
+    @ref Qore::Program::callFunctionArgs() "Program::callFunctionArgs()",
+    @ref Qore::Program::callStaticMethod() "Program::callStaticMethod()",
+    @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()",
+    @ref Qore::Program::run() "Program::run()",
+    @ref Qore::Program::getCallReference() "Program::getCallReference()" and
+    @ref Qore::Program::getExpression() "Program::getExpression()", run code with the freedom of that %Program, not
+    with the freedom of the code that holds the object.
+
+    - <b>Parse options belong to each %Program</b>: they restrict the code that is parsed in that %Program (see
+      @ref sandbox_parse_options).  They are not carried into another %Program that the code calls: the code of
+      the other %Program runs with its own parse options
+    - <b>The runtime sandbox policy follows the caller</b>: the @ref Qore::SandboxManager "SandboxManager" that
+      governs the caller also governs the code that runs for it in the other %Program, and the objects and call
+      references created for the caller keep the caller's sandbox as their provenance, also when trusted code uses
+      them later (see @ref sandbox_provenance)
+    - <b>A %Program that sandboxed code creates keeps its sandbox</b>: a %Program that sandboxed code creates (with
+      @ref Qore::Program::constructor() "Program::constructor()", in a thread that it starts, or through library code
+      that it calls), or commits code in (@ref Qore::Program::parse() "Program::parse()" of a %Program that it was
+      given, or @ref Qore::Program::parsePending() "Program::parsePending()" whose code is committed later, by any
+      code), keeps the sandbox that governs that code, and its code is governed by it wherever it runs: also when
+      trusted code calls it without the Program object, such as a function that it imported into a %Program of the
+      host, or a function copied into an evaluation %Program
+      (@ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()"), and also on a thread
+      that a binary module enters the %Program with.  The sandbox's interrupts and call limits apply to that code as
+      well, together with the sandbox of the code that calls it.  This is the whole %Program's code: a %Program of the host that sandboxed code commits code in is governed
+      by that sandbox from then on, its earlier code included, so a host gives sandboxed code a %Program that it may
+      add code to only for the sandbox's own use.  A parse that is refused or rolled back, and an
+      @ref Qore::Expression "Expression" (which is governed through its object and cannot define code: an expression
+      that tries to is refused, and the code pending in the %Program is rolled back with it), add no code
+      and give the %Program no sandbox.  A manager that code a sandbox governs gives a %Program with
+      @ref Qore::Program::setSandboxManager() "Program::setSandboxManager()" (also through trusted code that it calls)
+      adds to the sandbox of the code that calls the %Program, as the sandbox that a %Program keeps does, instead of
+      governing its code alone, so sandboxed code cannot loosen its own calls into a %Program by giving it a laxer
+      manager.  The policy that the %Program keeps is the one that governed the code that created it: a %Program
+      that trusted code creates in a system-policy capability
+      (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") for a sandboxed
+      caller keeps the caller's interrupts and limits but not its filesystem, network and uncontrolled-API policy, as
+      the capability's own code has.  @ref Qore::Program::setSandboxManager() "Program::setSandboxManager()" adds a manager of the
+      %Program's own, which governs its code together with the sandbox that it keeps; it never removes that sandbox,
+      and @ref Qore::Program::getSandboxManager() "Program::getSandboxManager()" returns only the %Program's own
+      manager
+    - <b>Give tenant code only what the tenant may do</b>: a host must not give tenant or sandboxed code a
+      @ref Qore::Program "Program" object with more freedom than the tenant itself has, such as the %Program of the
+      host or of another tenant, or a %Program with fewer parse-option restrictions than the tenant's own.  To give
+      tenant code a controlled operation, import a function that implements only that operation into the tenant's
+      %Program (see @ref Qore::Program::importFunction() "Program::importFunction()") instead
+
+    @since %Qore 3.0
 
     @subsection sandbox_datasource_options Datasource Options Are Judged by the Code That Sets Them
 
@@ -584,6 +642,15 @@ sm.setFilesystemDefaultPolicy(False);
 
 # Alternative: allow unlisted paths, only deny explicitly listed
 sm.setFilesystemDefaultPolicy(True);
+    @endcode
+
+    @subsection sandbox_fs_shell Shell Commands
+
+    system(), backquote() and the @ref backquote_operator "backquote operator" run their command with the shell, so
+    the filesystem policy must allow \c /bin/sh to be executed; otherwise they raise \c FILESYSTEM-ACCESS-DENIED.
+    Allowing it allows any command, as the shell runs what it is given:
+    @code{.py}
+sm.addFilesystemAllowedPath("/bin/sh", QSEC_EXECUTE);
     @endcode
 
     @section sandbox_network Network Security
@@ -1243,6 +1310,47 @@ hash<auto> fs_config = sm.getFilesystemConfiguration();
 # Get network-specific configuration
 hash<auto> net_config = sm.getNetworkConfiguration();
     @endcode
+
+    @subsection sandbox_restricts Asking Whether a Sandbox Restricts Anything
+
+    A sandbox manager that allows everything and sets no limit restricts nothing, also when it is attached to a
+    %Program.  The following methods answer from the state of the manager (the parse options and functional domains of
+    a %Program are not part of it):
+
+    |!Method|!True if
+    |@ref Qore::SandboxManager::networkRestricts() "networkRestricts()"|the default network policy denies, or there are allowed or denied IP ranges (blockPrivateNetworks() adds denied ranges) or allowed ports; allowed host patterns alone do not count
+    |@ref Qore::SandboxManager::filesystemRestricts() "filesystemRestricts()"|the default filesystem policy denies, or there are allowed or denied paths or a sandbox root
+    |@ref Qore::SandboxManager::limitsRestrict() "limitsRestrict()"|the thread, wall time, CPU time, stack size or memory limit is greater than 0
+    |@ref Qore::SandboxManager::restricts() "restricts()"|any of the above
+    |@ref Qore::SandboxManager::trustsUncontrolledApis() "trustsUncontrolledApis()"|the policy allows uncontrolled APIs (setUncontrolledApiPolicy()); for a combination of sandboxes, every member allows them
+
+    @code{.py}
+SandboxManager sm();
+sm.setFilesystemDefaultPolicy(True);
+sm.setNetworkDefaultPolicy(True);
+assert(!sm.restricts());
+sm.setMaxThreads(4);
+assert(sm.limitsRestrict() && !sm.networkRestricts());
+    @endcode
+
+    Binary modules use the C++ equivalents, QoreSandboxManager::restricts() and its relatives, instead of testing
+    whether a manager is attached or reading <tt>network().getConfiguration()</tt>, which is empty for the combination
+    of the sandboxes of several callers; for such a combination each predicate is true if any member's is.  The feature
+    macro \c _QORE_HAS_SANDBOX_RESTRICTS_API is defined by the headers that declare them.
+
+    A module that refuses an operation that only an unrestricted caller may use (one that runs code or does I/O that
+    %Qore does not see, as an uncontrolled API does) refuses it unless <tt>trustsUncontrolledApis()</tt> is true on
+    the governing manager (resolved with QoreSandboxManagerHelper::Policy): only a sandbox whose host trusts its code
+    to use uncontrolled APIs lets the code use it.  What the sandbox restricts does not matter: a sandbox that allows
+    all I/O and sets no limit but does not trust its code still keeps that code from such operations, as
+    @ref Qore::SandboxManager::setUncontrolledApiPolicy() "setUncontrolledApiPolicy()" describes; the predicates above
+    are for a module that applies the sandbox's I/O policy or limits itself.  Unlike the other predicates, a
+    combination of sandboxes trusts only if every member does (the AND over the members), because one member that does
+    not trust is enough.
+
+    The predicates are a snapshot of the current configuration: concurrent reconfiguration of a shared manager is not
+    synchronized (as for the other readers of the manager), and the interrupt state (requestInterrupt()) is not a
+    policy and is not reported.
 
     @section sandbox_exceptions Security Exceptions
 

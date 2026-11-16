@@ -3198,9 +3198,9 @@ bool parse_cond_test(const QoreProgramLocation* loc) {
     return td->pcs->test(loc);
 }
 
-void push_parse_options() {
+void push_parse_options(const QoreProgramLocation* loc) {
     ThreadData* td = thread_data.get();
-    qore_program_private::get(*td->current_pgm)->pushParseOptions(td->parse_file);
+    qore_program_private::get(*td->current_pgm)->pushParseOptions(loc, td->parse_file);
 }
 
 // called when a StatementBlock has "on_exit" blocks
@@ -4193,10 +4193,15 @@ QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, Qor
     rc.setClass(c);
     do_rc_update = true;
 
-    if (obj && ref_obj && obj != old_obj && !qore_object_private::get(*obj)->startCall(code, xsink)) {
+    if (obj && ref_obj && obj != old_obj && !qore_object_private::get(*obj)->startCall(c, code, xsink)) {
         do_ref = true;
     } else {
         do_ref = false;
+        // a call on the current object takes no reference, but its arguments can have deleted the object too: the
+        // call raises the same error as for another object, so that every execution mode raises it (issue #5824)
+        if (obj && ref_obj && obj == old_obj) {
+            qore_object_private::get(*obj)->checkCurrentObjectCall(c, code, xsink);
+        }
     }
 
     // issue #3024 / issue #3390: save & update the program call context from the code context
@@ -4745,6 +4750,23 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     }
 }
 
+QORE_INTERN_NOINLINE void ProgramThreadCountContextHelper::enterSandboxBudgets(ThreadData* td,
+        qore_program_private* pp) {
+    QoreSandboxManager* own_ptr;
+    QoreSandboxManager* creator_ptr;
+    pp->getSandboxManagerRefs(own_ptr, creator_ptr);
+    ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
+    ReferenceHolder<QoreSandboxManager> creator(creator_ptr, nullptr);
+    // the sandbox of the code that created the Program has call budgets in it as well: a call into the Program by
+    // trusted code is a call of that sandbox (a call made inside a budget of the manager starts none)
+    if (own) {
+        td->sandbox_budgets.enter(td->tid, *own, this);
+    }
+    if (creator) {
+        td->sandbox_budgets.enter(td->tid, *creator, this);
+    }
+}
+
 void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm,
         bool runtime) {
     old_pgm = td->current_pgm;
@@ -4824,11 +4846,8 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
     // entering a Program with a sandbox manager starts a call budget if the manager has a time limit and the thread
     // is not already running a call of it (see design/sandbox-resource-limits.md)
     // (almost every Program has no manager, which is checked without the call that takes a reference to it)
-    if (pp->sandbox_manager.load(std::memory_order_acquire)) {
-        ReferenceHolder<QoreSandboxManager> sm(pp->getSandboxManagerRef(), nullptr);
-        if (sm) {
-            td->sandbox_budgets.enter(td->tid, *sm, this);
-        }
+    if (pp->hasSandboxManager()) {
+        enterSandboxBudgets(td, pp);
     }
     // sandboxed code never runs with cancellation deferred (a trusted destructor, a cleanup critical section or thread
     // teardown that calls it); a Program that sandboxed code created has no manager of its own, so the flag decides
@@ -5188,14 +5207,18 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
                 *pgm_id = p->getProgramId();
             }
         };
-        // the reference of a Program's manager is held while it is visited
+        // the references of a Program's managers (its own and its creator's sandbox) are held while they are visited
         auto visit_pgm = [&](QoreProgram* p) -> bool {
-            ReferenceHolder<QoreSandboxManager> m(qore_program_private::get(*p)->getSandboxManagerRef(), nullptr);
-            if (!m) {
+            QoreSandboxManager* own_ptr;
+            QoreSandboxManager* creator_ptr;
+            qore_program_private::get(*p)->getSandboxManagerRefs(own_ptr, creator_ptr, policy);
+            ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
+            ReferenceHolder<QoreSandboxManager> creator(creator_ptr, nullptr);
+            if (!own && !creator) {
                 return true;
             }
             note_pgm(p);
-            return visit(*m);
+            return (!own || visit(*own)) && (!creator || visit(*creator));
         };
         if (td->current_pgm && !chain_clear) {
             if (!visit_pgm(td->current_pgm)) {
@@ -5215,25 +5238,76 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
     // issue #4285: with a policy barrier active, resolution does not walk out to the callers that
     // established it; see ThreadData::sandbox_policy_barrier and ThreadData::sandbox_policy_barrier_ctx
     const bool barrier = policy && td->sandbox_policy_barrier;
-    // helper: try to resolve a ref'd manager from a single program
-    auto try_pgm = [pgm_id](QoreProgram* p) -> QoreSandboxManager* {
-        QoreSandboxManager* sm = p ? qore_program_private::get(*p)->getSandboxManagerRef() : nullptr;
-        if (sm && pgm_id) {
-            *pgm_id = p->getProgramId();
+    // the managers of a Program (its own and the sandbox of the code that created it, the policy manager of that code
+    // for a policy check) are visited while their references are held.  The first Program found with a manager of its
+    // own governs alone, as before, and the walk ends there; the sandbox that a Program keeps of the code that created
+    // it, and a manager of its own that code a sandbox governs set, only add to the sandbox of its callers, so the walk
+    // goes on (a stricter caller still governs the code that it calls).  Returns true if the walk ends, with its
+    // result in \a rv
+    //
+    // the cache of the thread's context (see sandboxChainClear()) is shared by policy and other lookups, so a Program
+    // with a manager for the other kind of lookup counts as well: a Program created for sandboxed code under a
+    // system-policy capability keeps a sandbox but no policy manager, and a policy check must not cache that the chain
+    // has none for the lookups that follow
+    bool visited_any = false;
+    // the innermost Program that contributes a manager without ending the walk; reported when no Program's manager
+    // governs alone and nothing else sets the ID (a Program-ID report is used to scope cancel_thread())
+    qore_program_id_t contrib_id = 0;
+    struct ContribReport {
+        qore_program_id_t* pgm_id;
+        const qore_program_id_t& contrib_id;
+        ~ContribReport() {
+            if (pgm_id && !*pgm_id && contrib_id) {
+                *pgm_id = contrib_id;
+            }
         }
-        return sm;
+    } report_contrib{pgm_id, contrib_id};
+    auto try_pgm = [pgm_id, policy, &visit, &visited_any, &contrib_id](QoreProgram* p, bool& rv) -> bool {
+        if (!p) {
+            return false;
+        }
+        qore_program_private* pp = qore_program_private::get(*p);
+        if (pp->hasSandboxManager()) {
+            visited_any = true;
+        }
+        QoreSandboxManager* own_ptr;
+        QoreSandboxManager* creator_ptr;
+        bool own_additive;
+        pp->getSandboxManagerRefs(own_ptr, creator_ptr, policy, &own_additive);
+        ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
+        ReferenceHolder<QoreSandboxManager> creator(creator_ptr, nullptr);
+        if (!own && !creator) {
+            return false;
+        }
+        // a manager that code a sandbox governs set adds to the sandbox of the callers, as a kept sandbox does; only a
+        // manager that governs alone ends the walk
+        const bool ends = own && !own_additive;
+        // the Program whose manager governs alone is reported, as before; otherwise the innermost Program that
+        // contributes a manager (see report_contrib)
+        if (pgm_id) {
+            if (ends) {
+                *pgm_id = p->getProgramId();
+            } else if (!contrib_id) {
+                contrib_id = p->getProgramId();
+            }
+        }
+        if ((own && !visit(*own)) || (creator && !visit(*creator))) {
+            rv = false;
+            return true;
+        }
+        if (ends) {
+            rv = true;
+            return true;
+        }
+        return false;
     };
-    // the first manager found governs alone: it is visited while its reference is held, and the walk ends
-    auto found = [&visit](QoreSandboxManager* sm) -> bool {
-        ReferenceHolder<QoreSandboxManager> holder(sm, nullptr);
-        return visit(sm);
-    };
+    bool rv;
     if (!chain_clear) {
         // 1) the current program context; under a module initialization barrier, not the Program that loads the
         // module while no Program has been entered since
         if (!mib || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
-            if (QoreSandboxManager* sm = try_pgm(td->current_pgm)) {
-                return found(sm);
+            if (try_pgm(td->current_pgm, rv)) {
+                return rv;
             }
         }
         // 2) enclosing caller programs via the program-context (call) stack, innermost first
@@ -5254,12 +5328,12 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
             if (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx)) {
                 return true;
             }
-            if (QoreSandboxManager* sm = try_pgm(ch->getOldProgram())) {
-                return found(sm);
+            if (try_pgm(ch->getOldProgram(), rv)) {
+                return rv;
             }
         }
         // the whole chain was checked: none of its Programs has a manager in this generation
-        if (cacheable) {
+        if (cacheable && !visited_any) {
             cur_ctx->setSandboxChainClear(td->current_pgm, gen);
         }
     }
@@ -5270,8 +5344,8 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
     // null (issue #3024), preserving prior single-program resolution in that edge case; not under a module
     // initialization barrier, where it is the context of the code that loads the module
     if (!mib && td->current_pgm != td->call_program_context) {
-        if (QoreSandboxManager* sm = try_pgm(td->call_program_context)) {
-            return found(sm);
+        if (try_pgm(td->call_program_context, rv)) {
+            return rv;
         }
     }
     // 4) the sandbox inherited from the code that started this thread: the outermost caller of everything the
@@ -5286,7 +5360,7 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
         // borrowed from the context, which outlives the walk
         QoreSandboxManager* sm = policy ? ctx->policy_manager : ctx->manager;
         if (sm) {
-            if (pgm_id && !policy) {
+            if (pgm_id && !policy && !*pgm_id) {
                 *pgm_id = ctx->pgm_id;
             }
             return visit(sm);
@@ -5470,6 +5544,31 @@ bool qore_caller_is_untrusted() {
     }
     QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
     return static_cast<bool>(governing);
+}
+
+void qore_caller_sandbox_refs(QoreSandboxManager*& sm, QoreSandboxManager*& policy_sm) {
+    sm = nullptr;
+    policy_sm = nullptr;
+    ReferenceHolder<QoreSandboxManager> all(qore_caller_sandbox_ref(), nullptr);
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+    // library code that code that is not trusted loaded, while it is initialized: that code's sandbox, as for all
+    // purposes (see qore_caller_sandbox_ref())
+    if (!td->module_init_barriers.empty()) {
+        const ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
+        if (!mib.lift && mib.loader_untrusted) {
+            if (mib.loader_manager) {
+                mib.loader_manager->ref();
+            }
+            policy_sm = mib.loader_manager;
+            sm = all.release();
+            return;
+        }
+    }
+    policy_sm = find_thread_sandbox_manager_ref_intern(nullptr, true);
+    sm = all.release();
 }
 
 QoreSandboxManager* qore_caller_sandbox_ref() {
@@ -6383,7 +6482,7 @@ QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code
         // Program running on the thread that it calls back, have the effective options of their own callers
         td->callback_caller_pgm = nullptr;
         code_pgm = caller;
-        return caller->getParseOptions();
+        return qore_program_private::getParseOptions(*caller);
     }
     code_pgm = td->current_pgm;
     return runtime_get_effective_parse_options_for(td, td->current_pgm);
@@ -6432,7 +6531,8 @@ void QoreCallReferenceArgEvalHelper::evaluated(const QoreListNode* evaluated_arg
     }
 }
 
-QoreCallbackCallerHelper::QoreCallbackCallerHelper(const QoreProgram* caller) : po(caller->getParseOptions()) {
+QoreCallbackCallerHelper::QoreCallbackCallerHelper(const QoreProgram* caller)
+        : po(qore_program_private::getParseOptions(*caller)) {
     ThreadData* td = thread_data.get();
     old_caller_pgm = td->callback_caller_pgm;
     old_from_pgm = td->callback_from_pgm;
@@ -6448,7 +6548,7 @@ QoreCallbackCallerHelper::~QoreCallbackCallerHelper() {
 
 QoreParseOptions runtime_get_effective_parse_options_for(const QoreProgram* pgm) {
     ThreadData* td = thread_data.get();
-    return pgm ? apply_runtime_po_override(td, pgm->getParseOptions()) : td->runtime_po;
+    return pgm ? apply_runtime_po_override(td, qore_program_private::getParseOptions(*pgm)) : td->runtime_po;
 }
 
 QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOptions& po) {
@@ -6472,7 +6572,7 @@ ThreadData* qore_get_thread_data() {
 
 QoreParseOptions runtime_get_effective_parse_options_for(ThreadData* td, const QoreProgram* pgm) {
     assert(td == thread_data.get());
-    return pgm ? apply_runtime_po_override(td, pgm->getParseOptions()) : td->runtime_po;
+    return pgm ? apply_runtime_po_override(td, qore_program_private::getParseOptions(*pgm)) : td->runtime_po;
 }
 
 bool runtime_module_call_inherits_caller_restrictions(const QoreProgram* caller_pgm) {

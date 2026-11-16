@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/ConstantList.h"
+#include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreException.h"
 #include "qore/intern/qore_program_private.h"
@@ -659,6 +660,26 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
     qore_program_private* pgm_priv = qore_program_private::get(*getProgram());
     bool old_parse_commit_in_progress = pgm_priv->parse_commit_in_progress;
     pgm_priv->parse_commit_in_progress = true;
+    // the initializer runs with the parse options of the code that declares the constant, as its compiled form does
+    // (qore#6189), not with those of the code that triggers the evaluation: the statement that parses or loads the
+    // declaring code, or, for a parse at startup, none; any override of that code is suspended, as for the module's
+    // initialization, so that the value of the constant is not shaped by the code that happens to load it
+    // (qore#6205).  Both the thread's options and those of the thread-local RuntimeConfig, which the AST interpreter
+    // reads, are set
+    LoadTimeParseOptionsHelper init_po(pwo.parse_options);
+    struct ConstantInitRcParseOptionsHelper {
+        RuntimeConfig& rc;
+        QoreParseOptions old_po;
+
+        DLLLOCAL ConstantInitRcParseOptionsHelper(RuntimeConfig& rc, const QoreParseOptions& po) : rc(rc),
+                old_po(rc.getParseOptions()) {
+            rc.setParseOptions(po);
+        }
+
+        DLLLOCAL ~ConstantInitRcParseOptionsHelper() {
+            rc.setParseOptions(old_po);
+        }
+    } init_rc_po(rc_get_tls_ref(), pwo.parse_options);
     {
         try {
             ValueEvalOptimizedRefHolder v(saved_val, &xsink);

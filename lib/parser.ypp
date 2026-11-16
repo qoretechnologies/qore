@@ -103,6 +103,7 @@
 //#define YYDEBUG 1
 
 static int check_strong_encapsulation(const QoreProgramLocation* loc, const char* type, const char* name);
+static void check_expression_definition(const QoreProgramLocation* loc, const char* type);
 
 // the nesting depth of a rule is one more than that of its deepest symbol
 #define YYLLOC_DEFAULT(Current, Rhs, N)                         \
@@ -949,6 +950,9 @@ struct GVarSingleDecl : public GVarDecl {
                     type == VT_GLOBAL ? "global" : "thread_local", n);
         }
         if (qore_program_private::get(*getProgram())->expression_mode) {
+            // the declaration is pending in the Program: the expression's pending code is rolled back (see
+            // check_expression_definition())
+            qore_program_private::get(*getProgram())->expression_definition = true;
             parse_error(*loc, "%s variable declaration '%s' not allowed in expressions' is set",
                 type == VT_GLOBAL ? "global" : "thread_local", n);
         }
@@ -2223,6 +2227,19 @@ static void make_readonly_untyped_local_error(const QoreProgramLocation* loc, co
     qore_program_private::makeParseException(getProgram(), *loc, "PARSE-EXCEPTION", desc, metadata);
 }
 
+//! Refuses a definition in the code of an expression (Program::parseExpression(), Expression::constructor())
+/** The expression is parsed as the code \c "return (<expression>);", which code that closes the parenthesis could
+    extend with definitions; they would be pending in the Program and committed by its next parse, so the parse fails
+    and its pending code is rolled back (see qore_program_private::parseExpression())
+*/
+static void check_expression_definition(const QoreProgramLocation* loc, const char* type) {
+    qore_program_private* pp = qore_program_private::get(*getProgram());
+    if (pp->expression_mode) {
+        pp->expression_definition = true;
+        parse_error(*loc, "invalid expression; a %s cannot be defined in an expression", type);
+    }
+}
+
 static int check_strong_encapsulation(const QoreProgramLocation* loc, const char* type, const char* name) {
     if (parse_check_parse_option(PO_STRONG_ENCAPSULATION)) {
         parse_error(*loc, "illegal out of line %s definition \"%s\" (conflicts with parse option PO_STRONG_ENCAPSULATION)", type, name);
@@ -3087,14 +3104,17 @@ top_level_commands:
 
 top_level_command:
     sub_def {
+        check_expression_definition($1->loc, "function");
         $1->add(*(qore_ns_private::get(*(getRootNS()))));
     }
     | scoped_sub_def {
+        check_expression_definition($1->loc, "function");
         // see if strong encapsulation is enabled
         check_strong_encapsulation($1->loc, "function", $1->name.ostr);
         $1->add(*(qore_ns_private::get(*(getRootNS()))));
     }
     | class_def {
+        check_expression_definition($1->loc, "class");
         if (parse_check_restriction(QoreParseOptions::NO_CLASS_DEFS)) {
             parse_error(*$1->loc, "class '%s' cannot be defined with parse option NO_CLASS_DEFS set",
                 $1->name->ostr);
@@ -3104,27 +3124,32 @@ top_level_command:
         delete $1;
     }
     | hashdecl_def {
+        check_expression_definition($1->loc, "hashdecl");
         qore_root_ns_private::parseAddHashDecl($1->loc, *($1->name), $1->takeHashDecl());
         delete $1;
     }
     | enum_def {
+        check_expression_definition($1->loc, "enum");
         if ($1->enumdecl) {
             qore_root_ns_private::parseAddEnum($1->loc, *($1->name), $1->takeEnumDecl());
         }
         delete $1;
     }
     | typedef_decl {
+        check_expression_definition($1->loc, "typedef");
         NamedScope ns($1->getName());
         qore_root_ns_private::parseAddTypedef($1->loc, ns, $1->getTypeInfo(), $1->takeParseTypeInfo(), $1->isPublic());
         delete $1;
     }
     | scoped_typedef_decl {
+        check_expression_definition($1->loc, "typedef");
         // see if strong encapsulation is enabled
         check_strong_encapsulation($1->loc, "typedef", $1->name.ostr);
         qore_root_ns_private::parseAddTypedef($1->loc, $1->name, $1->getTypeInfo(), $1->takeParseTypeInfo(), $1->isPublic());
         delete $1;
     }
     | scoped_const_decl {
+        check_expression_definition($1->loc, "constant");
         if (parse_check_restriction(QoreParseOptions::NO_CONSTANT_DEFS)) {
             parse_error(*$1->loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $1->name.ostr);
@@ -3137,6 +3162,7 @@ top_level_command:
         delete $1;
     }
     | unscoped_const_decl {
+        check_expression_definition($1->loc, "constant");
         if (parse_check_restriction(QoreParseOptions::NO_CONSTANT_DEFS)) {
             parse_error(*$1->loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $1->name.ostr);
@@ -3147,6 +3173,7 @@ top_level_command:
         delete $1;
     }
     | outofline_methoddef {
+        check_expression_definition($1->loc, "method");
         // see if strong encapsulation is enabled
         check_strong_encapsulation($1->loc, "method", $1->name.ostr);
         $1->parseAddToClassAndDel();
@@ -3165,6 +3192,8 @@ top_level_command:
         qore_program_private::addStatement(*(getProgram()), $2, @2.native_parse_info);
     }
     | top_namespace_decl {
+        check_expression_definition(qore_program_private::get(*getProgram())->getLocation(@1.first_line,
+            @1.last_line, @1.first_col, @1.last_col), "namespace");
         if (parse_check_restriction(QoreParseOptions::NO_NAMESPACE_DEFS)) {
             const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
             parse_error(*loc, "namespace definitions cannot be made with parse option NO_NAMESPACE_DEFS set");
@@ -3172,6 +3201,8 @@ top_level_command:
         qore_root_ns_private::parseAddNamespace($1);
     }
     | TOK_MODULE '{' module_decls '}' {
+        check_expression_definition(qore_program_private::get(*getProgram())->getLocation(@1.first_line,
+            @4.last_line, @1.first_col, @4.last_col), "module");
         QoreModuleDefContext* qmd = get_module_def_context();
         if (!qmd)
             qore_program_private::makeParseWarning(getProgram(), *qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col), QP_WARN_MODULE_ONLY, "MODULE-ONLY", "module definitions are ignored when not defining a module");
@@ -3184,6 +3215,7 @@ top_level_command:
     | TRY_MODULE_ERROR {
         bool has_dollar = $1->var[0] == '$';
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
+        check_expression_definition(loc, "module variable");
         if (!has_dollar) {
             if (!parse_check_parse_option(PO_ALLOW_BARE_REFS)) {
                 parse_error(*loc, "%%try-module variable '%s' declared without '$' prefix, but parse option 'allow-bare-refs' is not set", $1->var);

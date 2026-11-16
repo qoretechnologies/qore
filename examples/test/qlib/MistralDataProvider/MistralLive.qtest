@@ -195,7 +195,7 @@ class MistralLiveTest inherits QUnit::Test {
     private speechTest() {
         auto voices = call("list-voices");
         assertTrue(voices.items.size() > 0);
-        auto speech = call("generate-speech", {"input": "Invoice paid.", "model": "voxtral-mini-tts-latest",
+        auto speech = call("generate-speech", {"input": "Invoice paid.", "model": "voxtral-mini-tts-3-0",
             "voice_id": voices.items[0].id});
         assertTrue(parse_base64_string(speech.audio_data).size() > 0);
     }

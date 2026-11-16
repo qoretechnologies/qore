@@ -63,6 +63,10 @@ class OnExitCapturedLocalsTest inherits QUnit::Test {
             "qore_rt_set_native_ir_slot_cache_value",
             "qore_rt_set_native_ir_slot_cache_value_aot",
             "qore_rt_end_native_ir_slot_cache",
+            "qore_rt_obe_publish",
+            "qore_rt_obe_reload",
+            "qore_rt_obe_release",
+            "qore_rt_obe_reload_released",
             "qore_rt_sync_local",
             "qore_rt_sync_local_aot",
             "qore_rt_exec_on_block_exit",
@@ -149,11 +153,23 @@ class OnExitCapturedLocalsTest inherits QUnit::Test {
 
     #! checks that every call of the out-of-line handler protocol in the functions of the script is in a block that
     #! runs only when a handler is pending, and that each function whose handlers can be pending has such a block
+    /** A block runs only when a handler is pending if it is a pending block of the lowering (its name starts with
+        \c PendingBlockPrefix) or if every edge into it is the "pending" edge of a branch on the pending flag or comes
+        from such a block: LLVM merges the pending blocks of several exits into one block of another name when their
+        code is the same, as it is with the table-driven code of the handlers (qore#6110), so the name is not enough.
+    */
     private checkCode(string code, string label) {
         # the calls of the protocol in pending blocks, by function
         hash<string, int> pending_calls = {};
         # the calls outside of a pending block
         list<string> misplaced = ();
+
+        # the blocks of the function being read, in order: name -> the names of the blocks that branch to it
+        hash<string, list<string>> preds = {};
+        # the calls of the protocol of each block
+        hash<string, list<string>> calls = {};
+        # the edges that a branch on the pending flag takes when a handler is pending: "from>to"
+        hash<string, bool> pending_edges = {};
         *string func;
         string block;
         foreach string line in (code.split("\n")) {
@@ -161,9 +177,50 @@ class OnExitCapturedLocalsTest inherits QUnit::Test {
             if (m) {
                 func = m[0];
                 block = "entry";
+                preds = {"entry": ()};
+                calls = {};
+                pending_edges = {};
                 continue;
             }
             if (line =~ /^}/) {
+                if (func && func !~ /_obe_[0-9]+$/) {
+                    # the blocks that run only when a handler is pending
+                    hash<string, bool> gated = {};
+                    foreach string name in (keys preds) {
+                        if (name.equalPartial(PendingBlockPrefix)) {
+                            gated{name} = True;
+                        }
+                    }
+                    bool changed = True;
+                    while (changed) {
+                        changed = False;
+                        foreach string name in (keys preds) {
+                            if (gated{name} || preds{name}.empty()) {
+                                continue;
+                            }
+                            bool all_gated = True;
+                            foreach string pred in (preds{name}) {
+                                if (!pending_edges{pred + ">" + name} && !gated{pred}) {
+                                    all_gated = False;
+                                    break;
+                                }
+                            }
+                            if (all_gated) {
+                                gated{name} = True;
+                                changed = True;
+                            }
+                        }
+                    }
+                    foreach hash<auto> i in (calls.pairIterator()) {
+                        foreach string callee in (i.value) {
+                            if (gated{i.key}) {
+                                ++pending_calls{func};
+                            } else {
+                                misplaced += sprintf("%s: %s: %s", func, i.key, callee);
+                            }
+                        }
+                    }
+                }
                 remove func;
                 continue;
             }
@@ -171,20 +228,31 @@ class OnExitCapturedLocalsTest inherits QUnit::Test {
             if (!func || func =~ /_obe_[0-9]+$/) {
                 continue;
             }
-            m = (line =~ x/^([-A-Za-z0-9_.$]+):/);
+            m = (line =~ x/^([-A-Za-z0-9_.$]+):(.*)$/);
             if (m) {
                 block = m[0];
+                preds{block} = ();
+                *list<*string> pm = (m[1] =~ x/preds = (.*)$/);
+                if (pm) {
+                    foreach string pred in (pm[0].split(", ")) {
+                        preds{block} += trim(pred, "% ");
+                    }
+                }
+                continue;
+            }
+            m = (line =~ x/br i1 %[A-Za-z_.]*pending[0-9]*, label %([-A-Za-z0-9_.$]+), label/);
+            if (m) {
+                pending_edges{block + ">" + m[0]} = True;
                 continue;
             }
             *string callee = (line =~ x/call [^@]*@([A-Za-z0-9_]+)\(/)[0];
             if (!callee || !inlist(callee, ProtocolCalls)) {
                 continue;
             }
-            if (block.equalPartial(PendingBlockPrefix)) {
-                ++pending_calls{func};
-            } else {
-                misplaced += sprintf("%s: %s: %s", func, block, callee);
+            if (!calls{block}) {
+                calls{block} = ();
             }
+            calls{block} += callee;
         }
         assertEq((), misplaced, label + ": the handler protocol runs only in blocks that run when a handler is "
             "pending");

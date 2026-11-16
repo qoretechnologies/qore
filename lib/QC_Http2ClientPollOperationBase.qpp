@@ -51,11 +51,15 @@ extern QoreClass* QC_EVENTNOTIFIER;
 
 /** @cond INTERNAL */
 
-// Returns epoch time in microseconds
-static inline int64_t h2_epoch_us() {
-    int us;
-    int64_t secs = q_epoch_us(us);
-    return secs * 1000000LL + us;
+// Returns the active streams of the operation \a op, for the idle check of its connection (#6184)
+static int h2_op_active_streams(const void* op) {
+    return static_cast<const Http2ClientPollOperationPriv*>(op)->getActiveStreamCount();
+}
+
+// Returns the monotonic clock in microseconds: the idle deadline and the keepalive PING interval are intervals, which a
+// step of the system clock must not end or stop (#6150)
+static inline int64_t h2_monotonic_us() {
+    return q_get_monotonic_us();
 }
 
 // ============================================================
@@ -1087,7 +1091,7 @@ QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_
         return poll_info;
     }
 
-    int64_t now_us = h2_epoch_us();
+    int64_t now_us = h2_monotonic_us();
     bool expired = false;
     bool armed_now = false;
     {
@@ -1104,6 +1108,17 @@ QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_
         } else if (now_us >= idle_deadline_us) {
             expired = true;
         }
+    }
+
+    // a request that has reserved a stream of the connection and not yet submitted is not closed under: the
+    // connection then starts a new idle period (#6184)
+    if (expired && !AbstractHttpPollConnectionPriv::idleCloseAllowed(stream_lock, connection_priv, h2_op_active_streams,
+            this, xsink)) {
+        ASYNC_IO_TRACE("H2 handleReading: IDLE-TIMEOUT deadline reached with a reserved stream fd=%d\n",
+            sock_obj ? sock_obj->getPollableDescriptor() : -1);
+        AutoLocker al(stream_lock);
+        idle_deadline_us = now_us + idle_timeout_us;
+        expired = false;
     }
 
     if (expired) {

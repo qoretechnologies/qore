@@ -2852,6 +2852,10 @@ add_executable(qore-substring-view-test EXCLUDE_FROM_ALL
 target_include_directories(qore-substring-view-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-substring-view-test PRIVATE libqore)
+add_executable(qore-substring-view-mutation-test examples/test/qore/strings/substring_view_mutation.cpp)
+target_include_directories(qore-substring-view-mutation-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-substring-view-mutation-test PRIVATE libqore)
 add_executable(qore-number-round-trip-test EXCLUDE_FROM_ALL
     examples/test/qore/vars/number_round_trip.cpp)
 target_include_directories(qore-number-round-trip-test PRIVATE

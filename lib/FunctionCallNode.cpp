@@ -1154,6 +1154,21 @@ SelfFunctionCallNode::SelfFunctionCallNode(const QoreProgramLocation* loc, char*
         const QoreMethod* m, const QoreClass* n_qc, const qore_class_private* class_ctx) :
         AbstractMethodCallNode(loc, NT_SELF_CALL, n_args, n_qc, m), ns(n), class_ctx(class_ctx), is_copy(false),
         is_abstract(m && qore_method_private::get(*m)->isAbstract()) {
+    // an unqualified call of an abstract method has no parse-time class, as in parseInitCall() (issue #3070), so that
+    // the method is looked up by name in the class of the object, with the class context of the call
+    if (is_abstract && ns.size() == 1) {
+        qc = nullptr;
+    }
+}
+
+const QoreClass* SelfFunctionCallNode::getRecordedClass() const {
+    if (qc) {
+        return qc;
+    }
+    if (class_ctx) {
+        return class_ctx->cls;
+    }
+    return method ? method->getClass() : nullptr;
 }
 
 template <bool Lexical>

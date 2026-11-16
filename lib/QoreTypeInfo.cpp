@@ -2817,6 +2817,13 @@ const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti
         : ti;
 }
 
+const TypedHashDecl* qore_substitute_hashdecl_type_params(const TypedHashDecl* hd) {
+    assert(hd);
+    const TypedHashDecl* rv = QoreTypeInfo::getUniqueReturnHashDecl(
+        qore_substitute_type_params_if_needed(hd->getTypeInfo()));
+    return rv ? rv : hd;
+}
+
 bool qore_resolve_explicit_type_param_instantiation(const QoreTypeParamInstantiation& inst,
         QoreTypeParamInstantiation& resolved) {
     bool changed = false;

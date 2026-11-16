@@ -319,6 +319,8 @@ run_case("usleep", auto sub () {
 {
     string fifo = make_fifo();
     SandboxManager sm();
+    # backquote() runs the command with the shell, which the sandbox must allow to be executed
+    sm.addFilesystemAllowedPath("/bin/sh", QSEC_EXECUTE);
     Program p(PO_NEW_STYLE);
     p.setSandboxManager(sm);
     p.parse("string sub run(string cmd) { return backquote(cmd); }", "cancel-wakeup-interrupt");
