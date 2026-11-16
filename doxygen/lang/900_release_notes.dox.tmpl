@@ -845,6 +845,12 @@
     members; 2.2.1 evaluated it with that code's variable (issue #6268).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Strict Number Parsing
+    @ref parse_int(string, string, bool) "parse_int()", @ref parse_float(string, string, bool) "parse_float()" and
+    @ref parse_number(string, string, bool) "parse_number()" take a \a strict argument that raises
+    \c PARSE-NUMBER-ERROR unless the string is the number and nothing else (see @ref strict_number_parsing;
+    <a href="https://github.com/qoretechnologies/qore/issues/305">issue 305</a>).
+
     @par Module Commands Know the Restrictions of the Code That Issues Them
     A binary module's command handler gets the effective restrictions of the issuing code, not those of the target
     %Program, from the new \c QoreModuleCommandContext (module API 2.3; see @ref qore_modules), also for
@@ -1979,6 +1985,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a sleep with @ref Qore::usleep() "usleep()" or @ref Qore::sleep() "sleep()" that a signal interrupted while
+      it slept with \c nanosleep() (2) slept its whole time again instead of the time that was left (issue #6364)
     - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
       threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
     - a range of the @ref list_element_operator "[] operator" (ex: <tt>x[-9..1]</tt>) gives only elements of its
@@ -1989,6 +1997,10 @@
       (see @ref unittestformats; issue #2297)
     - an empty \c "regex_mask" option of @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()" matches
       every file; it caused the constructor to throw an \c INVALID-MEMBER exception (issue #3377)
+    - two @ref Qore::Program "Program" objects whose commits run code that parses code in each other waited for each
+      other's parse lock forever; such a wait is refused with \c PROGRAM-ERROR, and the wait of a parse action for a
+      parse lock can be ended with @ref Qore::cancel_thread() "cancel_thread()"; see @ref program_parse_lock_waits
+      (issue #5693)
     - an allocation that fails while a thread enters another %Program (ex: in a binary module's
       \c QoreExternalProgramContextHelper or a parse commit) leaves the thread in the calling %Program and releases
       its thread count in the entered %Program, which could otherwise not be deleted (issue #6198)

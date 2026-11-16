@@ -8850,6 +8850,22 @@ void QoreIRLowering::setLoopCheckpointExceptionTarget(QoreIRInstruction* inst, Q
     if (inst && target && target->loop_cancel != QoreIRLoopCancel::None) {
         inst->exception_target = handler ? handler : getCurrentExceptionTarget();
     }
+    // the back-edge of a functional loop whose body has a value that can hold an object checks the sink for an
+    // exception that a release left there, before the next element (qore#6072): the IR interpreter finds one that the
+    // release of a value held across iterations (a Phi's, a call's) raised, which no later instruction of the body
+    // checks
+    QoreIRRegionRecord* record = builder.getRegionRecord();
+    QoreIRBasicBlock* current = builder.getBlock();
+    // qore_ir_optimize() removes it when no value of the loop can hold an object (qore_ir_prune_release_checks())
+    // only a back-edge: the header of the loop has been lowered when the branch back to it is, but not when the branch
+    // that enters the loop is
+    if (record && inst && current && !current->instructions.empty() && current->instructions.back().get() == inst
+            && !target->instructions.empty() && !record->exception_stack->empty()) {
+        builder.createCheckReleaseException(record->exception_stack->back(), inst->loc);
+        // before the branch
+        std::swap(current->instructions[current->instructions.size() - 1],
+            current->instructions[current->instructions.size() - 2]);
+    }
 }
 
 QoreIRLowering::GuardExceptionTargetOverrideScope::GuardExceptionTargetOverrideScope(QoreIRLowering& lowering,
@@ -17987,24 +18003,123 @@ static void qore_ir_create_value_releases(QoreIRBuilder& builder, const std::vec
     so the edge costs nothing on the normal path.  The instruction records a temp scope that no mark opens, so that
     the raise releases nothing before the block runs.
 */
+//! the body of a functional loop that is being lowered: the instructions appended in it go to its record (see
+//! QoreIRRegionRecord), which end() processes (qore#6072)
+class QoreIRLowering::LoopBodyRegion {
+public:
+    DLLLOCAL LoopBodyRegion(QoreIRLowering& lowering) : lowering(lowering) {
+        record.exception_stack = &lowering.exception_stack;
+        saved = lowering.builder.setRegionRecord(&record);
+    }
+
+    //! restores the enclosing region; the checks are inserted only by end(), on the path that completes the body
+    DLLLOCAL ~LoopBodyRegion() {
+        if (active) {
+            active = false;
+            lowering.builder.setRegionRecord(saved);
+        }
+    }
+
+    //! ends the body: restores the enclosing region, and puts a release check (QoreIRReleaseCheck) of the value after each
+    //! container and each call of the body that has a handler; qore_ir_prune_release_checks() removes those of the
+    //! values that cannot hold an object, when the function is finalized
+    DLLLOCAL void end() {
+        if (!active) {
+            return;
+        }
+        active = false;
+        lowering.builder.setRegionRecord(saved);
+        // a container: after it, with the handler that was innermost when it was appended
+        for (const QoreIRRegionRecord::Container& c : record.containers) {
+            if (!c.handler || !c.inst->result.isValid()) {
+                continue;
+            }
+            std::vector<std::unique_ptr<QoreIRInstruction>>& insts = c.block->instructions;
+            for (auto it = insts.begin(), e = insts.end(); it != e; ++it) {
+                if (it->get() == c.inst) {
+                    insts.insert(it + 1, makeCheck(c.inst, c.handler));
+                    break;
+                }
+            }
+        }
+        // a Phi: after the Phis of its block, where the IR interpreter has released the Phi's previous value; native
+        // code holds the value in the slots of the incoming values
+        for (const QoreIRRegionRecord::Container& c : record.phis) {
+            if (!c.handler || !c.inst->result.isValid()) {
+                continue;
+            }
+            std::vector<std::unique_ptr<QoreIRInstruction>>& insts = c.block->instructions;
+            auto it = insts.begin();
+            while (it != insts.end() && (*it)->opcode == QoreIROpcode::Phi) {
+                ++it;
+            }
+            insts.insert(it, makeCheck(c.inst, c.handler));
+        }
+        // a call: its result replaces the value of the previous element on its normal edge (native code releases it
+        // at the start of the continuation), with the call's handler
+        for (QoreIRInstruction* inst : record.values) {
+            if (inst->opcode != QoreIROpcode::Invoke || !inst->exception_target || !inst->result.isValid()) {
+                continue;
+            }
+            QoreIRBasicBlock* cont = static_cast<QoreIRInvokeInstruction*>(inst)->normal_target;
+            if (!cont || cont == inst->exception_target) {
+                continue;
+            }
+            std::vector<std::unique_ptr<QoreIRInstruction>>& insts = cont->instructions;
+            auto it = insts.begin();
+            while (it != insts.end() && (*it)->opcode == QoreIROpcode::Phi) {
+                ++it;
+            }
+            insts.insert(it, makeCheck(inst, inst->exception_target));
+        }
+    }
+
+    LoopBodyRegion(const LoopBodyRegion&) = delete;
+    LoopBodyRegion& operator=(const LoopBodyRegion&) = delete;
+
+private:
+    QoreIRLowering& lowering;
+    QoreIRRegionRecord record;
+    QoreIRRegionRecord* saved = nullptr;
+    bool active = true;
+
+    //! returns a check of the release of the value of an instruction, with the given handler
+    DLLLOCAL static std::unique_ptr<QoreIRInstruction> makeCheck(const QoreIRInstruction* inst,
+            QoreIRBasicBlock* handler) {
+        auto check = std::make_unique<QoreIRInstruction>(QoreIROpcode::CheckException);
+        check->release_check = QoreIRReleaseCheck::Pending;
+        check->loc = inst->loc;
+        check->temp_scope_id = inst->temp_scope_id;
+        check->exception_target = handler;
+        check->operands.push_back(inst->result);
+        return check;
+    }
+};
+
 class QoreIRLowering::FunctionalLoopExceptionCleanup {
 public:
     //! @param observable false if no value that the block releases can hold an object (a loop over a typed list of
     //! scalars that gives scalars): their release order cannot be observed, so the operator gets no block, and its
     //! instructions keep the handler of the enclosing code as their target
     DLLLOCAL FunctionalLoopExceptionCleanup(QoreIRLowering& lowering, bool observable = true)
-            : lowering(lowering), outer_target(observable ? lowering.getCurrentExceptionTarget() : nullptr) {
+            : lowering(lowering), enclosing_target(lowering.getCurrentExceptionTarget()),
+                outer_target(observable ? enclosing_target : nullptr) {
     }
 
     DLLLOCAL ~FunctionalLoopExceptionCleanup() {
         if (active) {
             lowering.exception_stack.pop_back();
         }
+        body_region.reset();
     }
 
     //! creates the block, if a handler of the function encloses the operator, and makes it the exception target;
     //! returns false with an error if it fails
     DLLLOCAL bool init(const char* name, std::string& error) {
+        // the instructions of the operator's body that build containers, which release the containers of the
+        // previous element, branch to the innermost handler when an exception is raised: the operator's block if it
+        // has one, or the enclosing handler (qore#6072)
+        body_region = std::make_unique<LoopBodyRegion>(lowering);
         if (!outer_target) {
             return true;
         }
@@ -18017,6 +18132,25 @@ public:
         active = true;
         return true;
     }
+
+    //! suspends the region handler while code of an exception path of the operator is emitted, whose instructions
+    //! (releases that add any exception to the one raised) must not branch to a handler; restores it when it goes
+    //! out of scope
+    class SuspendRegion {
+    public:
+        DLLLOCAL SuspendRegion(QoreIRBuilder& builder) : builder(builder), saved(builder.setRegionRecord(nullptr)) {
+        }
+        DLLLOCAL ~SuspendRegion() {
+            builder.setRegionRecord(saved);
+        }
+        //! sets the region restored when it goes out of scope
+        DLLLOCAL void restoreTo(QoreIRRegionRecord* record) {
+            saved = record;
+        }
+    private:
+        QoreIRBuilder& builder;
+        QoreIRRegionRecord* saved;
+    };
 
     //! returns the block, or nullptr if the operator has none
     DLLLOCAL QoreIRBasicBlock* get() const {
@@ -18054,6 +18188,18 @@ public:
     DLLLOCAL void finish(QoreIRValue iterator, QoreIRValue source, QoreIRValue element, QoreIRValue partial_result,
             const QoreProgramLocation* loc, const std::vector<QoreIRValue>& element_values = {},
             const std::vector<QoreIRValue>& partial_values = {}) {
+        // the body is lowered: the exception paths that follow have no region handler, and the enclosing code's
+        // region handler applies after them
+        // the body ends: its region is processed and the enclosing one restored, which applies after the exception
+        // paths
+        QoreIRRegionRecord* outer_record = lowering.builder.getRegionRecord();
+        if (body_region) {
+            body_region->end();
+            body_region.reset();
+            outer_record = lowering.builder.getRegionRecord();
+        }
+        SuspendRegion suspend(lowering.builder);
+        suspend.restoreTo(outer_record);
         if (next_block) {
             QoreIRBuilder& builder = lowering.builder;
             QoreIRBasicBlock* after_block = builder.getBlock();
@@ -18108,8 +18254,12 @@ private:
 
     QoreIRLowering& lowering;
     //! the handler of the enclosing code, or nullptr if the exception leaves the function
+    QoreIRBasicBlock* enclosing_target;
+    //! the handler of the enclosing code if the operator has a block of its own, or nullptr
     QoreIRBasicBlock* outer_target;
     QoreIRBasicBlock* block = nullptr;
+    //! the operator's body, while it is lowered (qore#6072)
+    std::unique_ptr<LoopBodyRegion> body_region;
     //! the block of routeNext(), or nullptr
     QoreIRBasicBlock* next_block = nullptr;
     //! the temp scope that the IteratorNext instructions of routeNext() record
@@ -19940,6 +20090,9 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
 
         // Body block: load element, evaluate predicate
         builder.setBlock(body_block);
+        // the body's instructions that build containers, which release the containers of the previous element, branch
+        // to the innermost handler when an exception is raised (qore#6072)
+        LoopBodyRegion body_region(*this);
         size_t body_block_count = builder.getFunction()->blocks.size();
 
         // Load element at current index
@@ -20073,6 +20226,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block, final_block});
 
         // Exit block: result_list is the result (empty for size 0)
+        body_region.end();
         builder.setBlock(exit_block);
         if (use_typed_scalar_construction) {
             builder.createListSetLength(result_list, output_index, select->loc);
@@ -20424,6 +20578,9 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
 
         // Body block: load element, evaluate fold expression
         builder.setBlock(body_block);
+        // the body's instructions that build containers, which release the containers of the previous element, branch
+        // to the innermost handler when an exception is raised (qore#6072)
+        LoopBodyRegion body_region(*this);
         size_t body_block_count = builder.getFunction()->blocks.size();
 
         // Load element at current index
@@ -20478,6 +20635,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         accum_phi->incoming.push_back({fold_result, body_exit_block});
         accum_phi->operands.push_back(first_val);
         accum_phi->operands.push_back(fold_result);
+        body_region.end();
         qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block});
 
         // Exit block: PHI between identity value (empty) and accumulator
@@ -20704,6 +20862,9 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
         builder.createBranchIf(at_end, exit_block, body_block, foldr->loc);
 
         builder.setBlock(body_block);
+        // the body's instructions that build containers, which release the containers of the previous element, branch
+        // to the innermost handler when an exception is raised (qore#6072)
+        LoopBodyRegion body_region(*this);
         size_t body_block_count = builder.getFunction()->blocks.size();
         QoreIRValue element_val = elem_is_int
             ? builder.createListGetInt(input_list, index_val, foldr->loc)->result
@@ -20750,6 +20911,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
         accum_phi->operands.push_back(fold_result);
         qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block});
 
+        body_region.end();
         builder.setBlock(exit_block);
         auto* result_phi = builder.createPhi({
             {nothing_val, empty_check_block},
@@ -23628,6 +23790,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         cleanup_element = QoreIRValue();
         partial_values.push_back(fold_accum_phi->result);
         if (fold_expr_exception_block) {
+            // an exception path: its releases have no region handler (qore#6072)
+            FunctionalLoopExceptionCleanup::SuspendRegion suspend(builder);
             QoreIRBasicBlock* after_block = builder.getBlock();
             builder.getFunction()->moveBlockToEnd(fold_expr_exception_block);
             builder.setBlock(fold_expr_exception_block);

@@ -139,6 +139,16 @@ public:
         symbol_name = name;
     }
 
+    //! Returns the LLVM symbol of the AOT body whose slot symbols the function being lowered references
+    /** The function's own owner (QoreIRFunction::getAOTSymbolOwner()), or, for a nested function (an on_block_exit
+        handler or a background helper), the owner of the function that it is nested in: a nested function shares its
+        parent's slot tables, and the dispatch functions of the closures that it creates are defined with the parent's
+        closure bodies (qore#6339)
+    */
+    const std::string& getAOTSymbolOwner() const {
+        return !aot_symbol_owner.empty() || !current_ir_func ? aot_symbol_owner : current_ir_func->getAOTSymbolOwner();
+    }
+
     //! Set deopt counter pointer for profile-informed guard failure tracking.
     //! When set, profiled guard failure paths emit a call to qore_rt_deopt()
     //! that increments this counter. The evalTiered() path checks the counter
@@ -711,6 +721,8 @@ private:
     //! true if the function is the body of a handler compiled as a function of its own: the handlers of its blocks
     //! run out of line with qore_rt_exec_on_block_exit_forward() (#6074)
     bool handler_function = false;
+    //! the AOT slot-symbol owner of the function that a nested function is lowered for; see getAOTSymbolOwner()
+    std::string aot_symbol_owner;
     //! A call that runs handlers out of line with handler_return_hold, and the returns whose values the first
     //! hand-over of a handler replaces (see finalizeHandlerReturnHoldSites())
     struct HandlerReturnHoldSite {
@@ -812,6 +824,10 @@ private:
     // discard.temps must not clear them while the local alloca still borrows
     // their owned reference.
     std::unordered_set<llvm::Value*> persistent_cleanup_allocas;
+    //! The function-lifetime slots of the results of the slow paths of the unary operations (see
+    //! emitAnyUnaryFastPath()), which hold NOTHING unless the slow path ran: an exit releases them only if they hold a
+    //! value (issue #6132)
+    std::unordered_set<llvm::Value*> unary_result_slots;
     // Map from local key (LocalVar* as void*) to invoke-result cleanup allocas
     // that hold references to values stored in this local.  Used by
     // UninstantiateLocal to clear cleanup allocas when block-scoped locals

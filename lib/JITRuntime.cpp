@@ -34,6 +34,7 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreHandlerRun.h"
 #include "qore/intern/JITRuntime.h"
+#include "qore/intern/QoreIRPointerSlot.h"
 #include "qore/intern/QoreJITException.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreRegexSubst.h"
@@ -3746,6 +3747,9 @@ private:
 };
 }
 
+// the IR interpreter keeps the iterator in a value slot (see QoreIRPointerSlot.h)
+QORE_IR_POINTER_SLOT_TYPE_CHECK(QoreRtSelectorIterator);
+
 extern "C" DLLEXPORT void* qore_rt_iterator_create_selectors(uint64_t seq_bits, int64_t flags, int64_t count,
         ExceptionSink* xsink) {
     // a sequence that is not a list, a string or a binary object gives no value and no selector is evaluated: no
@@ -3837,6 +3841,9 @@ extern "C" DLLEXPORT int64_t qore_rt_selector_segment_feed(uint64_t seq_bits, in
         ? std::numeric_limits<int64_t>::max() : static_cast<int64_t>(count);
     return 0;
 }
+
+// the IR interpreter keeps the handle in a value slot (see QoreIRPointerSlot.h)
+QORE_IR_POINTER_SLOT_TYPE_CHECK(ExceptionSink);
 
 extern "C" DLLEXPORT void* qore_rt_exception_suspend(ExceptionSink* xsink) {
     std::unique_ptr<ExceptionSink> saved(new ExceptionSink);
@@ -20156,6 +20163,9 @@ struct RefForeachState {
     QoreValue ln;                      // result accumulator (one ref owned)
 };
 
+// the IR interpreter keeps the state in a value slot (see QoreIRPointerSlot.h)
+QORE_IR_POINTER_SLOT_TYPE_CHECK(RefForeachState);
+
 // Initialize reference foreach state from a ParseReferenceNode expression.
 // Returns an opaque state pointer (as uint64_t), or 0 on error.
 extern "C" DLLEXPORT uint64_t qore_rt_ref_foreach_init(uint64_t parse_ref_bits, ExceptionSink* xsink) {
@@ -20315,6 +20325,9 @@ extern "C" DLLEXPORT void qore_rt_ref_foreach_cleanup(uint64_t state_ptr, Except
 // The Context ctor evaluates `where_exp` and `sort_exp` per-row internally
 // against itself (already on top of the stack) — those expressions are AST
 // trees passed through as opaque QoreValue bits.
+
+// the IR interpreter keeps the state in a value slot (see QoreIRPointerSlot.h)
+QORE_IR_POINTER_SLOT_TYPE_CHECK(Context);
 
 extern "C" DLLEXPORT uint64_t qore_rt_context_init(const char* name, uint64_t exp_bits,
         uint64_t where_bits, uint64_t sort_bits, int sort_type, ExceptionSink* xsink) {

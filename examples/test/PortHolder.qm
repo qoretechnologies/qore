@@ -128,7 +128,7 @@ public namespace PortHolder {
         @param port the port
 
         @return the local addresses of the listening TCP sockets on the port (hexadecimal on Linux, as
-        \c /proc/net/tcp and \c /proc/net/tcp6 give them; as \c netstat gives them on macOS); @ref nothing if no
+        \c /proc/net/tcp and \c /proc/net/tcp6 give them; as \c lsof gives them on macOS); @ref nothing if no
         socket listens on the port or the system's sockets cannot be read
     */
     public *list<string> sub tcp_listeners(int port) {
@@ -149,9 +149,12 @@ public namespace PortHolder {
                     }
                 }
             } else if (PlatformOS == "Darwin") {
-                # "tcp4  0  0  127.0.0.1.50123  *.*  LISTEN"
-                foreach string line in (backquote("/usr/sbin/netstat -an -p tcp").split("\n")) {
-                    *list<auto> f = (line =~ x/^tcp[46]*\s+[0-9]+\s+[0-9]+\s+(\S+)\.([0-9]+)\s+\S+\s+LISTEN/);
+                # lsof gives the name of each listening socket in a line of its own: "n127.0.0.1:50123",
+                # "n[::1]:50123", "n*:50123" (netstat, run by a qore process, listed no Internet sockets on macOS 27).
+                # It reports no socket of another user's process unless it runs as root
+                string cmd = sprintf("/usr/sbin/lsof -nP -a -iTCP:%d -sTCP:LISTEN -Fn 2>/dev/null", port);
+                foreach string line in (backquote(cmd).split("\n")) {
+                    *list<auto> f = (line =~ x/^n(.*):([0-9]+)$/);
                     if (f && f[1].toInt() == port) {
                         rv += f[0];
                     }

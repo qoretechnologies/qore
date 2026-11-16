@@ -418,6 +418,20 @@ private:
 */
 DLLLOCAL void qore_set_result_parse_analysis(QoreParseContext& parse_context, const QoreTypeInfo* typeInfo);
 
+#ifdef HAVE_NANOSLEEP
+//! sleeps the given number of nanoseconds with the given nanosleep() function, as qore_usleep() does with nanosleep()
+/** A sleep that a signal interrupts (\c EINTR) is continued with the time that \a sleep_func reports as left in its
+    second argument, so that a signal does not lengthen the sleep (issue #6364).  The function is a parameter so that a
+    unit test can report interruptions without signals.
+
+    @param ns the number of nanoseconds to sleep
+    @param sleep_func the function that sleeps, with the signature of nanosleep()
+
+    @return 0 if the time was slept, -1 if \a sleep_func failed with an error other than \c EINTR (in \c errno)
+*/
+DLLLOCAL int qore_nanosleep_with(int64 ns, int (*sleep_func)(const struct timespec*, struct timespec*));
+#endif
+
 class QoreParseContextLvarHelper {
 public:
     DLLLOCAL QoreParseContextLvarHelper(QoreParseContext& parse_context, LVList*& lvars)

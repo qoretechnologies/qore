@@ -2769,6 +2769,12 @@ void QoreIRFunction::embedLocalClosureFlags() {
 }
 
 void QoreIRFunction::computeSlotIdsAndEmbed() {
+    // every function that runs passes here, also the ones that are not optimized (top-level code, handlers, closures,
+    // functions read from an image): the release checks of values that cannot hold an object go, and the containers of
+    // the others get their handler (qore#6072); qore_ir_optimize() runs it again with the facts it refines
+    if (!defer_release_check_prune) {
+        qore_ir_prune_release_checks(*this);
+    }
     // Pass 1: Compute max value ID for right-sizing interpreter value vector
     // AND compute local variable slot IDs for flat array access in interpreter
     uint32_t max_vid = 0;

@@ -1,25 +1,18 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-%modern
-
-%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires ./CMakeBuildHelpersTestBase.qm
-
-%exec-class CMakeBuildHelpersPreloadTest
+# The cases of the CMakeBuildHelpersPreload-<n>.qtest tests: each runs one part of them, so that each takes a short
+# time, and together they run every case (see addPartCase()); the helpers are those of CMakeBuildHelpersTestBase.qm
 
 #! Incremental compiles of an object group: what they preload, and in which order they run
 /** Each case builds a small object group with the exported CMake helpers, edits some of its members, and checks that
     the group's incremental compiles -- of one component at a time, or a partial parse of several -- preload every
-    sibling the edited sources need, current, and that the next build converges.  The cases are a file of their own,
-    beside CMakeBuildHelpers-<n>.qtest, so that no file of the CMake helper tests comes near the time limit of a test
-    and test shards run them side by side.
+    sibling the edited sources need, current, and that the next build converges.  The cases are files of their own,
+    beside CMakeBuildHelpers-<n>.qtest, and each CMakeBuildHelpersPreload-<n>.qtest runs one part of them (see
+    addPartCase()), so that no file of the CMake helper tests comes near the time limit of a test, also on a loaded
+    host (qore#6357), and test shards run them side by side.
 */
-class CMakeBuildHelpersPreloadTest inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
+class CMakeBuildHelpersPreloadBase inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
     public {
         #! How the engine in testIncrementalExecutedCalleePreload() reaches its provider, by variant name
         const ExecutedCalleeVariants = {
@@ -29,22 +22,42 @@ class CMakeBuildHelpersPreloadTest inherits CMakeBuildHelpersTestBase::CMakeBuil
         };
     }
 
-    constructor() : CMakeBuildTest("CMakeBuildHelpersPreloadTest", "1.0", \ARGV) {
-        addTestCase("an incremental compile preloads the owner of a sibling's aliased constant",
+    private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+    }
+
+    constructor(string name, int part) : CMakeBuildTest(name, "1.0", \ARGV) {
+        self.part = part;
+        addPartCase(1, "an incremental compile preloads the owner of a sibling's aliased constant",
             \testIncrementalConstantOwnerPreload());
-        addTestCase("an incremental compile preloads a newly referenced typedef",
+        addPartCase(1, "an incremental compile preloads a newly referenced typedef",
             \testIncrementalTypedefPreload());
         # one case per kind of reference, so a failure in one does not hide the others
-        foreach hash<auto> variant in (ExecutedCalleeVariants.pairIterator()) {
-            addTestCase("an incremental compile preloads what a preloaded sibling's code runs at parse commit: "
-                + variant.key, \testIncrementalExecutedCalleePreload(), (variant.key, variant.value));
-        }
-        addTestCase("a partial parse runs a preloaded provider's body from a constant initializer",
+        addPartCase(2, executedCalleeCaseName("static-method"), \testIncrementalExecutedCalleePreload(),
+            ("static-method", ExecutedCalleeVariants."static-method"));
+        addPartCase(2, executedCalleeCaseName("function"), \testIncrementalExecutedCalleePreload(),
+            ("function", ExecutedCalleeVariants.function));
+        addPartCase(3, executedCalleeCaseName("construction"), \testIncrementalExecutedCalleePreload(),
+            ("construction", ExecutedCalleeVariants.construction));
+        addPartCase(3, "a partial parse runs a preloaded provider's body from a constant initializer",
             \testSubsetParseInitializerCallsPreloadedBody());
-        addTestCase("an edit to a provider and its consumer compiles the provider first",
+        addPartCase(3, "an edit to a provider and its consumer compiles the provider first",
             \testIncrementalStaleProviderCompiledFirst());
 
         set_return_value(main());
+    }
+
+    #! the name of the case of testIncrementalExecutedCalleePreload() for a variant of ExecutedCalleeVariants
+    private static string executedCalleeCaseName(string variant) {
+        return "an incremental compile preloads what a preloaded sibling's code runs at parse commit: " + variant;
+    }
+
+    #! adds a case if it is in the part that this test runs: each case is in one part, and each part is a test
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     #! An incremental compile must be preloaded with the owner of every constant its siblings reference.

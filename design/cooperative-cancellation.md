@@ -776,8 +776,19 @@ The kind is serialized in AOT code with the block's loop-header flag.
 does a single `pthread_cond_wait` / `pthread_cond_timedwait`; no polling is required.  It is used by
 the user-facing primitives (`Condition`, `Queue`, `Counter`, `Gate`, etc.).
 
-**Note**: Internal infrastructure (parser locks, `QoreThreadList::lck`, etc.) uses plain
-`wait()` / `lock()` and is NOT a cancellation point.
+**Note**: Internal infrastructure (`QoreThreadList::lck`, etc.) uses plain `wait()` / `lock()` and is
+NOT a cancellation point.  The exception is the wait for a Program's parse lock that another thread
+holds (`qore_program_private::waitForParseLock()`), made with an exception sink: the waiting thread
+can hold the parse locks of other Programs, so a wait that never ends would block their parses as
+well; it is refused with `PROGRAM-ERROR` when it would close a cycle of parse lock waits (qore#5693).  A
+wait without an exception sink (an internal one) is neither refused nor a cancellation point; when it
+closes a cycle, it wakes the cancellable waits of the cycle (`QoreThreadList::wakeCondWaiter()`), which
+check the cycle again; one of them is refused (if any is registered for a wakeup).  The check is the
+`before_block` callback of `qore_cond_wait_cancellable()`, made after the wait is registered and before
+it blocks, with the same ordering as a cancellation request (set what the check reads, then wake): the
+closing wait is either seen by the check or sees the registration, so no wakeup is lost.  The mutex of
+this wait is the Program's `plock`, which the module loader can hold for longer stretches; a wakeup
+handed to the condition waker thread waits for it then, and the wakeups queued after it wait as well.
 
 **Note**: SmartMutex, RWLock and VRMutex waits are cancellation points only when made through the
 Qore-level APIs, which mark them with a `VLockCancellationPoint` (see "Lock waits" above); internal

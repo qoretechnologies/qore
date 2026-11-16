@@ -969,7 +969,7 @@ was the completeness defect above -- `OmqMap.qc` was neither compiled nor preloa
 `new OmqMap()` was deferred and its deferred value read as no value -- and not a missing body. On
 the current Qorus tree a partial parse compiling `MetadataActionContext.qc` with
 `QorusMapManager.qc`, `GroupRuntimeContext.qc` and `OmqMap.qc` all preloaded commits cleanly, and
-`CMakeBuildHelpers-preload.qtest` pins the same call chain, counting the preloaded body's runs.
+`CMakeBuildHelpersPreload.qc` pins the same call chain, counting the preloaded body's runs.
 
 What #5466 did find was a hole in what an object records about a **static class variable**. A
 read the parse resolves is a `LoadStaticVar` that names the variable itself and takes no
@@ -1793,8 +1793,8 @@ which two builders can still race to restore.
   started requiring after the group parse is watched and an edit to it rebuilds that member
   alone, and that configuring resets the consolidated dependencies an earlier configuration
   left
-- `examples/test/ir/CMakeBuildHelpers-preload.qtest` — what a group's incremental compiles
-  preload, and in which order they run: the owner of a sibling's aliased constant, a newly
+- `examples/test/ir/CMakeBuildHelpersPreload.qc` (`CMakeBuildHelpersPreload-*.qtest`) — what a
+  group's incremental compiles preload, and in which order they run: the owner of a sibling's aliased constant, a newly
   referenced typedef, that code a preloaded sibling runs at parse commit finds what it calls -- a
   static method, a function and a construction -- after its caller was compiled standalone, that a
   partial parse's constant initializers run a preloaded provider's body on every build, not every

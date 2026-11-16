@@ -141,15 +141,18 @@ public string sub value() {
         return m ? (m[0],) : ();
     }
 
-    #! returns the settings of the link configuration that qcc links with (aot-link.conf), if any
+    #! returns the settings of the link configuration that qcc links with (aot-link.conf)
     /** The file is found as qcc finds it: \c QORE_AOT_LINK_CONF if set, else the one that the build wrote next to
         libqore, else the installed one.  \c cxx is the path of the C++ compiler that the build found (cmake's
         CMAKE_CXX_COMPILER), a single value that qcc quotes for the shell; \c sanitize_flags (the sanitizer flags of
         a sanitizer build) and \c dynamic_libs (the libraries that dlopen() and dlsym() need) are lists of words
         already quoted for the shell, which qcc passes as they are
+
+        The test case fails if there is no such file (ex: a qore and a libqore copied out of their build tree): the
+        host is linked with the settings of the Qore under test, which the test cannot know without it
     */
     private hash<string, string> linkConfig() {
-        hash<string, string> rv;
+        hash<string, string> rv = {};
         list<string> paths = exists ENV.QORE_AOT_LINK_CONF
             ? (ENV.QORE_AOT_LINK_CONF,)
             : (libqore_dir + "/aot-link.conf", libqore_dir + "/qore/aot-link.conf");
@@ -166,9 +169,10 @@ public string sub value() {
                     rv{line.substr(0, eq)} = line.substr(eq + 1);
                 }
             }
-            break;
+            return rv;
         }
-        return rv;
+        fail(sprintf("no aot-link.conf found (%s); set QORE_AOT_LINK_CONF to the aot-link.conf of the Qore under test "
+            "(%s)", paths.join(", "), qore_bin));
     }
 
     #! quotes a single value for the shell, as qcc quotes the compiler (quoteAOTLinkArgument())

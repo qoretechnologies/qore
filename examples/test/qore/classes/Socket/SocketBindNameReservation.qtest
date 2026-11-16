@@ -26,6 +26,9 @@
     A TCP socket bound to a name with addresses in more than one address family, such as "localhost", holds its port
     on the name's addresses in the other address families, so that a client connecting to the name, which tries the
     IPv6 address first, cannot reach another listener with the same port number in the other address family.
+
+    A port that only connections hold can be bound by number by another program that reuses the address (issue
+    #6322); the test of a given port reports that program's listener as the cause instead of failing.
 */
 
 %modern
@@ -33,6 +36,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires Util
+%requires ../../../PortHolder.qm
 
 %exec-class SocketBindNameReservationTest
 
@@ -67,6 +71,8 @@ class SocketBindNameReservationTest inherits QUnit::Test {
         addTestCase("closing the socket releases the port", \closeTest());
         addTestCase("rebinding the socket moves the reservation", \rebindTest());
         addTestCase("a given port in use in the other address family", \givenPortTest());
+        addTestCase("a given port that another program binds by number while connections hold it is reported",
+            \takenGivenPortTest());
         addTestCase("an address family given for the bind", \familyTest());
         addTestCase("an IP address", \ipAddressTest());
         addTestCase("datagram sockets", \udpTest());
@@ -183,6 +189,66 @@ class SocketBindNameReservationTest inherits QUnit::Test {
 
     givenPortTest() {
         checkLocalhost();
+        (int port, hash<auto> info, list<auto> sockets) = heldNamePort();
+        on_exit map $1.close(), sockets;
+        *string taken = bindHeldName(port, info);
+        if (taken) {
+            testSkip("%s", taken);
+        }
+    }
+
+    takenGivenPortTest() {
+        checkLocalhost();
+        # another program binds the held port by number on the name's first address, reusing the address, and
+        # listens on it, as a program that restarts a server on a port that it had released does; the bind of the
+        # name is then refused, and that is reported as the cause instead of a failure
+        (int port, hash<auto> info, list<auto> sockets) = heldNamePort();
+        on_exit map $1.close(), sockets;
+        Socket other();
+        on_exit other.close();
+        try {
+            other.bindINET(info.family == AF_INET6 ? "::1" : "127.0.0.1", port, True, info.family);
+            if (other.listen()) {
+                throw "SOCKET-LISTEN-ERROR", strerror();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # this system keeps the port from a bind by number while connections hold it
+            other.close();
+            assertEq(NOTHING, bindHeldName(port, info), sprintf("the held port %d is bound (%s: %s)", port, ex.err,
+                ex.desc));
+            return;
+        }
+        assertRegex(sprintf("another program listens on port %d", port), bindHeldName(port, info) ?? "<nothing>");
+    }
+
+    #! binds the name with a port that a connection holds on its first address and a listener in the other family
+    /** @return why the port could not be bound if another program listens on it on the name's first address; a
+        failure with no such listener fails the test
+    */
+    private *string bindHeldName(int port, hash<auto> info) {
+        Socket s();
+        on_exit s.close();
+        if (s.bind("localhost:" + port, True) || s.listen()) {
+            string err = strerror(errno());
+            # the test's holder listens on the port in the other address family; another listener is another
+            # program's, which bound the port by number with SO_REUSEADDR while a connection held it on the name's
+            # first address; no socket keeps such a bind from the port
+            *list<string> listeners = PortHolder::tcp_listeners(port);
+            if (listeners.size() > 1) {
+                return sprintf("another program listens on port %d (listeners: %s), which it bound by number while "
+                    "the test held the port with a connection, as a program that restarts a server on a port that "
+                    "it had released does; no socket keeps such a bind from the port (%s)", port,
+                    join(", ", listeners), err);
+            }
+            assertTrue(False, sprintf("the name is bound with the given port and listens: %s", err));
+        }
+        assertEq(port, s.getSocketInfo(False).port, "the given port was bound");
+        assertEq(info.family, s.getSocketInfo(False).family, "the name's first address was bound");
+    }
+
+    #! returns a port that a listener holds in the other address family of "localhost" and a connection on its first
+    #! address, the address info of the name's first address, and the sockets that hold the port
+    private list<auto> heldNamePort() {
         # find the address family that "localhost" is bound in
         Socket probe();
         hash<auto> info = listenLocalhost(probe);
@@ -230,13 +296,14 @@ class SocketBindNameReservationTest inherits QUnit::Test {
             port = candidate;
         }
         assertGt(0, port, "a port free at the name's first address is held in the other address family");
-        Socket s();
-        on_exit s.close();
-        assertEq(0, s.bind("localhost:" + port, True), sprintf("the name is bound with the given port: %s",
-            strerror(errno())));
-        s.listen();
-        assertEq(port, s.getSocketInfo(False).port, "the given port was bound");
-        assertEq(info.family, s.getSocketInfo(False).family, "the name's first address was bound");
+        # built element by element: a list literal of sockets would be a list<Socket>
+        list<auto> sockets;
+        map sockets += $1, (holder, held_client, held_peer), $1;
+        # the sockets are closed by the caller
+        remove holder;
+        remove held_client;
+        remove held_peer;
+        return (port, info, sockets);
     }
 
     familyTest() {

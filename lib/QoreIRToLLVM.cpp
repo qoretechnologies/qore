@@ -6197,6 +6197,23 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
             continue;
         }
         llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
+        llvm::BasicBlock* bb = builder->GetInsertBlock();
+        // the slot of a unary operation's slow path holds NOTHING unless the slow path ran: at the end of a block, it
+        // is released only if it holds a value, so that a function whose unary operations took their inline paths
+        // makes no call (issue #6132)
+        if (unary_result_slots.count(alloca_ptr) && builder->GetInsertPoint() == bb->end()) {
+            llvm::Value* holds = builder->CreateICmpNE(val, llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+            llvm::Function* func = bb->getParent();
+            llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "unary_result_release", func);
+            llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(ctx, "unary_result_cont", func);
+            builder->CreateCondBr(holds, release_bb, cont_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+            builder->SetInsertPoint(release_bb);
+            builder->CreateCall(helper, {val, xsink_arg});
+            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
+            builder->CreateBr(cont_bb);
+            builder->SetInsertPoint(cont_bb);
+            continue;
+        }
         builder->CreateCall(helper, {val, xsink_arg});
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
             alloca_ptr);
@@ -13385,6 +13402,8 @@ llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, co
         // the nested function shares the AOT context of the function being lowered: its slot tables
         nested_lowering.setAOTMode(aot_slots);
         nested_lowering.setAOTDirectClosureFastEntry(aot_direct_closure_fast_entry);
+        // and its slot symbols, such as the dispatch functions of its closures (qore#6339)
+        nested_lowering.aot_symbol_owner = getAOTSymbolOwner();
     }
     if (active_di_builder && di_cu) {
         nested_lowering.setSharedDebugInfo(active_di_builder, di_cu);
@@ -14863,6 +14882,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_cleanup_slot.clear();
     exit_temp_cleanup_slot.clear();
     persistent_cleanup_allocas.clear();
+    unary_result_slots.clear();
     temp_cleanup_marks.clear();
     exception_edges.clear();
     ir_block_predecessor_counts.clear();
@@ -29683,6 +29703,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            // the inline paths produce inline values only; the result of the runtime helper, a new reference, is
+            // released through a cleanup slot that only the slow path writes (issue #6132)
             llvm::Value* result = emitAnyUnaryFastPath(true,
                     static_cast<int>(QoreIROpcode::UnaryMinusAny),
                     inst, val_boxed, llvm_func, module);
@@ -29695,6 +29717,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            // the inline paths produce inline values only; the result of the runtime helper, a new reference, is
+            // released through a cleanup slot that only the slow path writes (issue #6132)
             llvm::Value* result = emitAnyUnaryFastPath(false,
                     static_cast<int>(QoreIROpcode::UnaryPlusAny),
                     inst, val_boxed, llvm_func, module);
@@ -31470,13 +31494,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             ? i1_type : i64_type;
                     auto dispatch_type = llvm::FunctionType::get(
                         dispatch_return_type, param_types, false);
-                    std::string dispatch_name = current_ir_func->name
+                    // named after the owner of the slot map: an outlined helper's closure dispatch is defined
+                    // with its coordinator's closure bodies (qore#6310)
+                    std::string dispatch_name = getAOTSymbolOwner()
                         + (guarded_stored_closure
                             ? "_closure_native_guarded_dispatch_"
                             : "_closure_native_dispatch_")
                         + std::to_string(slot);
+                    std::string return_kind_value = std::to_string(
+                        static_cast<unsigned>(closure_return_kind));
+                    // one dispatch function serves one closure creation; a declaration left by another call site
+                    // (an outlined helper whose lowering failed, qore#6310) must have the same ABI, or the call and
+                    // the definition would disagree
+                    for (const std::string& existing_name : {dispatch_name, dispatch_name + "_throwing"}) {
+                        llvm::Function* existing = module.getFunction(existing_name);
+                        if (!existing) {
+                            continue;
+                        }
+                        llvm::Attribute existing_kind = existing->getFnAttribute(
+                            "qore.closure.return_kind");
+                        if (existing->getFunctionType() != dispatch_type
+                                || (!guarded_stored_closure && existing_kind.isStringAttribute()
+                                    && existing_kind.getValueAsString() != return_kind_value)) {
+                            error = "internal error: closure dispatch function '" + existing_name
+                                + "' is already declared with another ABI";
+                            return false;
+                        }
+                    }
                     auto dispatch = module.getOrInsertFunction(dispatch_name,
                         dispatch_type);
+                    if (!guarded_stored_closure) {
+                        // the definition boxes the closure's native result for a call site that declares a boxed
+                        // one; i64 does not tell a native int from a boxed value (qore#6310)
+                        if (auto* dispatch_fn = llvm::dyn_cast<llvm::Function>(
+                                dispatch.getCallee())) {
+                            dispatch_fn->addFnAttr("qore.closure.return_kind", return_kind_value);
+                        }
+                    }
                     if (capture_count) {
                         if (auto* dispatch_fn = llvm::dyn_cast<llvm::Function>(
                                 dispatch.getCallee())) {
@@ -31714,7 +31768,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 && qore_ir_fast_entry_operands_need_no_binding(call_gives_args, variant,
                                     closure_call->expr, current_ir_func, inst->operands,
                                     1, nargs)) {
-                            std::string dispatch_name = current_ir_func->name
+                            std::string dispatch_name = getAOTSymbolOwner()
                                 + "_closure_dispatch_" + std::to_string(slot);
                             helper = module.getOrInsertFunction(dispatch_name, ft);
                         }
@@ -36948,6 +37002,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::CheckException: {
+            // a kept check of a release in a functional loop's body: native code checks the sink after the release
+            // itself, with the handler of the container that releases the value (qore#6072); nothing to emit.  A
+            // pending one was not decided by qore_ir_prune_release_checks(), which every pipeline runs first: it is
+            // checked here, which is correct, if not free
+            assert(inst->release_check != QoreIRReleaseCheck::Pending);
+            if (inst->release_check == QoreIRReleaseCheck::Kept) {
+                return true;
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -39475,6 +39537,11 @@ llvm::Value* QoreIRToLLVM::emitAnyBitwiseFastPath(llvm::Instruction::BinaryOps i
 
 // Emit inline LLVM fast-path for .any unary operations (UnaryMinusAny/UnaryPlusAny).
 // Type-checks operand for int or float, falls back to qore_rt_unary_op for other types.
+// The inline paths produce inline values only, which hold no reference: the identity of an inline int or float is the
+// operand itself, and a negation whose result cannot be inline (the smallest int48, or a double whose negation
+// collides with a value tag, such as a NaN) takes the slow path.  The slow path's result is a new reference, which a
+// function-lifetime slot written in the slow path only releases, so an operation on an inline value costs no release
+// (issue #6132).
 llvm::Value* QoreIRToLLVM::emitAnyUnaryFastPath(bool is_minus, int opcode_val_int,
         const QoreIRInstruction* inst,
         llvm::Value* operand, llvm::Function* llvm_func, llvm::Module& module) {
@@ -39490,28 +39557,58 @@ llvm::Value* QoreIRToLLVM::emitAnyUnaryFastPath(bool is_minus, int opcode_val_in
 
     builder->CreateCondBr(is_int, fast_int_bb, check_float_bb);
 
-    // Fast int path: unbox, negate (or identity for plus), box
+    // Fast int path: the operand itself for plus; for minus, the negation inline, except for the smallest int48,
+    // whose negation needs a heap integer
     builder->SetInsertPoint(fast_int_bb);
-    llvm::Value* int_val = unboxInt(operand);
-    llvm::Value* int_result = is_minus ? builder->CreateNeg(int_val) : int_val;
-    llvm::Value* int_boxed = boxIntInline(int_result);
+    llvm::Value* int_boxed;
+    llvm::BasicBlock* fast_int_end;
+    if (is_minus) {
+        llvm::Value* int_val = unboxInt(operand);
+        llvm::Value* overflows = builder->CreateICmpEQ(int_val, llvm::ConstantInt::get(i64_type, INT48_MIN));
+        llvm::BasicBlock* int_neg_bb = llvm::BasicBlock::Create(ctx, "unary_int_neg", llvm_func);
+        builder->CreateCondBr(overflows, slow_bb, int_neg_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+        builder->SetInsertPoint(int_neg_bb);
+        llvm::Value* masked = builder->CreateAnd(builder->CreateNeg(int_val),
+                llvm::ConstantInt::get(i64_type, PAYLOAD_MASK));
+        int_boxed = builder->CreateOr(masked, llvm::ConstantInt::get(i64_type, TAG_INT48));
+    } else {
+        int_boxed = operand;
+    }
     builder->CreateBr(merge_bb);
-    llvm::BasicBlock* fast_int_end = builder->GetInsertBlock();
+    fast_int_end = builder->GetInsertBlock();
 
     // Check float path: exclude SSO short strings from the double range.
     builder->SetInsertPoint(check_float_bb);
     llvm::Value* is_float = emitIsBoxedFloat(operand);
     builder->CreateCondBr(is_float, fast_float_bb, slow_bb);
 
-    // Fast float path: unbox, fneg (or identity for plus), box
+    // Fast float path: the operand itself for plus; for minus, the negation inline unless its encoding collides with
+    // a value tag (QoreValue::rawDoubleCollidesWithTag(): a negated NaN, or a finite double whose negation encodes
+    // into the short-string or opaque tag families), which needs a heap float
     builder->SetInsertPoint(fast_float_bb);
-    llvm::Value* float_val = unboxFloat(operand);
-    llvm::Value* float_result = is_minus ? builder->CreateFNeg(float_val) : float_val;
-    llvm::Value* float_boxed = boxFloat(float_result);
+    llvm::Value* float_boxed;
+    if (is_minus) {
+        llvm::Value* float_result = builder->CreateFNeg(unboxFloat(operand));
+        llvm::Value* raw_bits = builder->CreateBitCast(float_result, i64_type);
+        llvm::Value* high_tag = builder->CreateICmpUGE(raw_bits,
+            llvm::ConstantInt::get(i64_type, QoreValue::RAW_DOUBLE_HIGH_TAG_FIRST));
+        llvm::Value* tag_family_offset = builder->CreateSub(raw_bits,
+            llvm::ConstantInt::get(i64_type, QoreValue::RAW_DOUBLE_TAG_COLLISION_FIRST));
+        llvm::Value* tag_family = builder->CreateICmpULT(tag_family_offset,
+            llvm::ConstantInt::get(i64_type,
+                QoreValue::RAW_DOUBLE_TAG_COLLISION_END - QoreValue::RAW_DOUBLE_TAG_COLLISION_FIRST));
+        llvm::Value* collides = builder->CreateOr(high_tag, tag_family);
+        llvm::BasicBlock* float_neg_bb = llvm::BasicBlock::Create(ctx, "unary_float_neg", llvm_func);
+        builder->CreateCondBr(collides, slow_bb, float_neg_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+        builder->SetInsertPoint(float_neg_bb);
+        float_boxed = builder->CreateAdd(raw_bits, llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET));
+    } else {
+        float_boxed = operand;
+    }
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* fast_float_end = builder->GetInsertBlock();
 
-    // Slow path: call runtime helper
+    // Slow path: call runtime helper, whose result is a new reference, kept in the slot below
     builder->SetInsertPoint(slow_bb);
     llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), opcode_val_int);
     auto u_ft = llvm::FunctionType::get(i64_type,
@@ -39521,6 +39618,24 @@ llvm::Value* QoreIRToLLVM::emitAnyUnaryFastPath(bool is_minus, int opcode_val_in
             "qore_rt_unary_op_throwing", u_ft);
     llvm::Value* slow_result = emitMaybeInvoke(helper, helper_throwing,
             {opcode_val, operand, xsink_arg}, module, llvm_func, inst);
+    // the slot that holds the result for the rest of the function: a number, a date, a heap integer or a heap float,
+    // which no destructor observes; it releases the result of the previous run of the slow path, and the exits of the
+    // function release the last one (registerPersistentCleanupAlloca()), so that no statement end has a release to
+    // make for the inline paths; the result is not the slot's for the consumers (invoke_alloca_map), which take a
+    // reference of their own to keep it
+    {
+        llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
+        llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+        llvm::AllocaInst* slot = alloca_builder.CreateAlloca(i64_type, nullptr, "unary_result");
+        alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
+        registerPersistentCleanupAlloca(slot);
+        unary_result_slots.insert(slot);
+        llvm::Value* previous = builder->CreateLoad(i64_type, slot);
+        builder->CreateStore(slow_result, slot);
+        auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        builder->CreateCall(decref_fn, {previous, xsink_arg});
+    }
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();
 

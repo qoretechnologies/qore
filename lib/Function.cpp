@@ -8283,7 +8283,9 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     func->reserveLocalSlot(signature.selfid);
 
     // Compute slot IDs, max_value_id, and embed pre-computed fields in instructions
-    // This must happen BEFORE compileAllHandlerIRs() to ensure parent slots are populated
+    // This must happen BEFORE compileAllHandlerIRs() to ensure parent slots are populated; qore_ir_optimize() below
+    // prunes the release checks (qore#6072)
+    func->defer_release_check_prune = true;
     func->computeSlotIdsAndEmbed();
 
     // Phase A4: Compile all handler bodies to separate IR functions and attach to OnBlockExit instructions

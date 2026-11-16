@@ -468,7 +468,9 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::ContextRow, {G::Base}},
     {O::RefSelf, {G::Base}},
     {O::DebugBlock, {G::Base, G::DebugStatement}},
-    {O::CheckException, {G::Base}},
+    // an image carries a CheckException without operands: a release check (qore#6072) has its value as an operand only
+    // until qore_ir_prune_release_checks() decides it, before the IR is serialized
+    {O::CheckException, {G::Base}, false, -1, 0, 0},
     {O::NewComplexBuffer, {G::NewComplexBuffer}, true},
     {O::PluginUnary, {G::Plugin}},
     {O::PluginBinary, {G::Plugin}},

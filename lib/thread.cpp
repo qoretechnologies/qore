@@ -9613,7 +9613,7 @@ static bool qore_cancel_limits_only() {
 }
 
 int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink,
-        const char* operation) {
+        const char* operation, int (*before_block)(void*), void* before_block_arg) {
     // a fast route must never block
     QORE_ASSERT_NOT_IN_FAST_ROUTE();
     // a request made before the wait
@@ -9625,8 +9625,16 @@ int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 ti
     // once no other thread can run (the condition waker has been stopped for good: see qore_thread_start_closed)
     if (tid < 0 || tid >= MAX_QORE_THREADS || qore_is_cancel_deferred()
             || qore_thread_start_closed.load(std::memory_order_acquire)) {
+        if (before_block && before_block(before_block_arg)) {
+            return QORE_COND_RESULT_SUCCESS;
+        }
         return cond.wait2(m, timeout_ms) ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
     }
+#ifdef DEBUG
+    if (void (*register_hook)() = qore_cond_wait_register_hook.load()) {
+        register_hook();
+    }
+#endif
     if (thread_list.registerCondWait(tid, &cond, m, qore_cancel_limits_only())) {
         if (xsink) {
             xsink->raiseErrnoException("THREAD-CREATION-FAILURE", errno, "%s: cannot start the condition waker "
@@ -9634,6 +9642,9 @@ int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 ti
             return QORE_COND_RESULT_INTERRUPTED;
         }
         // without an exception sink the failure cannot be reported: the wait is not a cancellation point
+        if (before_block && before_block(before_block_arg)) {
+            return QORE_COND_RESULT_SUCCESS;
+        }
         return cond.wait2(m, timeout_ms) ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
     }
     // a request made after the registration: either this check sees it, or the canceller sees the registration and
@@ -9641,6 +9652,12 @@ int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 ti
     if (qore_check_cancel(xsink, operation)) {
         thread_list.unregisterCondWait(tid, m);
         return QORE_COND_RESULT_INTERRUPTED;
+    }
+    // the caller's own condition, made with the same ordering: a thread that sets what it reads and then wakes this
+    // one either is seen here, or sees the registration
+    if (before_block && before_block(before_block_arg)) {
+        thread_list.unregisterCondWait(tid, m);
+        return QORE_COND_RESULT_SUCCESS;
     }
 #ifdef DEBUG
     void (*hook)() = qore_cond_wait_window_hook.load();
@@ -9659,6 +9676,7 @@ int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 ti
 
 #ifdef DEBUG
 std::atomic<void (*)()> qore_cond_wait_window_hook{nullptr};
+std::atomic<void (*)()> qore_cond_wait_register_hook{nullptr};
 #endif
 
 void QoreThreadList::clearCancel(int tid) {
