@@ -1841,6 +1841,14 @@ struct qore_httpclient_priv {
     DLLLOCAL QoreObject* startPollConnectConnMgr(ExceptionSink* xsink, QoreObject* self,
             QoreHttpClientObject* client);
 
+    //! Returns a poll operation that reports the error of a failed connection acquire, with the given goal
+    /** The I/O errors of a request are reported by its poll operation, never raised by the start* call: a new
+        connection can fail (its connect is refused, or the server closes it) before the connection manager reserves
+        it, and the acquire then raises the connection's error (qore#6111).
+    */
+    DLLLOCAL QoreObject* deferredAcquireErrorPollOp(ExceptionSink& acquire_xsink, const char* goal, QoreObject* self,
+            ExceptionSink* xsink);
+
     DLLLOCAL QoreObject* startPollSendRecv(ExceptionSink* xsink, QoreObject* self, QoreHttpClientObject* client,
             const QoreString* method, const QoreString* path, const AbstractQoreNode* data_save, const void* data,
             size_t size, const QoreHashNode* headers, const QoreEncoding* enc = nullptr) {
@@ -2032,16 +2040,19 @@ struct qore_httpclient_priv {
             return -1;
         }
         HttpClientConnectionManagerBase& mgr = *mgr_holder;
-        HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
+        HttpClientConnectionBase* conn = mgr.acquireConnectionRef(scheme,
             connection.host.c_str(), connection.port, xsink);
         if (!conn || *xsink) {
             return -1;
         }
 
-        // Release the stream reservation taken by acquireConnection.  The
-        // connection stays in the pool; the next send() finds it ready and
-        // reserves a stream of its own.
+        // Release the stream reservation and the reference taken by the
+        // acquire.  The connection stays in the pool; the next send() finds it
+        // ready and reserves a stream of its own.
         mgr.releaseConnection(conn);
+        ExceptionSink rel_xsink;
+        conn->deref(&rel_xsink);
+        rel_xsink.clear();
         return 0;
     }
 
@@ -4311,13 +4322,12 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
     }
     HttpClientConnectionManagerBase& mgr = *mgr_holder;
 
-    HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSend(scheme, this_connection.host.c_str(),
+    HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSendRef(scheme, this_connection.host.c_str(),
         this_connection.port, xsink);
     if (!conn || *xsink) {
         return nullptr;
     }
 
-    conn->ref();
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
     auto close_and_evict_conn = [&]() {
         ExceptionSink close_xsink;
@@ -4530,14 +4540,13 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
     }
     HttpClientConnectionManagerBase& mgr = *mgr_holder;
 
-    HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSend("https", this_connection.host.c_str(),
+    HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSendRef("https", this_connection.host.c_str(),
         this_connection.port, xsink);
     if (!conn || *xsink) {
         restore_forced_h3();
         return nullptr;
     }
 
-    conn->ref();
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
     auto close_and_evict_conn = [&]() {
         ExceptionSink close_xsink;
@@ -5570,15 +5579,14 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 
             // Acquire connection manually (can't use mgr.request() because
             // body must be pushed between submit and future-get)
-            HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSend(scheme,
+            HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSendRef(scheme,
                 this_connection.host.c_str(), this_connection.port, xsink);
             if (!conn || *xsink) {
                 return nullptr;
             }
-            // Hold a strong ref — the I/O thread may fire onConnectionClosed
+            // The acquire returns a strong ref — the I/O thread may fire onConnectionClosed
             // (which derefs the pool's ref) while we're blocking on pushSendData
             // or the Future/Channel wait.
-            conn->ref();
             ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
             auto close_and_evict_conn = [&]() {
                 ExceptionSink close_xsink;
@@ -7165,12 +7173,11 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     }
 
     const char* scheme = this_connection.ssl ? "https" : "http";
-    HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
+    HttpClientConnectionBase* conn = mgr.acquireConnectionRef(scheme,
         this_connection.host.c_str(), this_connection.port, xsink);
     if (!conn || *xsink) {
         return nullptr;
     }
-    conn->ref();
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
 
     conn->waitForReadyOrError(timeout_ms, xsink);
@@ -8302,7 +8309,7 @@ public:
 
     //! Morphs @ref pending_conn once it reports ready, if it needs morphing.
     /** An ALPN-negotiating connection acquired through
-        @ref HttpClientConnectionManagerBase::acquireConnectionAsync is transitional
+        @ref HttpClientConnectionManagerBase::acquireConnectionAsyncRef is transitional
         and cannot carry a request; once ready it must be handed over to a concrete
         H1/H2 connection.  Replaces @ref pending_conn with the concrete connection,
         transferring this operation's reference.
@@ -8785,13 +8792,9 @@ public:
             const std::shared_ptr<HttpClientConnectionManagerBase>& mgr, const con_info& target,
             const QoreSandboxContext& sandbox_context, ExceptionSink* xsink) {
         QoreSandboxContextHelper sch(sandbox_context);
-        HttpClientConnectionBase* conn = mgr->acquireConnectionAsync(target.ssl ? "https" : "http",
-            target.host.c_str(), target.port, xsink);
-        if (!conn || *xsink) {
-            return nullptr;
-        }
-        conn->ref();
-        return conn;
+        // the acquire returns a reference of the caller
+        return mgr->acquireConnectionAsyncRef(target.ssl ? "https" : "http", target.host.c_str(), target.port,
+            xsink);
     }
 
     //! Raises the error of a connection that closed before it could be used
@@ -9232,12 +9235,17 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         return nullptr;
     }
     HttpClientConnectionManagerBase& mgr = *mgr_holder;
-    HttpClientConnectionBase* conn = mgr.acquireConnectionAsync(scheme,
-        this_connection.host.c_str(), this_connection.port, xsink);
-    if (!conn || *xsink) {
-        return nullptr;
+    // the acquire can fail for a new connection whose connect is refused, or that the server closes, before the
+    // manager reserves it: the error is reported through the poll operation, as for a connection found closed below,
+    // and as startPollConnect() does (qore#6111)
+    ExceptionSink acquire_xsink;
+    HttpClientConnectionBase* conn = mgr.acquireConnectionAsyncRef(scheme,
+        this_connection.host.c_str(), this_connection.port, &acquire_xsink);
+    if (!conn || acquire_xsink) {
+        return deferredAcquireErrorPollOp(acquire_xsink, "received", self, xsink);
     }
-    // Hold a strong ref for the duration of this function.  The pool holds
+    // A strong ref for the duration of this function, taken by the acquire
+    // while the pool held the connection (qore#6303).  The pool holds
     // its own ref, but the I/O thread may fire onConnectionClosed → deref
     // at any time — even between isClosed()/isReady() calls and
     // registerReadyNotifier — so without this extra ref the connection can
@@ -9249,7 +9257,6 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     // fast-path synchronous submit drops the ref at the end; slow-path
     // WAITING_CONNECT transfers the ref to the poll op's pending_conn slot.
     bool conn_local_ref_held = true;
-    conn->ref();
     auto release_local_conn_ref = [&]() {
         if (conn_local_ref_held) {
             ExceptionSink rel_xsink;
@@ -9348,12 +9355,14 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         if (!*xsink) {
             return false;
         }
-        QoreStringValueHelper err(xsink->getExceptionErr());
-        if (!strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR")) {
-            // a connection that another thread is closing (closeConnection() invalidates it before it closes it,
-            // and refuses the submit meanwhile) is reported like a closed one (#5814)
-            return conn->isClosed() || conn->isInvalidated();
+        // the submit failed on a connection that is closed or that another thread is closing (closeConnection()
+        // invalidates it before it closes it, and refuses new calls meanwhile, also the read of its error below): the
+        // connection was closed after it was found ready, whatever the error of the submit (#5814, qore#6111: the
+        // stored error that the submit raised could no longer be matched once the connection was invalidated)
+        if (conn->isClosed() || conn->isInvalidated()) {
+            return true;
         }
+        QoreStringValueHelper err(xsink->getExceptionErr());
         ExceptionSink info_xsink;
         ReferenceHolder<QoreHashNode> err_info(conn->getReferencedErrorInfo(), &info_xsink);
         if (!err_info) {
@@ -9391,14 +9400,36 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
 
     // An ALPN-negotiating connection is transitional and cannot carry a request.
     // When ALPN is already decided — the controller can finish the handshake
-    // while this thread is still inside acquireConnectionAsync, which on loopback
+    // while this thread is still inside acquireConnectionAsyncRef, which on loopback
     // is the common case — morph it now, so every path below (the fast-path
     // submit in particular) works with a connection that can accept a request.
     // A connection that is still CONNECTING is morphed by the poll op instead,
     // when it reports ready.
+#ifdef DEBUG
+    // tests that hold the finalize have the request wait for its connection to be ready, so that it reaches the hold
+    if (qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint::Finalize)) {
+        ExceptionSink ready_xsink;
+        // a hang guard only: the test's connection becomes ready
+        conn->waitForReadyOrError(60000, &ready_xsink);
+        ready_xsink.clear();
+    }
+#endif
     if (conn->isReady()) {
+#ifdef DEBUG
+        // tests hold the finalize to order it with a close of the connection by another thread
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::Finalize);
+#endif
         HttpClientConnectionBase* concrete = mgr.finalizeAsyncConnection(conn, true, xsink);
         if (!concrete || *xsink) {
+            // the connection was closed after it was found ready (by the server, or by another thread, which
+            // invalidated it): the hand-over refuses it as a closed connection refuses a submit, and the error is
+            // reported through the poll operation, as for a connection found closed (qore#6301)
+            if (*xsink) {
+                QoreStringValueHelper err(xsink->getExceptionErr());
+                if (!strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR")) {
+                    return deferred_submit_error();
+                }
+            }
             release_local_conn_ref();
             return nullptr;
         }
@@ -9434,6 +9465,12 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
 #endif
         int64_t stream_id = conn->submitRequestWithAction(method, msgpath,
             *nh, data, size, action, xsink);
+#ifdef DEBUG
+        // tests hold a failed submit to order it with a close that invalidates the connection
+        if (*xsink) {
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::SubmitFailed);
+        }
+#endif
         if (closed_submit_error()) {
             // the server closed the connection after it was found ready (the I/O thread marked it closed in the
             // meantime): reported like a connection found closed above
@@ -9545,6 +9582,60 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     return rv.release();
 }
 
+QoreObject* qore_httpclient_priv::deferredAcquireErrorPollOp(ExceptionSink& acquire_xsink, const char* goal,
+        QoreObject* self, ExceptionSink* xsink) {
+    // an event that is not an exception (such as a thread exit) is not deferred
+    if (acquire_xsink && !acquire_xsink.isException()) {
+        xsink->assimilate(acquire_xsink);
+        return nullptr;
+    }
+    // Extract error info for deferred raising
+    std::string err_str = "SOCKET-CONNECT-ERROR";
+    std::string desc_str = "connection failed";
+    if (acquire_xsink.isException()) {
+        QoreValue err_val = acquire_xsink.getExceptionErr();
+        QoreValue desc_val = acquire_xsink.getExceptionDesc();
+        if (err_val.getType() == NT_STRING) {
+            QoreStringValueHelper err(err_val);
+            err_str = err->c_str();
+        }
+        if (desc_val.getType() == NT_STRING) {
+            QoreStringValueHelper desc(desc_val);
+            desc_str = desc->c_str();
+        }
+    }
+    acquire_xsink.clear();
+
+    ReferenceHolder<QoreEventNotifier> notifier_holder(
+        new QoreEventNotifier(xsink), xsink);
+    if (*xsink || !notifier_holder->isValid()) {
+        return nullptr;
+    }
+    notifier_holder->notify();
+
+    QoreEventNotifier* notifier_raw = *notifier_holder;
+    notifier_raw->ref();
+    ReferenceHolder<QoreObject> notifier_obj(
+        new QoreObject(QC_EVENTNOTIFIER, getProgram(), notifier_raw), xsink);
+
+    // Create poll op with deferred error — constructor refs notifier,
+    // holder will deref its own ref on scope exit
+    QoreEventNotifier* notifier_for_op = *notifier_holder;
+    ReferenceHolder<HttpClientConnMgrPollOp> poller(
+        new HttpClientConnMgrPollOp(err_str.c_str(), desc_str.c_str(),
+            notifier_for_op, this, self), xsink);
+
+    SocketPollOperationBase* p = *poller;
+    ReferenceHolder<QoreObject> rv(
+        new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
+    if (!*xsink) {
+        p->setSelf(*rv);
+        rv->setValue("sock", notifier_obj.release(), xsink);
+        rv->setValue("goal", new QoreStringNode(goal), xsink);
+    }
+    return rv.release();
+}
+
 QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, QoreObject* self,
         QoreHttpClientObject* client) {
     SocketSyncPoll::assertNotOnIoThread("HTTPClient", "startPollConnect", xsink);
@@ -9560,80 +9651,60 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
         return nullptr;
     }
     HttpClientConnectionManagerBase& mgr = *mgr_holder;
-    // acquireConnectionAsync can still fail synchronously before a controller
+    // acquireConnectionAsyncRef can still fail synchronously before a controller
     // operation is submitted, for example on invalid setup.  Capture the error
     // and return a poll op that defers it to the continuePoll loop, matching
     // legacy startPollConnect behavior.
     ExceptionSink connect_xsink;
-    HttpClientConnectionBase* conn = mgr.acquireConnectionAsync(scheme,
+    HttpClientConnectionBase* conn = mgr.acquireConnectionAsyncRef(scheme,
         this_connection.host.c_str(), this_connection.port, &connect_xsink);
     if (!conn || connect_xsink) {
-        // Extract error info for deferred raising
-        std::string err_str = "SOCKET-CONNECT-ERROR";
-        std::string desc_str = "connection failed";
-        if (connect_xsink.isException()) {
-            QoreValue err_val = connect_xsink.getExceptionErr();
-            QoreValue desc_val = connect_xsink.getExceptionDesc();
-            if (err_val.getType() == NT_STRING) {
-                QoreStringValueHelper err(err_val);
-                err_str = err->c_str();
-            }
-            if (desc_val.getType() == NT_STRING) {
-                QoreStringValueHelper desc(desc_val);
-                desc_str = desc->c_str();
-            }
-        }
-        connect_xsink.clear();
-
-        ReferenceHolder<QoreEventNotifier> notifier_holder(
-            new QoreEventNotifier(xsink), xsink);
-        if (*xsink || !notifier_holder->isValid()) {
-            return nullptr;
-        }
-        notifier_holder->notify();
-
-        QoreEventNotifier* notifier_raw = *notifier_holder;
-        notifier_raw->ref();
-        ReferenceHolder<QoreObject> notifier_obj(
-            new QoreObject(QC_EVENTNOTIFIER, getProgram(), notifier_raw), xsink);
-
-        // Create poll op with deferred error — constructor refs notifier,
-        // holder will deref its own ref on scope exit
-        QoreEventNotifier* notifier_for_op = *notifier_holder;
-        ReferenceHolder<HttpClientConnMgrPollOp> poller(
-            new HttpClientConnMgrPollOp(err_str.c_str(), desc_str.c_str(),
-                notifier_for_op, this, self), xsink);
-
-        SocketPollOperationBase* p = *poller;
-        ReferenceHolder<QoreObject> rv(
-            new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
-        if (!*xsink) {
-            p->setSelf(*rv);
-            rv->setValue("sock", notifier_obj.release(), xsink);
-            rv->setValue("goal", new QoreStringNode("connect"), xsink);
-        }
-        return rv.release();
+        return deferredAcquireErrorPollOp(connect_xsink, "connect", self, xsink);
     }
 
+    // the acquire returned a reference of this function, taken while the pool held the connection: a close of the
+    // client's connections by another thread can release the pool's reference at any time, and a failed hand-over
+    // below evicts it (qore#6303); it is released when the function returns, discarding any exception, as the other
+    // releases here do
+    struct ConnRefGuard {
+        HttpClientConnectionBase* c;
+        ~ConnRefGuard() {
+            ExceptionSink rel_xsink;
+            c->deref(&rel_xsink);
+            rel_xsink.clear();
+        }
+    };
+    ConnRefGuard conn_ref{conn};
+
+#ifdef DEBUG
+    // tests that hold the finalize have the connect wait for its connection to be ready, so that it hands the
+    // connection over itself
+    if (qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint::Finalize)) {
+        ExceptionSink ready_xsink;
+        // a hang guard only: the test's connection becomes ready
+        conn->waitForReadyOrError(60000, &ready_xsink);
+        ready_xsink.clear();
+    }
+#endif
     // If already ready, return a poll op that completes on first continuePoll
     if (conn->isReady()) {
         // Morph a transitional ALPN-negotiating connection so the pool is left
         // holding a usable connection, as the blocking acquire path did.  A
         // failure here is not fatal for a connect-only operation: the connect
         // itself succeeded, so report success and let the pool entry go.
-        //
-        // NOTE: `conn` is borrowed from the pool here (this branch takes no
-        // reference of its own), and finalizeAsyncConnection() drops the pool's
-        // reference to the transitional connection — so `conn` must not be
-        // touched again once it returns something else.
         ExceptionSink fin_xsink;
         HttpClientConnectionBase* concrete =
             mgr.finalizeAsyncConnection(conn, false, &fin_xsink);
         fin_xsink.clear();
         if (concrete) {
-            // finalizeAsyncConnection() returns an owned reference; this branch
-            // only has to give back the acquire's stream slot
-            mgr.releaseConnection(concrete);
+            // finalizeAsyncConnection() returns an owned reference; the acquire's
+            // stream slot is on `conn`: a negotiating connection that was handed
+            // over has given it back already (swapNegotiatedConnection()), and the
+            // concrete connection, which may be pooled by now, has no slot of this
+            // call to give back
+            if (concrete == conn) {
+                mgr.releaseConnection(concrete);
+            }
             ExceptionSink dx;
             concrete->deref(&dx);
             dx.clear();
@@ -9736,7 +9807,7 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
         // Surface the error as a DEFERRED error on the returned poll op rather
         // than raising synchronously — callers expect the error to arrive
         // through drivePoll(), not from startPollConnect() itself.  Mirrors the
-        // acquireConnectionAsync() fast-fail path above and the isClosed() path
+        // acquireConnectionAsyncRef() fast-fail path above and the isClosed() path
         // in startPollSendRecvConnMgr().  Raising here made the connect-to-dead-
         // port test case fail intermittently whenever the connection was decided
         // in the window between the isReady() check above and
@@ -9773,19 +9844,14 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
         return err_rv.release();
     }
 
-    // Keep the connection alive until the connect-mode poll op observes the
-    // final READY/CLOSED state.  The manager slot is released immediately; the
-    // poll op only holds a private ref for state/error inspection.
-    conn->ref();
+    // The manager slot is released immediately; the connect-mode poll op takes
+    // a reference of its own to observe the final READY/CLOSED state.
     mgr.releaseConnection(conn);
 
     // Create poll op — no future for connect, just notifier signaling
     QoreEventNotifier* notifier_for_op = *notifier_holder;
     ReferenceHolder<HttpClientConnMgrPollOp> poller(
         new HttpClientConnMgrPollOp(conn, notifier_for_op, mgr_holder, this, self), xsink);
-    ExceptionSink deref_xsink;
-    conn->deref(&deref_xsink);
-    deref_xsink.clear();
 
     SocketPollOperationBase* p = *poller;
     ReferenceHolder<QoreObject> rv(

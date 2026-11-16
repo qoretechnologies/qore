@@ -392,6 +392,11 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - fixed a column declared with \c "default null", which was described with the default value \c null, so
+      table alignment set it again every time
+      (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
+    - the \c "except" @ref select_option_set_operators "set operator" of a select is Oracle's \c MINUS
+      (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>)
     - fixed the \c IN operator with a driver other than \c oracle (ex: \c jdbc), which cannot bind the collection of
       values that the \c oracle driver binds, so the statement failed: each value is bound in a collection
       constructor (see @ref ora_in_operator), and a list with more values than a statement can bind raises an
@@ -4711,6 +4716,10 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 row.data_type = row.data_type.lwr();
             }
             trim row.data_default;
+            # issue #1746: a column declared with "default null" has no default value; Oracle keeps the text as given
+            if (row.data_default =~ /^\(*\s*null\s*\)*$/i) {
+                remove row.data_default;
+            }
 
             bool char_used;
             if (row.char_used == "C") {
@@ -5510,7 +5519,7 @@ group by p.index_name", schema.upr(), name.upr());
     }
 
     #! returns the Oracle server major version (e.g. 12, 19, 23)
-    /** @since OracleSqlUtilBase 1.6
+    /** @since OracleSqlUtilBase 1.7
     */
     private int getOracleServerMajorVersion() {
         return oracle_get_server_major_version(ds);
@@ -6182,6 +6191,13 @@ group by p.index_name", schema.upr(), name.upr());
     }
 
     #! returns @ref True if the database requires a wildcard \c "*" to be prefixed with the table name when it appears with other column arguments in a select statement
+    #! Returns the SQL keyword of a set operator: Oracle names \c "except" \c MINUS
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private string getSetOperatorSql(string op) {
+        return op == "except" ? "minus" : AbstractTable::getSetOperatorSql(op);
+    }
+
     private bool asteriskRequiresPrefix() {
         return True;
     }

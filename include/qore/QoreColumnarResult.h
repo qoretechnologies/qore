@@ -161,7 +161,9 @@ public:
     /** @param sdata serialized payload produced by serialize()
         @param xsink exception sink for validation, allocation, and cancellation errors
         @return a new columnar result, or nullptr if an exception was raised
-        @throw DESERIALIZATION-ERROR if the payload has an unsupported version or invalid shape
+        @throw DESERIALIZATION-ERROR if the payload has an unsupported version or invalid shape, or a column schema
+        that is invalid or does not match its data: the schema is checked as described for addColumn(), and a buffer
+        type, decimal precision or scale that the data does not have is an error; a list column is not converted
      */
     DLLEXPORT static QoreColumnarResult* deserialize(const QoreHashNode* sdata, ExceptionSink* xsink);
 
@@ -177,6 +179,28 @@ public:
         QoreBufferElementType buffer_type, bool nullable, const char* native_type, ExceptionSink* xsink);
 
     //! Adds a column with recursive schema metadata and takes ownership of @a data.
+    /** A list column whose schema describes dense storage (a temporal or decimal kind, or a native type with a dense
+        storage type) is converted to a buffer.  The schema is then checked against the data and completed from it.
+
+        The kind of the schema must be one that the data can hold: for a buffer, \c bool in \c buffer<bool>, \c int
+        in an integer buffer, \c float in a floating-point buffer, \c string in \c buffer<string>, \c decimal128 in
+        \c buffer<decimal128>, \c date, \c timestamp and \c duration in \c buffer<int64>, \c dictionary in the
+        buffer of its value kind, and \c auto in any buffer; for a list, each value must be of a type of the kind
+        (\c bool: \c bool; \c int: \c int, or a \c number with no fractional part, as an unsigned 64-bit integer
+        too big for an \c int is imported; \c float: \c float or \c int; \c number: \c number, \c int, \c float
+        or \c string; \c string: \c string; \c binary: \c binary; the list kinds: \c list; \c struct and
+        \c map: \c hash; \c auto: any), checked recursively against the child schemas.  A schema can be nested at
+        most 64 levels deep.  The values of a column with a \c fixed_size (a \c fixed_size_list or fixed-size
+        \c binary column) must have that size, and the size of its null values must be justified by the data: the
+        null rows of such a column can hold at most as many padding elements as its other rows, or 2^24 if more.
+
+        The schema is completed from the data: a NOTHING or NULL value or a buffer with nullable elements makes it
+        (or the child schema) nullable, a buffer column gets the element type of its buffer (and the precision and
+        scale of a decimal buffer) and, without a kind, the kind of its buffer type, and a list column has no buffer
+        type.
+
+        @throw COLUMNAR-SCHEMA-ERROR the schema is invalid or does not match the column data
+     */
     DLLEXPORT int addColumn(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
         ExceptionSink* xsink);
 
@@ -222,7 +246,8 @@ public:
 
     //! Returns a hash of column values with native Qore typing restored.
     /** Like \c toColumnHash() but every temporal column is materialized into a
-        \c list<date> with the result's current timezone applied; non-temporal
+        \c list<date> (\c list<*date> with NOTHING for each null for a nullable
+        column) with the result's current timezone applied; non-temporal
         columns pass through with no copy.  Use this only when the consumer
         requires native typing (e.g., assembling rows for a downstream API that
         cannot accept \c buffer<int64> microsecond payloads); prefer
@@ -279,9 +304,9 @@ private:
 
     DLLLOCAL int setRowCount(size_t n_rows, ExceptionSink* xsink);
 
-    //! Adds a column, checking script values as fromScriptColumnHash() does if @a script_values is true
+    //! Adds a column; @a flags select the conversion and the check of the schema, which raises @a err
     DLLLOCAL int addColumnIntern(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
-        bool script_values, ExceptionSink* xsink);
+        int flags, const char* err, ExceptionSink* xsink);
 
     //! Creates a columnar result from a hash-of-lists, checking script values if @a script_values is true
     DLLLOCAL static QoreColumnarResult* fromColumnHashIntern(const QoreHashNode* columns, const QoreHashNode* desc,

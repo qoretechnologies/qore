@@ -282,7 +282,10 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             return False;
         }
         # the reservation is counted in the C++ connection, where the idle timeout of its operation sees it (#6184)
-        return tryReservePendingStream(getPollOperation().getActiveStreamCount(), max_concurrent_streams);
+        # the active streams of the operation are read under the reservation lock of the C++ connection, so that a
+        # request that is being submitted, whose reservation is released after its active stream is counted, cannot
+        # leave its stream to another reservation
+        return tryReservePendingStream(getPollOperation(), max_concurrent_streams);
     }
 
     #! Releases a pending stream reservation
@@ -616,6 +619,9 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     close(*timeout close_timeout) {
         log(LoggerLevel::DEBUG, "closing connection");
         closeImpl(close_timeout);
+        # the connection and its poll operation reference each other: the cycle is broken once the connection is
+        # closed, or neither is ever released (#6286)
+        getPollOperation().clearConnection();
     }
 
     #! Marks (or unmarks) the connection as exclusively leased for a persistent session

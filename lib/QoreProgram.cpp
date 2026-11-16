@@ -625,9 +625,19 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
         thread_hub->forkChild(tid, ++activity_gen, !own);
     }
     if (parse_tid != tid) {
-        // a thread of the parent was parsing; the parse does not go on in the child
+        // a thread of the parent was parsing; the parse does not go on in the child, nor does its commit
         parse_count = 0;
         parse_tid = -1;
+        commit_entry_restricted = false;
+    }
+    // the other threads of the parent do not exist in the child, whose TIDs can be given to other threads
+    // (erased without allocating)
+    for (std::set<int>::iterator i = parse_tids.begin(); i != parse_tids.end();) {
+        if (*i == tid) {
+            ++i;
+        } else {
+            i = parse_tids.erase(i);
+        }
     }
     tlock.reinitAfterFork();
     tcond.reinitAfterFork();
@@ -2017,6 +2027,34 @@ void qore_program_private_base::copyExternalData() {
     }
 }
 
+int qore_program_private::beginParse(ExceptionSink* xsink, ParseStartGuard& guard, bool nested) {
+    {
+        // PO_ALLOW_REPARSE is read and the mark set with the write lock of the options held, which the changes of the
+        // options hold as well (see checkReparseOptionChange()); the write lock before plock
+        std::lock_guard<std::recursive_mutex> wl(pwo.parse_options.writeLock());
+        AutoLocker al(plock);
+        if (!nested && checkParseIntern(xsink)) {
+            return -1;
+        }
+        // set in the same critical section as the check that no thread runs the Program's code, so that no thread
+        // enters it between them; a Program without PO_ALLOW_REPARSE makes no such check, and sets the flag when its
+        // code is parsed, as before
+        if ((pwo.parse_options & PO_ALLOW_REPARSE) && !parsing_in_progress) {
+            parsing_in_progress = true;
+            guard.began = true;
+        }
+        // the threads that code of an earlier parse or of a debugger evaluation started are not this parse's
+        // (issue #6243)
+        parse_tids.clear();
+    }
+#ifdef DEBUG
+    if (qore_dbg_parse_start_gate(pgm, xsink)) {
+        return -1;
+    }
+#endif
+    return 0;
+}
+
 void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     bool atomic_rollback = static_cast<bool>(pwo.parse_options & PO_ALLOW_REPARSE);
     // delete pending changes to namespaces: only what the failed parse added is removed, also without
@@ -2072,6 +2110,10 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     // it, it cannot be parsed again
     if (atomic_rollback) {
         parsing_in_progress = false;
+    }
+    {
+        AutoLocker al(plock);
+        parse_tids.clear();
     }
 }
 
@@ -2472,7 +2514,29 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             requires_exception = false;
             rc = -1;
         } else { // otherwise commit them
-            parsing_in_progress = false;
+            // the code that the commit runs can enter the Program, other threads cannot until the commit has finished
+            // (issue #6243); both flags are changed in one critical section of plock, which incThreadCount() takes
+            {
+                AutoLocker al(plock);
+                commit_entry_restricted = true;
+                parsing_in_progress = false;
+            }
+            // lifts the restriction when the commit ends, also with an exception
+            class CommitEntryRestrictionHelper {
+            public:
+                DLLLOCAL CommitEntryRestrictionHelper(qore_program_private& pp) : pp(pp) {
+                }
+                DLLLOCAL ~CommitEntryRestrictionHelper() {
+                    AutoLocker al(pp.plock);
+                    pp.commit_entry_restricted = false;
+                    pp.parse_tids.clear();
+                }
+            private:
+                qore_program_private& pp;
+            } cerh(*this);
+#ifdef DEBUG
+            qore_dbg_parse_commit_gate(pgm, 0);
+#endif
             parsing_done = true;
 
             // merge pending namespace additions and run namespace-level runtime init
@@ -2489,6 +2553,9 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             sb.parseCommit(pgm);
             committed_native_parse_info = native_parse_info;
 
+#ifdef DEBUG
+            qore_dbg_parse_commit_gate(pgm, 1);
+#endif
             initDeferredCode();
             assert(dset.empty());
 

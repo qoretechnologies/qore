@@ -977,11 +977,10 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         if (exec_mode == QEM_IR || exec_mode == QEM_JIT
             || (exec_mode == QEM_TIERED
                 && qore_parse_options_support_ir(runtime_parse_options))) {
-            // Try to use cached IR if available
-            QoreIRFunction* ir_func = cached_toplevel_ir;
-            bool need_lower = !ir_func && !toplevel_ir_failed;
-
-            if (need_lower) {
+            // the IR is lowered once; every run goes through the once flag, which makes what the lowering stored (the
+            // IR, its options, the failure) visible to the threads that run the code later
+            QoreIRFunction* ir_func = nullptr;
+            {
                 std::call_once(toplevel_ir_once, [this, pgm]() {
                     // Make the top-level function name unique per TopLevelStatementBlock
                     // to avoid name collisions in the JIT's compiled_functions map.
@@ -1087,6 +1086,12 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     // the interpreter makes the check of a call's target in the load of the target, as for the code
                     // of a function (UserVariantBase::lowerIRFunction(); issues #5784, #5824)
                     qore_ir_fuse_call_target_checks(*func);
+                    // the options of the code, which the lowered code runs with, as the code of a function runs with
+                    // those of its declaration (see execIR())
+                    if (!statement_list.empty()) {
+                        cached_toplevel_ir_po = toplevelCodeParseOptions();
+                        cached_toplevel_ir_po_set = true;
+                    }
                     cached_toplevel_ir = func;
                 });
                 ir_func = cached_toplevel_ir;
@@ -1167,9 +1172,65 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     return execIntern(rc, return_value, xsink);
 }
 
+//! returns the parse options of the top-level code, which its lowered code runs with
+/** The AST interpreter runs each statement with the options of its declaration; the lowered code has no statements,
+    so it runs with the options of the first statement, with the restrictions of any of them and without a positive
+    option that one of them does not have.  Lowered code is %modern, so the options that compiled code relies on
+    (negative offsets, strict arguments) are those of every statement.  The options of the Program can differ: with
+    \c %push-parse-options, the options of the file end with it
+
+    @note when the statements have different restrictions (files parsed into one Program with different options), the
+    lowered code runs all of them with the restrictions of every one, which is more restrictive than the AST interpreter
+    for the statements that have fewer, never less
+*/
+QoreParseOptions TopLevelStatementBlock::toplevelCodeParseOptions() const {
+    assert(!statement_list.empty());
+    const QoreParseOptions& positive = QoreParseOptions::POSITIVE_OPTIONS;
+    QoreParseOptions rv = (*statement_list.begin())->pwo.parse_options;
+    for (const AbstractStatement* stmt : statement_list) {
+        const QoreParseOptions& po = stmt->pwo.parse_options;
+        // the restrictions of any statement
+        rv |= po & ~positive;
+        // the positive options of every statement
+        rv &= po | ~positive;
+    }
+    return rv;
+}
+
 //! Runs the IR of the top-level code: compiled by the JIT if \a use_jit, or in the IR interpreter
 int TopLevelStatementBlock::execIR(QoreIRFunction* ir_func, bool use_jit, const QoreParseOptions& runtime_parse_options,
         QoreProgram* pgm, QoreValue& return_value, ExceptionSink* xsink) {
+    // the lowered code runs with the options of its statements, as the AST interpreter runs each statement and a
+    // function runs with the options of its declaration, not with those of the Program, which can differ (with
+    // %push-parse-options, the options of a file end with it);
+    // both the thread's options and those of the thread-local RuntimeConfig, which code shared with the AST interpreter
+    // reads, are set.  Top-level code compiled ahead of time has no statements and runs with the Program's options
+    struct ToplevelCodeParseOptionsHelper {
+        bool set;
+        const AbstractStatement* old_stmt = nullptr;
+        const QoreProgramLocation* old_loc = nullptr;
+        QoreParseOptions old_po;
+        RuntimeConfig* rc = nullptr;
+        QoreParseOptions old_rc_po;
+
+        DLLLOCAL ToplevelCodeParseOptionsHelper(bool set, const QoreParseOptions& po) : set(set) {
+            if (!set) {
+                return;
+            }
+            swap_toplevel_code_parse_options(po, old_stmt, old_loc, old_po);
+            rc = &rc_get_tls_ref();
+            old_rc_po = rc->getParseOptions();
+            rc->setParseOptions(po);
+        }
+
+        DLLLOCAL ~ToplevelCodeParseOptionsHelper() {
+            if (!set) {
+                return;
+            }
+            rc->setParseOptions(old_rc_po);
+            restore_toplevel_code_parse_options(old_stmt, old_loc, old_po);
+        }
+    } code_po(cached_toplevel_ir_po_set && ir_func == cached_toplevel_ir, cached_toplevel_ir_po);
     if (qore_program_private::get(*pgm)->ir_dump) {
         QoreIRPrinter::print(*ir_func, std::cout);
     }

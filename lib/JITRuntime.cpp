@@ -30,6 +30,7 @@
 */
 
 #include "qore/intern/QoreRuntimeDiagnostic.h"
+#include "qore/intern/AssertStatement.h"
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreHandlerRun.h"
 #include "qore/intern/JITRuntime.h"
@@ -450,6 +451,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_iterator_cleanup_allocas", reinterpret_cast<void*>(&qore_rt_iterator_cleanup_allocas) },
     { "qore_rt_reload_chain_rotate", reinterpret_cast<void*>(&qore_rt_reload_chain_rotate) },
     { "qore_rt_reload_chain_clear", reinterpret_cast<void*>(&qore_rt_reload_chain_clear) },
+    { "qore_rt_reload_chain_flush", reinterpret_cast<void*>(&qore_rt_reload_chain_flush) },
     { "qore_rt_reload_local_if_stale", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale) },
     { "qore_rt_reload_local_if_stale_aot", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_aot) },
     { "qore_rt_obe_publish", reinterpret_cast<void*>(&qore_rt_obe_publish) },
@@ -1342,6 +1344,35 @@ extern "C" DLLEXPORT void qore_rt_reload_chain_clear(uint64_t* slot, ExceptionSi
     *slot = 0;
     QoreValue v = fromBits(bits);
     v.discard(xsink);
+}
+
+// documented in JITRuntime.h
+extern "C" DLLEXPORT void qore_rt_reload_chain_flush(uint64_t** slots, const uint32_t* table, int32_t pairs,
+        int32_t epochs, uint64_t* epoch, ExceptionSink* xsink) {
+    for (int32_t i = 0; i < pairs; ++i) {
+        const uint32_t tracker = table[2 * i];
+        const uint32_t deferred = table[2 * i + 1];
+        if (tracker == QORE_RELOAD_CHAIN_NO_SLOT) {
+            assert(deferred != QORE_RELOAD_CHAIN_NO_SLOT);
+            qore_rt_reload_chain_clear(slots[deferred], xsink);
+        } else if (deferred == QORE_RELOAD_CHAIN_NO_SLOT) {
+            qore_rt_reload_chain_clear(slots[tracker], xsink);
+        } else {
+            qore_rt_reload_chain_rotate(slots[tracker], slots[deferred], xsink);
+        }
+    }
+    if (!epochs) {
+        return;
+    }
+    assert(epoch);
+    // the caches are valid for the epoch before the boundary, which makes them stale after it, as the inline code
+    // stores the old epoch
+    const uint64_t old_epoch = *epoch;
+    *epoch = old_epoch + 1;
+    const uint32_t* epoch_table = table + 2 * pairs;
+    for (int32_t i = 0; i < epochs; ++i) {
+        *slots[epoch_table[i]] = old_epoch;
+    }
 }
 
 //! Run all cleanup actions (decref all tracked values) and free the array.
@@ -3007,7 +3038,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_dynamic(uint64_t left, uint64_t
         return toBits(QoreValue());
     }
 
-    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    bool negative_offsets = qore_compiled_code_negative_offsets();
     QoreValue result = QoreSquareBracketsOperatorNode::doSquareBrackets(*lv, *rv, true, string_index_char != 0,
         negative_offsets, xsink);
     if (lv->getType() == NT_LIST && !(xsink && *xsink)) {
@@ -3300,7 +3331,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
     QoreValue left = fromBits(left_bits);
     qore_type_t left_type = left.getType();
     int selector_idx = 0;
-    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    bool negative_offsets = qore_compiled_code_negative_offsets();
 
     if (left_type == NT_LIST) {
         const QoreTypeInfo* vtype = nullptr;
@@ -3495,7 +3526,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_list_selector_step_intern(uint
     QoreRtSelectorTypeFold fold;
     bool fold_here = last && result.getType() == NT_LIST && result.get<const QoreListNode>()->empty();
     bool string_index_char = flags & static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar);
-    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    bool negative_offsets = qore_compiled_code_negative_offsets();
     int32_t vi = 0;
     for (unsigned i = 0; vi < count; ++i) {
         assert(i < QORE_IR_LIST_SELECTOR_STEP_MAX);
@@ -4378,7 +4409,9 @@ static const QoreTypeInfo* qore_rt_resolve_call_type_path(QoreAOTTypeResolver& r
 // Eliminates the need for EXPR_TREE serialization of cast operator nodes.
 // Generic: the path has type parameters (generic code), which are substituted with their types in the current call;
 // the code generator decides it when it emits the cast (qore#5661)
-template <bool Generic>
+// OrNothingPath: the path is that of an or-nothing cast ("*list<int>"), whose value has the or-nothing type
+// (qore#6174); see qore_rt_cast_by_type_path_dispatch()
+template <bool Generic, bool OrNothingPath>
 static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         const char* type_path, int64_t or_nothing, ExceptionSink* xsink, QoreProgram* pgm) {
     QoreValue inner = qore_rt_cast_normalize_weak_ref(fromBits(inner_bits));
@@ -4403,7 +4436,7 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
     // `list<string>` and `*list<string>` share the base type and differ
     // only in the or-nothing flag.
     const char* resolve_path = type_path;
-    if (or_nothing && resolve_path[0] == '*') {
+    if constexpr (OrNothingPath) {
         ++resolve_path;
     }
     std::string error;
@@ -4515,8 +4548,10 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         }
         QoreHashNode* init_hash = inner.get<QoreHashNode>()->hashRefSelf();
         // the values are converted to the value type as by an assignment, as in
-        // QoreComplexHashCastOperatorNode::castValue()
-        QoreValue result = qore_hash_private::newComplexHashFromHash(ti, init_hash, xsink, true);
+        // QoreComplexHashCastOperatorNode::castValue(); the hash of an or-nothing cast has the or-nothing type, as
+        // there, which the path resolved has not (qore#6174)
+        QoreValue result = qore_hash_private::newComplexHashFromHash(OrNothingPath
+            ? get_or_nothing_type_check(ti) : ti, init_hash, xsink, true);
         return toBits(result);
     }
 
@@ -4544,7 +4579,22 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         if (inner.isNothing() && or_nothing) {
             return toBits(QoreValue());
         }
+        // the list of an or-nothing cast has the or-nothing type, as in QoreComplexListCastOperatorNode::castValue(),
+        // which the path resolved has not (qore#6174)
+        const QoreTypeInfo* cast_ti = OrNothingPath ? get_or_nothing_type_check(ti) : ti;
         if (inner.getType() != NT_LIST) {
+            // a soft list cast converts any other value as by an assignment (a one-element list, or an empty list
+            // for NOTHING), as in QoreComplexListCastOperatorNode::castValue() (qore#6174)
+            if (QoreTypeInfo::getUniqueReturnComplexSoftList(ti)) {
+                QoreValue value = inner.refSelf();
+                QoreTypeInfo::acceptAssignment(cast_ti, "<cast operator>", value, xsink);
+                // acceptAssignment() leaves the value referenced when it raises an exception
+                if (*xsink) {
+                    value.discard(xsink);
+                    return toBits(QoreValue());
+                }
+                return toBits(value);
+            }
             xsink->raiseException("RUNTIME-CAST-ERROR",
                 "cannot cast from type '%s' to '%s'",
                 inner.getTypeName(), cast_type_name);
@@ -4552,7 +4602,7 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         }
         // List cast: return the value with the desired element type.
         // newComplexListFromValue takes ownership of inner's ref.
-        QoreValue result = qore_list_private::newComplexListFromValue(ti,
+        QoreValue result = qore_list_private::newComplexListFromValue(cast_ti,
             inner.refSelf(), xsink);
         return toBits(result);
     }
@@ -4634,21 +4684,34 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
     return toBits(QoreValue());
 }
 
+//! Casts by a type path; the path of an or-nothing cast is resolved without its "*" (see above)
+/** the or-nothing path is told apart with the test that stripped the "*" before (qore#6174), so that the other casts
+    make no added check
+*/
+template <bool Generic>
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_cast_by_type_path_dispatch(uint64_t inner_bits,
+        const char* type_path, int64_t or_nothing, ExceptionSink* xsink, QoreProgram* pgm) {
+    if (or_nothing && type_path && *type_path == '*') {
+        return qore_rt_cast_by_type_path_in_program<Generic, true>(inner_bits, type_path, or_nothing, xsink, pgm);
+    }
+    return qore_rt_cast_by_type_path_in_program<Generic, false>(inner_bits, type_path, or_nothing, xsink, pgm);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path(uint64_t inner_bits,
         const char* type_path, int64_t or_nothing, ExceptionSink* xsink) {
-    return qore_rt_cast_by_type_path_in_program<false>(inner_bits, type_path, or_nothing, xsink, getProgram());
+    return qore_rt_cast_by_type_path_dispatch<false>(inner_bits, type_path, or_nothing, xsink, getProgram());
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path_aot(QoreAOTContext* ctx, uint64_t inner_bits,
         const char* type_path, int64_t or_nothing, ExceptionSink* xsink) {
     QoreProgram* pgm = ctx && ctx->pgm ? ctx->pgm : getProgram();
-    return qore_rt_cast_by_type_path_in_program<false>(inner_bits, type_path, or_nothing, xsink, pgm);
+    return qore_rt_cast_by_type_path_dispatch<false>(inner_bits, type_path, or_nothing, xsink, pgm);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_cast_by_generic_type_path_aot(QoreAOTContext* ctx, uint64_t inner_bits,
         const char* type_path, int64_t or_nothing, ExceptionSink* xsink) {
     QoreProgram* pgm = ctx && ctx->pgm ? ctx->pgm : getProgram();
-    return qore_rt_cast_by_type_path_in_program<true>(inner_bits, type_path, or_nothing, xsink, pgm);
+    return qore_rt_cast_by_type_path_dispatch<true>(inner_bits, type_path, or_nothing, xsink, pgm);
 }
 
 // --- Call reference creation helper ---
@@ -6995,19 +7058,10 @@ extern "C" DLLEXPORT int64_t qore_rt_int_to_string_measure(int64_t value) {
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_sprintf(uint64_t val_bits, ExceptionSink* xsink) {
-    QoreValue val = fromBits(val_bits);
-    QoreStringNode* str;
-    if (val.getType() == NT_LIST) {
-        str = q_sprintf(val.get<const QoreListNode>(), 0, 0, xsink);
-        if (*xsink) {
-            return toBits(QoreValue());
-        }
-    } else {
-        // Single value: convert to string
-        QoreStringValueHelper sv(val);
-        str = new QoreStringNode(*sv);
-    }
-    return toBits(QoreValue(str));
+    // the message of a failed @assert, the only code that QoreIROpcode::Sprintf is emitted for: it is made as the AST
+    // interpreter makes it (qore#6197)
+    QoreStringNode* str = AssertStatement::makeMessage(fromBits(val_bits), xsink);
+    return str ? toBits(QoreValue(str)) : toBits(QoreValue());
 }
 
 static uint64_t qore_rt_make_hash_const_keys_impl(const char** keys, uint64_t* vals,
@@ -8359,7 +8413,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
     QoreValue lv = fromBits(list_bits);
     QoreValue val = fromBits(val_bits);
     ValueHolder val_holder(val.refSelf(), xsink);
-    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    bool negative_offsets = qore_compiled_code_negative_offsets();
 
     if (lv.getType() == NT_LIST) {
         QoreListNode* l = lv.get<QoreListNode>();
@@ -8451,7 +8505,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
     QoreValue lv = fromBits(list_bits);
     QoreValue val = fromBits(val_bits);
     ValueHolder val_holder(val.refSelf(), xsink);
-    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    bool negative_offsets = qore_compiled_code_negative_offsets();
     if (lv.getType() == NT_LIST) {
         QoreListNode* l = lv.get<QoreListNode>();
         // ListIndexStore loads the container without taking an extra reference.
@@ -8541,7 +8595,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_access_compat(uint64_t list_val
         return toBits(QoreValue());
     }
     QoreValue v = *vh;
-    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    bool negative_offsets = qore_compiled_code_negative_offsets();
     int64 qindex = static_cast<int64>(index);
     if (v.getType() == NT_LIST) {
         const QoreListNode* l = v.get<const QoreListNode>();
@@ -8552,11 +8606,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_access_compat(uint64_t list_val
             return toBits(rv);
         }
     } else if (v.getType() == NT_STRING) {
+        // %no-string-index-char, which would give a string, is refused under %modern, so compiled code never has it
+        assert(string_index_char);
         QoreStringNodeValueHelper s(v);
-        if (string_index_char) {
-            return toBits(QoreValue::makeCharFromStringAt(**s, static_cast<qore_offset_t>(qindex), xsink));
-        }
-        return toBits(s->substr(static_cast<qore_offset_t>(qindex), 1, xsink));
+        return toBits(QoreValue::makeCharFromStringAt(**s, static_cast<qore_offset_t>(qindex), xsink));
     } else if (v.getType() == NT_BINARY) {
         const BinaryNode* b = v.get<const BinaryNode>();
         if (QoreSquareBracketsOperatorNode::normalizeIndex(qindex, static_cast<int64>(b->size()),
@@ -8589,7 +8642,7 @@ extern "C" DLLEXPORT int64_t qore_rt_list_index_int_compare(
         int64 normalized = index;
         if (QoreSquareBracketsOperatorNode::normalizeIndex(normalized,
                 static_cast<int64>(list->size()),
-                runtime_check_parse_option(PO_NEGATIVE_OFFSETS))) {
+                qore_compiled_code_negative_offsets())) {
             QoreValue entry =
                 list->retrieveEntry(static_cast<size_t>(normalized));
             equal = entry.getType() == NT_INT
@@ -11091,7 +11144,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
     // enum value, which does not own the string node of its member's base value, whose reference count does not show
     // the enum values that share it (see qore_enum_value_copy_for_write()); a string is never held opaquely
     QoreStringNode* left_node = left.isPlainPointer() ? left.get<QoreStringNode>() : nullptr;
-    QoreStringNode* right_node = right.isShortString() ? nullptr : right.get<QoreStringNode>();
+    // the base value of an enum value on the right is its member's, which holds a reference of its own (qore#6254)
+    QoreStringNode* right_node = right.isShortString() || right.isEnum() ? nullptr : right.get<QoreStringNode>();
     if (left_node && left_node != right_node && left_node->reference_count() == 1) {
         left_node->concat(*right_string, xsink);
         if (xsink && *xsink) {
@@ -11146,7 +11200,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
     // enum value, which does not own the string node of its member's base value, whose reference count does not show
     // the enum values that share it (see qore_enum_value_copy_for_write()); a string is never held opaquely
     QoreStringNode* left_node = left.isPlainPointer() ? left.get<QoreStringNode>() : nullptr;
-    QoreStringNode* right_node = right.isShortString() ? nullptr : right.get<QoreStringNode>();
+    // the base value of an enum value on the right is its member's, which holds a reference of its own (qore#6254)
+    QoreStringNode* right_node = right.isShortString() || right.isEnum() ? nullptr : right.get<QoreStringNode>();
     if (left_node && left_node != right_node && left_node->reference_count() == 1) {
         left_node->concat(*right_string, xsink);
         return xsink && *xsink ? toBits(QoreValue()) : left_bits;
@@ -11182,7 +11237,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_in_place(
     }
 
     QoreStringNode* left_string = left.get<QoreStringNode>();
-    QoreStringNode* right_node = right.isShortString() ? nullptr : right.get<QoreStringNode>();
+    // the base value of an enum value on the right is its member's, which holds a reference of its own (qore#6254)
+    QoreStringNode* right_node = right.isShortString() || right.isEnum() ? nullptr : right.get<QoreStringNode>();
     QoreStringValueHelper right_string(right);
     if (left_string == right_node) {
         ReferenceHolder<QoreStringNode> right_copy(new QoreStringNode(*right_string), xsink);
@@ -11245,6 +11301,10 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
     if (direct) {
         for (int i = 0; i < nargs; ++i) {
             QoreValue value = fromBits(args[i]);
+            // the value of a string enum is its member, whose base value is the string (qore#6254)
+            if (value.isEnum()) {
+                value = value.getEnumBaseValue();
+            }
             const QoreEncoding* current;
             if (value.isShortString()) {
                 current = QCS_DEFAULT;
@@ -11293,6 +11353,10 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_search(
         same_encoding = nargs > 0;
         for (int i = 0; i < nargs; ++i) {
             QoreValue value = fromBits(args[i]);
+            // the value of a string enum is its member, whose base value is the string (qore#6254)
+            if (value.isEnum()) {
+                value = value.getEnumBaseValue();
+            }
             const QoreEncoding* current;
             if (value.isShortString()) {
                 current = QCS_DEFAULT;
@@ -17056,8 +17120,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_compound_consume(
     return qore_rt_self_member_compound_impl(member_name, compound_op, rhs_holder, xsink);
 }
 
+// documented in JITRuntime.h
 extern "C" DLLEXPORT uint64_t qore_rt_self_member_update(
-        const char* member_name, int32_t unary_op, ExceptionSink* xsink) {
+        const char* member_name, int32_t unary_op, int32_t ref_rv, ExceptionSink* xsink) {
     if (*xsink || unary_op < static_cast<int32_t>(LVUnaryOp::PreInc)
             || unary_op > static_cast<int32_t>(LVUnaryOp::PostDec)) {
         return toBits(QoreValue());
@@ -17068,60 +17133,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_update(
     }
     QoreValue res;
     switch (static_cast<LVUnaryOp>(unary_op)) {
-        case LVUnaryOp::PreInc: {
-            qore_type_t type = lvh.getType();
-            if (type == NT_NUMBER) {
-                lvh.preIncrementNumber();
-                res = lvh.getReferencedValue();
-            } else if (type == NT_FLOAT) {
-                res = lvh.preIncrementFloat();
-            } else {
-                res = lvh.preIncrementBigInt();
-            }
+        case LVUnaryOp::PreInc:
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PreInc>(lvh, ref_rv != 0, res);
             break;
-        }
-        case LVUnaryOp::PreDec: {
-            qore_type_t type = lvh.getType();
-            if (type == NT_NUMBER) {
-                lvh.preDecrementNumber();
-                res = lvh.getReferencedValue();
-            } else if (type == NT_FLOAT) {
-                res = lvh.preDecrementFloat();
-            } else {
-                res = lvh.preDecrementBigInt();
-            }
+        case LVUnaryOp::PreDec:
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PreDec>(lvh, ref_rv != 0, res);
             break;
-        }
-        case LVUnaryOp::PostInc: {
-            qore_type_t type = lvh.getType();
-            if (type == NT_NUMBER) {
-                if (QoreNumberNode* number = lvh.postIncrementNumber(true)) {
-                    res = number;
-                }
-            } else if (type == NT_FLOAT) {
-                res = lvh.postIncrementFloat();
-            } else {
-                res = lvh.postIncrementBigInt();
-            }
+        case LVUnaryOp::PostInc:
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PostInc>(lvh, ref_rv != 0, res);
             break;
-        }
-        case LVUnaryOp::PostDec: {
-            qore_type_t type = lvh.getType();
-            if (type == NT_NUMBER) {
-                if (QoreNumberNode* number = lvh.postDecrementNumber(true)) {
-                    res = number;
-                }
-            } else if (type == NT_FLOAT) {
-                res = lvh.postDecrementFloat();
-            } else {
-                res = lvh.postDecrementBigInt();
-            }
-            break;
-        }
         default:
-            assert(false);
+            // the range of unary_op was checked above
+            assert(static_cast<LVUnaryOp>(unary_op) == LVUnaryOp::PostDec);
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PostDec>(lvh, ref_rv != 0, res);
+            break;
     }
-    return toBits(*xsink ? QoreValue() : res);
+    // no value after an exception (a number can be the value that the lvalue kept)
+    if (*xsink) {
+        res.discard(xsink);
+        return toBits(QoreValue());
+    }
+    return toBits(res);
 }
 
 // Shared helper for HashKeySlice terminal step: iterates the resolved
@@ -17249,13 +17281,9 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         ExceptionSink* xsink) {
     const bool is_delete = (unary_op == LVUnaryOp::Delete);
     // a negative index counts from the end with negative offsets, as in the AST interpreter (do_list_value(),
-    // do_string_value() and do_binary_value() in Variable.cpp); the option is read for the first negative index only
-    int negative_offsets_state = -1;
-    auto negative_offsets = [&negative_offsets_state]() -> bool {
-        if (negative_offsets_state < 0) {
-            negative_offsets_state = runtime_check_parse_option(PO_NEGATIVE_OFFSETS) ? 1 : 0;
-        }
-        return negative_offsets_state != 0;
+    // do_string_value() and do_binary_value() in Variable.cpp), which compiled code always has
+    auto negative_offsets = []() -> bool {
+        return qore_compiled_code_negative_offsets();
     };
 
     // Helper: gives the indexes that the selector \a i selects to \a cb: a range selects each index of its value,
@@ -17362,7 +17390,11 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         return v.release();
     }
     if (ct == NT_STRING) {
-        lvh.ensureUnique();
+        // the characters are removed from the string in place, which leaves a plain string that a string enum lvalue
+        // refuses, as in the AST interpreter (LValueRemoveHelper::doRemove(), qore#6195)
+        if (lvh.ensureUnique(is_delete ? "<delete operator>" : "<remove operator>")) {
+            return QoreValue();
+        }
         QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
         if (!str) {
             return QoreValue();
@@ -17462,33 +17494,20 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
         return QoreValue();
     }
 
-    bool broken_list_range = false;
-    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    bool negative_offsets = qore_compiled_code_negative_offsets();
     int64 start = 0;
     int64 stop = 0;
     int64 seq_size = 0;
     QoreValue seq = lvh.getValue();
     if (!QoreSquareBracketsRangeOperatorNode::getEffectiveRange(seq, start, stop, seq_size,
-            last_step.slice_values[0], last_step.slice_values[1], broken_list_range, negative_offsets, xsink)) {
+            last_step.slice_values[0], last_step.slice_values[1], false, negative_offsets, xsink)) {
         if (*xsink || is_delete) {
             return QoreValue();
         }
         if (ct == NT_LIST) {
-            ReferenceHolder<QoreListNode> v(new QoreListNode(autoTypeInfo), xsink);
-            if (broken_list_range) {
-                int64 d = stop - start;
-                if (d < 0) {
-                    d = -d;
-                }
-                ++d;
-                while (d--) {
-                    qore_list_private::pushCanonical(**v, QoreValue(), xsink);
-                    if (*xsink) {
-                        return QoreValue();
-                    }
-                }
-            }
-            return v.release();
+            // %broken-list-range, which would fill the result with NOTHING, is refused under %modern, so compiled
+            // code never has it
+            return new QoreListNode(autoTypeInfo);
         }
         if (ct == NT_STRING) {
             return QoreValue::makeStringValue("");
@@ -17525,7 +17544,11 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
     }
 
     if (ct == NT_STRING) {
-        lvh.ensureUnique();
+        // the range is extracted from the string in place, which leaves a plain string that a string enum lvalue
+        // refuses, as in the AST interpreter (LValueRemoveHelper::doRemove(), qore#6195)
+        if (lvh.ensureUnique(is_delete ? "<delete operator>" : "<remove operator>")) {
+            return QoreValue();
+        }
         QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
         if (!str) {
             return QoreValue();
@@ -17874,58 +17897,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             return toBits(QoreValue());
         }
         switch (inst->unary_op) {
-            case LVUnaryOp::PreInc: {
-                qore_type_t t = lvh.getType();
-                if (t == NT_NUMBER) {
-                    lvh.preIncrementNumber();
-                    res = lvh.getReferencedValue();
-                } else if (t == NT_FLOAT) {
-                    res = lvh.preIncrementFloat();
-                } else {
-                    res = lvh.preIncrementBigInt();
-                }
+            case LVUnaryOp::PreInc:
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PreInc>(lvh, inst->ref_rv, res);
                 break;
-            }
-            case LVUnaryOp::PreDec: {
-                qore_type_t t = lvh.getType();
-                if (t == NT_NUMBER) {
-                    lvh.preDecrementNumber();
-                    res = lvh.getReferencedValue();
-                } else if (t == NT_FLOAT) {
-                    res = lvh.preDecrementFloat();
-                } else {
-                    res = lvh.preDecrementBigInt();
-                }
+            case LVUnaryOp::PreDec:
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PreDec>(lvh, inst->ref_rv, res);
                 break;
-            }
-            case LVUnaryOp::PostInc: {
-                qore_type_t t = lvh.getType();
-                if (t == NT_NUMBER) {
-                    QoreNumberNode* n = lvh.postIncrementNumber(true);
-                    if (n) {
-                        res = n;
-                    }
-                } else if (t == NT_FLOAT) {
-                    res = lvh.postIncrementFloat();
-                } else {
-                    res = lvh.postIncrementBigInt();
-                }
+            case LVUnaryOp::PostInc:
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PostInc>(lvh, inst->ref_rv, res);
                 break;
-            }
-            case LVUnaryOp::PostDec: {
-                qore_type_t t = lvh.getType();
-                if (t == NT_NUMBER) {
-                    QoreNumberNode* n = lvh.postDecrementNumber(true);
-                    if (n) {
-                        res = n;
-                    }
-                } else if (t == NT_FLOAT) {
-                    res = lvh.postDecrementFloat();
-                } else {
-                    res = lvh.postDecrementBigInt();
-                }
+            case LVUnaryOp::PostDec:
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PostDec>(lvh, inst->ref_rv, res);
                 break;
-            }
             case LVUnaryOp::EnsureUnique:
                 // the container of a variable that a weak reference is taken of (qore#5756)
                 if (lvh.getType() == NT_HASH || lvh.getType() == NT_LIST) {
@@ -17957,7 +17940,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     if (l && l->size() > 0) {
                         res = l->shift();
                     }
-                } else if (lvh.getType() != NT_NOTHING && runtime_check_parse_option(PO_STRICT_ARGS)) {
+                } else if (lvh.getType() != NT_NOTHING && qore_compiled_code_strict_args()) {
                     // matches QoreShiftOperatorNode::evalImpl()
                     xsink->raiseException("SHIFT-ERROR", "the lvalue argument to shift is type \"%s\"; "
                         "expecting \"list\"", lvh.getTypeName());
@@ -17970,15 +17953,20 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     if (l && l->size() > 0) {
                         res = l->pop();
                     }
-                } else if (lvh.getType() != NT_NOTHING && runtime_check_parse_option(PO_STRICT_ARGS)) {
+                } else if (lvh.getType() != NT_NOTHING && qore_compiled_code_strict_args()) {
                     // matches QorePopOperatorNode::evalImpl()
                     xsink->raiseException("POP-ERROR", "the lvalue argument to pop is type \"%s\"; "
                         "expecting \"list\"", lvh.getTypeName());
                 }
                 break;
             case LVUnaryOp::Trim:
+                // a string enum lvalue, and a container whose type refuses a plain string in the place of an enum
+                // element, refuse the plain strings that the operation leaves, as in the AST interpreter
+                // (QoreTrimOperatorNode::evalImpl(), qore#6195)
                 if (lvh.getType() == NT_STRING) {
-                    lvh.ensureUnique();
+                    if (lvh.ensureUnique("<trim operator>")) {
+                        break;
+                    }
                     QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
                     if (str) {
                         str->trim(xsink);
@@ -17987,6 +17975,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     // value so callers like `return trim ct;` see the result.
                     res = lvh.getReferencedValue();
                 } else if (lvh.getType() == NT_LIST) {
+                    if (qore_check_in_place_container_strings(lvh.getValue(), "<trim operator>", xsink)) {
+                        break;
+                    }
                     lvh.ensureUnique();
                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
                     if (l) {
@@ -18003,6 +17994,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     }
                     res = lvh.getReferencedValue();
                 } else if (lvh.getType() == NT_HASH) {
+                    if (qore_check_in_place_container_strings(lvh.getValue(), "<trim operator>", xsink)) {
+                        break;
+                    }
                     lvh.ensureUnique();
                     QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
                     if (h) {
@@ -18021,14 +18015,20 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 }
                 break;
             case LVUnaryOp::Chomp:
+                // see LVUnaryOp::Trim (QoreChompOperatorNode::evalImpl(), qore#6195)
                 if (lvh.getType() == NT_STRING) {
-                    lvh.ensureUnique();
+                    if (lvh.ensureUnique("<chomp operator>")) {
+                        break;
+                    }
                     QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
                     if (str) {
                         // Mirror QoreChompOperatorNode::evalImpl: return count.
                         res = QoreValue(static_cast<int64>(str->chomp()));
                     }
                 } else if (lvh.getType() == NT_LIST) {
+                    if (qore_check_in_place_container_strings(lvh.getValue(), "<chomp operator>", xsink)) {
+                        break;
+                    }
                     lvh.ensureUnique();
                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
                     if (l) {
@@ -18047,6 +18047,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                         res = QoreValue(count);
                     }
                 } else if (lvh.getType() == NT_HASH) {
+                    if (qore_check_in_place_container_strings(lvh.getValue(), "<chomp operator>", xsink)) {
+                        break;
+                    }
                     lvh.ensureUnique();
                     QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
                     if (h) {
@@ -18115,7 +18118,7 @@ static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* ins
                 }
             }
             if (lvh.getType() != NT_LIST) {
-                if (runtime_check_parse_option(PO_STRICT_ARGS)) {
+                if (qore_compiled_code_strict_args()) {
                     xsink->raiseException(
                         inst->binary_mut_op == LVBinaryMutOp::Push
                             ? "PUSH-ERROR" : "UNSHIFT-ERROR",
@@ -18144,11 +18147,10 @@ static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* ins
                 if (regex_op && regex_op->getRegexSubst()) {
                     QoreStringNodeValueHelper str(lvh.getValue());
                     QoreStringNode* nv = regex_op->getRegexSubst()->exec(*str, xsink);
-                    if (!*xsink && nv) {
-                        lvh.assign(nv);
-                        if (inst->ref_rv) {
-                            res = nv->refSelf();
-                        }
+                    // the lvalue's type can refuse the plain string (ex: an enum type, qore#6196); assign() owns
+                    // the value in either case
+                    if (!*xsink && nv && !lvh.assign(nv, "<=~ s/// operator>") && inst->ref_rv) {
+                        res = nv->refSelf();
                     }
                 }
             }
@@ -18164,11 +18166,10 @@ static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* ins
                 if (trans_op && trans_op->getTransliteration()) {
                     QoreStringNodeValueHelper str(lvh.getValue());
                     QoreStringNode* nv = trans_op->getTransliteration()->exec(*str, xsink);
-                    if (!*xsink && nv) {
-                        lvh.assign(nv);
-                        if (inst->ref_rv) {
-                            res = nv->refSelf();
-                        }
+                    // the lvalue's type can refuse the plain string (ex: an enum type, qore#6196); assign() owns
+                    // the value in either case
+                    if (!*xsink && nv && !lvh.assign(nv, "<=~ tr/// operator>") && inst->ref_rv) {
+                        res = nv->refSelf();
                     }
                 }
             }
@@ -18244,8 +18245,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
         xsink->raiseException("EXTRACT-ERROR",
             "first (lvalue) argument to the extract operator is not a list, "
             "string, or binary object");
+    } else if (lvh.ensureUnique(inst->ternary_op == LVTernaryOp::Splice
+            ? "<splice operator>" : "<extract operator>")) {
+        // a string enum lvalue refuses the plain string that the operation leaves, as in the AST interpreter
+        // (qore#6195)
+        return toBits(QoreValue());
     } else {
-        lvh.ensureUnique();
         size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
         if (inst->ternary_op == LVTernaryOp::Splice) {
             if (vt == NT_LIST) {
@@ -18520,9 +18525,9 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_comp
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_update_throwing(
-        const char* member_name, int32_t unary_op, ExceptionSink* xsink) {
+        const char* member_name, int32_t unary_op, int32_t ref_rv, ExceptionSink* xsink) {
     uint64_t result = qore_rt_self_member_update(
-        member_name, unary_op, xsink);
+        member_name, unary_op, ref_rv, xsink);
     if (xsink && *xsink) {
         fromBits(result).discard(xsink);
         throw QoreJITException();
@@ -23298,6 +23303,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_empty_noguard(uint64_t val_b
     if (v.isShortString()) {
         return toBits(QoreValue(v.shortStringLen() == 0));
     }
+    // the value of a string enum is its member, whose base value is the string (a value typed string is one in a hash
+    // value or a hashdecl member, qore#6254)
+    if (v.isEnum()) {
+        return qore_rt_pseudo_string_empty_noguard(toBits(v.getEnumBaseValue()));
+    }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
         return toBits(QoreValue(!str || str->empty()));
@@ -23311,6 +23321,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_val_noguard(uint64_t val_bit
     if (v.isShortString()) {
         return toBits(QoreValue(v.shortStringLen() != 0));
     }
+    // the value of a string enum is its member, whose base value is the string (a value typed string is one in a hash
+    // value or a hashdecl member, qore#6254)
+    if (v.isEnum()) {
+        return qore_rt_pseudo_string_val_noguard(toBits(v.getEnumBaseValue()));
+    }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
         return toBits(QoreValue(str && !str->empty()));
@@ -23318,16 +23333,29 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_val_noguard(uint64_t val_bit
     return qore_rt_pseudo_val(val_bits);
 }
 
+static int64_t qore_rt_pseudo_string_size_enum(QoreValue v);
+
 static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_size_native_impl(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
     if (v.isShortString()) {
         return static_cast<int64_t>(v.shortStringLen());
+    }
+    // the value of a string enum is its member, whose base value is the string (a value typed string is one in a hash
+    // value or a hashdecl member, qore#6254)
+    if (v.isEnum()) {
+        return qore_rt_pseudo_string_size_enum(v);
     }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
         return static_cast<int64_t>(str ? str->strlen() : 0);
     }
     return fromBits(qore_rt_pseudo_size(val_bits)).getAsBigInt();
+}
+
+//! returns the size of the base value of a string enum value (out of line: the inline size helper calls itself)
+static int64_t qore_rt_pseudo_string_size_enum(QoreValue v) {
+    assert(v.isEnum());
+    return qore_rt_pseudo_string_size_native_impl(toBits(v.getEnumBaseValue()));
 }
 
 //! Native scalar <string>::size()/strlen() for bases proven to be assigned strings.
@@ -23365,16 +23393,29 @@ static size_t qore_short_string_utf8_length(QoreValue v) {
     return len;
 }
 
+static int64_t qore_rt_pseudo_string_length_enum(QoreValue v);
+
 static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_length_native_impl(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
     if (v.isShortString()) {
         return static_cast<int64_t>(qore_short_string_utf8_length(v));
+    }
+    // the value of a string enum is its member, whose base value is the string (see
+    // qore_rt_pseudo_string_size_native_impl(), qore#6254)
+    if (v.isEnum()) {
+        return qore_rt_pseudo_string_length_enum(v);
     }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
         return static_cast<int64_t>(str ? str->length() : 0);
     }
     return fromBits(qore_rt_pseudo_length(val_bits)).getAsBigInt();
+}
+
+//! returns the length of the base value of a string enum value (out of line: the inline length helper calls itself)
+static int64_t qore_rt_pseudo_string_length_enum(QoreValue v) {
+    assert(v.isEnum());
+    return qore_rt_pseudo_string_length_native_impl(toBits(v.getEnumBaseValue()));
 }
 
 //! Native scalar <string>::length() for bases proven to be assigned strings.

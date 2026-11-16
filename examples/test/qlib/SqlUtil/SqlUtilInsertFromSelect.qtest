@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class SqlUtilInsertFromSelectTest
+
+#! Tests insertFromSelect() with cop_seq() without an alias (issue #2847) and Table arguments (issue #6321)
+/** A column operator with an optional alias, such as cop_seq(), can be given without one, and a Table can be given
+    wherever an AbstractTable argument is expected when the method is called through the Table.  The tests run on
+    SQLite, and on PostgreSQL in a schema of their own when \c QORE_DB_CONNSTR_PGSQL is set.
+*/
+class SqlUtilInsertFromSelectTest inherits QUnit::Test {
+    private {
+        *Datasource pgsql;
+    }
+
+    constructor() : Test("SqlUtilInsertFromSelect", "1.0", \ARGV) {
+        addTestCase("PostgreSQL: cop_seq() without an alias", \pgsqlSequence());
+        addTestCase("PostgreSQL: Table arguments", \pgsqlTableArgs());
+        addTestCase("SQLite: Table arguments", \sqliteTableArgs());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "SqlUtilInsertFromSelect");
+            pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+            pgsql.exec("create sequence ifs_seq");
+            setupTables(pgsql);
+        }
+%endif
+    }
+
+    globalTearDown() {
+        if (pgsql) {
+            pgsql.rollback();
+            delete pgsql;
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    private static setupTables(Datasource ds) {
+        ds.exec("create table ifs_src (id integer not null primary key, name varchar(10))");
+        ds.exec("create table ifs_dst (tid bigint, name varchar(10), status varchar(1))");
+        ds.exec("create table ifs_up (id integer not null primary key, name varchar(10))");
+        ds.exec("insert into ifs_src values (1, 'a'), (2, 'b'), (3, 'c')");
+        ds.commit();
+    }
+
+    private Datasource getPgsql() {
+%ifdef NoPgsql
+        testSkip("no pgsql module");
+%endif
+        if (!pgsql) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        return pgsql;
+    }
+
+    pgsqlSequence() {
+        Datasource ds = getPgsql();
+        on_exit ds.rollback();
+        Database db(ds);
+        AbstractTable dst = db.getTable("ifs_dst");
+        AbstractTable src = db.getTable("ifs_src");
+        string sql;
+        assertEq(2, dst.insertFromSelect(("tid", "name", "status"), src,
+            {"columns": (cop_seq("ifs_seq"), "name", cop_value("I")), "where": {"id": op_gt(1)}, "orderby": "id"},
+            \sql));
+        assertRegex("nextval\\('ifs_seq'\\), ", sql);
+        assertEq(({"tid": 1, "name": "b", "status": "I"}, {"tid": 2, "name": "c", "status": "I"}),
+            ds.selectRows("select * from ifs_dst order by tid"));
+        # with an alias, as before
+        assertEq(1, dst.insertFromSelect(("tid", "name", "status"), src,
+            {"columns": (cop_seq("ifs_seq", "seqval"), "name", cop_value("J")), "where": {"id": 1}}));
+        assertEq({"tid": 3, "name": "a", "status": "J"}, ds.selectRow("select * from ifs_dst where tid = 3"));
+        # in a select
+        assertEq(("a",), map $1.name, src.selectRows({"columns": (cop_seq("ifs_seq"), "name"), "where": {"id": 1}},
+            \sql));
+        assertRegex("^select nextval\\('ifs_seq'\\), ", sql);
+    }
+
+    pgsqlTableArgs() {
+        Datasource ds = getPgsql();
+        on_exit ds.rollback();
+        checkTableArgs(ds);
+        Table dst(ds, "ifs_dst");
+        Table src(ds, "ifs_src");
+        # a sequence through the Table wrapper too
+        assertEq(3, dst.insertFromSelect(("tid", "name"), src, {"columns": (cop_seq("ifs_seq"), "name")}));
+    }
+
+    sqliteTableArgs() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        setupTables(ds);
+        checkTableArgs(ds);
+    }
+
+    #! checks the AbstractTable methods that take a table, called through a Table with a Table argument
+    private checkTableArgs(Datasource ds) {
+        Table dst(ds, "ifs_dst");
+        Table src(ds, "ifs_src");
+        string sql;
+        # a Table source and a reference argument through the Table
+        assertEq(3, dst.insertFromSelect(("tid", "name", "status"), src,
+            {"columns": ("id", "name", cop_value("T")), "orderby": "id"}, \sql));
+        assertRegex("^insert into .*ifs_dst", sql);
+        assertEq((1, 2, 3), map $1.tid, ds.selectRows("select tid from ifs_dst where status = 'T' order by tid"));
+        # an AbstractTable source through the Table, as before
+        assertEq(1, dst.insertFromSelect(("tid", "name", "status"), src.getTable(),
+            {"columns": ("id", "name", cop_value("A")), "where": {"id": 1}}));
+        # other methods taking a table: the SQL of an insert from a select, and an upsert from a select
+        list<auto> args;
+        assertRegex("^insert into .*ifs_dst", dst.getInsertFromSelectSql(("tid", "name"), src,
+            {"columns": ("id", "name")}, \args));
+        Table up(ds, "ifs_up");
+        up.upsertFromSelect(src, {"columns": ("id", "name")});
+        assertEq(3, ds.selectRow("select count(1) as c from ifs_up").c);
+        ds.rollback();
+    }
+}

@@ -2582,7 +2582,11 @@ public:
 };
 
 //! Fused add-assign for two typed int locals: target += source
-//! Replaces LoadLocal(target) + LoadLocal(source) + AddAssignInt + StoreLocal(target)
+/** Replaces LoadLocal(target) + LoadLocal(source) + AddAssignInt + StoreLocal(target); the target's type stores the
+    integer as it is (int or softint, never an enum, which takes the lvalue path).  The instruction has the handler of
+    an enclosing try block as its exception target: the read of the source and the change of the target, made by a
+    runtime helper for a variable on the runtime stack, can raise an exception
+*/
 class QoreIRAddAssignLocalIntInstruction : public QoreIRInstruction {
 public:
     QORE_IR_INST_CLASS(AddAssignLocalInt)
@@ -2603,7 +2607,11 @@ public:
 };
 
 //! Fused increment for typed int local: local += delta (constant int)
-//! Replaces LoadLocal + ConstInt(delta) + AddAssignInt + StoreLocal
+/** Replaces LoadLocal + ConstInt(delta) + AddAssignInt + StoreLocal; the local's type stores the integer as it is
+    (int or softint, never an enum, which takes the lvalue path).  The instruction has the handler of an enclosing
+    try block as its exception target: the change, made by a runtime helper for a variable on the runtime stack or a
+    closure-bound variable, can raise an exception
+*/
 class QoreIRIncrementLocalIntInstruction : public QoreIRInstruction {
 public:
     QORE_IR_INST_CLASS(IncrementLocalInt)
@@ -4138,6 +4146,16 @@ public:
     //! coordinator block returning the helper's result value through the
     //! coordinator's own epilogue (see design/aot-function-outlining.md).
     QoreIRBasicBlock* return_target = nullptr;
+
+    //! Transient (never serialized): the locals of the coordinator that the
+    //! outlined function-body helper also references (its shared locals; empty
+    //! for an init-expression helper)
+    /** The coordinator releases its own references to their values before the
+        call and reloads them after it, so that a value that the helper
+        replaces is released at its assignment in the helper (qore#6300; see
+        QoreIRToLLVM::recordHelperSite())
+    */
+    std::vector<const LocalVar*> shared_locals;
 };
 
 //! Returns the instruction as the given instruction class pointer type if it is one, otherwise nullptr

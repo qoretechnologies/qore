@@ -1668,7 +1668,10 @@ static DataFrame DataFrame::readParquet(string path, *hash<ParquetReadOptions> o
 //! Writes the DataFrame to a Parquet file
 /** @param path the Parquet file path
     @param options optional ParquetWriteOptions hash:
-    - \c compression: \c "none", \c "snappy", \c "gzip", \c "brotli", \c "zstd", \c "lz4", or \c "lz4_frame"
+    - \c compression: \c "none", \c "snappy", \c "gzip", \c "brotli", \c "zstd", \c "lz4" or \c "lz4_raw"; \c "lz4"
+      and \c "lz4_raw" both write the Parquet codec \c LZ4_RAW (Parquet has no codec for the LZ4 frame format);
+      readParquet() also reads files whose pages use the deprecated Parquet codec \c LZ4 (Hadoop framing); any other
+      value raises a \c DATAFRAME-IO-ERROR exception
     - \c row_group_size: maximum rows per Parquet row group
     - \c use_dictionary: enables or disables dictionary encoding globally
     - \c write_statistics: enables or disables column statistics

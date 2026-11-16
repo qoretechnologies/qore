@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - threads, thread pool tasks and AsyncIoController timer and task workers running compiled code
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class CompiledModernInvariantsTest
+
+#! Compiled code has negative offsets, strict arguments and string index characters wherever it runs
+/** Only %modern code is compiled (IR, JIT, AOT), and %modern implies negative offsets and strict arguments and refuses
+    the options that turn off string index characters, so compiled code no longer looks the options up; a debug build
+    asserts that they hold.  The same expressions give the same values in every execution mode, in the main thread and
+    in the threads that run code for it: a background thread, a thread pool task, and the timer and task workers of the
+    AsyncIoController, which run code with the options of the code that started it or registered it (qore#6208), and in
+    top-level code, which runs as lowered code with the options of its statements, also when those of the Program
+    differ (a file with %push-parse-options): the IR and JIT modes ran it with those of the Program (a range with
+    negative offsets gave [], pop accepted a non-list and remove refused a negative index).
+*/
+class CompiledModernInvariantsTest inherits QUnit::Test {
+    public {
+        #! computes the values in each thread and prints them, or whether they are the same as in the main thread
+        const Script = "%modern
+%no-child-restrictions
+
+nothing sub noargs() {}
+
+string sub probe() {
+    list<int> l = (1, 2, 3);
+    string s = \"abc\";
+    binary b = binary(\"xyz\");
+    string strict;
+    try {
+        call_function(\"noargs\", 1);
+        strict = \"accepted\";
+    } catch (hash<ExceptionInfo> ex) {
+        strict = ex.err;
+    }
+    return sprintf(\"%y\", (l[-1], s[-1], b[-1], l[-2..-1], s[1], strict));
+}
+
+Queue q();
+string main_val = probe();
+background sub () { q.push(probe()); }();
+string bg = q.get();
+ThreadPool tp(1);
+tp.submit(sub () { q.push(probe()); });
+string pool = q.get();
+AsyncIoController::addTimerDelay(0s, sub () { q.push(probe()); });
+string timer = q.get();
+AsyncIoController::submitTask(sub () { q.push(probe()); });
+string task = q.get();
+tp.stopWait();
+printf(\"main: %s\\n\", main_val);
+foreach hash<auto> h in ({\"background\": bg, \"pool\": pool, \"timer\": timer, \"task\": task}.pairIterator()) {
+    printf(\"%s: %s\\n\", h.key, h.value == main_val ? \"same\" : h.value);
+}
+
+# top-level code: it runs as lowered code in the compiled execution modes, with the options of its statements
+list<int> tl = (1, 2, 3);
+string tl_pop;
+auto not_a_list = 1;
+try {
+    pop not_a_list;
+    tl_pop = \"accepted\";
+} catch (hash<ExceptionInfo> ex) {
+    tl_pop = ex.err;
+}
+list<auto> tx = (1, 2, 3);
+splice tx, -1, 1;
+remove tx[-1];
+printf(\"top-level: %y\\n\", (tl[-1], tl[-2..-1], tl_pop, tx));
+
+# the top-level code of a child Program whose file has its own options (%push-parse-options): the options of the
+# Program end with the file, and its code runs with those of its statements; a child Program takes the execution mode
+# that it is given, not the one of the command line (tiered execution runs top-level code whose Program options are
+# not %modern in the AST interpreter)
+Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+p.parsePending(\"%push-parse-options\\n%modern\\nlist<int> l = (1, 2, 3); string popped; int i = 1;
+try { pop i; popped = \\\"accepted\\\"; } catch (hash<ExceptionInfo> ex) { popped = ex.err; }
+list<auto> x = (1, 2, 3); splice x, -1, 1; remove x[-1];
+printf(\\\"child top-level: %y\\\\n\\\", (l[-1], l[-2..-1], popped, x));\", \"child\");
+p.parseCommit();
+switch (ARGV[0]) {
+    case \"ast\": p.setExecMode(EM_AST); break;
+    case \"ir\": p.setExecMode(EM_IR); break;
+    case \"jit\": p.setExecMode(EM_JIT); break;
+    case \"tiered\": p.setExecMode(EM_TIERED); break;
+}
+p.run();
+";
+
+        #! the output: negative offsets on lists, strings and binaries, a range with negative offsets, a string index
+        #! character, and the excess argument refused by strict arguments, the same in every thread
+        const Expected = "main: [3, c'c', 122, [2, 3], c'b', \"RUNTIME-OVERLOAD-ERROR\"]
+background: same
+pool: same
+timer: same
+task: same
+top-level: [3, [2, 3], \"POP-ERROR\", [1, null]]
+child top-level: [3, [2, 3], \"POP-ERROR\", [1, null]]
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("CompiledModernInvariantsTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("the same values in every execution mode and thread", \invariantsTest());
+        set_return_value(main());
+    }
+
+    invariantsTest() {
+        TmpDir tmp("qore-compiled-modern-invariants-");
+        string script = tmp.path + "/invariants.q";
+        File f();
+        f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s %s",
+                libqore_dir, libqore_dir, qore_bin, mode, script, mode));
+            assertEq(Expected, output, "execution mode " + mode);
+        }
+    }
+}

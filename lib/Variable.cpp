@@ -866,6 +866,8 @@ static thread_local int64 lvalue_scan_count = 0;
 static thread_local int64 lvalue_removal_visit_count = 0;
 static thread_local int64 lvalue_removal_probe_count = 0;
 static thread_local int64 lvalue_removal_allocation_count = 0;
+//! the number of old values of number lvalues copied by post-increments and post-decrements in the current thread
+static thread_local int64 number_old_value_copy_count = 0;
 
 int64 q_get_lvalue_scan_count() {
     return lvalue_scan_count;
@@ -881,6 +883,10 @@ int64 q_get_lvalue_removal_probe_count() {
 
 int64 q_get_lvalue_removal_allocation_count() {
     return lvalue_removal_allocation_count;
+}
+
+int64 q_get_number_old_value_copy_count() {
+    return number_old_value_copy_count;
 }
 
 void q_record_lvalue_removal_probe() {
@@ -1423,25 +1429,40 @@ void QoreLValueReferencePrograms::releaseIntern(ExceptionSink* xsink) {
     }
 }
 
-void LValueHelper::replaceEnumForWrite(const QoreValue& current) {
+int LValueHelper::refuseValue(const char* desc, const QoreValue& n) {
+    assert(typeInfo);
+    typeInfo->doTypeException("lvalue", 0, desc, n, vl.xsink);
+    write_rejected = true;
+    return -1;
+}
+
+int LValueHelper::replaceEnumForWrite(const QoreValue& current, const char* desc) {
     assert(current.isEnum());
     assert(val || qv);
+    // the operation leaves a plain value of the enum's base type, which an enum lvalue type refuses as it refuses its
+    // assignment (qore#6195)
+    if (desc && typeInfo
+            && !QoreTypeInfo::parseAccepts(typeInfo, current.getEnumMember()->getEnumDecl()->getBaseTypeInfo())) {
+        typeInfo->doTypeException("lvalue", 0, desc, current.getEnumBaseValue(), vl.xsink);
+        write_rejected = true;
+        return -1;
+    }
     QoreValue copy = qore_enum_value_copy_for_write(current);
     if (val) {
         // QoreLValue::assignAssume() takes the copy and releases the lvalue's reference to the enum member
         saveTemp(val->assignAssume(copy));
-        return;
+        return 0;
     }
     QoreValue old = *qv;
     *qv = copy;
     saveTemp(old);
+    return 0;
 }
 
-void LValueHelper::ensureUniqueSlow(const QoreValue& current) {
+int LValueHelper::ensureUniqueSlow(const QoreValue& current, const char* desc) {
     if (current.isEnum()) {
         // the enum member's base value is shared and constant: the lvalue takes an owned copy to modify
-        replaceEnumForWrite(current);
-        return;
+        return replaceEnumForWrite(current, desc);
     }
     // never a scalar that the lvalue stores natively (qore#6094)
     assert(!val || !val->optimized());
@@ -1449,11 +1470,12 @@ void LValueHelper::ensureUniqueSlow(const QoreValue& current) {
         char buf[7];
         current.getShortString(buf);
         assignNodeIntern(new QoreStringNode(buf, current.shortStringLen(), QCS_UTF8));
-        return;
+        return 0;
     }
     // an opaque reference
     assert(current.isOpaque());
     ensureUniqueNode();
+    return 0;
 }
 
 void LValueHelper::keepCreatedNode(QoreValue rv) const {
@@ -3035,11 +3057,23 @@ QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink
     bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
     qore_type_t t = lvh.getType();
     if (t == NT_LIST || t == NT_STRING || t == NT_BINARY) {
-        lvh.ensureUnique();
+        // only a list is changed: the element of a string or a binary is only read, and making a string unique would
+        // replace an enum value with a plain string, which a string enum lvalue does not hold (qore#6195)
+        if (t == NT_LIST) {
+            lvh.ensureUnique();
+        }
         QoreValue container = lvh.getValue();
-        size_t size = t == NT_LIST
-            ? container.get<QoreListNode>()->size()
-            : (t == NT_STRING ? container.get<QoreStringNode>()->length() : container.get<BinaryNode>()->size());
+        // a string can be a short string held inline or an enum value, which the helper reads
+        std::optional<QoreStringNodeValueHelper> str;
+        size_t size;
+        if (t == NT_LIST) {
+            size = container.get<QoreListNode>()->size();
+        } else if (t == NT_STRING) {
+            str.emplace(container);
+            size = (*str)->length();
+        } else {
+            size = container.get<BinaryNode>()->size();
+        }
         if (negative_offsets && index < 0) {
             index += static_cast<int64>(size);
         }
@@ -3056,10 +3090,9 @@ QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink
                 l->setEntry(static_cast<size_t>(index), QoreValue(), xsink);
             }
         } else if (t == NT_STRING) {
-            QoreStringNode* str = container.get<QoreStringNode>();
             rv = static_cast<size_t>(index) < size
-                ? str->substr(index, 1, xsink)
-                : new QoreStringNode(str->getEncoding());
+                ? (*str)->substr(index, 1, xsink)
+                : new QoreStringNode((*str)->getEncoding());
         } else {
             BinaryNode* v = new BinaryNode;
             if (static_cast<size_t>(index) < size) {
@@ -3233,9 +3266,9 @@ bool LValueHelper::numberResultNeedsConversion() const {
         && QoreTypeInfo::parseAccepts(typeInfo, numberTypeInfo);
 }
 
-void LValueHelper::storeNumberResult(QoreNumberNode* n, const char* desc) {
+int LValueHelper::storeNumberResult(QoreNumberNode* n, const char* desc) {
     // the assignment converts the value to the lvalue's type and takes the reference
-    assign(QoreValue(n), desc);
+    return assign(QoreValue(n), desc);
 }
 
 int LValueHelper::makeIntVal(const char* desc) {
@@ -3267,11 +3300,17 @@ int LValueHelper::makeIntVal(const char* desc) {
 int LValueHelper::makeIntQv(const char* desc) {
     member_lvalue_modified = true;
     assert(qv);
-    if (qv->getType() == NT_INT) {
+    // an inline int, the common case, is checked without the type lookup
+    if (qv->isInt()) {
+        return 0;
+    }
+    // a member of an int enum has the base type int, but it is an enum value, which the operation replaces with a
+    // plain int: the lvalue's type is checked for it, as an enum type refuses a plain int (qore#6197)
+    if (!qv->isEnum() && qv->getType() == NT_INT) {
         return 0;
     }
 
-    if (typeInfo && qv->getType() != NT_INT && !QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo)) {
+    if (typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo)) {
         // the 4th arg to doTypeException() is needed only for the type
         typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1), vl.xsink);
         write_rejected = true;
@@ -3308,7 +3347,9 @@ int LValueHelper::makeFloat(const char* desc) {
 
         saveTemp(val->makeFloat());
     } else {
-        if (!qv->hasNode() && qv->getType() == NT_FLOAT) {
+        // an inline float; a member of a float enum is an enum value, which the operation replaces with a plain float
+        // (see makeIntQv())
+        if (qv->isFloat()) {
            return 0;
         }
 
@@ -3775,8 +3816,9 @@ void LValueHelper::preIncrementNumber(const char* desc) {
         return;
     }
     QoreNumberNode* n = ensureUniqueNumber(desc);
-    if (n)
+    if (n) {
         qore_number_private::inc(*n);
+    }
 }
 
 void LValueHelper::preDecrementNumber(const char* desc) {
@@ -3788,23 +3830,33 @@ void LValueHelper::preDecrementNumber(const char* desc) {
         return;
     }
     QoreNumberNode* n = ensureUniqueNumber(desc);
-    if (n)
+    if (n) {
         qore_number_private::dec(*n);
+    }
 }
 
 QoreNumberNode* LValueHelper::postIncrementNumber(bool ref_rv, const char* desc) {
     if (numberResultNeedsConversion()) {
         QoreNumberNode* nn = new QoreNumberNode(getValue());
         SimpleRefHolder<QoreNumberNode> n(nn);
-        QoreNumberNode* rv = ref_rv ? new QoreNumberNode(*nn) : nullptr;
+        SimpleRefHolder<QoreNumberNode> rv(ref_rv ? new QoreNumberNode(*nn) : nullptr);
+#ifdef DEBUG
+        number_old_value_copy_count += ref_rv;
+#endif
         qore_number_private::inc(*nn);
-        storeNumberResult(n.release(), desc);
-        return rv;
+        if (storeNumberResult(n.release(), desc)) {
+            // the lvalue's type refused the result: no old value is returned
+            return nullptr;
+        }
+        return rv.release();
     }
     QoreNumberNode* n = ensureUniqueNumber(desc);
     if (!n)
         return nullptr;
     QoreNumberNode* rv = ref_rv ? new QoreNumberNode(*n) : 0;
+#ifdef DEBUG
+    number_old_value_copy_count += ref_rv;
+#endif
     qore_number_private::inc(*n);
     return rv;
 }
@@ -3813,15 +3865,24 @@ QoreNumberNode* LValueHelper::postDecrementNumber(bool ref_rv, const char* desc)
     if (numberResultNeedsConversion()) {
         QoreNumberNode* nn = new QoreNumberNode(getValue());
         SimpleRefHolder<QoreNumberNode> n(nn);
-        QoreNumberNode* rv = ref_rv ? new QoreNumberNode(*nn) : nullptr;
+        SimpleRefHolder<QoreNumberNode> rv(ref_rv ? new QoreNumberNode(*nn) : nullptr);
+#ifdef DEBUG
+        number_old_value_copy_count += ref_rv;
+#endif
         qore_number_private::dec(*nn);
-        storeNumberResult(n.release(), desc);
-        return rv;
+        if (storeNumberResult(n.release(), desc)) {
+            // the lvalue's type refused the result: no old value is returned
+            return nullptr;
+        }
+        return rv.release();
     }
     QoreNumberNode* n = ensureUniqueNumber(desc);
     if (!n)
         return nullptr;
     QoreNumberNode* rv = ref_rv ? new QoreNumberNode(*n) : 0;
+#ifdef DEBUG
+    number_old_value_copy_count += ref_rv;
+#endif
     qore_number_private::dec(*n);
     return rv;
 }
@@ -4387,11 +4448,13 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
         }
 
         case NT_STRING: {
-            lvh.ensureUnique();
-            QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
             SimpleRefHolder<QoreStringNode> v;
-            size_t len = str->length();
             if (!rl) {
+                // a single character is only read: making the string unique would replace an enum value with a plain
+                // string, which a string enum lvalue does not hold (qore#6195); the helper reads a short string held
+                // inline and an enum value
+                QoreStringNodeValueHelper str(lvh.getValue());
+                size_t len = str->length();
                 if (negative_offsets && ind < 0) {
                     ind += static_cast<int64>(len);
                 }
@@ -4404,6 +4467,13 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                 else
                     v = new QoreStringNode(str->getEncoding());
             } else {
+                // the characters are removed from the string in place, which leaves a plain string that a string
+                // enum lvalue refuses (qore#6195)
+                if (lvh.ensureUnique(for_del ? "<delete operator>" : "<remove operator>")) {
+                    return;
+                }
+                QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
+                size_t len = str->length();
                 v = new QoreStringNode(str->getEncoding());
                 // keep a set of offsets removed to remove them from the list in reverse order
                 ind_set_t iset;
@@ -4544,7 +4614,11 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
         }
 
         case NT_STRING: {
-            lvh.ensureUnique();
+            // the characters are removed from the string in place, which leaves a plain string that a string enum
+            // lvalue refuses (qore#6195)
+            if (lvh.ensureUnique(for_del ? "<delete operator>" : "<remove operator>")) {
+                return;
+            }
             QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
             SimpleRefHolder<QoreStringNode> v(new QoreStringNode(str->getEncoding()));
             size_t len = str->length();
@@ -4716,7 +4790,11 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
             break;
         }
         case NT_STRING: {
-            lvh.ensureUnique();
+            // the range is extracted from the string in place, which leaves a plain string that a string enum lvalue
+            // refuses (qore#6195)
+            if (lvh.ensureUnique(for_del ? "<delete operator>" : "<remove operator>")) {
+                return;
+            }
             QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
             QoreStringNode* ns = str->extract(start, stop - start + 1, xsink);
             v = ns;

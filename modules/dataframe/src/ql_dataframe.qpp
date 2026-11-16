@@ -145,7 +145,7 @@ df.writeParquet("orders.parquet", options);
     @since dataframe 1.0
 */
 hashdecl Qore::DataFrame::ParquetWriteOptions {
-    //! Compression codec: "none", "snappy", "gzip", "brotli", "zstd", "lz4", or "lz4_frame"
+    //! Compression codec: "none", "snappy", "gzip", "brotli", "zstd", "lz4" or "lz4_raw" ("lz4" and "lz4_raw" both write the Parquet codec LZ4_RAW)
     *string compression;
     //! Maximum rows per Parquet row group
     *int row_group_size;

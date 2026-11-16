@@ -35,6 +35,7 @@
 
 #include "qore/intern/ParseNode.h"
 
+#include <atomic>
 #include <vector>
 
 class LocalVar;
@@ -176,8 +177,15 @@ private:
     const qore_class_private* static_class = nullptr;
     qore_class_private* parse_qc = nullptr;
     qore_ns_private* parse_ns = nullptr;
+    //! true while the parse initialization of the closure is deferred (see parseInitDeferred())
+    /** Read without a lock by exec() and execNamed(), which can run in other threads than the commit that
+        initializes the closure (issue #6243); cleared (release) once the initialization has finished.
+    */
+    std::atomic<bool> is_deferred{false};
+    //! true while parseInitDeferred() initializes the closure; read and written with the lock of the deferred
+    //! initialization held
+    bool deferred_init_running = false;
     bool lambda, in_method,
-        is_deferred = false,
         //! true if the closure is in generic code, whose type arguments it is created with (qore#5733)
         needs_type_context = false,
         //! the default values of the closure use its object (see setDefaultsNeedObject())

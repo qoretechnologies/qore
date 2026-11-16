@@ -154,9 +154,31 @@ hash<auto> h = i.getValue();
     }
 
     #! parses the input value based on global configuration and the current field definition
+    /** @param value the value to parse
+        @param type the field specification, with the name of the field in its \c "name" key
+
+        @return the value parsed; an \c "int", \c "float" or \c "number" field of only spaces is read as zero
+
+        @throw FIELD-VALUE-ERROR an \c "int", \c "float" or \c "number" field has a value that is not a number of its
+        type in its number format (ex: \c "12abc", or a value with decimals in an \c "int" field), or a \c "string"
+        value is too long for its field without the \c "truncate" option
+        @throw FIELD-TYPE-ERROR the field type is not supported
+    */
     auto transform(auto value, hash<auto> type) {
         switch (type.type) {
             case "int": {
+                if (value.typeCode() == NT_STRING) {
+                    *string nf = type.format ?? m_opts.number_format;
+                    checkNumericValue(type, value, nf);
+                    if (nf) {
+                        return parse_int(value, nf);
+                    }
+                    # a whole number in floating-point notation (ex: "1.2e3"), which int() would truncate at the
+                    # decimal point
+                    if (!is_int(value, True) && value !~ /^\s*$/) {
+                        return int(float(value));
+                    }
+                }
                 return int(value);
             }
 
@@ -182,6 +204,7 @@ hash<auto> h = i.getValue();
             case "float": {
                 if (value.typeCode() == NT_STRING) {
                     *string nf = type.format ? type.format: m_opts.number_format;
+                    checkNumericValue(type, value, nf);
                     return nf ? parse_float(value, nf) : float(value);
                 }
                 return float(value);
@@ -189,6 +212,7 @@ hash<auto> h = i.getValue();
             case "number": {
                 if (value.typeCode() == NT_STRING) {
                     *string nf = type.format ? type.format: m_opts.number_format;
+                    checkNumericValue(type, value, nf);
                     return nf ? parse_number(value, nf) : number(value);
                 }
                 return number(value);
@@ -226,6 +250,22 @@ hash<auto> h = i.getValue();
             default: {
                 throw "FIELD-TYPE-ERROR", sprintf("output type %y not supported", type.type);
             }
+        }
+    }
+
+    #! Throws \c FIELD-VALUE-ERROR if the string value of a numeric field is not a number of the field's type
+    /** @param type the field specification, with the name of the field in its \c "name" key
+        @param value the string value of the field
+        @param fmt the number format of the field, if any
+
+        @throw FIELD-VALUE-ERROR the value is not a number of the field's type in the given format
+
+        @since FixedLengthUtil 1.7
+    */
+    private static checkNumericValue(hash<auto> type, string value, *string fmt) {
+        if (!isNumericValue(type.type, value, fmt)) {
+            throw "FIELD-VALUE-ERROR", sprintf("invalid %s value %y for field %y%s", type.type, value, type.name,
+                fmt ? sprintf(" with number format %y", fmt) : "");
         }
     }
 

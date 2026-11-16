@@ -32,6 +32,29 @@
 #include "qore/Qore.h"
 #include <qore/HttpClientConnection.h>
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/QC_Http1ClientPollOperationBase.h"
+#include "qore/intern/QC_Http2ClientPollOperationBase.h"
+#include "qore/intern/QC_Http3ClientPollOperationBase.h"
+
+extern qore_classid_t CID_HTTP1CLIENTPOLLOPERATIONBASE;
+extern qore_classid_t CID_HTTP2CLIENTPOLLOPERATIONBASE;
+extern qore_classid_t CID_HTTP3CLIENTPOLLOPERATIONBASE;
+
+/** @cond INTERNAL */
+// return the active streams of a client poll operation, read by HttpClientConnectionBase::tryReservePendingStream()
+// under the reservation lock
+static int h1_reserve_active_streams(const void* op) {
+    return static_cast<const Http1ClientPollOperationPriv*>(op)->getActiveStreamCount();
+}
+
+static int h2_reserve_active_streams(const void* op) {
+    return static_cast<const Http2ClientPollOperationPriv*>(op)->getActiveStreamCount();
+}
+
+static int h3_reserve_active_streams(const void* op) {
+    return static_cast<const Http3ClientPollOperationPriv*>(op)->getActiveStreamCount();
+}
+/** @endcond */
 
 // vparent: referenced by qpp-generated addBuiltinVirtualBaseClass() call — must
 // be declared here so non-SCU builds can resolve the symbol across TUs.
@@ -98,20 +121,44 @@ bool HttpClientConnectionBase::tryReserveStream() {
     return priv->tryReserveStream();
 }
 
-//! Reserves a stream slot of a connection whose active streams its owner counts (a Qore-level connection)
-/** Fails if the connection is draining, closed or closing for its idle timeout, or if \a max_streams is not 0 and
-    \a active_streams and the reservations reach it.  The reservation is released with releaseStreamReservation(); the
-    idle timeout of the connection's operation does not close a connection with a reservation.
+//! Reserves a stream slot of a connection whose active streams its poll operation counts (a Qore-level connection)
+/** Fails if the connection is draining, closed or closing for its idle timeout, or if \a max_streams is not 0 and the
+    active streams of \a op and the reservations reach it.  The active streams are read under the reservation lock,
+    which a release of a reservation takes: a submit counts its active stream before it releases its reservation, so
+    two requests cannot reserve the last stream of a connection; the draining and closed states are checked after the
+    count, so a connection whose last response ends it is not reserved.  The reservation is released with
+    releaseStreamReservation(); the idle timeout of the connection's operation does not close a connection with a
+    reservation.
 
-    @param active_streams the active streams of the connection, as its owner counts them
+    @param op the poll operation of the connection: an HTTP/1.1, HTTP/2 or HTTP/3 client poll operation
     @param max_streams the most streams of the connection; 0: no limit
 
     @return True if a slot was reserved
 
+    @throw HTTPCLIENT-RESERVATION-ERROR \a op is not an HTTP/1.1, HTTP/2 or HTTP/3 client poll operation
+
     @since %Qore 3.0
 */
-bool HttpClientConnectionBase::tryReservePendingStream(int active_streams, int max_streams) [flags=NAMED_ARGS] {
-    return priv->tryReservePendingStream(static_cast<int>(active_streams), static_cast<int>(max_streams));
+bool HttpClientConnectionBase::tryReservePendingStream(object op, int max_streams) [flags=NAMED_ARGS] {
+    const QoreClass* cls = op->getClass();
+    if (cls->getClass(CID_HTTP1CLIENTPOLLOPERATIONBASE)) {
+        PrivateDataRefHolder<Http1ClientPollOperationPriv> h1(op, CID_HTTP1CLIENTPOLLOPERATIONBASE, xsink);
+        return *h1 ? priv->tryReservePendingStream(h1_reserve_active_streams, *h1, static_cast<int>(max_streams))
+            : false;
+    }
+    if (cls->getClass(CID_HTTP2CLIENTPOLLOPERATIONBASE)) {
+        PrivateDataRefHolder<Http2ClientPollOperationPriv> h2(op, CID_HTTP2CLIENTPOLLOPERATIONBASE, xsink);
+        return *h2 ? priv->tryReservePendingStream(h2_reserve_active_streams, *h2, static_cast<int>(max_streams))
+            : false;
+    }
+    if (cls->getClass(CID_HTTP3CLIENTPOLLOPERATIONBASE)) {
+        PrivateDataRefHolder<Http3ClientPollOperationPriv> h3(op, CID_HTTP3CLIENTPOLLOPERATIONBASE, xsink);
+        return *h3 ? priv->tryReservePendingStream(h3_reserve_active_streams, *h3, static_cast<int>(max_streams))
+            : false;
+    }
+    xsink->raiseException("HTTPCLIENT-RESERVATION-ERROR", "cannot reserve a stream for an operation of class '%s': "
+        "an HTTP/1.1, HTTP/2 or HTTP/3 client poll operation is required", cls->getName());
+    return false;
 }
 
 //! Holds the connection against the idle timeout of its operation, or releases the hold
