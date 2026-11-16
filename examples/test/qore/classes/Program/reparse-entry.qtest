@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires Util
 
 %exec-class ReparseEntryTest
 
@@ -22,6 +23,12 @@ public class ReparseEntryTest inherits QUnit::Test {
         addTestCase("failure after the start", \failureAfterStart());
         addTestCase("failed parse", \failedParse());
         addTestCase("active threads", \activeThreads());
+        addTestCase("refused entry runs no code", \refusedEntryRunsNoCode());
+        addTestCase("parseFile() refused", \parseFileRefused());
+        addTestCase("parseFile() refuses entry", \parseFileRefusesEntry());
+        addTestCase("C++ exception in a parse", \cxxExceptionInParse());
+        addTestCase("parsePending() fails after the start", \parsePendingFailure());
+        addTestCase("PO_ALLOW_REPARSE while code is pending", \reparseOptionWhilePending());
         set_return_value(main());
     }
 
@@ -33,9 +40,9 @@ public class ReparseEntryTest inherits QUnit::Test {
     }
 
     #! returns the error of a call of f() in the Program, or "OK" if it ran
-    private string tryCall(Program p) {
+    private string tryCall(Program p, string func = "f") {
         try {
-            assertEq(1, p.callFunction("f"));
+            p.callFunction(func);
             return "OK";
         } catch (hash<ExceptionInfo> ex) {
             return ex.err;
@@ -166,5 +173,194 @@ public class ReparseEntryTest inherits QUnit::Test {
         assertEq("OK", tryCall(p));
         p.parse("int sub h() { return 3; }", "h");
         assertEq(3, p.callFunction("h"));
+    }
+
+    #! a thread that is refused entry runs none of the Program's code, its entry handlers either
+    refusedEntryRunsNoCode() {
+        skipWithoutGate();
+        Program p = getProgram();
+        p.parse("our Queue q;
+code sub get_f() { return int sub () { return f(); }; }
+code sub get_enter() { return auto sub () { q.push(gettid()); }; }
+code sub get_exit() { return sub (auto x) { q.push(gettid()); }; }
+code sub get_init() { return sub () { q.push(gettid()); }; }
+", "handlers");
+        Queue q();
+        p.setGlobalVarValue("q", q);
+        p.setThreadInit(p.callFunction("get_init"));
+        p.setThreadEntryHandler(p.callFunction("get_enter"), p.callFunction("get_exit"));
+        code c = p.callFunction("get_f");
+        # the handlers of the calls above
+        q.clear();
+        call_function("dbg_arm_parse_start_gate", p, False);
+        Counter done(1);
+        background sub () {
+            on_exit {
+                call_function("dbg_abort_parse_start_gate");
+                done.dec();
+            }
+            p.parse("int sub g() { return 2; }", "g");
+        }();
+        {
+            on_exit {
+                call_function("dbg_release_parse_start_gate");
+                done.waitForZero();
+            }
+            assertTrue(call_function("dbg_wait_parse_start_gate"));
+            # a new thread calls a closure of the Program while it is being parsed
+            string err;
+            int caller_tid;
+            Counter c2(1);
+            background sub () {
+                on_exit c2.dec();
+                caller_tid = gettid();
+                try {
+                    c();
+                    err = "OK";
+                } catch (hash<ExceptionInfo> ex) {
+                    err = ex.err;
+                }
+            }();
+            c2.waitForZero();
+            assertEq("PROGRAM-ERROR", err);
+            # none of the Program's code ran in that thread (the handlers record the TIDs that they run in; the thread
+            # parsing the Program can run them as well)
+            list<int> tids;
+            while (q.size()) {
+                tids += q.get();
+            }
+            assertFalse(inlist(caller_tid, tids));
+        }
+        assertEq(2, p.callFunction("g"));
+    }
+
+    #! a parseFile() that is refused (threads are active) changes nothing in the Program
+    parseFileRefused() {
+        skipWithoutGate();
+        Program p = getProgram();
+        p.parse("int sub wait_for_end(Queue started, Queue end) { started.push(1); return end.get(); }", "w");
+        # a file name that the interpreter parses with %modern
+        string fn = tmp_location() + DirSep + get_random_string() + ".qr";
+        File f();
+        f.open2(fn, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("int sub h() { return 3; }\n");
+        f.close();
+        on_exit unlink(fn);
+        list<string> po = p.getFullParseOptions().toStringList();
+        auto mode = p.getExecMode();
+        *string script = p.getScriptName();
+        Queue started();
+        Queue end();
+        Counter c(1);
+        background sub () {
+            on_exit c.dec();
+            p.callFunction("wait_for_end", started, end);
+        }();
+        {
+            on_exit {
+                end.push(1);
+                c.waitForZero();
+            }
+            started.get();
+            assertThrows("PARSE-ERROR", "threads are active", \call_function(), ("dbg_program_parse_file", p, fn));
+        }
+        # the options (no %modern) and the script name are unchanged
+        assertEq(po, p.getFullParseOptions().toStringList());
+        assertEq(mode, p.getExecMode());
+        assertEq(script, p.getScriptName());
+        assertEq("OK", tryCall(p));
+        call_function("dbg_program_parse_file", p, fn);
+        assertEq(3, p.callFunction("h"));
+    }
+
+    #! no thread can enter the Program while parseFile() has started
+    parseFileRefusesEntry() {
+        skipWithoutGate();
+        Program p = getProgram();
+        string fn = tmp_location() + DirSep + get_random_string() + ".q";
+        File f();
+        f.open2(fn, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("int sub h() { return 3; }\n");
+        f.close();
+        on_exit unlink(fn);
+        call_function("dbg_arm_parse_start_gate", p, False);
+        Counter c(1);
+        *hash<ExceptionInfo> parse_ex;
+        background sub () {
+            on_exit {
+                call_function("dbg_abort_parse_start_gate");
+                c.dec();
+            }
+            try {
+                call_function("dbg_program_parse_file", p, fn);
+            } catch (hash<ExceptionInfo> ex) {
+                parse_ex = ex;
+            }
+        }();
+        {
+            on_exit {
+                call_function("dbg_release_parse_start_gate");
+                c.waitForZero();
+            }
+            assertTrue(call_function("dbg_wait_parse_start_gate"));
+            assertEq("PROGRAM-ERROR", tryCall(p));
+        }
+        assertNothing(parse_ex);
+        assertEq(3, p.callFunction("h"));
+        assertEq("OK", tryCall(p));
+    }
+
+    #! a C++ exception that leaves a parse after it has started rolls it back
+    cxxExceptionInParse() {
+        skipWithoutGate();
+        Program p = getProgram();
+        assertThrows("DBG-PARSE-CXX-EXCEPTION", \call_function(), ("dbg_parse_with_cxx_exception", p,
+            "int sub g() { return 2; }", False));
+        # the Program can be entered, has none of the code, and can be parsed again
+        assertEq("OK", tryCall(p));
+        assertEq("NO-FUNCTION", tryCall(p, "g"));
+        p.parse("int sub g() { return 2; }", "g");
+        assertEq(2, p.callFunction("g"));
+
+        # the same for the expression of an Expression object, which makes no thread check
+        assertThrows("DBG-PARSE-CXX-EXCEPTION", \call_function(), ("dbg_parse_with_cxx_exception", p, "f() + 1",
+            True));
+        assertEq("OK", tryCall(p));
+        Expression e(p, "f() + 1", "e");
+        assertEq(2, e.eval());
+    }
+
+    #! parsePending() that fails after it has started leaves the Program usable
+    parsePendingFailure() {
+        skipWithoutGate();
+        Program p = getProgram();
+        call_function("dbg_arm_parse_start_gate", p, True);
+        call_function("dbg_release_parse_start_gate");
+        assertThrows("DBG-PARSE-START-GATE", \p.parsePending(), ("int sub g() { return 2; }", "g"));
+        assertEq("OK", tryCall(p));
+        p.parsePending("int sub g() { return 2; }", "g");
+        p.parseCommit();
+        assertEq(2, p.callFunction("g"));
+    }
+
+    #! PO_ALLOW_REPARSE cannot be changed while code is pending
+    reparseOptionWhilePending() {
+        Program p = getProgram();
+        p.parsePending("int sub g() { return 2; }", "g");
+        assertThrows("PROGRAM-ERROR", "PO_ALLOW_REPARSE", \p.disableParseOptions(), PO_ALLOW_REPARSE);
+        assertThrows("PROGRAM-ERROR", "PO_ALLOW_REPARSE", \p.replaceParseOptions(),
+            PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parseCommit();
+        assertEq(2, p.callFunction("g"));
+        # once the code is committed, it can be changed
+        p.disableParseOptions(PO_ALLOW_REPARSE);
+        assertEq(0, p.getParseOptions() & PO_ALLOW_REPARSE);
+
+        # nor set in a Program without it while code is pending
+        Program p2(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_NO_CHILD_PO_RESTRICTIONS);
+        p2.parsePending("int sub g() { return 2; }", "g");
+        assertThrows("PROGRAM-ERROR", "PO_ALLOW_REPARSE", \p2.setParseOptions(), PO_ALLOW_REPARSE);
+        p2.parseCommit();
+        assertEq(2, p2.callFunction("g"));
     }
 }

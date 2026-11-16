@@ -1996,10 +1996,10 @@ void qore_program_private_base::copyExternalData() {
     }
 }
 
-int qore_program_private::beginParse(ExceptionSink* xsink, ParseStartGuard& guard) {
+int qore_program_private::beginParse(ExceptionSink* xsink, ParseStartGuard& guard, bool nested) {
     {
         AutoLocker al(plock);
-        if (checkParseIntern(xsink)) {
+        if (!nested && checkParseIntern(xsink)) {
             return -1;
         }
         // set in the same critical section as the check that no thread runs the Program's code, so that no thread

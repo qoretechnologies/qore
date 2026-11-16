@@ -75,6 +75,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QC_Expression.h"
 #include "qore/intern/QC_QoreParseOptions.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
@@ -17504,6 +17505,63 @@ int qore_dbg_parse_start_gate(const QoreProgram* pgm, ExceptionSink* xsink) {
     return 0;
 }
 
+namespace {
+//! the Program whose next parse throws a C++ exception (see dbg_parse_with_cxx_exception())
+std::atomic<const QoreProgram*> parse_throw_pgm{nullptr};
+}
+
+void qore_dbg_parse_throw_point(const QoreProgram* pgm) {
+    const QoreProgram* armed = pgm;
+    if (parse_throw_pgm.compare_exchange_strong(armed, nullptr)) {
+        throw QoreStandardException("DBG-PARSE-CXX-EXCEPTION", "a C++ exception thrown by "
+            "dbg_parse_with_cxx_exception() after the parse has started");
+    }
+}
+
+//! Debug-only: parses the code in the Program, which leaves the parse with a C++ exception once it has started
+/** The exception is thrown where the parse of the code begins, after the Program has been marked as being parsed,
+    and is raised as a Qore exception (\c DBG-PARSE-CXX-EXCEPTION) when it reaches this function (issue #6206).  If
+    \a expression is True, the code is parsed as the expression of an Expression object.  DEBUG builds only.
+*/
+static QoreValue f_dbg_parse_with_cxx_exception(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    QoreStringNodeValueHelper code(get_param_value(params, 1));
+    parse_throw_pgm = *pgm;
+    // disarmed also if another exception leaves the parse
+    ON_BLOCK_EXIT([] { parse_throw_pgm = nullptr; });
+    try {
+        if (get_param_value(params, 2).getAsBool()) {
+            SimpleRefHolder<QoreStringNode> src(new QoreStringNode(*code));
+            SimpleRefHolder<QoreStringNode> label(new QoreStringNode("dbg-cxx-exception"));
+            ReferenceHolder<QoreExpression> exp(new QoreExpression(**pgm, **src, **label, xsink), xsink);
+        } else {
+            (*pgm)->parse(code->c_str(), "dbg-cxx-exception", xsink);
+        }
+    } catch (AbstractException& e) {
+        e.convert(xsink);
+    }
+    return QoreValue();
+}
+
+//! Debug-only: parses the file in the Program with QoreProgram::parseFile() (issue #6206); DEBUG builds only
+static QoreValue f_dbg_program_parse_file(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    QoreStringNodeValueHelper path(get_param_value(params, 1));
+    (*pgm)->parseFile(path->c_str(), xsink);
+    return QoreValue();
+}
+
 //! Debug-only: stops the next parse of the Program once it has started (issue #6206)
 /** The parse (Program::parse(), Program::parsePending() or Program::parseCommit()) stops after it has been marked
     as in progress, until dbg_release_parse_start_gate() is called; dbg_wait_parse_start_gate() waits until it has
@@ -24254,6 +24312,12 @@ void init_debug_functions(QoreNamespace& qns) {
         "name");
     qns.addBuiltinVariant("dbg_file_stream_io_flags", f_dbg_file_stream_io_flags, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
+    qns.addBuiltinVariant("dbg_parse_with_cxx_exception", f_dbg_parse_with_cxx_exception, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 3, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "code", boolTypeInfo, QORE_PARAM_NO_ARG, "expression");
+    qns.addBuiltinVariant("dbg_program_parse_file", f_dbg_program_parse_file, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo, QORE_PARAM_NO_ARG,
+        "path");
     qns.addBuiltinVariant("dbg_arm_parse_start_gate", f_dbg_arm_parse_start_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", boolTypeInfo, QORE_PARAM_NO_ARG,
         "fail");
