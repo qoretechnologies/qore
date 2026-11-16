@@ -185,6 +185,14 @@ module SqlUtil {
       "AbstractDatabase::checkDriverOptions()" accepts a list of keys
     - @ref SqlUtil::generate_auto_triggers() "generate_auto_triggers()" takes \c "freetds", the name of the SQL Server
       driver, for SQL Server, as \c "mssql"
+    - fixed @ref SqlUtil::cop_seq() "cop_seq()" and @ref SqlUtil::cop_seq_currval() "cop_seq_currval()" without an
+      alias, which raised \c RUNTIME-OVERLOAD-ERROR (ex: in the columns of
+      @ref SqlUtil::AbstractTable::insertFromSelect() "AbstractTable::insertFromSelect()")
+      (<a href="https://github.com/qoretechnologies/qore/issues/2847">issue 2847</a>)
+    - fixed calling a method that takes an @ref SqlUtil::AbstractTable "AbstractTable" argument (ex:
+      \c insertFromSelect()) through a @ref SqlUtil::Table "Table" with a Table argument, which raised
+      \c RUNTIME-OVERLOAD-ERROR; the Table's AbstractTable is given to the method
+      (<a href="https://github.com/qoretechnologies/qore/issues/6321">issue 6321</a>)
     - fixed @ref SqlUtil::AbstractDatabase::getDropFunctionSqlIfExists() "AbstractDatabase::getDropFunctionSqlIfExists()",
       @ref SqlUtil::AbstractDatabase::getDropProcedureSqlIfExists() "getDropProcedureSqlIfExists()" and
       @ref SqlUtil::AbstractDatabase::getDropSequenceSqlIfExists() "getDropSequenceSqlIfExists()", which returned no
