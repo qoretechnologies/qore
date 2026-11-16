@@ -1,0 +1,419 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class QppSourceStructureTest
+
+#! qpp reports source it cannot process instead of dropping or copying it, takes -v levels, and locates constants
+/** - issue #219: a function or a constant with a doc comment outside a group was dropped with its documentation, and
+      the build went on without it; it is now an error, and other code after a doc comment is kept
+    - issue #1686: a method of a class of the file without a doc comment was copied into the C++ code as it was; it is
+      now an error; "-v" took the next argument as its level, and "-vv" set the level to 0
+    - issue #2290: the bindings of a group's constants had no source location of their own, so the compiler's errors
+      for a constant's value named the wrong line
+*/
+class QppSourceStructureTest inherits QUnit::Test {
+    private {
+        string qpp_bin;
+
+        const ConstGroupStart = "/** @defgroup test_constants Test Constants
+    Test constants
+*/
+///@{
+";
+
+        const FuncGroupStart = "/** @defgroup test_functions Test Functions
+    Test functions
+*/
+///@{
+";
+
+        const GroupEnd = "///@}
+";
+
+        const ClassStart = "//! test class
+/** a test class
+*/
+qclass TestCls [arg=void* p; ns=Qore];
+";
+
+        const Function = "//! a test function
+/**
+ */
+int t_func(int a) {
+    return a + 1;
+}
+";
+
+        #! a valid source that logs at every level
+        const Valid = ConstGroupStart + "//! a constant
+const ConstOne = 1;
+" + GroupEnd;
+    }
+
+    constructor() : QUnit::Test("QppSourceStructureTest", "1.0", \ARGV) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string bin_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qpp_bin = ENV.QPP ?? ENV.QORE_QPP
+            ?? (is_file(bin_dir + "/qpp") ? bin_dir + "/qpp" : dirname(qore_bin) + "/qpp");
+
+        addTestCase("function outside a group fails", \testFunctionOutsideGroup());
+        addTestCase("constant outside a group fails", \testConstantOutsideGroup());
+        addTestCase("C++ helper after a doc comment fails", \testCppHelperAfterDocComment());
+        addTestCase("function in a group is bound", \testFunctionInGroup());
+        addTestCase("other code after a doc comment is kept", \testCodeAfterDocCommentKept());
+        addTestCase("empty group is accepted", \testEmptyGroup());
+        addTestCase("undocumented method fails", \testUndocumentedMethod());
+        addTestCase("undocumented methods of other forms fail", \testUndocumentedMethodForms());
+        addTestCase("documented method is bound", \testDocumentedMethod());
+        addTestCase("method in a block comment is copied", \testMethodInBlockComment());
+        addTestCase("method of a C++ class is copied", \testMethodOfCppClass());
+        addTestCase("every error is reported in one run", \testAllErrorsReported());
+        addTestCase("constants have their own line markers", \testConstantLineMarkers());
+        addTestCase("verbosity options", \testVerbosity());
+        addTestCase("invalid verbosity levels fail", \testInvalidVerbosity());
+        addTestCase("help text describes -v", \testHelp());
+
+        set_return_value(main());
+    }
+
+    #! runs qpp with the given options over a source fragment
+    /** @return a hash with the exit status (\c status), the combined output (\c out), the qpp source path
+        (\c qpp_path), whether the C++ code was written (\c cpp) and the code (\c cpp_text)
+    */
+    private hash<auto> runQpp(string source, *list<string> opts) {
+        if (!is_file(qpp_bin)) {
+            testSkip("qpp binary not found at %y; set QPP or QORE_LIBDIR", qpp_bin);
+        }
+
+        TmpDir tmp("qore-qpp-struct-");
+        string qpp_path = tmp.path + "/structtest.qpp";
+        string cpp_path = tmp.path + "/structtest.cpp";
+
+        File f();
+        f.open2(qpp_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(source);
+        f.close();
+
+        # the exit status is written to a file, so it is the status of qpp itself
+        string status_path = tmp.path + "/status";
+        string out = backquote(sprintf("%s %s --output=%s --dox-output=%s/structtest.dox.h %s 2>&1; echo $? > %s",
+            qpp_bin, opts ? opts.join(" ") : "", cpp_path, tmp.path, qpp_path, status_path));
+
+        return {
+            "tmp": tmp,
+            "out": out,
+            "qpp_path": qpp_path,
+            "status": trim(ReadOnlyFile::readTextFile(status_path)).toInt(),
+            "cpp": is_file(cpp_path),
+            "cpp_text": is_file(cpp_path) ? ReadOnlyFile::readTextFile(cpp_path) : "",
+        };
+    }
+
+    #! asserts that qpp failed and wrote no C++ code
+    private assertFailed(hash<auto> r, string what) {
+        assertEq(1, r.status, what + ": qpp exits with status 1: " + r.out);
+        assertFalse(r.cpp, what + ": no C++ code is written");
+    }
+
+    #! asserts that qpp succeeded
+    private assertSucceeded(hash<auto> r, string what) {
+        assertEq(0, r.status, what + ": qpp exits with status 0: " + r.out);
+        assertTrue(r.cpp, what + ": the C++ code is written");
+        assertNRegex("ERROR", r.out, what + ": no error is reported");
+    }
+
+    #! returns the number of error lines in qpp output, not counting the summary line
+    private int countErrors(string out) {
+        int count = 0;
+        foreach string line in (out.split("\n")) {
+            if (line =~ /ERROR: / && line !~ /please correct the error/) {
+                ++count;
+            }
+        }
+        return count;
+    }
+
+    testFunctionOutsideGroup() {
+        # issue #219: the example of the issue
+        hash<auto> r = runQpp("#include <qore/Qore.h>
+
+//! lz4frame
+/**
+
+ */
+binary lz4frame(binary bin, softint level) {
+    return 0;
+}
+");
+        assertFailed(r, "function outside a group");
+        assertRegex("structtest\\.qpp:7: 'binary lz4frame\\(binary bin, softint level\\) \\{': a Qore function or "
+            "constant with a doc comment must be declared in a group", r.out, "the error names the line");
+        assertEq(1, countErrors(r.out), "one error: " + r.out);
+    }
+
+    testConstantOutsideGroup() {
+        hash<auto> r = runQpp("//! a constant
+/**
+*/
+const Stray = 1;
+");
+        assertFailed(r, "constant outside a group");
+        assertRegex("structtest\\.qpp:4: 'const Stray = 1;': a Qore function or constant", r.out);
+
+        # an or-nothing return type
+        r = runQpp("//! a function
+/**
+*/
+*string t_name() {
+    return nullptr;
+}
+");
+        assertFailed(r, "function with an or-nothing return type outside a group");
+        assertRegex("structtest\\.qpp:4: '\\*string t_name\\(\\) \\{': a Qore function or constant", r.out);
+    }
+
+    testCppHelperAfterDocComment() {
+        # a C++ function after a '//!' comment was dropped too; the error says to use a C++ comment
+        hash<auto> r = runQpp("//! a helper
+/**
+*/
+static int helper(int a) {
+    return a;
+}
+");
+        assertFailed(r, "C++ helper after a doc comment");
+        assertRegex("C\\+\\+ code takes a '//' or '/\\* \\*/' comment, not '//!'", r.out);
+
+        # with a C++ comment, it is copied
+        r = runQpp("// a helper
+static int helper(int a) {
+    return a;
+}
+");
+        assertSucceeded(r, "C++ helper after a C++ comment");
+        assertRegex("static int helper\\(int a\\) \\{", r.cpp_text, "the helper is copied");
+    }
+
+    testFunctionInGroup() {
+        hash<auto> r = runQpp(FuncGroupStart + Function + GroupEnd);
+        assertSucceeded(r, "function in a group");
+        assertRegex("addBuiltinVariant\\(\"t_func\"", r.cpp_text, "the function is bound");
+    }
+
+    testCodeAfterDocCommentKept() {
+        # issue #219: a line after a doc comment that is not a declaration was dropped too
+        hash<auto> r = runQpp("//! a value used by the module
+/**
+*/
+static int module_value = 42;
+");
+        assertSucceeded(r, "code after a doc comment");
+        assertRegex("static int module_value = 42;", r.cpp_text, "the line is kept");
+    }
+
+    testEmptyGroup() {
+        # the form of the constant group of QC_FtpControlPollOperation.qpp
+        hash<auto> r = runQpp("//! @defgroup empty_group Empty Group
+/** @since %Qore 3.0
+*/
+///@{
+///@}
+" + ClassStart);
+        assertSucceeded(r, "empty group");
+        assertRegex("///@\\{", r.cpp_text, "the group start is kept as a comment");
+    }
+
+    testUndocumentedMethod() {
+        # issue #1686: a method without a doc comment was copied into the C++ code as it was
+        hash<auto> r = runQpp(ClassStart + "
+int TestCls::get() {
+    return 1;
+}
+");
+        assertFailed(r, "undocumented method");
+        assertRegex("structtest\\.qpp:6: 'int TestCls::get\\(\\) \\{': a method of class 'TestCls' must have a "
+            "leading doc comment", r.out, "the error names the line and the class");
+    }
+
+    testUndocumentedMethodForms() {
+        map assertFailed(runQpp(ClassStart + $1 + "
+    return 1;
+}
+"), $1), (
+            "TestCls::constructor() {",
+            "nothing TestCls::run(int a) {",
+            "*string TestCls::name() {",
+            "hash<auto> TestCls::info(*hash<auto> opts) {",
+            "static int TestCls::count() {",
+            "private int TestCls::priv() {",
+        );
+    }
+
+    testDocumentedMethod() {
+        hash<auto> r = runQpp(ClassStart + "
+//! a documented method
+/**
+ */
+int TestCls::get() {
+    return 1;
+}
+");
+        assertSucceeded(r, "documented method");
+        assertRegex("addMethod\\(\"get\"", r.cpp_text, "the method is bound");
+    }
+
+    testMethodInBlockComment() {
+        # the form of the disabled Socket::startPollReadServerSentEvent() in QC_Socket.qpp
+        hash<auto> r = runQpp(ClassStart + "
+/*
+int TestCls::get() {
+    return 1;
+}
+*/
+/* a one-line comment */ static int after_comment = 1;
+const char* str = \"/*\";
+int x = 1; // /*
+");
+        assertSucceeded(r, "method in a block comment");
+        assertRegex("int TestCls::get\\(\\) \\{", r.cpp_text, "the commented method is copied");
+
+        # a comment start in a string or a line comment does not hide a method
+        r = runQpp(ClassStart + "
+const char* str = \"/*\";
+int x = 1; // /*
+int TestCls::get() {
+    return 1;
+}
+");
+        assertFailed(r, "undocumented method after a comment start in a string and a line comment");
+        assertRegex("'int TestCls::get\\(\\) \\{'", r.out);
+    }
+
+    testMethodOfCppClass() {
+        # a method of a class that is not a qclass of the file is C++ code
+        hash<auto> r = runQpp(ClassStart + "
+int Helper::get() {
+    return 3;
+}
+void ns::helper() {
+}
+");
+        assertSucceeded(r, "method of a C++ class");
+        assertRegex("int Helper::get\\(\\) \\{", r.cpp_text, "the method is copied");
+    }
+
+    testAllErrorsReported() {
+        hash<auto> r = runQpp("//! a constant
+/**
+*/
+const Stray = 1;
+" + ClassStart + "
+int TestCls::first() {
+    return 1;
+}
+
+int TestCls::second() {
+    return 2;
+}
+");
+        assertFailed(r, "three errors");
+        assertEq(3, countErrors(r.out), "every error is reported: " + r.out);
+        assertRegex("'const Stray = 1;'", r.out);
+        assertRegex("'int TestCls::first\\(\\) \\{'", r.out);
+        assertRegex("'int TestCls::second\\(\\) \\{'", r.out);
+        assertRegex("3 errors found", r.out);
+    }
+
+    testConstantLineMarkers() {
+        # issue #2290: every constant's binding is preceded by the location of its definition
+        string source = ConstGroupStart + "//! the first constant
+const ConstOne = 1;
+
+//! the second constant
+/** with a long comment
+*/
+const ConstTwo = 2;
+//! a constant defined on two lines
+const ConstThree =
+    3;
+" + GroupEnd;
+        hash<auto> r = runQpp(source);
+        assertSucceeded(r, "constants");
+
+        list<string> src_lines = source.split("\n");
+        list<string> cpp_lines = r.cpp_text.split("\n");
+        int found = 0;
+        for (int i = 0; i < cpp_lines.size(); ++i) {
+            *list<*string> m = (cpp_lines[i] =~ x/ns\.addConstant\("([A-Za-z]+)"/);
+            if (!m) {
+                continue;
+            }
+            ++found;
+            string name = m[0];
+            *list<*string> loc = (cpp_lines[i - 1] =~ x/^# ([0-9]+) "(.*)"$/);
+            assertEq(2, loc.size(), sprintf("%s: the binding is preceded by a line marker: %y", name,
+                cpp_lines[i - 1]));
+            assertEq(r.qpp_path, loc[1], name + ": the marker names the source file");
+            int line = loc[0].toInt();
+            assertRegex("^const " + name + " =", src_lines[line - 1], sprintf("%s: the marker gives the line of "
+                "its definition (line %d)", name, line));
+        }
+        assertEq(3, found, "the three constants are bound");
+    }
+
+    testVerbosity() {
+        # LL_DEBUG (4) logs every source line read ("<line>: <text>"); the default level (2) logs the files written
+        string debug_line = "DEBUG: 2: /\\*\\* @defgroup";
+        string info_line = "creating cpp file";
+        hash<string, hash<auto>> cases = {
+            "": {"debug": False, "info": True},
+            "-v": {"debug": False, "info": True},
+            "-vv": {"debug": True, "info": True},
+            "-v -v": {"debug": True, "info": True},
+            "-v4": {"debug": True, "info": True},
+            "--verbose=4": {"debug": True, "info": True},
+            "--verbose": {"debug": False, "info": True},
+            "-v0": {"debug": False, "info": False},
+            "--verbose=0": {"debug": False, "info": False},
+        };
+        foreach hash<auto> c in (cases.pairIterator()) {
+            hash<auto> r = runQpp(Valid, c.key ? (c.key,) : NOTHING);
+            # issue #1686: "-v" took the next argument (--output=...) as its level and dropped it
+            assertSucceeded(r, sprintf("%y", c.key));
+            if (c.value.debug) {
+                assertRegex(debug_line, r.out, sprintf("%y logs at the debug level", c.key));
+            } else {
+                assertNRegex(debug_line, r.out, sprintf("%y does not log at the debug level", c.key));
+            }
+            if (c.value.info) {
+                assertRegex(info_line, r.out, sprintf("%y logs at the info level", c.key));
+            } else {
+                assertNRegex(info_line, r.out, sprintf("%y does not log at the info level", c.key));
+            }
+        }
+    }
+
+    testInvalidVerbosity() {
+        foreach string opt in ("-vx", "-v9", "-v-1", "--verbose=x", "--verbose=5", "-v3x", "-vvx") {
+            hash<auto> r = runQpp(Valid, (opt,));
+            assertFailed(r, opt);
+            assertRegex("invalid verbosity level '[^']+'; expecting an integer from 0 to 4", r.out, opt);
+        }
+    }
+
+    testHelp() {
+        if (!is_file(qpp_bin)) {
+            testSkip("qpp binary not found at %y; set QPP or QORE_LIBDIR", qpp_bin);
+        }
+        string out = backquote(qpp_bin + " --help 2>&1; true");
+        assertRegex("-v, --verbose\\[=arg\\] +increases the verbosity level \\(repeatable: -vv\\)", out);
+        assertRegex("from 0 to 4 \\(-v3, --verbose=3\\)", out);
+    }
+}

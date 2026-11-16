@@ -2675,6 +2675,9 @@
         (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
     - \c qpp writes its output files to relative paths correctly and reports an error for a hashdecl member without
       a <tt>//!</tt> comment and for unexpected text after the comment of a function or constant group
+    - \c qpp reports an error for a function or constant with a <tt>//!</tt> comment outside a group and for a method
+      without one instead of dropping it or copying it unprocessed, takes <tt>-vv</tt> and <tt>-v</tt><i>n</i>, and
+      gives each constant binding its source line; see the \c qpp(1) manual page
     - fixed a deadlock when a @ref Qore::Program "Program" was created from a Program in which a binary module such
       as \c python keeps data while another thread used the module
     - a value whose return is interrupted by an exception that a \c catch block handles is not returned; see

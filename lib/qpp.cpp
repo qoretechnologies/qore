@@ -73,7 +73,8 @@ const char usage_str[] = "usage: %s [options] <input file(s)...>\n"
     " -s, --stub-output=arg  Qore-syntax compile-time stub (.stub.qc) output file name\n"
     " -t, --table=arg        process the given file for doxygen tables (|!...)\n"
     " -u, --unit=arg         qtest (QUnit) output file name\n"
-    " -v, --verbose          increases verbosity level\n"
+    " -v, --verbose[=arg]    increases the verbosity level (repeatable: -vv), or sets it to\n"
+    "                        arg, from 0 to 4 (-v3, --verbose=3); the default is 2\n"
     " -T, --table-strict     treat documentation table issues as errors\n";
 
 static const option pgm_opts[] = {
@@ -1038,6 +1039,118 @@ public:
         return false;
     }
 };
+
+//! returns true if the line starts with an identifier, or with an or-nothing type ('*' and an identifier)
+static bool qpp_line_starts_with_identifier(const std::string& line) {
+    size_t i = (!line.empty() && line[0] == '*') ? 1 : 0;
+    return i < line.size() && (isalpha(static_cast<unsigned char>(line[i])) || line[i] == '_');
+}
+
+//! returns true if the (trimmed) line is a Qore declaration that qpp processes only in a group or a class
+/** A constant ("const ..."), or a function signature: a return type and a name followed by '(' at the start of the
+    line (issue #219)
+*/
+static bool qpp_line_is_qore_declaration(const std::string& line) {
+    if (!line.compare(0, 6, "const ")) {
+        return true;
+    }
+    if (!qpp_line_starts_with_identifier(line)) {
+        return false;
+    }
+    size_t paren = line.find('(');
+    if (paren == std::string::npos) {
+        return false;
+    }
+    // the name before '('
+    size_t end = paren;
+    while (end > 0 && isspace(static_cast<unsigned char>(line[end - 1]))) {
+        --end;
+    }
+    size_t start = end;
+    while (start > 0 && (isalnum(static_cast<unsigned char>(line[start - 1])) || line[start - 1] == '_')) {
+        --start;
+    }
+    // a name with a return type before it
+    return start < end && start > 0 && line.find_first_of("=;{}", 0) >= paren;
+}
+
+//! updates the block comment state with a line of C++ code: '/*' starts a block comment outside one, and '*/' ends it
+/** a line comment ('//') or a string or character literal outside a block comment are skipped (issue #1686)
+*/
+static void qpp_update_block_comment(const std::string& line, bool& in_comment) {
+    for (size_t i = 0; i < line.size(); ++i) {
+        char c = line[i];
+        if (in_comment) {
+            if (c == '*' && i + 1 < line.size() && line[i + 1] == '/') {
+                in_comment = false;
+                ++i;
+            }
+            continue;
+        }
+        if (c == '/' && i + 1 < line.size()) {
+            if (line[i + 1] == '/') {
+                return;
+            }
+            if (line[i + 1] == '*') {
+                in_comment = true;
+                ++i;
+            }
+            continue;
+        }
+        if (c == '"' || c == '\'') {
+            // skip the literal
+            for (++i; i < line.size() && line[i] != c; ++i) {
+                if (line[i] == '\\') {
+                    ++i;
+                }
+            }
+        }
+    }
+}
+
+//! returns the class name of a method definition at the start of a line ("[type ]Class::name(..."), or an empty string
+/** used for a method without a doc comment, which qpp would copy into the C++ code as it is (issue #1686)
+*/
+static std::string qpp_line_method_class(const std::string& line) {
+    if (!qpp_line_starts_with_identifier(line)) {
+        return std::string();
+    }
+    size_t colons = line.find("::");
+    size_t paren = line.find('(');
+    if (colons == std::string::npos || paren == std::string::npos || paren < colons
+            || line.find_first_of("=;{}\"", 0) < colons) {
+        return std::string();
+    }
+    // the method name between "::" and '('
+    size_t p = colons + 2;
+    size_t name_start = p;
+    while (p < line.size() && (isalnum(static_cast<unsigned char>(line[p])) || line[p] == '_')) {
+        ++p;
+    }
+    if (p == name_start) {
+        return std::string();
+    }
+    while (p < line.size() && isspace(static_cast<unsigned char>(line[p]))) {
+        ++p;
+    }
+    if (p != paren) {
+        return std::string();
+    }
+    // the class name before "::"
+    size_t start = colons;
+    while (start > 0 && (isalnum(static_cast<unsigned char>(line[start - 1])) || line[start - 1] == '_')) {
+        --start;
+    }
+    if (start == colons) {
+        return std::string();
+    }
+    // the class name starts the line or follows the return type
+    if (start > 0 && !isspace(static_cast<unsigned char>(line[start - 1])) && line[start - 1] != '*'
+            && line[start - 1] != '&') {
+        return std::string();
+    }
+    return std::string(line, start, colons - start);
+}
 
 static int read_line(unsigned &lineNumber, std::string& str, FILE* fp) {
     while (true) {
@@ -3490,9 +3603,13 @@ static int serialize_dox_comment(FILE* fp, std::string& buf, const strlist_t& do
 class ConstantGroupElement {
 protected:
     std::string name, doc, value;
+    //! the source file and the line of the constant's definition (issue #2290)
+    std::string fileName;
+    unsigned line;
 
 public:
-    ConstantGroupElement(const std::string& n, const std::string& d, const std::string& v) : name(n), doc(d), value(v) {
+    ConstantGroupElement(const std::string& n, const std::string& d, const std::string& v, const std::string& fn,
+            unsigned l) : name(n), doc(d), value(v), fileName(fn), line(l) {
     }
 
     int serializeCpp(FILE* fp) {
@@ -3506,6 +3623,9 @@ public:
         const char* prefix = 0;
         if (get_qore_value(value, qv, name.c_str(), &prefix))
             return -1;
+        // the binding has the location of the constant's definition, so the compiler's errors for its value name it
+        // (issue #2290)
+        fprintf(fp, "# %u \"%s\"\n", line, fileName.c_str());
         if (get_val_type(value) == T_QORE_RUNTIME) {
             // qv is "(<value>, <value in compiled code>)"; code referencing the constant reads it from the process
             // it runs in; see ConstantEntry::setRuntimeDependent()
@@ -4831,6 +4951,8 @@ public:
 
                 if (!line.compare(0, 6, "const ")) {
                     checkBuf(buf);
+                    // the line of the definition: read_line() has counted the line read (issue #2290)
+                    unsigned const_line = lineNumber - 1;
 
                     // trim off trailing newline and spaces
                     line.erase(line.size() - 1);
@@ -4867,7 +4989,7 @@ public:
                         return;
                     }
 
-                    cmap[name] = new ConstantGroupElement(name, cdoc, val);
+                    cmap[name] = new ConstantGroupElement(name, cdoc, val, fileName, const_line);
                     continue;
                 }
 
@@ -8052,6 +8174,8 @@ protected:
 
         std::string str;
         std::string buf;
+        // true while the lines copied into the C++ code are in a block comment (issue #1686)
+        bool in_block_comment = false;
         while (true) {
             str.clear();
             read_line(lineNumber, str, fp);
@@ -8321,7 +8445,43 @@ protected:
                     }
                 }
 
+                // issue #219: a function or a constant outside a group was dropped with its documentation; qpp
+                // processes them only in a group, so this is an error; any other line (C++ code or documentation
+                // markup, such as the "///@{" of an empty group) is kept with its comment
+                {
+                    std::string trimmed = sc;
+                    trim(trimmed);
+                    if (qpp_line_is_qore_declaration(trimmed)) {
+                        error("%s:%d: '%s': a Qore function or constant with a doc comment must be declared in a "
+                            "group ('/** @defgroup ...' followed by '//@{' ... '//@}'), a method with its class name "
+                            "('Class::method(...)'); C++ code takes a '//' or '/* */' comment, not '//!'\n", fileName,
+                            lineNumber - 1, trimmed.c_str());
+                        // the other errors of the file are reported too
+                        valid = false;
+                        continue;
+                    }
+                }
+                buf += str;
+                buf += sc;
+                qpp_update_block_comment(sc, in_block_comment);
                 continue;
+            }
+
+            // issue #1686: a method of a class of the file without a doc comment is not processed by qpp, so it would
+            // be copied into the C++ code as it is
+            {
+                bool commented = in_block_comment;
+                qpp_update_block_comment(str, in_block_comment);
+                std::string cls = commented ? std::string() : qpp_line_method_class(str);
+                if (!cls.empty() && cemap.find(cls) != cemap.end()) {
+                    std::string trimmed = str;
+                    trim(trimmed);
+                    error("%s:%d: '%s': a method of class '%s' must have a leading doc comment ('//! ...')\n",
+                        fileName, lineNumber - 1, trimmed.c_str(), cls.c_str());
+                    // the other errors of the file are reported too
+                    valid = false;
+                    continue;
+                }
             }
 
             buf += str;
@@ -9013,7 +9173,7 @@ void process_command_line(int& argc, char**& argv) {
     pn = basename(argv[0]);
 
     int ch;
-    while ((ch = getopt_long(argc, argv, "d:D:hj:m:o:s:t:Tu:v:V", pgm_opts, nullptr)) != -1) {
+    while ((ch = getopt_long(argc, argv, "d:D:hj:m:o:s:t:Tu:v::V", pgm_opts, nullptr)) != -1) {
         //log(LL_INFO, "ch=%c optarg=%p (%s)\n", ch, optarg, optarg ? optarg : "(null)");
 
         switch (ch) {
@@ -9071,12 +9231,33 @@ void process_command_line(int& argc, char**& argv) {
                 opts.unit_test_fn = optarg;
                 break;
 
-            case 'v':
-                if (optarg)
-                    opts.verbose = strtoll(optarg, nullptr, 10);
-                else
+            case 'v': {
+                // issue #1686: "-v" increases the level, as does each "v" of "-vv...", and "-v<n>" or
+                // "--verbose=<n>" sets it; the short option took a required argument, so "-v" used the next
+                // argument and "-vv" set the level to 0
+                if (!optarg) {
                     ++opts.verbose;
+                    break;
+                }
+                const char* p = optarg;
+                while (*p == 'v') {
+                    ++p;
+                }
+                if (!*p) {
+                    opts.verbose += 1 + static_cast<int>(p - optarg);
+                    break;
+                }
+                char* end;
+                errno = 0;
+                long long level = strtoll(optarg, &end, 10);
+                if (end == optarg || *end || errno || level < 0 || level > LL_DEBUG) {
+                    fprintf(stderr, "%s: invalid verbosity level '%s'; expecting an integer from 0 to %d\n",
+                        pn.c_str(), optarg, LL_DEBUG);
+                    exit(1);
+                }
+                opts.verbose = static_cast<int>(level);
                 break;
+            }
         }
     }
 

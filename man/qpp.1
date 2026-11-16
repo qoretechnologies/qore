@@ -33,8 +33,57 @@ Write a Qore compile-time stub to the given file.
 .BR \-D , " \-\-define=" name
 Define a preprocessor macro. May be specified more than once.
 .TP
+.BR \-v , " \-\-verbose" [ =level ]
+Without a level, increase the verbosity level by one; each
+.B v
+of
+.B \-vv...
+increases it by one more.  With a level from 0 (critical messages only) to 4
+(debugging output), as in
+.B \-v3
+or
+.BR \-\-verbose=3 ,
+set it.  The default level is 2, which reports the files written.  Any other
+level is an error.
+.TP
 .BR \-h , " \-\-help"
 Show all available options.
+.SH SOURCE STRUCTURE
+A Qore function or constant is declared in a group: a
+.B /** @defgroup
+comment followed by
+.B //@{
+(or
+.BR ///@{ ),
+the declarations, each with a
+.B //!
+comment and a
+.B /** */
+comment, and
+.BR //@} .
+A group declares either functions or constants.  The binding of each constant
+in the generated C++ code has the source location of its definition, so the
+compiler's errors for its value name its line.
+.PP
+A class is declared with a
+.B qclass
+line after its comments, and each of its methods with its class name
+.RB ( Class::method(...) )
+after a
+.B //!
+comment and a
+.B /** */
+comment.
+.PP
+Any other text is C++ code that is copied into the generated source.  A
+function or constant with a
+.B //!
+comment outside a group, and a method of a class of the file without one, are
+errors: C++ code takes a
+.B //
+or
+.B /* */
+comment.
 .SH EXIT STATUS
 .B qpp
 reports problems on standard error as errors or warnings.  An error means that
