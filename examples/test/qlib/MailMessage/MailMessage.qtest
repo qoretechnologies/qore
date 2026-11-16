@@ -2310,7 +2310,9 @@ lorem ipsum\r
         # parsing took time that grew with the square of the number of header lines, folded and separate, ASCII and
         # not, in UTF-8 and in other encodings, and of encoded words (issue #6139): the bytes that the parsers scan
         # are counted (see Mime::MimeScanCounter), so that the work for twice as many lines is checked to be at most
-        # twice as large; a parser that scans the rest of the message for each line does four times as much work
+        # twice as large; a parser that scans the rest of the message for each line does four times as much work.
+        # The counts are added by hand in the parsers: every operation whose cost grows with the input size must add
+        # its size to the count; otherwise a quadratic regression in it goes unseen.
         addParseWorkCase("folded", 1000,
             string sub (int n) { return sprintf("To: z@y.com%s\r\n\r\nbody\r\n", strmul(",\r\n a@b.com", n)); },
             sub (Message m, int n) { assertEq(n + 1, m.getTO()[0].split(",").size()); });
@@ -2357,7 +2359,9 @@ lorem ipsum\r
 
     # checks that the bytes that the parsers scan (see Mime::MimeScanCounter) for an input twice the size are at most
     # about twice the bytes for the input, as for work that grows linearly with the size of the input; the work of a
-    # quadratic algorithm grows by 4 times (issues #6066, #6134, #6139)
+    # quadratic algorithm grows by 4 times (issues #6066, #6134, #6139).  The counts are added by hand in the
+    # parsers: every operation whose cost grows with the input size must add its size to the count; otherwise a
+    # quadratic regression in it goes unseen.
     private checkLinearWork(string name, int n, code make, code run, *code check) {
         list<int> work = map countWork(make, run, check, $1), (n, n * 2);
         if (m_options.verbose) {
@@ -2370,18 +2374,15 @@ lorem ipsum\r
     }
 
     # returns the bytes that the parsers of the MailMessage and Mime modules scan (see Mime::MimeScanCounter and
-    # Message::setScanCounting()) to run the code with an input of the given size
+    # Message::setScanCounting(), which turns counting on and off for both) to run the code with an input of the given
+    # size; counting is process-wide, which is fine for this test, which runs one case at a time
     private int countWork(code make, code run, *code check, int n) {
         auto input = make(n);
-        MimeScanCounter::start();
         Message::setScanCounting(True);
-        on_error {
-            Message::setScanCounting(False);
-            MimeScanCounter::stop();
-        }
+        on_error Message::setScanCounting(False);
         auto result = run(input);
         Message::setScanCounting(False);
-        int bytes = MimeScanCounter::stop();
+        int bytes = MimeScanCounter::bytes;
         if (check) {
             check(result, n);
         }
