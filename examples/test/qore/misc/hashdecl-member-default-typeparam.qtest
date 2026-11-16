@@ -23,10 +23,9 @@
     type parameter, with two type parameters, with new and cast forms of the instantiation, and a non-generic hashdecl
     as a control.  They run in each execution mode in a child process, with tiered execution at the IR tier and
     promoted to native code, as qcc-compiled executables (-O0, -O3) and in a qcc-compiled module (-O0, -O3) loaded by a
-    child in each execution mode.  In qcc-compiled code, the member defaults that make hashdecls with the type
-    parameter, whose hashdecl path the AOT format does not yet carry with its type parameters (it names HD2<X, int>),
-    give the expected value or raise an error that names the unresolved hashdecl, never another value; the other
-    forms give the expected values.
+    child in each execution mode, all with the same results: the member defaults that make hashdecls with the type
+    parameter also in qcc-compiled code, whose records have the hashdecl's serializable type path (not HD2<X, int>)
+    since AOT format v40 (qore#6173, qore#6241).
 */
 class HashdeclMemberDefaultTypeParamTest inherits QUnit::Test {
     public {
@@ -100,11 +99,7 @@ for (int i = 0; i < 4; ++i) {
             + "probes.q");
     }
 
-    #! checks the output of qcc-compiled code
-    /** a probe of the hashdecls whose member defaults make hashdecls with the type parameter (O, O2) gives the
-        expected value or an error that names the unresolved hashdecl; the typed containers and the object (OC) and the
-        controls (P) must be as expected
-    */
+    #! checks the output of qcc-compiled code: each line must be the expected one
     checkCompiled(string out, string label) {
         list<string> lines = out.split("\n");
         if (lines.last() === "") {
@@ -112,13 +107,7 @@ for (int i = 0; i < 4; ++i) {
         }
         assertEq(expected_lines.size(), lines.size(), label + ": line count");
         for (int i = 0; i < lines.size() && i < expected_lines.size(); ++i) {
-            if (lines[i] == expected_lines[i]) {
-                continue;
-            }
-            # the hashdecl path of a member default is not yet written with its type parameters (see above)
-            bool clean = lines[i] =~ /^[0-9]+: O2?</
-                && lines[i] =~ /: (HASHDECL-ERROR|RUNTIME-CAST-ERROR): cannot resolve hashdecl '[^']*\bX\b[^']*'/;
-            assertTrue(clean, sprintf("%s: %s (expected %y)", label, lines[i], expected_lines[i]));
+            assertEq(expected_lines[i], lines[i], sprintf("%s: line %d", label, i + 1));
         }
     }
 

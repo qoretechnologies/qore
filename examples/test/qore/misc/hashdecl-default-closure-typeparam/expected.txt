@@ -17,4 +17,7 @@ generic function: ["g"] list<string>
 generic method: [8] list<int>
 threads: ["[\"t\"] list<string>", "[9] list<int>"] list<string>
 made in a thread: [10] list<int>
+inherited mk: [[12]] list<list<int>>
+inherited cast: {val: [13]} hash<HdcBox<list<int>>>
+inherited own: [14, 14] list<int>
 plain: ["p"] list<string>

@@ -20,14 +20,13 @@
     The probes (hashdecl-default-closure-typeparam/probes.q) call closures of two instantiations (Hdc<string>,
     Hdc<int>) whose parameter and return types name the type parameter, whose bodies make typed hashes and lists with
     it and cast to them, closures made by closures, closures called after the hash is copied or passed around, made by
-    a generic function and a method of a generic class, called in other threads and made in another thread, and a
-    non-generic hashdecl as a control; expected.txt has their results.  They run in each execution mode in a child
-    process, with tiered execution at the IR tier and promoted to native code, as qcc-compiled executables (-O0, -O3)
-    and in a qcc-compiled module (-O0, -O3) loaded by a child in each execution mode.  In qcc-compiled code, the cast
-    to a hashdecl with the type parameter (cast<hash<HdcBox<X>>>), whose hashdecl path the AOT format does not yet
-    carry with its type parameters (the CAST_HASHDECL record names HdcBox<X>; qore#6173, qore#6241: the hashdecl path
-    is written as the serializable type path in the next format version), gives the expected value or raises the
-    error that names the unresolved hashdecl, never another value; the other probes give the expected values.
+    a generic function and a method of a generic class, called in other threads and made in another thread, inherited
+    by a generic hashdecl (HdcQ<Y> inherits Hdc<list<Y>>), and a non-generic hashdecl as a control; expected.txt has
+    their results.  They run in each execution mode in a child process, with tiered execution at the IR tier and
+    promoted to native code, as qcc-compiled executables (-O0, -O3) and in a qcc-compiled module (-O0, -O3) loaded by a
+    child in each execution mode and at the IR tier of tiered execution, all with the same results: the
+    cast to a hashdecl with the type parameter (cast<hash<HdcBox<X>>>) also in qcc-compiled code, whose CAST_HASHDECL
+    record has the hashdecl's serializable type path since AOT format v40 (qore#6173, qore#6241).
 */
 class HashdeclDefaultClosureTypeParamTest inherits QUnit::Test {
     public {
@@ -89,10 +88,7 @@ for (int i = 0; i < 4; ++i) {
         return ReadOnlyFile::readTextFile(getDataDir() + DirSep + "probes.q");
     }
 
-    #! checks the output of qcc-compiled code
-    /** a cast to a hashdecl with the type parameter gives the expected value or an error that names the unresolved
-        hashdecl; the other probes must be as expected
-    */
+    #! checks the output of qcc-compiled code: each line must be the expected one
     checkCompiled(string out, string label) {
         list<string> lines = out.split("\n");
         if (lines.last() === "") {
@@ -100,13 +96,7 @@ for (int i = 0; i < 4; ++i) {
         }
         assertEq(expected_lines.size(), lines.size(), label + ": line count");
         for (int i = 0; i < lines.size() && i < expected_lines.size(); ++i) {
-            if (lines[i] == expected_lines[i]) {
-                continue;
-            }
-            # the hashdecl path of a cast is not yet written with its type parameters (qore#6173, qore#6241; see above)
-            bool clean = lines[i] =~ /^[0-9]+: (string|int) cast: RUNTIME-CAST-ERROR: /
-                && lines[i] =~ /: cannot resolve hashdecl 'HdcBox<X>' for cast$/;
-            assertTrue(clean, sprintf("%s: %s (expected %y)", label, lines[i], expected_lines[i]));
+            assertEq(expected_lines[i], lines[i], sprintf("%s: line %d", label, i + 1));
         }
     }
 
@@ -167,10 +157,13 @@ for (int i = 0; i < 4; ++i) {
             # the child must load the compiled module: there is no source to fall back to
             unlink(src);
 
-            foreach string mode in (ExecModes) {
+            # each execution mode, and tiered execution at the IR tier
+            list<string> mode_args = map "--exec-mode=" + $1, ExecModes;
+            mode_args += "--exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1000000";
+            foreach string args in (mode_args) {
                 checkCompiled(backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=2 LD_LIBRARY_PATH=%s "
-                    "DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s 2>&1", libqore_dir,
-                    libqore_dir, tmp.path, qore_bin, mode, child)), sprintf("module %s, %s", opt, mode));
+                    "DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>&1", libqore_dir, libqore_dir, tmp.path,
+                    qore_bin, args, child)), sprintf("module %s, %s", opt, args));
             }
         }
     }

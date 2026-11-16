@@ -26,6 +26,11 @@ hashdecl Hdc<X> {
     code again = code sub () { hash<Hdc<X>> h2(); return h2.mk; };
 }
 
+#! a generic hashdecl that inherits the closures of Hdc with its type parameter in the type argument
+hashdecl HdcQ<Y> inherits Hdc<list<Y>> {
+    code own = list<Y> sub (Y v) { return (v, v); };
+}
+
 #! a non-generic hashdecl as a control
 hashdecl HdcPlain {
     code mk = list<string> sub (string v) { return (v,); };
@@ -93,6 +98,11 @@ list<string> sub probes() {
     background make_in_thread();
     code tc = q.get();
     rv += "made in a thread: " + hdc_show(auto sub () { return tc(10); });
+    # inherited closures
+    hash<HdcQ<int>> hq();
+    rv += "inherited mk: " + hdc_show(auto sub () { return hq.mk((12,)); });
+    rv += "inherited cast: " + hdc_show(auto sub () { return hq.hcast((13,)); });
+    rv += "inherited own: " + hdc_show(auto sub () { return hq.own(14); });
     # the control
     hash<HdcPlain> hp();
     rv += "plain: " + hdc_show(auto sub () { return hp.mk("p"); });
