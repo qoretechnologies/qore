@@ -156,6 +156,16 @@ DLLLOCAL uint64_t qore_ir_list_selector_step(uint64_t result_val, uint64_t seq_v
 DLLLOCAL QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh, LVCompoundOp compound_op,
         ValueHolder& rhs_holder, ExceptionSink* xsink);
 
+//! Applies ++ or -- (LVUnaryOp::PreInc, PreDec, PostInc or PostDec) to an lvalue as the AST interpreter does
+/** The operation follows the type of the value, as QorePreIncrementOperatorNode::evalImpl() and the other operators
+    do, and an error that the lvalue's type raises names the operator as they do (ex: <tt><++ (pre) operator></tt>
+    for an enum lvalue, which refuses the plain value computed, qore#6197)
+
+    @return the value of the operation (the new value, or the old value for a post operator), holding a reference,
+    or no value if an exception was raised
+*/
+DLLLOCAL QoreValue qore_rt_apply_lvalue_incdec(LValueHelper& lvh, LVUnaryOp unary_op, ExceptionSink* xsink);
+
 //! Returns true if the lvalue type is an int type (int, *int, softint), but not timeout
 DLLLOCAL bool qore_is_int_lvalue_type(const QoreTypeInfo* ti);
 
