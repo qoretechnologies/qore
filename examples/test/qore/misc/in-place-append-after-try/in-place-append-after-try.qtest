@@ -54,7 +54,7 @@ class InPlaceAppendAfterTryTest inherits QUnit::Test {
             "twoThrowPoints|True|second => \"freshp\" | \"TU\"",
             "dtorList => [1, 2, 9] | [1, 2]",
             "dtorString => \"TUp\" | \"TU\"",
-            "appendInCatchFresh => \"aaacaa\" | \"TU\"",
+            "appendInCatchFresh => \"aaacaa\"",
             "appendAroundTry => \"abababababab/-1\"",
             "plainBuilder => 2000",
             "plainListBuilder => 1000",
@@ -73,9 +73,10 @@ class InPlaceAppendAfterTryTest inherits QUnit::Test {
             ("pushAroundTry", "inplace-push", 2),
         );
 
-        #! the functions whose appends after a try statement must not be in place: (function, statistic)
+        #! the functions whose appends in or after the catch blocks must not be in place: (function, statistic)
         const NotInPlace = (
             ("catchAssign", "inplace-string"),
+            ("appendInCatch", "inplace-string"),
             ("catchAssignsConditionally", "inplace-string"),
             ("rethrowFromCatch", "inplace-string"),
             ("throwBetweenAssignments", "inplace-string"),
