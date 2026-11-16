@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - float to int conversions (x86-64 and AArch64 code) in JIT native code and qcc executables
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class FloatConversionEdgesTest
+
+#! Conversions of a float or number that cast it to an integer without a range check are defined in every mode
+#! (qore#6212)
+/** An absolute date from a number (softdate) took the microseconds from a float of the int of the value, which lost
+    precision above 2^24 seconds (1731690000.5n gave 16 seconds more) and was undefined above 2^31, and a value out of
+    range, infinity and NaN were undefined; round(), ceil() and floor() of a float with a precision above 9 converted
+    the power of 10 to an int (undefined; round(1.23456789012345, 12) gave 1.2345678899437189), those of a number and
+    an int cut the precision to an int (round(5, -4294967295) gave 5), round(1.5n, 400) gave NaN and
+    round(9223372036854775807, -1) ended the process with a C++ exception, the local time of a date at the smallest
+    seconds overflowed in its conversion to UTC, and parse_cbor() converted an epoch time (tag 1) float that is not
+    finite or does not fit an int64 to an int (undefined).  The probes (float-conversion-edges/probes.q) check these
+    in each execution mode in a child process, with tiered execution at the IR tier and promoted to native code, and as
+    qcc-compiled executables (-O0, -O3).  The expected output is float-conversion-edges/expected.txt.
+*/
+class FloatConversionEdgesTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("FloatConversionEdges", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        string lines = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "float-conversion-edges" + DirSep
+            + "expected.txt");
+        for (int i = 0; i < 4; ++i) {
+            expected += sprintf("%d: %s", i, lines);
+        }
+
+        addTestCase("float conversions without a range check", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-float-conversion-edges-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "float-conversion-edges" + DirSep + "probes.q")
+            + "\nfor (int i = 0; i < 4; ++i) {\n    printf(\"%d: %s\\n\", i, probes());\n}\n");
+        f.close();
+
+        # a time zone ahead of UTC, where the local time of the smallest seconds overflowed in the conversion to UTC
+        string env = sprintf("TZ=Europe/Prague QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=2 LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), "tiered, IR tier");
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("TZ=Europe/Prague QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir,
+                qcc_bin, opt, exe, file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("TZ=Europe/Prague LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1",
+                libqore_dir, libqore_dir, exe)), "qcc " + opt);
+            assertEq(expected, backquote(sprintf("TZ=Europe/Prague QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 "
+                "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe)),
+                "qcc " + opt + ", JIT");
+        }
+    }
+}

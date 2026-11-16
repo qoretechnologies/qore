@@ -246,6 +246,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   execution modes
         # - unhandled-exception-report: its checks run in child processes without an execution mode, whose threads
         #   raise unhandled exceptions at the same time
+        # - float-conversion-edges (#6212): its probes run in child processes that set their own --exec-mode and in qcc
+        #   executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
@@ -261,6 +263,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/empty-string-order.qtest",
                                  "examples/test/qore/operators/float-int-conversion.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
+                                 "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",

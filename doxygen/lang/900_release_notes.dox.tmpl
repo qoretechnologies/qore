@@ -1979,6 +1979,13 @@
     - a float out of the range of an integer, an infinite float and NaN now @ref float_to_int_conversion "convert to an
       integer" as a number does in every mode, saturated with NaN giving 0; the result was undefined and differed
       between the execution modes (issue #6181)
+    - an absolute date from an arbitrary-precision numeric value (ex: a \c softdate assignment) has the right
+      microseconds (\c 1731690000.5n gave a date 16 seconds later), and a value out of range, infinity and NaN
+      @ref conversions "convert to seconds" as an integer conversion does (issue #6212)
+    - @ref Qore::round() "round()", @ref Qore::ceil() "ceil()" and @ref Qore::floor() "floor()" round a float at a
+      precision above 9 or below -9, an int or number at a precision out of the range of a 32-bit int, and a number
+      at a precision above 308 or below -308 (it gave NaN); an int result out of range is the largest or smallest int
+      (\c round(9223372036854775807, -1) ended the process, and \c ceil(5, -25) gave 0) (issue #6212)
     - a @ref find "find expression" nested in the result, in-expression or where expression of another one can now be
       compiled with @ref qcc_tool "qcc"; it was refused as an unsupported expression (issue #5974)
     - @ref qcc_tool "qcc" no longer crashes compiling a user module whose header has a \c del closure, and the compiled

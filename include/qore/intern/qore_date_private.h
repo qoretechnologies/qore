@@ -560,6 +560,15 @@ protected:
     unsigned us;                       // microseconds
     const AbstractQoreZoneInfo* zone;  // time zone region
 
+    //! returns e - off, saturated
+    DLLLOCAL static int64 sat_sub(int64 e, int off) {
+        int64 rv;
+        if (__builtin_expect(__builtin_sub_overflow(e, static_cast<int64>(off), &rv), 0)) {
+            return off > 0 ? std::numeric_limits<int64>::min() : std::numeric_limits<int64>::max();
+        }
+        return rv;
+    }
+
     // epoch is set to local time; needs to be converted to UTC
     DLLLOCAL void setLocalIntern(int n_us) {
         // normalize units in case us > 1000000 or < 0
@@ -569,16 +578,13 @@ protected:
         // get standard time UTC offset
         int off = AbstractQoreZoneInfo::getUTCOffset(zone);
 
-        printd(5, "qore_absolute_time::setLocalIntern() epoch: %lld -> %lld (std off: %d)\n", epoch, epoch - off,
-            off);
-        epoch -= off;
+        // saturated: a local time at the limit of the seconds (ex: from a number out of range) overflowed (qore#6212)
+        epoch = sat_sub(epoch, off);
 
         // now get actual UTC offset
         int aoff = AbstractQoreZoneInfo::getUTCOffset(zone, epoch);
         if (aoff != off) {
-            printd(5, "qore_absolute_time::setLocalIntern() epoch: %lld -> %lld (aoff: %d diff: %d)\n", epoch,
-                epoch - (aoff - off), aoff, aoff - off);
-            epoch -= (aoff - off);
+            epoch = sat_sub(epoch, aoff - off);
         }
 
         printd(5, "qore_absolute_time::setLocalIntern() epoch: %lld zone: %s\n", epoch,
@@ -612,11 +618,8 @@ public:
         us = n_us;
     }
 
-    DLLLOCAL void set(double f, const AbstractQoreZoneInfo* n_zone = currentTZ()) {
-        zone = n_zone;
-        epoch = (int64)f;
-        us = (int)((f - (float)((int)f)) * 1000000);
-    }
+    //! sets the date from a floating-point number of seconds; see qore_split_float_seconds_saturated()
+    DLLLOCAL void set(double f, const AbstractQoreZoneInfo* n_zone = currentTZ());
 
     DLLLOCAL void setLocal(const AbstractQoreZoneInfo* n_zone, int64 n_epoch, int n_us) {
         epoch = n_epoch;
@@ -1966,6 +1969,18 @@ DLLLOCAL static inline int qore_split_float_seconds(double secs, int64& whole, i
     whole = static_cast<int64>(secs);
     us = static_cast<int>((secs - static_cast<double>(whole)) * 1000000);
     return QDO_NONE;
+}
+
+//! splits a floating-point number of seconds for a conversion with no exception sink (qore#6212)
+/** as qore_split_float_seconds(); a value that is not finite or whose whole seconds do not fit an int64 gives the
+    saturated seconds of q_float_to_int64() (NaN: 0) and no microseconds, as date(float) gives with no exception sink
+    (qore#6103)
+*/
+DLLLOCAL static inline void qore_split_float_seconds_saturated(double secs, int64& whole, int& us) {
+    if (__builtin_expect(qore_split_float_seconds(secs, whole, us) != QDO_NONE, 0)) {
+        whole = q_float_to_int64(secs);
+        us = 0;
+    }
 }
 
 //! makes a relative date from a floating-point number of seconds (qore#6103)
