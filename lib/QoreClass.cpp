@@ -5249,6 +5249,15 @@ QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* 
         if (w) {
             return qore_method_private::evalGivenArgs(*w, xsink, rc, self, args, class_ctx, pgm_ctx);
         }
+        // a member that holds a closure or a call reference is called with the argument list's values, which its
+        // parameters take over (issue #5958); a call through a call reference of another Program (pgm_ctx) is made
+        // as evalMethod() makes it
+        if (!pgm_ctx) {
+            QoreValue rv;
+            if (qore_class_eval_member_code_given_args(*this, self, nme, args, class_ctx, xsink, rv)) {
+                return rv;
+            }
+        }
     }
     // anything else is called as evalMethod() calls it
     return evalMethod(self, nme, args, class_ctx, rc, xsink, nullptr, pgm_ctx);

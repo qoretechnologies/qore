@@ -68,6 +68,11 @@
 #include <qore/intern/ExpressionStatement.h>
 #include <qore/intern/QoreOpcodeRegistry.h>
 
+// QoreIRTakeOver.cpp compiles this file with QORE_IR_TAKE_OVER_UNIT defined, outside the single compilation unit of
+// libqore: that unit compiles the analysis of the parameters that take their arguments over (see
+// qore_ir_compute_param_take_over() at the end of this file) and the walkers of expressions and statement blocks that
+// it uses; "#ifndef QORE_IR_TAKE_OVER_UNIT" encloses the rest of the file
+#ifndef QORE_IR_TAKE_OVER_UNIT
 // isTerminator() is now defined in QoreIR.h
 
 // Check if opcode produces a result value — delegates to registry
@@ -733,6 +738,8 @@ static bool isDelegateToASTStatement(QoreIROpcode op) {
     }
 }
 
+#endif // QORE_IR_TAKE_OVER_UNIT
+
 //! Returns true if the opcode is a lvalue operation that modifies variables through
 //! the runtime stack (not through StoreLocal).
 static bool isLValueOp(QoreIROpcode op) {
@@ -1331,6 +1338,7 @@ static void collectLocalsFromStatementBlock(const StatementBlock* block,
     }
 }
 
+#ifndef QORE_IR_TAKE_OVER_UNIT
 //! Extracts the AST expression from an instruction that stores one.
 //! Returns nullptr if the instruction type doesn't have an expr field.
 static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
@@ -2154,6 +2162,9 @@ bool QoreIRFunction::collectHandlerLocals(std::unordered_set<const void*>& local
 }
 
 void QoreIRFunction::computeIROnlyLocals() {
+    // the write inventories are recomputed: the take-over analysis cached from them for the AOT IR is computed again
+    // when it is needed (see take_over_params_state)
+    take_over_params_state.store(0, std::memory_order_release);
     // the locals that a reference can reach other than from \var in this function: they are reference-capable
     // (localMayHoldReference()), and those that would otherwise be IR-only keep the reference in their own storage
     // (reference_slot_locals)
@@ -3133,3 +3144,199 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
         }
     }
 }
+#endif // QORE_IR_TAKE_OVER_UNIT
+
+#ifdef QORE_IR_TAKE_OVER_UNIT
+//! The writes of a function's locals that its own inventories do not record, collected once for the function
+/** A write through a reference that the function creates to a local (<tt>\\var</tt>, <tt>\\var.member</tt>), through
+    which a callee can write it, and a write in a handler of the function (on_exit, on_error, on_success), which is a
+    function of its own (QoreIROnBlockExitInstruction::handler_ir), whose writes to the locals of the function that
+    registers it are not in that function's inventories and whose own inventories are not built (computeIROnlyLocals()
+    runs for the function): the handlers' instructions are scanned, an Invoke (an operation in a try block) of a store
+    or of an lvalue operation, a reference that cannot be walked and a handler without its IR counting as a write of
+    every local (qore#6004)
+*/
+struct QoreIRUnrecordedWrites {
+    //! the locals written
+    std::unordered_set<const void*> locals;
+    //! true if any local can be written
+    bool any = false;
+
+    DLLLOCAL bool writes(const void* key) const {
+        return any || locals.count(key);
+    }
+
+    //! adds the locals that \a ir_func creates a reference to
+    DLLLOCAL void addReferences(const QoreIRFunction& ir_func) {
+        for (const auto& block : ir_func.blocks) {
+            for (const auto& inst : block->instructions) {
+                const QoreValue* expr = nullptr;
+                if (inst->opcode == QoreIROpcode::CreateParseRef) {
+                    expr = &static_cast<const QoreIRCreateParseRefInstruction*>(inst.get())->expr;
+                } else if (inst->opcode == QoreIROpcode::Invoke) {
+                    const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst.get());
+                    if (inv->invoke_opcode == QoreIROpcode::CreateParseRef) {
+                        expr = &inv->expr;
+                    }
+                }
+                if (expr) {
+                    bool unknown_node_found = false;
+                    collectLocalsFromExpr(*expr, locals, unknown_node_found);
+                    if (unknown_node_found) {
+                        any = true;
+                    }
+                }
+            }
+        }
+    }
+
+    //! adds the writes of the handlers of \a ir_func and of their handlers; \a handler is true if \a ir_func is one
+    DLLLOCAL void addHandlerWrites(const QoreIRFunction& ir_func, bool handler) {
+        if (handler) {
+            addReferences(ir_func);
+        }
+        for (const auto& block : ir_func.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (any) {
+                    return;
+                }
+                if (handler) {
+                    if (const LocalVar* written = qore_ir_get_written_local(inst.get())) {
+                        locals.insert(reinterpret_cast<const void*>(written));
+                    }
+                    if (inst->opcode == QoreIROpcode::Invoke) {
+                        QoreIROpcode op = static_cast<const QoreIRInvokeInstruction*>(inst.get())->invoke_opcode;
+                        if (op == QoreIROpcode::StoreLocal || op == QoreIROpcode::StoreClosure || isLValueOp(op)) {
+                            any = true;
+                            return;
+                        }
+                    }
+                }
+                if (inst->opcode != QoreIROpcode::OnBlockExit) {
+                    continue;
+                }
+                const QoreIRFunction* handler_ir = static_cast<const QoreIROnBlockExitInstruction*>(inst.get())
+                    ->handler_ir.get();
+                if (!handler_ir) {
+                    any = true;
+                    return;
+                }
+                addHandlerWrites(*handler_ir, true);
+            }
+        }
+    }
+};
+
+//! Returns true if a value of the type can be or hold an object, whose destructor can run when it is released
+/** As qore_ir_type_may_hold_object() in QoreIRLowering.cpp, whose code this unit does not compile
+*/
+static bool qore_ir_take_over_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0) {
+    if (!QoreTypeInfo::needsScan(ti)) {
+        return false;
+    }
+    if (depth >= 8) {
+        return true;
+    }
+    // the elements of a list and the values of a hash of a type are of that type
+    if (const QoreTypeInfo* element = QoreTypeInfo::getComplexListValueType(ti)) {
+        return qore_ir_take_over_type_may_hold_object(element, depth + 1);
+    }
+    if (const QoreTypeInfo* value = QoreTypeInfo::getComplexHashValueType(ti)) {
+        return qore_ir_take_over_type_may_hold_object(value, depth + 1);
+    }
+    return true;
+}
+
+// documented in QoreIR.h
+bool qore_ir_collect_take_over_params(const QoreIRFunction& ir_func, const LocalVar* const* params, unsigned num_params,
+        std::unordered_set<const void*>* take_over) {
+    bool rv = false;
+    // the writes that the inventories do not record are collected once, for the first parameter that needs them
+    std::optional<QoreIRUnrecordedWrites> unrecorded;
+    for (unsigned i = 0; i < num_params; ++i) {
+        const LocalVar* param = params[i];
+        if (!param || !qore_ir_take_over_type_may_hold_object(param->getTypeInfo())) {
+            continue;
+        }
+        const void* key = reinterpret_cast<const void*>(param);
+        // a write that the IR records, or one in a closure that captures the parameter
+        bool writes = qore_ir_local_is_written(ir_func, param) || param->closureUse();
+        if (!writes) {
+            if (!unrecorded) {
+                unrecorded.emplace();
+                unrecorded->addReferences(ir_func);
+                if (!unrecorded->any) {
+                    unrecorded->addHandlerWrites(ir_func, false);
+                }
+            }
+            writes = unrecorded->writes(key);
+        }
+        if (writes) {
+            rv = true;
+            if (!take_over) {
+                return true;
+            }
+            take_over->insert(key);
+        }
+    }
+    return rv;
+}
+
+// documented in QoreIR.h
+bool qore_ir_collect_take_over_params(const QoreIRFunction& ir_func, std::unordered_set<const void*>* take_over) {
+    if (ir_func.param_local_vars.empty()) {
+        return false;
+    }
+    std::vector<const LocalVar*> params;
+    for (const auto& [idx, lv] : ir_func.param_local_vars) {
+        if (idx >= 0) {
+            if (params.size() <= static_cast<size_t>(idx)) {
+                params.resize(static_cast<size_t>(idx) + 1, nullptr);
+            }
+            params[static_cast<size_t>(idx)] = lv;
+        }
+    }
+    return qore_ir_collect_take_over_params(ir_func, params.data(), static_cast<unsigned>(params.size()), take_over);
+}
+
+// documented in QoreIR.h
+bool qore_ir_function_may_deopt(const QoreIRFunction& ir_func) {
+    for (const auto& block : ir_func.blocks) {
+        for (const auto& inst : block->instructions) {
+            switch (inst->opcode) {
+                case QoreIROpcode::GuardInt:
+                case QoreIROpcode::GuardFloat:
+                case QoreIROpcode::GuardType:
+                case QoreIROpcode::GuardNotNothing:
+                    if (static_cast<const QoreIRGuardInstruction*>(inst.get())->deopt_target) {
+                        return true;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+    return false;
+}
+
+// documented in QoreIR.h
+void qore_ir_compute_param_take_over(QoreIRFunction& ir_func, LocalVar* const* params, unsigned num_params) {
+    ir_func.param_take_over = qore_ir_collect_take_over_params(ir_func, params, num_params, nullptr);
+}
+
+// documented in QoreIR.h
+bool qore_ir_is_sequence_temp(const QoreIRInstruction* inst) {
+    // extract on an lvalue path (extract l, 0, 1) gives the new list, string or binary that it removed
+    if (inst->opcode == QoreIROpcode::LValuePathTernary) {
+        return static_cast<const QoreIRLValuePathInstruction*>(inst)->ternary_op == LVTernaryOp::Extract;
+    }
+    QoreIROpcode op = inst->opcode;
+    if (op == QoreIROpcode::Invoke) {
+        op = static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
+    }
+    return op == QoreIROpcode::RangeSliceAny || op == QoreIROpcode::RangeSliceInt
+        || op == QoreIROpcode::RangeSliceFloat || op == QoreIROpcode::ExtractAny || op == QoreIROpcode::ExtractList
+        || op == QoreIROpcode::ExtractString || op == QoreIROpcode::ExtractBinary;
+}
+#endif // QORE_IR_TAKE_OVER_UNIT

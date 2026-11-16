@@ -801,8 +801,12 @@ bool qore_ir_fast_entry_param_is_private(
     // A safe local referenced by lowered IR would be in ir_only_locals.
     // Therefore absence from both local inventories proves that the parameter
     // is unused. Object locals are excluded because their lifetime still
-    // requires the runtime stack even when their value is not loaded.
+    // requires the runtime stack even when their value is not loaded.  A written
+    // parameter is not unused, whatever kept it off the IR-only path: its store
+    // goes to the runtime stack, where the fast entry would not have instantiated
+    // it (an optional object, *T, which has no unique class; issue #6148)
     return !ir_func.has_opaque_ast_local_access
+        && !qore_ir_local_is_written(ir_func, local)
         && !ir_func.isAstVisibleLocal(key)
         && !local->isTopLevel()
         && !QoreTypeInfo::getUniqueReturnClass(local->getTypeInfo());

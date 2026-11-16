@@ -5794,6 +5794,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     }
     // Every runtime-visible access to these locals was removed or replaced;
     // keep the local ownership metadata aligned with the rewritten IR.
+    if (!scalarized_container_locals.empty()) {
+        // the write inventories change: the take-over analysis cached from them is computed again when needed
+        func.take_over_params_state.store(0, std::memory_order_release);
+    }
     for (const LocalVar* local : scalarized_container_locals) {
         (void)qore_ir_analysis_cancelled(check_count,
             "IR fixed-aggregate scalar replacement metadata commit");

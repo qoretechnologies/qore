@@ -5350,6 +5350,16 @@ DLLLOCAL QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSour
 DLLLOCAL QoreProgram* qore_get_function_pgm_context(const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, QoreSourceProgramHolder& holder, QoreProgram* call_pgm);
 
+//! Calls the code that the member \a nme of \a self holds (a closure or a call reference) with \a args, whose values
+//! a call gave (see qore_class_private::evalMethodGivenArgs()): the code's parameters take them over (issue #5958)
+/** @return true if the member holds such code and it was called, or if reading the member raised an exception; the
+    result is then in \a rv; false if the member holds no code, which is then called as evalMethod() calls it
+
+    Defined in QoreClassGivenArgs.cpp, outside the single compilation unit of libqore
+*/
+DLLLOCAL bool qore_class_eval_member_code_given_args(const qore_class_private& qcp, QoreObject* self,
+        const char* nme, QoreListNode* args, const qore_class_private* class_ctx, ExceptionSink* xsink, QoreValue& rv);
+
 class qore_class_private_holder {
     //! the class pointer (handle) to release, if the object was created with one
     /** the pointer is tracked separately from the private data, as it can be a wrapper for a class imported into

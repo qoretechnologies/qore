@@ -582,6 +582,10 @@ private:
     // delay destruction or force copy-on-write.
     std::vector<llvm::AllocaInst*> preinstantiated_entry_cleanup_allocas;
     std::unordered_map<const void*, llvm::AllocaInst*> preinstantiated_entry_cleanup_by_local;
+    //! the parameters that take their arguments over and that the normal entry took from their runtime variables
+    //! (qore_rt_take_param()), with their LocalVar and the cleanup slot that owns the value (issue #5958): a function
+    //! that can deoptimize takes none (the deoptimization exit asserts it)
+    std::vector<std::pair<LocalVar*, llvm::AllocaInst*>> taken_param_cleanups;
 
     // Allocas for fast entry param locals (Approach B).
     // At exit, the current alloca value is loaded and decref'd.  StoreLocal
@@ -1065,6 +1069,12 @@ private:
         @return the value loaded, with a reference for the cache
     */
     llvm::Value* emitLocalCacheLoad(const void* key, llvm::IRBuilder<>& b, llvm::Module& module);
+    //! As emitLocalCacheLoad() for a parameter that takes its argument over: the runtime variable's reference is
+    //! released, so that the value loaded holds the only reference that the call gave (qore_rt_take_param())
+    llvm::Value* emitParamTake(const void* key, llvm::IRBuilder<>& b, llvm::Module& module);
+    //! Returns true if the call \a inst gives the callee the cleanup slot of an argument (buildArgCleanupArray()):
+    //! such a call does not call the fast entry of a callee whose parameter takes its argument over (issue #5958)
+    bool callGivesArgs(const QoreIRInstruction* inst) const;
 
     //! Emits the read of a local with a reference flag: the cached value, or the referenced value if it is a reference
     /** The referenced value is read only when the flag is set (qore_rt_read_reference_local()); it is owned and kept,

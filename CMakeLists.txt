@@ -1749,6 +1749,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreStandardException.cpp
     lib/QoreXSinkException.cpp
     lib/QoreClass.cpp
+    lib/QoreClassGivenArgs.cpp
     lib/TypedHashDecl.cpp
     lib/QoreEnumDecl.cpp
     lib/QoreReflection.cpp
@@ -1859,6 +1860,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRExprRegistry.cpp
     lib/JITRuntime.cpp
     lib/JITRuntimeGivenArgs.cpp
+    lib/JITRuntimeTakeOver.cpp
     lib/QoreIRInterpreter.cpp
     lib/QoreIRInterpreterGivenArgs.cpp
     lib/QoreIRIntrinsic.cpp
@@ -1867,6 +1869,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRLowering.cpp
     lib/QoreIRToLLVM.cpp
     lib/QoreIRVerifier.cpp
+    lib/QoreIRTakeOver.cpp
     lib/QoreAOT.cpp
     lib/QoreAOTBatchMemory.cpp
     lib/QoreAOTRuntime.cpp
@@ -2577,8 +2580,12 @@ if (SINGLE_COMPILATION_UNIT)
     # - JITRuntimeGivenArgs.cpp, QoreIRInterpreterGivenArgs.cpp: the code of the calls that give the references of
     #   their temporary arguments to the callee (issue #5882); in the SCU, it would change how the compiler inlines
     #   the helpers that the code of the calls that give nothing uses, and so that code
+    # - QoreIRTakeOver.cpp, QoreClassGivenArgs.cpp, JITRuntimeTakeOver.cpp: the analysis of the parameters that take
+    #   their arguments over, and the calls with the arguments given to them of the code that a member holds and of
+    #   the callees that the JIT runtime finds at run time (issue #5958), for the same reason
     set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp
-        lib/JITRuntimeGivenArgs.cpp lib/QoreIRInterpreterGivenArgs.cpp)
+        lib/JITRuntimeGivenArgs.cpp lib/QoreIRInterpreterGivenArgs.cpp lib/QoreIRTakeOver.cpp
+        lib/QoreClassGivenArgs.cpp lib/JITRuntimeTakeOver.cpp)
     if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1)
         # sources that cannot share a translation unit with the LLVM users (see cmake/QoreScuChunks.cmake)
         list(APPEND LIBQORE_EXTRA_SRC ${LIBQORE_SCU_ISOLATED_SRC})
@@ -3219,6 +3226,8 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp
+    # the analysis of the parameters that take their arguments over, compiled from QoreIRVerifier.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRTakeOver.cpp
     ${CMAKE_SOURCE_DIR}/qcc-main.cpp
 )
 
