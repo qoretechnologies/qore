@@ -273,7 +273,15 @@ examples/test/ir/CommonPseudoFastPath.qtest	3.0	1.0	-	-	-	-	-	-	1.0	2.0
 examples/test/ir/CompoundAssignmentAssignedState.qtest	1.0	2.0	-	-	-	-	-	-	1.0	1.0
 examples/test/ir/CompoundAssignmentComplexType.qtest	7.0	4.0	-	-	-	-	-	-	2.0	3.0
 examples/test/ir/CompoundAssignmentErrorDescription.qtest	1.0	2.0	-	-	-	-	-	-	1.0	2.0
-examples/test/ir/CompoundAssignmentMatrix.qtest	166.0	166.0	-	-	-	-	-	-	165.0	173.0
+examples/test/ir/CompoundAssignmentMatrix-1.qtest	8.1	8.1	-	-	-	-	-	-	8.1	8.4
+examples/test/ir/CompoundAssignmentMatrix-2.qtest	21.6	21.6	-	-	-	-	-	-	21.5	22.5
+examples/test/ir/CompoundAssignmentMatrix-3.qtest	24.7	24.7	-	-	-	-	-	-	24.5	25.7
+examples/test/ir/CompoundAssignmentMatrix-4.qtest	24.7	24.7	-	-	-	-	-	-	24.6	25.8
+examples/test/ir/CompoundAssignmentMatrix-5.qtest	21.0	21.0	-	-	-	-	-	-	20.8	21.8
+examples/test/ir/CompoundAssignmentMatrix-6.qtest	23.5	23.5	-	-	-	-	-	-	23.3	24.4
+examples/test/ir/CompoundAssignmentMatrix-7.qtest	21.9	21.9	-	-	-	-	-	-	21.8	22.8
+examples/test/ir/CompoundAssignmentMatrix-8.qtest	11.9	11.9	-	-	-	-	-	-	11.8	12.4
+examples/test/ir/CompoundAssignmentMatrix-9.qtest	10.5	10.5	-	-	-	-	-	-	10.5	11.0
 examples/test/ir/CompoundAssignmentResult.qtest	6.0	2.0	-	-	-	-	-	-	1.0	2.0
 examples/test/ir/ConstantClosureListType.qtest	1.0	2.0	-	-	-	-	-	-	2.0	2.0
 examples/test/ir/ConstantClosureSignatureType.qtest	2.0	1.0	-	-	-	-	-	-	2.0	1.0
