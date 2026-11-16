@@ -13773,7 +13773,7 @@ static bool setExpressionFallbackError(std::string& error,
 }
 
 void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_func,
-        const QoreIRInstruction* inst, bool synthetic) {
+        const QoreIRInstruction* inst, bool synthetic, const QoreIRInstruction* folded_host) {
     // AOT native code is program-independent: it cannot bake the program-specific
     // attached-debugger gate or the StatementBlock context, so the hook is JIT-only.
     // (AOT debug-step support would require resolving both from the runtime execution
@@ -13852,14 +13852,33 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
         }
         auto fn = module.getOrInsertFunction("qore_rt_dbg_step",
                 llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+        // the event of an operation's step event is made in the statement's location, not in the operation's,
+        // which the code of the operation stored before the hook (see emitRuntimeLocationUpdate())
+        if (folded_host && inst->loc) {
+            emitRuntimeLocationStore(inst->loc);
+        }
         builder->CreateCall(fn, {stmt_ptr, sb_ptr, xsink_arg});
     }
     // Honor a debugger-raised exception (the only flow-control signal honored
     // mid-native-frame); routes to the instruction's exception target or the
     // function-level error-return block.
     emitExceptionCheck(module, llvm_func, inst);
+    // the operation then runs in its own location if it starts on another line, as after a DebugStatement instruction
+    if (folded_host && folded_host->loc && inst->loc && folded_host->loc->start_line != inst->loc->start_line) {
+        emitRuntimeLocationStore(folded_host->loc);
+    }
     builder->CreateBr(cont);
     builder->SetInsertPoint(cont);
+}
+
+void QoreIRToLLVM::emitRuntimeLocationStore(const QoreProgramLocation* loc) {
+    if (!loc_cache_ptr || aot_mode) {
+        return;
+    }
+    llvm::Value* loc_val = builder->CreateIntToPtr(
+        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(loc)),
+        llvm::PointerType::getUnqual(ctx));
+    builder->CreateStore(loc_val, loc_cache_ptr);
 }
 
 void QoreIRToLLVM::annotateAotExecutableExprFallback(llvm::Value* call,
@@ -21005,6 +21024,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::AddAssignLocalInt: {
             const auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+            // the step event of the statement, which the operation keeps (qore_ir_fold_debug_statements()), as the
+            // DebugStatement instruction that it was
+            if (const QoreIRDebugStatementInstruction* folded_step = qore_ir_folded_debug_step(inst)) {
+                emitDebugStepHook(module, llvm_func, folded_step, /*synthetic=*/false, inst);
+            }
             auto target_key = reinterpret_cast<const void*>(fused->target);
             auto source_key = reinterpret_cast<const void*>(fused->source);
             auto target_it = local_allocas.find(target_key);
@@ -21031,6 +21055,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::IncrementLocalInt: {
             const auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
+            // the step event of the statement, which the operation keeps (qore_ir_fold_debug_statements()), as the
+            // DebugStatement instruction that it was
+            if (const QoreIRDebugStatementInstruction* folded_step = qore_ir_folded_debug_step(inst)) {
+                emitDebugStepHook(module, llvm_func, folded_step, /*synthetic=*/false, inst);
+            }
             auto key = reinterpret_cast<const void*>(fused->local);
             if (fused->local && fused->local->closureUse()) {
                 llvm::Value* result;

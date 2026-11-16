@@ -1712,6 +1712,9 @@ public:
     //! leaves the block releases before the debugger's exception event of the statement that contains it, with a
     //! debugger attached (#5921); a pointer, so that the instructions of other code are not larger
     std::unique_ptr<QoreIRDebugBlockLocals> block_locals;
+    //! the operation that keeps this step event (qore_ir_fold_debug_statements()), which owns it and runs after it,
+    //! or nullptr for an instruction of its own
+    QoreIRInstruction* folded_host = nullptr;
 };
 
 class QoreIRConstInstruction : public QoreIRInstruction {
@@ -2598,6 +2601,9 @@ public:
     uint32_t target_slot_id = UINT32_MAX;  //!< Pre-computed slot index for target
     uint32_t source_slot_id = UINT32_MAX;  //!< Pre-computed slot index for source
     bool target_ir_only = false;  //!< True if target is IR-only (skip write-through)
+    //! the debugger's step event of the statement of the instruction, which runs before it; see
+    //! qore_ir_fold_debug_statements()
+    std::unique_ptr<QoreIRDebugStatementInstruction> folded_debug_step;
 };
 
 //! Fused increment for typed int local: local += delta (constant int)
@@ -2619,7 +2625,23 @@ public:
     int64_t delta;
     uint32_t slot_id = UINT32_MAX;  //!< Pre-computed slot index for local
     bool ir_only = false;  //!< True if local is IR-only (skip write-through)
+    //! the debugger's step event of the statement of the instruction, which runs before it; see
+    //! qore_ir_fold_debug_statements()
+    std::unique_ptr<QoreIRDebugStatementInstruction> folded_debug_step;
 };
+
+//! Returns the debugger's step event that runs before \a inst, as the QoreIROpcode::DebugStatement instruction that
+//! preceded it, or nullptr if none; see qore_ir_fold_debug_statements()
+inline QoreIRDebugStatementInstruction* qore_ir_folded_debug_step(const QoreIRInstruction* inst) {
+    switch (inst->opcode) {
+        case QoreIROpcode::AddAssignLocalInt:
+            return static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst)->folded_debug_step.get();
+        case QoreIROpcode::IncrementLocalInt:
+            return static_cast<const QoreIRIncrementLocalIntInstruction*>(inst)->folded_debug_step.get();
+        default:
+            return nullptr;
+    }
+}
 
 //! Fused compare-and-branch for two typed int locals: if (lhs < rhs) goto true else goto false
 //! Replaces LoadLocal(lhs) + LoadLocal(rhs) + LtInt + BranchIf

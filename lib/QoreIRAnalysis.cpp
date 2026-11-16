@@ -2639,6 +2639,81 @@ static size_t qore_ir_fuse_call_target_checks_intern(QoreIRFunction& func,
     return count;
 }
 
+//! Returns true if the step event \a dbg can be moved into \a host, the instruction that follows it in its block
+/** The operation must be one that cannot raise an exception, so that it has no exception path of its own, which would
+    run after the event without the debugger's state (see QORE_IR_DISPATCH_FOLDED_DEBUG_STEP() in
+    QoreIRInterpreter.cpp), and makes no exception check in native code: a fused local int operation on int locals
+    that only the IR uses (no closure-bound or reference local, and a source of type int, whose read cannot fail, as the
+    reference read of a source of no type can); it then has no exception target, and it takes that of the event.
+*/
+static bool qore_ir_can_fold_debug_step(const QoreIRDebugStatementInstruction& dbg, const QoreIRInstruction& host) {
+    // only the step event of a statement; the end of a statement, the start of an exception path and a block's event
+    // stay instructions of their own
+    if (dbg.opcode != QoreIROpcode::DebugStatement || !dbg.statement || dbg.block_locals
+            || (dbg.nest_flags & (QORE_IR_DEBUG_NEST_END | QORE_IR_DEBUG_NEST_UNWIND))) {
+        return false;
+    }
+    if (host.exception_target) {
+        return false;
+    }
+    auto is_int_local = [](const LocalVar* local) -> bool {
+        return local && !local->closureUse() && local->getTypeInfo() == bigIntTypeInfo;
+    };
+    switch (host.opcode) {
+        case QoreIROpcode::IncrementLocalInt: {
+            const auto& inc = static_cast<const QoreIRIncrementLocalIntInstruction&>(host);
+            return is_int_local(inc.local) && inc.ir_only && !inc.folded_debug_step;
+        }
+        case QoreIROpcode::AddAssignLocalInt: {
+            const auto& add = static_cast<const QoreIRAddAssignLocalIntInstruction&>(host);
+            return is_int_local(add.target) && add.target_ir_only && is_int_local(add.source)
+                && !add.folded_debug_step;
+        }
+        default:
+            return false;
+    }
+}
+
+size_t qore_ir_fold_debug_statements(QoreIRFunction& func) {
+    // the debug IR of AOT code is serialized with its DebugStatement instructions
+    if (!func.source_dpgm_addr || func.emit_debug_statements) {
+        return 0;
+    }
+    size_t count = 0;
+    for (auto& block : func.blocks) {
+        auto& insts = block->instructions;
+        size_t out = 0;
+        for (size_t i = 0; i < insts.size(); ++i) {
+            if (i + 1 < insts.size()) {
+                auto* dbg = qore_ir_inst_cast<QoreIRDebugStatementInstruction*>(insts[i].get());
+                QoreIRInstruction* host = insts[i + 1].get();
+                if (dbg && qore_ir_can_fold_debug_step(*dbg, *host)) {
+                    std::unique_ptr<QoreIRDebugStatementInstruction> step(
+                        static_cast<QoreIRDebugStatementInstruction*>(insts[i].release()));
+                    // the edge of the event's exception path stays in the block; the operation has none of its own
+                    assert(!host->exception_target);
+                    host->exception_target = step->exception_target;
+                    step->folded_host = host;
+                    if (host->opcode == QoreIROpcode::IncrementLocalInt) {
+                        static_cast<QoreIRIncrementLocalIntInstruction*>(host)->folded_debug_step = std::move(step);
+                    } else {
+                        static_cast<QoreIRAddAssignLocalIntInstruction*>(host)->folded_debug_step = std::move(step);
+                    }
+                    ++count;
+                    // the empty slot is dropped below
+                    continue;
+                }
+            }
+            if (out != i) {
+                insts[out] = std::move(insts[i]);
+            }
+            ++out;
+        }
+        insts.resize(out);
+    }
+    return count;
+}
+
 bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8_t>& reused, size_t* check_count) {
     static const char* const operation = "IR reused call argument analysis";
     auto cancelled = [&]() -> bool {

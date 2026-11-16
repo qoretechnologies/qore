@@ -2229,8 +2229,14 @@ private:
     // block-entry → dbgSyntheticBlockStep) or DebugStatement (synthetic=false,
     // per-statement → dbgStep) instruction.  Gated by an inline attached-debugger check so
     // non-debug JIT execution pays at most one predictable not-taken branch.  No-op in AOT mode.
+    // \a folded_host is the operation that keeps the step event \a inst (qore_ir_folded_debug_step()), whose
+    // location the runtime location is when the hook runs: the hook then makes the event in the statement's location,
+    // as the hook of a DebugStatement instruction does, and gives the operation its own location back if it starts on
+    // another line.
     void emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_func,
-            const QoreIRInstruction* inst, bool synthetic);
+            const QoreIRInstruction* inst, bool synthetic, const QoreIRInstruction* folded_host = nullptr);
+    //! Stores \a loc as the runtime location of the frame, without the line check of emitRuntimeLocationUpdate()
+    void emitRuntimeLocationStore(const QoreProgramLocation* loc);
 
     // Get or create the per-function JIT deopt block.
     // On guard failure, branches here to set the thread-local deopt flag
