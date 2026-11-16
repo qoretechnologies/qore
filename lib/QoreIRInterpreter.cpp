@@ -7561,13 +7561,13 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
 
         case QoreIROpcode::LoadStaticVar: {
             const AbstractQoreNode* node = inv->expr.getInternalNode();
-            if (auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(node)) {
+            if (auto* static_var = qore_exact_node_cast<StaticClassVarRefNode>(node)) {
                 uint64_t result_bits = preserve_hash_key_weak_result
                     ? qore_rt_load_static_var_for_call(&static_var->vi, static_var->str.c_str(), xsink)
                     : qore_rt_load_static_var(&static_var->vi, static_var->str.c_str(), xsink);
                 return fromBits(result_bits);
             }
-            if (auto* deferred_static = dynamic_cast<const DeferredStaticClassMemberRefNode*>(node)) {
+            if (auto* deferred_static = qore_exact_node_cast<DeferredStaticClassMemberRefNode>(node)) {
                 uint64_t result_bits = preserve_hash_key_weak_result
                     ? qore_rt_load_static_var_by_path_for_call(deferred_static->class_path.c_str(),
                         deferred_static->member_name.c_str(), xsink)
@@ -14236,7 +14236,7 @@ load_local_done:
             case QoreIROpcode::LoadStaticVar: {
                 auto* sv_inst = static_cast<QoreIRStaticVarInstruction*>(inst);
                 const AbstractQoreNode* node = sv_inst->expr.getInternalNode();
-                if (auto* deferred_static = dynamic_cast<const DeferredStaticClassMemberRefNode*>(node)) {
+                if (auto* deferred_static = qore_exact_node_cast<DeferredStaticClassMemberRefNode>(node)) {
                     uint64_t result_bits = isDotEvalOnlyBase(inst)
                         ? qore_rt_load_static_var_by_path_for_call(deferred_static->class_path.c_str(),
                             deferred_static->member_name.c_str(), xsink)
