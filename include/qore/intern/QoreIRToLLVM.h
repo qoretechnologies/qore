@@ -64,6 +64,7 @@ struct AOTSlotMap;
 struct QorePluginLLVMCodegenInfo;
 //! The finalization loops of the lowering of a function that a cancellation interrupts, which refuses the function
 enum QoreFinalizeLoop : int {
+    // 1 is reserved for the loop of the reload chain slots, which another change adds, so that the numbers stay stable
     //! QoreIRToLLVM::finalizeObeEntries()
     QFL_HANDLER_LOCAL_TABLE = 2,
 };
@@ -1882,8 +1883,8 @@ private:
     //! Returns the locals whose reload storage releaseLocalReloadStorage() releases, in the order of its release
     std::vector<const void*> getReleasedReloadLocals();
     //! Writes the records of obe_entries in the entry block, once the function is lowered
-    /** @return false if it was cancelled (qore_check_cancel()), leaving records unwritten: the function must then be
-        refused (qore#6305)
+    /** @return false if it was cancelled (qore_finalize_cancelled()), leaving records unwritten: the function must
+        then be refused (qore#6305)
     */
     bool finalizeObeEntries(llvm::Function* llvm_func);
     //! Calls the helper \a name with the records and the table
