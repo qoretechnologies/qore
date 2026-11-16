@@ -1,0 +1,67 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class UnaryPlusHeapElementTest
+
+#! Tests that an element assigned the unary plus of a heap integer call result holds the value (issue #6297)
+/** The AST interpreter stored a freed value in a hash member assigned the unary plus of a call result that is an
+    integer outside the inline (48-bit) range (garbage in a release build, an abort in a debug build).  The worker
+    assigns such values to a hash member, a list element, an object member, a local, a pushed element and a hash
+    literal, in every execution mode and as a qcc-compiled executable.
+*/
+class UnaryPlusHeapElementTest inherits QUnit::Test {
+    public {
+        #! the result printed by the worker
+        const Expected = "[4611686018427387905, 4611686018427387906, 4611686018427387907, 4611686018427387908, "
+            "4611686018427387909, 4611686018427387910]";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("UnaryPlusHeapElement", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "unary-plus-heap-element-worker.q";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, worker)));
+        }
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-unary-plus-heap-element-");
+        string exe = tmp.path + DirSep + "element";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, exe)));
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Expected, lines[0], label + ": " + out);
+    }
+}
