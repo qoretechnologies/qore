@@ -866,6 +866,8 @@ static thread_local int64 lvalue_scan_count = 0;
 static thread_local int64 lvalue_removal_visit_count = 0;
 static thread_local int64 lvalue_removal_probe_count = 0;
 static thread_local int64 lvalue_removal_allocation_count = 0;
+//! the number of old values of number lvalues copied by post-increments and post-decrements in the current thread
+static thread_local int64 number_old_value_copy_count = 0;
 
 int64 q_get_lvalue_scan_count() {
     return lvalue_scan_count;
@@ -881,6 +883,10 @@ int64 q_get_lvalue_removal_probe_count() {
 
 int64 q_get_lvalue_removal_allocation_count() {
     return lvalue_removal_allocation_count;
+}
+
+int64 q_get_number_old_value_copy_count() {
+    return number_old_value_copy_count;
 }
 
 void q_record_lvalue_removal_probe() {
@@ -3233,9 +3239,9 @@ bool LValueHelper::numberResultNeedsConversion() const {
         && QoreTypeInfo::parseAccepts(typeInfo, numberTypeInfo);
 }
 
-void LValueHelper::storeNumberResult(QoreNumberNode* n, const char* desc) {
+int LValueHelper::storeNumberResult(QoreNumberNode* n, const char* desc) {
     // the assignment converts the value to the lvalue's type and takes the reference
-    assign(QoreValue(n), desc);
+    return assign(QoreValue(n), desc);
 }
 
 int LValueHelper::makeIntVal(const char* desc) {
@@ -3267,11 +3273,17 @@ int LValueHelper::makeIntVal(const char* desc) {
 int LValueHelper::makeIntQv(const char* desc) {
     member_lvalue_modified = true;
     assert(qv);
-    if (qv->getType() == NT_INT) {
+    // an inline int, the common case, is checked without the type lookup
+    if (qv->isInt()) {
+        return 0;
+    }
+    // a member of an int enum has the base type int, but it is an enum value, which the operation replaces with a
+    // plain int: the lvalue's type is checked for it, as an enum type refuses a plain int (qore#6197)
+    if (!qv->isEnum() && qv->getType() == NT_INT) {
         return 0;
     }
 
-    if (typeInfo && qv->getType() != NT_INT && !QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo)) {
+    if (typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo)) {
         // the 4th arg to doTypeException() is needed only for the type
         typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1), vl.xsink);
         write_rejected = true;
@@ -3308,7 +3320,9 @@ int LValueHelper::makeFloat(const char* desc) {
 
         saveTemp(val->makeFloat());
     } else {
-        if (!qv->hasNode() && qv->getType() == NT_FLOAT) {
+        // an inline float; a member of a float enum is an enum value, which the operation replaces with a plain float
+        // (see makeIntQv())
+        if (qv->isFloat()) {
            return 0;
         }
 
@@ -3775,8 +3789,9 @@ void LValueHelper::preIncrementNumber(const char* desc) {
         return;
     }
     QoreNumberNode* n = ensureUniqueNumber(desc);
-    if (n)
+    if (n) {
         qore_number_private::inc(*n);
+    }
 }
 
 void LValueHelper::preDecrementNumber(const char* desc) {
@@ -3788,23 +3803,33 @@ void LValueHelper::preDecrementNumber(const char* desc) {
         return;
     }
     QoreNumberNode* n = ensureUniqueNumber(desc);
-    if (n)
+    if (n) {
         qore_number_private::dec(*n);
+    }
 }
 
 QoreNumberNode* LValueHelper::postIncrementNumber(bool ref_rv, const char* desc) {
     if (numberResultNeedsConversion()) {
         QoreNumberNode* nn = new QoreNumberNode(getValue());
         SimpleRefHolder<QoreNumberNode> n(nn);
-        QoreNumberNode* rv = ref_rv ? new QoreNumberNode(*nn) : nullptr;
+        SimpleRefHolder<QoreNumberNode> rv(ref_rv ? new QoreNumberNode(*nn) : nullptr);
+#ifdef DEBUG
+        number_old_value_copy_count += ref_rv;
+#endif
         qore_number_private::inc(*nn);
-        storeNumberResult(n.release(), desc);
-        return rv;
+        if (storeNumberResult(n.release(), desc)) {
+            // the lvalue's type refused the result: no old value is returned
+            return nullptr;
+        }
+        return rv.release();
     }
     QoreNumberNode* n = ensureUniqueNumber(desc);
     if (!n)
         return nullptr;
     QoreNumberNode* rv = ref_rv ? new QoreNumberNode(*n) : 0;
+#ifdef DEBUG
+    number_old_value_copy_count += ref_rv;
+#endif
     qore_number_private::inc(*n);
     return rv;
 }
@@ -3813,15 +3838,24 @@ QoreNumberNode* LValueHelper::postDecrementNumber(bool ref_rv, const char* desc)
     if (numberResultNeedsConversion()) {
         QoreNumberNode* nn = new QoreNumberNode(getValue());
         SimpleRefHolder<QoreNumberNode> n(nn);
-        QoreNumberNode* rv = ref_rv ? new QoreNumberNode(*nn) : nullptr;
+        SimpleRefHolder<QoreNumberNode> rv(ref_rv ? new QoreNumberNode(*nn) : nullptr);
+#ifdef DEBUG
+        number_old_value_copy_count += ref_rv;
+#endif
         qore_number_private::dec(*nn);
-        storeNumberResult(n.release(), desc);
-        return rv;
+        if (storeNumberResult(n.release(), desc)) {
+            // the lvalue's type refused the result: no old value is returned
+            return nullptr;
+        }
+        return rv.release();
     }
     QoreNumberNode* n = ensureUniqueNumber(desc);
     if (!n)
         return nullptr;
     QoreNumberNode* rv = ref_rv ? new QoreNumberNode(*n) : 0;
+#ifdef DEBUG
+    number_old_value_copy_count += ref_rv;
+#endif
     qore_number_private::dec(*n);
     return rv;
 }

@@ -600,6 +600,10 @@ DLLLOCAL int64 q_get_lvalue_removal_probe_count();
 DLLLOCAL void q_record_lvalue_removal_probe();
 //! returns the number of lazy removal-tracker states allocated in this thread
 DLLLOCAL int64 q_get_lvalue_removal_allocation_count();
+//! returns the number of old values of number lvalues copied by post-increments and post-decrements in this thread
+/** for tests; see dbg_get_number_old_value_copy_count()
+*/
+DLLLOCAL int64 q_get_number_old_value_copy_count();
 #endif
 
 //! Identities held by a removal until its recursive-reference scan completes
@@ -824,7 +828,9 @@ protected:
     DLLLOCAL bool numberResultNeedsConversion() const;
 
     //! stores a number result of an operation, converted to the lvalue's type; takes the reference of \a n
-    DLLLOCAL void storeNumberResult(QoreNumberNode* n, const char* desc);
+    /** @return 0 for OK, -1 if the lvalue's type refused the result (an exception was raised)
+    */
+    DLLLOCAL int storeNumberResult(QoreNumberNode* n, const char* desc);
     DLLLOCAL int makeIntVal(const char* desc);
 
     //! returns true if a removal started with startContainerRemoval() left the reachable objects unchanged
@@ -1559,7 +1565,9 @@ public:
     DLLLOCAL void divideEqualsNumber(QoreValue r, const char* desc = "<lvalue>");
     DLLLOCAL void preIncrementNumber(const char* desc = "<lvalue>");
     DLLLOCAL void preDecrementNumber(const char* desc = "<lvalue>");
+    //! increments a number lvalue; returns the old value if \a ref_rv is true, or nullptr if an exception was raised
     DLLLOCAL QoreNumberNode* postIncrementNumber(bool ref_rv, const char* desc = "<lvalue>");
+    //! decrements a number lvalue; returns the old value if \a ref_rv is true, or nullptr if an exception was raised
     DLLLOCAL QoreNumberNode* postDecrementNumber(bool ref_rv, const char* desc = "<lvalue>");
 
     DLLLOCAL QoreNumberNode* ensureUniqueNumber(const char* desc = "<lvalue>") {
