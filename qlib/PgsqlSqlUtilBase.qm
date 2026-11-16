@@ -235,6 +235,9 @@ $function$
 
 
     @section pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - fixed writing a string to a \c json or \c jsonb column with an insert, an update or an upsert, which
+      PostgreSQL refused as \c text; the value is cast to the column's type in the SQL
+      (<a href="https://github.com/qoretechnologies/qore/issues/4448">issue 4448</a>)
     - the drop SQL of a partitioned table drops each of its partitions in a statement of its own before the table:
       dropping the table took a lock on every partition and its indexes at once, and with hundreds of partitions
       failed with "out of shared memory" on a server with the default \c max_locks_per_transaction
@@ -3163,6 +3166,11 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
 #! provides the PostgreSQL-specific implementation of the SqlUtil::AbstractTable interface
 public class PgsqlTable inherits SqlUtil::AbstractTable {
     public {
+        #! the JSON types, whose values are cast from the text bound for them in DML
+        /** @since PgsqlSqlUtilBase 1.19
+        */
+        const JsonTypes = {"json": True, "jsonb": True};
+
         #! maps PostgreSQL type names to type configurations
         const PgsqlTypeMap = (
             "abstime": ("qore": Type::Date,),
@@ -4287,6 +4295,24 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return {"sql": sql, "args": scalar_binds + array_binds};
     }
 
+    #! Returns the placeholder of a value written to the given column by an insert, an update or an upsert
+    /** A value of a \c json or \c jsonb column is bound as the text of the JSON and cast to the column's type, as
+        PostgreSQL does not convert a value bound as \c text to \c json or \c jsonb by itself (issue #4448)
+
+        @param column the name of the column
+
+        @return \c "%v::json" or \c "%v::jsonb" for a \c json or \c jsonb column, otherwise \c "%v"
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    private string getColumnValuePlaceholder(string column) {
+        *AbstractColumn c = columns{column};
+        if (c && JsonTypes{c.native_type}) {
+            return "%v::" + c.native_type;
+        }
+        return "%v";
+    }
+
     #! Overrides the default doReturningImpl to return all rows for bulk operations
     private *hash<auto> doReturningImpl(hash<auto> opt, reference<string> sql, list<auto> args) {
         list<auto> l = ();
@@ -4754,7 +4780,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         sql += ") do update set ";
         list<string> sl = ();
         foreach hash<auto> i in (row{updc}.pairIterator()) {
-            string exp = sprintf("%s = %v", getColumnSqlName(i.key));
+            string exp = getColumnSqlName(i.key) + " = " + getColumnValuePlaceholder(i.key);
             sl += exp;
         }
         sql += foldl $1 + ", " + $2, sl;

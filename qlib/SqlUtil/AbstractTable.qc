@@ -4074,6 +4074,21 @@ table.insert(row);
         return {"sql": sql, "args": vh.values ?? ()};
     }
 
+    #! Returns the placeholder of a value written to the given column by an insert, an update or an upsert
+    /** The default implementation returns \c "%v"; a driver whose database needs a cast for the value of a column
+        bound as the type of its Qore value overrides it (ex: PostgreSQL's \c json and \c jsonb columns, given a
+        string)
+
+        @param column the name of the column
+
+        @return the placeholder for the value of the column in SQL
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getColumnValuePlaceholder(string column) {
+        return "%v";
+    }
+
     private hash<auto> getPlaceholdersAndValues(hash<auto> row) {
         hash<auto> im;
         # placeholder list
@@ -4085,7 +4100,7 @@ table.insert(row);
         while (i.next()) {
             string key = i.getKey();
             auto v = i.getValue();
-            string ph = "%v";
+            string ph = getColumnValuePlaceholder(key);
             if (v.typeCode() == NT_LIST)
                 v = v[0];
             if (v."_iop".typeCode() == NT_STRING) {
@@ -4482,7 +4497,7 @@ int rows = table.insertFromIterator(i);
 
         # make insert statement template
         string sql = sprintf("insert into %s (%s) values (%s)", getSqlName(), (foldl $1 + "," + $2, (map getColumnSqlName($1), keys row)),
-                                (foldl $1 + "," + $2, (map "%v", keys row)));
+                                (foldl $1 + "," + $2, (map getColumnValuePlaceholder($1), keys row)));
         AbstractSQLStatement stmt = ds.getSQLStatement();
         stmt.prepare(sql);
 
@@ -7936,7 +7951,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
             } else if (value.typeCode() == NT_HASH && value.hasKey("uop") && value.uop) {
                 exp += getUpdateExpression(getColumnSqlName(key), cast<hash<UpdateOperatorInfo>>(value));
             } else {
-                exp += "%v";
+                exp += getColumnValuePlaceholder(key);
                 qinfo.args += value;
             }
             sl += exp;
@@ -8243,7 +8258,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         string sql = sprintf("insert into %s (", getSqlName());
         sql += (foldl $1 + "," + $2, (map getColumnSqlName($1), keys row));
         sql += ") values (";
-        sql += (foldl $1 + "," + $2, (map "%v", keys row));
+        sql += (foldl $1 + "," + $2, (map getColumnValuePlaceholder($1), keys row));
         sql += ")";
         return sql;
     }
@@ -8258,7 +8273,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
         # make sql
         string sql = sprintf("update %s set ", getSqlName());
-        sql += foldl $1 + ", " + $2, (map sprintf("%s = %v", getColumnSqlName($1)), updc);
+        sql += foldl $1 + ", " + $2, (map getColumnSqlName($1) + " = " + getColumnValuePlaceholder($1), updc);
         sql += " where ";
         sql += foldl $1 + " and " + $2, (map sprintf("%s = %v", getColumnSqlName($1)), cols.keyIterator());
 
