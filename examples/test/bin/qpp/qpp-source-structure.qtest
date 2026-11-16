@@ -287,6 +287,9 @@ bool TestCls::next(ExceptionSink* xsink) {
             "int TestCls::fp(int (*cb)(int)) [flags=CONSTANT] {",
             "int TestCls::opt(*string a) [flags=CONSTANT] {",
             "int TestCls::opt2( * string a) [flags=CONSTANT] {",
+            "int TestCls::opt3(*Foo::Bar a) [flags=CONSTANT] {",
+            "int TestCls::opt4(*hash<auto> a) [const;flags=RET_VALUE_ONLY] {",
+            "int TestCls::opt5(int a) [ doconly ] {",
         );
     }
 
@@ -361,6 +364,12 @@ const Two = 2;
         assertFailed(r, "function without a doc comment");
         assertRegex("structtest\\.qpp:5: 'int t_nodoc\\(softint a\\) \\{': a constant or a function in a group",
             r.out);
+
+        r = runQpp(FuncGroupStart + "int t_opt(*string a) [flags=CONSTANT] {
+    return 1;
+}
+" + GroupEnd);
+        assertFailed(r, "function with an or-nothing parameter and attributes without a doc comment");
 
         r = runQpp(FuncGroupStart + "t_noret(int a) [flags=CONSTANT] {
     return a;
@@ -573,6 +582,16 @@ static int (&&rr(int))[N] {
 static int (*const cp(int))[N] {
 }
 static int (Cls::*mp(int))[N] {
+}
+int (*(Cls::*getpmf(int))(double))[N] {
+}
+int (*(*getfp(int))(double))[N] {
+}
+int (*Tpl<T>::name2(int))[N] {
+}
+int (*Cls::operator[](size_t i))[N] {
+}
+int (*(name3)(int))[N] {
 }
 static int hex = 0x1F'FF; static double f = 1'000.5; /*
 int t_hidden(softint a) {

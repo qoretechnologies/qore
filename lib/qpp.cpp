@@ -1048,6 +1048,24 @@ static bool qpp_line_starts_with_identifier(const std::string& line) {
     return i < line.size() && (isalpha(static_cast<unsigned char>(line[i])) || line[i] == '_');
 }
 
+//! returns true if the line has a ';' outside square brackets: a statement, as a declaration has a ';' only in its
+//! attributes ("[const;flags=...]")
+static bool qpp_line_has_statement_end(const std::string& line) {
+    int depth = 0;
+    for (char c : line) {
+        if (c == '[') {
+            ++depth;
+        } else if (c == ']') {
+            if (depth) {
+                --depth;
+            }
+        } else if (c == ';' && !depth) {
+            return true;
+        }
+    }
+    return false;
+}
+
 //! returns true if the line starts with a C++ statement keyword, which a declaration never does
 static bool qpp_line_starts_with_statement_keyword(const std::string& line) {
     static const char* keywords[] = {"return", "if", "else", "while", "for", "switch", "case", "do", "delete",
@@ -1085,7 +1103,7 @@ static bool qpp_line_is_qore_declaration(const std::string& orig_line) {
         return true;
     }
     if (!qpp_line_starts_with_identifier(line) || qpp_line_starts_with_statement_keyword(line)
-            || line.find(';') != std::string::npos) {
+            || qpp_line_has_statement_end(line)) {
         return false;
     }
     size_t paren = line.find('(');
@@ -1122,7 +1140,7 @@ static std::string qpp_line_method_class(const std::string& orig_line) {
     std::string line = qpp_strip_comments_and_literals(orig_line);
     trim_end(line);
     if (!qpp_line_starts_with_identifier(line) || qpp_line_starts_with_statement_keyword(line)
-            || line.find(';') != std::string::npos) {
+            || qpp_line_has_statement_end(line)) {
         return std::string();
     }
     size_t paren = line.find('(');
@@ -1217,6 +1235,44 @@ static bool qpp_idchar(char c) {
     return isalnum(static_cast<unsigned char>(c)) || c == '_';
 }
 
+//! returns true if the text in brackets is a qpp attribute list: items separated by ';' that are "name=value" or the
+//! flags "const" and "doconly", as qpp attributes are, and not an array bound or subscript ("N", "MAX", "0", "i")
+static bool qpp_is_attribute_list(const std::string& text) {
+    bool any = false;
+    size_t start = 0;
+    while (start <= text.size()) {
+        size_t semi = text.find(';', start);
+        std::string item(text, start, semi == std::string::npos ? std::string::npos : semi - start);
+        trim(item);
+        if (!item.empty()) {
+            if (item.find('=') != std::string::npos) {
+                size_t eq = item.find('=');
+                std::string name(item, 0, eq);
+                trim(name);
+                // "name=value": a name that is an identifier (not "a == b" or "i <= n")
+                if (name.empty() || !(isalpha(static_cast<unsigned char>(name[0])) || name[0] == '_')
+                        || (eq + 1 < item.size() && item[eq + 1] == '=')) {
+                    return false;
+                }
+                for (char c : name) {
+                    if (!qpp_idchar(c)) {
+                        return false;
+                    }
+                }
+            } else if (item != "const" && item != "doconly") {
+                return false;
+            }
+            any = true;
+        }
+        if (semi == std::string::npos) {
+            break;
+        }
+        start = semi + 1;
+    }
+    // "const" alone is a qpp flag only; "[const]" is not an array bound
+    return any;
+}
+
 //! returns true if a signature line has syntax that only qpp accepts, so that it cannot be C++ code
 /** A line of C++ code that qpp copies can be a definition of a C++ function or of a method of a C++ class that has the
     name of a class of the file (the class of its private data, for example), so a declaration that qpp did not
@@ -1294,68 +1350,21 @@ static bool qpp_line_has_qpp_only_syntax(const std::string& orig_line) {
             }
         }
     }
-    // attributes after the parameters: ") [" or ")[" after the ')' that closes the parameter list of the name, with
-    // an attribute name ("[flags=...]", "[dom=...]"), not an array type ("-> int(&)[3]") or a C++ attribute ("[["); a
-    // parenthesized declarator ("int (*name(...))[N]", "int (&name(...))[N]") returns an array, which C++ accepts
-    // ("int (**name(...))[N]", "int (*const name(...))[N]", "int (*ns::name(...))[N]", "int (Cls::*name(...))[N]"):
-    // after the '(', pointers, references, cv-qualifiers and scopes, then the name and its '('; a Qore parameter of an
-    // or-nothing type ("(*string a") has a name after its type, not a '('
-    bool declarator = false;
-    {
-        size_t i = paren + 1;
-        bool ptr = false;
-        while (true) {
-            i = line.find_first_not_of(" \t", i);
-            if (i == std::string::npos) {
-                break;
-            }
-            if (line[i] == '*' || line[i] == '&') {
-                ptr = true;
-                ++i;
-                continue;
-            }
-            if (!(isalpha(static_cast<unsigned char>(line[i])) || line[i] == '_')) {
-                break;
-            }
-            size_t e = i;
-            while (e < line.size() && qpp_idchar(line[e])) {
-                ++e;
-            }
-            std::string word(line, i, e - i);
-            if (word == "const" || word == "volatile") {
-                i = e;
-                continue;
-            }
-            if (!line.compare(e, 2, "::")) {
-                // a scope: of the name, or of a pointer to member ("Cls::*")
-                i = e + 2;
-                continue;
-            }
-            // the name: the declarator has a pointer or a reference, and the name has its parameters
-            size_t j = line.find_first_not_of(" \t", e);
-            declarator = ptr && j != std::string::npos && line[j] == '(';
-            break;
+    // attributes after the parameters: ") [" or ")[" followed by a qpp attribute list, whose items, separated by ';',
+    // are "name=value" or the flags "const" and "doconly" ("[flags=CONSTANT]", "[const;flags=RET_VALUE_ONLY]"); an
+    // array bound after a declarator ("-> int(&)[N]", "int (*name(int))[N]", "f(x)[0]") or a C++ attribute ("[[")
+    // has none
+    for (size_t close = line.find(')'); close != std::string::npos; close = line.find(')', close + 1)) {
+        size_t i = line.find_first_not_of(" \t", close + 1);
+        if (i == std::string::npos || line[i] != '[' || (i + 1 < line.size() && line[i + 1] == '[')) {
+            continue;
         }
-    }
-    if (!declarator) {
-        int depth = 0;
-        size_t close = std::string::npos;
-        for (size_t i = paren; i < line.size(); ++i) {
-            if (line[i] == '(') {
-                ++depth;
-            } else if (line[i] == ')' && !--depth) {
-                close = i;
-                break;
-            }
+        size_t end = line.find(']', i + 1);
+        if (end == std::string::npos) {
+            continue;
         }
-        if (close != std::string::npos) {
-            size_t i = line.find_first_not_of(" \t", close + 1);
-            if (i != std::string::npos && line[i] == '[') {
-                size_t j = line.find_first_not_of(" \t", i + 1);
-                if (j != std::string::npos && (isalpha(static_cast<unsigned char>(line[j])) || line[j] == '_')) {
-                    return true;
-                }
-            }
+        if (qpp_is_attribute_list(std::string(line, i + 1, end - i - 1))) {
+            return true;
         }
     }
     // a type that only Qore has, in a type position: the word followed by a name
