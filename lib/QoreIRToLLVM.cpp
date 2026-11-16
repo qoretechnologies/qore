@@ -37002,6 +37002,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::CheckException: {
+            // a kept check of a release in a functional loop's body: native code checks the sink after the release
+            // itself, with the handler of the container that releases the value (qore#6072); nothing to emit.  A
+            // pending one was not decided by qore_ir_prune_release_checks(), which every pipeline runs first: it is
+            // checked here, which is correct, if not free
+            assert(inst->release_check != QoreIRReleaseCheck::Pending);
+            if (inst->release_check == QoreIRReleaseCheck::Kept) {
+                return true;
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }

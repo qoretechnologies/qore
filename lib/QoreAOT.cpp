@@ -2879,7 +2879,9 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
 
     // Assign slot IDs and compile handler IR functions.  Handler
     // compilation failure now aborts the AOT lowering of this function
-    // (the runtime `executeHandlerBody` asserts handler_ir is populated).
+    // (the runtime `executeHandlerBody` asserts handler_ir is populated).  qore_ir_optimize() below prunes the
+    // release checks (qore#6072)
+    ir_func->defer_release_check_prune = true;
     ir_func->computeSlotIdsAndEmbed();
     std::string handler_error;
     if (lowering.compileAllHandlerIRs(handler_error) < 0) {
@@ -4617,6 +4619,10 @@ private:
     //! True when an instruction ends a statement/cleanup cluster — the only
     //! positions where a block may be split (keeps statement units whole).
     static bool isStatementEndMarker(const QoreIRInstruction* inst) {
+        // a check of a release in a functional loop's body is in the middle of a statement (qore#6072)
+        if (inst->opcode == QoreIROpcode::CheckException && inst->release_check != QoreIRReleaseCheck::None) {
+            return false;
+        }
         switch (inst->opcode) {
             case QoreIROpcode::DiscardTemps:
             case QoreIROpcode::CheckException:
@@ -5119,6 +5125,10 @@ static int tryLowerInitExpression(const QoreValue& init_expr, const char* name,
         ir_func = nullptr;
         return -1;
     }
+
+    // the release checks of the values that cannot hold an object go, and the containers of the others get their
+    // handler (qore#6072): native code is generated from this IR without computeSlotIdsAndEmbed()
+    qore_ir_prune_release_checks(*ir_func);
 
     // Init expressions have no body locals (no statement blocks)
     ir_func->computeIROnlyLocals();
@@ -24435,6 +24445,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
             }
             std::string verify_error;
             if (QoreIRVerifier::verify(*ir_func, verify_error)) {
+                // native code is generated here before computeSlotIdsAndEmbed() runs: the release checks of the values
+                // that cannot hold an object go, and the containers of the others get their handler (qore#6072)
+                qore_ir_prune_release_checks(*ir_func);
                 // the LLVM lowering needs the closure-bound locals marked in the instructions: without the flag, a
                 // closure-bound local of a block was not popped at the end of the block, so that the closures of all
                 // iterations of a loop shared one variable (#5869); the slot IDs are not embedded, as the local

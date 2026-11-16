@@ -412,6 +412,7 @@ public:
     void setFunctionalBaseSource(const QoreValue& base_source);
     //! The block that an exception leaving the loop of a functional operator goes to (see the definition)
     class FunctionalLoopExceptionCleanup;
+    class LoopBodyRegion;
     //! Lowers code that runs with an element as the implicit argument and its index as the implicit element, which
     //! are restored on every path, also when the code raises an exception (see the definition)
     template <typename F>

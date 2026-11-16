@@ -12,6 +12,7 @@
 #include <qore/intern/QoreIRAnalysis.h>
 #include <qore/intern/QoreIRLowering.h>
 #include <qore/intern/LocalVar.h>
+#include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/QoreJITIncludes.h>
 #include <qore/intern/QoreBinaryLValueOperatorNode.h>
 #include <qore/intern/QoreDeleteOperatorNode.h>
@@ -11609,7 +11610,663 @@ static size_t qore_ir_load_read_only_constant_containers(QoreIRFunction& func, s
     return replace.size();
 }
 
-void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
+//! true if a type can hold an object, whose release can run a destructor (qore#6072)
+static bool qore_ir_release_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0) {
+    if (!QoreTypeInfo::needsScan(ti)) {
+        return false;
+    }
+    if (depth >= 8) {
+        return true;
+    }
+    if (const QoreTypeInfo* element = QoreTypeInfo::getComplexListValueType(ti)) {
+        return qore_ir_release_type_may_hold_object(element, depth + 1);
+    }
+    if (const QoreTypeInfo* value = QoreTypeInfo::getComplexHashValueType(ti)) {
+        return qore_ir_release_type_may_hold_object(value, depth + 1);
+    }
+    return true;
+}
+
+namespace {
+//! decides whether the values of a function can hold an object (qore#6072)
+/** A monotone data-flow analysis over the values of the function: a value is decided by its type facts, by the type
+    of the local that it loads, or by its opcode (a scalar result); an element read, a literal container and a phi hold
+    what their sources hold, and a list that the function builds holds what is appended to it or set in it.  A value
+    that an instruction outside the read-only set takes as an operand can be changed there, and is taken to hold an
+    object; so is the value of any other instruction.  The values only change from "no object" to "can hold an
+    object", so the analysis ends.
+*/
+class QoreIRReleaseObjectFacts {
+public:
+    DLLLOCAL explicit QoreIRReleaseObjectFacts(const QoreIRFunction& func) {
+        // the values decided without the data flow
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (!inst->result.isValid()) {
+                    continue;
+                }
+                int fixed = fixedState(func, inst.get());
+                if (fixed >= 0) {
+                    fixed_values[inst->result.id] = fixed != 0;
+                } else {
+                    flow_values[inst->result.id] = false;
+                }
+            }
+        }
+        // the containers that the function builds, and the phis that carry them: an instruction can change what one of
+        // them holds after it is built (an in-place append or push), which an element or an argument of a call, which
+        // are not unique, cannot have done to them
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                switch (inst->opcode) {
+                    case QoreIROpcode::CreateSizedList:
+                    case QoreIROpcode::CreateEmptyList:
+                    case QoreIROpcode::MakeList:
+                    case QoreIROpcode::MakeHash:
+                    case QoreIROpcode::MakeHashConstKeys:
+                        if (flow_values.count(inst->result.id)) {
+                            built_values.insert(inst->result.id);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+        bool changed = true;
+        while (changed) {
+            changed = false;
+            for (const auto& block : func.blocks) {
+                for (const auto& inst : block->instructions) {
+                    if (inst->opcode != QoreIROpcode::Phi || !flow_values.count(inst->result.id)
+                            || built_values.count(inst->result.id)) {
+                        continue;
+                    }
+                    for (const QoreIRPhiIncoming& in : static_cast<const QoreIRPhiInstruction*>(inst.get())->incoming) {
+                        if (in.value.isValid() && built_values.count(in.value.id)) {
+                            built_values.insert(inst->result.id);
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        changed = true;
+        while (changed) {
+            changed = false;
+            for (const auto& block : func.blocks) {
+                for (const auto& inst : block->instructions) {
+                    if (propagate(inst.get())) {
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+
+    //! true if the value can hold an object
+    DLLLOCAL bool valueMayHoldObject(QoreIRValue value) const {
+        auto i = fixed_values.find(value.id);
+        if (i != fixed_values.end()) {
+            return i->second;
+        }
+        auto f = flow_values.find(value.id);
+        // a value without an instruction (an argument) is unknown
+        return f == flow_values.end() || f->second;
+    }
+
+    //! true if the container that a container instruction builds can hold an object
+    DLLLOCAL bool containerMayHoldObject(const QoreIRInstruction* inst) const {
+        return !inst->result.isValid() || valueMayHoldObject(inst->result);
+    }
+
+private:
+    //! the values decided without the data flow
+    std::unordered_map<uint32_t, bool> fixed_values;
+    //! the values of the data flow
+    std::unordered_map<uint32_t, bool> flow_values;
+    //! the values of the data flow that hold a container that the function builds
+    std::unordered_set<uint32_t> built_values;
+
+    //! returns 1 or 0 for a value decided without the data flow, -1 for one of the data flow
+    DLLLOCAL static int fixedState(const QoreIRFunction& func, const QoreIRInstruction* inst) {
+        QoreIROpcode opcode = effectiveOpcode(inst);
+        // each of the facts below bounds what the value can hold: one that excludes an object decides it
+        if (isScalarOpcode(opcode)) {
+            return 0;
+        }
+        const QoreIRValueFacts* facts = func.getValueFacts(inst->result);
+        if (facts) {
+            if (facts->representation == QoreIRValueRepresentation::NativeInt
+                    || facts->representation == QoreIRValueRepresentation::NativeFloat) {
+                return 0;
+            }
+            if (facts->type_info && !qore_ir_release_type_may_hold_object(facts->type_info)) {
+                return 0;
+            }
+        }
+        if (inst->intrinsic != QoreIRIntrinsic::None && inst->intrinsic != QoreIRIntrinsic::ListFirst
+                && inst->intrinsic != QoreIRIntrinsic::ListLast) {
+            // a pseudo-method that the lowering recognized: it returns a scalar (a size, a type, a string's part)
+            return 0;
+        }
+        {
+            // a method call resolved at parse time: its variant's return type, which is checked when it returns
+            // or a function call resolved at parse time: its variant's return type (a builtin's is that of its
+            // signature, a user function's is checked when it returns)
+            const AbstractQoreFunctionVariant* variant = nullptr;
+            if (inst->opcode == QoreIROpcode::CallDirect) {
+                variant = static_cast<const QoreIRCallDirectInstruction*>(inst)->variant;
+            } else if (inst->opcode == QoreIROpcode::Invoke
+                    && static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode == QoreIROpcode::CallDirect) {
+                const AbstractQoreNode* node = static_cast<const QoreIRInvokeInstruction*>(inst)->expr.getInternalNode();
+                const FunctionCallNode* call = node ? dynamic_cast<const FunctionCallNode*>(node) : nullptr;
+                variant = call ? call->getVariant() : nullptr;
+            } else if (inst->opcode == QoreIROpcode::DotEvalMethodDirect) {
+                variant = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst)->variant;
+            } else if (inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
+                variant = static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)->variant;
+            }
+            AbstractFunctionSignature* sig = variant ? variant->getSignature() : nullptr;
+            const QoreTypeInfo* rti = sig ? sig->getReturnTypeInfo() : nullptr;
+            if (rti && !qore_ir_release_type_may_hold_object(rti)) {
+                return 0;
+            }
+        }
+        if (opcode == QoreIROpcode::LoadLocal) {
+            // the type of a local holds for every value that it is given
+            const LocalVar* local = static_cast<const QoreIRLocalInstruction*>(inst)->local;
+            const QoreTypeInfo* ti = local ? local->getTypeInfo() : nullptr;
+            if (ti && !QoreTypeInfo::isReference(ti) && !qore_ir_release_type_may_hold_object(ti)) {
+                return 0;
+            }
+            return 1;
+        }
+        if (isElementOpcode(opcode) || isValueOperatorOpcode(opcode)) {
+            return -1;
+        }
+        switch (opcode) {
+            case QoreIROpcode::IteratorCreate:
+            case QoreIROpcode::IteratorNext:
+            case QoreIROpcode::Phi:
+            case QoreIROpcode::MakeList:
+            case QoreIROpcode::MakeHash:
+            case QoreIROpcode::MakeHashConstKeys:
+            case QoreIROpcode::CreateSizedList:
+            case QoreIROpcode::CreateEmptyList:
+                return -1;
+            default:
+                return isScalarOpcode(inst->opcode) ? 0 : 1;
+        }
+    }
+
+    //! true for an opcode whose result is an element of its first operand (a list's or a hash's), which holds what the
+    //! operand holds
+    DLLLOCAL static bool isElementOpcode(QoreIROpcode opcode) {
+        switch (opcode) {
+            case QoreIROpcode::ListGetInt:
+            case QoreIROpcode::ListGetValue:
+            case QoreIROpcode::ListGetValueNoRef:
+            case QoreIROpcode::ListGetValueNoRefUnchecked:
+            case QoreIROpcode::ListIndexAccess:
+            case QoreIROpcode::ListIndexDynamic:
+            case QoreIROpcode::HashKeyAccess:
+            case QoreIROpcode::HashKeyAccessInt:
+            case QoreIROpcode::HashKeyAccessHash:
+            case QoreIROpcode::HashKeyAccessHashGuarded:
+            case QoreIROpcode::HashDerefDynamic:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    //! true for an operator whose result is made of its operands' values (+, -, etc. of any type), which holds what
+    //! they hold; the operators of assignments and of code (map, fold, etc.) are not
+    DLLLOCAL static bool isValueOperatorOpcode(QoreIROpcode opcode) {
+        switch (opcode) {
+            case QoreIROpcode::AddAny:
+            case QoreIROpcode::SubAny:
+            case QoreIROpcode::MulAny:
+            case QoreIROpcode::DivAny:
+            case QoreIROpcode::ModAny:
+            case QoreIROpcode::AndAny:
+            case QoreIROpcode::OrAny:
+            case QoreIROpcode::XorAny:
+            case QoreIROpcode::ShlAny:
+            case QoreIROpcode::ShrAny:
+            case QoreIROpcode::UnaryPlusAny:
+            case QoreIROpcode::UnaryMinusAny:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    //! the operation of an instruction: an Invoke's is the one that it calls
+    DLLLOCAL static QoreIROpcode effectiveOpcode(const QoreIRInstruction* inst) {
+        if (inst->opcode == QoreIROpcode::Invoke) {
+            return static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
+        }
+        return inst->opcode;
+    }
+
+    //! true for an opcode whose result is an int, a float, a bool, a string or no value
+    DLLLOCAL static bool isScalarOpcode(QoreIROpcode opcode) {
+        switch (opcode) {
+            case QoreIROpcode::ConstInt:
+            case QoreIROpcode::ConstFloat:
+            case QoreIROpcode::ConstBool:
+            case QoreIROpcode::ConstNothing:
+            case QoreIROpcode::ConstString:
+            case QoreIROpcode::ListSize:
+            case QoreIROpcode::AddInt:
+            case QoreIROpcode::AddFloat:
+            case QoreIROpcode::SubInt:
+            case QoreIROpcode::SubFloat:
+            case QoreIROpcode::MulInt:
+            case QoreIROpcode::MulFloat:
+            case QoreIROpcode::DivInt:
+            case QoreIROpcode::DivFloat:
+            case QoreIROpcode::ModInt:
+            case QoreIROpcode::ShlInt:
+            case QoreIROpcode::ShrInt:
+            case QoreIROpcode::EqInt:
+            case QoreIROpcode::EqFloat:
+            case QoreIROpcode::NeInt:
+            case QoreIROpcode::NeFloat:
+            case QoreIROpcode::EqHard:
+            case QoreIROpcode::NeHard:
+            case QoreIROpcode::LtInt:
+            case QoreIROpcode::LtFloat:
+            case QoreIROpcode::LeInt:
+            case QoreIROpcode::LeFloat:
+            case QoreIROpcode::GtInt:
+            case QoreIROpcode::GtFloat:
+            case QoreIROpcode::GeInt:
+            case QoreIROpcode::GeFloat:
+            case QoreIROpcode::CmpInt:
+            case QoreIROpcode::CmpFloat:
+            case QoreIROpcode::Not:
+            case QoreIROpcode::ToBool:
+            case QoreIROpcode::ListGetFloat:
+            // a match is a bool, a substitution a string, an extraction a list of strings or no value
+            case QoreIROpcode::RegexMatchAny:
+            case QoreIROpcode::RegexMatchBool:
+            case QoreIROpcode::RegexNMatchBool:
+            case QoreIROpcode::RegexExtractAny:
+            case QoreIROpcode::RegexExtractList:
+            case QoreIROpcode::RegexSubstAny:
+            case QoreIROpcode::RegexSubstString:
+            case QoreIROpcode::Sprintf:
+            case QoreIROpcode::SprintfIntFixed:
+            case QoreIROpcode::ToString:
+            case QoreIROpcode::ToStringChecked:
+            case QoreIROpcode::ToInt:
+            case QoreIROpcode::ToIntChecked:
+            case QoreIROpcode::ToFloat:
+            case QoreIROpcode::ToFloatChecked:
+            case QoreIROpcode::EqAny:
+            case QoreIROpcode::NeAny:
+            case QoreIROpcode::LtAny:
+            case QoreIROpcode::LeAny:
+            case QoreIROpcode::GtAny:
+            case QoreIROpcode::GeAny:
+            case QoreIROpcode::CmpAny:
+            case QoreIROpcode::ExistsAny:
+            case QoreIROpcode::ExistsBool:
+            case QoreIROpcode::ElementsAny:
+            case QoreIROpcode::ElementsInt:
+            case QoreIROpcode::IsNullOrNothing:
+            case QoreIROpcode::IsCollectionType:
+            // the keys of a hash or the member names of an object: strings
+            case QoreIROpcode::KeysAny:
+            case QoreIROpcode::KeysList:
+            case QoreIROpcode::KeysHash:
+            case QoreIROpcode::RangeAny:
+            case QoreIROpcode::RangeInt:
+            case QoreIROpcode::RangeFloat:
+            case QoreIROpcode::RangeDate:
+            case QoreIROpcode::AddNumber:
+            case QoreIROpcode::SubNumber:
+            case QoreIROpcode::MulNumber:
+            case QoreIROpcode::DivNumber:
+            case QoreIROpcode::AndInt:
+            case QoreIROpcode::OrInt:
+            case QoreIROpcode::XorInt:
+            case QoreIROpcode::UnaryMinusInt:
+            case QoreIROpcode::UnaryMinusFloat:
+            case QoreIROpcode::AddAssignInt:
+            case QoreIROpcode::AddAssignFloat:
+            case QoreIROpcode::SubAssignInt:
+            case QoreIROpcode::SubAssignFloat:
+            case QoreIROpcode::MulAssignInt:
+            case QoreIROpcode::MulAssignFloat:
+            case QoreIROpcode::DivAssignInt:
+            case QoreIROpcode::DivAssignFloat:
+            case QoreIROpcode::ModAssignInt:
+            case QoreIROpcode::ShlAssignInt:
+            case QoreIROpcode::ShrAssignInt:
+            case QoreIROpcode::AddAssignLocalInt:
+            case QoreIROpcode::IncrementLocalInt:
+            // the index of the next element
+            case QoreIROpcode::ListAppendElement:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    //! marks a value of the data flow as one that can hold an object; returns true if it changed
+    DLLLOCAL bool mark(QoreIRValue value) {
+        auto i = flow_values.find(value.id);
+        if (i == flow_values.end() || i->second) {
+            return false;
+        }
+        i->second = true;
+        return true;
+    }
+
+    //! applies the rules of an instruction; returns true if a value changed
+    DLLLOCAL bool propagate(const QoreIRInstruction* inst) {
+        bool changed = false;
+        // the result: what its sources hold
+        QoreIROpcode opcode = effectiveOpcode(inst);
+        if (inst->result.isValid() && flow_values.count(inst->result.id)) {
+            bool rv = false;
+            switch (opcode) {
+                case QoreIROpcode::Phi:
+                    for (const QoreIRPhiIncoming& in : static_cast<const QoreIRPhiInstruction*>(inst)->incoming) {
+                        if (in.value.isValid() && valueMayHoldObject(in.value)) {
+                            rv = true;
+                            break;
+                        }
+                    }
+                    break;
+                case QoreIROpcode::MakeList:
+                case QoreIROpcode::MakeHash:
+                case QoreIROpcode::MakeHashConstKeys:
+                    for (const QoreIRValue& op : inst->operands) {
+                        if (op.isValid() && valueMayHoldObject(op)) {
+                            rv = true;
+                            break;
+                        }
+                    }
+                    break;
+                case QoreIROpcode::IteratorCreate: {
+                    // an iterator of a lazily evaluated operator gives what the operator gives
+                    const auto* ic = static_cast<const QoreIRIteratorCreateInstruction*>(inst);
+                    rv = ic->iterator_func || !ic->iterable.isValid() || valueMayHoldObject(ic->iterable);
+                    break;
+                }
+                case QoreIROpcode::IteratorNext: {
+                    const auto* in = static_cast<const QoreIRIteratorNextInstruction*>(inst);
+                    rv = !in->iterator.isValid() || valueMayHoldObject(in->iterator);
+                    break;
+                }
+                default:
+                    if (isElementOpcode(opcode)) {
+                        rv = inst->operands.empty() || !inst->operands[0].isValid()
+                            || valueMayHoldObject(inst->operands[0]);
+                    } else if (isValueOperatorOpcode(opcode)) {
+                        for (const QoreIRValue& op : inst->operands) {
+                            if (op.isValid() && valueMayHoldObject(op)) {
+                                rv = true;
+                                break;
+                            }
+                        }
+                    }
+                    break;
+            }
+            if (rv && mark(inst->result)) {
+                changed = true;
+            }
+        }
+        // a phi that can hold an object: its sources are taken to hold one too, as what is done with the phi's value
+        // is done with theirs
+        if (inst->opcode == QoreIROpcode::Phi && inst->result.isValid() && valueMayHoldObject(inst->result)) {
+            for (const QoreIRPhiIncoming& in : static_cast<const QoreIRPhiInstruction*>(inst)->incoming) {
+                if (in.value.isValid() && mark(in.value)) {
+                    changed = true;
+                }
+            }
+        }
+        // the operands: what the instruction can store in a container that the function builds
+        for (size_t i = 0, e = inst->operands.size(); i < e; ++i) {
+            QoreIRValue op = inst->operands[i];
+            if (!op.isValid() || !built_values.count(op.id)) {
+                continue;
+            }
+            bool rv;
+            switch (opcode) {
+                case QoreIROpcode::ListAppendElement:
+                    // operands: the list, the value, the index
+                    rv = !i && e > 1 && inst->operands[1].isValid() && valueMayHoldObject(inst->operands[1]);
+                    break;
+                case QoreIROpcode::ListSetValue:
+                    // operands: the list, the index, the value
+                    rv = !i && e > 2 && inst->operands[2].isValid() && valueMayHoldObject(inst->operands[2]);
+                    break;
+                // read: an instruction changes a container in place only when it is the only reference, which this
+                // value's slot is not while it holds it; a local that is given it holds another reference
+                case QoreIROpcode::StoreLocal:
+                case QoreIROpcode::Return:
+                case QoreIROpcode::Phi:
+                case QoreIROpcode::MakeList:
+                case QoreIROpcode::MakeHash:
+                case QoreIROpcode::MakeHashConstKeys:
+                case QoreIROpcode::ListSetCommonType:
+                case QoreIROpcode::ListSetLength:
+                case QoreIROpcode::ListSetScannedType:
+                case QoreIROpcode::IteratorCreate:
+                case QoreIROpcode::IteratorNext:
+                case QoreIROpcode::IteratorRelease:
+                case QoreIROpcode::ReleaseOwnedTemp:
+                case QoreIROpcode::CheckException:
+                    rv = false;
+                    break;
+                default:
+                    rv = !isScalarOpcode(opcode) && !isElementOpcode(opcode) && !isValueOperatorOpcode(opcode);
+                    break;
+            }
+            if (rv && mark(op)) {
+                changed = true;
+            }
+        }
+        return changed;
+    }
+};
+}
+
+//! true for an instruction that a pending exception cannot leave the frame from or be observed by, between the check
+//! of a release and an instruction that checks the sink with the same handler: a constant, scalar arithmetic or
+//! comparison, or the release of a temporary, whose own exception the same check takes (qore#6072)
+static bool qore_ir_release_check_transparent(const QoreIRInstruction* inst, const QoreIRBasicBlock* handler) {
+    switch (inst->opcode) {
+        case QoreIROpcode::ConstInt:
+        case QoreIROpcode::ConstFloat:
+        case QoreIROpcode::ConstBool:
+        case QoreIROpcode::ConstNothing:
+        case QoreIROpcode::ConstString:
+        case QoreIROpcode::AddInt:
+        case QoreIROpcode::AddFloat:
+        case QoreIROpcode::SubInt:
+        case QoreIROpcode::SubFloat:
+        case QoreIROpcode::MulInt:
+        case QoreIROpcode::MulFloat:
+        case QoreIROpcode::EqInt:
+        case QoreIROpcode::NeInt:
+        case QoreIROpcode::LtInt:
+        case QoreIROpcode::LeInt:
+        case QoreIROpcode::GtInt:
+        case QoreIROpcode::GeInt:
+        case QoreIROpcode::ListSize:
+            return true;
+        // the release of a fused pipeline's stage input (a second operand) checks the sink with its own handler
+        case QoreIROpcode::ReleaseOwnedTemp:
+            return inst->operands.size() < 2 || inst->exception_target == handler;
+        default:
+            return false;
+    }
+}
+
+//! true for an instruction that checks the sink after itself with the given handler, in the IR interpreter and in
+//! native code, and runs no Qore code: a check of a release before it is redundant (qore#6072)
+static bool qore_ir_release_check_covering(const QoreIRInstruction* inst, const QoreIRBasicBlock* handler) {
+    // ListSetValue is not one: native code stores some values without a check
+    return handler && inst->exception_target == handler && inst->opcode == QoreIROpcode::ListAppendElement;
+}
+
+// documented in QoreIRAnalysis.h
+size_t qore_ir_prune_release_checks(QoreIRFunction& func) {
+    bool any = false;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::CheckException && inst->release_check == QoreIRReleaseCheck::Pending) {
+                any = true;
+                break;
+            }
+        }
+        if (any) {
+            break;
+        }
+    }
+    if (!any) {
+        return 0;
+    }
+    QoreIRReleaseObjectFacts facts(func);
+    std::unordered_map<uint32_t, QoreIRInstruction*> defs;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->result.isValid()) {
+                defs[inst->result.id] = inst.get();
+            }
+        }
+    }
+    // a back-edge check is decided by the natural loop of its back-edge: the header that the block branches to and the
+    // blocks that reach the block without passing the header; one whose loop cannot be found is kept
+    QoreIRControlFlowGraph cfg(func);
+    auto backEdgeLoopHasObjects = [&](const QoreIRBasicBlock* block) -> bool {
+        auto bi = cfg.block_ids.find(block);
+        if (cfg.cancelled || bi == cfg.block_ids.end() || bi->second >= cfg.successors.size()) {
+            return true;
+        }
+        size_t b = bi->second;
+        for (size_t h : cfg.successors[b]) {
+            if (!cfg.dominates(h, b)) {
+                continue;
+            }
+            std::vector<uint8_t> in_loop(cfg.blocks.size(), 0);
+            std::vector<size_t> work;
+            in_loop[h] = 1;
+            if (!in_loop[b]) {
+                in_loop[b] = 1;
+                work.push_back(b);
+            }
+            while (!work.empty()) {
+                size_t x = work.back();
+                work.pop_back();
+                for (size_t p : cfg.predecessors[x]) {
+                    if (!in_loop[p]) {
+                        in_loop[p] = 1;
+                        work.push_back(p);
+                    }
+                }
+            }
+            for (size_t i = 0, e = cfg.blocks.size(); i < e; ++i) {
+                if (!in_loop[i]) {
+                    continue;
+                }
+                for (const auto& x : cfg.blocks[i]->instructions) {
+                    if (x->result.isValid() && facts.valueMayHoldObject(x->result)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        return true;
+    };
+    size_t removed = 0;
+    for (const auto& block : func.blocks) {
+        std::vector<std::unique_ptr<QoreIRInstruction>>& insts = block->instructions;
+        for (size_t i = 0; i < insts.size(); ) {
+            QoreIRInstruction* inst = insts[i].get();
+            if (inst->opcode != QoreIROpcode::CheckException || inst->release_check != QoreIRReleaseCheck::Pending) {
+                ++i;
+                continue;
+            }
+            bool keep = true;
+            if (!inst->operands.empty() && inst->operands[0].isValid()) {
+                // the check of the value of a container or of a call
+                QoreIRValue value = inst->operands[0];
+                keep = facts.valueMayHoldObject(value);
+                auto d = defs.find(value.id);
+                QoreIRInstruction* def = d == defs.end() ? nullptr : d->second;
+                // the next instruction that is not transparent checks the sink with the same handler: the check is
+                // redundant, at no cost in any mode
+                bool covered = false;
+                if (keep) {
+                    for (size_t j = i + 1, e = insts.size(); j < e; ++j) {
+                        if (qore_ir_release_check_covering(insts[j].get(), inst->exception_target)) {
+                            covered = true;
+                            break;
+                        }
+                        if (!qore_ir_release_check_transparent(insts[j].get(), inst->exception_target)) {
+                            break;
+                        }
+                    }
+                }
+                if (keep && def && qore_ir_takes_region_exception_target(def->opcode)) {
+                    // native code checks the sink after the release of the value that the container replaces
+                    if (!def->exception_target) {
+                        def->exception_target = inst->exception_target;
+                    }
+                }
+                if (covered) {
+                    keep = false;
+                } else if (keep) {
+                    // native code releases the previous value of a call or a Phi at the start of the call's
+                    // continuation or of the Phi's block, where this is, and checks it here; it checks that of a
+                    // container after the container, with the handler, and emits nothing here
+                    inst->release_check = def && (def->opcode == QoreIROpcode::Invoke || def->opcode == QoreIROpcode::Phi)
+                        ? QoreIRReleaseCheck::Native : QoreIRReleaseCheck::Kept;
+                }
+            } else {
+                // at a back-edge; redundant when the instructions before it, which are transparent, follow one that
+                // checks the sink with the same handler
+                keep = backEdgeLoopHasObjects(block.get());
+                if (keep) {
+                    for (size_t j = i; j-- > 0; ) {
+                        if (qore_ir_release_check_covering(insts[j].get(), inst->exception_target)) {
+                            keep = false;
+                            break;
+                        }
+                        if (!qore_ir_release_check_transparent(insts[j].get(), inst->exception_target)) {
+                            break;
+                        }
+                    }
+                }
+            }
+            if (keep) {
+                // decided: the operand only served the decision, and the image carries a CheckException as before
+                if (inst->release_check == QoreIRReleaseCheck::Pending) {
+                    inst->release_check = QoreIRReleaseCheck::Kept;
+                }
+                inst->operands.clear();
+                ++i;
+                continue;
+            }
+            insts.erase(insts.begin() + i);
+            ++removed;
+        }
+    }
+    return removed;
+}
+
+//! the passes of qore_ir_optimize(), which returns early when a pass is cancelled or disabled
+static void qore_ir_optimize_intern(QoreIRFunction& func, QoreIROptimizationStats* stats,
         bool enable_licm, const QoreIRFoldContext& fold_context) {
     QoreIROptimizationStats local_stats;
     if (q_env_is_set("QORE_DISABLE_IR_OPT")) {
@@ -11965,6 +12622,15 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
     if (stats) {
         *stats = local_stats;
     }
+}
+
+void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
+        bool enable_licm, const QoreIRFoldContext& fold_context) {
+    qore_ir_optimize_intern(func, stats, enable_licm, fold_context);
+    // last, also when a pass was cancelled or the optimization is disabled: it reads the final facts of the values
+    // (qore#6072)
+    func.defer_release_check_prune = false;
+    qore_ir_prune_release_checks(func);
 }
 
 size_t qore_ir_optimize_fresh_list_calls(QoreIRFunction& func,

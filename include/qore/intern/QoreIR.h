@@ -1532,6 +1532,24 @@ enum class QoreIRInstClass : uint8_t {
         return c == inst_class_id; \
     }
 
+//! The kind of a check of a release in the body of a functional loop (a CheckException; qore#6072)
+/** The body of a map, select or fold expression keeps the values of an element until the next element replaces them;
+    the release of one whose type can hold an object can run a destructor that raises an exception.  The lowering puts
+    a CheckException after each container, at the start of each call's continuation, after the Phis of each block and
+    at the loop's back-edge (QoreIRLowering::LoopBodyRegion), with the value whose release it checks as its operand
+    (none at a back-edge).  qore_ir_prune_release_checks() removes those of the values that cannot hold an object and
+    those that an append with the same handler follows, and clears the operands of the others.  The IR interpreter
+    executes every CheckException alike.
+*/
+enum class QoreIRReleaseCheck : uint8_t {
+    None,       //!< not a release check
+    Pending,    //!< a release check that qore_ir_prune_release_checks() has not decided yet (it has its operand)
+    Kept,       //!< a kept check of a container's value or at a back-edge: native code checks the sink after the
+                //!< release itself (the container gets the handler) and emits nothing for it
+    Native,     //!< a kept check of a call's or a Phi's value: native code releases the previous value at the start
+                //!< of the call's continuation or of the Phi's block, where it checks the sink
+};
+
 class QoreIRInstruction {
 public:
     enum class AOTStringCaseComparisonKind : uint8_t {
@@ -1598,6 +1616,9 @@ public:
     // Transient: ReleaseOwnedTemp in the exception cleanup of a functional operator, which only runs once the loop has
     // ended (see qore_ir_is_exception_only_release())
     bool exception_cleanup_release = false;
+    //! CheckException only: whether it checks a release in the body of a functional loop (qore#6072); transient, not
+    //! serialized: the IR interpreter executes it as any CheckException
+    QoreIRReleaseCheck release_check = QoreIRReleaseCheck::None;
     // Transient: a call with an argument that the IR interpreter's analysis found it can consume, which gives the
     // references of its temporary arguments to the callee (see IRConsumedCallArgs in QoreIRInterpreter.cpp, issue
     // #5882): QORE_IR_GIVES_CALL_ARGS, with QORE_IR_GIVES_CALL_TEMPS if one of them is a value that a parameter of the
@@ -4452,6 +4473,10 @@ public:
         Program's statement index at runtime.
     */
     bool emit_debug_statements = false;
+    //! true while qore_ir_optimize() is still to run on the function: computeSlotIdsAndEmbed() leaves the release
+    //! checks to it, which prunes them with the facts that it refines (qore#6072, qore_ir_prune_release_checks());
+    //! the pruning gives handlers and converts checks, which a later run cannot undo
+    bool defer_release_check_prune = false;
     //! Owning program of this lowered IR function. Used by the per-Program background
     //! JIT-compile drain (QoreJIT::waitForBgCompileQueue(QoreProgram*)) to cancel/await
     //! only the compiles referencing a Program being torn down. Set unconditionally at
