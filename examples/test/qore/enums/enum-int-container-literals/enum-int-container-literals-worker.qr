@@ -182,6 +182,43 @@ sub run(EI e) {
         show("nested-hash-hash", hh.x.a);
     }
 
+    # the results of operators stored in containers of a declared type
+    {
+        list<int> l = select (e, 2), True;
+        show("select-typed", l[0]);
+        l = map $1, (e, 2);
+        show("map-typed", l[0]);
+        hash<string, int> h = map {$1: e}, ("a",);
+        show("map-hash-typed", h.a);
+        l = (1,) + (e,);
+        show("list-plus-typed", l[1]);
+        l = (e,) + (1,);
+        show("list-plus-typed-rev", l[0]);
+        h = {"a": 1} + {"b": e};
+        show("hash-plus-typed", h.b);
+        l = (e, 2)[0..1];
+        show("slice-typed", l[0]);
+        l = (1,);
+        l += (e, 2);
+        show("list-plus-eq", l[1]);
+    }
+
+    # the results of operators whose type is taken from their values keep the enum values
+    {
+        auto l = select (e, 2), True;
+        show("select-untyped", l[0]);
+        l = map $1, (e, 2);
+        show("map-untyped", l[0]);
+        l = (1,) + (e,);
+        show("list-plus-untyped", l[1]);
+        l = (e,) + (1,);
+        show("list-plus-untyped-rev", l[0]);
+        auto h = {"a": 1} + {"b": e};
+        show("hash-plus-untyped", h.b);
+        l = (e, 2)[0..1];
+        show("slice-untyped", l[0]);
+    }
+
     # containers whose value type keeps the enum value
     {
         list<auto> la = (e,);

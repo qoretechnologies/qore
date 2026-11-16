@@ -18,9 +18,12 @@
 /** An enum value stored in a container whose value type is \c int (a \c list<int>, a \c hash<string, int>, an
     \c int member of a hashdecl or a class, and the same containers nested) is converted to its base value, whether
     it is assigned to an element or given in a list or hash literal, a default value or a cast; only a container of
-    the enum type or of \c auto keeps the enum value.  The checks are in enum-int-container-literals-worker.qr,
-    which is run in each execution mode, on the IR tier and as a program compiled with qcc at -O0 and -O3; every
-    run must give the results below.
+    the enum type or of \c auto keeps the enum value, as does a container whose value type is taken from its values
+    (an untyped literal or the result of an operator such as select, map, + or a slice), as an enum type and another
+    type have no common type.  Union element types are not checked here: whether a union of an enum and its base
+    type keeps the enum depends on the order of its member types (qore#6407).  The checks are in
+    enum-int-container-literals-worker.qr, which is run in each execution mode, on the IR tier and as a program
+    compiled with qcc at -O0 and -O3; every run must give the results below.
 */
 class EnumIntContainerLiteralsTest inherits QUnit::Test {
     public {
@@ -71,6 +74,20 @@ class EnumIntContainerLiteralsTest inherits QUnit::Test {
             "list-auto-literal": "enum<EI>",
             "list-enum-literal": "enum<EI>",
             "hash-auto-literal": "enum<EI>",
+            "select-typed": "integer",
+            "map-typed": "integer",
+            "map-hash-typed": "integer",
+            "list-plus-typed": "integer",
+            "list-plus-typed-rev": "integer",
+            "hash-plus-typed": "integer",
+            "slice-typed": "integer",
+            "list-plus-eq": "integer",
+            "select-untyped": "enum<EI>",
+            "map-untyped": "enum<EI>",
+            "list-plus-untyped": "enum<EI>",
+            "list-plus-untyped-rev": "enum<EI>",
+            "hash-plus-untyped": "enum<EI>",
+            "slice-untyped": "enum<EI>",
             "list-auto-to-list-int": "integer",
             "untyped-hash-literal-mixed": "enum<EI>",
             "untyped-list-literal-mixed": "enum<EI>",
