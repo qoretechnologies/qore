@@ -79,6 +79,8 @@ optional enum return: enum<ES> "yy"
 method enum return: enum<ES> "yy"
 method optional enum return: enum<ES> "yy"
 closure enum return: enum<ES> "yy"
+concatenated hashdecl member length(), size(), find(): ["integer", "integer", "integer", "integer"] [3, 3, 4, 3]
+concatenated multi-byte hashdecl member length(), size(), find(): ["integer", "integer", "integer", "integer"] [4, 4, 8, 4]
 long value size(): integer 49
 long value empty(): bool False
 long value string local: string "a string value longer than an inline short string"

@@ -10,6 +10,7 @@ enum ES : string { X = "x", Y = "yy", N = "12" }
 enum EN : number { N1 = 1.5n, N2 = 2.5n }
 enum EI : int { One = 1, Two = 2 }
 enum EL : string { Long = "a string value longer than an inline short string" }
+enum EU : string { U = "äöü" }
 
 hashdecl HS {
     string s;
@@ -110,6 +111,25 @@ auto sub fHashDeclMemberSize(hash<HS> h) { return h.s.size(); }
 auto sub fHashDeclMemberEmpty(hash<HS> h) { return h.s.empty(); }
 auto sub fHashDeclMemberVal(hash<HS> h) { return h.s.val(); }
 auto sub fHashDeclMemberLength(hash<HS> h) { return h.s.length(); }
+
+# the value of a string enum in a string-typed hashdecl member concatenated with other strings, then measured
+string sub fConcat2(string a, string b) { return a + b; }
+string sub fConcat3(string a, string b, string c) { return a + b + c; }
+int sub fConcatLength(string a, string b) { return fConcat2(a, b).length(); }
+int sub fConcatLocalLength(string a, string b) { string r = fConcat2(a, b); return r.length(); }
+int sub fConcatSize(string a, string b, string c) { return fConcat3(a, b, c).size(); }
+int sub fConcatFind(string a, string b, string c) { return fConcat3(a, b, c).find("r"); }
+# the member is passed as a string argument, which keeps the enum's member as the hashdecl member does
+list<int> sub fConcatMember(ES e) {
+    hash<HS> h = <HS>{"s": e};
+    return (fConcatLength(h.s, "q"), fConcatLocalLength(h.s, "q"), fConcatSize("q", h.s, "r"),
+        fConcatFind("q", h.s, "r"));
+}
+list<int> sub fConcatMultiByteMember(EU u) {
+    hash<HS> h = <HS>{"s": u};
+    return (fConcatLength(h.s, "q"), fConcatLocalLength(h.s, "q"), fConcatSize("q", h.s, "r"),
+        fConcatFind("q", h.s, "r"));
+}
 
 # a string enum value that is not an inline short string
 auto sub fLongSize(EL e) { return e.size(); }
@@ -231,6 +251,9 @@ run("optional enum return", auto sub () { return fReturnOptionalEnum(e); });
 run("method enum return", auto sub () { return fMethodReturnEnum(e); });
 run("method optional enum return", auto sub () { return fMethodReturnOptionalEnum(e); });
 run("closure enum return", auto sub () { return fClosureReturnEnum(e); });
+run("concatenated hashdecl member length(), size(), find()", auto sub () { return fConcatMember(e); });
+run("concatenated multi-byte hashdecl member length(), size(), find()",
+    auto sub () { return fConcatMultiByteMember(EU::U); });
 run("long value size()", auto sub () { return fLongSize(EL::Long); });
 run("long value empty()", auto sub () { return fLongEmpty(EL::Long); });
 run("long value string local", auto sub () { return fLongLocal(EL::Long); });

@@ -11124,6 +11124,10 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
     if (direct) {
         for (int i = 0; i < nargs; ++i) {
             QoreValue value = fromBits(args[i]);
+            // the value of a string enum is its member, whose base value is the string (qore#6254)
+            if (value.isEnum()) {
+                value = value.getEnumBaseValue();
+            }
             const QoreEncoding* current;
             if (value.isShortString()) {
                 current = QCS_DEFAULT;
@@ -11172,6 +11176,10 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_search(
         same_encoding = nargs > 0;
         for (int i = 0; i < nargs; ++i) {
             QoreValue value = fromBits(args[i]);
+            // the value of a string enum is its member, whose base value is the string (qore#6254)
+            if (value.isEnum()) {
+                value = value.getEnumBaseValue();
+            }
             const QoreEncoding* current;
             if (value.isShortString()) {
                 current = QCS_DEFAULT;
