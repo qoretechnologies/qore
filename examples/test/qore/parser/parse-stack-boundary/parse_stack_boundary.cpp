@@ -14,7 +14,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <climits>
 #include <pthread.h>
+#include <unistd.h>
 
 //! the smallest and the largest stack size tried, and the step between them
 static constexpr size_t MIN_STACK_SIZE = 160 * 1024;
@@ -279,12 +281,47 @@ static void* load_source(void*) {
     return nullptr;
 }
 
+//! Returns the smallest stack size that a thread can be created with on this platform, 0 if there is no minimum:
+//! glibc refuses a smaller one (EINVAL from pthread_attr_setstacksize()), and its minimum depends on the platform
+//! (131072 bytes on aarch64, 16384 on x86_64), and on glibc 2.34 and later also on the system (_SC_THREAD_STACK_MIN)
+static size_t min_stack_size() {
+    size_t rv = 0;
+#ifdef PTHREAD_STACK_MIN
+    rv = static_cast<size_t>(PTHREAD_STACK_MIN);
+#endif
+#ifdef _SC_THREAD_STACK_MIN
+    long sys_min = sysconf(_SC_THREAD_STACK_MIN);
+    if (sys_min > 0 && static_cast<size_t>(sys_min) > rv) {
+        rv = static_cast<size_t>(sys_min);
+    }
+#endif
+    return rv;
+}
+
+//! Tears the library down and returns the exit status, or ends the process with it when it must not run exit()
+/** A background JIT compile still in LLVM when qore_cleanup() stops the compiler is abandoned (the module code that
+    the fixture loads is %modern, so its functions are compiled in the background), and exit() would destroy the
+    static objects of LLVM under it: an embedding program that returns from main() calls qore_fork_child_quick_exit()
+    after qore_cleanup(), which then flushes the standard I/O streams and ends the process with _exit()
+*/
+static int end_process(int rc) {
+    qore_cleanup();
+    qore_fork_child_quick_exit(rc);
+    return rc;
+}
+
 //! parse_stack_boundary: parses the nested code with each stack size
 //! parse_stack_boundary <module> <stack KB>: parses code that requires the module with the given stack size, and
 //! prints "parsed" or "stack error" (a process can load a module once, so each size runs in a process of its own)
 //! parse_stack_boundary --source <file> <stack KB>...: parses the file in a new Program with each stack size in turn,
 //! in a thread of its own, and runs its run() function (see load_source())
+//! parse_stack_boundary --min-stack: prints the smallest stack size in bytes that a thread can be created with (see
+//! min_stack_size())
 int main(int argc, char** argv) {
+    if (argc == 2 && !strcmp(argv[1], "--min-stack")) {
+        std::printf("%zu\n", min_stack_size());
+        return 0;
+    }
     qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
     if (argc > 3 && !strcmp(argv[1], "--source")) {
         source_path = argv[2];
@@ -295,8 +332,7 @@ int main(int argc, char** argv) {
                 ++failures;
             }
         }
-        qore_cleanup();
-        return failures ? 1 : 0;
+        return end_process(failures ? 1 : 0);
     }
     if (argc > 2) {
         module_name = argv[1];
@@ -304,8 +340,7 @@ int main(int argc, char** argv) {
         if (run_in_thread(current_size, load_module)) {
             ++failures;
         }
-        qore_cleanup();
-        return failures ? 1 : 0;
+        return end_process(failures ? 1 : 0);
     }
     for (current_size = MIN_STACK_SIZE; current_size <= MAX_STACK_SIZE; current_size += STACK_SIZE_STEP) {
         if (run_in_thread(current_size, work)) {
@@ -321,10 +356,8 @@ int main(int argc, char** argv) {
             ++failures;
         }
     }
-    qore_cleanup();
-    if (failures) {
-        return 1;
+    if (!failures) {
+        std::puts("parse-stack-boundary: ok");
     }
-    std::puts("parse-stack-boundary: ok");
-    return 0;
+    return end_process(failures ? 1 : 0);
 }

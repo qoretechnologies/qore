@@ -37,6 +37,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
             \aotOptionalAvailableCheck());
         addPartCase(2, "module initialization that recurses without end", \runawayInitCheck());
         addPartCase(2, "module initialization deeper than a small stack", \deepInitCheck());
+        addPartCase(2, "the end of the fixture with a background JIT compile in LLVM", \abandonedCompileExitCheck());
         set_return_value(main());
     }
 
@@ -181,12 +182,38 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         assertGt(0, parsed, "the chain is parsed with a large stack");
         assertGt(0, stack_errors, "the chain runs short of a small stack");
     }
+
+    #! the smallest stack size of the sweeps of runSource() and deepInitCheck() in KB, where the platform allows it
+    /** A smaller stack than 96KB leaves a foreign thread too little stack to run at all on glibc, whose threads hold
+        libqore's static TLS (about 60KB) in their stacks
+    */
+    const MinSweepKb = 96;
+
+    #! Returns the smallest stack size of a sweep in KB with the given step: MinSweepKb, or the smallest stack size
+    #! that a thread can be created with on this platform rounded up to the step, if it is larger
+    /** The fixture reports the platform's minimum (\c PTHREAD_STACK_MIN, 128KB with glibc on aarch64), where
+        \c pthread_attr_setstacksize() refuses a smaller size, and the fixture cannot run a thread with it
+    */
+    private static int getSweepStartKb(string exe, string libdir, int step_kb) {
+        int status;
+        string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + quote(exe) + " --min-stack 2>&1", \status);
+        if (status || output !~ /^[0-9]+\n$/) {
+            throw "FIXTURE-ERROR", sprintf("the fixture cannot report the minimum stack size (exit code %d): %s",
+                status, output);
+        }
+        int min_kb = (output.toInt() + 1023) / 1024;
+        @assert(step_kb > 0);
+        int rv = (min_kb + step_kb - 1) / step_kb * step_kb;
+        return max(MinSweepKb, rv);
+    }
+
     #! runs the fixture on a source file in a foreign thread with each stack size from 96KB to 1MB in 16KB steps
     /** Each run must parse the source and return the expected value from its run() function, or fail with the parse
         stack error; both must occur within the range of sizes.  Code that was parsed can still run short of stack
         when it runs (\c STACK-LIMIT-EXCEEDED).  A process loads a module once, so each size runs in a process of its
-        own.  A smaller stack than 96KB leaves a foreign thread too little stack to run at all on glibc, whose threads
-        hold libqore's static TLS (about 60KB) in their stacks.
+        own.  The sweep starts at the platform's minimum stack size where it is larger than 96KB (see
+        getSweepStartKb()).
 
         @param exe the fixture
         @param libdir the directory of libqore
@@ -201,7 +228,9 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         int parsed;
         int stack_errors;
         int run_stack_errors;
-        for (int kb = 96; kb <= max_kb; kb += 16) {
+        int start_kb = getSweepStartKb(exe, libdir, 16);
+        assertGt(start_kb, max_kb, basename(source) + ": the sweep has more than one size");
+        for (int kb = start_kb; kb <= max_kb; kb += 16) {
             int status;
             string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
                 + (mdir ? " QORE_MODULE_DIR=" + quote(mdir) : "") + " " + quote(exe) + " --source " + quote(source)
@@ -349,6 +378,14 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
     #! the number of AOT modules (.qmod) in the chain of AOT modules that load each other with %try-module
     const AotChainLength = 12;
 
+    #! the depth of the recursion of the constant initializer of each AOT module of aotModuleCheck()
+    /** \c qcc initializes the constant when it compiles the module, in its primary thread (8MB with the usual resource
+        limit), where the recursion must fit: a level takes up to about 6KB of stack in a debug build (5.7KB with GCC
+        16 at -O0 on x86_64, where 1500 levels exceeded it), and it still runs short of the small stacks of the
+        fixture's threads
+    */
+    const AotInitDepth = 1000;
+
     #! AOT modules (.qmod) that load each other with %try-module, each with a fallback for the module that it loads
     /** As tryModuleCheck() for modules compiled with \c qcc: an AOT module loads the modules that it depends on when
         it is initialized, and a module that the chain cannot load within the stack of the thread is not a module that
@@ -380,14 +417,14 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
                 "module StackAot%d { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n"
                 "public namespace StackAot%d {\n"
                 "public int sub deep(int n) { return n ? deep(n - 1) + 1 : 0; }\n"
-                "public const Depth = deep(1500);\n"
+                "public const Depth = deep(%d);\n"
                 "public int sub count() { return %s + 1; }\n"
                 "}\n",
                 i + 1 < AotChainLength
                     ? sprintf("%%try-module %s\npublic namespace %s { public int sub count() { return 0; } }\n"
                         "%%endtry\n", next, next)
                     : "",
-                i, i, i + 1 < AotChainLength ? next + "::count()" : "0"));
+                i, i, AotInitDepth, i + 1 < AotChainLength ? next + "::count()" : "0"));
             compileAotModule(qcc, libdir, mdir, path, sprintf("%s/StackAot%d.qmod", mdir, i));
         }
         string source = dir.path + "/try-aot.q";
@@ -603,10 +640,11 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         writeFile(child_source, "%requires DeepParent\nint sub run() { return get_module_hash().DeepParent."
             "\"child-modules\".DeepChild.status == \"attached\" ? DeepParent::Loaded : 0; }\n");
         int default_kb = get_default_thread_stack_size() / 1024;
+        int start_kb = getSweepStartKb(exe, libdir, 32);
         foreach hash<auto> i in ({"source": try_source, "expected": DeepInitDepth},
                 {"source": child_source, "expected": 1}) {
             int stack_errors;
-            for (int kb = 96; kb <= 512; kb += 32) {
+            for (int kb = start_kb; kb <= 512; kb += 32) {
                 # a small stack, then the default size in the same process
                 int status;
                 string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
@@ -627,6 +665,47 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
             }
             assertGt(0, stack_errors, basename(i.source) + ": the module runs short of a small stack");
         }
+    }
+
+    #! The fixture ends cleanly when the library abandons a background JIT compile that is still in LLVM
+    /** The module code that the fixture loads is %modern, so its functions are compiled in the background, and a
+        compile that is still in LLVM when qore_cleanup() stops the compiler is abandoned: exit() would destroy the
+        static objects of LLVM under it (a SIGSEGV in LLVM's instruction selection at the end of a deepInitCheck()
+        run, with no output, as stdout is a pipe), so the fixture ends with qore_fork_child_quick_exit() after
+        qore_cleanup(), as an embedding program must.  A test hook of a debug library holds the compile of a module
+        function in LLVM until the end of the process; without the quick exit, the process waits for it in an
+        atexit() handler of the library and never ends.
+    */
+    private abandonedCompileExitCheck() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_hold_bg_compile() requires library debugging");
+        }
+        string libdir = getLibDir();
+        TmpDir dir("qore-parse-stack-jit-exit-");
+        string exe = build(dir.path, realpath(get_script_dir() + "/../../../../.."), libdir);
+        string mdir = dir.path + "/modules";
+        mkdir(mdir);
+        writeFile(mdir + "/HoldJit.qm", "%modern\n"
+            "module HoldJit { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n"
+            "public namespace HoldJit {\n"
+            "public int sub held(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += i * 4; } return s; }\n"
+            # the compile of held() stops in LLVM, and is still there when the fixture ends
+            "public int sub start() {\n"
+            "    call_function(\"dbg_hold_bg_compile\", \"llvm\", \"held\");\n"
+            "    int t = held(10) + held(10);\n"
+            "    return call_function(\"dbg_wait_bg_compile_held\", \"llvm\", 60000) ? t : -1;\n"
+            "}\n"
+            "}\n");
+        string source = dir.path + "/hold-jit.q";
+        writeFile(source, "%requires HoldJit\nint sub run() { return HoldJit::start(); }\n");
+        int status;
+        # functions are compiled in the background at their first call
+        string output = backquote("env -u QORE_JIT_SYNC_COMPILE QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_MODULE_DIR="
+            + quote(mdir) + " " + quote(exe) + " --source " + quote(source) + " 8192 2>&1", \status);
+        assertEq(0, status, output);
+        # the output is written before the process ends; the compile was held (the sum of i * 4 for i < 10, twice)
+        assertEq("parsed 360", (output =~ x/([^\n]*)\n$/)[0], output);
     }
 
     #! the depth of the recursion of the constant initializer of deepInitCheck()
