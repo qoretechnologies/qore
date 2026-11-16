@@ -4,6 +4,8 @@
 
 %modern
 %set-time-zone Asia/Tokyo
+# the module disallows changes to its time zone after setting it
+%no-locale-control
 
 module TzMod {
     version = "1.0";

@@ -31,7 +31,7 @@ class SetTimeZoneCompiledTest inherits QUnit::Test {
         string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 
         #! the fixture programs that set their time zones
-        const Programs = ("region", "offset", "utc");
+        const Programs = ("region", "offset", "utc", "lock");
 
         #! the fixture programs that use the TzMod module
         const ModulePrograms = ("usemod", "nlc");
