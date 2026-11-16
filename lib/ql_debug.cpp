@@ -17069,9 +17069,20 @@ static int64 dbg_peer_window(int fd) {
 }
 
 //! the most milliseconds that dbg_wait_send_buffer_empty() waits before it looks at the connection again
-/** It paces the checks only: an acknowledgement that frees room in the send buffer ends the wait at once, and the
-    outcome does not depend on the interval; the state of a connection whose window closed without freeing room (a
-    window update or the answer to a window probe) is only seen by looking again
+/** The wait is a bounded poll, not a wait for an event, because neither system has an event for every change that
+    decides it (the bytes not acknowledged, the window that the peer advertised, the state of the connection):
+    - Linux: there is no poll or epoll event for the peer's acknowledgement (snd_una advancing) or for a change of
+      its window: \c POLLOUT only reports room in the send buffer and is level-triggered, so while there is room it
+      is reported at once and cannot be waited on, and while the buffer is full it reports an acknowledgement that
+      frees room, but not one that only changes the window; the count (\c TIOCOUTQ) and the window and state
+      (\c TCP_INFO) can only be read, not waited for.
+    - macOS: the write filter (\c EVFILT_WRITE) fires when the stack wakes the socket's writers, which TCP does when
+      an acknowledgement frees data from the send buffer; an acknowledgement that frees nothing, such as a window
+      update or the answer to a window probe that sets the window to 0, and a change of the connection's state, wake
+      no writer, so the filter does not fire for them.
+    An acknowledgement that frees room still ends the wait at once where the system reports it.  The interval only
+    paces the checks of what has no event: it changes how soon the wait sees the outcome, never the outcome, which
+    is decided by the state read at each check.
 */
 static constexpr int DbgAckCheckMs = 10;
 
