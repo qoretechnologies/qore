@@ -1911,6 +1911,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the time zone of a @ref Qore::Program "Program" is read and set atomically: setting it with
+      @ref Qore::TimeZone::setRegion() "TimeZone::setRegion()" and the other @ref Qore::TimeZone "TimeZone" methods
+      while other threads of the Program read it was a data race (issue #6346)
     - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
       threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
     - an allocation that fails while a thread enters another %Program (ex: in a binary module's

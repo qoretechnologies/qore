@@ -1055,8 +1055,12 @@ public:
     // thread-local variable storage - map from thread ID to thread-local storage
     pgm_data_map_t pgm_data_map;
 
-    // time zone setting for the program
-    const AbstractQoreZoneInfo* TZ;
+    //! the time zone of the Program
+    /** atomic: TimeZone::set*() changes it in one thread while the Program's other threads read it (currentTZ(),
+        currentTZIntern(): now(), date(), ...); the zone objects are not changed once published, so a reader that
+        loads the pointer with acquire semantics sees the whole zone (qore#6346)
+    */
+    std::atomic<const AbstractQoreZoneInfo*> TZ{nullptr};
 
     // lock serializing changes to sandbox_manager with the lookups that take a reference to it
     QoreThreadLock sm_lock;
@@ -1195,7 +1199,7 @@ public:
         if (p_pgm) {
             setParent(p_pgm, n_parse_options);
         } else {
-            TZ = QTZM.getLocalZoneInfo();
+            TZ.store(QTZM.getLocalZoneInfo(), std::memory_order_release);
             newProgram();
         }
         // Apply parse-option implications once pwo.parse_options is fully populated
@@ -3582,11 +3586,11 @@ public:
         pgm_data_map_t::const_iterator i = pgm_data_map.find(tpd);
         if (i != pgm_data_map.end() && i->second->tz_set)
             return i->second->tz;
-        return TZ;
+        return TZ.load(std::memory_order_acquire);
     }
 
     DLLLOCAL void setTZ(const AbstractQoreZoneInfo* n_TZ) {
-        TZ = n_TZ;
+        TZ.store(n_TZ, std::memory_order_release);
     }
 
     DLLLOCAL void exportFunction(ExceptionSink* xsink, qore_program_private* p, const char* name, const char* new_name = nullptr, bool inject = false) {
@@ -3802,7 +3806,7 @@ public:
         // note that tz may be NULL in case the offset is UTC (ie 0)
         assert(tz || ((*zone == '-' || *zone == '+')));
 
-        TZ = tz;
+        TZ.store(tz, std::memory_order_release);
     }
 
     DLLLOCAL void makeParseException(const QoreProgramLocation& loc, const char* err, QoreStringNode* desc,
@@ -4777,7 +4781,7 @@ public:
     }
 
     DLLLOCAL static const AbstractQoreZoneInfo* currentTZIntern(QoreProgram& pgm) {
-        return pgm.priv->TZ;
+        return pgm.priv->TZ.load(std::memory_order_acquire);
     }
 
     DLLLOCAL static int tryLockParsing(QoreProgram& pgm, ExceptionSink* xsink) {
