@@ -532,18 +532,6 @@ public:
 
     DLLLOCAL virtual int parseInit(QoreFunction* f) override;
 
-    //! Move BCAList from another constructor variant (for AOT fallback transplanting)
-    /** Takes ownership of the source's BCAList, leaving the source with nullptr.
-        This is needed when the main program's constructor was deserialized without
-        BCA (no source), and the fallback source parse provides the correct BCAList.
-    */
-    DLLLOCAL void transplantBCAList(UserConstructorVariant* src) {
-        if (src && src->bcal && !bcal) {
-            bcal = src->bcal;
-            src->bcal = nullptr;
-        }
-    }
-
     //! Set the BCAList for AOT deserialization (takes ownership)
     DLLLOCAL void setBCAList(BCAList* n_bcal);  // defined in QoreClass.cpp
 };
@@ -1587,6 +1575,14 @@ public:
     */
     std::atomic<TrustedModuleStatic*> trusted_module{nullptr};
 
+    //! the parse options of the code that declares the variable, which its initializer runs with (see evalInit())
+    /** Set by the parser (bindDeclarationParseOptions()); a variable without a Qore initializer (a builtin variable,
+        or one of a compiled class, which its compiled initializer sets) has none
+    */
+    QoreParseOptions decl_po;
+    //! true if \a decl_po is set
+    bool has_decl_po = false;
+
     DLLLOCAL QoreVarInfo(const QoreProgramLocation* loc, const QoreTypeInfo* n_typeinfo = nullptr,
             QoreParseTypeInfo* n_parseTypeInfo = nullptr, QoreValue e = QoreValue(), ClassAccess n_access = Public) :
         QoreMemberInfoBaseAccess(loc, n_typeinfo, n_parseTypeInfo, e, n_access), finalized(false) {
@@ -1597,7 +1593,14 @@ public:
             builtin_value(old.builtin_value),
             // an imported copy reads and writes the same external storage as the original; del_cb is deliberately
             // not copied, since the module data belongs to the variable the module registered
-            get_cb(old.get_cb), set_cb(old.set_cb), cb_data(old.cb_data), cb_cls(old.cb_cls) {
+            get_cb(old.get_cb), set_cb(old.set_cb), cb_data(old.cb_data), cb_cls(old.cb_cls), decl_po(old.decl_po),
+            has_decl_po(old.has_decl_po) {
+    }
+
+    //! records the parse options of the code that declares the variable, which its initializer runs with
+    DLLLOCAL void bindDeclarationParseOptions(const QoreParseOptions& po) {
+        decl_po = po;
+        has_decl_po = true;
     }
 
     DLLLOCAL ~QoreVarInfo() {
@@ -5346,6 +5349,16 @@ DLLLOCAL QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSour
 */
 DLLLOCAL QoreProgram* qore_get_function_pgm_context(const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, QoreSourceProgramHolder& holder, QoreProgram* call_pgm);
+
+//! Calls the code that the member \a nme of \a self holds (a closure or a call reference) with \a args, whose values
+//! a call gave (see qore_class_private::evalMethodGivenArgs()): the code's parameters take them over (issue #5958)
+/** @return true if the member holds such code and it was called, or if reading the member raised an exception; the
+    result is then in \a rv; false if the member holds no code, which is then called as evalMethod() calls it
+
+    Defined in QoreClassGivenArgs.cpp, outside the single compilation unit of libqore
+*/
+DLLLOCAL bool qore_class_eval_member_code_given_args(const qore_class_private& qcp, QoreObject* self,
+        const char* nme, QoreListNode* args, const qore_class_private* class_ctx, ExceptionSink* xsink, QoreValue& rv);
 
 class qore_class_private_holder {
     //! the class pointer (handle) to release, if the object was created with one

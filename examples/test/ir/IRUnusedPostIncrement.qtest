@@ -1,0 +1,271 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class IRUnusedPostIncrementTest
+
+#! Regression test for issue #6199: a post-increment or post-decrement whose value is unused lowers as the pre form
+/** A post-increment statement on an int local (<tt>total++;</tt>) lowered to 4 IR instructions (a load of the old
+    value, its conversion to an int, the addition and a store), while <tt>++total;</tt> and <tt>total += 1;</tt>
+    lower to one IncrementLocalInt.  When the value is unused (an expression statement, the update of a for loop),
+    the post form changes the lvalue as the pre form does, so it is lowered as the pre form, with the same fused
+    paths: IncrementLocalInt for an int local, and the pre operation of the lvalue path for every other lvalue,
+    including a hash key (whose path the fixed-aggregate scalar replacement can remove).
+
+    The test compares the IR of functions that differ only in the form of the operator, as the AOT compiler dumps it
+    (QORE_AOT_DUMP_IR), for every kind of lvalue, and counts the IR instructions of a function of 10 and of 20 such
+    statements with the JIT's compilation budget (QORE_JIT_MAX_IR_INSTRUCTIONS), as reported in the issue: the post
+    forms and \c += 1 must have the count of the pre form.
+*/
+class IRUnusedPostIncrementTest inherits QUnit::Test {
+    public {
+        #! the declarations of the module
+        const Decls = "our int g;
+our auto ga;
+class C {
+    public {
+        int i;
+        float f;
+        static int s;
+    }
+
+    int updateSelf() {
+        %OP%(i);
+        %OP%(self.i);
+        %OP%(f);
+        return i;
+    }
+
+    static int updateStatic() {
+        %OP%(s);
+        return s;
+    }
+}
+";
+
+        #! the function bodies, each with %OP%(lvalue) where the operator is applied, by kind of lvalue
+        const Bodies = {
+            "int local": "int sub f(int v) { int x = v; %OP%(x); %OP%(x); return x; }",
+            "for loop update": "int sub f(int n) { int s = 0; for (int i = 0; i < n; %OP%(i)) { s += i; } "
+                "return s; }",
+            "for loop update and body": "int sub f(int n) { int c = 0; for (int i = 0; i < n; %OP%(i)) { %OP%(c); } "
+                "return c; }",
+            "closure-bound int local": "int sub f(int v) { int x = v; code c = int sub () { return x; }; %OP%(x); "
+                "return c(); }",
+            "int local in a try block": "int sub f(int v) { int x = v; try { %OP%(x); } catch () { x = -1; } "
+                "return x; }",
+            "softint local": "int sub f(softint v) { softint x = v; %OP%(x); return x; }",
+            "float local": "float sub f(float v) { float x = v; %OP%(x); return x; }",
+            "number local": "number sub f(number v) { number x = v; %OP%(x); return x; }",
+            "untyped local": "auto sub f(auto v) { auto x = v; %OP%(x); return x; }",
+            "int global": "int sub f() { %OP%(g); return g; }",
+            "untyped global": "auto sub f() { %OP%(ga); return ga; }",
+            "int reference": "int sub f(reference<int> r) { %OP%(r); return r; }",
+            "const hash key": "int sub f(hash<string, int> h) { %OP%(h.a); return h.a; }",
+            "dynamic hash key": "int sub f(hash<string, int> h, string k) { %OP%(h{k}); return h{k}; }",
+            "untyped hash key": "auto sub f(hash<auto> h) { %OP%(h.a); return h.a; }",
+            "object member": "int sub f(C o) { %OP%(o.i); return o.i; }",
+            "self member": "int sub f(C o) { return o.updateSelf(); }",
+            "static member": "int sub f() { return C::updateStatic(); }",
+            "list element": "int sub f(list<int> l) { %OP%(l[0]); return l[0]; }",
+        };
+
+        #! the kinds of lvalues whose function has an IncrementLocalInt
+        const FusedLocalKinds = ("int local", "for loop update", "for loop update and body",
+            "closure-bound int local", "int local in a try block");
+
+        #! the kinds of lvalues whose IR shows the pre operation of the lvalue path
+        const PathKinds = ("float local", "number local", "untyped local", "int global", "untyped global",
+            "int reference", "const hash key", "dynamic hash key", "untyped hash key", "object member",
+            "list element");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("IRUnusedPostIncrementTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("an unused post-increment lowers as the pre-increment", sub () { checkIr(True); });
+        addTestCase("an unused post-decrement lowers as the pre-decrement", sub () { checkIr(False); });
+        addTestCase("a used post-increment keeps the old value", \checkUsed());
+        addTestCase("an unused post-increment statement is one IR instruction", \checkCounts());
+
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! asserts that the regular expression does not match
+    private assertFalseRegex(string pattern, string actual, string name) {
+        assertFalse(regex(actual, pattern), sprintf("%s: %y does not match: %s", name, pattern, actual));
+    }
+
+    #! returns the source with each %OP%(lvalue) replaced by the operator form given
+    private static string apply(string source, string form) {
+        *list<*string> m;
+        while (m = (source =~ x/%OP%\(([^()]*)\)/)) {
+            string lvalue = m[0];
+            string replacement;
+            switch (form) {
+                case "pre-inc": replacement = "++" + lvalue; break;
+                case "post-inc": replacement = lvalue + "++"; break;
+                case "pre-dec": replacement = "--" + lvalue; break;
+                case "post-dec": replacement = lvalue + "--"; break;
+            }
+            source = replace(source, "%OP%(" + lvalue + ")", replacement);
+        }
+        return source;
+    }
+
+    #! dumps the IR of a module with the function of each body, in the operator form given
+    private hash<string, string> dump(TmpDir tmp, string form) {
+        string module_name = "UnusedPostInc" + replace(form, "-", "");
+        list<string> funcs = ();
+        list<string> names = ();
+        foreach string kind in (keys Bodies) {
+            string name = sprintf("f%d", $#);
+            names += name;
+            funcs += "public " + replace(apply(Bodies{kind}, form), "sub f(", "sub " + name + "(");
+        }
+        string qm_path = sprintf("%s/%s.qm", tmp.path, module_name);
+        string qmod_path = sprintf("%s/%s.qmod", tmp.path, module_name);
+        write(qm_path, sprintf("%%modern
+
+module %s {
+    version = \"1.0\";
+    desc = \"unused post-increment IR test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace %s {
+%s
+%s
+}
+", module_name, module_name, replace(apply(Decls, form), "class C", "public class C"), funcs.join("\n")));
+        string out = backquote(sprintf("QORE_LIBDIR=%s QORE_AOT_DUMP_IR=1 %s -b --compile-module "
+            "--strip-source --output %s %s 2>&1", libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), sprintf("compiled module %s: %s", module_name, out));
+        hash<string, string> rv = {};
+        foreach string kind in (keys Bodies) {
+            rv{kind} = irFor(out, names[$#]);
+        }
+        # the methods of C
+        rv."C::updateSelf" = irFor(out, "updateSelf");
+        rv."C::updateStatic" = irFor(out, "_static_updateStatic");
+        return rv;
+    }
+
+    #! returns the dumped IR of one function, without its name, so that the IR of two functions can be compared
+    private string irFor(string dump, string name) {
+        # a header can span lines: the name of a type can have a newline
+        int pos = 0;
+        while ((pos = dump.find("=== IR for ", pos)) >= 0) {
+            int header_end = dump.find(" ===\n", pos);
+            if (header_end < 0) {
+                break;
+            }
+            header_end += 5;
+            if (dump.substr(pos, header_end - pos).find("::" + name + "(") >= 0) {
+                # the IR ends with a line of "="
+                int end = dump.find("\n=====", header_end);
+                string ir = end < 0 ? dump.substr(header_end) : dump.substr(header_end, end - header_end);
+                # the name of the compiled function has a hash of the module
+                return regex_subst(ir, "^func @[^\\n]*\\n", "", RE_MultiLine);
+            }
+            pos = header_end;
+        }
+        assertTrue(False, sprintf("IR dump of '%s': %s", name, dump));
+        return "";
+    }
+
+    checkIr(bool increment) {
+        TmpDir tmp("qore-ir-unused-post-increment-");
+        string pre_form = increment ? "pre-inc" : "pre-dec";
+        string post_form = increment ? "post-inc" : "post-dec";
+        hash<string, string> pre = dump(tmp, pre_form);
+        hash<string, string> post = dump(tmp, post_form);
+        foreach hash<auto> i in (pre.pairIterator()) {
+            assertEq(i.value, post{i.key}, sprintf("%s: the IR of the unused %s is that of the %s", i.key, post_form,
+                pre_form));
+        }
+        string delta = increment ? "1" : "-1";
+        foreach string kind in (FusedLocalKinds) {
+            assertRegex("increment\\.local\\.int @[a-z]+ " + delta + " -> ", post{kind}, kind);
+            assertFalseRegex(" (add|sub)(\\.assign)?\\.int |lvalue\\.path", post{kind}, kind);
+        }
+        foreach string kind in (PathKinds) {
+            assertRegex("lvalue\\.path\\.unary " + pre_form + " -> ", post{kind}, kind);
+            assertFalseRegex(post_form, post{kind}, kind);
+        }
+        assertFalseRegex(post_form, post."C::updateSelf", "self members");
+        assertFalseRegex(post_form, post."C::updateStatic", "static member");
+    }
+
+    checkUsed() {
+        TmpDir tmp("qore-ir-used-post-increment-");
+        string path = tmp.path + "/used.q";
+        write(path, "%modern
+int sub f(int v) { int x = v; int y = x++; int z = x--; return y * 10000 + z * 100 + x; }
+float sub g(float v) { float x = v; float y = x++; return y * 10 + x; }
+int sub h(hash<string, int> h) { int y = h.a++; return y * 100 + h.a; }
+printf(\"%d %y %d\\n\", f(5), g(1.5), h({\"a\": 3}));
+");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq("50605 17.5 304\n", ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, path)), mode);
+        }
+    }
+
+    #! returns the IR instruction count of f() as the JIT's compilation budget reports it
+    private int count(TmpDir tmp, string statement, int n, bool no_debugging) {
+        string path = sprintf("%s/count-%d.q", tmp.path, n);
+        string body = "";
+        for (int i = 0; i < n; ++i) {
+            body += "    " + statement + "\n";
+        }
+        write(path, sprintf("%%modern\n%s\nint sub f(int value) {\n    int total = value;\n%s    return total;\n}\n"
+            "printf(\"r=%%d\\n\", f(0));\n", no_debugging ? "%no-debugging" : "", body));
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+            "QORE_JIT_MAX_IR_INSTRUCTIONS=10 QORE_JIT_TIMING=1 %s -b --exec-mode=jit %s 2>&1", libqore_dir, qore_bin,
+            path));
+        string out = r.out + r.trace.join("\n");
+        *list<*string> m = (out =~ x/skipped native (?:compilation|promotion) of 'f[^']*' \(compilation budget exceeded; ([0-9]+) IR instructions/);
+        assertNeq(NOTHING, m, sprintf("%s x%d: the budget is reported: %s", statement, n, out));
+        return m ? m[0].toInt() : -1;
+    }
+
+    checkCounts() {
+        TmpDir tmp("qore-ir-unused-post-increment-count-");
+        foreach bool no_debugging in ((True, False)) {
+            string label = no_debugging ? "%no-debugging" : "with debugging";
+            # the post forms and += have the count of the pre form, whatever it is (a step event of a statement can
+            # be an instruction of its own or folded into the increment)
+            int pre10 = count(tmp, "++total;", 10, no_debugging);
+            int pre20 = count(tmp, "++total;", 20, no_debugging);
+            assertGt(pre10, pre20, label + ": ++total;");
+            foreach string statement in (("total++;", "total--;", "total += 1;", "--total;")) {
+                assertEq(pre10, count(tmp, statement, 10, no_debugging), sprintf("%s: %s x10", label, statement));
+                assertEq(pre20, count(tmp, statement, 20, no_debugging), sprintf("%s: %s x20", label, statement));
+            }
+        }
+    }
+}

@@ -290,7 +290,8 @@ public:
     //! concatenates a string and converts encodings if necessary
     /** @param str the string to concatenate to the current string (this)
         @param pos the starting character (not byte) position for concatenation (negative values are from the end)
-        @param len the number of characters (not bytes) to concatenate from the starting position (negative values indicate all except that many characters from the end)
+        @param len the number of characters (not bytes) to concatenate from the starting position (negative values indicate all except that many characters from the end); the characters
+        concatenated are always within \a str, in single-byte and multi-byte encodings
         @param xsink if an error occurs converting character encodings, it will be raised here
 
         @return 0 for OK, -1 for exception raised
@@ -568,6 +569,9 @@ public:
     DLLEXPORT bool endsWith(const QoreString& str) const;
 
     //! terminates the string at byte position "size", the string is reallocated if necessary
+    /** The bytes before \a size are the content of the string after the call, including bytes written to its buffer
+        before the call (ex: after reserve())
+    */
     DLLEXPORT void terminate(size_t size);
 
     //! ensures that at least the given size is available in the string; the string's contents are not affected
@@ -640,12 +644,14 @@ public:
     DLLEXPORT void replaceAll(const char* old_str, const char* new_str);
 
     //! replaces bytes with the string passed
-    /** offsets and size are in bytes, not characters
+    /** offsets and size are in bytes, not characters; an offset past the end of the string is the end of the string
+        (the string passed is appended), and a length past the end of the string is the rest of the string
     */
     DLLEXPORT void replace(size_t offset, size_t len, const char* str);
 
     //! replaces bytes with the string passed
-    /** offsets and size are in bytes, not characters
+    /** offsets and size are in bytes, not characters; an offset past the end of the string is the end of the string
+        (the string passed is appended), and a length past the end of the string is the rest of the string
     */
     DLLEXPORT void replace(size_t offset, size_t len, const QoreString* str, ExceptionSink* xsink);
 
@@ -968,7 +974,8 @@ public:
     /** @param offset the offset in characters (not bytes) in the string; may be negative giving an offset from the end of the string
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
-        @return the unicode code for the character or -1 in case of an error
+        @return the unicode code for the character or -1 in case of an error; 0 for an offset at or after the end of
+        the string, in every encoding
     */
     DLLEXPORT unsigned int getUnicodePoint(qore_offset_t offset, ExceptionSink* xsink) const;
 
@@ -977,7 +984,8 @@ public:
         @param len the length of the character in bytes in the source string in the original encoding
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
-        @return the unicode code for the character at the given byte offset or -1 in case of an error
+        @return the unicode code for the character at the given byte offset or -1 in case of an error; 0 (and
+        \a len 0) for an offset at or after the end of the string
 
         @since Qore 0.8.8
     */
@@ -1050,12 +1058,18 @@ public:
     DLLEXPORT qore_offset_t index(const QoreString& needle, qore_offset_t pos, ExceptionSink* xsink) const;
 
     //! returns the byte position of a substring within the string or -1 if not found
+    /** a negative \a pos is an offset from the end of the string; one before the start of the string is the start
+    */
     DLLEXPORT qore_offset_t bindex(const QoreString& needle, qore_offset_t pos = 0) const;
 
     //! returns the byte position of a substring within the string or -1 if not found
+    /** a negative \a pos is an offset from the end of the string; one before the start of the string is the start
+    */
     DLLEXPORT qore_offset_t bindex(const char* needle, qore_offset_t pos = 0) const;
 
     //! returns the byte position of a substring within the string or -1 if not found
+    /** a negative \a pos is an offset from the end of the string; one before the start of the string is the start
+    */
     DLLEXPORT qore_offset_t bindex(const std::string& needle, qore_offset_t pos = 0) const;
 
     //! returns the character position of a substring searching in reverse from a given position or -1 if not found
@@ -1068,12 +1082,21 @@ public:
     DLLEXPORT qore_offset_t rindex(const QoreString& needle, qore_offset_t pos, ExceptionSink* xsink) const;
 
     //! returns the byte position of a substring within the string searching in reverse from a given position or -1 if not found
+    /** the substring is found when it lies within the bytes up to and including \a pos; a negative \a pos is an
+        offset from the end of the string (-1 = the last byte)
+    */
     DLLEXPORT qore_offset_t brindex(const QoreString& needle, qore_offset_t pos = -1) const;
 
     //! returns the byte position of a substring within the string searching in reverse from a given position or -1 if not found
+    /** the substring is found when it lies within the bytes up to and including \a pos; a negative \a pos is an
+        offset from the end of the string (-1 = the last byte)
+    */
     DLLEXPORT qore_offset_t brindex(const char* needle, qore_offset_t pos = -1) const;
 
     //! returns the byte position of a substring within the string searching in reverse from a given position or -1 if not found
+    /** the substring is found when it lies within the bytes up to and including \a pos; a negative \a pos is an
+        offset from the end of the string (-1 = the last byte)
+    */
     DLLEXPORT qore_offset_t brindex(const std::string& needle, qore_offset_t pos = -1) const;
 
     //! returns the byte position of a character (byte) within the string or -1 if not found

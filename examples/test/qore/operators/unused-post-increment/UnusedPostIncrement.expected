@@ -1,0 +1,17 @@
+int local statements: 7 integer
+int local used: 5061107 integer
+int return post: 5 integer
+used contexts: {arg: 506, if: 1, list: [6, 1], i: 7, j: 0, ternary: 600, used ternary: [5, 1, 6, 0], switch: 203, while: 299, coalesce: 506, compare: 6, closure: 506} hash<auto>
+for loop: 110 integer
+for loop body count: 5 integer
+while loop: 405 integer
+overflow: {max: -9223372036854775808, min: 9223372036854775807, max_used: -9223372036854775808, old_max: 9223372036854775807, min_used: 9223372036854775807, old_min: -9223372036854775808} hash<string, int>
+other types: {si: 6, f: 2.25, n: 2.5, oi: 1, of: -1.0, a: 1, s: 42, fl: 1.5, nn: 8, b: 2, d: 1704164646, f_used: 2.5, f_old: 1.5, n_used: 0.5, n_old: 1.5} hash<auto>
+closures: {captured: 2, c: 4, cf: 1.5, old: 3, own: 7} hash<auto>
+globals: {gi: 12, ga: 1, gf: 0.5, old: 11} hash<auto>
+references: {x: 4, y: 10, z: 1} hash<string, int>
+hash keys: {h: {a: 6, b: 1, c: 1}, old: 3, pre: 6, pre_dyn: 1, hd: {a: 3, f: -0.5}, err: "INVALID-MEMBER", pre_err: "INVALID-MEMBER", ha: {x: 2.5, y: 1, z: -1, n: {m: 1}}, hf: {f: 1.25}, hn: {n: 0}, hs: {s: 2}} hash<auto>
+members: {i: 4, f: 0.5, n: 2.5, a: 0, h: {k: 7}, used: 9, s: 102, s_after: 103} hash<auto>
+lists: {l: [3, 1, 4, null, null, 1], la: [2.5, 3, -1], old: 2, fl: [1, 2, 3], rl: [2, 3, 4]} hash<auto>
+handlers: {x: 1, h: {a: 2}, a: 1} hash<auto>
+threads: 800008000 integer

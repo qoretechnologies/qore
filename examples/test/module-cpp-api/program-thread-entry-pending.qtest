@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  program-thread-entry-pending.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+# the Programs of the test load the cppapiuser module
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires cppapiuser
+
+%exec-class ProgramThreadEntryPendingTest
+
+#! qore_program_thread_entry_pending() tells a module whether a call into a Program must enter it
+/** A module that calls code of a Program from C++ can skip QoreExternalProgramContextHelper for a call within the
+    Program that the thread has entered, but not for a Program that has thread entry handlers and that the thread has
+    not entered (Program::setThreadEntryHandler()); ProgramContextProbe::threadEntryPending() (the cppapiuser test
+    module) reports what the function returns to the module's C++ code.
+*/
+class ProgramThreadEntryPendingTest inherits QUnit::Test {
+    public {
+        #! the code of the Program under test: it reports the result for itself, from inside
+        const Source = "bool sub inside(Program self) { return ProgramContextProbe::threadEntryPending(self); }";
+    }
+
+    constructor() : QUnit::Test("program-thread-entry-pending", "1.0") {
+        addTestCase("a Program without thread entry handlers needs no entry", \noHandlersTest());
+        addTestCase("a Program with thread entry handlers needs an entry unless it is entered", \handlersTest());
+        set_return_value(main());
+    }
+
+    #! returns a Program that loads the module and has the test's code
+    private static Program makeProgram() {
+        Program p(PO_NEW_STYLE);
+        p.loadModule("cppapiuser");
+        p.parse(Source, "program-thread-entry-pending");
+        return p;
+    }
+
+    noHandlersTest() {
+        Program p = makeProgram();
+        assertFalse(ProgramContextProbe::threadEntryPending(p), "from another Program");
+        assertFalse(p.callFunction("inside", p), "from inside the Program");
+        # the Program is current but not entered: without handlers, no entry is needed
+        assertFalse(ProgramContextProbe::needsEntryInContext(p), "current but not entered");
+    }
+
+    handlersTest() {
+        Program p = makeProgram();
+        Queue events();
+        assertFalse(p.setThreadEntryHandler(sub () { events.push("enter"); }, sub (auto token) { events.push("exit"); }),
+            "the Program had no handlers before");
+        assertTrue(ProgramContextProbe::threadEntryPending(p), "from another Program");
+        # the case the function is for: the Program is the current one (QoreProgramContextHelper) but not entered
+        assertTrue(ProgramContextProbe::needsEntryInContext(p), "current but not entered");
+        assertFalse(p.callFunction("inside", p), "from inside the Program, which the call entered");
+        assertEq(("enter", "exit"), (events.get(60s), events.get(60s)), "the call ran the entry and the exit handler");
+        assertEq(0, events.size(), "and nothing else");
+        # another thread has not entered the Program either
+        Queue q();
+        background sub () {
+            q.push(ProgramContextProbe::threadEntryPending(p));
+        }();
+        assertTrue(q.get(60s), "from another thread");
+        # without the handlers, no entry is needed
+        assertTrue(p.setThreadEntryHandler(), "the Program had the handlers");
+        assertFalse(ProgramContextProbe::threadEntryPending(p), "the handlers are removed");
+    }
+}

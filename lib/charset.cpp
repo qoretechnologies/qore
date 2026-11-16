@@ -126,7 +126,8 @@ size_t QoreEncoding::getByteLen(const char* p, const char* end, size_t c, bool& 
 
 size_t QoreEncoding::getByteLen(const char* p, const char* end, size_t c, ExceptionSink* xsink) const {
     if (!priv->fend) {
-        size_t len = (end - p);
+        // there is no character at or after the end
+        size_t len = p < end ? static_cast<size_t>(end - p) : 0;
         if (c > len)
             c = len;
         return c;
@@ -272,8 +273,11 @@ int get_unicode_iconv(const QoreEncoding* enc, const char* p, unsigned clen, Exc
 int QoreEncoding::getUnicode(const char* p, const char* end, unsigned& clen, ExceptionSink* xsink) const {
     // get character length & check validity
     clen = (unsigned)getByteLen(p, end, 1, xsink);
-    if (*xsink)
-        return -1;
+    // an invalid character has no length; neither has the end of the string, where there is no character, and the
+    // bytes after it are not part of the string
+    if (!clen) {
+        return *xsink ? -1 : 0;
+    }
 
     if (!priv->get_unicode) {
         assert(this != QCS_UTF8);

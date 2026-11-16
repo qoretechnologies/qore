@@ -1007,9 +1007,10 @@ DLLLOCAL QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* co
     QoreValue::discard() or LValueHelper::saveTemp(): releasing it as a plain node would leave the registration of
     an opaque value with the opaque target registry (see design/dgc.md, "Opaque references").
 
-    An enum value is always replaced, with an owned copy of its base value (see qore_enum_value_copy_for_write()).
+    An enum value does not own the node that it reaches (see qore_enum_value_copy_for_write()): the callers replace it
+    with an owned copy of its base value instead of calling this function.
 
-    @param v a value holding a node other than an object, or an enum value
+    @param v a value holding a node other than an object; not an enum value
     @return the value replaced, or NOTHING if the node was unique
 */
 DLLLOCAL QoreValue qore_value_copy_on_write(QoreValue& v);
@@ -2105,6 +2106,7 @@ public:
 };
 
 class ClosureParseEnvironment;
+class VNode;
 
 // pushes a marker on the local variable parse stack so that searches can skip to global thread-local variables when the search hits the marker
 /* the block is also a new capture root: a closure being parsed in the enclosing context (e.g. one whose body
@@ -2117,6 +2119,23 @@ public:
     DLLLOCAL ~VariableBlockHelper();
 
 private:
+    ClosureParseEnvironment* closure_parse_env;
+};
+
+//! Parses the initializer of a declaration (a class or hashdecl member, a class static variable) in its own scope
+/** A declaration's initializer is code of the declaration, not of the code whose parse makes it parse it: a class or
+    a hashdecl is parsed when it is first used, which can be in a function, a method or a closure.  The initializer
+    sees the program's top-level local variables, as the code of a function does, and none of the local variables of
+    the code being parsed, and it is in no closure, so that a top-level variable that it refers to is not captured by
+    the closure being parsed (qore#6268)
+*/
+class DeclarationParseScopeHelper {
+public:
+    DLLLOCAL DeclarationParseScopeHelper();
+    DLLLOCAL ~DeclarationParseScopeHelper();
+
+private:
+    VNode* vstack;
     ClosureParseEnvironment* closure_parse_env;
 };
 

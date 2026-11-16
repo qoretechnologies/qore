@@ -357,6 +357,24 @@ const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signat
 //! Resolves a serialized hashdecl path, including parameterized hashdecl paths.
 const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char* path);
 
+//! Returns the path written for the hashdecl of a construction or a cast in an expression tree, an expression slot or
+//! a default value
+/** The namespace path of the hashdecl, or for a hashdecl with type parameters (HD<U> in generic code), whose
+    namespace path names no hashdecl that can be found, its serializable type path (hash<NS::HD<typeparam<, 0, U>>>),
+    whose type parameters the reader resolves with the signature or the receiver that owns them (qore#6173)
+*/
+DLLLOCAL std::string qore_aot_encode_expr_hashdecl_path(const TypedHashDecl* hd);
+
+//! Resolves a path written by qore_aot_encode_expr_hashdecl_path() when the expression is read
+/** A path with type parameters is resolved with the signature whose default value is being read (see
+    QoreAOTDefaultTypeParamSignatureHelper) or the class that owns them; the hashdecl has type parameters, which are
+    substituted with the types of the running instantiation when the expression is evaluated (qore#5720).
+
+    @return the hashdecl, or nullptr if it cannot be resolved when read: the caller then resolves the path when the
+    expression is evaluated, with qore_aot_resolve_call_hashdecl_path()
+*/
+DLLLOCAL const TypedHashDecl* qore_aot_decode_expr_hashdecl_path(QoreProgram* pgm, const char* path);
+
 //! Resolves a serialized hashdecl path in the current call
 /** The type parameters of the receiver's class and of the generic function or method running are substituted with
     their types in the current call (hash<HD<U>> is hash<HD<int>> in a call of m<int>(), qore#5661); a type parameter
@@ -508,6 +526,18 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      for a call dispatched by name, whose slot records the class, method and variant resolved at parse time for the
 //!      check of the call's target; and the method-ref payload of a self call to an abstract method is
 //!      QORE_AOT_ABSTRACT_SELF_CALL_MARKER (#5824).  A v9-v37 image has neither.
+//! v39 (batch S; one format version for the format changes of the batch, one line each):
+//!      - a return statement of a handler compiled as a function of its own (an out-of-line on_exit, on_success or
+//!        on_error handler) is followed by a HandlerReturn instruction (QoreIROpcode::HandlerReturn, 438), with the
+//!        value of the return as its operand, or none for a return without a value, which hands the value to the
+//!        function that the handler runs for; native code calls qore_rt_handler_return(), and
+//!        qore_rt_exec_on_block_exit_hold() takes the values of the interrupted return that the first hand-over
+//!        releases (two more arguments).  A handler of an earlier format returned its value, which the runtime no
+//!        longer reads; the AOT runtime identity changes with the runtime entry, so a module compiled for an earlier
+//!        format is refused and must be rebuilt (#6074).
+//! v40 (batch T; one format version for the format changes of the batch, one line each):
+//!      - the hashdecl path of HASHDECL_NEW/CAST_HASHDECL expressions, slots and member defaults is written as the
+//!        serializable type path when the hashdecl has type parameters (qore#6173, qore#6241)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -548,9 +578,12 @@ constexpr uint16_t QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION = 36;
 constexpr uint16_t QORE_AOT_MODULE_CMD_OPTIONS_VERSION = 37;
 //! First format version whose call targets can be dispatched by name and self calls marked abstract (see v38 above).
 constexpr uint16_t QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION = 38;
-//! The current format version: the newest feature version above (a merge with another format change takes the next
-//! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION;
+//! First format version whose out-of-line handlers hand their return values over with HandlerReturn (see v39 above).
+constexpr uint16_t QORE_AOT_HANDLER_RETURN_VERSION = 39;
+//! The current format version: the newest version of the history above, which is the newest feature version above
+//! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
+//! in the history above)
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 40;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).

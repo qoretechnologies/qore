@@ -739,6 +739,31 @@ protected:
     */
     DLLLOCAL void replaceEnumForWrite(const QoreValue& current);
 
+    //! ensureUnique() for a value other than an ordinary node pointer: an enum value, an inline short string or an
+    //! opaque reference
+    DLLLOCAL QORE_INTERN_NOINLINE void ensureUniqueSlow(const QoreValue& current);
+
+    //! ensureUnique() for a node held as an ordinary pointer or through an opaque reference
+    DLLLOCAL void ensureUniqueNode() {
+        AbstractQoreNode* current_value = getNodeValue();
+        assert(current_value && current_value->getType() != NT_OBJECT);
+
+        if (current_value->is_unique()) {
+            return;
+        }
+        if (qv) {
+            // a value stored in a container can be held through an opaque reference: the copy keeps its
+            // representation, and the value replaced is released as it is held (see qore_value_copy_on_write())
+            saveTemp(qore_value_copy_on_write(*qv));
+            return;
+        }
+        // a variable holds its node as an ordinary reference (QoreLValue never holds an opaque value)
+        assert(!val->getValue().isOpaque());
+        AbstractQoreNode* old = current_value;
+        assignNodeIntern(current_value->realCopy());
+        saveTemp(old);
+    }
+
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
     //! checks the stack and records the lvalue ID of a reference that is resolved; nullptr if the stack is exhausted
     DLLLOCAL const lvalue_ref* startReferenceLValue(const ReferenceNode* ref);
@@ -1491,36 +1516,13 @@ public:
         // an enum (QV_Enum, which QoreLValue::getValue() returns borrowed), a container or a string: never a scalar
         // that the lvalue stores natively in a node that getValue() would create and keep (qore#6094)
         QoreValue current = val ? val->getValue() : *qv;
-        if (current.isEnum()) {
-            // the enum member's base value is shared and constant: the lvalue takes an owned copy to modify
-            replaceEnumForWrite(current);
+        // an enum value, a short string held inline and an opaque reference take the slow path
+        if (!current.isPlainPointer()) [[unlikely]] {
+            ensureUniqueSlow(current);
             return;
         }
         assert(!val || !val->optimized());
-        if (current.isShortString()) {
-            char buf[7];
-            current.getShortString(buf);
-            assignNodeIntern(new QoreStringNode(buf, current.shortStringLen(), QCS_UTF8));
-            return;
-        }
-
-        AbstractQoreNode* current_value = getNodeValue();
-        assert(current_value && current_value->getType() != NT_OBJECT);
-
-        if (current_value->is_unique()) {
-            return;
-        }
-        if (qv) {
-            // a value stored in a container can be held through an opaque reference: the copy keeps its
-            // representation, and the value replaced is released as it is held (see qore_value_copy_on_write())
-            saveTemp(qore_value_copy_on_write(*qv));
-            return;
-        }
-        // a variable holds its node as an ordinary reference (QoreLValue never holds an opaque value)
-        assert(!val->getValue().isOpaque());
-        AbstractQoreNode* old = current_value;
-        assignNodeIntern(current_value->realCopy());
-        saveTemp(old);
+        ensureUniqueNode();
     }
 
     DLLLOCAL int64 getAsBigInt() const;

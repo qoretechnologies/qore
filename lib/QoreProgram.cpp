@@ -1608,11 +1608,17 @@ void qore_program_private::doThreadInit(ExceptionSink* xsink) {
 
     // if there is any thread-initialization code, execute it here
     ReferenceHolder<ResolvedCallReferenceNode> ti(xsink);
+    QoreThreadRuntimeParseOptions ti_po;
     {
         AutoLocker al(tlock);
         ti = thr_init ? thr_init->refRefSelf() : 0;
+        if (ti) {
+            ti_po = thr_init_po;
+        }
     }
     if (ti) {
+        // the code runs with the options of the code that set it (qore#6208)
+        QoreThreadRuntimeParseOptionsHelper po_helper(&ti_po);
         ValueHolder v(ti->invoke(0, xsink), xsink);
     }
 }
@@ -1731,10 +1737,17 @@ bool qore_program_private::scanMembers(RObject& obj, RSetHelper& rsh) {
 bool qore_program_private::setThreadInit(const ResolvedCallReferenceNode* n_thr_init, ExceptionSink* xsink) {
     // the old code is released after the lock, as releasing it can run destructors
     ReferenceHolder<ResolvedCallReferenceNode> old(xsink);
+    // the options of the code that sets it, which it runs with, without the application of a call of module code,
+    // as it runs for every thread that enters the Program (qore#6208); the old ones are released after the lock, as
+    // their references to Programs can be the last ones
+    QoreThreadRuntimeParseOptions po = n_thr_init ? QoreThreadRuntimeParseOptions::captureForThread()
+        : QoreThreadRuntimeParseOptions();
     {
         AutoLocker al(tlock);
         old = thr_init;
         thr_init = n_thr_init ? n_thr_init->refRefSelf() : nullptr;
+        std::swap(thr_init_po.po, po.po);
+        std::swap(thr_init_po.override, po.override);
         if (scan_holder) {
             scanValuesChangedIntern(program_code_needs_scan(*old), {thr_init});
         }
@@ -3288,11 +3301,15 @@ void qore_program_private::del(ExceptionSink* xsink) {
     clearScanHolder();
     assert(!scan_holder);
     ResolvedCallReferenceNode* old_thr_init;
+    // the options of the code that set it, released with it after the lock (qore#6208)
+    QoreThreadRuntimeParseOptions old_thr_init_po;
     {
         // the object that survives can still set or get the code (Program::setThreadInit())
         AutoLocker al(tlock);
         old_thr_init = thr_init;
         thr_init = nullptr;
+        std::swap(old_thr_init_po.po, thr_init_po.po);
+        std::swap(old_thr_init_po.override, thr_init_po.override);
     }
     if (old_thr_init) {
         old_thr_init->deref(xsink);
@@ -6224,6 +6241,10 @@ QoreExternalProgramContextHelper::~QoreExternalProgramContextHelper() {
     delete priv;
 }
 
+bool qore_program_thread_entry_pending(const QoreProgram* pgm) {
+    return pgm && thread_entry_pending(pgm);
+}
+
 class QoreExternalProgramCallContextHelperPriv : ProgramCallContextHelper {
 public:
     DLLLOCAL QoreExternalProgramCallContextHelperPriv(QoreProgram* pgm) : ProgramCallContextHelper(pgm) {
@@ -6250,9 +6271,17 @@ struct QoreExitHook {
     QoreProgram* pgm;
     //! the hook; referenced
     ResolvedCallReferenceNode* code;
+    //! the run-time parse options of the code that registered the hook, which the hook runs with (qore#6208)
+    /** A hook that is a call reference to builtin code sets no options of its own, and the thread that runs the hooks
+        (the one that deletes the Program, or the main thread at the end of the process) has its own
+    */
+    QoreThreadRuntimeParseOptions po;
 
     //! Releases the hook's references; called without the registry lock
     void release(ExceptionSink* xsink) {
+        // the options' references to Programs are released here, not when the object is overwritten or destroyed
+        // with the registry lock held (qore#6208)
+        po = QoreThreadRuntimeParseOptions();
         code->deref(xsink);
         pgm->depDeref();
     }
@@ -6332,6 +6361,9 @@ void qore_run_exit_hook(QoreExitHook& hook) {
     {
         // the hook runs in its Program, without the policy of a sandboxed caller that deletes a Program; a Program
         // that is being deleted meanwhile refuses it with an exception
+        // the hook runs with the options of the code that registered it (qore#6208), installed before the Program
+        // is entered, whose thread entry handler and initialization run then
+        QoreThreadRuntimeParseOptionsHelper po_helper(&hook.po);
         ProgramThreadCountContextHelper tch(&xsink, hook.pgm, true);
         if (!xsink) {
             QoreSandboxPolicyBarrierHelper barrier;
@@ -6371,7 +6403,7 @@ int64 qore_register_exit_hook(const ResolvedCallReferenceNode* code, ExceptionSi
     int64 id = ++exit_hook_seq;
     // taking the references cannot fail, and releasing them takes no lock
     pgm->depRef();
-    exit_hooks.push_back({id, pgm, code->refRefSelf()});
+    exit_hooks.push_back({id, pgm, code->refRefSelf(), QoreThreadRuntimeParseOptions::capture()});
     return id;
 }
 

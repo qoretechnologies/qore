@@ -10,6 +10,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class AOTInitParseOptionsTest
@@ -117,6 +118,116 @@ int sub main() {
 
         #! running code parses code with other options: the constants of that code run with its options, not with
         #! those of the statement that parses it, and give the values that the same expressions give in its functions
+        #! a module that loads another one when its code is called
+        const LoaderModuleSource = "%modern
+module LoaderMod {
+    version = \"1.0\";
+    desc = \"qore#6205: a module loaded at run time by module code\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+public namespace LoaderMod {
+    public bool sub load_target() {
+        load_module(\"TargetMod\");
+        return call_function(\"TargetMod::restricted\");
+    }
+    public int sub load_costly(string name) {
+        load_module(name);
+        return call_function(name + \"::value\");
+    }
+}
+";
+
+        #! the module loaded at run time: its constant records whether its initializer ran with a restriction
+        const TargetModuleSource = "%modern
+module TargetMod {
+    version = \"1.0\";
+    desc = \"qore#6205: a module loaded at run time by module code\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+public namespace TargetMod {
+    public const Restricted = (Program::getCallerCapabilityMask(0) & PO_NO_TERMINAL_IO) != 0;
+    public bool sub restricted() { return Restricted; }
+}
+";
+
+        #! modules whose constant initializers take a long time (SpinMod) or a lot of memory (BigMod): loaded for a
+        #! sandboxed call, the work is charged to the limits of the call, though the initializers run with the module's
+        #! own options
+        const SpinModuleSource = "%modern
+module SpinMod {
+    version = \"1.0\";
+    desc = \"qore#6205: the limits of a sandboxed call count the initializers of a module that it loads\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+int sub spin() {
+    int n = 0;
+    for (int i = 0; i < 1000000000; ++i) {
+        n += i;
+    }
+    return n;
+}
+public namespace SpinMod {
+    public const Value = spin();
+    public int sub value() { return Value; }
+}
+";
+
+        const BigModuleSource = "%modern
+module BigMod {
+    version = \"1.0\";
+    desc = \"qore#6205: the limits of a sandboxed call count the initializers of a module that it loads\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+list<string> sub big() {
+    list<string> l = ();
+    for (int i = 0; i < 2000000; ++i) {
+        l += sprintf(\"%d-padding-padding-padding\", i);
+    }
+    return l;
+}
+public namespace BigMod {
+    public const Value = big().size();
+    public int sub value() { return Value; }
+}
+";
+
+        #! a sandboxed call with a limit (ARGV[0]: wall, cpu or memory) that makes module code load SpinMod or BigMod
+        const BudgetScript = "%modern
+%no-child-restrictions
+load_module(\"LoaderMod\");
+Program p(PO_NO_TERMINAL_IO);
+SandboxManager sm();
+switch (ARGV[0]) {
+    case \"wall\": sm.setWallTimeLimit(300); break;
+    case \"cpu\": sm.setCPUTimeLimit(300); break;
+    case \"memory\": sm.setMemoryLimit(10 * 1024 * 1024); break;
+}
+p.setSandboxManager(sm);
+p.parse(\"%modern\\n%requires LoaderMod\\nint sub run(string m) { return LoaderMod::load_costly(m); }\\n\", \"child\");
+try {
+    printf(\"%d\\n\", p.callFunction(\"run\", ARGV[0] == \"memory\" ? \"BigMod\" : \"SpinMod\"));
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+
+        #! a sandboxed caller of module code that loads a module: the module code runs with the restriction of its
+        #! caller (an override), which the loaded module's constant initializer must not take on
+        const SandboxedLoadScript = "%modern
+%no-child-restrictions
+load_module(\"LoaderMod\");
+hash<string, auto> modes = {\"ast\": EM_AST, \"ir\": EM_IR, \"tiered\": EM_TIERED, \"jit\": EM_JIT};
+Program p(PO_NO_TERMINAL_IO);
+p.setExecMode(modes{ARGV[0]});
+p.setSandboxManager(new SandboxManager());
+p.parse(\"%modern\\n%requires LoaderMod\\nbool sub run() { return LoaderMod::load_target(); }\\n\", \"child\");
+printf(\"%y\\n\", p.callFunction(\"run\"));
+";
+
         const RuntimeParseScript = "%modern
 Program p();
 p.parse(\"%old-style
@@ -134,13 +245,15 @@ printf(\"%y\\n\", (c[0], c[1] === p.callFunction(\"in_function\")[1]));
     }
 
     constructor() : QUnit::Test("AOTInitParseOptionsTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        # never the test's own executable when it runs compiled with qcc (TestInterpreter)
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
-            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : trim(`command -v qcc 2>/dev/null`));
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "";
         addTestCase("module constants: source and compiled modules give the same values", \moduleTest());
         addTestCase("script constants: qcc executables give the interpreted values", \exeTest());
         addTestCase("constants of code parsed by running code", \runtimeParseTest());
+        addTestCase("constants of a module loaded for a sandboxed caller", \sandboxedLoadTest());
+        addTestCase("the limits of a sandboxed call count the initializers it triggers", \budgetTest());
         set_return_value(main());
     }
 
@@ -206,6 +319,36 @@ printf(\"%y\\n\", (c[0], c[1] === p.callFunction(\"in_function\")[1]));
         foreach string mode in (Modes) {
             assertEq("[False, True]\n", backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b "
                 "--exec-mode=%s %s 2>&1", libqore_dir, libqore_dir, qore_bin, mode, script)), "mode " + mode);
+        }
+    }
+
+    sandboxedLoadTest() {
+        TmpDir mods("qore-aot-init-opts-mods-");
+        write(mods.path + "/LoaderMod.qm", LoaderModuleSource);
+        write(mods.path + "/TargetMod.qm", TargetModuleSource);
+        TmpDir tmp("qore-aot-init-opts-sbx-");
+        string script = tmp.path + "/sbx.q";
+        write(script, SandboxedLoadScript);
+        # each run loads the target module in a new process, so its constant is evaluated for the sandboxed caller
+        foreach string mode in (Modes) {
+            assertEq("False\n", backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b "
+                "%s %s 2>&1", libqore_dir, libqore_dir, mods.path, qore_bin, script, mode)), "mode " + mode);
+        }
+    }
+
+    budgetTest() {
+        TmpDir mods("qore-aot-init-opts-mods-");
+        write(mods.path + "/LoaderMod.qm", LoaderModuleSource);
+        write(mods.path + "/SpinMod.qm", SpinModuleSource);
+        write(mods.path + "/BigMod.qm", BigModuleSource);
+        TmpDir tmp("qore-aot-init-opts-budget-");
+        string script = tmp.path + "/budget.q";
+        write(script, BudgetScript);
+        foreach hash<auto> i in (("wall": "SANDBOX-TIMEOUT", "cpu": "SANDBOX-TIMEOUT",
+                "memory": "SANDBOX-MEMORY-LIMIT").pairIterator()) {
+            assertEq(i.value + "\n", backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s "
+                "%s -b %s %s 2>&1", libqore_dir, libqore_dir, mods.path, qore_bin, script, i.key)),
+                i.key + " limit");
         }
     }
 

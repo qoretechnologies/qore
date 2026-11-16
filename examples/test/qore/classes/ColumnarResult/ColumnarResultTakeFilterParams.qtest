@@ -1,0 +1,244 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ColumnarResultTakeFilterParamsTest
+
+#! ColumnarResult::take() and filter() keep the parameters of the buffers they rebuild (qore#6179)
+/** take() and filter() copy the selected rows of each buffer column into a new buffer; the new buffer must carry the
+    decimal precision and scale of the source column, or a decimal128 value with a scale cannot be stored in it
+*/
+class ColumnarResultTakeFilterParamsTest inherits QUnit::Test {
+    public {
+        #! decimal128 columns: precision, scale, values (row 1 is always null)
+        const DecimalCases = (
+            {"precision": 10, "scale": 2, "values": (1.25n, NOTHING, -3.75n, 0n, 99999999.99n)},
+            {"precision": 38, "scale": 0,
+                "values": (99999999999999999999999999999999999999n, NOTHING, -99999999999999999999999999999999999999n,
+                    0n, 1n)},
+            {"precision": 38, "scale": 10,
+                "values": (1234567890123456789012345678.0123456789n, NOTHING, -0.0000000001n, 0n,
+                    -9999999999999999999999999999.9999999999n)},
+            {"precision": 38, "scale": 37,
+                "values": (9.87654321n, NOTHING, -0.0000000000000000000000000000000000001n, 0n, -1.5n)},
+            {"precision": 5, "scale": 5, "values": (0.12345n, NOTHING, -0.99999n, 0n, 0.00001n)},
+            {"precision": 20, "scale": 0, "values": (12345678901234567890n, NOTHING, -1n, 0n, 7n)},
+            {"precision": 19, "scale": 4, "values": (123456789012345.6789n, NOTHING, -0.0001n, 0n, 2.5n)},
+        );
+
+        #! row indices for take(): reordered, repeated, and including the null row
+        const TakeIndices = (4, 1, 0, 2, 0);
+
+        #! row mask for filter()
+        const FilterMask = (True, True, False, True, True);
+    }
+
+    constructor() : QUnit::Test("ColumnarResultTakeFilterParams", "1.0", \ARGV) {
+        addTestCase("decimal128 take", \decimalTake());
+        addTestCase("decimal128 filter", \decimalFilter());
+        addTestCase("decimal128 filter with buffer masks", \decimalFilterBufferMask());
+        addTestCase("decimal128 buffer columns", \decimalBufferColumns());
+        addTestCase("non-nullable decimal128", \decimalNotNullable());
+        addTestCase("empty results", \emptyResults());
+        addTestCase("chained operations", \chainedOperations());
+        addTestCase("temporal columns", \temporalColumns());
+        addTestCase("other column types", \otherColumnTypes());
+        set_return_value(main());
+    }
+
+    private decimalTake() {
+        foreach hash<auto> c in (DecimalCases) {
+            string label = sprintf("decimal(%d,%d)", c.precision, c.scale);
+            ColumnarResult result = makeDecimalResult(c);
+            ColumnarResult taken = result.take(TakeIndices);
+            list<auto> source = sourceValues(result, c);
+            list<auto> expected = map source[$1], TakeIndices;
+            assertDecimalColumn(result, taken, expected, label + " take");
+        }
+    }
+
+    private decimalFilter() {
+        foreach hash<auto> c in (DecimalCases) {
+            string label = sprintf("decimal(%d,%d)", c.precision, c.scale);
+            ColumnarResult result = makeDecimalResult(c);
+            ColumnarResult filtered = result.filter(FilterMask);
+            list<auto> expected = select sourceValues(result, c), FilterMask[$#];
+            assertDecimalColumn(result, filtered, expected, label + " filter");
+        }
+    }
+
+    private decimalFilterBufferMask() {
+        foreach hash<auto> c in (DecimalCases) {
+            string label = sprintf("decimal(%d,%d)", c.precision, c.scale);
+            ColumnarResult result = makeDecimalResult(c);
+            # non-null rows
+            list<auto> source = sourceValues(result, c);
+            ColumnarResult filtered = result.filter(result.nullMask("n", True));
+            list<auto> expected = select source, exists $1;
+            assertDecimalColumn(result, filtered, expected, label + " filter non-null");
+            # null rows
+            filtered = result.filter(result.nullMask("n"));
+            assertDecimalColumn(result, filtered, (NOTHING,), label + " filter null");
+            # a bool buffer mask
+            filtered = result.filter(new buffer<bool>(FilterMask));
+            expected = select source, FilterMask[$#];
+            assertDecimalColumn(result, filtered, expected, label + " filter bool buffer");
+        }
+    }
+
+    private decimalBufferColumns() {
+        # buffers created directly, with the scale inferred from the values
+        ColumnarResult result = ColumnarResult::fromColumnHash({
+            "n": new buffer<*decimal128>((1.20n, NOTHING, -4.50n, 7n)),
+            "m": new buffer<*decimal128>((0.001n, 2n, NOTHING, -123.456n)),
+        });
+        ColumnarResult taken = result.take((3, 2, 1, 0));
+        assertEq((7n, -4.50n, NOTHING, 1.20n), taken.getColumn("n").toList());
+        assertEq((-123.456n, NOTHING, 2n, 0.001n), taken.getColumn("m").toList());
+        assertEq(result.schemaV2(), taken.schemaV2());
+        assertEq(taken.toRows(), roundTrip(taken).toRows());
+
+        ColumnarResult filtered = result.filter((True, False, True, True));
+        assertEq((1.20n, -4.50n, 7n), filtered.getColumn("n").toList());
+        assertEq((0.001n, NOTHING, -123.456n), filtered.getColumn("m").toList());
+        assertEq(result.schemaV2(), filtered.schemaV2());
+        assertEq(filtered.toRows(), roundTrip(filtered).toRows());
+    }
+
+    private decimalNotNullable() {
+        ColumnarResult result = ColumnarResult::fromColumnHash({"n": (1.25n, 2.5n, 3.75n, -0.01n)},
+            {"n": {"native_type": "numeric", "precision": 10, "scale": 2}});
+        # the example from the issue
+        assertEq((1.25n, 2.5n), result.slice(0, 2).getColumn("n").toList());
+        assertEq((1.25n, 3.75n), result.take((0, 2)).getColumn("n").toList());
+        assertEq((2.5n, -0.01n), result.filter((False, True, False, True)).getColumn("n").toList());
+        assertEq(result.schemaV2(), result.take((0, 2)).schemaV2());
+        assertEq(result.schemaV2(), result.filter((False, True, False, True)).schemaV2());
+    }
+
+    private emptyResults() {
+        ColumnarResult result = makeDecimalResult(DecimalCases[0]);
+        ColumnarResult taken = result.take(());
+        assertEq(0, taken.numRows());
+        assertEq(result.schemaV2(), taken.schemaV2());
+        ColumnarResult filtered = result.filter((False, False, False, False, False));
+        assertEq(0, filtered.numRows());
+        assertEq(result.schemaV2(), filtered.schemaV2());
+    }
+
+    private chainedOperations() {
+        hash<auto> c = DecimalCases[2];
+        ColumnarResult result = makeDecimalResult(c);
+        list<auto> source = sourceValues(result, c);
+        # take of a filter of a slice of a take
+        ColumnarResult r = result.take((4, 3, 2, 1, 0)).slice(1, 4).filter((True, False, True, True)).take((2, 0));
+        assertEq((source[0], source[3]), r.getColumn("n").toList());
+        assertEq(result.schemaV2(), r.schemaV2());
+        # and through serialization
+        ColumnarResult copy = roundTrip(r);
+        assertEq(r.toRows(), copy.toRows());
+        assertEq(r.schemaV2(), copy.schemaV2());
+        assertEq((source[3],), copy.take((1,)).getColumn("n").toList());
+    }
+
+    private temporalColumns() {
+        list<auto> ts = (2024-01-01T00:00:00.123456Z, NOTHING, 2024-01-03T12:34:56Z, 1969-12-31T23:59:59Z,
+            2024-02-29T00:00:00Z);
+        list<auto> dates = (2024-01-01, NOTHING, 1970-01-01, 1900-01-01, 2100-12-31);
+        ColumnarResult result = ColumnarResult::fromColumnHash({
+            "ts": ts,
+            "tsz": ts,
+            "d": dates,
+            "n": DecimalCases[0].values,
+        }, {
+            "ts": {"native_type": "timestamp", "nullable": True},
+            "tsz": {"native_type": "timestamp with time zone", "nullable": True},
+            "d": {"native_type": "date", "nullable": True},
+            "n": {"native_type": "numeric", "precision": 10, "scale": 2, "nullable": True},
+        });
+        # toRows() rather than toMaterializedColumnHash(), which cannot materialize null temporal values
+        list<hash<auto>> rows = result.toRows();
+
+        ColumnarResult taken = result.take(TakeIndices);
+        assertEq(result.schemaV2(), taken.schemaV2(), "take temporal schema");
+        assertEq((map rows[$1], TakeIndices), taken.toRows(), "take temporal rows");
+        assertEq(result.toColumnHash().ts.fullType(), taken.toColumnHash().ts.fullType(), "take temporal type");
+
+        ColumnarResult filtered = result.filter(FilterMask);
+        assertEq(result.schemaV2(), filtered.schemaV2(), "filter temporal schema");
+        assertEq((select rows, FilterMask[$#]), filtered.toRows(), "filter temporal rows");
+        assertEq(result.toColumnHash().ts.fullType(), filtered.toColumnHash().ts.fullType(),
+            "filter temporal type");
+    }
+
+    private otherColumnTypes() {
+        ColumnarResult result = ColumnarResult::fromColumnHash({
+            "i": new buffer<*int64>((1, NOTHING, -3, 4, 5)),
+            "i32": new buffer<int32>((1, 2, -3, 4, 5)),
+            "f": new buffer<*float64>((1.5, NOTHING, -3.25, 0.0, 1e100)),
+            "f32": new buffer<float32>((1.5, 2.5, -3.25, 0.0, 4.0)),
+            "b": new buffer<*bool>((True, NOTHING, False, True, False)),
+            "s": new buffer<*string>(("a", NOTHING, "", "dd", "eee")),
+            "bin": (<01>, NOTHING, <0203>, binary(), <ff>),
+            "l": cast<list<string>>(("x", "y", "z", "w", "v")),
+        });
+        ColumnarResult taken = result.take(TakeIndices);
+        assertEq(result.schemaV2(), taken.schemaV2());
+        hash<auto> source = result.toColumnHash();
+        hash<auto> taken_columns = taken.toColumnHash();
+        foreach string col in (keys source) {
+            assertEq(source{col}.fullType(), taken_columns{col}.fullType(), "take type " + col);
+            assertEq((map listOf(source{col})[$1], TakeIndices), listOf(taken_columns{col}), "take " + col);
+        }
+
+        ColumnarResult filtered = result.filter(FilterMask);
+        assertEq(result.schemaV2(), filtered.schemaV2());
+        hash<auto> filtered_columns = filtered.toColumnHash();
+        foreach string col in (keys source) {
+            assertEq(source{col}.fullType(), filtered_columns{col}.fullType(), "filter type " + col);
+            assertEq((select listOf(source{col}), FilterMask[$#]), listOf(filtered_columns{col}), "filter " + col);
+        }
+    }
+
+    private ColumnarResult makeDecimalResult(hash<auto> c) {
+        return ColumnarResult::fromColumnHash({"n": c.values, "id": (0, 1, 2, 3, 4)},
+            {"n": {"native_type": "numeric", "precision": c.precision, "scale": c.scale, "nullable": True}});
+    }
+
+    #! Returns the source values as stored in the column
+    /** They are compared with those of the result rather than the literals in DecimalCases, as a number read from a
+        decimal128 buffer can have another binary precision than the literal it was stored from
+    */
+    private list<auto> sourceValues(ColumnarResult result, hash<auto> c) {
+        list<auto> rv = result.getColumn("n").toList();
+        # the values are the same as the literals
+        assertEq(c.values.size(), rv.size());
+        foreach auto v in (rv) {
+            assertEq(c.values[$#].toString(), v.toString());
+        }
+        return rv;
+    }
+
+    private assertDecimalColumn(ColumnarResult source, ColumnarResult result, list<auto> expected, string label) {
+        assertEq(source.schemaV2(), result.schemaV2(), label + " schema");
+        assertEq(source.toColumnHash().n.fullType(), result.toColumnHash().n.fullType(), label + " type");
+        assertEq(expected, result.getColumn("n").toList(), label + " values");
+        assertEq(expected, (map $1.n, result.toRows()), label + " rows");
+        # the result survives serialization with the same values and schema
+        ColumnarResult copy = roundTrip(result);
+        assertEq(result.schemaV2(), copy.schemaV2(), label + " serialized schema");
+        assertEq(result.toRows(), copy.toRows(), label + " serialized rows");
+    }
+
+    private static list<auto> listOf(auto v) {
+        return v.typeCode() == NT_LIST ? v : v.toList();
+    }
+
+    private ColumnarResult roundTrip(ColumnarResult result) {
+        return Serializable::deserialize(Serializable::serialize(result));
+    }
+}
