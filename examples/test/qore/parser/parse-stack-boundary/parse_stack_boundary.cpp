@@ -320,9 +320,17 @@ static size_t min_stack_size() {
     static objects of LLVM under it: an embedding program that returns from main() calls qore_fork_child_quick_exit()
     after qore_cleanup(), which then flushes the standard I/O streams and ends the process with _exit()
 */
+//! true with --plain-exit: the fixture returns from main() after qore_cleanup(), without qore_fork_child_quick_exit()
+/** For the test of the debug library's check of a process that ends so while a test hook holds an abandoned compile
+    (QoreJIT::dbgExitIfAbandonedCompileHeld(), issue #6296); never used otherwise
+*/
+static bool plain_exit = false;
+
 static int end_process(int rc) {
     qore_cleanup();
-    qore_fork_child_quick_exit(rc);
+    if (!plain_exit) {
+        qore_fork_child_quick_exit(rc);
+    }
     return rc;
 }
 
@@ -331,12 +339,18 @@ static int end_process(int rc) {
 //! prints "parsed" or "stack error" (a process can load a module once, so each size runs in a process of its own)
 //! parse_stack_boundary --source <file> <stack KB>...: parses the file in a new Program with each stack size in turn,
 //! in a thread of its own, and runs its run() function (see load_source())
+//! parse_stack_boundary --plain-exit ...: as without it, but ends with exit() after qore_cleanup() (see plain_exit)
 //! parse_stack_boundary --min-stack: prints the smallest stack size in bytes that a thread can be created with (see
 //! min_stack_size())
 int main(int argc, char** argv) {
     if (argc == 2 && !strcmp(argv[1], "--min-stack")) {
         std::printf("%zu\n", min_stack_size());
         return 0;
+    }
+    if (argc > 1 && !strcmp(argv[1], "--plain-exit")) {
+        plain_exit = true;
+        --argc;
+        ++argv;
     }
     qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
     if (argc > 3 && !strcmp(argv[1], "--source")) {

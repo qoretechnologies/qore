@@ -38,6 +38,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         addPartCase(2, "module initialization that recurses without end", \runawayInitCheck());
         addPartCase(2, "module initialization deeper than a small stack", \deepInitCheck());
         addPartCase(2, "the end of the fixture with a background JIT compile in LLVM", \abandonedCompileExitCheck());
+        addPartCase(2, "exit() with a background JIT compile held in LLVM", \abandonedCompilePlainExitCheck());
         set_return_value(main());
     }
 
@@ -677,14 +678,49 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         qore_cleanup(), as an embedding program must.  A test hook of a debug library holds the compile of a module
         function in LLVM until the end of the process; without the quick exit, the atexit() handler of the library
         would wait for it forever, so the debug library ends the process with status 86 and a message on stderr
-        instead (QoreJIT::dbgExitIfAbandonedCompileHeld(), issue #6296).
+        instead (QoreJIT::dbgExitIfAbandonedCompileHeld(), issue #6296; see abandonedCompilePlainExitCheck()).
     */
     private abandonedCompileExitCheck() {
+        int status;
+        string output = runHeldCompileFixture("qore-parse-stack-jit-exit-", False, \status);
+        # a fixture that ends with exit() instead of qore_fork_child_quick_exit() exits with 86 and says why
+        assertEq(-1, output.find("abandoned compile held at debug hold point"), output);
+        assertEq(0, status, output);
+        # the output is written before the process ends; the compile was held (the sum of i * 4 for i < 10, twice)
+        assertEq("parsed 360", (output =~ x/([^\n]*)\n$/)[0], output);
+    }
+
+    #! A process that ends with exit() while a test hook holds the abandoned compile ends with status 86 and says why
+    /** The fixture returns from main() after qore_cleanup() without qore_fork_child_quick_exit() (--plain-exit): the
+        join of the compile thread in the atexit() handler of the library would never return, so the debug library
+        writes why to stderr and ends the process with _exit(86) (QoreJIT::dbgExitIfAbandonedCompileHeld(), issue
+        #6296).  If that check stopped firing, the fixture would wait in the join for good: nothing in the process can
+        then tell a join that ends from one that does not without a timer, so the time limit of run_tests.sh for the
+        test is what ends it then, and the test fails.
+    */
+    private abandonedCompilePlainExitCheck() {
+        int status;
+        string output = runHeldCompileFixture("qore-parse-stack-jit-plain-exit-", True, \status);
+        assertEq(86, status, output);
+        assertRegex("QORE-DEBUG: exit\\(\\) with an abandoned compile held at debug hold point \"llvm\": end with "
+            "qore_fork_child_quick_exit\\(\\) after qore_cleanup\\(\\)", output);
+        # the result was written before the process ended (the standard I/O streams are flushed)
+        assertTrue(output =~ /^parsed 360$/m, output);
+    }
+
+    #! Runs the fixture on code whose module function's compile a test hook holds in LLVM until the end of the process
+    /** @param prefix the prefix of the temporary directory
+        @param plain_exit if the fixture ends with exit() after qore_cleanup() (--plain-exit)
+        @param status the exit status of the fixture
+
+        @return the output of the fixture, stdout and stderr
+    */
+    private string runHeldCompileFixture(string prefix, bool plain_exit, reference<int> status) {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("dbg_hold_bg_compile() requires library debugging");
         }
         string libdir = getLibDir();
-        TmpDir dir("qore-parse-stack-jit-exit-");
+        TmpDir dir(prefix);
         string exe = build(dir.path, realpath(get_script_dir() + "/../../../../.."), libdir);
         string mdir = dir.path + "/modules";
         mkdir(mdir);
@@ -701,16 +737,14 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
             "}\n");
         string source = dir.path + "/hold-jit.q";
         writeFile(source, "%requires HoldJit\nint sub run() { return HoldJit::start(); }\n");
-        int status;
         # functions are compiled in the background at their first call
+        int rc;
         string output = backquote("env -u QORE_JIT_SYNC_COMPILE QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
             "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_MODULE_DIR="
-            + quote(mdir) + " " + quote(exe) + " --source " + quote(source) + " 8192 2>&1", \status);
-        # a fixture that ends with exit() instead of qore_fork_child_quick_exit() exits with 86 and says why
-        assertEq(-1, output.find("abandoned compile held in LLVM"), output);
-        assertEq(0, status, output);
-        # the output is written before the process ends; the compile was held (the sum of i * 4 for i < 10, twice)
-        assertEq("parsed 360", (output =~ x/([^\n]*)\n$/)[0], output);
+            + quote(mdir) + " " + quote(exe) + (plain_exit ? " --plain-exit" : "") + " --source " + quote(source)
+            + " 8192 2>&1", \rc);
+        status = rc;
+        return output;
     }
 
     #! the depth of the recursion of the constant initializer of deepInitCheck()
