@@ -113,6 +113,9 @@ msg.addTO("My Best Friend <you@friend.com>");
         \c Content-Type is \c text/plain (it was \c "7bit"), and an attachment with the \c 7bit, \c 8bit or
         \c binary transfer encoding no longer makes the parse fail with \c UNKNOWN-ENCODING
       - a body that ends with a line break is no longer given an empty line every time the message is serialized
+      - a message without a \c Subject or a \c From header is serialized without it; getting its headers raised
+        \c RUNTIME-OVERLOAD-ERROR, and @ref MailMessage::Message::getSubject() "Message::getSubject()" raised
+        \c RUNTIME-TYPE-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6267">issue 6267</a>)
     - The \c Disposition-Notification-To header of a parsed message sets
       @ref MailMessage::Message::receiptDelivery() "Message::receiptDelivery()", as a message created to be sent does;
       the header name was compared in the wrong case, so it was never recognized.  The header is therefore no
@@ -126,6 +129,11 @@ msg.addTO("My Best Friend <you@friend.com>");
       @ref MailMessage::Message::serialize() "Message::serialize()" no longer change the message: a \c Content-Type
       header was removed or taken as the type of the body, and the body encoding of a message with attachments was
       changed from \c none to \c 7bit
+    - Raw message text in any character encoding is parsed in time proportional to its length; the time grew with
+      the square of the number of header lines, encoded words and quoted-printable codes.  A body that is not valid
+      UTF-8 no longer makes the parse fail with \c INVALID-ENCODING, and the position given when a header line does
+      not end with CRLF is a byte offset in every encoding
+      (<a href="https://github.com/qoretechnologies/qore/issues/6139">issue 6139</a>)
     - Enhanced attachment handling:
       - Added RFC 2231 filename encoding for non-ASCII filenames
       - Added RFC 2231 filename decoding for incoming messages
@@ -256,6 +264,13 @@ msg.addTO("My Best Friend <you@friend.com>");
     - Part: used to represent alternate representations of the message body
 */
 public namespace MailMessage {
+#! @cond nodoc
+# True if the bytes that the parsers of this module scan are counted for tests in the count of Mime::MimeScanCounter
+# (issue #6139; see Message::setScanCounting()); a module variable, which is faster to read than a static class member,
+# so that each place that counts only reads it when counting is off
+our *bool scan_counting;
+#! @endcond
+
 #! Message part info
 public hashdecl PartInfo {
     #! Part name
@@ -573,6 +588,20 @@ m.addHeader("Message-ID: <20090712.123456789@mail.drei.at>");@endcode
 */
 public class Message {
     #! @cond nodoc
+    # internal, for tests: turns on or off counting the bytes that the parsers of this module and of the Mime module
+    # scan in Mime::MimeScanCounter::bytes (issue #6139); turning it on resets the count (MimeScanCounter::start()),
+    # and turning it off ends counting for both modules (MimeScanCounter::stop()).  Every operation whose cost grows
+    # with the input size must add its size to the count; otherwise a quadratic regression in it goes unseen.
+    # Counting is process-wide (all threads and Programs), so it is only for a process that runs one test at a time.
+    static setScanCounting(bool on) {
+        if (on) {
+            MimeScanCounter::start();
+        } else {
+            MimeScanCounter::stop();
+        }
+        scan_counting = on;
+    }
+
     private {
         # the sender
         string from;
@@ -706,6 +735,32 @@ public class Message {
         @ref receiptDelivery() and is no longer returned by @ref getHeaders()
     */
     constructor(string msg) {
+        # the lines of the header are split once, and the body is taken at the byte offset after them: taking each
+        # line off the front of the rest of the message copied the rest, so that the time to parse the header grew
+        # with the square of its number of lines, and a character offset takes time that grows with the offset in an
+        # encoding with characters of more than one byte (issue #6139)
+        string enc = msg.encoding();
+        bool convert = Message::isReadConverted(enc);
+        # the text is read by bytes in a single-byte view of it
+        string text = force_encoding(convert ? convert_encoding(msg, "UTF-8") : msg, "ISO-8859-1");
+        # the header ends with an empty line, at the latest before the first two line breaks in a row; the last
+        # element is the text after the last line break, which has no line break of its own unless it is that empty
+        # line
+        int hend = text.find(ViewEolEol);
+        list<string> lines = (hend == -1 ? text : text.substr(0, hend + 2)).split(ViewEol, False, True);
+        # the number of lines that end with a line break
+        int complete = hend == -1 ? lines.size() - 1 : lines.size();
+        # the bytes are counted for tests (issue #6139): the view of the message, the search for the end of the
+        # header, the lines split, and below each line converted and matched and the body; every operation whose
+        # cost grows with the input size must add its size to the count, otherwise a quadratic regression in it goes
+        # unseen by the tests (see Mime::MimeScanCounter)
+        bool count = scan_counting ?? False;
+        if (count) {
+            MimeScanCounter::bytes += msg.size() + (hend == -1 ? 2 * text.size() : 2 * (hend + 4));
+        }
+        # the index of the next line
+        int ln = 0;
+        # the byte offset of the next line in the text
         int pos = 0;
 
         # is this a MIME message?
@@ -717,13 +772,43 @@ public class Message {
 
         # first get the message headers
         while (True) {
-            string hdr = Message::getLine(\msg, \pos);
+            if (ln == complete) {
+                Message::throwNoEol(text, pos, enc, convert);
+            }
+            string hdr = lines[ln];
+            pos += hdr.size() + 2;
+            ++ln;
+            if (count) {
+                # the line converted, and the next line matched
+                MimeScanCounter::bytes += hdr.size() + (lines[ln] ?? "").size();
+            }
+            hdr = convert ? convert_encoding(force_encoding(hdr, "UTF-8"), enc) : force_encoding(hdr, enc);
+            trim hdr;
             if (hdr.empty())
                 break;
 
             # see if it's a long header field as defined in RFC 2822 section 2.2.3: http://tools.ietf.org/html/rfc2822#section-2.2.3
-            while (msg =~ /^[ \t]/)
-                hdr += " " + trim(Message::getLine(\msg, \pos));
+            if (lines[ln] =~ /^[ \t]/) {
+                # the lines are joined at the end, as appending to a string can copy it; they are joined in the
+                # encoding of the first line, as they were appended to it
+                list<string> fold = (hdr,);
+                do {
+                    if (ln == complete) {
+                        Message::throwNoEol(text, pos, enc, convert);
+                    }
+                    string line = lines[ln];
+                    pos += line.size() + 2;
+                    ++ln;
+                    if (count) {
+                        # the line converted and joined, and the next line matched
+                        MimeScanCounter::bytes += 2 * line.size() + (lines[ln] ?? "").size();
+                    }
+                    fold += " " + trim(convert
+                        ? convert_encoding(force_encoding(line, "UTF-8"), enc)
+                        : force_encoding(line, enc));
+                } while (lines[ln] =~ /^[ \t]/);
+                hdr = join(convert_encoding("", enc), fold);
+            }
 
             hash h = parseHeader(hdr);
             string lk = h.firstKey().lwr();
@@ -780,6 +865,12 @@ public class Message {
         }
 
         #printf("mime: %y ct: %y %d headers: %Y\n", mime, ct, headers.size(), headers);
+
+        # the rest of the message after the header is its body
+        msg = Message::getText(text.substr(pos), enc, convert);
+        if (count) {
+            MimeScanCounter::bytes += 2 * msg.size();
+        }
 
         # try and parse the Content-Type header; assume any multipart type is "multipart/mixed"
         # (http://tools.ietf.org/html/rfc2046#section-5.1.3)
@@ -1316,6 +1407,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         <tt>"http://user\@host.com/path"</tt> is now <tt>"//user"</tt>)
     */
     static *string getEmailAddress(string str) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += str.size();
+        }
         # an encoded word is text, never part of an address (issue #6066)
         if (str.find("=?") >= 0) {
             str = Message::removeEncodedWords(str);
@@ -1357,12 +1453,22 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # quote, a parenthesis or a bracket) is not one, so that removing it cannot change where a quoted string, a
     # comment or a bracket starts or ends (issue #6134)
     private static string removeEncodedWords(string str) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += str.size();
+        }
         return EncodedWordSubst.subst(str);
     }
 
     # returns the string without white space, including Unicode white space, and format characters (ex: a byte
     # order mark) at its start and end; linear in the length of the string
     private static string trimSpace(string str) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += str.size();
+        }
         str = TrimStartSubst.subst(str);
         if (!TrimEndRx.match(str)) {
             return str;
@@ -1380,6 +1486,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # local part (a quoted string followed by "@"); an unterminated comment or quoted string is kept; linear in the
     # length of the string
     private static string removeComments(string str, bool quotes) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += str.size();
+        }
         list<string> c = str.splitChars();
         int n = c.size();
         # the parts of the string returned; the text kept is added as a range of characters, not a character at a
@@ -1439,6 +1550,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
 
     # returns the text in quotes, square brackets or braces if the string is in them
     private static *string unwrap(string str) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += str.size();
+        }
         if (str.size() < 2) {
             return;
         }
@@ -1453,6 +1569,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # returns the address in angle brackets at the end of a trimmed string, if there is one; the last "<" is found
     # without a regular expression, so the time is linear in the length of the string
     private static *string getAngleAddress(string str) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += str.size();
+        }
         if (str.substr(-1) != ">") {
             return;
         }
@@ -1487,6 +1608,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         @since MailMessage 1.5.1
     */
     static list<string> getEmailAddresses(string str) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += str.size();
+        }
         # an encoded word is text, never part of an address, and its text cannot hide a separator
         if (str.find("=?") >= 0) {
             str = Message::removeEncodedWords(str);
@@ -1520,6 +1646,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # address in angle brackets is the given address, and the text before it is a phrase (see getPhraseText()); an
     # empty string if there is no name; NOTHING if the mailbox is not in this form
     private static *string getDisplayName(string mailbox, string addr) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += mailbox.size() + addr.size();
+        }
         *list<*string> m = mailbox =~ x/^\s*(.*?)\s*<([^<>]*)>\s*$/s;
         if (!m || m[1] != addr) {
             return;
@@ -1533,6 +1664,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # list of mailboxes, where each mailbox before it has an address in angle brackets or an address alone.  A ','
     # alone is accepted, as in "Me, Myself, and I <me@email.com>", and the name is then quoted in the header.
     private static *string getPhraseText(string phrase) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += phrase.size();
+        }
         list<string> words = ();
         string word = "";
         bool in_word;
@@ -1591,6 +1727,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
 
     # returns a mailbox in display format: "Name <addr>", with the name as a quoted string if it has specials
     private static string formatMailbox(string name, string addr) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += name.size() + addr.size();
+        }
         if (name =~ /[()<>\[\]:;@\\,."]/) {
             name = "\"" + replace(replace(name, "\\", "\\\\"), "\"", "\\\"") + "\"";
         }
@@ -1620,6 +1761,12 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     }
 
     private {
+        # the end of a line in the single-byte view of the message text that is parsed (issue #6139); in the
+        # encoding of the view, so that it is not converted for every line
+        const ViewEol = force_encoding("\r\n", "ISO-8859-1");
+        # the end of a line and an empty line in the view
+        const ViewEolEol = force_encoding("\r\n\r\n", "ISO-8859-1");
+
         # white space, including Unicode white space (ex: a no-break space, a line or paragraph separator, NEL)
         const SpaceChars = "\\s\\p{Z}\\x{85}";
         # white space and format characters (ex: a byte order mark, a zero width space, a soft hyphen, a
@@ -1686,6 +1833,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
 
     # returns True if the string is an email address (an RFC 5322 addr-spec)
     private static bool isAddrSpec(string str) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += str.size();
+        }
         return AddrSpecRx.match(str);
     }
 
@@ -1705,6 +1857,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # again without it, so that it cannot hide the separators after it.  The time is linear in the length of the
     # value: a part is split again at most once for each of the four kinds of construct.
     private static *list<string> splitMailboxList(string value, bool groups = False) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += value.size();
+        }
         list<string> c = value.splitChars();
         int n = c.size();
         list<string> rv = ();
@@ -1783,6 +1940,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # returns the characters from offset start to end (exclusive) as a string; a string is not built with a
     # character appended at a time, which takes a time that is not linear in its length in some execution modes
     private static string joinChars(list<string> c, int start, int end) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += end - start;
+        }
         return start < end ? c[start..end - 1].join("") : "";
     }
 
@@ -1792,6 +1954,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # parsed header).  The address is found without a regular expression on the whole string, so the time is
     # linear in its length.
     private static *hash<auto> parseMailbox(string mailbox, bool decode) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += mailbox.size();
+        }
         # format characters are trimmed for the address only: they are part of a display name (ex: a directional
         # formatting character)
         string trimmed = Message::trimSpace(mailbox);
@@ -1814,6 +1981,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
 
     # returns the mailboxes of an address header value, or NOTHING if it is not a list of mailboxes
     private static *list<hash<auto>> parseMailboxList(string value, bool decode) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += value.size();
+        }
         *list<string> parts = Message::splitMailboxList(value);
         if (parts && parts.size() > 1) {
             list<hash<auto>> rv = ();
@@ -1844,6 +2016,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # mailboxes.
     private static string doAddressHeader(string hdr, string val, *string raw, string eol, bool encode,
             bool sender = False) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += val.size() + (raw ?? "").size();
+        }
         if (!encode) {
             return Message::doHeaderValue(hdr, val, eol, encode);
         }
@@ -1892,6 +2069,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # name, otherwise the display name, as a quoted string if it has specials, or as a "B" encoded word if it is not
     # printable ASCII, and the address
     private static string formatHeaderMailbox(*string name, string addr, *bool angle, string eol) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += (name ?? "").size() + addr.size();
+        }
         if (!name.val()) {
             return angle ? sprintf("<%s>", addr) : addr;
         }
@@ -1903,6 +2085,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
 
     # returns the length of the first line of a string, and the length of its last line
     private static list<int> getLineLengths(string str, string eol) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += str.size();
+        }
         int first = str.find(eol);
         int last = str.rfind(eol);
         int len = str.length();
@@ -1912,6 +2099,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # returns the mailboxes separated by commas, with a folded line before a mailbox that would make the line
     # longer than MaxHeaderLineLen characters (RFC 5322 section 2.2.3)
     private static string foldMailboxes(list<string> mailboxes, string eol, int start) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += mailboxes.join("").size();
+        }
         string rv = "";
         int len = start;
         foreach string mb in (mailboxes) {
@@ -1939,6 +2131,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # separated by white space are one encoded word, since the white space between encoded words is dropped when
     # they are decoded (RFC 2047 section 6.2).  The time is linear in the length of the value.
     private static string encodeAddressText(string src, bool decode, string eol, int start) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += src.size();
+        }
         list<string> c = src.splitChars();
         int n = c.size();
         # the words of the value: hashes with "t" ("ws": white space, "lit": written as it is, "enc": text to
@@ -2100,6 +2297,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # adds a word of an address header to the words to write: an address at its start is written as it is, and the
     # rest is text
     private static addAddressWord(reference<list<hash<auto>>> words, reference<string> word, bool decode) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += word.size();
+        }
         if (!word.val()) {
             return;
         }
@@ -2120,6 +2322,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # adds text of an address header to the words to write: printable ASCII text is written as it is, other text
     # is encoded; an encoded word of a parsed header is decoded to be encoded again with the text beside it
     private static addAddressText(reference<list<hash<auto>>> words, string text, bool decode) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += text.size();
+        }
         if (!text.val()) {
             return;
         }
@@ -2272,6 +2479,11 @@ msg.addBCC(untrusted_name, "j@x.com");
     # returns a mailbox with the name as a quoted string, which cannot have a separator or an address outside
     # quotes; the address must be an addr-spec
     private static string makeMailbox(string name, string address, string err) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += name.size() + address.size();
+        }
         string addr = Message::trimSpace(address);
         if (!Message::isAddrSpec(addr)) {
             throw err, sprintf("%y is not an email address", address);
@@ -2332,8 +2544,14 @@ msg.addBCC(untrusted_name, "j@x.com");
     }
 
     #! returns the subject of the Message
+    /** @return the subject of the message, or an empty string if it has none (a parsed message without a \c Subject
+        header)
+
+        @since MailMessage 1.5.1 an empty string is returned for a parsed message without a \c Subject header; this
+        raised \c RUNTIME-TYPE-ERROR
+    */
     string getSubject() {
-        return subject;
+        return subject ?? "";
     }
 
     #! return all the email addresses the message will be sent to, a combination of the "To:", "CC:", and "BCC:" lists
@@ -2369,6 +2587,11 @@ msg.addBCC(untrusted_name, "j@x.com");
     # but the local part can be (RFC 5321 section 2.4); a quoted local part that needs no quotes is written without
     # them (RFC 5321 section 4.1.2: "a"@x.com is a@x.com)
     private static string getAddressKey(string addr) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += addr.size();
+        }
         int i = addr.substr(-1) == "]" ? addr.rfind("@[") : addr.rfind("@");
         if (i < 0) {
             return addr;
@@ -2478,6 +2701,11 @@ msg.addBCC(untrusted_name, "j@x.com");
         @throw HEADER-ERROR no ':' separator character found in header, no key or value found
     */
     static hash parseHeader(string hdr, bool decode = True) {
+        if (scan_counting) {
+            # the bytes scanned and copied are counted for tests (issue #6139); every operation here whose cost grows
+            # with the input size must add its size (see Mime::MimeScanCounter)
+            MimeScanCounter::bytes += 3 * hdr.size();
+        }
         trim hdr;
         int i = hdr.find(":");
         if (i == -1)
@@ -2695,6 +2923,11 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         horizontal tab; an encoded value is folded with \a eol
     */
     static string doHeaderValue(string hdr, string val, string eol = "\r\n", bool encode = True) {
+        if (scan_counting) {
+            # the bytes scanned are counted for tests (issue #6139); every operation here whose cost grows with the
+            # input size must add its size, otherwise a quadratic regression in it goes unseen
+            MimeScanCounter::bytes += val.size();
+        }
         check_line_text(hdr, "message header name", "HEADER-ERROR");
         if (encode) {
             # a value with a control character is not printable ASCII, so a CR or LF is encoded with the rest
@@ -2734,6 +2967,10 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         address that a header gives (see @ref getEmailAddress()) is the address that its value gives, so that a
         message that is parsed again is sent to the same addresses.
 
+        A header that a parsed message does not have is not written: the \c Subject header of a message without a
+        subject, and the \c From, \c Return-Receipt-To and \c Disposition-Notification-To headers, which have the
+        sender, of a message without a sender.
+
         @param eol the End-Of-Line marker for the string, also used to fold long headers
         @param encode encode non-ASCII values with RFC 2047 encoded words (http://tools.ietf.org/html/rfc2047)
 
@@ -2742,10 +2979,12 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         @since MailMessage 1.5.1 the message is not changed: a \c Content-Type header was removed or taken as the
         type of the body; the \c From header has the display name of the sender, and only the display name is
         encoded; only the text of the address headers is encoded, never their addresses, and encoded words are
-        folded with \a eol
+        folded with \a eol; the \c Subject and \c From headers of a parsed message that does not have them are not
+        written: getting the headers raised \c RUNTIME-OVERLOAD-ERROR
     */
     string getHeaderString(string eol = "\r\n", bool encode = True) {
-        string hdr = doSenderHeader("From", eol, encode);
+        # a parsed message can have no sender and no subject, and then these headers are not written (issue #6267)
+        string hdr = exists from ? doSenderHeader("From", eol, encode) : "";
 
         # To:
         foreach string l in (to)
@@ -2760,16 +2999,19 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
             hdr += Message::doAddressHeader("BCC", l, bcc_raw[$#], eol, encode);
 
         # add the subject - use "QP" encoding to ensure correct transmission & display of special characters through all SMTP servers
-        hdr += Message::doHeaderValue("Subject", subject, eol, encode);
+        if (exists subject) {
+            hdr += Message::doHeaderValue("Subject", subject, eol, encode);
+        }
 
         # importance
         if (importance)
             hdr += sprintf("Importance: high%sX-Priority: 1%sPriority: Urgent%s", eol, eol, eol);
 
-        if (deliveryReceipt)
+        # the receipt headers have the sender's address
+        if (deliveryReceipt && exists from)
             hdr += doSenderHeader("Return-Receipt-To", eol, encode);
 
-        if (readReceipt)
+        if (readReceipt && exists from)
             hdr += doSenderHeader("Disposition-Notification-To", eol, encode);
 
         # the MIME headers are generated if the message has a MIME structure (a body with a content transfer encoding,
@@ -2987,6 +3229,34 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
     }
 
     #! @cond nodoc
+    # returns True if message text in the given encoding is read in UTF-8, False if it is read by bytes as it is
+    # (issue #6139): the bytes of CR, LF, space and tab are never part of another character in UTF-8, in a
+    # single-byte encoding, or in the EUC, Shift_JIS, GBK, GB18030, Big5 and UHC encodings, so the lines found by
+    # bytes are the same; text in any other encoding (UTF-16, UTF-32, stateful encodings such as ISO-2022-JP) is
+    # converted to UTF-8, and its lines are converted back
+    private static bool isReadConverted(string enc) {
+        if (enc == "UTF-8") {
+            return False;
+        }
+        string name = enc.upr();
+        name =~ s/[^A-Z0-9]//g;
+        return name !~ /^(UTF8|USASCII|ASCII|ISO8859|LATIN|WINDOWS125|CP125|KOI8|KOI7|WINDOWS874|CP874)/
+            && name !~ /^(EUC|SHIFTJIS|SJIS|CP932|WINDOWS31J|MSKANJI|GBK|CP936|WINDOWS936|GB2312|GB18030|BIG5|CP950)/
+            && name !~ /^(CP949|UHC)/;
+    }
+
+    # returns text of the message read by bytes in the encoding of the message
+    private static string getText(string text, string enc, bool convert) {
+        return convert ? convert_encoding(force_encoding(text, "UTF-8"), enc) : force_encoding(text, enc);
+    }
+
+    # throws an exception for a header line at the given byte offset of the message text read by bytes that does not
+    # end with "\r\n"; the position is the byte offset in the message
+    private static throwNoEol(string text, int pos, string enc, bool convert) {
+        throw "MESSAGE-PARSE-ERROR", sprintf("cannot find end of line in message at byte position %d",
+            convert ? Message::getText(text.substr(0, pos), enc, True).size() : pos);
+    }
+
     private list<string> getEnvelopeList() {
         list<string> env = (sprintf("Sender: '%s'", from), sprintf("Subject: '%s'", subject));
         # add To addresses

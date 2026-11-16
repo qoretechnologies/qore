@@ -61,6 +61,15 @@
 #include <memory>
 #include <unistd.h>
 
+//! the deadline of an operation's timeout; saturated, as the timeout can be up to the largest int (qore#6212)
+static inline int64 qore_io_timeout_date_us(int64 now_us, int64 timeout_us) {
+    int64 rv;
+    if (__builtin_expect(__builtin_add_overflow(now_us, timeout_us, &rv), 0)) {
+        return timeout_us > 0 ? std::numeric_limits<int64>::max() : std::numeric_limits<int64>::min();
+    }
+    return rv;
+}
+
 extern qore_classid_t CID_QUEUE;
 extern QoreClass* QC_QUEUE;
 
@@ -3212,10 +3221,14 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     v = info->getKeyValue("to");
     int64 timeout_us = DEFAULT_IO_TIMEOUT_US;
     if (v.getType() == NT_DATE) {
-        timeout_us = v.get<const DateTimeNode>()->getRelativeSecondsDouble() * 1000000.0;
+        // saturated: a duration out of the range of an int64 of microseconds was undefined (qore#6212)
+        timeout_us = q_float_to_int64(v.get<const DateTimeNode>()->getRelativeSecondsDouble() * 1000000.0);
     } else if (v.getType() == NT_INT) {
-        // timeout in milliseconds
-        timeout_us = v.getAsBigInt() * 1000LL;
+        // timeout in milliseconds; saturated, as an overflow of the product was undefined (qore#6212)
+        int64 ms = v.getAsBigInt();
+        if (__builtin_mul_overflow(ms, static_cast<int64>(1000), &timeout_us)) {
+            timeout_us = ms > 0 ? std::numeric_limits<int64>::max() : std::numeric_limits<int64>::min();
+        }
     }
 
     // RAII cleanup for refcounted resources acquired below.
@@ -4648,7 +4661,6 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     }
 
     // Check autostop
-    bool stopped = false;
     {
         AutoLocker al(m);
         // Autostop handled by I/O thread main loop (cache is I/O-thread-only)
@@ -6112,7 +6124,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 PollInfo& pinfo = node->second;
                 // Initialize timeout and push to heap
                 if (pinfo.timeout_date_us == 0 && pinfo.timeout_us >= 0) {
-                    pinfo.timeout_date_us = now_us + pinfo.timeout_us;
+                    pinfo.timeout_date_us = qore_io_timeout_date_us(now_us, pinfo.timeout_us);
                     armTimeoutHeap(t, pinfo);
                 }
                 try_queue(pinfo, false);
@@ -6987,7 +6999,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                 }
                             }
                             if (renew) {
-                                pinfo.timeout_date_us = get_epoch_us() + pinfo.timeout_us;
+                                pinfo.timeout_date_us = qore_io_timeout_date_us(get_epoch_us(), pinfo.timeout_us);
                             }
                         }
 

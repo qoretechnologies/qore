@@ -2389,6 +2389,8 @@ bool qore_test_thread_pool_hold_dispatch(ThreadPool[ThreadPool] pool, bool hold)
     pool->dbgHoldDispatch(hold);
     return true;
 #else
+    // only a debug build holds the dispatch
+    static_cast<void>(hold);
     return false;
 #endif
 }

@@ -72,8 +72,8 @@ public:
     //! hands the temporary value of a holder to the innermost scope of the thread
     /** The holder keeps the value but no longer owns it; nothing is done if the holder does not own its value
         (it was read from a variable, for example), if the value cannot be referred to after the statement - a
-        string, a number, a binary or a date, which hold no other values - or if there is no scope, in which case
-        the holder releases the value as before.
+        string, a number, a binary, a date, or an int or a float outside the inline range, which hold no other
+        values - or if there is no scope, in which case the holder releases the value as before.
 
         @param site the expression that created the value; a value created again by the same expression in the same
         scope replaces the previous one, which is released
@@ -126,6 +126,11 @@ public:
             case NT_BINARY:
             case NT_NUMBER:
             case NT_DATE:
+            // an int or a float outside the inline range is a node that holds no other value: holding it only
+            // costs, and an operator that returns its operand (unary plus) must not give a value that only the
+            // scope holds as borrowed to a caller that can use it after the scope ends (qore#5712)
+            case NT_INT:
+            case NT_FLOAT:
                 return false;
             default:
                 return true;
@@ -178,9 +183,9 @@ private:
     operand of an operator is held by the scope as the receiver of a chain is (QoreStatementTempScope::holdReceiver())
     instead of being released when the operator returns (qore#5712).  Only a value that the holder owns and that is a
     node can be held, so an int costs no more than a test; a value borrowed from a variable and a value that cannot be
-    observed after the statement (a string, a number, a binary or a date) are not held.  The operator still uses the
-    value, which the scope keeps until the end of the statement; a value that it takes from the holder gets a
-    reference of its own.
+    observed after the statement (a string, a number, a binary, a date, or an int or a float node) are not held.  The
+    operator still uses the value, which the scope keeps until the end of the statement; a value that it takes from
+    the holder gets a reference of its own.
 */
 class QoreOperandEvalHolder : public ValueEvalOptimizedRefHolder {
 public:

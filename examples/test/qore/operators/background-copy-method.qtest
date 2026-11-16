@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class BackgroundCopyMethodTest
@@ -510,7 +511,7 @@ public class BackgroundCopyMethodTest inherits QUnit::Test {
     }
 
     private checkQcc() {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
         if (!is_file(qcc_bin)) {
             qcc_bin = "qcc";

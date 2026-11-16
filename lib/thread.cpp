@@ -1542,6 +1542,7 @@ static constexpr uintptr_t QORE_CANCEL_WAKEUP_IDENT = 1;
 static std::map<int, int> qore_cancel_wakeup_pipe_map;
 #endif
 
+#ifndef __linux__
 static int qore_set_cloexec_nonblock(int fd, bool nonblock) {
     int fdflags = fcntl(fd, F_GETFD);
     if (fdflags < 0 || fcntl(fd, F_SETFD, fdflags | FD_CLOEXEC) < 0) {
@@ -1555,6 +1556,7 @@ static int qore_set_cloexec_nonblock(int fd, bool nonblock) {
     }
     return 0;
 }
+#endif
 
 //! creates a wakeup channel and returns the descriptor to poll, or -1 with errno set; thread_list.lck is held
 static int qore_cancel_wakeup_create() {
@@ -4474,9 +4476,11 @@ int ThreadEntryHandlerFrame::enterHandlers(ThreadData* td, QoreProgram* pgm, Exc
     // handler gets a sink of its own, which also tells whether it failed
     ExceptionSink handler_xsink;
     try {
-        // the handler runs with the options of the code that set it (qore#6208)
-        QoreThreadRuntimeParseOptionsHelper po_helper(&handlers->po);
-        token = run_thread_entry_handler(td, handlers->on_enter, nullptr, handler_xsink);
+        {
+            // the handler runs with the options of the code that set it (qore#6208)
+            QoreThreadRuntimeParseOptionsHelper po_helper(&handlers->po);
+            token = run_thread_entry_handler(td, handlers->on_enter, nullptr, handler_xsink);
+        }
 #ifdef DEBUG
         if (qore_dbg_program_entry_fails(QDPES_ENTRY_HANDLER)) {
             throw std::bad_alloc();

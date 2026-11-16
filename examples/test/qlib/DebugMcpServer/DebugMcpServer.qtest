@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires Util
 %requires json
@@ -94,7 +95,7 @@ public class DebugMcpServerTest inherits QUnit::Test {
 
     #! returns the qore executable to run the tools with; a relative path is made absolute
     static string getQoreExecutable() {
-        string exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string exe = TestInterpreter::qore_interpreter();
         if (exe =~ /\// && !absolute_path(exe)) {
             exe = normalize_dir(getcwd() + DirSep + exe);
         }

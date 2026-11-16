@@ -1,0 +1,147 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreBuildTree.qm finds the qore under test and its build tree
+
+/*  QoreBuildTree.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ./TestInterpreter.qm
+
+module QoreBuildTree {
+    version = "1.0";
+    desc    = "finds the qore under test and its build tree";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+    # the paths are resolved once, when the module is loaded: a test can change its working directory later
+    init = sub () {
+        QoreBuildTree::Paths::init();
+    };
+}
+
+/** A test that runs a tool of the build (qpp, qcc), links against libqore or starts another qore takes them from the
+    build of the qore that runs the test, so that the test works with any build directory (build/, build-debug/ or
+    another) and never with another build that happens to be in the source tree.
+
+    @par Example:
+    @code{.py}
+%requires ../QoreBuildTree.qm
+
+*string build = QoreBuildTree::build_dir();
+if (!build) {
+    fail(QoreBuildTree::no_build_dir_message());
+}
+    @endcode
+*/
+public namespace QoreBuildTree {
+    #! Returns the qore that runs this program as an absolute path, symbolic links resolved
+    /** This is the interpreter that TestInterpreter::qore_interpreter() gives (the one that the test runner
+        configures, else the running interpreter), resolved when this module is loaded, so a later change of the
+        working directory does not change it.
+
+        @return the path of the qore under test, or the name that TestInterpreter::qore_interpreter() gives if it
+        cannot be found, or an empty string when qcc loads this module to compile a test
+    */
+    public string sub qore_executable() {
+        return Paths::qore;
+    }
+
+    #! Returns the build tree of the qore that runs this program, or NOTHING if it does not run from a build tree
+    /** The candidates are, in this order: the directory of the qore executable (qore_executable()), that of the
+        library that run_tests.sh gives in \c LIBQORE_BINARY, and the build tree named by \c QORE_LIBDIR.  The first
+        one that has libqore and the generated headers (\c include/qore/qore-version.h) is the build tree; there is no
+        default directory: a qore that does not run from a build tree has none.
+
+        @return the absolute path of the build tree, symbolic links resolved, or NOTHING
+    */
+    public *string sub build_dir() {
+        foreach string dir in (QoreBuildTree::candidates()) {
+            if (QoreBuildTree::is_build_dir(dir)) {
+                return dir;
+            }
+        }
+    }
+
+    #! Returns the source tree of a build tree, or NOTHING if its CMakeCache.txt does not name one
+    /** @param build the build tree (see build_dir())
+
+        @return the source directory that \a build was configured from (\c CMAKE_HOME_DIRECTORY), whose \c include
+        directory has the headers that are not generated
+    */
+    public *string sub source_dir(string build) {
+        string cache = build + "/CMakeCache.txt";
+        if (!is_readable(cache)) {
+            return;
+        }
+        *string dir = (ReadOnlyFile::readTextFile(cache) =~ x/^CMAKE_HOME_DIRECTORY:INTERNAL=(.+)$/m)[0];
+        return (dir && is_dir(dir)) ? realpath(dir) : NOTHING;
+    }
+
+    #! Returns the message for a failure when the qore under test does not run from a build tree
+    public string sub no_build_dir_message() {
+        return sprintf("the qore under test (%s) does not run from a build tree: none of %y has libqore and "
+            "include/qore/qore-version.h; run it from its build directory or name that in QORE_LIBDIR",
+            qore_executable(), QoreBuildTree::candidates());
+    }
+
+    #! Returns True if the directory has libqore and the generated headers of a build
+    public bool sub is_build_dir(string dir) {
+        return (is_file(dir + "/libqore.so") || is_file(dir + "/libqore.dylib"))
+            && is_file(dir + "/include/qore/qore-version.h");
+    }
+
+    #! Returns the directories that can be the build tree of the qore under test, in the order they are checked
+    public list<string> sub candidates() {
+        return Paths::candidates;
+    }
+
+    #! The paths of the qore under test, resolved when the module is loaded (relative paths are relative to the
+    #! working directory then)
+    class Paths {
+        public {
+            #! the qore that runs this program (see qore_executable())
+            static string qore;
+            #! the directories that can be the build tree of the qore under test (see candidates())
+            static list<string> candidates = ();
+        }
+
+        #! Resolves the paths; called by the initialization of the module
+        static init() {
+            # qcc initializes the module when it compiles a test that requires it: there is no program to run then
+            if (QORE_ARGV) {
+                string exe = TestInterpreter::qore_interpreter();
+                qore = is_file(exe) ? realpath(exe) : exe;
+            } else {
+                qore = "";
+            }
+            if (qore && is_file(qore)) {
+                candidates += dirname(qore);
+            }
+            if (ENV.LIBQORE_BINARY && is_file(ENV.LIBQORE_BINARY)) {
+                candidates += dirname(realpath(ENV.LIBQORE_BINARY));
+            }
+            if (ENV.QORE_LIBDIR && is_dir(ENV.QORE_LIBDIR)) {
+                candidates += realpath(ENV.QORE_LIBDIR);
+            }
+        }
+    }
+}

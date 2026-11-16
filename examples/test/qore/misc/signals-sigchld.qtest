@@ -9,6 +9,7 @@
 %enable-all-warnings
 
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class SignalsSigchldTest
@@ -113,7 +114,7 @@ class SignalsSigchldTest inherits QUnit::Test {
 
     #! Returns the interpreter running this test as an absolute path, so a child process runs the same build
     private static string getQoreExecutable() {
-        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore = TestInterpreter::qore_interpreter();
         return absolute_path(qore) || qore !~ /[\/\\]/ ? qore : getcwd() + DirSep + qore;
     }
 
