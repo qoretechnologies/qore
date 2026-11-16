@@ -24898,7 +24898,78 @@ static QoreValue f_dbg_sandbox_cpu_used(const QoreListNode* params, RuntimeConfi
 */
 #define QDOM_DEBUG_HOOK (QDOM_PROCESS | QDOM_UNCONTROLLED_API)
 
+#ifdef HAVE_NANOSLEEP
+namespace {
+//! a nanosleep() that reports an interruption by a signal, without a signal, for dbg_nanosleep_eintr()
+struct DbgNanosleep {
+    //! the nanoseconds of each call
+    std::vector<int64> requests;
+    //! the nanoseconds left that each interrupted call reports; the call after the last one succeeds
+    std::vector<int64> remainders;
+    //! the errno of the call after the interrupted ones, or 0 for success
+    int fail_errno = 0;
+};
+
+thread_local DbgNanosleep* dbg_nanosleep = nullptr;
+
+int dbg_nanosleep_func(const struct timespec* req, struct timespec* rem) {
+    DbgNanosleep& d = *dbg_nanosleep;
+    size_t call = d.requests.size();
+    d.requests.push_back(static_cast<int64>(req->tv_sec) * 1000000000ll + req->tv_nsec);
+    if (call < d.remainders.size()) {
+        // nanosleep() reports the time left only if it is given where to put it
+        if (rem) {
+            rem->tv_sec = d.remainders[call] / 1000000000ll;
+            rem->tv_nsec = d.remainders[call] % 1000000000ll;
+        }
+        errno = EINTR;
+        return -1;
+    }
+    if (d.fail_errno) {
+        errno = d.fail_errno;
+        return -1;
+    }
+    return 0;
+}
+}
+
+//! sleeps with qore_nanosleep_with() and a nanosleep() that is interrupted as given, without sleeping (issue #6364)
+/** @param ns the nanoseconds to sleep
+    @param remainders the nanoseconds left that each interrupted call of nanosleep() reports
+    @param fail_errno the errno of the call after the interrupted ones, or 0 for success
+
+    @return a hash with \c rc, the return value, and \c requests, the nanoseconds that each call of nanosleep() was
+    given
+*/
+static QoreValue f_dbg_nanosleep_eintr(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    DbgNanosleep d;
+    const QoreListNode* l = HARD_QORE_VALUE_LIST(params, 1);
+    ConstListIterator li(l);
+    while (li.next()) {
+        d.remainders.push_back(li.getValue().getAsBigInt());
+    }
+    d.fail_errno = static_cast<int>(HARD_QORE_VALUE_INT(params, 2));
+    dbg_nanosleep = &d;
+    int rv = qore_nanosleep_with(HARD_QORE_VALUE_INT(params, 0), dbg_nanosleep_func);
+    dbg_nanosleep = nullptr;
+
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("rc", rv, xsink);
+    ReferenceHolder<QoreListNode> requests(new QoreListNode(autoTypeInfo), xsink);
+    for (int64 r : d.requests) {
+        requests->push(r, xsink);
+    }
+    h->setKeyValue("requests", requests.release(), xsink);
+    return h.release();
+}
+#endif
+
 void init_debug_functions(QoreNamespace& qns) {
+#ifdef HAVE_NANOSLEEP
+    qns.addBuiltinVariant("dbg_nanosleep_eintr", f_dbg_nanosleep_eintr, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ns", listTypeInfo, QORE_PARAM_NO_ARG, "remainders",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "fail_errno");
+#endif
 
     qns.addBuiltinVariant("dbg_node_info", f_dbg_node_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, stringTypeInfo, 2,
         autoTypeInfo, QORE_PARAM_NO_ARG, "node", softBoolOrNothingTypeInfo, QORE_PARAM_NO_ARG, "shallow");
