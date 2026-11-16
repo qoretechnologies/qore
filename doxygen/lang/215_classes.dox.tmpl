@@ -349,7 +349,8 @@ softstring MyNamespace::MyClass::myMethod(softint i) {
     class path is resolved in the namespaces and classes declared before the method in the same block, and it cannot
     be anchored at the root namespace (<tt>::NS::I::C</tt>).  A class path that starts with the name of the enclosing
     namespace (<tt>int NS::I::C::m() { return 1; }</tt> in \c NS) is also accepted when it does not name a class
-    relative to the namespace.
+    relative to the namespace.  A class path that names no class this way is a parse error (before %Qore 3.0, release
+    builds ignored the first part of such a path and could add the method to a class of the enclosing namespace).
 
     @note Because method definitions are allowed out-of-line, this means that builtin classes may be extended with new user methods, however user constructor, destructor, and copy methods cannot be added to builtin classes; to customize the behavior of these methods for builtin classes, subclass the class instead.\n\n
     When parse option @ref allow-bare-refs "%allow-bare-refs" or @ref new-style "%new-style" is enabled, no \c "$" or \c "$." prefixes can be used with variable or method or member names.
