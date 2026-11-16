@@ -3233,9 +3233,9 @@ bool LValueHelper::numberResultNeedsConversion() const {
         && QoreTypeInfo::parseAccepts(typeInfo, numberTypeInfo);
 }
 
-void LValueHelper::storeNumberResult(QoreNumberNode* n, const char* desc) {
+int LValueHelper::storeNumberResult(QoreNumberNode* n, const char* desc) {
     // the assignment converts the value to the lvalue's type and takes the reference
-    assign(QoreValue(n), desc);
+    return assign(QoreValue(n), desc);
 }
 
 int LValueHelper::makeIntVal(const char* desc) {
@@ -3783,8 +3783,9 @@ void LValueHelper::preIncrementNumber(const char* desc) {
         return;
     }
     QoreNumberNode* n = ensureUniqueNumber(desc);
-    if (n)
+    if (n) {
         qore_number_private::inc(*n);
+    }
 }
 
 void LValueHelper::preDecrementNumber(const char* desc) {
@@ -3796,18 +3797,22 @@ void LValueHelper::preDecrementNumber(const char* desc) {
         return;
     }
     QoreNumberNode* n = ensureUniqueNumber(desc);
-    if (n)
+    if (n) {
         qore_number_private::dec(*n);
+    }
 }
 
 QoreNumberNode* LValueHelper::postIncrementNumber(bool ref_rv, const char* desc) {
     if (numberResultNeedsConversion()) {
         QoreNumberNode* nn = new QoreNumberNode(getValue());
         SimpleRefHolder<QoreNumberNode> n(nn);
-        QoreNumberNode* rv = ref_rv ? new QoreNumberNode(*nn) : nullptr;
+        SimpleRefHolder<QoreNumberNode> rv(ref_rv ? new QoreNumberNode(*nn) : nullptr);
         qore_number_private::inc(*nn);
-        storeNumberResult(n.release(), desc);
-        return rv;
+        if (storeNumberResult(n.release(), desc)) {
+            // the lvalue's type refused the result: no old value is returned
+            return nullptr;
+        }
+        return rv.release();
     }
     QoreNumberNode* n = ensureUniqueNumber(desc);
     if (!n)
@@ -3821,10 +3826,13 @@ QoreNumberNode* LValueHelper::postDecrementNumber(bool ref_rv, const char* desc)
     if (numberResultNeedsConversion()) {
         QoreNumberNode* nn = new QoreNumberNode(getValue());
         SimpleRefHolder<QoreNumberNode> n(nn);
-        QoreNumberNode* rv = ref_rv ? new QoreNumberNode(*nn) : nullptr;
+        SimpleRefHolder<QoreNumberNode> rv(ref_rv ? new QoreNumberNode(*nn) : nullptr);
         qore_number_private::dec(*nn);
-        storeNumberResult(n.release(), desc);
-        return rv;
+        if (storeNumberResult(n.release(), desc)) {
+            // the lvalue's type refused the result: no old value is returned
+            return nullptr;
+        }
+        return rv.release();
     }
     QoreNumberNode* n = ensureUniqueNumber(desc);
     if (!n)

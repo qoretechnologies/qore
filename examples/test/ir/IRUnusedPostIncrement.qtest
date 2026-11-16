@@ -18,8 +18,11 @@
     value, its conversion to an int, the addition and a store), while <tt>++total;</tt> and <tt>total += 1;</tt>
     lower to one IncrementLocalInt.  When the value is unused (an expression statement, the update of a for loop),
     the post form changes the lvalue as the pre form does, so it is lowered as the pre form, with the same fused
-    paths: IncrementLocalInt for an int local, and the pre operation of the lvalue path for every other lvalue,
-    including a hash key (whose path the fixed-aggregate scalar replacement can remove).
+    paths: IncrementLocalInt for an int local, and the pre operation of the lvalue path for every other lvalue whose
+    type is a plain int, float or number type, including a hash key (whose path the fixed-aggregate scalar replacement
+    can remove).  An lvalue of another type (an untyped lvalue, a reference) can have a type at run time that refuses
+    the result, and the error must name the post operator, as the AST interpreter's does: its IR is that of the pre
+    form with the post operation of the lvalue path.
 
     The test compares the IR of functions that differ only in the form of the operator, as the AOT compiler dumps it
     (QORE_AOT_DUMP_IR), for every kind of lvalue, and counts the IR instructions of a function of 10 and of 20 such
@@ -84,9 +87,12 @@ class C {
             "closure-bound int local", "int local in a try block");
 
         #! the kinds of lvalues whose IR shows the pre operation of the lvalue path
-        const PathKinds = ("float local", "number local", "untyped local", "int global", "untyped global",
-            "int reference", "const hash key", "dynamic hash key", "untyped hash key", "object member",
-            "list element");
+        const PathKinds = ("float local", "number local", "int global", "const hash key", "dynamic hash key",
+            "object member", "list element");
+
+        #! the kinds of lvalues whose type can refuse the result at run time, whose IR shows the post operation of the
+        #! lvalue path, so that the error names the post operator
+        const PostPathKinds = ("untyped local", "untyped global", "int reference", "untyped hash key");
     }
 
     private {
@@ -203,6 +209,13 @@ public namespace %s {
         hash<string, string> pre = dump(tmp, pre_form);
         hash<string, string> post = dump(tmp, post_form);
         foreach hash<auto> i in (pre.pairIterator()) {
+            if (inlist(i.key, PostPathKinds)) {
+                # the same IR with the post operation of the lvalue path
+                assertEq(replace(i.value, "lvalue.path.unary " + pre_form, "lvalue.path.unary " + post_form),
+                    post{i.key}, sprintf("%s: the IR of the unused %s is that of the %s with the post operation",
+                    i.key, post_form, pre_form));
+                continue;
+            }
             assertEq(i.value, post{i.key}, sprintf("%s: the IR of the unused %s is that of the %s", i.key, post_form,
                 pre_form));
         }
@@ -214,6 +227,9 @@ public namespace %s {
         foreach string kind in (PathKinds) {
             assertRegex("lvalue\\.path\\.unary " + pre_form + " -> ", post{kind}, kind);
             assertFalseRegex(post_form, post{kind}, kind);
+        }
+        foreach string kind in (PostPathKinds) {
+            assertRegex("lvalue\\.path\\.unary " + post_form + " -> ", post{kind}, kind);
         }
         assertFalseRegex(post_form, post."C::updateSelf", "self members");
         assertFalseRegex(post_form, post."C::updateStatic", "static member");

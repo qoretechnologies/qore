@@ -159,12 +159,63 @@ DLLLOCAL QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh, LVCompoundOp
 //! Applies ++ or -- (LVUnaryOp::PreInc, PreDec, PostInc or PostDec) to an lvalue as the AST interpreter does
 /** The operation follows the type of the value, as QorePreIncrementOperatorNode::evalImpl() and the other operators
     do, and an error that the lvalue's type raises names the operator as they do (ex: <tt><++ (pre) operator></tt>
-    for an enum lvalue, which refuses the plain value computed, qore#6197)
+    for an enum lvalue, which refuses the plain value computed, qore#6197).  The operation is a template argument and
+    the function is inlined in a case of the caller's switch over the operations (the IR interpreter and the runtime
+    helpers of native code); it reads no exception sink, so that ++ and -- cost what they cost before they named the
+    operator.
 
-    @return the value of the operation (the new value, or the old value for a post operator), holding a reference,
-    or no value if an exception was raised
+    @tparam Op the operation: LVUnaryOp::PreInc, PreDec, PostInc or PostDec
+
+    @param lvh the lvalue
+    @param res set to the value of the operation (the new value, or the old value for a post operator), holding a
+    reference; after an exception, the caller must release it (it can be the value that the lvalue kept)
 */
-DLLLOCAL QoreValue qore_rt_apply_lvalue_incdec(LValueHelper& lvh, LVUnaryOp unary_op, ExceptionSink* xsink);
+template <LVUnaryOp Op>
+QORE_INTERN_ALWAYS_INLINE void qore_rt_apply_lvalue_incdec(LValueHelper& lvh, QoreValue& res) {
+    static_assert(Op == LVUnaryOp::PreInc || Op == LVUnaryOp::PreDec || Op == LVUnaryOp::PostInc
+        || Op == LVUnaryOp::PostDec, "not an increment or decrement");
+    // the descriptions are those of the AST operators (QorePreIncrementOperatorNode::evalImpl() and the others)
+    constexpr const char* desc = Op == LVUnaryOp::PreInc ? "<++ (pre) operator>"
+        : (Op == LVUnaryOp::PreDec ? "<-- (pre) operator>"
+        : (Op == LVUnaryOp::PostInc ? "<++ (post) operator>" : "<-- (post) operator>"));
+    qore_type_t t = lvh.getType();
+    if (t == NT_NUMBER) {
+        if constexpr (Op == LVUnaryOp::PreInc) {
+            lvh.preIncrementNumber(desc);
+            res = lvh.getReferencedValue();
+        } else if constexpr (Op == LVUnaryOp::PreDec) {
+            lvh.preDecrementNumber(desc);
+            res = lvh.getReferencedValue();
+        } else {
+            // no value if the lvalue's type refused the result
+            QoreNumberNode* n = Op == LVUnaryOp::PostInc ? lvh.postIncrementNumber(true, desc)
+                : lvh.postDecrementNumber(true, desc);
+            if (n) {
+                res = n;
+            }
+        }
+    } else if (t == NT_FLOAT) {
+        if constexpr (Op == LVUnaryOp::PreInc) {
+            res = lvh.preIncrementFloat(desc);
+        } else if constexpr (Op == LVUnaryOp::PreDec) {
+            res = lvh.preDecrementFloat(desc);
+        } else if constexpr (Op == LVUnaryOp::PostInc) {
+            res = lvh.postIncrementFloat(desc);
+        } else {
+            res = lvh.postDecrementFloat(desc);
+        }
+    } else {
+        if constexpr (Op == LVUnaryOp::PreInc) {
+            res = lvh.preIncrementBigInt(desc);
+        } else if constexpr (Op == LVUnaryOp::PreDec) {
+            res = lvh.preDecrementBigInt(desc);
+        } else if constexpr (Op == LVUnaryOp::PostInc) {
+            res = lvh.postIncrementBigInt(desc);
+        } else {
+            res = lvh.postDecrementBigInt(desc);
+        }
+    }
+}
 
 //! Returns true if the lvalue type is an int type (int, *int, softint), but not timeout
 DLLLOCAL bool qore_is_int_lvalue_type(const QoreTypeInfo* ti);

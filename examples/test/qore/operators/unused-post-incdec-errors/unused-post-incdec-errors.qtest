@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the lvalue operations of unused post-increments
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class UnusedPostIncDecErrorsTest
+
+#! Tests the error of a post-increment or post-decrement whose value is unused on an lvalue whose type refuses it
+/** A post-increment or post-decrement whose value is unused is lowered as the pre form (qore#6199), but its error
+    must still name the post operator, as the AST interpreter's does: a RUNTIME-TYPE-ERROR raised by an lvalue whose
+    type refuses the result says <tt><++ (post) operator></tt> or <tt><-- (post) operator></tt>, not the pre
+    operator.  UnusedPostIncDecErrors.q applies them to enum lvalues of each kind and to untyped lvalues whose
+    container gives them a type that is not numeric, with number, int, float and untyped lvalues as controls.  Its
+    output must be the one in UnusedPostIncDecErrors.expected, which the AST interpreter prints, in every execution
+    mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
+*/
+class UnusedPostIncDecErrorsTest inherits QUnit::Test {
+    public {
+        #! the number of checks that the fixture makes
+        const CheckCount = 84;
+
+        #! the number of checks whose lvalue accepts the result (the controls)
+        const NoErrorCount = 17;
+    }
+
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string fixture = get_script_dir() + "/UnusedPostIncDecErrors.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/UnusedPostIncDecErrors.expected");
+    }
+
+    constructor() : QUnit::Test("unused post-increment and post-decrement errors", "1.0", \ARGV) {
+        addTestCase("expected output", \testExpected());
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    #! checks the expected output: every error names the post operator, and the controls raise nothing
+    testExpected() {
+        list<string> lines = select expected.split("\n"), $1.val();
+        assertEq(CheckCount, lines.size());
+        int errors = 0;
+        foreach string line in (lines) {
+            *list<*string> parts = (line =~ x/^([-a-z]+): (.*)$/);
+            assertTrue(exists parts, line);
+            string name = parts[0];
+            string result = parts[1];
+            if (name =~ /^control-/ || name =~ /^untyped-(hash|member)-[nfi]-/ || name == "ref-n-dec") {
+                assertRegex("^none -> ", result, name);
+                continue;
+            }
+            # the operator as it appears in a regular expression
+            string op = name =~ /-inc$/ ? "\\+\\+" : "--";
+            assertRegex(sprintf("^RUNTIME-TYPE-ERROR: <%s \\(post\\) operator> expects type '[^']+', but got type "
+                "'[a-z]+' instead -> ", op), result, name);
+            ++errors;
+        }
+        assertEq(CheckCount - NoErrorCount, errors);
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    private checkQcc(int opt) {
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/unused-post-incdec-errors";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(getQcc()), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private string getQcc() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

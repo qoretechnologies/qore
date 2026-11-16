@@ -1,0 +1,84 @@
+local-ei-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+local-ei-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+local-ef-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EF>', but got type 'float' instead -> enum<EF> 0.5
+local-ef-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EF>', but got type 'float' instead -> enum<EF> 0.5
+local-en-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+local-en-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+closure-ei-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+closure-ei-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+closure-en-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+closure-en-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+for-ei-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+for-ei-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+global-ei-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+global-ei-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+global-ef-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EF>', but got type 'float' instead -> enum<EF> 0.5
+global-ef-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EF>', but got type 'float' instead -> enum<EF> 0.5
+global-en-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+global-en-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+member-ei-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+member-ef-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EF>', but got type 'float' instead -> enum<EF> 0.5
+member-en-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+hashdecl-ei-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+hashdecl-ef-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EF>', but got type 'float' instead -> enum<EF> 0.5
+hashdecl-en-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+hash-ei-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+hash-ei-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+list-en-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+list-en-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+untyped-hash-ei-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+untyped-hash-ei-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+untyped-hash-ef-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EF>', but got type 'float' instead -> enum<EF> 0.5
+untyped-hash-ef-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EF>', but got type 'float' instead -> enum<EF> 0.5
+untyped-hash-en-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+untyped-hash-en-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+untyped-hash-s-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'string', but got type 'integer' instead -> string "x"
+untyped-hash-s-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'string', but got type 'integer' instead -> string "x"
+untyped-hash-b-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'bool', but got type 'integer' instead -> bool True
+untyped-hash-b-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'bool', but got type 'integer' instead -> bool True
+untyped-hash-d-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'date', but got type 'integer' instead -> date 2026-01-01
+untyped-hash-d-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'date', but got type 'integer' instead -> date 2026-01-01
+untyped-hash-bin-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'binary', but got type 'integer' instead -> binary !!binary AQ==
+untyped-hash-bin-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'binary', but got type 'integer' instead -> binary !!binary AQ==
+untyped-hash-l-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'list<int>', but got type 'integer' instead -> list<int> [1]
+untyped-hash-l-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'list<int>', but got type 'integer' instead -> list<int> [1]
+untyped-hash-n-inc: none -> number 2.5
+untyped-hash-n-dec: none -> number 1.5
+untyped-hash-f-inc: none -> float 2.5
+untyped-hash-f-dec: none -> float 1.5
+untyped-hash-i-inc: none -> integer 3
+untyped-hash-i-dec: none -> integer 2
+untyped-hash-const-s-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'string', but got type 'integer' instead -> string "x"
+untyped-hash-const-ei-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+untyped-member-ei-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+untyped-member-ei-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+untyped-member-ef-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EF>', but got type 'float' instead -> enum<EF> 0.5
+untyped-member-ef-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EF>', but got type 'float' instead -> enum<EF> 0.5
+untyped-member-en-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+untyped-member-en-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+untyped-member-s-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'string', but got type 'integer' instead -> string "x"
+untyped-member-s-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'string', but got type 'integer' instead -> string "x"
+untyped-member-b-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'bool', but got type 'integer' instead -> bool True
+untyped-member-b-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'bool', but got type 'integer' instead -> bool True
+untyped-member-d-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'date', but got type 'integer' instead -> date 2026-01-01
+untyped-member-d-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'date', but got type 'integer' instead -> date 2026-01-01
+untyped-member-n-inc: none -> number 2.5
+untyped-member-n-dec: none -> number 1.5
+untyped-member-const-s-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'string', but got type 'integer' instead -> string "x"
+untyped-member-const-en-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+untyped-list-s-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'string', but got type 'integer' instead -> string "x"
+untyped-list-ei-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+ref-s-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'string', but got type 'integer' instead -> string "x"
+ref-ei-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+ref-en-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5
+ref-n-dec: none -> number 0.5
+control-number-inc: none -> number 2.5
+control-number-dec: none -> number 0.5
+control-or-nothing-number-inc: none -> number 1
+control-int: none -> integer 6
+control-float: none -> float -0.5
+control-untyped-number: none -> number 2.5
+control-untyped-int: none -> integer 2
+control-hash-number: none -> number 0.5
+toplevel-ei-inc: RUNTIME-TYPE-ERROR: <++ (post) operator> expects type 'enum<EI>', but got type 'integer' instead -> enum<EI> 7
+toplevel-global-en-dec: RUNTIME-TYPE-ERROR: <-- (post) operator> expects type 'enum<EN>', but got type 'number' instead -> enum<EN> 1.5

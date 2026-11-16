@@ -10256,9 +10256,39 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
     return result;
 }
 
+//! Returns true if ++ and -- on an lvalue of the given parse type can raise an error that names the operator
+/** The operators raise RUNTIME-TYPE-ERROR with the operator's name (<tt><++ (post) operator></tt>) when the type of
+    the lvalue refuses the int, float or number result (LValueHelper::makeIntQv(), makeFloat() and the store of a
+    converted result); the plain int, float and number types (also soft and or-nothing) accept every result.  Any
+    other type can refuse it (an enum type), and so can an lvalue whose parse type is unknown or untyped: it can be an
+    element or member whose container gives it a type (a member of a hashdecl or an object read through a variable
+    of no type) or refer to a typed lvalue (an untyped reference parameter)
+*/
+static bool qore_ir_incdec_may_name_operator(const QoreTypeInfo* ti) {
+    return ti != bigIntTypeInfo && ti != bigIntOrNothingTypeInfo && ti != softBigIntTypeInfo
+        && ti != softBigIntOrNothingTypeInfo && ti != floatTypeInfo && ti != floatOrNothingTypeInfo
+        && ti != softFloatTypeInfo && ti != softFloatOrNothingTypeInfo && ti != numberTypeInfo
+        && ti != numberOrNothingTypeInfo && ti != softNumberTypeInfo && ti != softNumberOrNothingTypeInfo;
+}
+
+//! Returns the declared type of an lvalue of ++ or --, or its parse type
+/** A member that a method names without "self." and a static class variable have the declared type of the member or
+    variable, which getExprTypeInfo() does not give
+*/
+static const QoreTypeInfo* qore_ir_incdec_lvalue_type(const QoreValue& lvexp) {
+    const AbstractQoreNode* node = lvexp.getInternalNode();
+    if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(node)) {
+        return self_ref->getMemberTypeInfo();
+    }
+    if (auto* static_ref = dynamic_cast<const StaticClassVarRefNode*>(node)) {
+        return static_ref->vi.getTypeInfo();
+    }
+    return getExprTypeInfo(lvexp);
+}
+
 // documented in QoreIRLowering.h
 QoreIRValue QoreIRLowering::lowerPreIncDec(const QoreValue& expr, const QoreValue& lvexp, bool int_op, bool increment,
-        const QoreProgramLocation* loc, std::string& error) {
+        bool post, const QoreProgramLocation* loc, std::string& error) {
     const char* int_context = increment ? "pre-increment-int" : "pre-decrement-int";
     QoreIROpcode int_opcode = increment ? QoreIROpcode::AddAssignInt : QoreIROpcode::SubAssignInt;
     // Typed int pre-increment / pre-decrement on simple VarRef (exclude references — need lvalue write-through)
@@ -10308,9 +10338,15 @@ QoreIRValue QoreIRLowering::lowerPreIncDec(const QoreValue& expr, const QoreValu
     // every other lvalue, including a hash key, takes the lvalue path, which changes the lvalue in one operation;
     // the fixed-aggregate scalar replacement removes the path of a key of a hash that a local holds (qore#6199)
     {
+        // an unused post operator changes the lvalue as the pre operator does, but its error names the post operator,
+        // as the AST interpreter's does: it takes the post operation where the lvalue's type can raise the error, and
+        // the pre operation where it cannot, which does not copy the old value of a number lvalue
+        LVUnaryOp unary_op = increment ? LVUnaryOp::PreInc : LVUnaryOp::PreDec;
+        if (post && qore_ir_incdec_may_name_operator(qore_ir_incdec_lvalue_type(lvexp))) {
+            unary_op = increment ? LVUnaryOp::PostInc : LVUnaryOp::PostDec;
+        }
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            lvexp, nullptr, loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign,
-            increment ? LVUnaryOp::PreInc : LVUnaryOp::PreDec);
+            lvexp, nullptr, loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, unary_op);
         if (path_result.isValid()) {
             return path_result;
         }
@@ -10336,7 +10372,7 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
         return QoreIRValue();
     }
     return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPreIncrementOperatorNode*>(node) != nullptr, true,
-        op->loc, error);
+        false, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::string& error) {
@@ -10359,10 +10395,10 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
     // an unused value (an expression statement, the update of a for loop) is the only difference from the
     // pre-increment: both change the lvalue the same way (LValueHelper::postIncrementBigInt() and
     // preIncrementBigInt(), and the float and number versions), so it is lowered as the pre-increment, with its fused
-    // paths (qore#6199)
+    // paths (qore#6199), except that an error names the post operator
     if (!base_op->needsReturnValue()) {
         return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node) != nullptr, true,
-            base_op->loc, error);
+            true, base_op->loc, error);
     }
     // Typed int post-increment on simple VarRef (exclude references — need lvalue write-through)
     if (dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node)) {
@@ -10427,7 +10463,7 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
         return QoreIRValue();
     }
     return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPreDecrementOperatorNode*>(node) != nullptr, false,
-        op->loc, error);
+        false, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::string& error) {
@@ -10450,10 +10486,10 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
     // an unused value (an expression statement, the update of a for loop) is the only difference from the
     // pre-decrement: both change the lvalue the same way (LValueHelper::postDecrementBigInt() and
     // preDecrementBigInt(), and the float and number versions), so it is lowered as the pre-decrement, with its fused
-    // paths (qore#6199)
+    // paths (qore#6199), except that an error names the post operator
     if (!base_op->needsReturnValue()) {
         return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node) != nullptr,
-            false, base_op->loc, error);
+            false, true, base_op->loc, error);
     }
     // Typed int post-decrement on simple VarRef (exclude references — need lvalue write-through)
     if (dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node)) {

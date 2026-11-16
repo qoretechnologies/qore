@@ -824,7 +824,9 @@ protected:
     DLLLOCAL bool numberResultNeedsConversion() const;
 
     //! stores a number result of an operation, converted to the lvalue's type; takes the reference of \a n
-    DLLLOCAL void storeNumberResult(QoreNumberNode* n, const char* desc);
+    /** @return 0 for OK, -1 if the lvalue's type refused the result (an exception was raised)
+    */
+    DLLLOCAL int storeNumberResult(QoreNumberNode* n, const char* desc);
     DLLLOCAL int makeIntVal(const char* desc);
 
     //! returns true if a removal started with startContainerRemoval() left the reachable objects unchanged
@@ -1559,7 +1561,9 @@ public:
     DLLLOCAL void divideEqualsNumber(QoreValue r, const char* desc = "<lvalue>");
     DLLLOCAL void preIncrementNumber(const char* desc = "<lvalue>");
     DLLLOCAL void preDecrementNumber(const char* desc = "<lvalue>");
+    //! increments a number lvalue; returns the old value if \a ref_rv is true, or nullptr if an exception was raised
     DLLLOCAL QoreNumberNode* postIncrementNumber(bool ref_rv, const char* desc = "<lvalue>");
+    //! decrements a number lvalue; returns the old value if \a ref_rv is true, or nullptr if an exception was raised
     DLLLOCAL QoreNumberNode* postDecrementNumber(bool ref_rv, const char* desc = "<lvalue>");
 
     DLLLOCAL QoreNumberNode* ensureUniqueNumber(const char* desc = "<lvalue>") {

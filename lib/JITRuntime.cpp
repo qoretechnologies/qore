@@ -16751,69 +16751,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
 }
 
 // documented in QoreIRInterpreter.h
-QoreValue qore_rt_apply_lvalue_incdec(LValueHelper& lvh, LVUnaryOp unary_op, ExceptionSink* xsink) {
-    // the descriptions are those of the AST operators (QorePreIncrementOperatorNode::evalImpl() and the others)
-    QoreValue res;
-    qore_type_t t = lvh.getType();
-    switch (unary_op) {
-        case LVUnaryOp::PreInc:
-            if (t == NT_NUMBER) {
-                lvh.preIncrementNumber("<++ (pre) operator>");
-                if (!*xsink) {
-                    res = lvh.getReferencedValue();
-                }
-            } else if (t == NT_FLOAT) {
-                res = lvh.preIncrementFloat("<++ (pre) operator>");
-            } else {
-                res = lvh.preIncrementBigInt("<++ (pre) operator>");
-            }
-            break;
-        case LVUnaryOp::PreDec:
-            if (t == NT_NUMBER) {
-                lvh.preDecrementNumber("<-- (pre) operator>");
-                if (!*xsink) {
-                    res = lvh.getReferencedValue();
-                }
-            } else if (t == NT_FLOAT) {
-                res = lvh.preDecrementFloat("<-- (pre) operator>");
-            } else {
-                res = lvh.preDecrementBigInt("<-- (pre) operator>");
-            }
-            break;
-        case LVUnaryOp::PostInc:
-            if (t == NT_NUMBER) {
-                if (QoreNumberNode* n = lvh.postIncrementNumber(true, "<++ (post) operator>")) {
-                    res = n;
-                }
-            } else if (t == NT_FLOAT) {
-                res = lvh.postIncrementFloat("<++ (post) operator>");
-            } else {
-                res = lvh.postIncrementBigInt("<++ (post) operator>");
-            }
-            break;
-        case LVUnaryOp::PostDec:
-            if (t == NT_NUMBER) {
-                if (QoreNumberNode* n = lvh.postDecrementNumber(true, "<-- (post) operator>")) {
-                    res = n;
-                }
-            } else if (t == NT_FLOAT) {
-                res = lvh.postDecrementFloat("<-- (post) operator>");
-            } else {
-                res = lvh.postDecrementBigInt("<-- (post) operator>");
-            }
-            break;
-        default:
-            assert(false);
-            break;
-    }
-    if (*xsink) {
-        res.discard(xsink);
-        return QoreValue();
-    }
-    return res;
-}
-
-// documented in QoreIRInterpreter.h
 QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
         LVCompoundOp compound_op, ValueHolder& rhs_holder,
         ExceptionSink* xsink) {
@@ -17062,7 +16999,29 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_update(
     if (qore_rt_get_self_member_lvalue(member_name, lvh, xsink)) {
         return toBits(QoreValue());
     }
-    return toBits(qore_rt_apply_lvalue_incdec(lvh, static_cast<LVUnaryOp>(unary_op), xsink));
+    QoreValue res;
+    switch (static_cast<LVUnaryOp>(unary_op)) {
+        case LVUnaryOp::PreInc:
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PreInc>(lvh, res);
+            break;
+        case LVUnaryOp::PreDec:
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PreDec>(lvh, res);
+            break;
+        case LVUnaryOp::PostInc:
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PostInc>(lvh, res);
+            break;
+        default:
+            // the range of unary_op was checked above
+            assert(static_cast<LVUnaryOp>(unary_op) == LVUnaryOp::PostDec);
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PostDec>(lvh, res);
+            break;
+    }
+    // an int or float has no reference to release; a number can be the value that the lvalue kept
+    if (res.hasNode() && *xsink) {
+        res.discard(xsink);
+        return toBits(QoreValue());
+    }
+    return toBits(res);
 }
 
 // Shared helper for HashKeySlice terminal step: iterates the resolved
@@ -17816,10 +17775,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         }
         switch (inst->unary_op) {
             case LVUnaryOp::PreInc:
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PreInc>(lvh, res);
+                break;
             case LVUnaryOp::PreDec:
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PreDec>(lvh, res);
+                break;
             case LVUnaryOp::PostInc:
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PostInc>(lvh, res);
+                break;
             case LVUnaryOp::PostDec:
-                res = qore_rt_apply_lvalue_incdec(lvh, inst->unary_op, xsink);
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PostDec>(lvh, res);
                 break;
             case LVUnaryOp::EnsureUnique:
                 // the container of a variable that a weak reference is taken of (qore#5756)

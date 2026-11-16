@@ -216,12 +216,15 @@ public:
         @param lvexp the lvalue expression
         @param int_op true for the int-specialized operator (the lvalue is typed int)
         @param increment true for an increment, false for a decrement
+        @param post true for a post-increment or post-decrement whose value is unused: an error that the lvalue's type
+        raises names the post operator (<tt><++ (post) operator></tt>), as the AST interpreter's does
         @param loc the source location
         @param error set on failure
 
-        @return the new value of the lvalue, or an invalid value on failure
+        @return the new value of the lvalue (the old one for a post operator whose lvalue's type can raise an error,
+        see qore_ir_incdec_may_name_operator()), or an invalid value on failure
     */
-    QoreIRValue lowerPreIncDec(const QoreValue& expr, const QoreValue& lvexp, bool int_op, bool increment,
+    QoreIRValue lowerPreIncDec(const QoreValue& expr, const QoreValue& lvexp, bool int_op, bool increment, bool post,
         const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerPreIncrement(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPostIncrement(const QoreValue& expr, std::string& error);
