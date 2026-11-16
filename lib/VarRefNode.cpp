@@ -297,11 +297,6 @@ int VarRefNode::parseInitIntern(QoreParseContext& parse_context, bool is_new) {
         resolve(parse_context.typeInfo);
     }
 
-    // a local variable used in its own initialization expression has no value yet (qore#526)
-    if (!new_decl && (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS)) {
-        QoreParseInitializerTarget::parseUse(ref.id, nullptr, loc);
-    }
-
     name.optimize();
     return err;
 }
@@ -661,9 +656,6 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
     // so calling parseAssigned on a global Var* (cast to LocalVar*) would write into
     // Var::name's std::string pointer field at the LocalVar::parse_assigned offset
     const bool is_local_type = (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS);
-    // the arguments are the initialization expression of the declared local variable (qore#526); a global keeps its
-    // value when its declaration runs again, so it is not checked
-    QoreParseInitializerTarget init_target(new_decl && is_local_type ? ref.id : nullptr);
     const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(typeInfo);
     if (qc) {
         err = parseInitConstructorCall(loc, parse_context, qc);
@@ -732,10 +724,6 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
                 }
             }
         }
-    }
-
-    if (init_target.raiseUseError("local variable", getName()) && !err) {
-        err = -1;
     }
 
     if (parse_context.pflag & PF_FOR_ASSIGNMENT) {

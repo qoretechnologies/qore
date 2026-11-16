@@ -152,14 +152,6 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     parse_context.typeInfo = nullptr;
     slice = QoreTypeInfo::isType(rti, NT_LIST);
 
-    // a member used with self.member in its own initialization expression has no value yet (qore#526)
-    if (left.getType() == NT_VARREF && right.getType() == NT_STRING) {
-        const VarRefNode* vrn = left.get<const VarRefNode>();
-        if (vrn->getType() == VT_LOCAL && vrn->ref.id && vrn->ref.id->isSelf()) {
-            QoreParseInitializerTarget::parseUse(parse_get_class(), right.get<const QoreStringNode>()->c_str(), loc);
-        }
-    }
-
     printd(5, "QoreHashObjectDereferenceOperatorNode::parseInitImpl() l: %p %s r: %p %s\n", lti,
         QoreTypeInfo::getName(lti), rti, QoreTypeInfo::getName(rti));
 
