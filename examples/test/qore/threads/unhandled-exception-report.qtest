@@ -27,6 +27,13 @@ class UnhandledExceptionReportTest inherits QUnit::Test {
         const FirstLine = "^unhandled QORE User exception thrown in TID [0-9]+ at [^()]*\\([^()]*\\) in thr\\(\\) "
             "\\([^()]*worker\\.q:[0-9]+ \\(Qore user code\\)\\)$";
 
+        #! the QORE_* variables that the child inherits: its library and module directories
+        const KeepVariables = {
+            "QORE_LIBDIR": True,
+            "QORE_MODULE_DIR": True,
+            "QORE_MODULE_DIR_ONLY": True,
+        };
+
         #! the line of the exception of a report
         const ExceptionLine = "^REPORT-([0-9]+): the description of the exception of thread ([0-9]+)$";
     }
@@ -45,11 +52,18 @@ class UnhandledExceptionReportTest inherits QUnit::Test {
         for (int run = 0; run < Runs; ++run) {
             # the child runs without the QORE_* variables of this process other than its library and module
             # directories: diagnostic variables (QORE_JIT_TIMING, for example) make libqore write to standard error
-            string out = backquote(sprintf("for v in $(env | sed -n 's/^\\(QORE_[A-Za-z0-9_]*\\)=.*/\\1/p'); do "
-                "case $v in QORE_LIBDIR|QORE_MODULE_DIR) ;; *) unset $v;; esac; done; exec %s -b %s %d 2>&1",
-                quote(qore_bin), quote(worker), Threads));
+            string out = backquote(sprintf("%sexec %s -b %s %d 2>&1", getUnsetCommand(), quote(qore_bin),
+                quote(worker), Threads));
             checkReports(out, run);
         }
+    }
+
+    #! returns the shell command that unsets the QORE_* variables of this process that the child must not inherit
+    /** The names are taken from the keys of the environment, so that a value with a newline cannot give a wrong name
+    */
+    private static string getUnsetCommand() {
+        list<string> names = map quote($1), keys ENV, $1 =~ /^QORE_[A-Za-z0-9_]+$/ && !KeepVariables{$1};
+        return names ? "unset " + join(" ", names) + "; " : "";
     }
 
     #! returns the value quoted for the shell
