@@ -236,6 +236,10 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   and in qcc executables
         # - deleted-object-overload (#6159): its probes run in child processes that set their own --exec-mode and in
         #   qcc executables
+        # - background-runtime-parse-options (#6208): its checks run in child processes that set their own --exec-mode
+        #   and in qcc executables
+        # - deferred-callback-runtime-parse-options (#6208): its checks run in child processes that set their own
+        #   execution modes
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
@@ -258,6 +262,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/functions/generic-call-parse-type.qtest",
                                  "examples/test/qore/classes/generic-method-hashdecl-paths.qtest",
                                  "examples/test/qore/misc/hashdecl-member-default-typeparam.qtest",
+                                 "examples/test/qore/threads/background-runtime-parse-options.qtest",
+                                 "examples/test/qore/threads/deferred-callback-runtime-parse-options.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",

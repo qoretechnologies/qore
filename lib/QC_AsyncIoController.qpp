@@ -900,6 +900,18 @@ static int AsyncIoController::addTimerDelay(timeout delay, auto udata, string ow
     module; for any other timer, this method returns @ref False "False", so a restricted caller cannot use module code
     to cancel timers of other applications or of the host; see @ref MODULE_OWNED
 
+    A timer belongs to the application of the call that adds it.  A thread that module code starts while it runs for
+    a restricted caller serves no caller of its own: it keeps the restrictions of the code that started it, but not
+    its application, so the timers that it adds on its own (for work handed to it by a call of another application,
+    for example) belong to no application: no application can cancel them, and the thread itself can cancel only
+    such timers, not those of an application nor those of the host, so it cannot be used to cancel the timers of an
+    application.  Code that does not run module code for a restricted caller (the host, code without restrictions,
+    and a thread that module code starts outside a call for a restricted caller, as in its initialization) can
+    cancel any timer: a module that relays the requests of applications to such a thread lets them cancel each
+    other's timers.  Module code cannot yet give the context of a call to the thread that serves it, so that the work
+    of the thread would belong to the call's application and keep its restrictions; see
+    <a href="https://github.com/qoretechnologies/qore/issues/6245">issue #6245</a>.
+
     @since %Qore 3.0
 */
 static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,THREAD_CONTROL;flags=NAMED_ARGS,MODULE_OWNED] {

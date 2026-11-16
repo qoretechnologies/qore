@@ -229,6 +229,14 @@ void ThreadPool::worker(ExceptionSink* xsink) {
         if (stopflag)
             break;
 
+#ifdef DEBUG
+        // test hook (dbgHoldDispatch()): the queued tasks stay queued, so that they are cancelled when the pool stops
+        if (dbg_hold_dispatch && !shutdown) {
+            cond.wait(m);
+            continue;
+        }
+#endif
+
         while (!q.empty()) {
             ThreadPoolThread* tpt = getThreadUnlocked(sl, xsink);
             if (!tpt) {
@@ -336,8 +344,12 @@ void ThreadPool::worker(ExceptionSink* xsink) {
     // cancel tasks if any; decrement thread_counter for each cancelled task
     // (it was incremented at submit time)
     for (auto& i : q_copy) {
-        i->cancel(xsink);
-        i->del(xsink);
+        // each cancel callback runs with a sink of its own, so that one that raises an exception does not keep the
+        // cancel callbacks of the other tasks from running; its exceptions are added to the pool's
+        ExceptionSink cancel_xsink;
+        i->cancel(&cancel_xsink);
+        i->del(&cancel_xsink);
+        xsink->assimilate(cancel_xsink);
         thread_counter.dec();
     }
 

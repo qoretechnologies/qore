@@ -53,10 +53,14 @@ typedef qlist<ThreadPoolThread*> tplist_t;
     or work that the cleanup handed over (QoreSandboxContext::module_cleanup_delegate): the task is then part of the
     cleanup, and can enter the Programs of the modules, which the cleanup closes to other threads (see
     qore_close_module_programs()).
+
+    It also captures the run-time parse options of the submitting code, which the task's code runs with on the worker
+    thread, so that a task that is a call reference to builtin code, which sets no options of its own, runs with the
+    restrictions of the code that submitted it (qore#6208).
 */
 class ThreadTask {
 public:
-    //! Creates the task; must be called in the submitting thread, as it captures the thread's sandbox
+    //! Creates the task; must be called in the submitting thread, as it captures the thread's sandbox and options
     DLLLOCAL ThreadTask(ResolvedCallReferenceNode* c, ResolvedCallReferenceNode* cc) : code(c), cancelCode(cc) {
     }
 
@@ -81,10 +85,13 @@ public:
     DLLLOCAL QoreValue run(ExceptionSink* xsink) {
         // Get the program from the call reference and set up program context
         // This ensures tlpd is set up for thread pool threads
+        // a call reference to builtin code has no Program: it runs in the context of the worker
         QoreProgram* pgm = code->getProgram();
-        assert(pgm);
         // declared before the Program is entered, which can be the Program of a module
         QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
+        // the submitter's options, installed before the Program is entered, whose thread entry handler and
+        // initialization run then (qore#6208)
+        QoreThreadRuntimeParseOptionsHelper po_helper(&runtime_po);
         QoreExternalProgramContextHelper pch(xsink, pgm);
         if (*xsink) {
             return QoreValue();
@@ -101,6 +108,7 @@ public:
     DLLLOCAL void cancel(ExceptionSink* xsink) {
         if (cancelCode) {
             QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
+            QoreThreadRuntimeParseOptionsHelper po_helper(&runtime_po);
             SandboxScope sandbox_scope(sandbox_context);
             cancelCode->invoke(0, xsink).discard(xsink);
         }
@@ -111,6 +119,8 @@ protected:
     ResolvedCallReferenceNode* cancelCode;
     //! The sandbox of the submitting thread, and whether the task is part of the module cleanup
     const QoreSandboxContext sandbox_context;
+    //! The run-time parse options of the submitting code (qore#6208)
+    const QoreThreadRuntimeParseOptions runtime_po = QoreThreadRuntimeParseOptions::capture();
 
     //! Applies the sandbox of the submitting thread while the object exists, if a sandbox governed it
     /** Without one, the sandbox lookups of the worker resolve normally, so a task created by sandboxed code (a
@@ -259,6 +269,8 @@ class ThreadPool : public AbstractPrivateData {
 protected:
     //! true if the manager thread holds a reference to the pool, which it releases at the end of worker() (qore#6253)
     bool manager_ref = false;
+    //! see dbgHoldDispatch()
+    bool dbg_hold_dispatch = false;
 
     int max,        // maximum number of threads in pool (if <= 0 then unlimited)
         minidle,     // minimum number of idle threads
@@ -578,6 +590,14 @@ public:
             stopflag = true;
             cond.signal();
         }
+    }
+
+    //! test support (qore_test_thread_pool_hold_dispatch()): in a debug build, the pool does not give its queued tasks
+    //! to workers while \a hold is set, so that they stay queued until it stops and their cancel callbacks run
+    DLLLOCAL void dbgHoldDispatch(bool hold) {
+        AutoLocker al(m);
+        dbg_hold_dispatch = hold;
+        cond.signal();
     }
 
     // does not return until the thread pool has been stopped
