@@ -1091,6 +1091,13 @@ public:
     */
     std::atomic<QoreSandboxManager*> creator_sandbox_manager{nullptr};
 
+    //! true once any sandbox manager of the Program was set (own, kept or kept policy); cleared when they are released
+    /** The check made on every entry into the Program and at every cancellation point (hasSandboxManager()), so that
+        a Program with no manager costs one load, as before.  Set before a manager is published, so a lookup that finds
+        it false finds no manager, exactly as if it had run just before the manager was set.
+    */
+    std::atomic<bool> any_sandbox_manager{false};
+
     //! true if \c sandbox_manager adds to the sandbox of the Program's callers instead of governing its code alone
     /** Set when code that a sandbox governs sets the manager with Program::setSandboxManager() (see
         setOwnSandboxManager()): the walk of the thread's sandbox stack visits the manager and goes on to the callers,
@@ -2027,9 +2034,7 @@ public:
     /** Reads the pointers without the lock, for the checks made on every entry into the Program
     */
     DLLLOCAL bool hasSandboxManager() const {
-        return sandbox_manager.load(std::memory_order_acquire)
-            || creator_sandbox_manager.load(std::memory_order_acquire)
-            || creator_policy_manager.load(std::memory_order_acquire);
+        return any_sandbox_manager.load(std::memory_order_acquire);
     }
 
     //! Adds the sandbox of the code that creates the Program or adds code to it (see \c creator_sandbox_manager)

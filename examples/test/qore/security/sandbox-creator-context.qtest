@@ -205,7 +205,13 @@ auto sub do_cancel(int tid) { return Qore::cancel_thread(tid); }\", \"child\");
 }
 auto sub cancel_via(Program c, int tid) { return c.callFunction(\"do_cancel\", tid); }
 sub wait_started() { started.get(); }
-string sub wait_done() { return done.get(); }
+string sub wait_done() {
+    try {
+        return done.get(60s);
+    } catch (hash<ExceptionInfo> ex) {
+        return \"not cancelled\";
+    }
+}
 ";
 
     #! what code governed by the sandbox gets
@@ -626,6 +632,26 @@ string sub wait_done() { return done.get(); }
         p.callFunction("wait_started");
         assertTrue(p.callFunction("cancel_via", child, tid));
         assertEq("THREAD-CANCELLED", p.callFunction("wait_done"));
+
+        # a thread of the host, which never entered the sandbox, is out of the scope of that code, whether the
+        # sandbox's code or trusted code calls it
+        Counter hold(1);
+        Queue started();
+        Queue result();
+        int host_tid = background sub () {
+            started.push(True);
+            try {
+                hold.waitForZero();
+                result.push("released");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err);
+            }
+        }();
+        started.get();
+        p.callFunction("cancel_via", child, host_tid);
+        child.callFunction("do_cancel", host_tid);
+        hold.dec();
+        assertEq("released", result.get());
     }
 
     #! calls the reference in a thread that trusted code starts and returns its result

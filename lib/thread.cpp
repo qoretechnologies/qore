@@ -4723,6 +4723,23 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     }
 }
 
+QORE_INTERN_NOINLINE void ProgramThreadCountContextHelper::enterSandboxBudgets(ThreadData* td,
+        qore_program_private* pp) {
+    QoreSandboxManager* own_ptr;
+    QoreSandboxManager* creator_ptr;
+    pp->getSandboxManagerRefs(own_ptr, creator_ptr);
+    ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
+    ReferenceHolder<QoreSandboxManager> creator(creator_ptr, nullptr);
+    // the sandbox of the code that created the Program has call budgets in it as well: a call into the Program by
+    // trusted code is a call of that sandbox (a call made inside a budget of the manager starts none)
+    if (own) {
+        td->sandbox_budgets.enter(td->tid, *own, this);
+    }
+    if (creator) {
+        td->sandbox_budgets.enter(td->tid, *creator, this);
+    }
+}
+
 void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm,
         bool runtime) {
     old_pgm = td->current_pgm;
@@ -4803,19 +4820,7 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
     // is not already running a call of it (see design/sandbox-resource-limits.md)
     // (almost every Program has no manager, which is checked without the call that takes a reference to it)
     if (pp->hasSandboxManager()) {
-        QoreSandboxManager* own_ptr;
-        QoreSandboxManager* creator_ptr;
-        pp->getSandboxManagerRefs(own_ptr, creator_ptr);
-        ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
-        ReferenceHolder<QoreSandboxManager> creator(creator_ptr, nullptr);
-        // the sandbox of the code that created the Program has call budgets in it as well: a call into the Program
-        // by trusted code is a call of that sandbox (a call made inside a budget of the manager starts none)
-        if (own) {
-            td->sandbox_budgets.enter(td->tid, *own, this);
-        }
-        if (creator) {
-            td->sandbox_budgets.enter(td->tid, *creator, this);
-        }
+        enterSandboxBudgets(td, pp);
     }
     // sandboxed code never runs with cancellation deferred (a trusted destructor, a cleanup critical section or thread
     // teardown that calls it); a Program that sandboxed code created has no manager of its own, so the flag decides

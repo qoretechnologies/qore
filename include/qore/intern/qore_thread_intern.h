@@ -2528,6 +2528,12 @@ private:
 
     //! switches the thread's context to a Program that is not its current one; see set()
     DLLLOCAL void setOtherProgram(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+
+    //! Starts the call budgets of the sandbox managers of the Program entered (see setOtherProgram())
+    /** Out of line, so that the entry into a Program that has no manager, almost every one, keeps no locals whose
+        address is taken (and so no stack protector code)
+    */
+    DLLLOCAL void enterSandboxBudgets(ThreadData* td, qore_program_private* pp);
 };
 
 class ProgramRuntimeParseContextHelper {

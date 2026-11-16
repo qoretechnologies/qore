@@ -1731,6 +1731,7 @@ int qore_program_private::setOwnSandboxManager(QoreSandboxManager* sm, bool addi
             sm->ref();
             // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
             sandboxed.store(true, std::memory_order_release);
+            any_sandbox_manager.store(true, std::memory_order_release);
         }
         own_manager_additive.store(sm && additive, std::memory_order_release);
         old = sandbox_manager.exchange(sm, std::memory_order_acq_rel);
@@ -1781,7 +1782,8 @@ namespace {
 
     @return true if the manager in the slot changed
 */
-bool qore_add_sandbox_to_slot(QoreThreadLock& lock, std::atomic<QoreSandboxManager*>& slot, QoreSandboxManager* sm) {
+bool qore_add_sandbox_to_slot(QoreThreadLock& lock, std::atomic<QoreSandboxManager*>& slot, QoreSandboxManager* sm,
+        std::atomic<bool>& any) {
     while (true) {
         ReferenceHolder<QoreSandboxManager> current(nullptr, nullptr);
         {
@@ -1790,6 +1792,8 @@ bool qore_add_sandbox_to_slot(QoreThreadLock& lock, std::atomic<QoreSandboxManag
             if (!cur) {
                 // referenced before it is published: a lookup that finds it without the lock must find it alive
                 sm->ref();
+                // before the manager is published (see qore_program_private::any_sandbox_manager)
+                any.store(true, std::memory_order_release);
                 slot.store(sm, std::memory_order_release);
                 return true;
             }
@@ -1826,10 +1830,10 @@ void qore_program_private::addCreatorSandbox(QoreSandboxManager* sm, QoreSandbox
         }
     };
     try {
-        if (policy_sm && qore_add_sandbox_to_slot(sm_lock, creator_policy_manager, policy_sm)) {
+        if (policy_sm && qore_add_sandbox_to_slot(sm_lock, creator_policy_manager, policy_sm, any_sandbox_manager)) {
             changed = true;
         }
-        if (sm && qore_add_sandbox_to_slot(sm_lock, creator_sandbox_manager, sm)) {
+        if (sm && qore_add_sandbox_to_slot(sm_lock, creator_sandbox_manager, sm, any_sandbox_manager)) {
             changed = true;
         }
     } catch (...) {
@@ -1911,6 +1915,7 @@ void qore_program_private::releaseSandboxManagers(ExceptionSink* xsink) {
         sm = sandbox_manager.exchange(nullptr, std::memory_order_acq_rel);
         creator_sm = creator_sandbox_manager.exchange(nullptr, std::memory_order_acq_rel);
         creator_policy = creator_policy_manager.exchange(nullptr, std::memory_order_acq_rel);
+        any_sandbox_manager.store(false, std::memory_order_release);
     }
     // outside the lock: a release can destroy a manager
     for (QoreSandboxManager* m : {sm, creator_sm, creator_policy}) {
