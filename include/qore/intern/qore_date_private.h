@@ -1976,7 +1976,7 @@ DLLLOCAL static inline int qore_split_float_seconds(double secs, int64& whole, i
     saturated seconds of q_float_to_int64() (NaN: 0) and no microseconds, as date(float) gives with no exception sink
     (qore#6103)
 */
-DLLLOCAL static inline void qore_split_float_seconds_saturated(double secs, int64& whole, int& us) {
+static inline void qore_split_float_seconds_saturated(double secs, int64& whole, int& us) {
     if (__builtin_expect(qore_split_float_seconds(secs, whole, us) != QDO_NONE, 0)) {
         whole = q_float_to_int64(secs);
         us = 0;
