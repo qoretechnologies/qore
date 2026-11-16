@@ -2634,6 +2634,9 @@
     - fixed a bug handling nested conditional parsing directives
       (<a href="https://github.com/qoretechnologies/qore/issues/4999">issue 4999</a>)
 
+    - SqlUtil could not write a string to a PostgreSQL \c json or \c jsonb column, which PostgreSQL refused as
+      \c text (see @ref pgsqlsqlutilbasev119 "PgsqlSqlUtilBase v1.19")
+      (<a href="https://github.com/qoretechnologies/qore/issues/4448">issue 4448</a>)
     - fixed a memory leak in the @ref Qore::TreeMap "TreeMap" class with objects that create circular references
       (<a href="https://github.com/qoretechnologies/qore/issues/5028">issue 5028</a>)
 
