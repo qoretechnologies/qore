@@ -2328,9 +2328,6 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     }
     statementByLabelIndex.clear();
 
-    // roll back pending domain
-    pend_dom = 0;
-
     // with PO_ALLOW_REPARSE, the Program is back in its committed state, so it can be used at runtime again; without
     // it, it cannot be parsed again
     if (atomic_rollback) {
@@ -2786,10 +2783,6 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             initDeferredCode();
             assert(dset.empty());
 
-            // commit pending domain
-            dom |= pend_dom;
-            pend_dom = 0;
-
             {
                 // Runtime initialization can admit threads that materialize AOT metadata.
                 std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
@@ -2833,7 +2826,6 @@ int qore_program_private::internParseCommit(bool standard_parse) {
     } else {
         parsing_in_progress = false;
         assert(!*parseSink);
-        pend_dom = 0;
 
         // free temporary data structures
         {
