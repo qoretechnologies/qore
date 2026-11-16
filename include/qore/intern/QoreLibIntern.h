@@ -1008,6 +1008,21 @@ void ensure_unique(AbstractQoreNode** v, ExceptionSink* xsink);
 */
 void ensure_unique(QoreValue& v, ExceptionSink* xsink);
 
+//! Checks the elements of a list or hash that trim or chomp modify in place, before any of them is modified
+/** trim and chomp replace a string element that holds an enum value with a plain string (see ensure_unique()), which
+    the element type of a typed container or the type of a hashdecl member refuses if it is an enum type: then
+    RUNTIME-TYPE-ERROR is raised with \a desc for the first such element, and the caller leaves the container
+    unchanged (qore#6195).  The elements are only read if the type of the container can refuse a plain string.
+
+    @param container a list or a hash
+    @param desc the description of the operation
+    @param xsink for the exception
+
+    @return -1 if an exception was raised, 0 if not
+*/
+DLLLOCAL int qore_check_in_place_container_strings(const QoreValue& container, const char* desc,
+        ExceptionSink* xsink);
+
 //! Returns an owned copy of the base value of the enum value \a v, which the caller can modify in place
 /** An enum value (QoreValue::isEnum()) holds a reference to its enum member, not to the member's base value, which is
     shared and constant: a node reached through it with QoreValue::get() or QoreValue::getInternalNode() has a

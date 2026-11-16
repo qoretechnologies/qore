@@ -17390,7 +17390,11 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         return v.release();
     }
     if (ct == NT_STRING) {
-        lvh.ensureUnique();
+        // the characters are removed from the string in place, which leaves a plain string that a string enum lvalue
+        // refuses, as in the AST interpreter (LValueRemoveHelper::doRemove(), qore#6195)
+        if (lvh.ensureUnique(is_delete ? "<delete operator>" : "<remove operator>")) {
+            return QoreValue();
+        }
         QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
         if (!str) {
             return QoreValue();
@@ -17540,7 +17544,11 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
     }
 
     if (ct == NT_STRING) {
-        lvh.ensureUnique();
+        // the range is extracted from the string in place, which leaves a plain string that a string enum lvalue
+        // refuses, as in the AST interpreter (LValueRemoveHelper::doRemove(), qore#6195)
+        if (lvh.ensureUnique(is_delete ? "<delete operator>" : "<remove operator>")) {
+            return QoreValue();
+        }
         QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
         if (!str) {
             return QoreValue();
@@ -17952,8 +17960,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 }
                 break;
             case LVUnaryOp::Trim:
+                // a string enum lvalue, and a container whose type refuses a plain string in the place of an enum
+                // element, refuse the plain strings that the operation leaves, as in the AST interpreter
+                // (QoreTrimOperatorNode::evalImpl(), qore#6195)
                 if (lvh.getType() == NT_STRING) {
-                    lvh.ensureUnique();
+                    if (lvh.ensureUnique("<trim operator>")) {
+                        break;
+                    }
                     QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
                     if (str) {
                         str->trim(xsink);
@@ -17962,6 +17975,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     // value so callers like `return trim ct;` see the result.
                     res = lvh.getReferencedValue();
                 } else if (lvh.getType() == NT_LIST) {
+                    if (qore_check_in_place_container_strings(lvh.getValue(), "<trim operator>", xsink)) {
+                        break;
+                    }
                     lvh.ensureUnique();
                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
                     if (l) {
@@ -17978,6 +17994,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     }
                     res = lvh.getReferencedValue();
                 } else if (lvh.getType() == NT_HASH) {
+                    if (qore_check_in_place_container_strings(lvh.getValue(), "<trim operator>", xsink)) {
+                        break;
+                    }
                     lvh.ensureUnique();
                     QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
                     if (h) {
@@ -17996,14 +18015,20 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 }
                 break;
             case LVUnaryOp::Chomp:
+                // see LVUnaryOp::Trim (QoreChompOperatorNode::evalImpl(), qore#6195)
                 if (lvh.getType() == NT_STRING) {
-                    lvh.ensureUnique();
+                    if (lvh.ensureUnique("<chomp operator>")) {
+                        break;
+                    }
                     QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
                     if (str) {
                         // Mirror QoreChompOperatorNode::evalImpl: return count.
                         res = QoreValue(static_cast<int64>(str->chomp()));
                     }
                 } else if (lvh.getType() == NT_LIST) {
+                    if (qore_check_in_place_container_strings(lvh.getValue(), "<chomp operator>", xsink)) {
+                        break;
+                    }
                     lvh.ensureUnique();
                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
                     if (l) {
@@ -18022,6 +18047,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                         res = QoreValue(count);
                     }
                 } else if (lvh.getType() == NT_HASH) {
+                    if (qore_check_in_place_container_strings(lvh.getValue(), "<chomp operator>", xsink)) {
+                        break;
+                    }
                     lvh.ensureUnique();
                     QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
                     if (h) {
@@ -18217,8 +18245,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
         xsink->raiseException("EXTRACT-ERROR",
             "first (lvalue) argument to the extract operator is not a list, "
             "string, or binary object");
+    } else if (lvh.ensureUnique(inst->ternary_op == LVTernaryOp::Splice
+            ? "<splice operator>" : "<extract operator>")) {
+        // a string enum lvalue refuses the plain string that the operation leaves, as in the AST interpreter
+        // (qore#6195)
+        return toBits(QoreValue());
     } else {
-        lvh.ensureUnique();
         size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
         if (inst->ternary_op == LVTernaryOp::Splice) {
             if (vt == NT_LIST) {

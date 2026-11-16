@@ -3974,6 +3974,60 @@ QoreValue qore_enum_value_copy_for_write(const QoreValue& v) {
     return base;
 }
 
+//! Returns true if \a ti is an enum type that cannot hold a plain string (ex: a string enum type)
+/** Only an enum type can be the type of a slot that holds an enum value and refuses a plain string
+*/
+static bool qore_type_refuses_plain_string(const QoreTypeInfo* ti) {
+    return ti && ti != autoTypeInfo && QoreTypeInfo::getReturnEnum(ti)
+        && !QoreTypeInfo::parseAccepts(ti, stringTypeInfo);
+}
+
+// documented in QoreLibIntern.h
+int qore_check_in_place_container_strings(const QoreValue& container, const char* desc, ExceptionSink* xsink) {
+    if (container.getType() == NT_LIST) {
+        const QoreListNode* l = container.get<const QoreListNode>();
+        const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
+        if (!qore_type_refuses_plain_string(vti)) {
+            return 0;
+        }
+        ConstListIterator li(l);
+        while (li.next()) {
+            const QoreValue v = li.getValue();
+            if (v.isEnum() && v.getType() == NT_STRING) {
+                vti->doTypeException("lvalue", 0, desc, v.getEnumBaseValue(), xsink);
+                return -1;
+            }
+        }
+        return 0;
+    }
+    assert(container.getType() == NT_HASH);
+    const QoreHashNode* h = container.get<const QoreHashNode>();
+    const qore_hash_private* hp = qore_hash_private::get(*h);
+    // a hashdecl gives each member a type of its own
+    const TypedHashDecl* hd = hp->getHashDecl();
+    const QoreTypeInfo* vti = hd ? nullptr : hp->getValueTypeInfo();
+    if (!hd && !qore_type_refuses_plain_string(vti)) {
+        return 0;
+    }
+    ConstHashIterator hi(h);
+    while (hi.next()) {
+        const QoreValue v = hi.get();
+        if (!v.isEnum() || v.getType() != NT_STRING) {
+            continue;
+        }
+        const QoreTypeInfo* ti = vti;
+        if (hd) {
+            const HashDeclMemberInfo* mem = typed_hash_decl_private::get(*hd)->findMember(hi.getKey());
+            ti = mem ? mem->getTypeInfo() : nullptr;
+        }
+        if (qore_type_refuses_plain_string(ti)) {
+            ti->doTypeException("lvalue", 0, desc, v.getEnumBaseValue(), xsink);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 //! Replaces the enum value \a v with an owned copy of its base value and returns the enum value replaced
 static QORE_INTERN_NOINLINE QoreValue replace_enum_value_for_write(QoreValue& v) {
     QoreValue copy = qore_enum_value_copy_for_write(v);

@@ -9319,8 +9319,12 @@ static QORE_INTERN_NOINLINE int qore_ir_run_lvalue_path_ternary(const QoreIRLVal
         xsink->raiseException("EXTRACT-ERROR",
             "first (lvalue) argument to the extract operator is not a list, "
             "string, or binary object");
+    } else if (lvh.ensureUnique(path_inst->ternary_op == LVTernaryOp::Splice
+            ? "<splice operator>" : "<extract operator>")) {
+        // a string enum lvalue refuses the plain string that the operation leaves, as in the AST interpreter
+        // (qore#6195)
+        return -1;
     } else {
-        lvh.ensureUnique();
         size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
         if (path_inst->ternary_op == LVTernaryOp::Splice) {
             if (vt == NT_LIST) {
@@ -18900,13 +18904,22 @@ load_local_done:
                             }
                             case LVUnaryOp::Trim: {
                                 qore_type_t vtype = lvh.getType();
+                                // a string enum lvalue, and a container whose type refuses a plain string in the
+                                // place of an enum element, refuse the plain strings that the operation leaves, as
+                                // in the AST interpreter (QoreTrimOperatorNode::evalImpl(), qore#6195)
                                 if (vtype == NT_STRING) {
-                                    lvh.ensureUnique();
+                                    if (lvh.ensureUnique("<trim operator>")) {
+                                        return -1;
+                                    }
                                     QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
                                     if (str && str->trim(xsink)) {
                                         return -1;
                                     }
                                 } else if (vtype == NT_LIST) {
+                                    if (qore_check_in_place_container_strings(lvh.getValue(), "<trim operator>",
+                                            xsink)) {
+                                        return -1;
+                                    }
                                     lvh.ensureUnique();
                                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
                                     if (l) {
@@ -18922,6 +18935,10 @@ load_local_done:
                                         }
                                     }
                                 } else if (vtype == NT_HASH) {
+                                    if (qore_check_in_place_container_strings(lvh.getValue(), "<trim operator>",
+                                            xsink)) {
+                                        return -1;
+                                    }
                                     lvh.ensureUnique();
                                     QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
                                     if (h) {
@@ -18942,13 +18959,20 @@ load_local_done:
                             }
                             case LVUnaryOp::Chomp: {
                                 qore_type_t vtype = lvh.getType();
+                                // see LVUnaryOp::Trim (QoreChompOperatorNode::evalImpl(), qore#6195)
                                 if (vtype == NT_STRING) {
-                                    lvh.ensureUnique();
+                                    if (lvh.ensureUnique("<chomp operator>")) {
+                                        return -1;
+                                    }
                                     QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
                                     if (str) {
                                         res = QoreValue(static_cast<int64>(str->chomp()));
                                     }
                                 } else if (vtype == NT_LIST) {
+                                    if (qore_check_in_place_container_strings(lvh.getValue(), "<chomp operator>",
+                                            xsink)) {
+                                        return -1;
+                                    }
                                     lvh.ensureUnique();
                                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
                                     if (l) {
@@ -18965,6 +18989,10 @@ load_local_done:
                                         res = QoreValue(count);
                                     }
                                 } else if (vtype == NT_HASH) {
+                                    if (qore_check_in_place_container_strings(lvh.getValue(), "<chomp operator>",
+                                            xsink)) {
+                                        return -1;
+                                    }
                                     lvh.ensureUnique();
                                     QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
                                     if (h) {
@@ -22852,12 +22880,14 @@ static const QoreTypeInfo* get_compound_default_type(const QoreTypeInfo* ti) {
     raises the type error (qore#6197).  A string enum keeps the default value, as its string operation would change
     the member's value in place (qore#6164, qore#6195).
 */
-static qore_type_t qore_numeric_enum_lvalue_base_type(const QoreTypeInfo* ti) {
+//! Returns the base type of the enum of an enum lvalue type, or NT_NOTHING if \a ti is not an enum type
+static qore_type_t qore_enum_lvalue_base_type(const QoreTypeInfo* ti) {
     const QoreEnumDecl* ed = QoreTypeInfo::getReturnEnum(ti);
-    if (!ed) {
-        return NT_NOTHING;
-    }
-    qore_type_t t = QoreTypeInfo::getBaseType(ed->getBaseTypeInfo());
+    return ed ? QoreTypeInfo::getBaseType(ed->getBaseTypeInfo()) : NT_NOTHING;
+}
+
+static qore_type_t qore_numeric_enum_lvalue_base_type(const QoreTypeInfo* ti) {
+    qore_type_t t = qore_enum_lvalue_base_type(ti);
     return t == NT_INT || t == NT_FLOAT || t == NT_NUMBER ? t : NT_NOTHING;
 }
 
@@ -22959,11 +22989,17 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
 
     if (vtype == NT_NOTHING || vtype == NT_NULL) {
         const QoreTypeInfo* typeInfo = v.getTypeInfo();
-        // a numeric enum lvalue with no value gets no default value: the operation raises the type error (see
-        // qore_numeric_enum_lvalue_base_type()); an or-nothing enum lvalue is left unchanged by NOTHING, as below
-        qore_type_t enum_base = qore_numeric_enum_lvalue_base_type(typeInfo);
-        if (enum_base != NT_NOTHING
+        // a numeric or string enum lvalue with no value gets no default value: the operation raises the type error
+        // (see qore_numeric_enum_lvalue_base_type()), as the plain value that it would make is refused (qore#6195);
+        // an or-nothing enum lvalue is left unchanged by NOTHING, as below
+        qore_type_t enum_base = qore_enum_lvalue_base_type(typeInfo);
+        if ((enum_base == NT_INT || enum_base == NT_FLOAT || enum_base == NT_NUMBER || enum_base == NT_STRING)
                 && !(qore_value_is_nothing(right) && get_or_nothing_base_type(typeInfo) != typeInfo)) {
+            if (enum_base == NT_STRING) {
+                // the string branch below needs a string to append to
+                v.refuseValue("<+= operator>", QoreValue(NullString));
+                return QoreValue();
+            }
             vtype = enum_base;
         } else {
             // an or-nothing lvalue (*T) with no value takes the default value of T for an operand with a value
@@ -23101,7 +23137,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
     } else if (vtype == NT_STRING) {
         if (!right.isNullOrNothing()) {
             QoreStringValueHelper str(right);
-            v.ensureUnique();
+            // a string enum lvalue refuses the plain string that the operation leaves (qore#6195)
+            if (v.ensureUnique("<+= operator>")) {
+                return QoreValue();
+            }
             QoreStringNode* vs = v.getValue().get<QoreStringNode>();
             vs->concat(*str, xsink);
         }
