@@ -250,6 +250,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   raise unhandled exceptions at the same time
         # - float-conversion-edges (#6212): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - or-nothing-container-casts (#6174, #5734): its probes run in child processes that set their own
+        #   --exec-mode, in qcc executables and in a qcc-compiled module
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
@@ -281,6 +283,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/threads/deferred-callback-runtime-parse-options.qtest",
                                  "examples/test/qore/misc/hashdecl-default-closure-typeparam.qtest",
                                  "examples/test/qore/misc/declaration-initializer-scope.qtest",
+                                 "examples/test/qore/classes/or-nothing-container-casts.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
