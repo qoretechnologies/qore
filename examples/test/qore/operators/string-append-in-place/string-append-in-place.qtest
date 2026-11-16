@@ -1,0 +1,153 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of in-place appends to string locals
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class StringAppendInPlaceTest
+
+#! Tests that += appends to a string in place, whatever the operand (issue #6266)
+/** The IR, the JIT and programs compiled with qcc appended to a string local in place only an operand known to be a
+    string with a value (a literal, a concatenation, a substring); a variable, a call's value, a list or hash element,
+    NOTHING or a value of another type took the generic +=, which copied the string for every append, so that a loop
+    of appends was quadratic.  The AST interpreter appends in place in every case.
+
+    The checks are in string-append-in-place-worker.qr, which is run in each execution mode, on the IR tier and as a
+    program compiled with qcc at -O0 and -O3.  Each check tells whether every append was made in place, which a
+    memory-limited sandbox shows without depending on timing (see the worker), and describes the string; every run
+    must give the results below, which are those of the AST interpreter.  A string that another variable holds and a
+    string appended to itself must still be copied.
+*/
+class StringAppendInPlaceTest inherits QUnit::Test {
+    public {
+        #! the result of every check the worker makes, which it makes twice (the "-again" checks)
+        const Expected = {
+            "variable": "in-place|5000:UTF-8:abababababab",
+            "parameter": "in-place|5000:UTF-8:abababababab",
+            "call": "in-place|5000:UTF-8:abababababab",
+            "optional-call": "in-place|3666:UTF-8:cdcdcdcdcdcd",
+            "concatenation": "in-place|7000:UTF-8:abcabcabcabc",
+            "substring": "in-place|5000:UTF-8:abababababab",
+            "list-element": "in-place|5000:UTF-8:abcdabcdabcd",
+            "typed-list-element": "in-place|5000:UTF-8:abcdabcdabcd",
+            "hash-element": "in-place|5000:UTF-8:abababababab",
+            "auto-variable": "in-place|5000:UTF-8:abababababab",
+            "int": "in-place|7890:UTF-8:199719981999",
+            "mixed": "in-place|2779:UTF-8:3ab12.513ab1",
+            "nothing": "in-place|3000:UTF-8:abababababab",
+            "latin1": "in-place|5000:ISO-8859-1:éaéaéaéaéaéa",
+            "utf8": "in-place|7000:UTF-8:éaéaéaéaéaéa",
+            "shared": "copied|5000:UTF-8:abababababab:1000",
+            "self": "copied|8000:UTF-8:xxxxxxxxxxxx",
+            "closure-bound": "in-place|9000:UTF-8:abababababab",
+            "closure-local": "in-place|5000:UTF-8:abababababab",
+            "global": "in-place|5000:UTF-8:abababababab",
+            "member": "in-place|5000:UTF-8:abababababab",
+            "hash-lvalue": "in-place|5000:UTF-8:abababababab",
+            "list-lvalue": "in-place|5000:UTF-8:abababababab",
+            "reference": "in-place|5000:UTF-8:abababababab",
+            "reference-parameter": "in-place|5000:UTF-8:abababababab",
+            "enum": "a long string value that is not shortabababababababababab"
+                "|a long string value that is not shortabababababababababab"
+                "|a long string value that is not short",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        #! the output of the AST interpreter, which every other run must give
+        string ast_out;
+    }
+
+    constructor() : QUnit::Test("StringAppendInPlaceTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
+        addTestCase("compiled program -O0", \testCompiledProgram(), 0);
+        addTestCase("compiled program -O3", \testCompiledProgram(), 3);
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, getWorker()));
+            checkWorkerOutput(mode, out);
+        }
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testIrTier() {
+        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=tiered %s", libqore_dir, qore_bin, getWorker())));
+    }
+
+    testCompiledProgram(int opt) {
+        TmpDir tmp("qore-string-append-in-place-");
+        string exe = tmp.path + DirSep + "string-append-in-place";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d --strip-source -o %s %s 2>&1",
+            libqore_dir, qcc_bin, opt, exe, getWorker()));
+        assertTrue(is_file(exe), sprintf("compiled program -O%d: %s", opt, compile_out));
+        int rc;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe), \rc);
+        assertEq(0, rc, sprintf("compiled program -O%d exit code: %s", opt, out));
+        checkWorkerOutput(sprintf("aot-O%d", opt), out);
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "string-append-in-place-worker.qr";
+    }
+
+    #! returns the output of the AST interpreter
+    private string getAstOutput() {
+        if (!ast_out) {
+            ast_out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=ast %s",
+                libqore_dir, qore_bin, getWorker()));
+        }
+        return ast_out;
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them; any other output fails
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z0-9]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        hash<string, string> expected = {};
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            expected{i.key} = i.value;
+            expected{i.key + "-again"} = i.value;
+        }
+        assertEq(sort(keys expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+        assertEq(getAstOutput(), out, label + ": the output of the AST interpreter");
+    }
+}
