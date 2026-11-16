@@ -5391,6 +5391,34 @@ QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* 
     return evalMethod(self, nme, args, class_ctx, rc, xsink, nullptr, pgm_ctx);
 }
 
+QoreValue qore_class_private::getMemberCode(QoreObject* self, const char* nme, const qore_class_private* class_ctx,
+        ExceptionSink* xsink) const {
+    const QoreMemberInfo* mi = runtimeGetMemberInfo(nme, class_ctx);
+    if (!mi) {
+        return QoreValue();
+    }
+    const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
+    qore_object_private* obj_priv = qore_object_private::get(*self);
+    QoreValue mv{};
+    bool exists = false;
+    {
+        QoreAutoVarRWReadLocker al(obj_priv->rml);
+        if (obj_priv->status == OS_DELETED) {
+            return QoreValue();
+        }
+        const QoreHashNode* odata = member_class_ctx ? obj_priv->getInternalData(member_class_ctx) : obj_priv->data;
+        if (odata) {
+            mv = qore_hash_private::get(*odata)->getReferencedKeyValueIntern(nme, exists);
+        }
+    }
+    if (exists && (mv.getType() == NT_FUNCREF || mv.getType() == NT_RUNTIME_CLOSURE)
+            && dynamic_cast<const ResolvedCallReferenceNode*>(mv.getInternalNode())) {
+        return mv;
+    }
+    mv.discard(xsink);
+    return QoreValue();
+}
+
 // Member-call references, pseudo-methods and methodGate are only considered after method lookup fails.
 // Their ownership/locking locals must not reserve stack space on the ordinary method-call path.
 template <bool Lexical>

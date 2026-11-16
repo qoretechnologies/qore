@@ -4460,6 +4460,12 @@ public:
     template <bool Lexical>
     DLLLOCAL QoreValue evalMethodGateImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
 
+    //! returns a reference to the call reference or closure that the member of the name holds, if any
+    /** as a call of a method that the class does not have calls it (qore_class_private::evalMethod())
+    */
+    DLLLOCAL QoreValue getMemberCode(QoreObject* self, const char* nme, const qore_class_private* class_ctx,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL static const QoreMethod* doParseMethodAccess(const QoreMethod* m, const qore_class_private* class_ctx);
 
     DLLLOCAL static const QoreMethod* doMethodAccess(const QoreMethod* m, ClassAccess ma, const qore_class_private* class_ctx) {

@@ -40,6 +40,8 @@
 #include "qore/intern/NewComplexTypeNode.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/qore_aot_deps.h"
+#include "qore/intern/CallReferenceNode.h"
+#include "qore/intern/QorePseudoMethods.h"
 
 #include <string>
 #include <vector>
@@ -573,6 +575,33 @@ __attribute__((noinline, cold)) QoreValue AbstractMethodCallNode::execNamed(Lexi
             return QoreValue();
         }
         if (!m) {
+            // a member of the name that holds code: the names bind the arguments to the parameters of the code
+            // (qore#6361), as for a named call of a call reference or closure
+            {
+                ValueHolder code(cls->getMemberCode(o, c_str, ctx, xsink), xsink);
+                if (*xsink) {
+                    return QoreValue();
+                }
+                if (code) {
+                    const ResolvedCallReferenceNode* ref =
+                        static_cast<const ResolvedCallReferenceNode*>(code->getInternalNode());
+                    if (tmp_args) {
+                        ReferenceHolder<QoreListNode> args_copy(xsink);
+                        return qore_call_ref_invoke_named(ref, getEvalTmpArgs(args_copy), *runtime_arg_names,
+                            policy, xsink);
+                    }
+                    return qore_call_ref_invoke_named(ref, args, *runtime_arg_names, policy, xsink);
+                }
+            }
+            // otherwise the pseudo-method of the name, with the names bound to its parameters (as
+            // MethodCallNode::execPseudoNamed() calls it)
+            QoreClass* pseudo_class = nullptr;
+            if (const QoreMethod* pm = pseudo_classes_find_method(NT_OBJECT, c_str, pseudo_class)) {
+                ReferenceHolder<QoreListNode> args_copy(xsink);
+                const QoreListNode* call_args = tmp_args ? getEvalTmpArgs(args_copy) : args;
+                return NMETHF(qore_method_private::get(*pm)->func)->evalPseudoMethodNamed(xsink, rc, QoreValue(o),
+                    call_args, tmp_args, ctx, *runtime_arg_names, policy);
+            }
             // a method of the name is handled by the class's methodGate() method, which takes its arguments by
             // position: a named call of it is refused, as at parse time
             if (cls->methodGate) {
@@ -1048,9 +1077,14 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         //    func ? func->getName() : "n/a", variant, pflag, func ? func->empty() : -1);
     } else {
         parse_context.typeInfo = nullptr;
-        // named arguments are bound to parameters with the signature resolved at parse time; without one, they
-        // would be passed positionally
-        if (named_args && !err) {
+        // a call of a member's code binds its names at run time to the parameters of the code that the member holds
+        // (qore#6361)
+        if (named_args && runtime_named_member_call) {
+            runtime_arg_names = qore_intern_call_arg_names(std::move(arg_names));
+            type_param_instantiation.clear();
+        } else if (named_args && !err) {
+            // named arguments are bound to parameters with the signature resolved at parse time; without one, they
+            // would be passed positionally
             qore_program_private::makeParseException(parse_context.pgm, *loc, "NAMED-CALL-NOT-SUPPORTED",
                 new QoreStringNode("named arguments require a parse-time-resolved signature; the target of this "
                     "call is only resolved at runtime (for example, a method call through a receiver without a "
