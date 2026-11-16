@@ -1062,20 +1062,38 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
         return value;
     }
 
-    QoreAutoVarRWWriteLocker al(rml);
+    QoreValue rv;
+    {
+        QoreAutoVarRWWriteLocker al(rml);
 
-    if (status == OS_DELETED) {
-        makeAccessDeletedObjectException(xsink, key, theclass->getName());
-        return QoreValue();
-    }
+        if (status == OS_DELETED) {
+            makeAccessDeletedObjectException(xsink, key, theclass->getName());
+            return QoreValue();
+        }
 
-    QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
+        QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-    QoreValue rv = exists ? odata->priv->swapKeyValueIfExists(key, QoreValue(), this, *exists)
-        : odata->priv->swapKeyValue(key, QoreValue(), this);
-    if (needs_scan(rv)) {
+        rv = exists ? odata->priv->swapKeyValueIfExists(key, QoreValue(), this, *exists)
+            : odata->priv->swapKeyValue(key, QoreValue(), this);
+        if (!needs_scan(rv)) {
+            return rv;
+        }
         // the removal can take a reference out of this object's recursive set
         clearRSetClosed();
+    }
+    // The recursive sets are repaired now, as LValueHelper does after a write, and before the caller releases the
+    // removed value: the set still counts the removed edge until a scan has followed this object's edges again, and a
+    // release of the removed value before that compares what is left of the references with the stale counts, finds
+    // them equal, and collects objects that are still referenced (#6329: a removal of a member of self, with the
+    // "remove" operator in a method, broke a cycle whose other object was then collected while referenced)
+    bool deferred;
+    {
+        RSetHelper rsh(*this, xsink);
+        deferred = rsh.deferred();
+    }
+    // a deferred scan is made too late for the removed object: it is scanned now
+    if (deferred && rv.getType() == NT_OBJECT) {
+        RSetHelper rsh(*qore_object_private::get(*rv.get<QoreObject>()), xsink);
     }
     return rv;
 }
