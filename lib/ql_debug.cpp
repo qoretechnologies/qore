@@ -21776,6 +21776,63 @@ static QoreValue f_dbg_object_external_deref(const QoreListNode* params, Runtime
     return QoreValue();
 }
 
+//! Debug-only: returns the state of the member map of a class (#6272)
+/** @param path the path of the class, resolved in the current Program
+
+    @return a hash with \c frozen, \c indexed, \c members, \c has_internal_entries and \c error (an empty string if
+    the map's index and flags agree with its list; see QoreMemberMap::dbgCheckIndex())
+*/
+static QoreValue f_dbg_class_member_index_info(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* path = get_param_value(params, 0).get<const QoreStringNode>();
+    const QoreClass* qc = getProgram()->findClass(path->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!qc) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "class '%s' not found", path->c_str());
+        return QoreValue();
+    }
+    const QoreMemberMap& members = qore_class_private::get(*qc)->members;
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("frozen", members.isFrozen(), xsink);
+    rv->setKeyValue("indexed", members.isIndexed(), xsink);
+    rv->setKeyValue("members", (int64)members.size(), xsink);
+    rv->setKeyValue("has_internal_entries", members.hasInternalEntries(), xsink);
+    rv->setKeyValue("error", new QoreStringNode(members.dbgCheckIndex()), xsink);
+    return rv.release();
+}
+
+//! Debug-only: adds a public member to a class whose members are frozen, as a late change would (#6272)
+/** The member is added without the assertion that forbids it, so that the fallback that publishes a new index can be
+    tested; objects of the class made before hold no value for it.
+
+    @param path the path of the class, resolved in the current Program
+    @param name the name of the new member
+
+    @return the number of indexes that the class's member map has replaced so far
+*/
+static QoreValue f_dbg_class_member_late_add(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* path = get_param_value(params, 0).get<const QoreStringNode>();
+    const QoreStringNode* name = get_param_value(params, 1).get<const QoreStringNode>();
+    const QoreClass* qc = getProgram()->findClass(path->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!qc) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "class '%s' not found", path->c_str());
+        return QoreValue();
+    }
+    qore_class_private* qcp = const_cast<qore_class_private*>(qore_class_private::get(*qc));
+    if (qcp->members.inList(name->c_str())) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "class '%s' already has a member '%s'", path->c_str(),
+            name->c_str());
+        return QoreValue();
+    }
+    QoreMemberInfo* mi = new QoreMemberInfo(&loc_builtin, autoTypeInfo, nullptr, QoreValue(), Public, qcp);
+    return (int64)qcp->members.dbgLateAdd(strdup(name->c_str()), mi);
+}
+
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
 }
@@ -25356,6 +25413,11 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "obj");
     qns.addBuiltinVariant("dbg_object_external_deref", f_dbg_object_external_deref, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
+    qns.addBuiltinVariant("dbg_class_member_index_info", f_dbg_class_member_index_info, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "path");
+    qns.addBuiltinVariant("dbg_class_member_late_add", f_dbg_class_member_late_add, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "name");
     qns.addBuiltinVariant("dbg_get_module_mask_added", f_dbg_get_module_mask_added, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         listTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "module");
     qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

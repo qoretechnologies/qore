@@ -571,6 +571,11 @@ public:
             const qore_class_private* member_class_ctx,
             ExceptionSink* xsink) const;
 
+    //! as getReferencedMemberNoMethodResolved(), for a member that the caller found to have no accessors
+    DLLLOCAL QoreValue getReferencedMemberNoMethodResolvedNoAccessor(const char* mem,
+            const qore_class_private* member_class_ctx,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL QoreValue getReferencedMemberNoMethodResolvedPrehashed(
             const char* mem, size_t hash,
             const qore_class_private* member_class_ctx,

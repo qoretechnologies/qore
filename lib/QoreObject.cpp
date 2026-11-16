@@ -1567,10 +1567,10 @@ QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, Exce
         return cls->evalMemberAccessorGet(obj, mem, *ami, xsink);
     }
     const qore_class_private* class_ctx = runtime_get_class();
-    const qore_class_private* member_class_ctx = qore_class_private::get(*theclass)->runtimeGetMemberContext(mem,
-        class_ctx);
+    const qore_class_private* member_class_ctx = cls->runtimeGetMemberContext(mem, class_ctx);
 
-    return getReferencedMemberNoMethodResolved(mem, member_class_ctx, xsink);
+    // the accessor members were checked above (#6272)
+    return getReferencedMemberNoMethodResolvedNoAccessor(mem, member_class_ctx, xsink);
 }
 
 QoreValue qore_object_private::getReferencedMemberNoMethodResolved(
@@ -1580,7 +1580,12 @@ QoreValue qore_object_private::getReferencedMemberNoMethodResolved(
     if (const QoreMemberInfo* ami = cls->findAccessorMember(mem)) {
         return cls->evalMemberAccessorGet(obj, mem, *ami, xsink);
     }
+    return getReferencedMemberNoMethodResolvedNoAccessor(mem, member_class_ctx, xsink);
+}
 
+QoreValue qore_object_private::getReferencedMemberNoMethodResolvedNoAccessor(
+        const char* mem, const qore_class_private* member_class_ctx,
+        ExceptionSink* xsink) const {
     QoreSafeVarRWReadLocker sl(rml);
 
     if (status == OS_DELETED) {
