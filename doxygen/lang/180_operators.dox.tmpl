@@ -581,6 +581,8 @@ list nlist = remove l[2,5..7,8];
     - <tt><b>cast</b>&lt;@ref hash_type "hash"&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt>
     - <tt><b>cast</b>&lt;@ref list_type "list"&lt;</tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;&gt;(</tt><em>list_elements, ...</em><tt>)</tt>
     - <tt><b>cast</b>&lt;@ref list_type "list"&gt;(</tt><em>list_elements, ...</em><tt>)</tt>
+    - <tt><b>cast</b>&lt;<b>enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;&gt;(</tt><em>@ref expressions "expression"</em><tt>)</tt>
+    - <tt><b>cast</b>&lt;<b>*enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;&gt;(</tt><em>@ref expressions "expression"</em><tt>)</tt>
 
     @par Return Type
     - If a @ref qore_classes "class name" is given as the target type, then this operator returns an object of the specific class given at runtime.
@@ -592,6 +594,7 @@ list nlist = remove l[2,5..7,8];
     at runtime if possible.
     - If @ref hash_type "hash" is given as the target type, the runtime type must be a valid hash or a runtime exception will be raised, additionally, any type-safe information is removed and an untyped hash is returned
     - If @ref list_type "list" is given as the target type, the runtime type must be a valid list or a runtime exception will be raised, additionally, any type-safe information is removed and an untyped list is returned
+    - If an @ref enums "enum" type is given as the target type (<tt>enum&lt;</tt><em>enum_identifier</em><tt>&gt;</tt>), the value must have the enum's base type (or be the value of an enum with that base type) and be the value of one of its members, or a runtime exception will be raised; the enum value is returned (see @ref enum_cast); with the or-nothing form (<tt>*enum&lt;</tt><em>enum_identifier</em><tt>&gt;</tt>), \c NOTHING is also accepted and returned
 
     @par Data Conversions with cast<>()
     - <tt><b>cast</b>&lt;@ref hash_type "hash"&lt;</tt><em>@ref hashdecl "hashdecl_identifier"</em><tt>&gt;&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt>: performs initialization of @ref hashdecl "hashdecl" keys with initializer expressions for keys not present in the output evaluated hash expression
@@ -633,6 +636,8 @@ auto l = cast<list>(new list<int>(1));
     |<em>@ref hashdecl "hashdecl_identifier"</em>|This must be a literal unquoted string giving a @ref hashdecl "type-safe hash" name or a namespace-qualified path to a type-safe hash (ex: \c Namespace::MyHash); a runtime check for compatibility with the target @ref hashdecl "hashdecl" is performed on the evaluated expression; any keys missing from the expression that have default initializer expressions in the @ref hashdecl "hashdecl" are initialized accordingly
     |<tt>@ref hash_type "hash"&lt;string, </tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;</tt>|The second type in the type parameter list gives the hash value type; the values, including those of nested containers, are converted to it as an assignment converts them, and a value that an assignment refuses raises a \c RUNTIME-TYPE-ERROR exception
     |<tt>@ref list_type "list"&lt;</tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;</tt>|The single type in the type parameter list gives the list element type; the elements, including those of nested containers, are converted to it as an assignment converts them, and an element that an assignment refuses raises a \c RUNTIME-TYPE-ERROR exception
+    |<tt><b>enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;</tt>|The value of the enum's base type is returned as the enum member with that value; a value that is not a member raises a \c RUNTIME-CAST-ERROR exception; this is the only way to convert a value of the base type to the enum type (see @ref enum_cast)
+    |<tt><b>*enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;</tt>|As <tt><b>enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;</tt>, but \c NOTHING is also accepted and returned
 
     @throw RUNTIME-CAST-ERROR The expression given does not evaluate to a value that can be converted to the given type
 
