@@ -25199,6 +25199,15 @@ static QoreValue f_dbg_fail_next_program_entry(const QoreListNode* params, Runti
 //! current thread
 /** Tests that a character offset in the ASCII text at the start of a UTF-8 string is O(1) (issue #6138)
 */
+//! Returns True if the string is a view onto another string's buffer
+/** Tests that a slice that does not reach the end of its parent is copied when it is taken, and a slice that reaches
+    it is a zero-copy view (issue #6239)
+*/
+static QoreValue f_dbg_string_is_view(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* str = get_param_value(params, 0).get<const QoreStringNode>();
+    return qore_string_private::get(*str)->view_parent != nullptr;
+}
+
 static QoreValue f_dbg_get_string_scan_bytes(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_dbg_string_scan_bytes;
 }
@@ -25384,6 +25393,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "site");
     qns.addBuiltinVariant("dbg_get_string_scan_bytes", f_dbg_get_string_scan_bytes, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_string_is_view", f_dbg_string_is_view, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
+        stringTypeInfo, QORE_PARAM_NO_ARG, "str");
     qns.addBuiltinVariant("dbg_set_ascii_prefix_cache", f_dbg_set_ascii_prefix_cache, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "enable");
     qns.addBuiltinVariant("dbg_sandbox_fail_next_budgets", f_dbg_sandbox_fail_next_budgets,
