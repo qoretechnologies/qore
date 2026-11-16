@@ -37908,10 +37908,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!rhs) { return false; }
                 llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
                 if (inst->opcode == QoreIROpcode::ListIndexDynamic) {
-                    const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
                     // %no-string-index-char is refused under %modern, so compiled code always has string index chars
                     const int32_t string_index_char = 1;
 #ifdef DEBUG
+                    const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
                     if (expr_inst->expr.hasNode()) {
                         if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                                 expr_inst->expr.getInternalNode())) {
