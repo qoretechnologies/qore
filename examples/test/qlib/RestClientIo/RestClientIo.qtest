@@ -494,6 +494,7 @@ class RestClientIoTest inherits QUnit::Test {
         addTestCase("connection info via manager", \testConnectionInfoManager());
         addTestCase("persistent session pins one connection", \testPersistentSession());
         addTestCase("persistent session abort/error discards connection", \testPersistentSessionAbort());
+        addTestCase("a dropped persistent session releases its lease", \testPersistentSessionDropped());
         addTestCase("shared manager", \testSharedManager());
         addTestCase("shared manager close does not close manager", \testSharedManagerCloseNoClose());
         addTestCase("GET request bodies are rejected", \testGetRequestBodiesRejected());
@@ -1189,6 +1190,47 @@ class RestClientIoTest inherits QUnit::Test {
         }
         assertEq(200, rest.restGet("/api/z").status_code);
         assertNeq(after_error_id, mgr.getConnectionInfo(url)[0].connection_id);
+    }
+
+    #! A persistent session that is dropped without close() releases its lease (#6194)
+    /** The lease holds its connection against the idle timeout and out of the pool for the whole session, so a
+        session that its holder drops — leaving its scope, or unwound by an exception — must release it: its destructor
+        closes it as tainted, which unpins and discards the connection.  Requests after it then do not reach the
+        leased connection, and the next one opens a fresh connection.
+    */
+    testPersistentSessionDropped() {
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        string url = rest.getUrl();
+        HttpClientIo::HttpClientConnectionManager mgr = rest.getConnectionManager();
+
+        # the session leaves its scope without close()
+        int leased_id;
+        {
+            RestClientIo::RestPersistentSession ps = rest.startPersistentSession();
+            assertEq(200, ps.pinned(auto sub () { return rest.restGet("/api/one"); }).status_code);
+            leased_id = mgr.getConnectionInfo(url)[0].connection_id;
+        }
+        assertEq(200, rest.restGet("/api/after-scope").status_code, "the request does not reach the lease");
+        list<hash<auto>> info = mgr.getConnectionInfo(url);
+        assertEq(1, info.size());
+        assertNeq(leased_id, info[0].connection_id, "the dropped session's connection was discarded");
+
+        # the session is unwound by an exception
+        int leased_id2;
+        try {
+            RestClientIo::RestPersistentSession ps = rest.startPersistentSession();
+            assertEq(200, ps.pinned(auto sub () { return rest.restGet("/api/two"); }).status_code);
+            leased_id2 = mgr.getConnectionInfo(url)[0].connection_id;
+            throw "MY-ERROR", "the holder fails";
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("MY-ERROR", ex.err);
+        }
+        assertEq(200, rest.restGet("/api/after-error").status_code, "the request does not reach the lease");
+        info = mgr.getConnectionInfo(url);
+        assertEq(1, info.size());
+        assertNeq(leased_id2, info[0].connection_id, "the unwound session's connection was discarded");
     }
 
     testSharedManager() {

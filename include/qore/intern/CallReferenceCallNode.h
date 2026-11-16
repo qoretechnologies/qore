@@ -135,4 +135,18 @@ CallReferenceCallNode* qore_make_reference_call(LexicalSemanticPolicy policy, Ar
         : new LexicalCallReferenceCallNode(std::forward<Args>(args)...);
 }
 
+//! Returns the node as a CallReferenceCallNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const CallReferenceCallNode*>(), from the node type: only CallReferenceCallNode's
+    constructors give NT_FUNCREFCALL, and its subclass LexicalCallReferenceCallNode keeps it.  A dynamic_cast searches
+    the class hierarchy with string comparisons of the type names, which is too slow for the per-call paths of
+    compiled code.
+*/
+DLLLOCAL inline const CallReferenceCallNode* qore_get_call_reference_call_node(const AbstractQoreNode* n) {
+    const CallReferenceCallNode* rv = (n && n->getType() == NT_FUNCREFCALL)
+        ? static_cast<const CallReferenceCallNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const CallReferenceCallNode*>(n));
+    return rv;
+}
+
 #endif

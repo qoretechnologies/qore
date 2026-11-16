@@ -873,7 +873,8 @@
     @par Thread Entry and Exit Handlers
     @ref Qore::Program::setThreadEntryHandler() "Program::setThreadEntryHandler()" sets code that runs every time a
     thread enters and leaves a Program, so that an embedding application can keep a context of its own for each
-    Program on threads that run the code of many Programs, such as async I/O callback workers.
+    Program on threads that run the code of many Programs, such as async I/O callback workers; a binary module asks
+    \c qore_program_thread_entry_pending() whether a call into its current Program must still enter it.
 
     @par Module Parse Option Masks
     A process can let code with fewer privileges load trusted modules that use more functionality with a module
@@ -1866,6 +1867,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an allocation that fails while a thread enters another %Program (ex: in a binary module's
+      \c QoreExternalProgramContextHelper or a parse commit) leaves the thread in the calling %Program and releases
+      its thread count in the entered %Program, which could otherwise not be deleted (issue #6198)
     - the negative of an absolute date with microseconds (ex: <tt>-1970-01-01T00:00:01.5Z</tt>) is
       \c 1969-12-31T23:59:58.5Z; the microseconds were negated as an unsigned value and gave another date (issue #6103)
     - the decimal fraction of an ISO 8601 duration component (ex: \c P0.0000001Y for
@@ -1900,6 +1904,9 @@
       @ref Qore::hours() "hours()", @ref Qore::minutes() "minutes()", @ref Qore::seconds() "seconds()",
       @ref Qore::milliseconds() "milliseconds()" and @ref Qore::microseconds() "microseconds()" now raise
       \c INVALID-DATE for a value that a relative date cannot hold; it wrapped to another duration (issue #6101)
+    - a float out of the range of an integer, an infinite float and NaN now @ref float_to_int_conversion "convert to an
+      integer" as a number does in every mode, saturated with NaN giving 0; the result was undefined and differed
+      between the execution modes (issue #6181)
     - a @ref find "find expression" nested in the result, in-expression or where expression of another one can now be
       compiled with @ref qcc_tool "qcc"; it was refused as an unsupported expression (issue #5974)
     - @ref qcc_tool "qcc" no longer crashes compiling a user module whose header has a \c del closure, and the compiled
@@ -1932,6 +1939,10 @@
     - a program compiled with qcc called a \c private:internal method of another parent class that implements an
       @ref abstract "abstract method" through \c self, where the interpreters raise \c METHOD-IS-PRIVATE
       (<a href="https://github.com/qoretechnologies/qore/issues/6158">issue 6158</a>)
+    - in the IR, JIT and tiered @ref execution_modes "execution modes", a call through \c self on an object that had
+      already been deleted and was looked up by name named the class of the method found instead of the class of the
+      object in the \c OBJECT-ALREADY-DELETED error
+      (<a href="https://github.com/qoretechnologies/qore/issues/6168">issue 6168</a>)
     - a block whose @ref on_exit "on_exit" or @ref on_success "on_success" handler raised a
       @ref thread_exit "thread_exit" ran its @ref on_error "on_error" handlers with no exception, which crashed the
       process

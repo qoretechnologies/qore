@@ -1,0 +1,218 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ColumnarResultSerializeTypesTest
+
+#! a Serializable round trip of a ColumnarResult keeps the type and schema of each column kind (qore#6180)
+class ColumnarResultSerializeTypesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ColumnarResultSerializeTypes", "1.0", \ARGV) {
+        addTestCase("temporal native types", \temporalNativeTypes());
+        addTestCase("temporal kinds, units and time zones", \temporalKinds());
+        addTestCase("buffer element types", \bufferTypes());
+        addTestCase("decimal128 precision and scale", \decimalTypes());
+        addTestCase("list-stored kinds", \listKinds());
+        addTestCase("kinds stored in a buffer of another type", \bufferBackedKinds());
+        addTestCase("empty results", \emptyResults());
+        set_return_value(main());
+    }
+
+    #! the case of the issue: date, timestamp and duration columns given by native types
+    private temporalNativeTypes() {
+        ColumnarResult result = ColumnarResult::fromColumnHash({
+            "t": (2026-01-01T00:00:00Z, 2026-01-02T00:00:00Z),
+            "d": (2026-01-01, 2026-01-02),
+            "u": (1s, 2s),
+        }, {
+            "t": {"native_type": "timestamp"},
+            "d": {"native_type": "date"},
+            "u": {"native_type": "interval"},
+        });
+        ColumnarResult copy = checkRoundTrip(result);
+        hash<string, hash<auto>> schema = map {$1.name: $1}, copy.schema();
+        foreach list<string> col in (("t", "timestamp"), ("d", "date"), ("u", "duration")) {
+            assertEq("date", schema{col[0]}.type, col[0] + " type");
+            assertEq(col[1], schema{col[0]}.schema.kind, col[0] + " kind");
+            assertEq("us", schema{col[0]}.schema.time_unit, col[0] + " time unit");
+            assertEq("int64", schema{col[0]}.buffer_type, col[0] + " buffer type");
+        }
+        list<hash<auto>> rows = copy.toRows();
+        assertEq((2026-01-01T00:00:00Z, 2026-01-02T00:00:00Z), map $1.t, rows);
+        assertEq((1s, 2s), map $1.u, rows);
+        assertEq(Type::Date, rows[0].d.type());
+    }
+
+    #! each temporal kind with each time unit, with nulls, and timestamps with time zones
+    private temporalKinds() {
+        hash<auto> columns;
+        hash<auto> desc;
+        hash<string, list<string>> expected;
+        foreach string kind in ("date", "timestamp", "duration") {
+            foreach string unit in ("s", "ms", "us", "ns") {
+                string name = sprintf("%s_%s", kind, unit);
+                columns{name} = kind == "duration"
+                    ? (1s, NOTHING, 2D)
+                    : (2026-01-01T00:00:00Z, NOTHING, 2026-03-04T05:06:07Z);
+                desc{name} = {"schema": {"kind": kind, "time_unit": unit, "nullable": True}};
+                expected{name} = (kind, unit);
+            }
+        }
+        foreach string tz in ("UTC", "Europe/Prague", "+05:30") {
+            string name = "timestamp_tz_" + tz;
+            columns{name} = (2026-01-01T00:00:00Z, NOTHING, 2026-03-04T05:06:07.123456Z);
+            desc{name} = {"schema": {"kind": "timestamp", "time_unit": "us", "timezone": tz, "nullable": True}};
+            expected{name} = ("timestamp", "us", tz);
+        }
+        ColumnarResult copy = checkRoundTrip(ColumnarResult::fromColumnHash(columns, desc));
+        hash<string, hash<auto>> schema = map {$1.name: $1}, copy.schema();
+        list<hash<auto>> rows = copy.toRows();
+        foreach hash<auto> i in (expected.pairIterator()) {
+            hash<auto> s = schema{i.key};
+            assertEq("date", s.type, i.key + " type");
+            assertEq(i.value[0], s.schema.kind, i.key + " kind");
+            assertEq(i.value[1], s.schema.time_unit, i.key + " time unit");
+            assertEq(True, s.nullable, i.key + " nullable");
+            if (i.value[2]) {
+                assertEq(i.value[2], s.schema.timezone, i.key + " time zone");
+            }
+            assertEq(NOTHING, rows[1]{i.key}, i.key + " null value");
+            assertEq(Type::Date, rows[0]{i.key}.type(), i.key + " value type");
+            assertEq(columns{i.key}[2], rows[2]{i.key}, i.key + " value");
+        }
+    }
+
+    #! dense buffer columns of every element type, with and without nulls
+    private bufferTypes() {
+        ColumnarResult result = ColumnarResult::fromColumnHash({
+            "i8": new buffer<int8>((1, -2, 127)),
+            "i16": new buffer<*int16>((1, NOTHING, -32768)),
+            "i32": new buffer<int32>((1, 2, 2147483647)),
+            "i64": new buffer<*int64>((1, NOTHING, 9223372036854775807)),
+            "f32": new buffer<float32>((1.5, -2.25, 0.0)),
+            "f64": new buffer<*float64>((1.5, NOTHING, -2.25)),
+            "b": new buffer<bool>((True, False, True)),
+            "bn": new buffer<*bool>((True, NOTHING, False)),
+            "s": new buffer<*string>(("a", NOTHING, "")),
+        });
+        ColumnarResult copy = checkRoundTrip(result);
+        hash<string, hash<auto>> schema = map {$1.name: $1}, copy.schema();
+        foreach list<string> col in (("i8", "int8", "int"), ("i16", "int16", "int"), ("i32", "int32", "int"),
+                ("i64", "int64", "int"), ("f32", "float32", "float"), ("f64", "float64", "float"),
+                ("b", "bool", "bool"), ("bn", "bool", "bool"), ("s", "string", "string")) {
+            assertEq(col[1], schema{col[0]}.buffer_type, col[0] + " buffer type");
+            assertEq(col[2], schema{col[0]}.type, col[0] + " type");
+            assertEq(col[2], schema{col[0]}.schema.kind, col[0] + " kind");
+        }
+    }
+
+    #! decimal128 columns keep their precision and scale
+    private decimalTypes() {
+        ColumnarResult result = ColumnarResult::fromColumnHash({
+            "n10_2": (1.25n, NOTHING, -2.50n),
+            "n38_10": (1.25n, 2n, NOTHING),
+            "nb": new buffer<*decimal128>((1.20n, NOTHING, -4.50n)),
+        }, {
+            "n10_2": {"native_type": "decimal(10,2)", "nullable": True},
+            "n38_10": {"native_type": "numeric(38,10)", "nullable": True},
+        });
+        ColumnarResult copy = checkRoundTrip(result);
+        hash<string, hash<auto>> schema = map {$1.name: $1}, copy.schema();
+        assertEq("decimal128", schema.n10_2.schema.kind);
+        assertEq(10, schema.n10_2.schema.precision);
+        assertEq(2, schema.n10_2.schema.scale);
+        assertEq("number", schema.n10_2.type);
+        assertEq(38, schema.n38_10.schema.precision);
+        assertEq(10, schema.n38_10.schema.scale);
+        assertEq("decimal128", schema.nb.schema.kind);
+    }
+
+    #! columns stored as lists: strings, binaries, numbers, lists, structs and mixed values
+    private listKinds() {
+        ColumnarResult result = ColumnarResult::fromColumnHash({
+            "s": ("a", NOTHING, "c"),
+            "bin": (<01>, NOTHING, <0203>),
+            "n": (1.5n, NOTHING, 2n),
+            "l": ((1, 2), NOTHING, (3,)),
+            "st": ({"a": 1, "b": "x"}, NOTHING, {"a": 2, "b": "y"}),
+            "mixed": (1, "x", 2026-01-01),
+            "dl": (2026-01-01T00:00:00Z, NOTHING, 2026-01-02T00:00:00Z),
+        }, {
+            "l": {"schema": {"kind": "list", "nullable": True, "children": ({"name": "item", "kind": "int"},)}},
+            "st": {"schema": {"kind": "struct", "nullable": True, "children": (
+                {"name": "a", "kind": "int"},
+                {"name": "b", "kind": "string"},
+            )}},
+        });
+        ColumnarResult copy = checkRoundTrip(result);
+        hash<string, hash<auto>> schema = map {$1.name: $1}, copy.schema();
+        assertEq("list", schema.l.schema.kind);
+        assertEq("struct", schema.st.schema.kind);
+        assertEq("binary", schema.bin.schema.kind);
+    }
+
+    #! columns whose kind is not the kind of their buffer type keep their kind
+    private bufferBackedKinds() {
+        ColumnarResult result = ColumnarResult::fromColumnHash({
+            "dict": ("a", "b", NOTHING, "a"),
+            "numstr": new buffer<*string>(("1.5", "2", NOTHING, "3")),
+            "date32": new buffer<*int32>((1, NOTHING, 3, 4)),
+        }, {
+            "dict": {"schema": {"kind": "dictionary", "dictionary_index_type": "int32", "nullable": True,
+                "children": ({"name": "value", "kind": "string"},)}},
+            "numstr": {"schema": {"kind": "number", "native_type": "varchar"}},
+            "date32": {"schema": {"kind": "date", "nullable": True}},
+        });
+        ColumnarResult copy = checkRoundTrip(result);
+        hash<string, hash<auto>> schema = map {$1.name: $1}, copy.schema();
+        assertEq("dictionary", schema.dict.schema.kind);
+        assertEq("string", schema.dict.buffer_type);
+        assertEq("number", schema.numstr.schema.kind);
+        assertEq("number", schema.numstr.type);
+        assertEq("date", schema.date32.schema.kind);
+        assertEq("int32", schema.date32.buffer_type);
+    }
+
+    #! results with no rows and with no columns
+    private emptyResults() {
+        checkRoundTrip(ColumnarResult::fromColumnHash({
+            "i": new buffer<*int64>(),
+            "s": new buffer<*string>(),
+            "n": new buffer<*decimal128>(),
+            "t": (),
+            "d": (),
+            "u": (),
+        }, {
+            "t": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "UTC"}},
+            "d": {"schema": {"kind": "date", "time_unit": "s"}},
+            "u": {"schema": {"kind": "duration", "time_unit": "ns"}},
+        }));
+        checkRoundTrip(ColumnarResult::fromColumnHash({}));
+    }
+
+    #! round trips the result and checks that the copy has the same schema, column types and values
+    private ColumnarResult checkRoundTrip(ColumnarResult result) {
+        ColumnarResult copy = Serializable::deserialize(Serializable::serialize(result));
+        assertEq(result.numRows(), copy.numRows(), "row count");
+        assertEq(result.columnNames(), copy.columnNames(), "column names");
+        list<hash<auto>> expected = result.schema();
+        list<hash<auto>> actual = copy.schema();
+        for (int i = 0; i < expected.size(); ++i) {
+            assertEq(expected[i], actual[i], expected[i].name + " schema");
+        }
+        assertEq(result.schemaV2(), copy.schemaV2(), "v2 schema");
+        hash<auto> expected_columns = result.toColumnHash();
+        hash<auto> actual_columns = copy.toColumnHash();
+        foreach string name in (result.columnNames()) {
+            auto expected_value = expected_columns{name};
+            auto actual_value = actual_columns{name};
+            assertEq(expected_value.fullType(), actual_value.fullType(), name + " storage type");
+            assertEq(result.getColumn(name), copy.getColumn(name), name + " values");
+        }
+        assertEq(result.toRows(), copy.toRows(), "rows");
+        return copy;
+    }
+}

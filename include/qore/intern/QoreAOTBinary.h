@@ -508,6 +508,15 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      for a call dispatched by name, whose slot records the class, method and variant resolved at parse time for the
 //!      check of the call's target; and the method-ref payload of a self call to an abstract method is
 //!      QORE_AOT_ABSTRACT_SELF_CALL_MARKER (#5824).  A v9-v37 image has neither.
+//! v39 (batch S; one format version for the format changes of the batch, one line each):
+//!      - a return statement of a handler compiled as a function of its own (an out-of-line on_exit, on_success or
+//!        on_error handler) is followed by a HandlerReturn instruction (QoreIROpcode::HandlerReturn, 438), with the
+//!        value of the return as its operand, or none for a return without a value, which hands the value to the
+//!        function that the handler runs for; native code calls qore_rt_handler_return(), and
+//!        qore_rt_exec_on_block_exit_hold() takes the values of the interrupted return that the first hand-over
+//!        releases (two more arguments).  A handler of an earlier format returned its value, which the runtime no
+//!        longer reads; the AOT runtime identity changes with the runtime entry, so a module compiled for an earlier
+//!        format is refused and must be rebuilt (#6074).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -548,9 +557,11 @@ constexpr uint16_t QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION = 36;
 constexpr uint16_t QORE_AOT_MODULE_CMD_OPTIONS_VERSION = 37;
 //! First format version whose call targets can be dispatched by name and self calls marked abstract (see v38 above).
 constexpr uint16_t QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION = 38;
+//! First format version whose out-of-line handlers hand their return values over with HandlerReturn (see v39 above).
+constexpr uint16_t QORE_AOT_HANDLER_RETURN_VERSION = 39;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_HANDLER_RETURN_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).

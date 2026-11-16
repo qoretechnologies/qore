@@ -3288,9 +3288,8 @@ if (NOT _qcc_format_config_old STREQUAL _qcc_format_config_content)
     file(WRITE "${_qcc_format_config}" "${_qcc_format_config_content}")
 endif()
 
-# Rebuild qmods when this source set itself changes.  Otherwise an existing
-# build tree can miss a newly-added dependency if the file is older than the
-# current fingerprint.
+# The fingerprint names each source with its label, so it also changes when
+# this source set itself changes, and every qmod is rebuilt then.
 set(_qcc_format_sources_manifest ${CMAKE_BINARY_DIR}/qcc-format-sources.txt)
 set(_qcc_format_sources_labels ${CMAKE_BINARY_DIR}/qcc-format-source-labels.txt)
 set(_qcc_format_sources_manifest_content "")
@@ -3313,25 +3312,6 @@ if (NOT _qcc_format_sources_manifest_old STREQUAL _qcc_format_sources_manifest_c
 endif()
 
 set(QCC_FORMAT_STAMP ${CMAKE_BINARY_DIR}/qcc-format.stamp)
-add_custom_command(
-    OUTPUT ${QCC_FORMAT_STAMP}
-    COMMAND ${CMAKE_COMMAND}
-        -DINPUT_LIST=${_qcc_format_sources_manifest}
-        -DINPUT_LABELS=${_qcc_format_sources_labels}
-        -DOUTPUT=${QCC_FORMAT_STAMP}
-        -DSUCCESS_STAMP=${QCC_FORMAT_STAMP}
-        -P ${CMAKE_SOURCE_DIR}/cmake/QoreWriteContentDigest.cmake
-    DEPENDS
-        ${_qcc_format_sources}
-        ${_qcc_format_config}
-        ${_qcc_format_sources_manifest}
-        ${_qcc_format_sources_labels}
-        ${CMAKE_SOURCE_DIR}/cmake/QoreWriteContentDigest.cmake
-    COMMENT "Updating qcc format-version fingerprint"
-    VERBATIM
-)
-add_custom_target(qcc-format-version DEPENDS ${QCC_FORMAT_STAMP})
-add_dependencies(qcc qcc-format-version)
 
 # The AOT runtime identity of libqore: a digest of the source entries of the qcc format fingerprint above.  qcc
 # records it in every AOT module it compiles, and the module loader refuses an AOT module compiled for a different
@@ -3339,24 +3319,18 @@ add_dependencies(qcc qcc-format-version)
 # contract has changed (see cmake/QoreWriteAOTRuntimeIdentity.cmake and design/aot-object-files-and-module-artifacts.md
 # "AOT Module Runtime Identity").  Only lib/qore_aot_runtime_identity.cpp includes the header, and the header is only
 # rewritten when the identity changes.
+#
+# The qcc-format-version target writes the fingerprint and then the header in every build, each only when its content
+# changes; libqore depends on qore-aot-runtime-identity and every qmod on qcc-format-version, so both are current
+# before libqore, qcc or any qmod is built (see qore_aot_runtime_identity_targets() in cmake/QoreMacrosIntern.cmake
+# for why no custom command writes them).
 set(QORE_AOT_RUNTIME_IDENTITY_HEADER ${CMAKE_BINARY_DIR}/include/qore/intern/qore_aot_runtime_identity.h)
-add_custom_command(
-    OUTPUT ${QORE_AOT_RUNTIME_IDENTITY_HEADER}
-    COMMAND ${CMAKE_COMMAND}
-        -DINPUT=${QCC_FORMAT_STAMP}
-        -DOUTPUT=${QORE_AOT_RUNTIME_IDENTITY_HEADER}
-        -P ${CMAKE_SOURCE_DIR}/cmake/QoreWriteAOTRuntimeIdentity.cmake
-    DEPENDS
-        ${QCC_FORMAT_STAMP}
-        ${CMAKE_SOURCE_DIR}/cmake/QoreWriteAOTRuntimeIdentity.cmake
-    COMMENT "Updating the AOT runtime identity"
-    VERBATIM
-)
-add_custom_target(qore-aot-runtime-identity DEPENDS ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
-# The header is derived from the fingerprint, which the qcc-format-version target writes: without this target-level
-# dependency, a build can compile libqore with the previous identity before it regenerates the fingerprint, and qmods
-# compiled after the fingerprint changed then record that previous identity and are never rebuilt for the new one
-add_dependencies(qore-aot-runtime-identity qcc-format-version)
+qore_aot_runtime_identity_targets(
+    STAMP ${QCC_FORMAT_STAMP}
+    INPUT_LIST ${_qcc_format_sources_manifest}
+    INPUT_LABELS ${_qcc_format_sources_labels}
+    HEADER ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
+add_dependencies(qcc qcc-format-version)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/lib/qore_aot_runtime_identity.cpp
     PROPERTIES OBJECT_DEPENDS ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
 
@@ -3374,6 +3348,9 @@ add_custom_command(
     VERBATIM
 )
 add_custom_target(qcc-format-source-qmod-clean DEPENDS ${QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP})
+# the stamp is a byproduct of the qcc-format-version target: only CMake 3.16 and later add the target dependency for a
+# byproduct named in DEPENDS by themselves, and the build requires 3.14
+add_dependencies(qcc-format-source-qmod-clean qcc-format-version)
 
 # Ensure the installed qore binary can resolve @rpath/libqore.20.dylib.
 set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
@@ -3507,8 +3484,8 @@ if (DOXYGEN_FOUND)
     add_custom_target(docs-lib
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/library/html
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lib
-        COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/library/html/*.html
-        COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/library/html/search/*.html
+        COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/library/html/*.html ${CMAKE_BINARY_DIR}/docs/library/html/*.js
+        COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/library/html/search/*.html ${CMAKE_BINARY_DIR}/docs/library/html/search/*.js
         COMMENT "Generating API documentation with Doxygen for: lib"
         VERBATIM
     )

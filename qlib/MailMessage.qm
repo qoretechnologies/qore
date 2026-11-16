@@ -1277,7 +1277,7 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
 
     #! fetch the email address out of a sender/rcpt string
     /** An email address is an RFC 5322 \c addr-spec (section 3.4.1): a local part, which is a sequence of \c atext
-        characters (letters, digits and <tt>!#$%&'*+-/=?^_`{|}~</tt>) and dots, or a quoted string (ex:
+        characters (letters, digits and <tt>!\#$\%&'*+-/=?^_&#96;{|}~</tt>) and dots, or a quoted string (ex:
         <tt>"John Doe"\@example.com</tt>), then \c "@" and a domain, which is a host name or a domain literal in
         square brackets (ex: \c "[192.0.2.1]").  Non-ASCII letters, marks, digits, punctuation and symbols are
         accepted in the local part and in the domain (internationalized email addresses and domain names, RFC 6531

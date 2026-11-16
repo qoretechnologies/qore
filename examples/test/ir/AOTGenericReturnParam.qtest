@@ -52,6 +52,31 @@ int sub staticLoop(int count) {
     return result;
 }
 
+# the for loop updates that lower to IncrementLocalInt keep the loop variable proven assigned (qore#6199)
+int sub preIncrementLoop(int count) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        result += genericIdentity<int>(i);
+    }
+    return result;
+}
+
+int sub plusEqualsLoop(int count) {
+    int result = 0;
+    for (int i = 0; i < count; i += 1) {
+        result += genericIdentity<int>(i);
+    }
+    return result;
+}
+
+int sub postDecrementLoop(int count) {
+    int result = 0;
+    for (int i = count - 1; i >= 0; i--) {
+        result += genericIdentity<int>(i);
+    }
+    return result;
+}
+
 bool sub unassignedFunctionRejected() {
     int value;
     try {
@@ -75,8 +100,9 @@ bool sub unassignedIgnoredStaticArgumentRejected() {
 }
 
 int sub main() {
-    printf(\"%d:%d:%d:%y:%y\\n\", functionLoop(100),
-        inferredFunctionLoop(100), staticLoop(100),
+    printf(\"%d:%d:%d:%d:%d:%d:%y:%y\\n\", functionLoop(100),
+        inferredFunctionLoop(100), staticLoop(100), preIncrementLoop(100), plusEqualsLoop(100),
+        postDecrementLoop(100),
         unassignedFunctionRejected(),
         unassignedIgnoredStaticArgumentRejected());
     return 0;
@@ -93,7 +119,7 @@ source_file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
 source_file.write(source);
 source_file.close();
 
-string expected = "4950:4950:5050:True:True\n";
+string expected = "4950:4950:5050:4950:4950:4950:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = ExecModeHarness::run(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
@@ -121,7 +147,8 @@ if (!is_file(enabled_path) || !is_file(disabled_path)) {
     exit(2);
 }
 
-foreach string function in (("functionLoop", "inferredFunctionLoop", "staticLoop")) {
+foreach string function in (("functionLoop", "inferredFunctionLoop", "staticLoop", "preIncrementLoop",
+        "plusEqualsLoop", "postDecrementLoop")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:.*boxed-return-calls=[1-9]",
             function))) {
