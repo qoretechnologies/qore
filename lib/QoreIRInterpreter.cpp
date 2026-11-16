@@ -15215,10 +15215,15 @@ load_local_done:
                         // a type that names type parameters (a local of a generic function, ex: *T) accepts any
                         // value before its type parameters are substituted, which only the full path does
                         // (LocalVarValue::resolveLValueTypeInfo()), as the AST interpreter does (qore#5885)
+                        // A union converts the value to its first member that accepts it (an int stored in a
+                        // union<float, int> is the float; the accepting member of the value type is not
+                        // necessarily the first), which only acceptAssignment() does, as for a local in IR slots and
+                        // for the AST interpreter (qore#6282)
                         if (qore_type_contains_type_parameter(target_ti)
+                                || QoreTypeInfo::getUnionType(target_ti)
                                 || !QoreTypeInfo::parseAcceptsReturns(target_ti, val.getType())) {
-                            // Type mismatch: invalidate caches and use full
-                            // type-checking path (will raise RUNTIME-TYPE-ERROR)
+                            // Type mismatch, or a value that a union converts: invalidate caches and use the full
+                            // type-checking path (raises RUNTIME-TYPE-ERROR or converts the value)
                             locals_slot_cache.release(local_inst->slot_id, xsink);
                             locals_slot_cache.set(local_inst->slot_id, QoreValue());
                             if (local_inst->slot_id < locals_lvar_cache.size()) {
