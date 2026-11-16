@@ -1974,8 +1974,13 @@ static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const 
             if (!ref1 || !*ref1) {
                 return 0;
             }
-            const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, ref1);
+            const TypedHashDecl* hd = qore_aot_decode_expr_hashdecl_path(pgm, ref1);
             if (!hd) {
+                // a hashdecl with type parameters is resolved with the instantiation of the call (qore#6173)
+                if (strstr(ref1, "typeparam<")) {
+                    return toBitsNB(QoreValue(new NewHashDeclNode(&loc_builtin, ref1, hashTypeInfo,
+                        static_cast<QoreParseListNode*>(nullptr))));
+                }
                 printd(0, "AOT v2: cannot resolve hashdecl '%s' for new hashdecl\n", ref1);
                 aot_slot_resolve_error = describeUnresolvedAOTSymbol("hashdecl", ref1, pgm);
                 return 0;
@@ -2039,7 +2044,7 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
                     static_cast<const TypedHashDecl*>(nullptr), QoreValue(), or_nothing);
                 return toBitsNB(QoreValue(node));
             }
-            const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, ref1);
+            const TypedHashDecl* hd = qore_aot_decode_expr_hashdecl_path(pgm, ref1);
             if (!hd && (!ref1 || !*ref1)) {
                 printd(0, "AOT v2: cannot resolve hashdecl '%s' for cast\n", ref1);
                 return 0;
@@ -4240,8 +4245,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 // Resolve hashdecl and create node with args
                 if (ref1 && *ref1) {
-                    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, ref1);
-                    if (hd) {
+                    const TypedHashDecl* hd = qore_aot_decode_expr_hashdecl_path(pgm, ref1);
+                    // a hashdecl with type parameters is resolved with the instantiation of the call (qore#6173)
+                    if (hd || strstr(ref1, "typeparam<")) {
                         // Convert call_args to QoreParseListNode for NewHashDeclNode
                         QoreParseListNode* pln = nullptr;
                         if (call_args) {
@@ -4257,7 +4263,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                         }
                         // the parse's key check is not serialized, so the keys are always checked when the
                         // hash is made
-                        NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, pln, true);
+                        NewHashDeclNode* nhd = hd
+                            ? new NewHashDeclNode(&loc_builtin, hd, pln, true)
+                            : new NewHashDeclNode(&loc_builtin, ref1, hashTypeInfo, pln);
                         ctx->exprs[i] = toBitsNB(QoreValue(nhd));
                     } else {
                         printd(0, "AOT v2: cannot resolve hashdecl '%s' for new hashdecl\n", ref1);
