@@ -240,6 +240,40 @@ int QoreParseCastOperatorNode::getAsString(QoreString& str, int foff, ExceptionS
     return 0;
 }
 
+//! Returns true if the resolved target type of a cast is one that the cast operator supports
+/** This is the type check of QoreParseCastOperatorNode::parseInitImpl() after it has resolved the target type, without
+    the checks of the operand: the cast of an operand of NOTHING to an or-nothing type, which gives NOTHING without a
+    conversion, uses it to refuse the target types that any other operand gets "cannot cast<> to type" for (qore#6260);
+    the special cases of cast<object>, cast<hash> and cast<list>, which are recognized by name before the type is
+    resolved, are checked by the caller
+*/
+static bool qore_cast_is_castable_type(const QoreTypeInfo* ti, bool or_nothing) {
+    if (qore_type_info_is_aot_deferred(ti)
+            && (QoreTypeInfo::parseReturns(ti, NT_OBJECT) != QTI_NOT_EQUAL
+                || QoreTypeInfo::parseReturns(ti, NT_HASH) != QTI_NOT_EQUAL)) {
+        return true;
+    }
+    if (QoreScalarCastOperatorNode::isSupportedCastType(ti)) {
+        return true;
+    }
+    if (or_nothing ? QoreTypeInfo::getReturnClass(ti) : QoreTypeInfo::getUniqueReturnClass(ti)) {
+        return true;
+    }
+    if (or_nothing ? QoreTypeInfo::getComplexHashValueType(ti) : QoreTypeInfo::getUniqueReturnComplexHash(ti)) {
+        return true;
+    }
+    if (or_nothing ? QoreTypeInfo::getTypedHash(ti) : QoreTypeInfo::getUniqueReturnHashDecl(ti)) {
+        return true;
+    }
+    if (qore_cast_get_complex_softlist_value_type(ti)) {
+        return true;
+    }
+    if (or_nothing ? QoreTypeInfo::getComplexListValueType(ti) : QoreTypeInfo::getUniqueReturnComplexList(ti)) {
+        return true;
+    }
+    return or_nothing ? QoreTypeInfo::getReturnEnum(ti) : QoreTypeInfo::getUniqueReturnEnum(ti);
+}
+
 int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
 
@@ -313,10 +347,21 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
         return -1;
     }
     if (!exp && or_nothing) {
+        // the target type is resolved and checked also when the cast gives NOTHING without a conversion, so that an
+        // undefined or invalid target type (ex: cast<*enum<NoSuchEnum>>(NOTHING), cast<*code>(NOTHING)) is a parse
+        // error, as with any other operand (qore#6260); the result is still NOTHING
+        bool special_case = pti->cscope->size() == 1 && !pti->hasExplicitSubtypeList()
+            && (!strcmp(pti->cscope->ostr, "object") || !strcmp(pti->cscope->ostr, "hash")
+                || !strcmp(pti->cscope->ostr, "list"));
+        const QoreTypeInfo* target_ti = QoreParseTypeInfo::resolveAny(pti, loc, err);
+        if (!err && !special_case && !qore_cast_is_castable_type(target_ti, or_nothing)) {
+            parse_error(*loc, "cannot cast<> to type '%s'", QoreTypeInfo::getName(target_ti));
+            err = -1;
+        }
         ReferenceHolder<> holder(this, nullptr);
         val = QoreValue();
         set_cast_analysis();
-        return 0;
+        return err;
     }
 
     // check special cases

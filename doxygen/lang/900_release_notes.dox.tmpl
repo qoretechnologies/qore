@@ -107,6 +107,12 @@
     restrictions of a locked child Program, and an independent Program of restricted code takes and locks that code's
     restrictions; see @ref locked_parse_options.
 
+    @par Undefined or Invalid Types in cast<>() of NOTHING Are Parse Errors
+    A @ref cast "cast<>()" of a literal or constant @ref nothing to an or-nothing type or under
+    @ref broken-cast "%broken-cast" now raises a parse error for an undefined or invalid type in the target type, or a
+    type that cannot be cast to, as with any other operand (ex: \c cast<*NoSuchClass>(NOTHING),
+    \c cast<*code>(NOTHING)).
+
     @par Completed Objects Are Released After Constructor Argument Errors
     An exception while @ref constructor_argument_cleanup "releasing a completed constructor's arguments" now releases
     the new object normally, running its destructor when no other reference remains; AST execution previously skipped

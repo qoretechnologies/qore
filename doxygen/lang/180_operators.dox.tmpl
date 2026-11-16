@@ -592,6 +592,7 @@ list nlist = remove l[2,5..7,8];
     at runtime if possible.
     - If @ref hash_type "hash" is given as the target type, the runtime type must be a valid hash or a runtime exception will be raised, additionally, any type-safe information is removed and an untyped hash is returned
     - If @ref list_type "list" is given as the target type, the runtime type must be a valid list or a runtime exception will be raised, additionally, any type-safe information is removed and an untyped list is returned
+    - If an or-nothing type (ex: \c *enum<E>) is given as the target type, or if @ref broken-cast "%broken-cast" is in effect, @ref nothing is returned unchanged; the target type is still checked: an undefined or invalid type in the target type (ex: an undeclared class, @ref hashdecl "hashdecl" or @ref enums "enum" name, or the wrong number of type arguments), or a type that cannot be cast to, is a parse error for every operand, including a literal or constant @ref nothing
 
     @par Data Conversions with cast<>()
     - <tt><b>cast</b>&lt;@ref hash_type "hash"&lt;</tt><em>@ref hashdecl "hashdecl_identifier"</em><tt>&gt;&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt>: performs initialization of @ref hashdecl "hashdecl" keys with initializer expressions for keys not present in the output evaluated hash expression
