@@ -38,6 +38,8 @@ extern QoreListNode* ARGV, * QORE_ARGV;
 extern QoreHashNode* ENV;
 
 #include <deque>
+#include <memory>
+#include <new>
 
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/ProgramThreadHub.h"
@@ -3462,10 +3464,17 @@ public:
         if (lvl) {
             // In REPL mode, only instantiate new variables (those not yet instantiated)
             unsigned start = tlpd.inst_count;
+            // the count follows each variable: an instantiation that fails is resumed on the next entry, after the
+            // variables that were instantiated (issue #6198)
             for (unsigned i = start; i < lvl->size(); ++i) {
+#ifdef DEBUG
+                if (i > start && qore_dbg_program_entry_fails(QDPES_INSTANTIATION_VAR)) {
+                    throw std::bad_alloc();
+                }
+#endif
                 lvl->lv[i]->instantiate(pwo.parse_options);
+                tlpd.inst_count = i + 1;
             }
-            tlpd.inst_count = lvl->size();
         }
 
         //printd(5, "qore_program_private::doTopLevelInstantiation() lvl: %p setup %ld local vars pgm: %p\n", lvl, lvl ? lvl->size() : 0, getProgram());
@@ -3522,19 +3531,25 @@ public:
         if (i == pgm_data_map.end()) {
             // issue #4299: can be called while tclear is set; in which case the Program data will be removed safely
             // in normal Program cleanup
-            ThreadLocalProgramData* tlpd = new ThreadLocalProgramData;
+            // the data is recorded before it is published: an allocation that fails leaves nothing behind
+            // (issue #6198)
+#ifdef DEBUG
+            if (qore_dbg_program_entry_fails(QDPES_LOCAL_DATA)) {
+                throw std::bad_alloc();
+            }
+#endif
+            std::unique_ptr<ThreadLocalProgramData> tlpd(new ThreadLocalProgramData);
 
             printd(5, "qore_program_private::setThreadVarData() (first) this: %p pgm: %p td: %p run: %s inst: %s\n", this, pgm, td, run ? "true" : "false", tlpd->inst ? "true" : "false");
 
-            new_tlpd = tlpd;
-
-            pgm_data_map.insert(pgm_data_map_t::value_type(td, tlpd));
+            pgm_data_map.insert(pgm_data_map_t::value_type(td, tlpd.get()));
+            new_tlpd = tlpd.release();
 
             sl.unlock();
 
             if (run) {
                 printd(5, "qore_program_private::setThreadVarData() (first) this: %p pgm: %p td: %p\n", this, pgm, td);
-                doTopLevelInstantiation(*tlpd);
+                doTopLevelInstantiation(*new_tlpd);
             }
 
             return true;
@@ -4871,6 +4886,25 @@ public:
     DLLLOCAL static bool setThreadVarData(QoreProgram* pgm, ThreadProgramData* td, ThreadLocalProgramData* &tlpd,
             bool run) {
         return pgm->priv->setThreadVarData(td, tlpd, run);
+    }
+
+    //! removes the thread's data that setThreadVarData() just created, before any of the Program's code used it
+    /** For a first entry whose record in the thread failed (ThreadProgramData::saveProgram(); issue #6198)
+    */
+    DLLLOCAL static void removeThreadVarData(QoreProgram* pgm, ThreadProgramData* td) {
+        pgm->priv->removeThreadVarData(td);
+    }
+
+    DLLLOCAL void removeThreadVarData(ThreadProgramData* td) {
+        ThreadLocalProgramData* tlpd;
+        {
+            AutoLocker al(tlock);
+            pgm_data_map_t::iterator i = pgm_data_map.find(td);
+            assert(i != pgm_data_map.end());
+            tlpd = i->second;
+            pgm_data_map.erase(i);
+        }
+        delete tlpd;
     }
 
     DLLLOCAL static void makeParseException(QoreProgram* pgm, const QoreProgramLocation &loc, QoreStringNode* desc) {

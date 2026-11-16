@@ -37,6 +37,14 @@ bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRVal
 //! @param visitor callback invoked once per successor
 void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVisitor& visitor);
 
+//! Returns the returns of the try block of the try statement whose catch block an exception at an instruction whose
+//! exception target is \a target reaches first, if any (QoreIRFunction::catch_interrupted_returns, #6074)
+/** Searches the exception path from \a target, breadth first, for the first CatchException; nullptr if there is none
+    (the exception leaves the function), an empty list if its try block has no interrupted returns.
+*/
+DLLLOCAL const std::vector<uint32_t>* qore_ir_exception_catch_returns(const QoreIRFunction& func,
+        const QoreIRBasicBlock* target);
+
 //! Returns true for a release that only runs once a functional operator's loop has ended on an exception
 /** A ReleaseOwnedTemp of the exception cleanup of a functional operator (QoreIRInstruction::exception_cleanup_release):
     a value that it releases and that a Phi or a container took over is released there through its new owner, so the
@@ -142,6 +150,13 @@ bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8
     native code generation ignores the mark.  Returns the number of loads marked (issue #5784).
 */
 size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func);
+
+//! Returns @a next if it is the call that makes the check of its target @a check (a CheckCallTarget) when the check is
+//! fused into it (see qore_ir_fuse_call_target_checks()): the method call of the same expression; otherwise nullptr
+/** Native code generation, which does not fuse the checks, takes the arguments of the call for the check after them
+    from it (issue #5824).
+*/
+const QoreIRInstruction* qore_ir_call_of_target_check(const QoreIRInstruction* check, const QoreIRInstruction* next);
 
 struct QoreIROptimizationStats {
     size_t loops_analyzed = 0;

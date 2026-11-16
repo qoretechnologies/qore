@@ -18,18 +18,20 @@
     U (cast<hash<string, U>>(), cast<list<U>>() and their nested forms) checked their values against the type
     parameter U instead of the type argument of the call, and raised RUNTIME-TYPE-ERROR; the same in a generic class
     with its own T.  In qcc-compiled code, the construction, the new expression and the cast of a hashdecl with a type
-    parameter of the method could not resolve the hashdecl (HASHDECL-ERROR, IR-CAST-ERROR).
+    parameter of the method could not resolve the hashdecl (HASHDECL-ERROR, IR-CAST-ERROR), and a default value of a
+    parameter that constructs or casts to such a hashdecl gave NOTHING or raised RUNTIME-CAST-ERROR, as its hashdecl
+    was serialized by its name (HD<U>), which names no hashdecl (qore#6173).
 
     The probes (generic-method-hashdecl-paths/probes.q) construct, cast and assign hashdecls and typed containers of
     the type parameters of static methods, normal methods, generic functions and a generic method of a generic class
     (with the class's T and the method's U in one hashdecl), with another instantiation of the same method, with
-    values of the wrong type (whose errors name the types of the instantiation), or-nothing and softlist casts, in a
-    closure, in a background thread, in four threads running two instantiations at the same time, and with two
-    instantiations of a generic class whose own T is in the paths, and the same forms in non-generic code as a
-    control.  They run in each execution mode in a child process, with tiered execution at the IR tier and promoted
-    to native code, as qcc-compiled executables (-O0, -O3) and in a qcc-compiled module (-O0, -O3) loaded by a child
-    in each execution mode; the forms that fail in qcc-compiled non-generic code too are checked in the interpreted
-    modes only.
+    values of the wrong type (whose errors name the types of the instantiation), or-nothing and softlist casts, in
+    default values of parameters, in a closure, in a background thread, in four threads running two instantiations
+    at the same time, and with two instantiations of a generic class whose own T is in the paths, and the same forms
+    in non-generic code as a control.  They run in each execution mode in a child process, with tiered execution at
+    the IR tier and promoted to native code, as qcc-compiled executables (-O0, -O3) and in a qcc-compiled module (-O0,
+    -O3) loaded by a child in each execution mode; the forms that fail in qcc-compiled non-generic code too are
+    checked in the interpreted modes only.
 */
 class GenericMethodHashdeclPathsTest inherits QUnit::Test {
     public {
@@ -63,7 +65,12 @@ class GenericMethodHashdeclPathsTest inherits QUnit::Test {
             ("listCastNonList", "RUNTIME-CAST-ERROR: cannot cast from type 'integer' to 'list<int>'"),
             ("onHashCastNonHash", "RUNTIME-CAST-ERROR: cannot cast from type 'integer' to '*hash<string, int>'"),
             ("bgCast", HdInt), ("bgList", ListInt), ("onHdCast", HdInt), ("onHdNothing", "null nothing"),
-            ("softlistListCast", "[1] softlist<int>"), ("closureCast", HdInt), ("closureNew", HdInt),
+            ("softlistListCast", "[1] softlist<int>"), ("defNew", "{} hash<HD<int>>"),
+            ("defCast", "{} hash<HD<int>>"), ("defNewInit", "{a: 2} hash<HD<int>>"),
+            ("defCastList", "[] list<hash<HD<int>>>"), ("defNew<string>", "{} hash<HD<string>>"),
+            ("defOnCast", "{} hash<HD<int>>"), ("defNested", "{} hash<HD<list<int>>>"),
+            ("defTyped", "{} hash<HD<int>>"),
+            ("closureCast", HdInt), ("closureNew", HdInt),
         );
 
         #! the results of the probes of the generic method of the generic class and of the controls
@@ -72,9 +79,16 @@ class GenericMethodHashdeclPathsTest inherits QUnit::Test {
             ("G.hashHdCast", "{k: {a: \"x\", b: 1}} hash<string, hash<HD2<string, int>>>"),
             ("G.listHdCast", "[{a: \"x\", b: 1}] list<hash<HD2<string, int>>>"),
             ("G.hashListAssign", "{k: [1]} hash<string, list<int>>"), ("G.sctor", Hd2),
+            ("G.defHd2", "{} hash<HD2<string, int>>"),
+            ("GM<int>.h1", "{} hash<HD<int>>"), ("GM<int>.h2", "{} hash<HD<int>>"), ("GM<int>.h3", "{} hash<HD<int>>"),
+            ("GM<string>.h1", "{} hash<HD<string>>"), ("GM<string>.h2", "{} hash<HD<string>>"),
+            ("GM<string>.h3", "{} hash<HD<string>>"), ("GM<int>.h4", "{} hash<HD<int>>"),
+            ("GMI.h1", "{} hash<HD<int>>"),
+            ("MC.h1", "{} hash<HD<int>>"), ("MC.h2", "{} hash<HD<int>>"), ("MC.h3", "{} hash<HD<int>>"),
             ("GT<int>.cast", HdInt), ("GT<string>.cast", HdStr), ("GT<int>.new", HdInt), ("GT<string>.new", HdStr),
             ("GT<int>.ctor", HdInt), ("GT<string>.ctor", HdStr), ("GT<int>.list", ListInt),
-            ("GT<string>.list", "[\"s\"] list<string>"), ("threads", "\"ok\" string"),
+            ("GT<string>.list", "[\"s\"] list<string>"), ("GT<int>.defNew", "{} hash<HD<int>>"),
+            ("GT<string>.defCast", "{} hash<HD<string>>"), ("threads", "\"ok\" string"),
             ("concrete.cast", HdInt), ("concrete.new", HdInt),
         );
 

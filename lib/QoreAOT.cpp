@@ -23529,6 +23529,8 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         fprintf(stderr, "IR-OPT-AOT-LLVM: pruned-noop-decrefs=%zu\n",
             pruned_calls);
     }
+    // the float to int conversions of an x86-64 target, after the optimization passes (issue #6181)
+    QoreIRToLLVM::expandFloatToIntForTarget(module, t);
 
     // Dump IR after optimization if requested
     if (q_env_is_set("QORE_DUMP_IR_AFTER_OPT")) {
@@ -35981,7 +35983,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(vrn->getTypeInfo());
         if (hd) {
             id.kind = AOTExprKind::HASHDECL_NEW;
-            id.ref1 = hd->getNamespacePath();
+            id.ref1 = qore_aot_encode_expr_hashdecl_path(hd);
             id.call_args = vrn->getArgs();
             id.parse_args = vrn->getParseArgs();
             return id;
@@ -36020,7 +36022,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
         if (nhd->hd) {
             id.kind = AOTExprKind::HASHDECL_NEW;
-            id.ref1 = nhd->hd->getNamespacePath();
+            id.ref1 = qore_aot_encode_expr_hashdecl_path(nhd->hd);
             id.parse_args = nhd->args;
             return id;
         }
@@ -36749,7 +36751,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         const TypedHashDecl* cast_hd = QoreTypeInfo::getUniqueReturnHashDecl(hdc->getCastTypeInfo());
         if (cast_hd || hdc->isDynamicHashDeclCast()) {
             id.kind = AOTExprKind::CAST_HASHDECL;
-            id.ref1 = cast_hd ? cast_hd->getNamespacePath() : hdc->getDynamicHashDeclName();
+            id.ref1 = cast_hd ? qore_aot_encode_expr_hashdecl_path(cast_hd) : hdc->getDynamicHashDeclName();
             id.flags = hdc->isOrNothing() ? 1 : 0;
             return id;
         }

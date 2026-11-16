@@ -629,9 +629,6 @@ public:
         std::vector<uint8_t>&& paramFlags = std::vector<uint8_t>(),
         QoreProgram* localOwnerPgm = nullptr);
 
-    DLLLOCAL void replaceResolvedTypes(const QoreTypeInfo* retType,
-        std::vector<const QoreTypeInfo*>&& paramTypes);
-
     DLLLOCAL virtual ~UserSignature() {
         // type-parameter types are cached by signature address, which the next signature allocated can reuse
         qore_purge_derived_types(this, nullptr, nullptr);
@@ -886,6 +883,24 @@ public:
 
         saves current program location in case there's an exception
     */
+    //! the tag of the constructor for a method call on an object that its arguments deleted
+    struct DeletedByArgs {};
+
+    //! resolves the variant of a method call whose arguments, evaluated before the call, deleted its object
+    /** As the constructor with pre-evaluated arguments, but without the test of the object: the variant is resolved as
+        the call resolves it (raising the error of the resolution, as the AST interpreter does before it enters the
+        method's code); the caller then raises the error of the method's code (issue #5824).  Only for the cold path
+        of the compiled modes' check of a call's target after its arguments: the call itself is not made.
+    */
+    /** @param n_arg_names the names of the arguments of a named call resolved at run time by parameter name
+        (AbstractMethodCallNode::execNamed()), whose arguments are in source order, or nullptr
+    */
+    DLLLOCAL CodeEvaluationHelper(DeletedByArgs, ExceptionSink* n_xsink, RuntimeConfig& n_rc,
+            const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, const char* n_name,
+            QoreListNode* args, QoreObject* self, const qore_class_private* n_qc, const qore_class_private* cctx,
+            QoreProgram* pgm_ctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+            const name_vec_t* n_arg_names);
+
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args = nullptr,
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
@@ -2084,11 +2099,6 @@ public:
     */
     DLLLOCAL const QoreProgramLocation* getAOTBodyLocation() const {
         return aot_body_loc;
-    }
-
-    //! Returns true if this variant's AOT context has already been materialized.
-    DLLLOCAL bool hasMaterializedAOTContext() const {
-        return cached_aot_ctx.load(std::memory_order_acquire) != nullptr;
     }
 
     //! Returns the cached AOT context for direct AOT fast-entry dispatch.
