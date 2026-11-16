@@ -855,6 +855,15 @@ static bool write_slot_LIST_ASSIGN(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreListAssignmentOperatorNode>(ctx);
 }
 
+static bool write_slot_BACKQUOTE(AOTExprSlotWriteCtx& ctx) {
+    auto* bq = dynamic_cast<const BackquoteNode*>(ctx.expr.child_expr.getInternalNode());
+    if (!bq) {
+        return false;
+    }
+    ctx.writer.writeStringRef(bq->str ? bq->str : "");
+    return true;
+}
+
 static bool write_slot_NULL_COAL(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreNullCoalescingOperatorNode>(ctx);
 }

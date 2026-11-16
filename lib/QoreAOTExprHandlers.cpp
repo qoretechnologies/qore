@@ -48,6 +48,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/BackquoteNode.h"
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QorePlusOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
@@ -5171,6 +5172,25 @@ static QoreValue read_expr_list_assign(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
     return QoreValue(new QoreListAssignmentOperatorNode(&loc_builtin, left, right));
+}
+
+// ============================================================================
+// BACKQUOTE (133)
+// ============================================================================
+
+static bool write_expr_backquote(AOTExprWriteCtx& ctx) {
+    auto* bq = dynamic_cast<const BackquoteNode*>(ctx.expr.getInternalNode());
+    if (!bq) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::BACKQUOTE));
+    ctx.writer.writeStringRef(bq->str ? bq->str : "");
+    return true;
+}
+
+static QoreValue read_expr_backquote(AOTExprReadCtx& ctx) {
+    const char* cmd = ctx.reader.readStringRef(ctx.ptr);
+    return QoreValue(new BackquoteNode(&loc_builtin, strdup(cmd ? cmd : "")));
 }
 
 // ============================================================================

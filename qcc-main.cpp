@@ -2688,6 +2688,7 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::CONST_NUMBER:
         case AOTExprKind::CONST_BINARY:
         case AOTExprKind::CONST_STRING:
+        case AOTExprKind::BACKQUOTE:
         case AOTExprKind::FUNC_CALL_REF:
         case AOTExprKind::SELF_METHOD_REF:
             return dump_skip_string_ref(reader, p, end);

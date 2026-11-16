@@ -100,6 +100,7 @@ static_assert(QORE_AOT_STRING_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_STRING_EXPRE
 #include "qore/intern/CallReferenceCallNode.h"
 #include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/ScopedObjectCallNode.h"
+#include "qore/intern/BackquoteNode.h"
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
@@ -36484,6 +36485,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (dynamic_cast<const QoreListAssignmentOperatorNode*>(node)) {
         id.kind = AOTExprKind::LIST_ASSIGN;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const BackquoteNode*>(node)) {
+        id.kind = AOTExprKind::BACKQUOTE;
         id.child_expr = v;
         return id;
     }

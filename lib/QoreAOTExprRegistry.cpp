@@ -346,7 +346,7 @@ const QoreAOTExprKindInfo AOT_EXPR_KIND_REGISTRY[256] = {
     {"BIT_NOT", 130, true, write_expr_bit_not, read_expr_bit_not, "Binary not operator"},
     {"LOG_CMP", 131, true, write_expr_log_cmp, read_expr_log_cmp, "Comparison (<=>) operator"},
     {"LIST_ASSIGN", 132, true, write_expr_list_assign, read_expr_list_assign, "List assignment operator"},
-    {nullptr, 133, false, nullptr, nullptr, nullptr},
+    {"BACKQUOTE", 133, true, write_expr_backquote, read_expr_backquote, "Backquote expression"},
     {nullptr, 134, false, nullptr, nullptr, nullptr},
     {nullptr, 135, false, nullptr, nullptr, nullptr},
     {nullptr, 136, false, nullptr, nullptr, nullptr},

@@ -10571,7 +10571,10 @@ int sub refprobe2(int i) {
     int b;
     reference<auto> r4 = \\h.(cast<string>(((a, b) = (i, 2)).size() + 100));
     r4 = a + b;
-    return h.(cast<string>(+i)) + h.(cast<string>(~i)) + h.(cast<string>(i <=> 2)) + h.\"102\";
+    # a backquote as a slot expression (qore#6302)
+    reference<auto> r5 = \\h.(`printf k105`);
+    r5 = 1;
+    return h.(cast<string>(+i)) + h.(cast<string>(~i)) + h.(cast<string>(i <=> 2)) + h.\"102\" + h.k105;
 }
 
 printf(\"%d %d\\n\", refprobe(3), refprobe2(3));
@@ -10604,6 +10607,8 @@ printf(\"%d %d\\n\", refprobe(3), refprobe2(3));
             "qcc dump reports comparison expression kind from the slot registry: " + dump_out);
         assertTrue(dump_out.regex("LIST_ASSIGN\\s+\\(132\\)"),
             "qcc dump reports list assignment expression kind from the slot registry: " + dump_out);
+        assertTrue(dump_out.regex("BACKQUOTE\\s+\\(133\\)"),
+            "qcc dump reports backquote expression kind from the slot registry: " + dump_out);
     }
 
     testQccDumpCompoundSlotExprKinds() {

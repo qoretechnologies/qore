@@ -2509,6 +2509,7 @@ enum class AOTExprKind : uint8_t {
     LOG_CMP            = 131, //!< Comparison (<=>) operator: left(AOTExprKind) + right(AOTExprKind) (qore#6229)
     //! list assignment operator: lvalue list (LIST_LITERAL; read as a parse list) + value(AOTExprKind) (qore#6229)
     LIST_ASSIGN        = 132,
+    BACKQUOTE          = 133, //!< Backquote (shell command) expression: command(stringref) (qore#6302)
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };

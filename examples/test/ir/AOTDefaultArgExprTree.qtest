@@ -42,7 +42,8 @@ class AOTDefaultArgExprTreeTest inherits QUnit::Test {
         addTestCase("base class constructor argument expression tree", \testBaseConstructorArg());
         addTestCase("default argument expression tree with a caller-defined-first callee",
             \testCalleeDeclaredLast());
-        addTestCase("unary plus, binary not, comparison and list assignment default argument expression trees",
+        addTestCase("unary plus, binary not, comparison, list assignment and backquote default argument "
+            "expression trees",
             \testUnaryPlusDefaultArg());
 
         set_return_value(main());
@@ -105,10 +106,14 @@ public date sub getDelay() {
     }
 
     #! default arguments with a unary plus, a binary not, a comparison or a list assignment that are not folded at
-    #! parse time (qore#6229)
+    #! parse time (qore#6229), or a backquote (qore#6302)
     testUnaryPlusDefaultArg() {
         checkModule("AOTDefArgUnaryPlus", "public class C {
     int mdefault(auto v = +getDelay().durationSeconds()) {
+        return v;
+    }
+
+    string mbq(string v = `printf mbq`) {
         return v;
     }
 }
@@ -150,6 +155,11 @@ public class S {
     }
 }
 
+# a backquote (shell command) default (qore#6302)
+public string sub fbq(string d = `printf bq`) {
+    return d;
+}
+
 # a static variable, a hash member and an object member as lvalues
 public int sub flist(auto d = ((S::a, S::b, S::h.c, S::o.m) = (getDelay().durationSeconds(), 2, 3, 4))) {
     return S::a + S::b + S::h.c + S::o.m + d.size();
@@ -160,9 +170,9 @@ public string sub verify() {
     C c();
     string rv = sprintf(\"%d\", fdefault());
     if (c.mdefault() != fdefault() || fnested() != fdefault() || fbig() != 4611686018427387911
-            || fbitnot() != -61 || fcmp() != 1 || flist() != 73) {
-        rv = sprintf(\"%d %d %d %d %d %d %d\", fdefault(), c.mdefault(), fnested(), fbig(), fbitnot(), fcmp(),
-            flist());
+            || fbitnot() != -61 || fcmp() != 1 || flist() != 73 || fbq() != \"bq\" || c.mbq() != \"mbq\") {
+        rv = sprintf(\"%d %d %d %d %d %d %d %s %s\", fdefault(), c.mdefault(), fnested(), fbig(), fbitnot(), fcmp(),
+            flist(), fbq(), c.mbq());
     }
     return rv;
 }

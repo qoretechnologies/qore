@@ -89,6 +89,7 @@
 #include "qore/intern/ScopedObjectCallNode.h"
 #include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/StaticClassVarRefNode.h"
+#include "qore/intern/BackquoteNode.h"
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
@@ -5680,6 +5681,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QoreBinaryNotOperatorNode(&loc_builtin, operand)));
                 }
+                continue;
+            }
+            case AOTExprKind::BACKQUOTE: {
+                const char* cmd = reader.readStringRef(ptr);
+                ctx->exprs[i] = toBitsNB(QoreValue(new BackquoteNode(&loc_builtin, strdup(cmd ? cmd : ""))));
                 continue;
             }
             case AOTExprKind::LOG_CMP:

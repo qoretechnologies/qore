@@ -32,6 +32,7 @@
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/QoreParseHashNode.h"
+#include "qore/intern/BackquoteNode.h"
 #include "qore/intern/QorePlusOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
@@ -485,7 +486,8 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     {"BIT_NOT", 130, true, write_slot_BIT_NOT, "Binary not operator"},
     {"LOG_CMP", 131, true, write_slot_LOG_CMP, "Comparison (<=>) operator"},
     {"LIST_ASSIGN", 132, true, write_slot_LIST_ASSIGN, "List assignment operator"},
-    {nullptr, 133, false, nullptr, nullptr},
+    // 133: BACKQUOTE
+    {"BACKQUOTE", 133, true, write_slot_BACKQUOTE, "Backquote expression"},
     {nullptr, 134, false, nullptr, nullptr},
     {nullptr, 135, false, nullptr, nullptr},
     {nullptr, 136, false, nullptr, nullptr},
