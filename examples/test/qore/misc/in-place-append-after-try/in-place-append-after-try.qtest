@@ -54,7 +54,7 @@ class InPlaceAppendAfterTryTest inherits QUnit::Test {
             "twoThrowPoints|True|second => \"freshp\" | \"TU\"",
             "dtorList => [1, 2, 9] | [1, 2]",
             "dtorString => \"TUp\" | \"TU\"",
-            "appendInCatchFresh => \"aacaa\" | \"TU\"",
+            "appendInCatchFresh => \"aaacaa\" | \"TU\"",
             "appendAroundTry => \"abababababab/-1\"",
             "plainBuilder => 2000",
             "plainListBuilder => 1000",

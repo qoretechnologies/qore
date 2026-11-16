@@ -341,22 +341,21 @@ string sub appendAroundTry(int n) {
     return s + "/" + x;
 }
 
-# an append in a catch block to a local that is fresh wherever the try block can throw is in place
+# appends in a catch block and before the try statement to a local that is fresh wherever the try block can throw
+# are in place
 string sub appendInCatchFresh(string t, int n) {
     string s = "";
     for (int i = 0; i < n; ++i) {
+        s += "a";
         try {
             if (i == 2) {
                 throw "X";
             }
-            s += "a";
         } catch (hash<ExceptionInfo> ex) {
             s += "c";
         }
     }
-    string r = s;
-    s = t;
-    return r;
+    return s;
 }
 
 list<int> sub pushAroundTry(int n) {
