@@ -3839,61 +3839,61 @@ case_code:
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, ">=", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals);
+        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreSwitchCaseOperator::GreaterThanOrEquals, @2.semantic_policy);
     }
     | TOK_CASE LOGICAL_GE exp ':' // nothing
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, ">=", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals);
+        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreSwitchCaseOperator::GreaterThanOrEquals, @2.semantic_policy);
     }
     | TOK_CASE LOGICAL_LE exp ':' statements
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, "<=", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreLogicalLessThanOrEqualsOperatorNode::doLessThanOrEquals);
+        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreSwitchCaseOperator::LessThanOrEquals, @2.semantic_policy);
     }
     | TOK_CASE LOGICAL_LE exp ':' // nothing
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, "<=", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreLogicalLessThanOrEqualsOperatorNode::doLessThanOrEquals);
+        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreSwitchCaseOperator::LessThanOrEquals, @2.semantic_policy);
     }
     | TOK_CASE LOGICAL_EQ exp ':' statements
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, "==", $3);
-        $$ = CaseNodeWithOperator::makeEquality(loc, $3, $5, @2.semantic_policy);
+        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreSwitchCaseOperator::Equals, @2.semantic_policy);
     }
     | TOK_CASE LOGICAL_EQ exp ':' // nothing
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, "==", $3);
-        $$ = CaseNodeWithOperator::makeEquality(loc, $3, nullptr, @2.semantic_policy);
+        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreSwitchCaseOperator::Equals, @2.semantic_policy);
     }
     | TOK_CASE '<' exp ':' statements
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, "<", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreLogicalLessThanOperatorNode::doLessThan);
+        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreSwitchCaseOperator::LessThan, @2.semantic_policy);
     }
     | TOK_CASE '<' exp ':' // nothing
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, "<", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreLogicalLessThanOperatorNode::doLessThan);
+        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreSwitchCaseOperator::LessThan, @2.semantic_policy);
     }
     | TOK_CASE '>' exp ':' statements
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, ">", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreLogicalGreaterThanOperatorNode::doGreaterThan);
+        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreSwitchCaseOperator::GreaterThan, @2.semantic_policy);
     }
     | TOK_CASE '>' exp ':' // nothing
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, ">", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreLogicalGreaterThanOperatorNode::doGreaterThan);
+        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreSwitchCaseOperator::GreaterThan, @2.semantic_policy);
     }
     | TOK_CASE REGEX_MATCH REGEX ':' statements
     {
