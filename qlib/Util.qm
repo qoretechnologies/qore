@@ -108,6 +108,9 @@ module Util {
 
 
     @section util_3_0 Util 3.0
+    - @ref Util::string_ends_with() "string_ends_with()" finds a suffix that ends with a multi-byte character in
+      UTF-8 and other multi-byte encodings (ex: <tt>string_ends_with("café", "é")</tt> is @ref True "True"; it was
+      @ref False "False") (issue #6246)
     - @ref Util::get_random_string() "get_random_string()" makes the characters from
       @ref Qore::get_random_bytes() instead of reading \c /dev/urandom, so it no longer raises
       \c FILESYSTEM-ACCESS-DENIED in a program that is not allowed to access the filesystem, such as a sandboxed

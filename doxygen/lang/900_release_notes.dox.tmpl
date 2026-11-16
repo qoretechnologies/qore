@@ -799,7 +799,8 @@
     position (ex: <tt>brindex("abc", "ab", 1)</tt> is 0, not -1).  @ref Qore::bindex() "bindex()" (and
     \c QoreString::bindex() and \c QoreString::find() with a \c std::string in the C++ API) searches from a
     negative position as an offset from the end, or from the start before it, as @ref Qore::index() "index()" does;
-    it gave -1 for every negative position (ex: <tt>bindex("abc", "c", -1)</tt> is 2, not -1) (issue #6271).
+    it gave -1 for a negative position farther from the end than the length of the substring (ex:
+    <tt>bindex("abc", "c", -2)</tt> is 2, not -1) (issue #6271).
 
     @par <binary>::find() Searches From the Start for a Negative Offset Before It
     @ref <binary>::find() "<binary>::find()" searches from the start of the binary object for a negative offset
@@ -1526,6 +1527,9 @@
       - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"
         use @ref httpclientiointro "HttpClientIo"
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - @ref Util::string_ends_with() "string_ends_with()" finds a suffix that ends with a multi-byte character
+        (ex: <tt>string_ends_with("café", "é")</tt> is @ref True "True"), through the fix of
+        @ref <string>::rfind() "<string>::rfind()" (issue #6246)
       - see @ref util_3_0 for all changes
 
     - @ref vscdebugadapterintro "VscDebugAdapter" module
@@ -1904,9 +1908,9 @@
     - @ref <string>::getUnicode() "<string>::getUnicode()" returns 0 at and after the end of a string in IBM037 and
       Shift_JIS, as in the other encodings; it raised \c INVALID-ENCODING (issue #6246)
     - @ref Qore::brindex() "brindex()" finds a match that ends at the search position, and
-      @ref Qore::bindex() "bindex()" with a negative position searches from that offset from the end (or from the
-      start) instead of giving -1; in the C++ API, \c QoreString::findAny() finds any of the given bytes, as
-      documented, instead of the whole string (issue #6271)
+      @ref Qore::bindex() "bindex()" with a negative position farther from the end than the length of the substring
+      searches from that offset (or from the start) instead of giving -1; in the C++ API, \c QoreString::findAny()
+      finds any of the given bytes, as documented, instead of the whole string (issue #6271)
     - @ref <binary>::find() "<binary>::find()" with a negative offset before the start searches from the start
       instead of giving -1, as the string search functions do (issue #6281)
     - @ref Qore::rindex() "rindex()" and @ref <string>::rfind() "<string>::rfind()" also find a match at the search
