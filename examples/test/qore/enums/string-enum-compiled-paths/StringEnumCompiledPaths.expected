@@ -68,6 +68,17 @@ hash local value size(): integer 2
 hash local value empty(): bool False
 hashdecl member size(): integer 2
 hashdecl member empty(): bool False
+hashdecl member val(): bool True
+hashdecl member length(): integer 2
+hashdecl member long value size(): integer 49
+softint return: integer 12
+int return of an int enum: integer 2
+number return of an int enum: number 2
+enum return: enum<ES> "yy"
+optional enum return: enum<ES> "yy"
+method enum return: enum<ES> "yy"
+method optional enum return: enum<ES> "yy"
+closure enum return: enum<ES> "yy"
 long value size(): integer 49
 long value empty(): bool False
 long value string local: string "a string value longer than an inline short string"

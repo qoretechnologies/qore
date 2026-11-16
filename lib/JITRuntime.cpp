@@ -23032,16 +23032,29 @@ static size_t qore_short_string_utf8_length(QoreValue v) {
     return len;
 }
 
+static int64_t qore_rt_pseudo_string_length_enum(QoreValue v);
+
 static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_length_native_impl(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
     if (v.isShortString()) {
         return static_cast<int64_t>(qore_short_string_utf8_length(v));
+    }
+    // the value of a string enum is its member, whose base value is the string (see
+    // qore_rt_pseudo_string_size_native_impl(), qore#6254)
+    if (v.isEnum()) {
+        return qore_rt_pseudo_string_length_enum(v);
     }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
         return static_cast<int64_t>(str ? str->length() : 0);
     }
     return fromBits(qore_rt_pseudo_length(val_bits)).getAsBigInt();
+}
+
+//! returns the length of the base value of a string enum value (out of line: the inline length helper calls itself)
+static int64_t qore_rt_pseudo_string_length_enum(QoreValue v) {
+    assert(v.isEnum());
+    return qore_rt_pseudo_string_length_native_impl(toBits(v.getEnumBaseValue()));
 }
 
 //! Native scalar <string>::length() for bases proven to be assigned strings.
