@@ -969,6 +969,28 @@ DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);
 DLLLOCAL bool parse_check_restriction(const QoreParseOptions& o);
 DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
 
+//! Returns true: the code that runs as compiled code (IR, JIT, AOT) always has negative offsets
+/** Only %modern code is compiled (IR lowering and AOT refuse code with legacy tokens), %modern implies
+    PO_NEGATIVE_OFFSETS and refuses %no-negative-offsets, a module parse option mask cannot strip it, and compiled code
+    runs with its own parse options, also when legacy code calls it; so where compiled code checks the option it
+    always holds, and the run-time lookup is not made.  A debug build asserts it, so that a change that breaks the
+    guarantee fails in the debug tests (compatibility options refused under %modern: qore#5682)
+*/
+static inline bool qore_compiled_code_negative_offsets() {
+    assert(runtime_check_parse_option(PO_NEGATIVE_OFFSETS));
+    return true;
+}
+
+//! Returns true: the code that runs as compiled code (IR, JIT, AOT) always has strict arguments
+/** %modern implies PO_STRICT_ARGS; code after %loose-args is not %modern and is not compiled, and compiled code runs
+    with its own parse options, also when legacy %loose-args code calls it (see
+    qore_compiled_code_negative_offsets()).  A debug build asserts it
+*/
+static inline bool qore_compiled_code_strict_args() {
+    assert(runtime_check_parse_option(PO_STRICT_ARGS));
+    return true;
+}
+
 //! Sets the runtime parse options to those of AOT-compiled code while the code is loaded
 /** When code is parsed from source, the parser binds calls to their variants and checks each builtin variant's
     functional domain against the parse options of the code being parsed.  Code loaded from an AOT image is not
