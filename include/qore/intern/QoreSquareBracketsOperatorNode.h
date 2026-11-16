@@ -90,6 +90,15 @@ public:
         return negative_offsets;
     }
 
+    //! sets the options of the operator for compiled code, which is %modern: negative offsets and string index
+    //! characters, as parseInit() sets them for %modern code
+    /** For an operator that a reader of compiled code (AOT) creates, whose parseInit() is not called (qore#6294)
+    */
+    DLLLOCAL void setCompiledCodeOptions() {
+        string_index_char = true;
+        negative_offsets = true;
+    }
+
 protected:
     const QoreTypeInfo* typeInfo = nullptr;
     // is the RHS a list with a range?

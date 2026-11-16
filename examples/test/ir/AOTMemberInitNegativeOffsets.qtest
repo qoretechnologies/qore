@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes of the interpreter and of qcc executables
+# test-platform: macos - qcc executables whose member initializers are read from the compiled code
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestInterpreter.qm
+
+%exec-class AOTMemberInitNegativeOffsetsTest
+
+#! The square brackets operator of compiled code has negative offsets (qore#6294)
+/** A reader of compiled code creates the operator without calling its parseInit(), which sets negative offsets for
+    %modern code, so the operator had none: the member initializer int m = gl()[-1] of a qcc executable gave no value
+    (RUNTIME-TYPE-ERROR).  The executable gives the values that the interpreter gives.
+*/
+class AOTMemberInitNegativeOffsetsTest inherits QUnit::Test {
+    public {
+        const Script = "%modern
+list<int> sub gl() { return (1, 2, 3); }
+const C1 = (1, 2, 3)[-1];
+const C2 = gl()[-1];
+const C3 = \"abc\"[-1];
+const C4 = gl()[-2..-1];
+class K {
+    public {
+        const KC = (4, 5, 6)[-1];
+        static auto SV = gl()[-1];
+        int m = gl()[-1];
+        list<int> r = gl()[-2..-1];
+        string c = \"xyz\"[-1];
+    }
+}
+K k();
+printf(\"%y\\n\", (C1, C2, C3, C4, K::KC, K::SV, k.m, k.r, k.c));
+";
+
+        const Expected = "[3, 3, c'c', [2, 3], 6, 3, 3, [2, 3], c'z']\n";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("AOTMemberInitNegativeOffsetsTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler();
+        addTestCase("member initializers of a qcc executable", \executableTest());
+        set_return_value(main());
+    }
+
+    executableTest() {
+        TmpDir tmp("qore-aot-member-init-");
+        string script = tmp.path + "/members.q";
+        File f();
+        f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+        assertEq(Expected, backquote(sprintf("%s %s %s 2>&1", env, qore_bin, script)), "interpreted");
+        if (!qcc_bin) {
+            testSkip("qcc is unavailable");
+        }
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = sprintf("%s/members%s", tmp.path, opt);
+            string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, opt, exe, script));
+            if (!assertTrue(is_file(exe), sprintf("qcc %s built the executable: %s", opt, out))) {
+                continue;
+            }
+            assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "qcc " + opt);
+        }
+    }
+}
