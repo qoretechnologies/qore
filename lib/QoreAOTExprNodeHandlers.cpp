@@ -758,8 +758,8 @@ static QoreValue read_node_EN_NEW(AOTExprNodeReadCtx& ctx) {
         printd(5, "AOT EXPR_TREE EN_NEW: class='%s' id=%d nargs=%d constructor=%p\n",
             qc->getName(), qc->getID(), static_cast<int>(num_children), static_cast<const void*>(cons));
         if (cons) {
-            const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
-            printd(5, "  constructor vlist=%d\n", static_cast<int>(cf->numVariants()));
+            printd(5, "  constructor vlist=%d\n",
+                static_cast<int>(qore_method_private::get(*cons)->getFunction()->numVariants()));
         }
     }
     NewObjectCallNode* nocn = new NewObjectCallNode(qc, args_list.release(), object_type_info);

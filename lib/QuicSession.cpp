@@ -5603,7 +5603,7 @@ int QuicSession::beginPathValidationCallback(ngtcp2_conn* /* conn */,
                                               const ngtcp2_path* /* fallback_path */,
                                               void* user_data) {
     try {
-        auto* session = static_cast<QuicSession*>(user_data);
+        [[maybe_unused]] auto* session = static_cast<QuicSession*>(user_data);
         printd(3, "QuicSession::beginPathValidationCallback(): path validation started "
             "(session %lld)\n", (long long)session->session_id_);
     } catch (const std::exception& e) {
@@ -5647,8 +5647,8 @@ int QuicSession::dcidStatusCallback(ngtcp2_conn* /* conn */,
                                      const uint8_t* /* token */,
                                      void* user_data) {
     try {
-        auto* session = static_cast<QuicSession*>(user_data);
-        const char* type_str;
+        [[maybe_unused]] auto* session = static_cast<QuicSession*>(user_data);
+        [[maybe_unused]] const char* type_str;
         switch (type) {
             case NGTCP2_CONNECTION_ID_STATUS_TYPE_ACTIVATE:
                 type_str = "ACTIVATE";
@@ -6091,7 +6091,7 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                 }
             }
             if (frame_state) {
-                int pushed = frame_state->feedData(data, datalen);
+                [[maybe_unused]] int pushed = frame_state->feedData(data, datalen);
                 ASYNC_IO_TRACE("QuicSession::h3RecvDataCallback CONNECT_SRV_FRAME session=%lld stream_id=%lld datalen=%zu msgs_pushed=%d\n",
                     (long long)session->getSessionId(), (long long)stream_id,
                     datalen, pushed);

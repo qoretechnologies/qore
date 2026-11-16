@@ -1249,7 +1249,7 @@ int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSin
             if (*xsink) {
                 return -1;
             }
-            QoreValue old = hp->swapKeyValue(i.first, val.release(), nullptr);
+            [[maybe_unused]] QoreValue old = hp->swapKeyValue(i.first, val.release(), nullptr);
             assert(old.isNothing());
             move_member_to_back(i.first);
             continue;
@@ -1270,7 +1270,7 @@ int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSin
             return -1;
         }
 
-        QoreValue old = hp->swapKeyValue(i.first,
+        [[maybe_unused]] QoreValue old = hp->swapKeyValue(i.first,
             default_val.takeReferencedValue(), nullptr);
         assert(old.isNothing());
         move_member_to_back(i.first);

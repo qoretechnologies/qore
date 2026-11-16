@@ -1580,8 +1580,8 @@ bool Http3ServerPollOperation::isStreamPeerClosed(int session_id, int stream_id)
 */
 nothing Http3ServerPollOperation::onStreamData(string stream_key) [flags=NAMED_ARGS] {
     ValueHolder listener(xsink);
-    bool had_listeners = false;
-    size_t listener_count = 0;
+    [[maybe_unused]] bool had_listeners = false;
+    [[maybe_unused]] size_t listener_count = 0;
     bool listener_found = false;
     {
         AutoLocker ml(priv->stream_member_lock);

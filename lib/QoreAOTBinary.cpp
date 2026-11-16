@@ -11286,7 +11286,7 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                         | (ce->hasExplicitType() ? QORE_AOT_CONST_FLAG_EXPLICIT_TYPE : 0));
                     if (ce->hasInitExpr()) {
                         // Class constants with init expressions get NOTHING placeholder
-                        bool placeholder_ok = writer.writeValue(QoreValue());
+                        [[maybe_unused]] bool placeholder_ok = writer.writeValue(QoreValue());
                         assert(placeholder_ok);
                         std::string old_pending_path = std::move(writer.current_const_path);
                         writer.current_const_path = getClassConstantPath(priv, ce->getName());
@@ -11574,7 +11574,7 @@ static bool writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
         if (ce->hasInitExpr()) {
             // Constants with init expressions will be initialized at runtime
             // by their lowered init function — serialize NOTHING as placeholder
-            bool placeholder_ok = writer.writeValue(QoreValue());
+            [[maybe_unused]] bool placeholder_ok = writer.writeValue(QoreValue());
             assert(placeholder_ok);
             writePendingConstantParseValue(writer, ce);
         } else {
@@ -18048,9 +18048,9 @@ bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
             QoreValue d = xs.getExceptionDesc();
             QoreStringValueHelper es_str(e);
             QoreStringValueHelper ds_str(d);
-            const char* es = e.getType() == NT_STRING
+            [[maybe_unused]] const char* es = e.getType() == NT_STRING
                 ? es_str->c_str() : "(?err)";
-            const char* ds = d.getType() == NT_STRING
+            [[maybe_unused]] const char* ds = d.getType() == NT_STRING
                 ? ds_str->c_str() : "(?desc)";
             printd(0, "AOT deser: class '%s' constant '%s' narrowing "
                 "to '%s' failed: %s: %s\n",
@@ -18379,9 +18379,9 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                     QoreValue d = xs.getExceptionDesc();
                     QoreStringValueHelper es_str(e);
                     QoreStringValueHelper ds_str(d);
-                    const char* es = e.getType() == NT_STRING
+                    [[maybe_unused]] const char* es = e.getType() == NT_STRING
                         ? es_str->c_str() : "(?err)";
-                    const char* ds = d.getType() == NT_STRING
+                    [[maybe_unused]] const char* ds = d.getType() == NT_STRING
                         ? ds_str->c_str() : "(?desc)";
                     printd(0, "AOT deser: hashdecl '%s' member '%s' default "
                         "narrowing to '%s' failed: %s: %s\n",
@@ -19068,9 +19068,9 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
                 QoreValue d = xs.getExceptionDesc();
                 QoreStringValueHelper es_str(e);
                 QoreStringValueHelper ds_str(d);
-                const char* es = e.getType() == NT_STRING
+                [[maybe_unused]] const char* es = e.getType() == NT_STRING
                     ? es_str->c_str() : "(?err)";
-                const char* ds = d.getType() == NT_STRING
+                [[maybe_unused]] const char* ds = d.getType() == NT_STRING
                     ? ds_str->c_str() : "(?desc)";
                 printd(0, "AOT deser: namespace constant '%s' narrowing "
                     "to '%s' failed: %s: %s\n",
