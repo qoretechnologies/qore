@@ -87,10 +87,18 @@ class SqlUtilCallerDatabaseTest inherits QUnit::Test {
                     "Table-hash", "Database", "Database-hash")) {
                 rv{sprintf("%s.direct.%s", caller, call)} = restricted ? "PARSE-EXCEPTION-DATABASE" : Allowed;
             }
-            # a function of the trusted host decides for itself
+            # a function of the trusted host decides for itself, and a connection that the host created can be used
             rv{caller + ".host-function"} = Allowed;
+            # (a sandboxed caller's restrictions are composed into the module code that runs for it, so the
+            # connection's own code is refused the Datasource that it creates for such a caller)
+            rv{caller + ".host-connection"} = caller == "restricted-sandboxed" ? "INVALID-FUNCTION-ACCESS" : Allowed;
+            # a subclass that replaces the setup of the connection still checks the caller
+            rv{caller + ".subclass-connection"} = restricted ? "PERMISSION-DENIED" : Allowed;
+            # a subclass deserialized from data without the connection's own members, which gives its URL itself
+            rv{caller + ".subclass-deserialize-connection"} = restricted ? "PERMISSION-DENIED" : Allowed;
             rv{caller + ".runtime.getDatabase"} = restricted ? "INVALID-FUNCTION-ACCESS" : Allowed;
-            foreach string call in (("dbdataprovider", "deserialize", "module-chain")) {
+            foreach string call in (("dbdataprovider", "deserialize", "module-chain", "connection",
+                    "deserialize-connection")) {
                 rv{sprintf("%s.module.%s", caller, call)} = restricted ? "PERMISSION-DENIED" : Allowed;
                 rv{sprintf("%s.callback.%s", caller, call)} = restricted ? "PERMISSION-DENIED" : Allowed;
             }

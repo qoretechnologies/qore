@@ -79,17 +79,25 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
         @param url the URL to connect to (must start with @c "db://")
         @param attributes connection attributes
         @param options connection options
+        @throw PERMISSION-DENIED the calling code is restricted from the \c DATABASE domain
+        (@ref Qore::PO_NO_DATABASE "PO_NO_DATABASE"); it uses the connections that its host creates, unless a sandbox
+        that restricts the domain governs it (since DbDataProvider 2.5)
     */
     constructor(string name, string desc, string url, hash<auto> attributes = {}, hash<auto> options = {})
             : AbstractConnectionWithInfo(name, desc, url, attributes, options) {
+        checkCreator();
         commonSetup();
     }
 
     #! Creates the connection object from a hash
     /** @param config a hash with connection configuration
         @param attr optional connection attributes
+        @throw PERMISSION-DENIED the calling code is restricted from the \c DATABASE domain
+        (@ref Qore::PO_NO_DATABASE "PO_NO_DATABASE"); it uses the connections that its host creates, unless a sandbox
+        that restricts the domain governs it (since DbDataProvider 2.5)
     */
     constructor(hash<auto> config, *hash<auto> attr) : AbstractConnectionWithInfo(config, attr) {
+        checkCreator();
         commonSetup();
     }
 
@@ -199,6 +207,27 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
     */
     private hash<auto> validateOptions(hash<auto> options, bool check_required = True) {
         return options;
+    }
+
+    #! Refuses code restricted from the DATABASE domain as the code that gives the connection its URL
+    /** The connection opens a datasource from its URL for whoever uses it, so the code that creates it, and so gives
+        the URL, decides; code restricted from the \c DATABASE domain uses the connections that its host creates
+        (qore#6385).  It is \c private:internal, so a subclass cannot replace it, and it is called by the
+        constructors and by the deserialization, which gives the URL as well.
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c DATABASE domain
+    */
+    private:internal checkCreator() {
+        if (SandboxManager::isCallerRestricted(DOM_DATABASE)) {
+            throw "PERMISSION-DENIED", "code that is restricted from the DATABASE domain cannot create a database "
+                "connection from a URL, a configuration or serialized data; use a connection that the host provides";
+        }
+    }
+
+    #! Assigns the members of the class after deserialization: serialized data gives the connection its URL as well
+    private:internal deserializeMembers(hash<auto> members) {
+        checkCreator();
+        self += members;
     }
 
     #! Common setup logic called from both constructors

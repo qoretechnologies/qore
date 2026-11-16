@@ -72,12 +72,62 @@ const ModuleCalls = {
     "deserialize": "Serializable::deserialize(table_data())",
     # a module whose code opens a table through the variant in the DATABASE domain, called through another module
     "module-chain": "CallerDbOuter::open_table(Conn)",
+    # a connection that the caller creates from a URL, which opens a datasource when it is used (qore#6385)
+    "connection": "DbDataProvider::DatasourceConnection c(\"c\", \"test\", \"db://\" + Conn); c.get()",
+    # a connection that the caller deserializes, which gives its URL as well (qore#6385)
+    "deserialize-connection": "DbDataProvider::DatasourceConnection c = Serializable::deserialize("
+        "host_connection_data()); c.get()",
 };
 
 #! a function of the host that calls back code that the case gives it
 auto sub host_callback(code c) {
     return c();
 }
+
+#! a connection that the host creates: the code that it gives it to may use it (qore#6385)
+DbDataProvider::DatasourceConnection host_connection("host", "test", "db://" + Conn);
+
+#! returns the connection that the host created
+DbDataProvider::DatasourceConnection sub host_get_connection() {
+    return host_connection;
+}
+
+#! returns the serialized data of the connection that the host created
+hash<SerializationInfo> sub host_connection_data() {
+    return host_connection.serializeToData();
+}
+
+#! a subclass of the connection that replaces the setup of the base class (qore#6385)
+const SubclassCase = "class X inherits DbDataProvider::DatasourceConnection {
+    constructor() : DbDataProvider::DatasourceConnection(\"x\", \"test\", \"db://\" + Conn) {
+    }
+    private commonSetup() {
+        ds_urlh = parse_datasource(Conn);
+    }
+}
+string sub t() { return outcome(sub () { X x(); x.get(); }); }";
+
+#! a subclass of the connection that the case deserializes from data without the connection's own members, then gives
+#! its URL itself (qore#6385)
+const SubclassDeserializeCase = "class Y inherits DbDataProvider::DatasourceConnection {
+    constructor() : DbDataProvider::DatasourceConnection(\"y\", \"test\", \"db://\" + Conn) {
+    }
+    setUrl() {
+        ds_urlh = parse_datasource(Conn);
+    }
+}
+string sub t() {
+    return outcome(sub () {
+        Y y = Serializable::deserialize(<SerializationInfo>{
+            \"_index\": {\"0\": <ObjectSerializationInfo>{\"_class\": \"Y\", \"_class_data\": {
+                \"ConnectionProvider::AbstractConnection\": {\"name\": \"y\"},
+            }}},
+            \"_data\": {\"_index\": \"0\"},
+        });
+        y.setUrl();
+        y.get();
+    });
+}";
 
 #! a function of the host that opens a table for the code that calls it: the host's code decides, not its caller's
 sub host_open_table(string conn) {
@@ -100,6 +150,8 @@ string sub run_case(int po, bool sandbox, string code) {
     }
     p.importFunction("host_callback");
     p.importFunction("host_open_table");
+    p.importFunction("host_get_connection");
+    p.importFunction("host_connection_data");
     try {
         p.parse(Prefix + code, "case");
     } catch (hash<ExceptionInfo> ex) {
@@ -141,6 +193,12 @@ foreach hash<auto> caller in (Callers) {
     # a function of the trusted host that opens the table for the caller
     result(n + ".host-function", run_case(caller.po, caller.sandbox,
         "string sub t() { return outcome(sub () { host_open_table(Conn); }); }"));
+    # a subclass of the connection that replaces the setup of the base class
+    result(n + ".subclass-connection", run_case(caller.po, caller.sandbox, SubclassCase));
+    result(n + ".subclass-deserialize-connection", run_case(caller.po, caller.sandbox, SubclassDeserializeCase));
+    # a connection that the host created, which the case opens
+    result(n + ".host-connection", run_case(caller.po, caller.sandbox,
+        "string sub t() { return outcome(sub () { host_get_connection().get(); }); }"));
     # a call at run time, which the parse cannot see
     result(n + ".runtime.getDatabase", run_case(caller.po, caller.sandbox,
         "string sub t() { return outcome(sub () { call_static_method(\"SqlUtil::AbstractDatabase\", \"getDatabase\", "
