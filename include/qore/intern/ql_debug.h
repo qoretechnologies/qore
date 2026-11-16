@@ -249,10 +249,34 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     Submit,
     //! an HTTP/1 or HTTP/2 client connection's closeConnection() has invalidated it and is about to close it
     CloseAfterInvalidate,
+    //! HTTPClient::startPollSendRecv() submitted the request on a ready connection, the submit raised an exception, and
+    //! the error is about to be classified (whether it is reported through the poll operation)
+    SubmitFailed,
+    //! HTTPClient::startPollSendRecv() found an ALPN-negotiating connection ready and is about to finalize it (hand it
+    //! over to a concrete connection); while this point is armed, the request waits for its connection to be ready
+    //! first, so that it reaches the point
+    Finalize,
+    //! NegotiatingHttpClientConnection::takeOver() checked the connection and holds its method guard, before it hands
+    //! the socket over to the concrete connection
+    Takeover,
+    //! HttpClientConnectionBase::drainInFlight() has to wait for a call in flight (armed with a release Counter of 0,
+    //! the point only reports that the close waits)
+    DrainWait,
+    //! HttpClientConnectionManagerBase::swapNegotiatedConnection() was given the concrete connection that took over a
+    //! negotiating connection, before it reads the negotiating connection
+    Swap,
+    //! HttpClientConnectionManagerBase::acquireConnectionImpl() found a connection in its pool and released the pool
+    //! lock, before it returns the connection
+    Acquired,
+    //! the number of hold points
+    Count,
 };
 
 //! holds the calling thread at the given point if dbg_http_hold_at() armed it (one-shot)
 DLLLOCAL void qore_dbg_http_hold(QoreDbgHttpHoldPoint point);
+
+//! returns true if dbg_http_hold_at() armed the given point and no thread has reached it yet
+DLLLOCAL bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point);
 
 //! records that an HTTP client connection's closeConnection() runs, for dbg_http_concurrent_closes(); destroying it
 //! records the end of the close

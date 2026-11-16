@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreSocketObject.h>
 #include "qore/intern/NegotiatingConnectionPollOp.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreHttp1ClientConnection.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QC_SocketPollOperation.h"
@@ -543,9 +544,27 @@ void NegotiatingHttpClientConnection::onAlpnDecided(std::string alpn) {
 HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
         int max_concurrent_streams, HttpClientConnectionManagerBase* mgr,
         ExceptionSink* xsink) {
+    // the hand-over is a call on the connection: a close waits for it (drainInFlight()) and then finds it taken over,
+    // or, once it has invalidated the connection, refuses it; without the guard a close that began after the checks
+    // below cancelled the socket while it was handed over (qore#6303)
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot hand over the negotiating connection: it has been closed");
+        return nullptr;
+    }
     if (taken_over) {
         xsink->raiseException("HTTPCLIENT-NEGOTIATE-ERROR",
             "negotiating connection has already been taken over");
+        return nullptr;
+    }
+    // a connection that was closed after it was found ready, or that another thread is closing (closeConnection()
+    // invalidated it; it still reports ready until the close ends), is refused as a closed connection refuses a
+    // submit, so that the caller reports it like one: its socket must not be handed over to a concrete connection while
+    // the close cancels it (qore#6301, qore#6303)
+    if (isClosed() || isInvalidated()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot hand over the negotiating connection: it has been closed");
         return nullptr;
     }
     if (!isReady()) {
@@ -558,6 +577,10 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
             "negotiating connection has no socket to hand off");
         return nullptr;
     }
+#ifdef DEBUG
+    // tests hold the hand-over here, with the method guard held, to order it with a close of the connection
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::Takeover);
+#endif
 
     // The I/O controller has finalized the neg poll op (DECIDED →
     // goalReached returns true, needsCloseOnComplete returns false).
@@ -637,8 +660,16 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
 }
 
 void NegotiatingHttpClientConnection::closeConnection(ExceptionSink* xsink) {
+#ifdef DEBUG
+    // tests check that no two closes of the connection run at the same time
+    QoreDbgHttpCloseScope dbg_close_scope(this);
+#endif
     markInvalidated();
     drainInFlight();
+#ifdef DEBUG
+    // tests hold the close here, after new calls are refused and before the connection is closed
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::CloseAfterInvalidate);
+#endif
 
     if (neg_priv) {
         neg_priv->clearOwner();
