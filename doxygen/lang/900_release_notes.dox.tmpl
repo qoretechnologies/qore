@@ -1876,6 +1876,8 @@
     - a task of a @ref Qore::Thread::ThreadPool "ThreadPool" that releases the last reference to the pool no longer
       hangs: the pool's manager thread stops the pool instead of the task's worker, which waited for itself
       (issue #6253)
+    - the initializer of a class static variable runs with the parse options of its declaration; it ran with those of
+      the code that triggered it, such as a script with other options that parses the declaring code (issue #6273)
     - the negative of an absolute date with microseconds (ex: <tt>-1970-01-01T00:00:01.5Z</tt>) is
       \c 1969-12-31T23:59:58.5Z; the microseconds were negated as an unsigned value and gave another date (issue #6103)
     - the decimal fraction of an ISO 8601 duration component (ex: \c P0.0000001Y for

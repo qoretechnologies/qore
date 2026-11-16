@@ -1575,6 +1575,14 @@ public:
     */
     std::atomic<TrustedModuleStatic*> trusted_module{nullptr};
 
+    //! the parse options of the code that declares the variable, which its initializer runs with (see evalInit())
+    /** Set by the parser (bindDeclarationParseOptions()); a variable without a Qore initializer (a builtin variable,
+        or one of a compiled class, which its compiled initializer sets) has none
+    */
+    QoreParseOptions decl_po;
+    //! true if \a decl_po is set
+    bool has_decl_po = false;
+
     DLLLOCAL QoreVarInfo(const QoreProgramLocation* loc, const QoreTypeInfo* n_typeinfo = nullptr,
             QoreParseTypeInfo* n_parseTypeInfo = nullptr, QoreValue e = QoreValue(), ClassAccess n_access = Public) :
         QoreMemberInfoBaseAccess(loc, n_typeinfo, n_parseTypeInfo, e, n_access), finalized(false) {
@@ -1585,7 +1593,14 @@ public:
             builtin_value(old.builtin_value),
             // an imported copy reads and writes the same external storage as the original; del_cb is deliberately
             // not copied, since the module data belongs to the variable the module registered
-            get_cb(old.get_cb), set_cb(old.set_cb), cb_data(old.cb_data), cb_cls(old.cb_cls) {
+            get_cb(old.get_cb), set_cb(old.set_cb), cb_data(old.cb_data), cb_cls(old.cb_cls), decl_po(old.decl_po),
+            has_decl_po(old.has_decl_po) {
+    }
+
+    //! records the parse options of the code that declares the variable, which its initializer runs with
+    DLLLOCAL void bindDeclarationParseOptions(const QoreParseOptions& po) {
+        decl_po = po;
+        has_decl_po = true;
     }
 
     DLLLOCAL ~QoreVarInfo() {

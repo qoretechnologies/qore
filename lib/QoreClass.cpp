@@ -48,6 +48,7 @@
 #include <atomic>
 #include <climits>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
 #include <unordered_set>
@@ -9291,6 +9292,31 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink, bool defer_pen
     // recursing
     eval_init = true;
     if (exp) {
+        // the initializer runs with the parse options of the code that declares the variable, as a constant's does
+        // (qore#6205) and as the code of a function runs with those of its declaration, not with those of the code
+        // that triggers the evaluation: the statement that parses the declaring code, or the code that reads the
+        // variable first; any override of that code is suspended, so that the value is not shaped by the code that
+        // happens to initialize it.  Both the thread's options and those of the thread-local RuntimeConfig, which the
+        // AST interpreter reads, are set
+        struct StaticVarInitRcParseOptionsHelper {
+            RuntimeConfig& rc;
+            QoreParseOptions old_po;
+
+            DLLLOCAL StaticVarInitRcParseOptionsHelper(RuntimeConfig& rc, const QoreParseOptions& po) : rc(rc),
+                    old_po(rc.getParseOptions()) {
+                rc.setParseOptions(po);
+            }
+
+            DLLLOCAL ~StaticVarInitRcParseOptionsHelper() {
+                rc.setParseOptions(old_po);
+            }
+        };
+        std::optional<LoadTimeParseOptionsHelper> init_po;
+        std::optional<StaticVarInitRcParseOptionsHelper> init_rc_po;
+        if (has_decl_po) {
+            init_po.emplace(decl_po);
+            init_rc_po.emplace(rc_get_tls_ref(), decl_po);
+        }
         // the initializer is evaluated as a statement of its own (see design/temporary-lifetime.md)
         QoreScopedEvalHolder val(exp, true, &init_xsink);
         if (!init_xsink) {
