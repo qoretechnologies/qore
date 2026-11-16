@@ -1,0 +1,193 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Program::getCallReference() and sandbox provenance (issue #6149): a call reference that sandboxed code obtains from
+# another Program keeps the sandbox of the code that obtained it, as one made with the \ operator does
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%exec-class SandboxGetCallReferenceProvenanceTest
+
+# the file that the sandbox denies; set in globalSetUp()
+our string DeniedFile;
+
+#! the observable sandbox checks of the code that runs, as strings so that the cases can be compared
+hash<auto> sub probe() {
+    hash<auto!> h = {"sandboxed": SandboxManager::isSandboxed()};
+    try {
+        h.governed = SandboxManager::isGoverned();
+    } catch (hash<ExceptionInfo> ex) {
+        h.governed = ex.err;
+    }
+    try {
+        ReadOnlyFile f(DeniedFile);
+        h.fs = "read:" + trim(f.read(-1));
+    } catch (hash<ExceptionInfo> ex) {
+        h.fs = ex.err;
+    }
+    # a builtin of the uncontrolled-API domain, which the sandbox refuses at run time (qore#5741)
+    try {
+        code c = SandboxManager::createSystemPolicyCall(sub () {});
+        delete c;
+        h.uncontrolled = "ok";
+    } catch (hash<ExceptionInfo> ex) {
+        h.uncontrolled = ex.err;
+    }
+    return h;
+}
+
+class SandboxGetCallReferenceProvenanceTest inherits QUnit::Test {
+    private {
+        #! the sandboxed Program
+        Program sandboxed;
+        #! a trusted Program, whose Program object the sandboxed code is given
+        Program trusted;
+        #! the probe results of trusted code that no sandbox governs
+        hash<auto> Ungoverned;
+    }
+
+    const SandboxedSource = "
+code sub ref_by_operator() { return \\probe(); }
+code sub ref_by_program(Program p, string name) { return p.getCallReference(name); }
+auto sub call_by_program(Program p, string name) { code c = p.getCallReference(name); return c(); }
+hash<auto> sub own_probe() { return probe(); }
+Program sub child() {
+    Program c(PO_NEW_STYLE);
+    c.importFunction(\"probe\");
+    c.parse(\"code sub ref_by_operator() { return \\\\probe(); }
+code sub ref_by_program(Program p, string name) { return p.getCallReference(name); }\", \"child\");
+    return c;
+}
+";
+
+    #! what code governed by the sandbox gets
+    const Governed = {
+        "sandboxed": True,
+        "governed": True,
+        "fs": "FILESYSTEM-ACCESS-DENIED",
+        "uncontrolled": "INVALID-FUNCTION-ACCESS",
+    };
+
+    constructor() : QUnit::Test("sandbox getCallReference() provenance", "1.0", \ARGV) {
+        addTestCase("a reference that sandboxed code gets from a trusted Program is governed later",
+            \sandboxedReference());
+        addTestCase("a reference that trusted code gets has no provenance", \trustedReference());
+        addTestCase("a reference that sandboxed code gets from its own Program", \ownProgramReference());
+        addTestCase("a reference made with the \\ operator", \operatorReference());
+        addTestCase("a reference that sandboxed code gets and calls itself", \sandboxedCall());
+        addTestCase("a Program that sandboxed code created", \childProgram());
+        addTestCase("errors in the target Program", \referenceErrors());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        DeniedFile = tmp_location() + DirSep + "qore-getcallref-" + get_random_string(12);
+        File file();
+        file.open2(DeniedFile, O_CREAT | O_WRONLY | O_TRUNC);
+        file.write("secret\n");
+
+        Ungoverned = {
+            "sandboxed": False,
+            "governed": False,
+            "fs": "read:secret",
+            "uncontrolled": "ok",
+        };
+
+        trusted = new Program(PO_NEW_STYLE);
+        trusted.importFunction("probe");
+        trusted.parse("", "trusted");
+
+        SandboxManager manager();
+        manager.addFilesystemDeniedPath(DeniedFile);
+        sandboxed = new Program(PO_NEW_STYLE);
+        sandboxed.setSandboxManager(manager);
+        sandboxed.importFunction("probe");
+        sandboxed.parse(SandboxedSource, "sandboxed");
+    }
+
+    globalTearDown() {
+        unlink(DeniedFile);
+    }
+
+    sandboxedReference() {
+        # the trusted code itself is not governed
+        assertEq(Ungoverned, probe());
+        code ref = sandboxed.callFunction("ref_by_program", trusted, "probe");
+        # called later by trusted code, outside the sandbox
+        assertEq(Governed, ref());
+        # also on a thread that trusted code starts
+        assertEq(Governed, callInBackground(ref));
+        # the reference keeps its provenance when called again, and trusted code stays ungoverned
+        assertEq(Governed, call_function(ref));
+        assertEq(Ungoverned, probe());
+    }
+
+    trustedReference() {
+        code ref = trusted.getCallReference("probe");
+        assertEq(Ungoverned, ref());
+        assertEq(Ungoverned, callInBackground(ref));
+    }
+
+    ownProgramReference() {
+        # the target Program is the sandboxed Program itself: its function is governed by its own sandbox
+        code ref = sandboxed.callFunction("ref_by_program", sandboxed, "own_probe");
+        assertEq(Governed, ref());
+        assertEq(Governed, callInBackground(ref));
+        # an imported trusted function referenced through the sandboxed Program
+        ref = sandboxed.callFunction("ref_by_program", sandboxed, "probe");
+        assertEq(Governed, ref());
+    }
+
+    operatorReference() {
+        code ref = sandboxed.callFunction("ref_by_operator");
+        assertEq(Governed, ref());
+        assertEq(Governed, callInBackground(ref));
+    }
+
+    sandboxedCall() {
+        assertEq(Governed, sandboxed.callFunction("call_by_program", trusted, "probe"));
+        assertEq(Governed, sandboxed.callFunction("call_by_program", sandboxed, "own_probe"));
+    }
+
+    childProgram() {
+        # the code of a Program that sandboxed code created is sandboxed: the references that it makes and gets from
+        # the trusted Program are governed when trusted code calls them later
+        Program child = sandboxed.callFunction("child");
+        code ref = child.callFunction("ref_by_operator");
+        assertEq(Governed, ref());
+        ref = child.callFunction("ref_by_program", trusted, "probe");
+        assertEq(Governed, ref());
+        assertEq(Governed, callInBackground(ref));
+        assertEq(Ungoverned, probe());
+    }
+
+    referenceErrors() {
+        # a name that the target Program does not have is reported as before, for trusted and sandboxed callers
+        assertThrows("CALL-REFERENCE-ERROR", \trusted.getCallReference(), "no_such_function");
+        assertThrows("CALL-REFERENCE-ERROR", \sandboxed.callFunction(), ("ref_by_program", trusted,
+            "no_such_function"));
+        # the sandboxed Program's own functions are not in the trusted Program
+        assertThrows("CALL-REFERENCE-ERROR", \sandboxed.callFunction(), ("ref_by_program", trusted, "own_probe"));
+    }
+
+    #! calls the reference in a thread that trusted code starts and returns its result
+    private auto callInBackground(code ref) {
+        Queue q();
+        background sub () {
+            try {
+                q.push({"rv": ref()});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"ex": ex});
+            }
+        }();
+        hash<auto> h = q.get();
+        if (h.ex) {
+            throw h.ex.err, h.ex.desc;
+        }
+        return h.rv;
+    }
+}

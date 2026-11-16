@@ -262,8 +262,12 @@ public:
     /** An invalid @a target checks the current object, for a call through self (issue #5823): the code then does not
         load self, which a fast entry of a method of the object does not have.
     */
+    /** @param check_class the class of the method resolved at parse time, if any (QoreIRExprInstruction::check_class)
+        @param check_method the method resolved at parse time, if any
+    */
     QoreIRExprInstruction* createCheckCallTarget(const QoreValue& call, QoreIRValue target,
-        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc);
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc,
+            const QoreClass* check_class = nullptr, const QoreMethod* check_method = nullptr);
     QoreIRBackgroundInstruction* createBackground(QoreIRBackgroundKind kind, const std::string& name,
         const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc = nullptr);
@@ -417,6 +421,10 @@ public:
     QoreIRInstruction* createIteratorRelease(QoreIRValue iterator, const QoreProgramLocation* loc = nullptr);
     //! Releases a temporary that the function owns on the path of a return (QoreIROpcode::ReleaseOwnedTemp)
     QoreIRInstruction* createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+
+    //! Hands the value of a return statement in a handler run out of line to its function (QoreIROpcode::HandlerReturn,
+    //! #6074); an invalid \a value is a return without a value
+    QoreIRInstruction* createHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
 
     //! Releases \a input, the input of a fused pipeline's map stage, once the stage has given \a kept, unless it is
     //! \a kept itself at run time (a value that an optimization or the expression made the input): a ReleaseOwnedTemp

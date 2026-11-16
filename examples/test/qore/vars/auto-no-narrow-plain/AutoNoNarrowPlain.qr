@@ -1,0 +1,138 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A list or hash that reaches a plain `auto!` parameter, local, member or global variable or is returned through the
+# return type `auto!` has its complex type stripped, as with `any`, in every execution mode and in qcc-compiled code
+# (issue #6059): qcc-compiled parameters and returns kept it, as did a call that qcc replaced with the argument of a
+# function that only returns it (also for `any`); `auto` keeps it; see AutoNoNarrowPlain.qtest.
+
+hashdecl AutoNoNarrowPlainHd {
+    int a;
+}
+
+our auto! g;
+
+list<int> li = (1, 2);
+hash<string, int> hi = {"a": 1};
+
+string sub param(auto! v) { return v.fullType(); }
+string sub param_default(auto! v = (1, 2)) { return v.fullType(); }
+list<auto> sub param_write(auto! v) { v += "a"; return v; }
+string sub auto_param(auto v) { return v.fullType(); }
+auto! sub ret_param(list<int> l) { return l; }
+auto! sub ret_local() { hash<string, int> h = {"a": 1}; return h; }
+auto! sub ret_literal() { return (1, 2); }
+auto! sub ret_hashdecl() { return <AutoNoNarrowPlainHd>{"a": 1}; }
+auto! sub ret_scalar() { return 1; }
+auto sub auto_ret(list<int> l) { return l; }
+
+class AutoNoNarrowPlainC {
+    public {
+        auto! m;
+        auto! mi = (1, 2);
+    }
+
+    string p(auto! v) { return v.fullType(); }
+    static string sp(auto! v) { return v.fullType(); }
+    auto! r(hash<string, int> h) { return h; }
+    static auto sfwd(auto! v) { return v; }
+}
+
+# functions that only return a parameter: qcc replaced a call whose argument types it knows exactly with the argument,
+# so the parameter's strip was skipped
+auto sub fwd(auto! v) { return v; }
+auto sub fwd_local(auto! v) { auto! x = v; return x; }
+any sub fwd_any(any v) { return v; }
+auto sub fwd_any_auto(any v) { return v; }
+auto! sub fwd_ret(list<int> v) { return v; }
+auto sub fwd_keep(auto v) { return v; }
+# a parameter returned through a local: a local that strips makes the value returned a new one
+auto sub fwd_store_any(auto v) { any x = v; return x; }
+auto sub fwd_store(auto v) { auto! x = v; return x; }
+auto sub fwd_store_keep(auto v) { auto x = v; return x; }
+# a parameter that strips but is not the one returned does not stop the fold of another
+list<int> sub fwd_other(list<int> l, any tag) { return l; }
+
+# a static method of a generic class that returns its parameter of the type parameter, called with `any` for it
+class AutoNoNarrowPlainG<T> {
+    static T sid(T v) { return v; }
+}
+
+#! calls with locals as arguments, the first call of each function in this function
+string sub forwarded() {
+    list<int> a = (1, 2);
+    hash<string, int> h = {"a": 1};
+    auto w = fwd(a);
+    w += "s";
+    return sprintf("auto! %s, stored %s, any %s, any through auto %s, static method %s, auto! return %s, "
+        "auto %s, write %y", fwd(a).fullType(), fwd_local(a).fullType(), fwd_any(a).fullType(),
+        fwd_any_auto(h).fullType(), AutoNoNarrowPlainC::sfwd(h).fullType(), fwd_ret(a).fullType(),
+        fwd_keep(a).fullType(), w);
+}
+
+#! calls of functions that store a parameter in a local before returning it, the first call of each in this function
+string sub stored() {
+    list<int> a = (1, 2);
+    return sprintf("any %s, auto! %s, auto %s, other %s", fwd_store_any(a).fullType(), fwd_store(a).fullType(),
+        fwd_store_keep(a).fullType(), fwd_other(a, a).fullType());
+}
+
+#! calls of a generic static method that returns its parameter, the first call of each in this function
+string sub generic() {
+    list<int> a = (1, 2);
+    hash<string, int> h = {"a": 1};
+    auto r = AutoNoNarrowPlainG<any>::sid(a);
+    r += "x";
+    return sprintf("any %y %s, any hash %s, typed %s", r, r.fullType(), AutoNoNarrowPlainG<any>::sid(h).fullType(),
+        AutoNoNarrowPlainG<list<int>>::sid(a).fullType());
+}
+
+code cp = string sub (auto! v) { return v.fullType(); };
+code cr = auto! sub (list<int> l) { return l; };
+
+sub show(string label, auto v) {
+    printf("%s: %y %s\n", label, v, v.fullType());
+}
+
+# several calls, so that the code also runs once it has IR or is compiled
+for (int i = 0; i < 3; ++i) {
+    printf("param: %s %s\n", param(li), param(hi));
+    printf("param hashdecl: %s\n", param(<AutoNoNarrowPlainHd>{"a": 1}));
+    printf("param default: %s\n", param_default());
+    show("param write", param_write(li));
+    printf("auto param: %s %s\n", auto_param(li), auto_param(hi));
+    AutoNoNarrowPlainC o();
+    printf("method param: %s %s\n", o.p(li), o.p(hi));
+    printf("static method param: %s\n", AutoNoNarrowPlainC::sp(li));
+    printf("closure param: %s\n", cp(hi));
+    printf("call_function: %s\n", call_function("param", li));
+    printf("call_object_method: %s\n", call_object_method(o, "p", hi));
+    show("return param", ret_param(li));
+    show("return local", ret_local());
+    show("return literal", ret_literal());
+    show("return hashdecl", ret_hashdecl());
+    show("return scalar", ret_scalar());
+    show("method return", o.r(hi));
+    show("closure return", cr(li));
+    show("call_function return", call_function("ret_param", li));
+    show("auto return", auto_ret(li));
+    {
+        auto! x = li;
+        auto! y;
+        y = hi;
+        printf("local: %s %s\n", x.fullType(), y.fullType());
+        x += "a";
+        show("local write", x);
+    }
+    o.m = li;
+    printf("member: %s init: %s\n", o.m.fullType(), o.mi.fullType());
+    g = hi;
+    printf("global: %s\n", g.fullType());
+    foreach auto! e in ((li,)) {
+        printf("foreach: %s\n", e.fullType());
+    }
+    printf("forwarded: %s\n", forwarded());
+    printf("stored: %s\n", stored());
+    printf("generic: %s\n", generic());
+    printf("caller: %s %s\n", li.fullType(), hi.fullType());
+}

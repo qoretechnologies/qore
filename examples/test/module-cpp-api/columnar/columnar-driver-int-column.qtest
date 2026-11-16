@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ColumnarDriverIntColumnTest
+
+#! Tests that a dense integer column built by a DBI driver converts the driver's values (qore#6147)
+/** DBI drivers build their columnar results with the C++ API QoreColumnarResult::fromColumnHash(), which converts
+    every non-null value of a dense integer column to an integer, so that a scale-0 numeric column of precision 18 or
+    less, which is stored as buffer<int64>, takes the number values that the driver gives for it, as the scalar and row
+    fetch paths return them as integers.  ColumnarResult::fromColumnHash(), called by a script, checks the values
+    instead (see examples/test/qore/classes/ColumnarResult/ColumnarResult.qtest).
+*/
+class ColumnarDriverIntColumnTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ColumnarDriverIntColumnTest", "1.0", \ARGV) {
+        addTestCase("numeric narrowing", \testNumericNarrowing());
+        addTestCase("values that a script cannot give", \testUncheckedValues());
+        set_return_value(main());
+    }
+
+    testNumericNarrowing() {
+        ColumnarResult r = cpp_api_columnar_from_driver_column_hash({
+            "n10_0": (2n, -3n, NOTHING, 12345678901234567n),
+            "n18_0": (2.0, 3n, NULL, 7),
+        }, {
+            "n10_0": {"native_type": "numeric(10,0)", "nullable": True},
+            "n18_0": {"native_type": "numeric(18,0)", "nullable": True},
+        });
+        hash<auto> columns = r.toColumnHash();
+        assertEq("buffer<*int64>", columns.n10_0.fullType());
+        assertEq((2, -3, NOTHING, 12345678901234567), columns.n10_0.toList());
+        assertEq("buffer<*int64>", columns.n18_0.fullType());
+        assertEq((2, 3, NOTHING, 7), columns.n18_0.toList());
+    }
+
+    # the driver path keeps the conversion of every value to an integer, which a script's values do not get
+    testUncheckedValues() {
+        list<auto> values = (1, "x", "12", 1.5, True, NOTHING);
+        list<auto> expected = (1, 0, 12, 1, 1, NOTHING);
+        ColumnarResult r = cpp_api_columnar_from_driver_column_hash({"i": values}, {"i": {"native_type": "bigint"}});
+        assertEq(expected, r.toColumnHash().i.toList());
+
+        # the same values from a script raise an exception
+        assertThrows("COLUMNAR-RESULT-ERROR", "integer column 'i' row 1 has a string",
+            \ColumnarResult::fromColumnHash(), ({"i": values}, {"i": {"native_type": "bigint"}}));
+    }
+}

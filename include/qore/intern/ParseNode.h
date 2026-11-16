@@ -39,6 +39,7 @@
 #include "qore/intern/WeakHashReferenceNode.h"
 #include "qore/intern/WeakListReferenceNode.h"
 
+#include <type_traits>
 #include <typeinfo>
 
 struct QoreParseContext;
@@ -211,11 +212,13 @@ public:
     the type's type_info object: a dynamic_cast searches the class hierarchy with string comparisons of the type
     names, which is too slow for the interpreter's per-instruction paths.
 
-    T must be a library-internal (DLLLOCAL) class without subclasses: objects of such a class are only created in
-    this library, so their type_info object is the one that typeid(T) returns here.
+    T must be a library-internal (DLLLOCAL) final class: objects of such a class are only created in this library, so
+    their type_info object is the one that typeid(T) returns here, and a subclass, which the test would not accept,
+    cannot be declared.
 */
 template <typename T>
 DLLLOCAL inline const T* qore_exact_node_cast(const AbstractQoreNode* n) {
+    static_assert(std::is_final_v<T>, "an exact type test is only equivalent to a dynamic_cast for a final class");
     const T* rv = (n && &typeid(*n) == &typeid(T)) ? static_cast<const T*>(n) : nullptr;
     assert(rv == dynamic_cast<const T*>(n));
     return rv;
@@ -224,6 +227,7 @@ DLLLOCAL inline const T* qore_exact_node_cast(const AbstractQoreNode* n) {
 //! Returns the node as a T if its class is exactly T, otherwise nullptr; see the const overload
 template <typename T>
 DLLLOCAL inline T* qore_exact_node_cast(AbstractQoreNode* n) {
+    static_assert(std::is_final_v<T>, "an exact type test is only equivalent to a dynamic_cast for a final class");
     T* rv = (n && &typeid(*n) == &typeid(T)) ? static_cast<T*>(n) : nullptr;
     assert(rv == dynamic_cast<T*>(n));
     return rv;

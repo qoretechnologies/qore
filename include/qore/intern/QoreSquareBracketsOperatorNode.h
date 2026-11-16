@@ -34,7 +34,7 @@
 
 
 #include <atomic>
-class QoreSquareBracketsOperatorNode : public QoreBinaryOperatorNode<>, public FunctionalOperator {
+class QoreSquareBracketsOperatorNode final : public QoreBinaryOperatorNode<>, public FunctionalOperator {
 OP_COMMON
 public:
     //! the keys of the lvalue path that ends with this step, if they are evaluated before it is resolved

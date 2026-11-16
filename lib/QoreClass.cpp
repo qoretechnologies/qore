@@ -75,6 +75,10 @@ void qore_bump_method_dispatch_epoch() {
     qore_method_dispatch_epoch.fetch_add(1, std::memory_order_release);
 }
 
+const std::atomic<uint64_t>* qore_get_method_dispatch_epoch_addr() {
+    return &qore_method_dispatch_epoch;
+}
+
 // starts at 1 so that 0 never identifies a class
 static std::atomic<uint64_t> qore_class_instance_serial_seq{1};
 
@@ -4089,7 +4093,7 @@ int qore_class_private::runtimeCheckInstantiateClassByName(const QoreClass& qc, 
         }
     }
     // code running in its own Program can also be restricted with the restrictions of its caller (module code
-    // called from a restricted Program; see qore_get_user_call_runtime_po_override()), which only the effective
+    // called from a restricted Program; see qore_set_user_call_runtime_po_override()), which only the effective
     // runtime parse options hold
     if (pgm && pgm == ::getProgram()
             && !qore_parse_options_allow_domain(runtime_get_parse_options(), qc.priv->domain)) {
@@ -4844,6 +4848,9 @@ QoreClass* QoreClass::copy() {
 }
 
 QoreClass::~QoreClass() {
+    // the caches of method call sites are keyed on the address of the wrapper, which another class can take once it is
+    // freed (QoreCallTargetCheckCache; issue #5824)
+    qore_bump_method_dispatch_epoch();
     // dereference the private data if still present
     if (priv) {
         {
@@ -5183,6 +5190,50 @@ QoreValue qore_class_private::evalMemberGate(QoreObject* self, const char* nme, 
         args->push(runtimeCheckPrivateClassAccess() ? true : false, nullptr);
 
     return self->evalMethod(*memberGate, *args, xsink);
+}
+
+int qore_class_private::checkMethodForEval(const QoreObject* self, const char* nme,
+        const qore_class_private* class_ctx, ExceptionSink* xsink, bool* found_method) const {
+    // the lookup of evalMethod(), up to the evaluation of the arguments
+    if (!strcmp(nme, "copy")) {
+        return 0;
+    }
+    const QoreMethod* w = getMethodForEval(nme, self->getProgram(), class_ctx, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (w) {
+        // a method of the class, which does not depend on the object (QoreCallTargetCheckCache)
+        if (found_method) {
+            *found_method = true;
+        }
+        return 0;
+    }
+    if (const QoreMemberInfo* mi = runtimeGetMemberInfo(nme, class_ctx)) {
+        const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
+        qore_object_private* obj_priv = qore_object_private::get(*const_cast<QoreObject*>(self));
+        QoreAutoVarRWReadLocker al(obj_priv->rml);
+        if (obj_priv->status == OS_DELETED) {
+            return 0;
+        }
+        const QoreHashNode* odata = member_class_ctx ? obj_priv->getInternalData(member_class_ctx) : obj_priv->data;
+        if (odata) {
+            bool exists = false;
+            QoreValue mv = qore_hash_private::get(*odata)->getKeyValueExistenceIntern(nme, exists);
+            if (exists && (mv.getType() == NT_FUNCREF || mv.getType() == NT_RUNTIME_CLOSURE)) {
+                return 0;
+            }
+        }
+    }
+    QoreClass* qc = nullptr;
+    if (pseudo_classes_find_method(NT_OBJECT, nme, qc)
+            || (methodGate && !methodGate->inMethod(const_cast<QoreObject*>(self)))) {
+        return 0;
+    }
+    xsink->raiseException("METHOD-DOES-NOT-EXIST", "no method %s::%s() has been defined and no pseudo-method " \
+        "<object>::%s() is available (class lang: %s)", self->getClassName(), nme, nme,
+        self->getClass()->getLanguage());
+    return -1;
 }
 
 QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* nme, QoreListNode* args,
@@ -8441,6 +8492,35 @@ static QORE_INTERN_NOINLINE void raise_abstract_variant_call(ExceptionSink* xsin
         f->getClassName(), f->getName(), mv->getSignature()->getSignatureText());
 }
 
+void qore_raise_deleted_method_call_after_args(QoreObject* self, const QoreMethod& m,
+        const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t* arg_names,
+        ExceptionSink* xsink) {
+    assert(!m.isStatic());
+    const NormalMethodFunction* f = NMETHF(qore_method_private::get(m)->getFunction());
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreSourceProgramHolder spgm_holder(xsink);
+    {
+        // as NormalMethodFunction::evalMethodTmpArgs(), which the call runs: the variant is resolved with the
+        // arguments, raising the error of the resolution as the AST interpreter does before it enters the method's
+        // code
+        CodeEvaluationHelper ceh(CodeEvaluationHelper::DeletedByArgs(), xsink, rc, f, variant, f->getName(),
+            args, self, qore_class_private::get(*f->getClass()), cctx,
+            qore_get_method_pgm_context(*f->getClass(), spgm_holder), explicit_type_param_instantiation,
+            arg_names);
+        if (*xsink) {
+            return;
+        }
+    }
+    const MethodVariant* mv = METHV_const(variant);
+    if (mv->isAbstract()) {
+        raise_abstract_variant_call(xsink, f, mv);
+        return;
+    }
+    // the error of the method's code, which names the class of the variant (CodeContextHelper)
+    qore_object_private::get(*self)->raiseDeletedCall(qore_class_private::get(*mv->getClass()), f->getName(), xsink);
+}
+
 QoreValue NormalMethodFunction::evalMethod(
         ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, QoreObject* self, const QoreListNode* args,
@@ -8829,6 +8909,10 @@ BuiltinNormalMethodValueVariant* BuiltinNormalMethodValueVariant::create(q_metho
 QoreValue LexicalForwardingMethodVariant::evalLexicalMethod(QoreObject* self, CodeEvaluationHelper& ceh,
         ExceptionSink* xsink) const {
     CodeContextHelper cch(xsink, CT_BUILTIN, qmethod->getName(), self, getClassPriv());
+    // the object was deleted before the call, as by its arguments (issue #5824)
+    if (*xsink) {
+        return QoreValue();
+    }
     return qore_eval_builtin_call(xsink, [&]() -> QoreValue {
         ReferenceHolder<AbstractPrivateData> pd(qore_object_private::get(*self)->getReferencedPrivateData(
             qore_class_private::get(*getClass())->methodID, xsink), xsink);
@@ -8841,6 +8925,10 @@ QoreValue LexicalForwardingMethodVariant::evalLexicalMethod(QoreObject* self, Co
 QoreValue BuiltinNormalMethodVariantBase::evalMethod(QoreObject* self, CodeEvaluationHelper& ceh,
         ExceptionSink* xsink) const {
     CodeContextHelper cch(xsink, CT_BUILTIN, qmethod->getName(), self, qore_class_private::get(*qmethod->getClass()));
+    // the object was deleted before the call, as by its arguments (issue #5824)
+    if (*xsink) {
+        return QoreValue();
+    }
     return qore_eval_builtin_call(xsink, [&]() -> QoreValue {
         return qore_object_private::evalBuiltinMethodWithPrivateData(*self, *qmethod, this, ceh.getArgs(),
             ceh.getRuntimeConfig(), xsink);

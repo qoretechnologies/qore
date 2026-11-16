@@ -1,0 +1,38 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - DateTime default construction in a binary module built with the platform C++ compiler
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DateDefaultFormsTest
+
+#! Tests the default constructors of DateTime and DateTimeNode in the forms a module uses
+/** The converting constructors of DateTime and DateTimeNode are explicit, but the default constructors are not:
+    <tt>DateTime w = {};</tt>, <tt>DateTime a[2] = {};</tt>, <tt>return {};</tt> and <tt>{}</tt> for a
+    <tt>const DateTime&</tt> parameter compile (the cppapiuser module does not build otherwise) and give an empty
+    absolute date.
+*/
+class DateDefaultFormsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("DateDefaultFormsTest", "1.0", \ARGV) {
+        addTestCase("empty-brace and default forms", \testForms());
+        set_return_value(main());
+    }
+
+    testForms() {
+        list<date> dates = cpp_api_date_default_forms();
+        assertEq(7, dates.size());
+        foreach date d in (dates) {
+            string label = sprintf("form %d", $#);
+            assertFalse(d.relative(), label + ": absolute");
+            assertEq(1970-01-01T00:00:00Z, d, label + ": the epoch");
+            assertEq(0, d.getEpochMicroseconds(), label + ": epoch microseconds");
+        }
+    }
+}

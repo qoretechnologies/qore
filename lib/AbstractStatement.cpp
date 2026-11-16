@@ -194,7 +194,7 @@ QoreBreakpointList_t::~QoreBreakpointList_t() {
 }
 
 AbstractStatement::AbstractStatement(qore_program_private_base* p) : loc(p->getLocation(-1, -1)) {
-    pwo = p->pwo;
+    pwo = p->pwo.get();
     semantic_policy_bound = LexicalParsePolicyHelper::capture(semantic_policy);
 }
 

@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Locked Program Keeps Its Restrictions
+    @ref Qore::Program::disableParseOptions() "Program::disableParseOptions()", the parse directives that disable
+    options and @ref Qore::Program::replaceParseOptions() "Program::replaceParseOptions()" can no longer remove the
+    restrictions of a locked child Program, and an independent Program of restricted code takes and locks that code's
+    restrictions; see @ref locked_parse_options.
+
     @par Completed Objects Are Released After Constructor Argument Errors
     An exception while @ref constructor_argument_cleanup "releasing a completed constructor's arguments" now releases
     the new object normally, running its destructor when no other reference remains; AST execution previously skipped
@@ -635,6 +641,19 @@
       \c setRelativeDateSeconds() and \c makeRelativeFromSeconds(), the \c DateTimeNode overloads and
       \c DateTimeValueHelper(const QoreValue&, ExceptionSink*); the overloads without an \c ExceptionSink are
       deprecated and saturate such a result (it wrapped before; see \c QORE_DATE_UNCHECKED_DEPRECATED, issue #6103)
+    - a pointer to a \c DateTime or \c DateTimeNode given where a \c DateTime value is expected (a constructor,
+      \c DateTime::setDate(), a <tt>const DateTime&</tt> argument) is a compile error, as the deleted
+      \c DateTime(const DateTime*) shows; it was converted through \c DateTime(bool) to an empty date
+    - \c DateTime(bool) is \c explicit, so a pointer of another type (ex: <tt>const AbstractQoreNode*</tt>) is no
+      longer converted implicitly to an empty \c DateTime; write <tt>DateTime(true)</tt> for an empty relative date
+    - \c DateTime(int64) is \c explicit, so an integer, a floating-point value or a \c bool (\c true gave
+      1970-01-01 00:00:01) is no longer converted implicitly to an absolute date; construct it from an \c int64
+      (<tt>DateTime((int64)secs)</tt>, as another integer type is ambiguous with \c DateTime(bool))
+    - \c DateTimeNode(bool) and \c DateTimeNode(int64) are \c explicit like those of \c DateTime, which affects
+      only code that can create a \c DateTimeNode temporary (its destructor is protected)
+    - the <tt>const char*</tt> and <tt>struct tm*</tt> constructors of \c DateTime (and, as for
+      \c DateTimeNode(bool), of \c DateTimeNode) are \c explicit, so a string or a \c struct \c tm pointer is no
+      longer converted implicitly to a date; construct it explicitly (<tt>DateTime(str)</tt>)
     @endparblock
 
     @par qget Command-Line Changes
@@ -762,6 +781,12 @@
     \c float or \c number lvalue multiplied by a date with \c *= raises an exception at run time, as it cannot hold
     the result (issue #6109).
 
+    @par Calls Through Method References on Deleted Objects Name the Method
+    The \c OBJECT-ALREADY-DELETED exception of a call through a method call reference on a deleted object names the
+    method (<tt>cannot call U::m() ...</tt>) instead of <tt>cannot call a method ...</tt>, in every execution mode
+    (see @ref call_reference_deleted_object; <a href="https://github.com/qoretechnologies/qore/issues/6083">issue
+    6083</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Module Commands Know the Restrictions of the Code That Issues Them
     A binary module's command handler gets the effective restrictions of the issuing code, not those of the target
@@ -848,7 +873,8 @@
     @par Thread Entry and Exit Handlers
     @ref Qore::Program::setThreadEntryHandler() "Program::setThreadEntryHandler()" sets code that runs every time a
     thread enters and leaves a Program, so that an embedding application can keep a context of its own for each
-    Program on threads that run the code of many Programs, such as async I/O callback workers.
+    Program on threads that run the code of many Programs, such as async I/O callback workers; a binary module asks
+    \c qore_program_thread_entry_pending() whether a call into its current Program must still enter it.
 
     @par Module Parse Option Masks
     A process can let code with fewer privileges load trusted modules that use more functionality with a module
@@ -1077,6 +1103,17 @@
     reads with the new \c Datasource::getOptionRestrictions() and \c Datasource::getOptionPolicyManagerRef(), so that
     whoever configures a datasource decides what its options may do; see @ref sandbox_datasource_options
     (<a href="https://github.com/qoretechnologies/qore/issues/5741">issue 5741</a>).
+
+    @par Asking Whether a Sandbox Restricts Anything
+    @ref Qore::SandboxManager::restricts() "SandboxManager::restricts()", \c networkRestricts(), \c filesystemRestricts()
+    and \c limitsRestrict() tell whether a sandbox manager restricts network access, filesystem access or resource
+    use at all; a manager that allows everything and sets no limit restricts nothing.  Binary modules use the matching
+    C++ methods of \c QoreSandboxManager (feature macro \c _QORE_HAS_SANDBOX_RESTRICTS_API) instead of testing whether
+    a sandbox manager is attached; see @ref sandbox_restricts.  The new
+    @ref Qore::SandboxManager::trustsUncontrolledApis() "SandboxManager::trustsUncontrolledApis()" and the matching C++
+    method tell whether the sandbox trusts its code to use uncontrolled APIs (for a combination of sandboxes, whether
+    every member does), so that a module refuses an operation for a sandboxed caller only if
+    <tt>!trustsUncontrolledApis() && restricts()</tt>.
 
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
@@ -1830,6 +1867,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an allocation that fails while a thread enters another %Program (ex: in a binary module's
+      \c QoreExternalProgramContextHelper or a parse commit) leaves the thread in the calling %Program and releases
+      its thread count in the entered %Program, which could otherwise not be deleted (issue #6198)
     - the negative of an absolute date with microseconds (ex: <tt>-1970-01-01T00:00:01.5Z</tt>) is
       \c 1969-12-31T23:59:58.5Z; the microseconds were negated as an unsigned value and gave another date (issue #6103)
     - the decimal fraction of an ISO 8601 duration component (ex: \c P0.0000001Y for
@@ -1840,6 +1880,10 @@
       @ref Qore::Socket::startPollConnectSsl() "Socket::startPollConnectSsl()",
       @ref Qore::HTTPClient::startPollConnect() "HTTPClient::startPollConnect()") reports the connect's own error; on
       macOS, a refused or timed-out connect could be reported as <tt>Broken pipe</tt> (\c EPIPE) (issue #6119)
+    - the @ref splice "splice" and @ref extract "extract" operators no longer read past the end of a string when they
+      replace a range of it with a shorter string (issue #6188)
+    - the @ref splice "splice" and @ref extract "extract" operators no longer read past the end of a list, which could
+      crash, when they replace a range of it with fewer elements (issue #6192)
     - the heartbeat of @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" connections is measured on the
       monotonic clock: a step back of the system clock no longer stops the heartbeat PINGs for the size of the step
       (see @ref Qore::AsyncIoController::addTimerDelay() "AsyncIoController::addTimerDelay()")
@@ -1860,6 +1904,9 @@
       @ref Qore::hours() "hours()", @ref Qore::minutes() "minutes()", @ref Qore::seconds() "seconds()",
       @ref Qore::milliseconds() "milliseconds()" and @ref Qore::microseconds() "microseconds()" now raise
       \c INVALID-DATE for a value that a relative date cannot hold; it wrapped to another duration (issue #6101)
+    - a float out of the range of an integer, an infinite float and NaN now @ref float_to_int_conversion "convert to an
+      integer" as a number does in every mode, saturated with NaN giving 0; the result was undefined and differed
+      between the execution modes (issue #6181)
     - a @ref find "find expression" nested in the result, in-expression or where expression of another one can now be
       compiled with @ref qcc_tool "qcc"; it was refused as an unsupported expression (issue #5974)
     - @ref qcc_tool "qcc" no longer crashes compiling a user module whose header has a \c del closure, and the compiled
@@ -1884,6 +1931,18 @@
     - a call through \c self of an @ref abstract "abstract method" that another parent class implements raised
       \c RUNTIME-OVERLOAD-ERROR instead of calling the implementation, except in programs compiled with qcc
       (<a href="https://github.com/qoretechnologies/qore/issues/3070">issue 3070</a>)
+    - a method call whose arguments deleted the object ran the method on the deleted object in the AST interpreter
+      and raised \c OBJECT-ALREADY-DELETED without the class of the method in the compiled modes; it now raises
+      \c OBJECT-ALREADY-DELETED naming the method (<tt>cannot call C::m()</tt>) in every mode
+      (<a href="https://github.com/qoretechnologies/qore/issues/5824">issue 5824</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6057">issue 6057</a>)
+    - a program compiled with qcc called a \c private:internal method of another parent class that implements an
+      @ref abstract "abstract method" through \c self, where the interpreters raise \c METHOD-IS-PRIVATE
+      (<a href="https://github.com/qoretechnologies/qore/issues/6158">issue 6158</a>)
+    - in the IR, JIT and tiered @ref execution_modes "execution modes", a call through \c self on an object that had
+      already been deleted and was looked up by name named the class of the method found instead of the class of the
+      object in the \c OBJECT-ALREADY-DELETED error
+      (<a href="https://github.com/qoretechnologies/qore/issues/6168">issue 6168</a>)
     - a block whose @ref on_exit "on_exit" or @ref on_success "on_success" handler raised a
       @ref thread_exit "thread_exit" ran its @ref on_error "on_error" handlers with no exception, which crashed the
       process

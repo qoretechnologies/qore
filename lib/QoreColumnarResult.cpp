@@ -10,9 +10,11 @@
 #include <qore/QoreColumnarResult.h>
 
 #include "qore/intern/QC_ColumnarResult.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
@@ -482,8 +484,77 @@ static QoreListNode* columnar_make_typed_list(const QoreListNode* source, const 
     return rv.release();
 }
 
+//! Returns true if a string is a numeric string that a dense integer column accepts from a script
+/** A numeric string is an optional sign and decimal digits, with optional leading and trailing whitespace, whose
+    value fits in an int64: exactly the strings that the string-to-int conversion of \c softint and
+    QoreStringNode::getAsBigInt() reads in full, without ignoring trailing characters (as in \c "1.5", \c "1e3" or
+    \c "12abc") or saturating an out-of-range value.
+*/
+static bool columnar_string_is_integer(const QoreString& str) {
+    return QoreAsciiCompatStringHelper::withText(str, [] (const char* p, size_t len) -> bool {
+        char* end;
+        errno = 0;
+        strtoll(p, &end, 10);
+        if (end == p || errno == ERANGE) {
+            return false;
+        }
+        const char* e = p + len;
+        while (end < e && std::isspace(static_cast<unsigned char>(*end))) {
+            ++end;
+        }
+        // a NUL character before the end of the string stops the scan, and it is not whitespace
+        return end == e;
+    });
+}
+
+//! Checks a non-null value given by a script for a dense integer column
+/** A dense integer column built from script values accepts int, float, number and numeric string values (see
+    columnar_string_is_integer()); any other value, including a boolean, raises an exception instead of being
+    converted to an integer.  Called only for a value that is not an int, float or number, which the caller accepts,
+    so that those values cost nothing more than in a column built by a DBI driver.
+
+    @param value the value; not NOTHING or NULL, and not an int, float or number
+    @param type the type of \a value
+    @param name the column name
+    @param row the row index of \a value
+    @param xsink for the exception
+
+    @return 0 if the value is accepted, -1 if an exception was raised
+*/
+static __attribute__((noinline, cold)) int columnar_check_script_int_value(QoreValue value, qore_type_t type,
+        const char* name, size_t row, ExceptionSink* xsink) {
+    // the caller accepts these types without calling this function
+    assert(type != NT_INT && type != NT_FLOAT && type != NT_NUMBER);
+    switch (type) {
+        case NT_STRING: {
+            QoreStringValueHelper str(value);
+            if (columnar_string_is_integer(**str)) {
+                return 0;
+            }
+            xsink->raiseException("COLUMNAR-RESULT-ERROR", "integer column '%s' row " QLLD " has a string that is "
+                "not a decimal integer; expected int, float, number, a numeric string, NULL or NOTHING", name,
+                static_cast<int64>(row));
+            return -1;
+        }
+        default:
+            xsink->raiseException("COLUMNAR-RESULT-ERROR", "integer column '%s' row " QLLD " has type '%s'; "
+                "expected int, float, number, a numeric string, NULL or NOTHING", name, static_cast<int64>(row),
+                value.getFullTypeName());
+            return -1;
+    }
+}
+
+//! Returns the values of a column list in the storage of a column of the given shape
+/** @param source the column values
+    @param shape the column shape
+    @param name the column name, for errors
+    @param script_values true if the values were given by a script (ColumnarResult::fromColumnHash(),
+    ColumnarResult::fromRows() and deserialization), false if they come from a DBI driver or from an existing
+    result; a value given by a script for a dense integer column is checked by columnar_check_script_int_value()
+    @param xsink for errors
+*/
 static QoreValue columnar_make_column_value(const QoreListNode* source, const ColumnarShape& shape,
-        ExceptionSink* xsink) {
+        const char* name, bool script_values, ExceptionSink* xsink) {
     if (shape.column_type == QoreColumnarColumnType::Date && shape.buffer_type == QoreBufferElementType::Int64
             && (shape.kind == QoreColumnarTypeKind::Date || shape.kind == QoreColumnarTypeKind::Timestamp
                 || shape.kind == QoreColumnarTypeKind::Duration)) {
@@ -532,7 +603,8 @@ static QoreValue columnar_make_column_value(const QoreListNode* source, const Co
             // a scale-0, precision<=18 numeric/decimal column narrows to int64 (see
             // columnar_decimal_narrows_to_int64()); its source list still carries the driver's
             // number/float values, so coerce each non-null element to int while building the
-            // dense int64 buffer to match the scalar/row fetch paths
+            // dense int64 buffer to match the scalar/row fetch paths; a value given by a script must
+            // be an int, float, number or numeric string (columnar_check_script_int_value())
             ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(shape.buffer_type, shape.nullable,
                 source->size()), xsink);
             ConstListIterator i(source);
@@ -542,16 +614,35 @@ static QoreValue columnar_make_column_value(const QoreListNode* source, const Co
                     return QoreValue();
                 }
                 QoreValue value = i.getValue();
-                if (value.isNothing() || value.getType() == NT_NULL) {
-                    if (rv->setEntry(i.index(), QoreValue(), xsink)) {
-                        return QoreValue();
+                if (!value.isInt()) {
+                    qore_type_t type = value.getType();
+                    if (type == NT_NOTHING || type == NT_NULL) {
+                        if (rv->setEntry(i.index(), QoreValue(), xsink)) {
+                            return QoreValue();
+                        }
+                        continue;
                     }
-                    continue;
+                    if (type != NT_INT) {
+                        if (script_values && type != NT_FLOAT && type != NT_NUMBER
+                                && columnar_check_script_int_value(value, type, name, i.index(), xsink)) {
+                            return QoreValue();
+                        }
+                        // an int outside of the inline range is held in a node of its own, which setEntry() copies
+                        // and which is released here (qore#6146); released only when it is not inline, as a
+                        // ValueHolder would cost an out-of-line discard() call for every converted value
+                        QoreValue int_value(value.getAsBigInt());
+                        int rc = rv->setEntry(i.index(), int_value, xsink);
+                        if (!int_value.isInt()) {
+                            int_value.discard(xsink);
+                        }
+                        if (rc) {
+                            return QoreValue();
+                        }
+                        continue;
+                    }
                 }
-                // an int outside of the inline range is held in a node of its own, which setEntry() copies and
-                // the holder releases (qore#6146)
-                ValueHolder int_value(QoreValue(value.getAsBigInt()), xsink);
-                if (rv->setEntry(i.index(), *int_value, xsink)) {
+                // an int value is stored as it is
+                if (rv->setEntry(i.index(), value, xsink)) {
                     return QoreValue();
                 }
             }
@@ -560,6 +651,19 @@ static QoreValue columnar_make_column_value(const QoreListNode* source, const Co
         return new QoreBufferNode(shape.buffer_type, shape.nullable, source, xsink);
     }
     return columnar_make_typed_list(source, shape.element_type, shape.nullable, xsink);
+}
+
+// the buffer errors raised while a column is built name the element only; adds the column (issue #6181)
+static void columnar_add_column_to_buffer_error(const char* name, ExceptionSink* xsink) {
+    QoreValue err = xsink->getExceptionErr();
+    if (err.getType() != NT_STRING) {
+        return;
+    }
+    // the error code can be held in inline short string storage, which has no QoreStringNode
+    QoreStringDataHelper e(err);
+    if (e == "BUFFER-RANGE-ERROR" || e == "BUFFER-TYPE-ERROR") {
+        xsink->appendLastDescription(" (column '%s')", name);
+    }
 }
 
 static size_t columnar_value_size(QoreValue value) {
@@ -705,8 +809,10 @@ static QoreValue columnar_filter_value(QoreValue value, QoreValue mask, size_t s
             return new QoreBufferNode(source->getElementType(), source->hasNullableElements(), *values, xsink);
         }
 
+        // carry the source buffer's decimal precision and scale (ignored for other element types)
         ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(source->getElementType(),
-            source->hasNullableElements(), selected), xsink);
+            source->hasNullableElements(), selected, source->getDecimalPrecision(), source->getDecimalScale()),
+            xsink);
         size_t out = 0;
         for (size_t i = 0; i < source->size(); ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "filtering columnar buffer column")) {
@@ -782,8 +888,10 @@ static QoreValue columnar_take_value(QoreValue value, const std::vector<size_t>&
             return new QoreBufferNode(source->getElementType(), source->hasNullableElements(), *values, xsink);
         }
 
+        // carry the source buffer's decimal precision and scale (ignored for other element types)
         ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(source->getElementType(),
-            source->hasNullableElements(), indices.size()), xsink);
+            source->hasNullableElements(), indices.size(), source->getDecimalPrecision(),
+            source->getDecimalScale()), xsink);
         for (size_t i = 0; i < indices.size(); ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "taking columnar buffer rows")) {
                 return QoreValue();
@@ -1174,11 +1282,15 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
     if (kind_name.empty()) {
         kind_name = columnar_get_desc_string(desc, "logical_type");
     }
+    // an explicit kind is not replaced by the kind derived from the buffer type below: a date, timestamp or
+    // duration column is stored in a buffer<int64>, and its schema has both
+    bool has_kind = false;
     if (!kind_name.empty()) {
         QoreColumnarTypeKind kind;
         if (columnar_type_kind_from_name(kind_name, kind)) {
             schema.kind = kind;
             schema.column_type = columnar_flat_type_from_kind(kind);
+            has_kind = kind != QoreColumnarTypeKind::Auto;
         }
     }
 
@@ -1208,8 +1320,10 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
         QoreBufferElementType parsed = QoreBufferElementType::Invalid;
         if (qore_buffer_element_type_from_name(buffer_type.c_str(), parsed)) {
             schema.buffer_type = parsed;
-            schema.column_type = columnar_type_from_buffer(parsed);
-            schema.kind = columnar_kind_from_flat_type(schema.column_type);
+            if (!has_kind) {
+                schema.column_type = columnar_type_from_buffer(parsed);
+                schema.kind = columnar_kind_from_flat_type(schema.column_type);
+            }
             if (parsed == QoreBufferElementType::Decimal128) {
                 schema.kind = QoreColumnarTypeKind::Decimal128;
                 schema.column_type = QoreColumnarColumnType::Number;
@@ -4050,6 +4164,11 @@ int QoreColumnarResult::addColumn(const char* name, QoreValue data, QoreColumnar
 
 int QoreColumnarResult::addColumn(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
         ExceptionSink* xsink) {
+    return addColumnIntern(name, data, schema, false, xsink);
+}
+
+int QoreColumnarResult::addColumnIntern(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
+        bool script_values, ExceptionSink* xsink) {
     ValueHolder data_holder(data, xsink);
     size_t size = columnar_value_size(data);
     if (data.getType() != NT_LIST && data.getType() != NT_BUFFER) {
@@ -4074,8 +4193,10 @@ int QoreColumnarResult::addColumn(const char* name, QoreValue data, const QoreCo
 
             QoreColumnarTypeDescriptor column_schema = columnar_descriptor_from_shape(shape, schema.native_type.c_str());
             column_schema.name = schema.name;
-            ValueHolder column_value(columnar_make_column_value(source, shape, xsink), xsink);
+            ValueHolder column_value(columnar_make_column_value(source, shape, name, script_values, xsink),
+                xsink);
             if (*xsink) {
+                columnar_add_column_to_buffer_error(name, xsink);
                 return -1;
             }
 
@@ -4090,6 +4211,16 @@ int QoreColumnarResult::addColumn(const char* name, QoreValue data, const QoreCo
 
 QoreColumnarResult* QoreColumnarResult::fromColumnHash(const QoreHashNode* columns, const QoreHashNode* desc,
         ExceptionSink* xsink) {
+    return fromColumnHashIntern(columns, desc, false, xsink);
+}
+
+QoreColumnarResult* QoreColumnarResult::fromScriptColumnHash(const QoreHashNode* columns, const QoreHashNode* desc,
+        ExceptionSink* xsink) {
+    return fromColumnHashIntern(columns, desc, true, xsink);
+}
+
+QoreColumnarResult* QoreColumnarResult::fromColumnHashIntern(const QoreHashNode* columns, const QoreHashNode* desc,
+        bool script_values, ExceptionSink* xsink) {
     assert(xsink);
     if (!columns) {
         xsink->raiseException("COLUMNAR-RESULT-ERROR", "columnar result creation requires a column hash");
@@ -4136,7 +4267,7 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHash(const QoreHashNode* colum
                 schema.precision = buffer->getDecimalPrecision();
                 schema.scale = buffer->getDecimalScale();
             }
-            if (rv->addColumn(i.getKey(), value.refSelf(), schema, xsink)) {
+            if (rv->addColumnIntern(i.getKey(), value.refSelf(), schema, script_values, xsink)) {
                 return nullptr;
             }
             continue;
@@ -4168,11 +4299,15 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHash(const QoreHashNode* colum
         }
         columnar_shape_apply_schema(shape, schema);
 
-        ValueHolder column_value(columnar_make_column_value(source, shape, xsink), xsink);
+        ValueHolder column_value(columnar_make_column_value(source, shape, i.getKey(), script_values, xsink),
+            xsink);
         if (*xsink) {
+            columnar_add_column_to_buffer_error(i.getKey(), xsink);
             return nullptr;
         }
-        if (rv->addColumn(i.getKey(), column_value.release(), schema, xsink)) {
+        // the schema can come from a "schema" sub-hash of the description, which can make a list column that the
+        // shape left as a list a dense column there, so the values are checked there too
+        if (rv->addColumnIntern(i.getKey(), column_value.release(), schema, script_values, xsink)) {
             return nullptr;
         }
     }
@@ -4182,6 +4317,16 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHash(const QoreHashNode* colum
 
 QoreColumnarResult* QoreColumnarResult::fromRows(const QoreListNode* rows, const QoreHashNode* desc,
         ExceptionSink* xsink) {
+    return fromRowsIntern(rows, desc, false, xsink);
+}
+
+QoreColumnarResult* QoreColumnarResult::fromScriptRows(const QoreListNode* rows, const QoreHashNode* desc,
+        ExceptionSink* xsink) {
+    return fromRowsIntern(rows, desc, true, xsink);
+}
+
+QoreColumnarResult* QoreColumnarResult::fromRowsIntern(const QoreListNode* rows, const QoreHashNode* desc,
+        bool script_values, ExceptionSink* xsink) {
     assert(xsink);
     if (!rows) {
         xsink->raiseException("COLUMNAR-RESULT-ERROR", "columnar row result creation requires a row list");
@@ -4250,7 +4395,7 @@ QoreColumnarResult* QoreColumnarResult::fromRows(const QoreListNode* rows, const
         }
     }
 
-    return fromColumnHash(*columns, desc, xsink);
+    return fromColumnHashIntern(*columns, desc, script_values, xsink);
 }
 
 QoreHashNode* QoreColumnarResult::serialize(ExceptionSink* xsink) const {
@@ -4374,7 +4519,8 @@ QoreColumnarResult* QoreColumnarResult::deserialize(const QoreHashNode* sdata, E
         if (*xsink) {
             return nullptr;
         }
-        if (rv->addColumn(name.c_str(), data.release(), schema, xsink)) {
+        // serialized data can be given by a script, so its values are checked as by fromScriptColumnHash()
+        if (rv->addColumnIntern(name.c_str(), data.release(), schema, true, xsink)) {
             return nullptr;
         }
     }

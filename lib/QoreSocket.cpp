@@ -2734,9 +2734,8 @@ private:
     DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events, bool stream_wait = false) {
         int64 poll_timeout_ms = -1;
         if (timeout_ms >= 0) {
-            int us;
-            int64 now_s = q_epoch_us(us);
-            int64 now_ms = now_s * 1000 + us / 1000;
+            // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+            int64 now_ms = q_get_monotonic_us() / 1000;
             if (!wait_deadline_ms) {
                 wait_deadline_ms = now_ms + timeout_ms;
             }
@@ -2786,9 +2785,8 @@ private:
         if (wait_deadline_ms <= 0) {
             return false;
         }
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (now_ms < wait_deadline_ms) {
             return false;
         }
@@ -3026,9 +3024,8 @@ private:
     DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events, bool output_wait = false) {
         int64 poll_timeout_ms = -1;
         if (timeout_ms >= 0) {
-            int us;
-            int64 now_s = q_epoch_us(us);
-            int64 now_ms = now_s * 1000 + us / 1000;
+            // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+            int64 now_ms = q_get_monotonic_us() / 1000;
             if (!wait_deadline_ms) {
                 wait_deadline_ms = now_ms + timeout_ms;
             }
@@ -3078,9 +3075,8 @@ private:
         if (wait_deadline_ms <= 0) {
             return false;
         }
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (now_ms < wait_deadline_ms) {
             return false;
         }
@@ -17671,9 +17667,8 @@ int SocketSendInputStreamPollOperation::initLocked(ExceptionSink* xsink) {
 QoreHashNode* SocketSendInputStreamPollOperation::getPollInfo(ExceptionSink* xsink, int events, bool stream_wait) {
     int64 poll_timeout_ms = -1;
     if (timeout_ms >= 0) {
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (!wait_deadline_ms) {
             wait_deadline_ms = now_ms + timeout_ms;
         }
@@ -17727,9 +17722,8 @@ bool SocketSendInputStreamPollOperation::checkTimeout(ExceptionSink* xsink) {
     if (wait_deadline_ms <= 0) {
         return false;
     }
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     if (now_ms < wait_deadline_ms) {
         return false;
     }
@@ -17970,9 +17964,8 @@ QoreHashNode* SocketSendHttpChunkedInputStreamPollOperation::getPollInfo(Excepti
         bool stream_wait) {
     int64 poll_timeout_ms = -1;
     if (timeout_ms >= 0) {
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (!wait_deadline_ms) {
             wait_deadline_ms = now_ms + timeout_ms;
         }
@@ -18019,9 +18012,8 @@ bool SocketSendHttpChunkedInputStreamPollOperation::checkTimeout(ExceptionSink* 
     if (wait_deadline_ms <= 0) {
         return false;
     }
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     if (now_ms < wait_deadline_ms) {
         return false;
     }
@@ -18269,9 +18261,8 @@ int SocketRecvOutputStreamPollOperation::initLocked(ExceptionSink* xsink) {
 QoreHashNode* SocketRecvOutputStreamPollOperation::getPollInfo(ExceptionSink* xsink, int events, bool output_wait) {
     int64 poll_timeout_ms = -1;
     if (timeout_ms >= 0) {
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (!wait_deadline_ms) {
             wait_deadline_ms = now_ms + timeout_ms;
         }
@@ -18325,9 +18316,8 @@ bool SocketRecvOutputStreamPollOperation::checkTimeout(ExceptionSink* xsink) {
     if (wait_deadline_ms <= 0) {
         return false;
     }
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     if (now_ms < wait_deadline_ms) {
         return false;
     }
@@ -18510,9 +18500,8 @@ SocketWriteOutputStreamPollOperation::SocketWriteOutputStreamPollOperation(Excep
 QoreHashNode* SocketWriteOutputStreamPollOperation::getPollInfo(ExceptionSink* xsink) {
     int64 poll_timeout_ms = -1;
     if (timeout_ms >= 0) {
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         if (!wait_deadline_ms) {
             wait_deadline_ms = now_ms + timeout_ms;
         }
@@ -18556,9 +18545,8 @@ bool SocketWriteOutputStreamPollOperation::checkTimeout(ExceptionSink* xsink) {
     if (wait_deadline_ms <= 0) {
         return false;
     }
-    int us;
-    int64 now_s = q_epoch_us(us);
-    int64 now_ms = now_s * 1000 + us / 1000;
+    // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
     if (now_ms < wait_deadline_ms) {
         return false;
     }
@@ -19949,9 +19937,8 @@ SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(Excep
           idle_timeout_ms(idle_timeout_ms), header_output(nullptr) {
     {
         // the idle timeout is given as a deadline; a request answered by a fast route moves it on
-        int us;
-        int64 now_s = q_epoch_us(us);
-        int64 now_ms = now_s * 1000 + us / 1000;
+        // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+        int64 now_ms = q_get_monotonic_us() / 1000;
         idle_ttl_ms = idle_timeout_ms > now_ms ? idle_timeout_ms - now_ms : 0;
     }
     AutoLocker al(sock->priv->m);
@@ -20033,9 +20020,8 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
 
         case Phase::Idle: {
             // Check idle timeout
-            int us;
-            int64 now_s = q_epoch_us(us);
-            int64 now_ms = now_s * 1000 + us / 1000;
+            // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+            int64 now_ms = q_get_monotonic_us() / 1000;
             if (idle_timeout_ms > 0 && now_ms > idle_timeout_ms) {
                 phase = Phase::Timeout;
                 sock->priv->clearNonBlock();
@@ -20292,9 +20278,8 @@ int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const st
     }
     phase = Phase::Sending;
     if (idle_ttl_ms > 0) {
-        int us2;
-        int64 now_s = q_epoch_us(us2);
-        idle_timeout_ms = now_s * 1000 + us2 / 1000 + idle_ttl_ms;
+        // on the monotonic clock, as the deadline given to the constructor (#6150)
+        idle_timeout_ms = q_get_monotonic_us() / 1000 + idle_ttl_ms;
     }
     int rc = poll_state->continuePoll(xsink);
     if (*xsink) {
@@ -20672,9 +20657,8 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
 
             case Phase::Idle: {
                 // Check idle timeout
-                int us;
-                int64 now_s = q_epoch_us(us);
-                int64 now_ms = now_s * 1000 + us / 1000;
+                // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+                int64 now_ms = q_get_monotonic_us() / 1000;
                 if (idle_timeout_ms > 0 && now_ms > idle_timeout_ms) {
                     phase = Phase::Timeout;
                     sock->priv->clearNonBlock();

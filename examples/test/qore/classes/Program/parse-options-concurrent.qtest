@@ -1,0 +1,153 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - threads and the memory ordering of the lock-free reads of the parse options (ARM64)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ParseOptionsConcurrentTest
+
+#! The parse options of a Program read and changed by several threads at once (issue #6078)
+/** The 128 bits of a Program's parse options are two 64-bit words.  They were read and written without
+    synchronization: a reader could see one word of the old value and one of the new one, and two concurrent changes
+    could each read the options, change their own bits and write the result back, so that one change was lost.
+
+    Each value used here has an option in each word (\c no-gui in the low word and \c no-class-defs in the high one,
+    for example), so that a read that combines the words of two values shows one option without the other.
+
+    No case sleeps.  In the read case the writer changes the options and then waits for the reader, which reads them
+    in a loop until it sees the new value: the reads of every round run while the change is made, and the round ends
+    as soon as the reader has seen it.  A torn read or a lost change is a race, which a round does not always hit; a
+    ThreadSanitizer build reports the unsynchronized accesses of every round.
+*/
+class ParseOptionsConcurrentTest inherits QUnit::Test {
+    public {
+        const Rounds = 3000;
+    }
+
+    constructor() : QUnit::Test("ParseOptionsConcurrentTest", "1.0") {
+        addTestCase("a read while the options change sees the old or the new value", \readDuringChange());
+        addTestCase("concurrent changes of different options are all kept", \concurrentChanges());
+        addTestCase("a child process can change the options after fork() while another thread changed them",
+            \forkWhileLocked());
+        set_return_value(main());
+    }
+
+    readDuringChange() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        ParseOptions both(("no-gui", "no-class-defs"));
+        ParseOptions lo("no-gui");
+        ParseOptions hi("no-class-defs");
+        # the rounds that the reader has finished
+        Queue done();
+        # reads that showed one option without the other
+        int torn = 0;
+        # set when the writer stops, so that the reader never waits for a change that does not come
+        bool stop = False;
+        Counter c(1);
+        background sub () {
+            on_exit c.dec();
+            # an error ends the writer's round with a value that it does not expect
+            on_error done.push(-1);
+            for (int r = 0; r < Rounds && !stop; ++r) {
+                # even rounds set the options, odd rounds disable them
+                bool want = !(r % 2);
+                while (!stop) {
+                    ParseOptions po = p.getFullParseOptions();
+                    bool l = po.hasAny(lo);
+                    bool h = po.hasAny(hi);
+                    if (l != h) {
+                        ++torn;
+                    }
+                    if (l == want && h == want) {
+                        break;
+                    }
+                }
+                done.push(r);
+            }
+        }();
+        {
+            on_exit stop = True;
+            for (int r = 0; r < Rounds; ++r) {
+                if (r % 2) {
+                    p.disableParseOptions(both);
+                } else {
+                    p.setParseOptions(both);
+                }
+                assertEq(r, done.get());
+            }
+        }
+        c.waitForZero();
+        assertEq(0, torn);
+        assertFalse(p.getFullParseOptions().hasAny(both));
+    }
+
+    concurrentChanges() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        # the options of each writer: one in each word
+        list<ParseOptions> own = (
+            new ParseOptions(("no-gui", "no-class-defs")),
+            new ParseOptions(("no-thread-classes", "no-namespace-defs")),
+        );
+        # the rounds of each writer in which its own change was missing when it read the options back
+        list<int> lost = (0, 0);
+        # the writers that ended with an exception
+        int errors = 0;
+        Counter c(own.size());
+        for (int w = 0; w < own.size(); ++w) {
+            background sub (int w) {
+                on_exit c.dec();
+                on_error ++errors;
+                ParseOptions mine = own[w];
+                for (int r = 0; r < Rounds; ++r) {
+                    # only this writer changes its own options, so it must see what it set and what it disabled
+                    p.setParseOptions(mine);
+                    if (!p.getFullParseOptions().hasAll(mine)) {
+                        ++lost[w];
+                    }
+                    p.disableParseOptions(mine);
+                    if (p.getFullParseOptions().hasAny(mine)) {
+                        ++lost[w];
+                    }
+                }
+            }(w);
+        }
+        c.waitForZero();
+        assertEq(0, errors);
+        assertEq((0, 0), lost);
+        ParseOptions po = p.getFullParseOptions();
+        assertFalse(po.hasAny(own[0]));
+        assertFalse(po.hasAny(own[1]));
+    }
+
+    #! The lock that serializes the changes is initialized again in a child process (design/fork-handlers.md)
+    /** Another thread holds it when fork() is called; a child that inherits it held exits with 98 without waiting
+        for it.
+    */
+    forkWhileLocked() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        ParseOptions lo("no-gui");
+        int status = call_function("dbg_fork_while_parse_options_locked", p, int sub () {
+            # a change of the options takes the lock
+            p.setParseOptions(lo);
+            return p.getFullParseOptions().hasAny(lo) ? 0 : 1;
+        });
+        assertEq(0, status);
+        # the parent's options are unchanged
+        assertFalse(p.getFullParseOptions().hasAny(lo));
+        # the parent's lock was released by the other thread: the parent can change its options too
+        p.setParseOptions(lo);
+        assertTrue(p.getFullParseOptions().hasAny(lo));
+    }
+}
