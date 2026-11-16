@@ -846,6 +846,19 @@ public:
     */
     void joinAbandonedCompileThread();
 
+#ifdef DEBUG
+    //! The exit status of a process that joinAbandonedCompileThread() ends because a test hook holds the compile
+    static constexpr int QORE_JIT_DBG_HELD_AT_EXIT_STATUS = 86;
+
+    //! Test hook: ends the process if the abandoned compile is held at a debug hold point that nothing releases
+    /** joinAbandonedCompileThread() would then wait forever: the process writes the reason to \c stderr, flushes the
+        standard I/O streams and ends with \c _exit() and QORE_JIT_DBG_HELD_AT_EXIT_STATUS.  A process ends this way
+        when it calls \c exit() after qore_cleanup() instead of qore_fork_child_quick_exit() while a test holds a
+        compile in LLVM (issue #6296), so that a test of that path fails at once instead of hanging.
+    */
+    void dbgExitIfAbandonedCompileHeld() noexcept;
+#endif
+
     //! Releases the LLVM execution engine, its code and the caches (see shutdown())
     void releaseEngine();
 

@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <unistd.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/Error.h>
@@ -3713,9 +3714,35 @@ bool QoreJIT::exitQuickly() {
 void QoreJIT::joinAbandonedCompileThread() {
     // called by the exiting thread only, after stopBackgroundCompiler(), which no longer starts or joins the thread
     if (bg_thread_abandoned.load(std::memory_order_acquire) && bg_compile_thread.joinable()) {
+#ifdef DEBUG
+        dbgExitIfAbandonedCompileHeld();
+#endif
         bg_compile_thread.join();
     }
 }
+
+#ifdef DEBUG
+void QoreJIT::dbgExitIfAbandonedCompileHeld() noexcept {
+    bool held;
+    try {
+        std::lock_guard<std::mutex> lock(bg_queue_mutex);
+        // a thread that was let go (dbgFinishAbandonedCompile(), dbgContinueBgCompile()) leaves the hold point
+        held = dbg_bg_held >= 0 && !dbg_bg_hold_release;
+    } catch (...) {
+        // the state cannot be read: the join is made as without the test hook
+        return;
+    }
+    if (!held) {
+        return;
+    }
+    // the compile stays held, so the join would never return and the process would hang without a sign of why: a
+    // process that ends with exit() after qore_cleanup() instead of qore_fork_child_quick_exit() (issue #6296)
+    fprintf(stderr, "QORE-DEBUG: exit() with an abandoned compile held in LLVM: end with qore_fork_child_quick_exit() "
+        "after qore_cleanup()\n");
+    fflush(nullptr);
+    _exit(QORE_JIT_DBG_HELD_AT_EXIT_STATUS);
+}
+#endif
 
 void QoreJIT::releaseDeferredEngineNoThrow() noexcept {
     // called by exitQuickly() through qore_jit_exit_quickly() from qore_fork_child_quick_exit(), an exported C
