@@ -1906,6 +1906,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
+      threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
     - an allocation that fails while a thread enters another %Program (ex: in a binary module's
       \c QoreExternalProgramContextHelper or a parse commit) leaves the thread in the calling %Program and releases
       its thread count in the entered %Program, which could otherwise not be deleted (issue #6198)
