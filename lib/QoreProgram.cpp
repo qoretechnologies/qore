@@ -2459,7 +2459,28 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             requires_exception = false;
             rc = -1;
         } else { // otherwise commit them
-            parsing_in_progress = false;
+            // the code that the commit runs can enter the Program, other threads cannot until the commit has finished
+            // (issue #6243); both flags are changed in one critical section of plock, which incThreadCount() takes
+            {
+                AutoLocker al(plock);
+                commit_entry_restricted = true;
+                parsing_in_progress = false;
+            }
+            // lifts the restriction when the commit ends, also with an exception
+            class CommitEntryRestrictionHelper {
+            public:
+                DLLLOCAL CommitEntryRestrictionHelper(qore_program_private& pp) : pp(pp) {
+                }
+                DLLLOCAL ~CommitEntryRestrictionHelper() {
+                    AutoLocker al(pp.plock);
+                    pp.commit_entry_restricted = false;
+                }
+            private:
+                qore_program_private& pp;
+            } cerh(*this);
+#ifdef DEBUG
+            qore_dbg_parse_commit_gate(pgm, 0);
+#endif
             parsing_done = true;
 
             // merge pending namespace additions and run namespace-level runtime init
@@ -2476,6 +2497,9 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             sb.parseCommit(pgm);
             committed_native_parse_info = native_parse_info;
 
+#ifdef DEBUG
+            qore_dbg_parse_commit_gate(pgm, 1);
+#endif
             initDeferredCode();
             assert(dset.empty());
 

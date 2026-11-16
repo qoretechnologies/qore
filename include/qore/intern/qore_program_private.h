@@ -706,6 +706,14 @@ public:
     //! true while the commit of a parse initializes constants; read by other threads (findHashDecl(), findEnum())
     std::atomic<bool> parse_commit_in_progress{false};
 
+    //! true while a parse is committed, after parsing_in_progress has been cleared (issue #6243)
+    /** The code that the commit runs (initializers) enters the Program, so parsing_in_progress is cleared before it
+        runs; while this is set, only the thread that holds the parse lock (the committing thread) can enter the
+        Program (see incThreadCount()), so that no other thread runs concurrently with the commit.  Written under plock
+        and read under it by incThreadCount().
+    */
+    std::atomic<bool> commit_entry_restricted{false};
+
     //! Set once the program cleanup callbacks have been run for this Program
     /** There are two teardown entry points - waitForTerminationAndClear() and clearNamespaceData()
         - and the callbacks must run exactly once per Program from whichever gets there first.
@@ -2300,7 +2308,8 @@ public:
             }
             return -1;
         }
-        if (parsing_in_progress && xsink) {
+        // a commit is part of the parse: only the committing thread can enter the Program then (issue #6243)
+        if ((parsing_in_progress || (commit_entry_restricted && parse_tid != tid)) && xsink) {
             xsink->raiseException("PROGRAM-ERROR", "the Program accessed is currently undergoing parsing and cannot "
                 "be accessed at runtime");
         }
@@ -2330,7 +2339,8 @@ public:
             throw QoreStandardException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
                 "therefore cannot be accessed at runtime");
         }
-        if (parsing_in_progress) {
+        // a commit is part of the parse: only the committing thread can enter the Program then (issue #6243)
+        if (parsing_in_progress || (commit_entry_restricted && parse_tid != tid)) {
             throw QoreStandardException("PROGRAM-ERROR", "the Program accessed is currently undergoing parsing and "
                 "cannot be accessed at runtime");
         }
@@ -6251,6 +6261,16 @@ DLLLOCAL void qore_run_exit_hooks(QoreProgram* pgm);
 
 //! Returns true if the exit hooks of the process have started to run
 DLLLOCAL bool qore_exit_hooks_started();
+
+#ifdef DEBUG
+//! Stops the commit of a parse of the Program armed with dbg_arm_parse_commit_gate() (debug builds, for tests)
+/** Called by qore_program_private::internParseCommit() once the commit has started and only the committing thread can
+    enter the Program (\a point 0), and once the new code has been merged into the Program and before the deferred
+    initialization of its closures (\a point 1): the thread waits until dbg_release_parse_commit_gate() releases it,
+    so that a test can try to enter the Program meanwhile (issue #6243).
+*/
+DLLLOCAL void qore_dbg_parse_commit_gate(const QoreProgram* pgm, int point);
+#endif
 
 //! Starts a callback in a new thread of a Program that no sandbox governs; see SandboxManager::createSystemThreadCall()
 /** The thread does not inherit the sandbox of the starting code and does not count against its limits.  Refused,
