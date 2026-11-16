@@ -51,8 +51,7 @@ class AOTInvokeCleanupArraySizeTest inherits QUnit::Test {
     constructor() : QUnit::Test("AOTInvokeCleanupArraySizeTest", "1.0", \ARGV) {
         string qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
-            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
         env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
 
         addTestCase("helper-path cleanup array is sized to its registered slots",
