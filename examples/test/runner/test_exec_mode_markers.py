@@ -252,6 +252,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   executables
         # - or-nothing-container-casts (#6174, #5734): its probes run in child processes that set their own
         #   --exec-mode, in qcc executables and in a qcc-compiled module
+        # - asyncio_callback_exception_stderr (#6275): its checks run in child processes without an execution mode,
+        #   whose standard output and error output it reads
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
@@ -268,6 +270,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/float-int-conversion.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
+                                 "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",
