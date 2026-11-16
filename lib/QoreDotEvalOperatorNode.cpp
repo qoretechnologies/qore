@@ -437,11 +437,16 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             ClassAccess member_access = Public;
             const QoreMemberInfo* mi = qore_class_private::get(*qc)->parseFindMember(mname, member_class_ctx,
                 member_access);
-            if (mi && (member_access <= Public || qore_class_private::parseCheckPrivateClassAccess(*qc))) {
+            // a member of the name that can hold code: at run time, the call calls the code that the member holds
+            // (qore_class_private::evalMethod()), so it is not bound to the signature of the pseudo-method of the
+            // name, and a named call binds its names at run time to the parameters of that code (qore#6361); a
+            // private member called from outside its class is called the same way at run time
+            if (mi) {
                 const QoreTypeInfo* member_type_info = mi->parseGetTypeInfo();
-                if (member_type_info && QoreTypeInfo::hasType(member_type_info)
-                    && QoreTypeInfo::parseAccepts(codeTypeInfo, member_type_info)) {
+                if (!QoreTypeInfo::hasType(member_type_info)
+                    || QoreTypeInfo::parseAccepts(member_type_info, codeTypeInfo)) {
                     member_callable = true;
+                    m->setRuntimeNamedMemberCall();
                 }
             }
 

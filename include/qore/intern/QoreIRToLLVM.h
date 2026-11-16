@@ -52,6 +52,7 @@ class FunctionEntry;
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/ValueHandle.h>
 #include <llvm/TargetParser/Triple.h>
 
 class QoreIRFunction;
@@ -65,7 +66,7 @@ struct AOTSlotMap;
 struct QorePluginLLVMCodegenInfo;
 //! The finalization loops of the lowering of a function that a cancellation interrupts, which refuses the function
 enum QoreFinalizeLoop : int {
-    //! QoreIRToLLVM::finalizeReloadChainSlots()
+    //! the reload chain slots of QoreIRToLLVM::finalizeCleanupFrame()
     QFL_RELOAD_CHAIN_SLOTS = 1,
     //! QoreIRToLLVM::finalizeObeEntries()
     QFL_HANDLER_LOCAL_TABLE = 2,
@@ -103,6 +104,19 @@ public:
     //! Remove decref calls whose value is proven to be NOTHING.
     //! @return the number of calls removed
     static size_t pruneNoopDecrefs(llvm::Module& module);
+
+    //! Gives each block that uses the address of a slot of the cleanup frame a copy of its constant GEP
+    /** Called on the optimized module before code generation (JIT and AOT).  The addresses of the slots of a
+        function's cleanup frame (see finalizeCleanupFrame()) are GEPs of the frame in the entry block: a GEP used in
+        another block is a virtual register live from the entry block to its last use, so a function with thousands
+        of slots had thousands of such registers, which made machine sinking and register allocation superlinear
+        (qore#6299), where the allocas that the slots replaced were frame indexes in every block.  A copy of the GEP
+        in the block of each of its users folds into a frame index and offset there.  Applies to the static allocas
+        with at least QORE_FRAME_SINK_MIN_SLOTS such GEPs (64), which leaves ordinary functions as they are; run after
+        the optimization passes, which would merge the copies back.
+        @return the number of GEPs copied
+    */
+    static size_t sinkFrameSlotAddresses(llvm::Module& module);
 
     //! Expands the scalar llvm.fptosi.sat.i64.f64 calls of createFloatToInt() for an x86-64 target
     /** Called on the optimized module before code generation (JIT and AOT).  On x86-64 the saturating conversion
@@ -628,67 +642,139 @@ private:
     std::vector<llvm::AllocaInst*> owned_ir_local_allocas;
     std::unordered_set<const void*> owned_ir_local_alloca_keys;
 
-    // Entry-block array of pointers to owned_ir_local_allocas slots.  The inline
+    //! A constant table of slots of the cleanup frame that a runtime helper reads (qore#6299)
+    /** The calls of the helper reference \c placeholder, a private global, until finalizeCleanupFrame() replaces it
+        with the constant array of the entries of the table (uint64_t, see QORE_FRAME_ENTRY_SHIFT): the index of the
+        slot of the cleanup frame that \c slots gives, shifted and or'ed with its tag in \c bits, or \c bits itself
+        for an entry without a slot (a local on the runtime stack).  The tables used to be arrays of the addresses of
+        the slots, written in the entry block: a function with many slots had thousands of stores there, which made
+        LLVM's code generation superlinear.
+    */
+    struct CleanupFrameTable {
+        //! true if the helper form is used
+        bool active = false;
+        //! the global that the calls reference, made with the first call; null before
+        llvm::GlobalVariable* placeholder = nullptr;
+        //! the slot of each entry (an alloca in the entry block), or null for an entry that has none
+        std::vector<llvm::WeakTrackingVH> slots;
+        //! the tag of each entry with a slot; the entry itself otherwise
+        std::vector<uint64_t> bits;
+
+        //! Adds an entry
+        DLLLOCAL void add(llvm::Value* slot, uint64_t entry_bits) {
+            slots.emplace_back(slot);
+            bits.push_back(entry_bits);
+        }
+
+        //! Returns the number of entries
+        DLLLOCAL size_t size() const {
+            return slots.size();
+        }
+
+        //! Resets the table (an unused placeholder is left to the module, which drops an unused private global)
+        DLLLOCAL void clear() {
+            active = false;
+            placeholder = nullptr;
+            slots.clear();
+            bits.clear();
+        }
+    };
+
+    //! The cleanup frame of the function: an array of 8-byte slots in the entry block (qore#6299)
+    /** Each alloca that a table of slots of a runtime helper covers (a CleanupFrameTable, the reload chain slots of
+        the flushes and the records of the table-driven handler code) is replaced with a slot of this array once the
+        function is lowered (finalizeCleanupFrame()), and the tables give the slots by their indexes: nothing is
+        written to describe them when the function is entered, as the addresses of the slots were.  Made with the
+        first table; its size is set by finalizeCleanupFrame().
+    */
+    llvm::AllocaInst* cleanup_frame = nullptr;
+
+    //! Returns the cleanup frame of the function, making it if it has none
+    llvm::AllocaInst* getCleanupFrame(llvm::Function* llvm_func);
+    //! Returns the global that the calls of \a table reference, making it if it has none
+    llvm::GlobalVariable* getCleanupFrameTable(llvm::Module& module, CleanupFrameTable& table, const char* name);
+    //! Returns true if \a slot can be a slot of the cleanup frame: an alloca of one element of at most 8 bytes in the
+    //! entry block of its function
+    bool isCleanupFrameSlotCandidate(const llvm::Value* slot) const;
+    //! Returns the AOT context for an argument of a helper that reads a cleanup frame table: null in JIT code
+    llvm::Value* getCleanupFrameAotContext() const;
+    //! Replaces the allocas that the tables cover with slots of the cleanup frame and makes the constant tables, once
+    //! the function is lowered
+    /** The reload chain slots are the first slots of the frame, at their indexes (getReloadChainSlotIndex()).  The
+        entry block clears the frame with one memset, which replaces the stores that cleared each alloca.
+        @return false, with \a error set, if a finalization loop was cancelled (qore_finalize_cancelled()), leaving
+        a table incomplete, or if a slot of a table cannot be a slot of the frame: the function must then be refused
+        (qore#6299, qore#6305)
+    */
+    bool finalizeCleanupFrame(llvm::Function* llvm_func, const std::string& fn_name, std::string& error);
+    //! Makes the constant array of the entries of \a table and replaces its placeholder with it, giving each slot an
+    //! index in the frame; false if a slot of the table is not a candidate (isCleanupFrameSlotCandidate())
+    bool finalizeCleanupFrameTable(llvm::Function* llvm_func, CleanupFrameTable& table, const char* name);
+    //! Returns the index of \a slot in the cleanup frame, giving it the next one if it has none
+    uint32_t getCleanupFrameIndex(llvm::Value* slot);
+    //! the slots of the cleanup frame, in the order of their indexes (finalizeCleanupFrame())
+    std::vector<llvm::Value*> cleanup_frame_slots;
+    //! the index of each slot in the cleanup frame (finalizeCleanupFrame())
+    std::unordered_map<const llvm::Value*, uint32_t> cleanup_frame_index;
+
+    // The slots of owned_ir_local_allocas, as a table of the cleanup frame.  The inline
     // cleanup emits one load/store/decref triple per IR-only local in the shared
     // error-return block; once SROA promotes those slots, every local needs a PHI
     // for every edge reaching that block, so the PHI count is
-    // (locals x exit edges) and code generation becomes superlinear.  Storing the
-    // slot addresses here keeps them in memory, so the cleanup is a single
-    // qore_rt_cleanup_run_allocas() call and no PHI is required.  Prepared at
+    // (locals x exit edges) and code generation becomes superlinear.  Keeping the
+    // slots in the cleanup frame keeps them in memory, so the cleanup is a single
+    // qore_rt_cleanup_run_frame() call and no PHI is required.  Prepared at
     // function finalization, when both factors are known, and only when their
     // product exceeds getCleanupPhiBudget() -- every other function keeps the
     // inline triples and full SSA promotion of its locals.
-    llvm::AllocaInst* boxed_exit_cleanup_array = nullptr;
-    unsigned boxed_exit_cleanup_array_count = 0;
+    CleanupFrameTable boxed_exit_cleanup_table;
 
-    // Entry-block array of pointers to iterator_cleanup_allocas slots.  Same
-    // problem and same remedy as local_cleanup_array: emitLateExitCleanup()
+    // The slots of iterator_cleanup_allocas, as a table of the cleanup frame.  Same
+    // problem and same remedy as boxed_exit_cleanup_table: emitLateExitCleanup()
     // repeats the per-iterator load/release/clear sequence at every return and
     // resume, so once SROA promotes the slots the merged common return needs
     // (iterators x exits) PHI operands.  Prepared at function finalization.
-    llvm::AllocaInst* iterator_cleanup_array = nullptr;
-    unsigned iterator_cleanup_array_count = 0;
-    //! The array form of the iterators that an exception exit releases with the statement temporaries: those without
+    CleanupFrameTable iterator_cleanup_table;
+    //! The table form of the iterators that an exception exit releases with the statement temporaries: those without
     //! a place among the locals (see positioned_iterator_allocas), which the release of the locals releases instead
-    llvm::AllocaInst* iterator_cleanup_unpositioned_array = nullptr;
-    unsigned iterator_cleanup_unpositioned_count = 0;
+    CleanupFrameTable iterator_cleanup_unpositioned_table;
 
     // Allocas for Invoke/ConstString results that need cleanup at function exit.
     // qore_rt_invoke_expr returns +1 ref; these allocas track the results so they
     // can be decref'd at exit (matching the IR interpreter's cleanup vector).
     std::vector<llvm::Value*> invoke_result_allocas;
-    //! the slot of each of invoke_result_allocas in invoke_cleanup_array, if it has one: a long release sequence is
-    //! emitted as one call of qore_rt_cleanup_release_slots() with a table of the slots (qore#5962)
+    //! the entry of each of invoke_result_allocas in invoke_cleanup_table, if it has one: a long release sequence is
+    //! emitted as one call of qore_rt_cleanup_release_frame_slots() with a table of the entries (qore#5962)
     std::unordered_map<llvm::Value*, unsigned> invoke_cleanup_slot;
-    //! the slot of each of invoke_result_allocas that is not a persistent cleanup in exit_temp_cleanup_array, if it
+    //! the entry of each of invoke_result_allocas that is not a persistent cleanup in exit_temp_cleanup_table, if it
     //! has one: an exit that holds the values of the returns that an exception interrupts runs the array in the
     //! ranges between their slots (qore#5989)
     std::unordered_map<llvm::Value*, unsigned> exit_temp_cleanup_slot;
 
-    //! Releases the first \a count entries of the cleanup slot array \a array in reverse order, except those in
-    //! \a skip, with one call of qore_rt_cleanup_run_allocas() for each run of entries between the skipped ones
+    //! Releases the first \a count entries of the cleanup frame table \a table in reverse order, except those in
+    //! \a skip, with one call of qore_rt_cleanup_run_frame() for each run of entries between the skipped ones
     /** The release is that of an inline load/store/decref sequence over the entries that are not skipped, last
         registered first, and takes a number of instructions in the number of skipped entries and not in \a count
         (qore#5989).
         @param skip the indexes of the entries not to release, in any order
     */
-    void emitCleanupArrayRunSkipping(llvm::Module& module, llvm::AllocaInst* array, unsigned count,
-        std::vector<unsigned> skip);
+    void emitCleanupArrayRunSkipping(llvm::Module& module, CleanupFrameTable& table, const char* name,
+        unsigned count, std::vector<unsigned> skip);
 
-    // Entry-block array of pointers to invoke_result_allocas slots.  Large
-    // functions use qore_rt_cleanup_run_allocas() to avoid emitting thousands
+    // The slots of invoke_result_allocas, as a table of the cleanup frame.  Large
+    // functions use qore_rt_cleanup_run_frame() to avoid emitting thousands
     // of load/decref/store triples at every cleanup exit.
-    llvm::AllocaInst* invoke_cleanup_array = nullptr;
+    CleanupFrameTable invoke_cleanup_table;
     unsigned invoke_cleanup_array_capacity = 0;
     unsigned invoke_cleanup_array_count = 0;
     bool invoke_cleanup_array_overflow = false;
-    // Entry-block array of pointers to the slots of invoke_result_allocas that are not persistent cleanups, in
-    // registration order.  Every exit of a function releases these temporaries before its on_block_exit handlers
+    // The slots of invoke_result_allocas that are not persistent cleanups, in registration order, as a table of the
+    // cleanup frame.  Every exit of a function releases these temporaries before its on_block_exit handlers
     // (emitExitStatementCleanup()); emitted inline, that is a load/store/decref triple per temporary of the whole
     // function at every exit, so a function with many statements and many exits (ex: a large switch whose cases
     // return) grew quadratically -- 3.9 million LLVM instructions and over 6 GiB of compile memory for 1600
-    // returning cases.  Large functions release them with one qore_rt_cleanup_run_allocas() call instead.
-    llvm::AllocaInst* exit_temp_cleanup_array = nullptr;
+    // returning cases.  Large functions release them with one qore_rt_cleanup_run_frame() call instead.
+    CleanupFrameTable exit_temp_cleanup_table;
     unsigned exit_temp_cleanup_array_count = 0;
     bool exit_temp_cleanup_array_overflow = false;
     // the slots of invoke_result_allocas that are not persistent cleanups
@@ -1188,22 +1274,15 @@ private:
     /** Each flush rotated or cleared every tracked local with a call of its own (qore_rt_reload_chain_rotate()), so
         a function had calls in the product of its tracked locals and its temp boundaries, and its code generation
         took time in more than that (qore#6299).  Such a flush is one call of qore_rt_reload_chain_flush() with a
-        constant table of pairs of indexes in an array of the addresses of the trackers and deferred slots, which is
-        written in the entry block once the function is lowered (finalizeReloadChainSlots()).
+        constant table of pairs of indexes of the trackers and deferred slots in the cleanup frame, whose first slots
+        they are (finalizeCleanupFrame()).
     */
-    llvm::AllocaInst* reload_chain_slots = nullptr;
-    //! the tracker and deferred slots of reload_chain_slots, in the order of their indexes
-    std::vector<llvm::Value*> reload_chain_slot_allocas;
-    //! the index of each slot in reload_chain_slots
+    std::vector<llvm::WeakTrackingVH> reload_chain_slot_allocas;
+    //! the index of each slot of reload_chain_slot_allocas
     std::unordered_map<const llvm::Value*, uint32_t> reload_chain_slot_index;
 
-    //! Returns the index of \a slot in reload_chain_slots, adding it if it has none
+    //! Returns the index of \a slot in the cleanup frame among the reload chain slots, adding it if it has none
     uint32_t getReloadChainSlotIndex(llvm::Value* slot);
-    //! Writes the addresses of the slots of reload_chain_slots in the entry block, once the function is lowered
-    /** @return false if it was cancelled (qore_finalize_cancelled()), leaving slots unwritten: the function must
-        then be refused (qore#6299)
-    */
-    bool finalizeReloadChainSlots(llvm::Function* llvm_func);
 
     // Error return block: used for exception cleanup when outside a try block.
     // When a Call/CallDirect/CallMethodDirect throws outside a try, execution
@@ -1835,22 +1914,22 @@ private:
     //! yet (see retainLocalCacheValueIntern()), so that a release emitted before it is created releases it too
     void ensureLocalReloadDeferred(const void* key, llvm::Function* llvm_func);
 
-    //! Route boxed exit cleanup through qore_rt_cleanup_run_allocas() when the
+    //! Route boxed exit cleanup through qore_rt_cleanup_run_frame() when the
     //! inline per-slot triples would need (slots x exit_edges) PHIs.
     /** @param llvm_func the function being finalized
         @param exit_edges the number of edges reaching the shared cleanup block
 
-        @return true if the array was prepared; emitPreinstantiatedCleanup() then
+        @return true if the table was prepared; emitPreinstantiatedCleanup() then
         emits a single runtime call in place of the per-slot triples
     */
     bool prepareBoxedExitCleanupArray(llvm::Function* llvm_func, size_t exit_edges);
 
-    //! Route iterator cleanup through qore_rt_iterator_cleanup_allocas() when the
+    //! Route iterator cleanup through qore_rt_iterator_cleanup_frame() when the
     //! inline per-iterator sequence would need (iterators x exits) PHIs.
     /** @param llvm_func the function being finalized
         @param exits the number of return/resume sites that repeat the sequence
 
-        @return true if the array was prepared; emitIteratorCleanup() then emits a
+        @return true if the table was prepared; emitIteratorCleanup() then emits a
         single runtime call in place of the per-iterator sequence
     */
     bool prepareIteratorCleanupArray(llvm::Function* llvm_func, size_t exits);
@@ -1898,12 +1977,14 @@ private:
     /** The code of each place that runs the pending handlers (see emitOnBlockExitExec()) published every local of the
         function to the runtime and reloaded it afterwards, inline, so a function with many handlers and many locals
         had code in the product of the two.  The places of a function over a size (shouldUseObeTables()) call helpers
-        with a table of the locals that they cover instead: the records of the locals are written once in the entry
-        block (obe_entries), and each table is a constant array of record indexes.
+        with a table of the locals that they cover instead: the records of the locals are a constant array
+        (obe_entries) that gives their storage by its slots in the cleanup frame, and each table is a constant array of
+        record indexes.
     */
     bool obe_table_mode = false;
-    //! the array of the records (QoreObeLocal) of the locals that the tables cover, in the entry block
-    llvm::AllocaInst* obe_entries = nullptr;
+    //! the global of the records (QoreObeLocal) of the locals that the tables cover, which finalizeObeEntries()
+    //! replaces with the constant array of the records
+    llvm::GlobalVariable* obe_entries = nullptr;
     //! the local of each record of obe_entries
     std::vector<const void*> obe_entry_keys;
     //! the index of the record of each local
@@ -1935,8 +2016,8 @@ private:
         the handlers reference (see releasesReloadStorageForHandlers())
     */
     std::vector<const void*> getReleasedReloadLocals(const std::unordered_set<const void*>* only = nullptr);
-    //! Writes the records of obe_entries in the entry block, once the function is lowered
-    /** @return false if it was cancelled (qore_finalize_cancelled()), leaving records unwritten: the function must
+    //! Makes the constant array of the records of obe_entries, once the function is lowered (finalizeCleanupFrame())
+    /** @return false if it was cancelled (qore_finalize_cancelled()), leaving records unmade: the function must
         then be refused (qore#6305)
     */
     bool finalizeObeEntries(llvm::Function* llvm_func);
@@ -2071,7 +2152,7 @@ private:
     bool orderExceptionTemps(size_t start, bool observable_only, std::vector<llvm::Value*>& temps,
             size_t* receivers = nullptr);
     //! Emits, at the insertion point, the release of \a temps from \a begin to \a end in their order: one call with a
-    //! table of their slots in invoke_cleanup_array for a long sequence, as each release inline would make the code of
+    //! table of their entries in invoke_cleanup_table for a long sequence, as each release inline would make the code of
     //! a large statement large (qore#5962)
     void emitTempReleaseSequence(llvm::Module& module, const std::vector<llvm::Value*>& temps, size_t begin,
             size_t end);
@@ -2094,29 +2175,14 @@ private:
     //! of an operand in the middle of a statement)
     void emitDiscardTemps(llvm::Module& module, uint32_t scope_id = 0, bool statement_end = true);
 
-    // Register an alloca-backed cleanup slot and, for large functions, add its
-    // address to the entry-block cleanup pointer array used by
-    // qore_rt_cleanup_run_allocas().
+    // Register an alloca-backed cleanup slot and, for large functions, add it to
+    // the cleanup frame tables used by qore_rt_cleanup_run_frame().
     void registerInvokeCleanupAlloca(llvm::Value* alloca_ptr);
     void registerPersistentCleanupAlloca(llvm::Value* alloca_ptr);
 
-    //! Sizes the invoke cleanup pointer array to the slots actually registered
-    /** Erases the array and its registration stores when no exit reads it.  Must be called
-        after every emitInvokeCleanup() call for the function has been emitted.
-    */
-    void finalizeInvokeCleanupArray();
-
-    //! Stores the address of a cleanup slot at the next index of an entry-block cleanup pointer array
-    void storeCleanupSlotAddress(llvm::AllocaInst* array, unsigned idx, llvm::Value* alloca_ptr);
-
-    //! Sizes a cleanup pointer array to the slots registered, or erases it with its registration stores when no
-    //! exit reads it
-    void finalizeCleanupSlotArray(llvm::AllocaInst* array, unsigned count, unsigned capacity, const char* what);
-
-    // Conservative upper bound for the cleanup pointer array.  Overflow falls
+    // Conservative upper bound for the invoke cleanup table.  Overflow falls
     // back to the expanded cleanup path, so the estimate only affects whether
-    // the compact helper path is available; finalizeInvokeCleanupArray() sizes
-    // the emitted array to the slots actually used.
+    // the compact helper path is available.
     unsigned estimateInvokeCleanupArrayCapacity(const QoreIRFunction& func) const;
 
     //! @return true if @p variant is the exact variant this function is being lowered from
@@ -2132,7 +2198,7 @@ private:
 
     //! Emits the release of the active iterators (qore_rt_iterator_cleanup())
     //! @param skip_positioned true to leave the iterators that the release of the locals releases at their places
-    //! (see positionIterators()); the array form then releases those of iterator_cleanup_unpositioned_array
+    //! (see positionIterators()); the table form then releases those of iterator_cleanup_unpositioned_table
     void emitIteratorCleanup(llvm::Module& module, bool skip_positioned = false);
 
     //! Registers the cleanup alloca of the iterator that \a inst creates in positioned_iterator_allocas if the IR

@@ -92,7 +92,8 @@ public:
         // the submitter's options, installed before the Program is entered, whose thread entry handler and
         // initialization run then (qore#6208)
         QoreThreadRuntimeParseOptionsHelper po_helper(&runtime_po);
-        QoreExternalProgramContextHelper pch(xsink, pgm);
+        // an internal entry: a C++ exception of the entry is raised in xsink (issue #6255)
+        ProgramThreadCountContextHelper pch(xsink, pgm, true);
         if (*xsink) {
             return QoreValue();
         }

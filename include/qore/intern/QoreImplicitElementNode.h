@@ -55,6 +55,9 @@ private:
                 "method or closure called from or defined in that code, and a fold expression does not set it");
             return -1;
         }
+        // a context statement or find expression whose expressions read it is an observer of the implicit element
+        // at run time (qore#6341)
+        ++parse_context.implicit_element_reads;
         return 0;
     }
 

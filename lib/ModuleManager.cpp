@@ -173,6 +173,11 @@ void QoreModuleManager::forkChild(int tid) {
             }
         }
     }
+    // leaf locks of the parse option masks, held briefly by their readers and writers in the parent's other threads
+    new (&po_mask_lock) std::mutex();
+    for (auto& i : map) {
+        i.second->reinitParseOptionMaskLockAfterFork();
+    }
     module_load_cond.reinitAfterFork();
     mutex.reinitAfterFork(qore_module_manager_mutex_attr());
 }

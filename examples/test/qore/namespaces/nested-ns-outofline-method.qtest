@@ -1,0 +1,199 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+%exec-class NestedNsOutOfLineMethodTest
+
+#! issue #6340: an out-of-line method in a namespace resolves its class relative to the namespace
+/** <tt>namespace NS { namespace I { class C {} } int I::C::m() { ... } }</tt> took the first element of the class
+    path for the name of the enclosing namespace: a debug build failed an assertion, a release build reported that it
+    could not find the class.  The class path is now relative to the enclosing namespace, as for the scoped functions
+    and constants declared in a namespace; a path that starts with the name of the enclosing namespace is still
+    accepted.  Every script runs in a child process; a crash shows as an exit status of a signal.
+
+    Code without \c %modern runs only with the AST interpreter, and qcc compiles only \c %modern code: the other
+    execution modes and qcc are covered by the \c %modern script, which may declare out-of-line methods in a namespace
+    (only the top-level form is refused under strong encapsulation).
+*/
+class NestedNsOutOfLineMethodTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        TmpDir tmp("nested-ns-outofline-method-");
+
+        #! without %modern: nested and deeper namespaces, a path relative to an inner namespace, generic and static
+        #! methods, a constructor, the path from the enclosing namespace, a root namespace with the name of a nested
+        #! one and the top-level forms
+        const Legacy = "namespace I { class C { int w() { return 1; } } }\n"
+            "namespace NS {\n"
+            "    namespace I {\n"
+            "        class C { int w() { return 2; } }\n"
+            "        class D { public { int $.x; } }\n"
+            "    }\n"
+            "    namespace A { namespace B { class C {} } int B::C::fromA() { return 5; } }\n"
+            "    int I::C::m(int $v) { return $v + 10; }\n"
+            "    T I::C::g<T>(T $v) { return $v; }\n"
+            "    static int I::C::s(int $v) { return $v + 20; }\n"
+            "    I::D::constructor(int $v) { $.x = $v; }\n"
+            "    int A::B::C::deep() { return 4; }\n"
+            "    int NS::I::C::fq() { return 3; }\n"
+            "    int I::C::amb() { return 6; }\n"
+            "}\n"
+            "int I::C::amb() { return 7; }\n"
+            "int NS::I::C::top() { return 8; }\n"
+            "my NS::I::C $c = new NS::I::C();\n"
+            "my NS::A::B::C $d = new NS::A::B::C();\n"
+            "my I::C $r = new I::C();\n"
+            "printf(\"%y %y %y %y %y %y %y %y %y %y %y %y\\n\", $c.m(1), $c.g(\"x\"), NS::I::C::s(1), "
+            "(new NS::I::D(9)).x, $d.deep(), $d.fromA(), $c.fq(), $c.amb(), $r.amb(), $c.top(), $c.w(), $r.w());\n";
+
+        const LegacyOut = "11 \"x\" 21 9 4 5 3 6 7 8 2 1\n";
+
+        #! with %modern, in every execution mode and with qcc
+        const Modern = "%modern\n"
+            "namespace NS {\n"
+            "    namespace I {\n"
+            "        class C {}\n"
+            "        class D { public { int x; } }\n"
+            "    }\n"
+            "    namespace A { namespace B { class C {} } }\n"
+            "    int I::C::m(int v) { return v + 10; }\n"
+            "    T I::C::g<T>(T v) { return v; }\n"
+            "    static int I::C::s(int v) { return v + 20; }\n"
+            "    I::D::constructor(int v) { x = v; }\n"
+            "    int A::B::C::deep() { return 4; }\n"
+            "    int NS::I::C::fq() { return 3; }\n"
+            "}\n"
+            "NS::I::C c();\n"
+            "NS::A::B::C d();\n"
+            "NS::I::D e(9);\n"
+            "printf(\"%y %y %y %y %y %y\\n\", c.m(1), c.g(\"x\"), NS::I::C::s(1), e.x, d.deep(), c.fq());\n";
+
+        const ModernOut = "11 \"x\" 21 9 4 3\n";
+
+        #! scripts that must fail to parse: name -> source, expected error
+        const Failing = {
+            "no-namespace": (
+                "src": "namespace NS {\n    class C {}\n    int X::C::m() { return 1; }\n}\n",
+                "err": "cannot find namespace 'X::' in 'X::C::m()' as a child of namespace 'NS::'",
+            ),
+            "no-class": (
+                "src": "namespace NS {\n    namespace I {}\n    int I::Z::m() { return 1; }\n}\n",
+                "err": "cannot find class 'I::Z' for method 'I::Z::m()' in namespace 'NS::'",
+            ),
+            "no-local-class": (
+                "src": "namespace NS {\n    int Z::m() { return 1; }\n}\n",
+                "err": "cannot find class 'Z' for method 'Z::m()' in namespace 'NS::'",
+            ),
+            # the path is relative to the enclosing namespace, not to the root namespace
+            "root-namespace": (
+                "src": "namespace R { class C {} }\nnamespace NS {\n    int R::C::m() { return 1; }\n}\n",
+                "err": "cannot find namespace 'R::' in 'R::C::m()' as a child of namespace 'NS::'",
+            ),
+            "root-anchored": (
+                "src": "namespace NS {\n    namespace I { class C {} }\n    int ::NS::I::C::m() { return 1; }\n}\n",
+                "err": "out-of-line method '::NS::I::C::m()' in namespace 'NS::' cannot have a class path anchored at "
+                    "the root namespace",
+            ),
+        };
+    }
+
+    constructor() : QUnit::Test("NestedNsOutOfLineMethodTest", "1.0", \ARGV) {
+        addTestCase("without %modern", \testLegacy());
+        addTestCase("with %modern in every execution mode", \testModern());
+        addTestCase("qcc", \testQcc());
+        foreach string name in (keys Failing) {
+            string script = name;
+            addTestCase(sprintf("%s fails to parse", script), sub () { testFailing(script); });
+        }
+        set_return_value(main());
+    }
+
+    private testLegacy() {
+        string path = writeScript("legacy", Legacy);
+        # code without %modern runs only with the AST interpreter; the other modes parse it and then refuse it
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
+                shellQuote(qore_bin), mode, shellQuote(path)));
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::None);
+            if (mode == "ast") {
+                assertEq(0, r.rc, sprintf("%s: exit status: %s", mode, r.out));
+                assertEq(LegacyOut, r.out, mode);
+            } else {
+                checkNoCrash(mode, r.rc, r.out);
+                assertTrue(r.out.find("EXEC-MODE-ERROR") >= 0, sprintf("%s: %s", mode, r.out));
+                assertEq(-1, r.out.find("PARSE-EXCEPTION"), sprintf("%s: %s", mode, r.out));
+            }
+        }
+    }
+
+    private testModern() {
+        string path = writeScript("modern", Modern);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
+                shellQuote(qore_bin), mode, shellQuote(path)));
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::Jit);
+            assertEq(0, r.rc, sprintf("%s: exit status: %s", mode, r.out));
+            assertEq(ModernOut, r.out, mode);
+        }
+    }
+
+    private testQcc() {
+        string qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        string path = writeScript("modern", Modern);
+        string exe = tmp.path + "/modern";
+        int rc;
+        string out = backquote(sprintf("%s -o %s %s 2>&1", shellQuote(qcc_bin), shellQuote(exe), shellQuote(path)),
+            \rc);
+        assertEq(0, rc, sprintf("qcc exit status: %s", out));
+        out = backquote(sprintf("%s 2>&1", shellQuote(exe)), \rc);
+        assertEq(0, rc, sprintf("compiled program exit status: %s", out));
+        assertEq(ModernOut, out, "compiled program output");
+
+        # a parse error is reported by qcc as well
+        path = writeScript("modern-no-class", "%modern\nnamespace NS {\n    namespace I {}\n"
+            "    int I::Z::m() { return 1; }\n}\n");
+        exe = tmp.path + "/modern-no-class";
+        out = backquote(sprintf("%s -o %s %s 2>&1", shellQuote(qcc_bin), shellQuote(exe), shellQuote(path)), \rc);
+        checkNoCrash("qcc", rc, out);
+        assertNeq(0, rc, sprintf("qcc exit status: %s", out));
+        assertTrue(out.find(Failing."no-class".err) >= 0, sprintf("qcc parse error: %s", out));
+        assertFalse(is_file(exe), "no executable");
+    }
+
+    private testFailing(string name) {
+        string path = writeScript(name, Failing{name}.src);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
+                shellQuote(qore_bin), mode, shellQuote(path)));
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::None);
+            checkNoCrash(name + ": " + mode, r.rc, r.out);
+            assertNeq(0, r.rc, sprintf("%s: %s: exit status", name, mode));
+            assertTrue(r.out.find(Failing{name}.err) >= 0, sprintf("%s: %s: parse error: %s", name, mode, r.out));
+        }
+    }
+
+    #! checks that a child process did not end with a signal
+    private checkNoCrash(string label, int rc, string out) {
+        # a shell reports a child killed by a signal with an exit status of 128 + the signal number
+        assertTrue(rc < 128, sprintf("%s: exit status %d (not a crash): %s", label, rc, out));
+    }
+
+    private string writeScript(string name, string src) {
+        string path = sprintf("%s/%s.q", tmp.path, name);
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(src);
+        f.close();
+        return path;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

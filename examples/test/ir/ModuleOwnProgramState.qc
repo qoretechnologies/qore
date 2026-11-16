@@ -1,19 +1,10 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: children - its checks run in child processes that set their own execution modes
-
 # Copyright 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
-
-%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires QUnit
-%requires ../TestInterpreter.qm
-%requires FsUtil
-%requires ../ExecModeHarness.qm
-
-%exec-class ModuleOwnProgramStateTest
+# The cases of the ModuleOwnProgramState-<n>.qtest tests: each runs one part of them, so that each takes a short time,
+# and together they run every case (see addPartCase()); part 1 runs the case with the source forms of the Mapper and
+# DataProvider modules, whose jit and tiered runs compile them to native code function by function, and part 2 the
+# case with their AOT forms (qore#6358)
 
 #! Module code running in its own Program uses its thread-local data for a restricted caller in every execution mode
 /** Module code runs with the restrictions of a sandboxed caller as well as its own, so a method of a module class that
@@ -38,8 +29,11 @@
     source module with the AST interpreter; the Mapper and DataProvider modules run from source, and also AOT-compiled
     when the build has AOT qlib modules.
 */
-class ModuleOwnProgramStateTest inherits QUnit::Test {
+class ModuleOwnProgramStateBase inherits QUnit::Test {
     private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+
         string qore_bin;
         string libqore_dir;
         string qlib_dir;
@@ -133,7 +127,8 @@ user mark_resources: \"marked\"
 ";
     }
 
-    constructor() : QUnit::Test("ModuleOwnProgramStateTest", "1.0", \ARGV) {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qlib_dir = realpath(get_script_dir() + "/../../../qlib");
@@ -145,12 +140,21 @@ user mark_resources: \"marked\"
         writeFile(src_dir + "/OwnStateMod.qm", moduleCode());
         makeQlibSourceDir();
 
-        addTestCase("module code uses its own thread-local data for a PO_NO_THREAD_CONTROL caller with source qlib "
+        # the source qlib modules are compiled to native code function by function in the jit and tiered runs, which
+        # takes most of the time: each part runs alone (qore#6358)
+        addPartCase(1, "module code uses its own thread-local data for a PO_NO_THREAD_CONTROL caller with source qlib "
             "modules in every mode", \testSourceQlib());
-        addTestCase("module code uses its own thread-local data for a PO_NO_THREAD_CONTROL caller with AOT qlib "
+        addPartCase(2, "module code uses its own thread-local data for a PO_NO_THREAD_CONTROL caller with AOT qlib "
             "modules in every mode", \testAotQlib());
 
         set_return_value(main());
+    }
+
+    #! adds the test case if it is in the part that this test runs
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     #! links the sources of the Mapper and DataProvider modules, without any AOT form, in a module directory

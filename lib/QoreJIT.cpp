@@ -1909,6 +1909,8 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
     // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
     QoreIRToLLVM::expandFloatToIntForTarget(*module, llvm::Triple(llvm::sys::getProcessTriple()));
+    // the addresses of the slots of the cleanup frames in the blocks that use them (qore#6299)
+    QoreIRToLLVM::sinkFrameSlotAddresses(*module);
 
     // Dump LLVM IR if requested (after optimization)
     if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
@@ -2481,6 +2483,8 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
     // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
     QoreIRToLLVM::expandFloatToIntForTarget(*module, llvm::Triple(llvm::sys::getProcessTriple()));
+    // the addresses of the slots of the cleanup frames in the blocks that use them (qore#6299)
+    QoreIRToLLVM::sinkFrameSlotAddresses(*module);
 
     // Dump LLVM IR if requested (after optimization)
     if (q_env_is_set("QORE_DUMP_LLVM_IR")) {

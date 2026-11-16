@@ -120,6 +120,8 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
+#include <sched.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -17005,10 +17007,72 @@ static QoreValue f_dbg_close_socket_at_next_ssl_io(const QoreListNode* params, R
     return QoreValue();
 }
 
-//! Debug-only: closes a socket so that its connection is reset at once
+//! returns the number of bytes in the send buffer of \a fd that the peer has not acknowledged, or 0 if unknown
+static int64 dbg_unacknowledged_bytes(int fd) {
+#ifdef DARWIN
+    int n = 0;
+    socklen_t len = sizeof n;
+    return getsockopt(fd, SOL_SOCKET, SO_NWRITE, &n, &len) || n < 0 ? 0 : n;
+#elif defined(TIOCOUTQ)
+    int n = 0;
+    return ::ioctl(fd, TIOCOUTQ, &n) || n < 0 ? 0 : n;
+#else
+    return 0;
+#endif
+}
+
+//! blocks until the peer has acknowledged everything written on \a fd, or the connection has ended; no timer is
+//! involved
+/** A reset (\c SO_LINGER 0) discards the data in the send buffer that has not been sent; on macOS a small write made
+    while an earlier one is unacknowledged is held back (Nagle), and loopback delivery is not synchronous with send(),
+    so a reset made at once discards the end of what was written (as for issue #6320).  The peer acknowledges data
+    when it arrives, whether its program reads it or not, so this only waits if more was written than the peer's
+    receive buffer takes.
+*/
+static void dbg_wait_send_buffer_empty(int fd) {
+#ifdef DARWIN
+    // the write filter fires for each change of the send buffer's space, as the peer acknowledges data
+    int kq = kqueue();
+    if (kq < 0) {
+        return;
+    }
+    ON_BLOCK_EXIT([kq] () { ::close(kq); });
+    struct kevent kev;
+    EV_SET(&kev, fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, nullptr);
+    if (kevent(kq, &kev, 1, nullptr, 0, nullptr) < 0) {
+        return;
+    }
+    while (dbg_unacknowledged_bytes(fd) > 0) {
+        struct kevent out;
+        int rc = kevent(kq, nullptr, 0, &out, 1, nullptr);
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        if (rc <= 0 || (out.flags & (EV_EOF | EV_ERROR))) {
+            return;
+        }
+    }
+#else
+    // loopback acknowledges data as it is delivered, before send() returns, so this normally does not wait
+    while (dbg_unacknowledged_bytes(fd) > 0) {
+        pollfd pfd = {fd, POLLOUT, 0};
+        if (::poll(&pfd, 1, -1) < 0 && errno != EINTR) {
+            return;
+        }
+        if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
+            return;
+        }
+        sched_yield();
+    }
+#endif
+}
+
+//! Debug-only: closes a socket so that its connection is reset at once, once what was written on it has arrived
 /** The close sets \c SO_LINGER with a zero timeout and skips the TLS close_notify alert and the shutdown that a close
     makes first, which on macOS discards unread data and ends the connection with a FIN.  Tests use it to have a peer
-    reset a connection deterministically.  DEBUG builds only.
+    reset a connection deterministically.  The close is made once the peer has acknowledged all the data written on
+    the socket (see dbg_wait_send_buffer_empty()), so that the reset does not discard the end of an answer still in
+    the send buffer.  DEBUG builds only.
 */
 static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
@@ -17022,6 +17086,10 @@ static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& r
         xsink);
     if (*xsink || !sock) {
         return QoreValue();
+    }
+    int fd = sock->getPollableDescriptor();
+    if (fd >= 0) {
+        dbg_wait_send_buffer_empty(fd);
     }
     sock->dbgResetOnClose();
     sock->close();
@@ -18459,6 +18527,64 @@ static QoreValue f_dbg_fork_while_parse_options_locked(const QoreListNode* param
             _exit(98);
         }
         wlock.unlock();
+        ExceptionSink child_xsink;
+        ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+        int status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+        child_xsink.clear();
+        _exit(status);
+    }
+    int fork_errno = errno;
+    {
+        std::lock_guard<std::mutex> lg(m);
+        release = true;
+        cv.notify_all();
+    }
+    holder.join();
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", fork_errno, "fork() failed");
+        return QoreValue();
+    }
+    return ut_wait_child(pid);
+}
+
+//! Debug-only: creates a child process with fork() while another thread holds the lock of the thread list's records
+//! of cancellable waits
+/** The other thread holds the lock that every cancellable wait takes in debug builds (QoreThreadList::dbgNoteWait())
+    until fork() has returned in the parent, as a thread that registers or ends a wait at the moment of fork() does.
+    The child first checks that it can take the lock and exits with 98 at once if it cannot, so that a child that
+    inherited the lock held fails without waiting for it; then it runs the code given, which can wait (ex: a file
+    read), and exits with the value it returns (99 if it raised an exception).  DEBUG builds only.
+
+    @return the exit status of the child (-1 if it did not exit normally)
+
+    @throw DBG-FORK-ERROR fork() failed
+*/
+static QoreValue f_dbg_fork_while_thread_wait_lock_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    QoreThreadLock& wait_lck = thread_list.dbgGetWaitLock();
+    std::mutex m;
+    std::condition_variable cv;
+    bool held = false;
+    bool release = false;
+    std::thread holder([&]() {
+        AutoLocker al(wait_lck);
+        std::unique_lock<std::mutex> ul(m);
+        held = true;
+        cv.notify_all();
+        cv.wait(ul, [&release] { return release; });
+    });
+    {
+        std::unique_lock<std::mutex> ul(m);
+        cv.wait(ul, [&held] { return held; });
+    }
+    pid_t pid = fork();
+    if (!pid) {
+        // a lock inherited held would block the code below forever
+        if (wait_lck.trylock()) {
+            _exit(98);
+        }
+        wait_lck.unlock();
         ExceptionSink child_xsink;
         ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
         int status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
@@ -21432,9 +21558,10 @@ static bool dbg_get_bg_compile_hold_point(const QoreStringNode* point, QoreJIT::
 
 //! makes the next check of a finalization loop of the native lowering report a cancellation at the given entry
 /** The lowering of the function then fails, and the function is not compiled.  The loops are \c "reload-chain-slots"
-    (QoreIRToLLVM::finalizeReloadChainSlots()) and \c "handler-local-table" (QoreIRToLLVM::finalizeObeEntries()); the
-    hook is cleared when it fires, or with a negative index.  It is process-wide: it fires in whichever lowering first
-    reaches that loop at that index, on any thread, which can be that of a callee of the batch of another function.
+    (the reload chain slots of QoreIRToLLVM::finalizeCleanupFrame()) and \c "handler-local-table"
+    (QoreIRToLLVM::finalizeObeEntries()); the hook is cleared when it fires, or with a negative index.  It is
+    process-wide: it fires in whichever lowering first reaches that loop at that index, on any thread, which can be
+    that of a callee of the batch of another function.
 
     @throw DBG-ARGUMENT-ERROR the loop is unknown
 */
@@ -21733,6 +21860,105 @@ static QoreValue f_dbg_get_module_mask_added(const QoreListNode* params, Runtime
 }
 
 //! returns the number of Program objects that exist (created and not yet destroyed; qore#5822)
+//! the references to objects that dbg_object_external_ref() holds, by ID; protected by its mutex
+static struct {
+    std::mutex m;
+    int64 next = 0;
+    std::map<int64, QoreObject*> refs;
+} dbg_external_refs;
+
+//! Debug-only: holds a reference to an object from C++, as the async I/O controller holds a poll operation (#6329)
+/** The reference is not reached by the scans of the recursive references: it is a reference from outside the
+    object graph, released with dbg_object_external_deref().
+
+    @param obj the object
+
+    @return the ID of the reference
+*/
+static QoreValue f_dbg_object_external_ref(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    obj->ref();
+    std::lock_guard<std::mutex> l(dbg_external_refs.m);
+    int64 id = ++dbg_external_refs.next;
+    dbg_external_refs.refs[id] = obj;
+    return id;
+}
+
+//! Debug-only: releases a reference that dbg_object_external_ref() holds, from C++ (#6329)
+static QoreValue f_dbg_object_external_deref(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 id = get_param_value(params, 0).getAsBigInt();
+    QoreObject* obj;
+    {
+        std::lock_guard<std::mutex> l(dbg_external_refs.m);
+        auto i = dbg_external_refs.refs.find(id);
+        if (i == dbg_external_refs.refs.end()) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "no external reference with ID %lld", (long long)id);
+            return QoreValue();
+        }
+        obj = i->second;
+        dbg_external_refs.refs.erase(i);
+    }
+    obj->deref(xsink);
+    return QoreValue();
+}
+
+//! Debug-only: returns the state of the member map of a class (#6272)
+/** @param path the path of the class, resolved in the current Program
+
+    @return a hash with \c frozen, \c indexed, \c members, \c has_internal_entries and \c error (an empty string if
+    the map's index and flags agree with its list; see QoreMemberMap::dbgCheckIndex())
+*/
+static QoreValue f_dbg_class_member_index_info(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* path = get_param_value(params, 0).get<const QoreStringNode>();
+    const QoreClass* qc = getProgram()->findClass(path->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!qc) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "class '%s' not found", path->c_str());
+        return QoreValue();
+    }
+    const QoreMemberMap& members = qore_class_private::get(*qc)->members;
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("frozen", members.isFrozen(), xsink);
+    rv->setKeyValue("indexed", members.isIndexed(), xsink);
+    rv->setKeyValue("members", (int64)members.size(), xsink);
+    rv->setKeyValue("has_internal_entries", members.hasInternalEntries(), xsink);
+    rv->setKeyValue("error", new QoreStringNode(members.dbgCheckIndex()), xsink);
+    return rv.release();
+}
+
+//! Debug-only: adds a public member to a class whose members are frozen, as a late change would (#6272)
+/** The member is added without the assertion that forbids it, so that the fallback that publishes a new index can be
+    tested; objects of the class made before hold no value for it.
+
+    @param path the path of the class, resolved in the current Program
+    @param name the name of the new member
+
+    @return the number of indexes that the class's member map has replaced so far
+*/
+static QoreValue f_dbg_class_member_late_add(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* path = get_param_value(params, 0).get<const QoreStringNode>();
+    const QoreStringNode* name = get_param_value(params, 1).get<const QoreStringNode>();
+    const QoreClass* qc = getProgram()->findClass(path->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!qc) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "class '%s' not found", path->c_str());
+        return QoreValue();
+    }
+    qore_class_private* qcp = const_cast<qore_class_private*>(qore_class_private::get(*qc));
+    if (qcp->members.inList(name->c_str())) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "class '%s' already has a member '%s'", path->c_str(),
+            name->c_str());
+        return QoreValue();
+    }
+    QoreMemberInfo* mi = new QoreMemberInfo(&loc_builtin, autoTypeInfo, nullptr, QoreValue(), Public, qcp);
+    return (int64)qcp->members.dbgLateAdd(strdup(name->c_str()), mi);
+}
+
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
 }
@@ -23278,12 +23504,64 @@ void dbg_http1_wait_hangup(int fd) {
 #endif
 }
 
+//! blocks until the receive buffer of \a fd holds at least \a size bytes, or the connection has ended; no timer is
+//! involved
+void dbg_http1_wait_received(int fd, size_t size) {
+    auto received = [fd] () -> size_t {
+        int n = 0;
+        return ::ioctl(fd, FIONREAD, &n) || n < 0 ? 0 : static_cast<size_t>(n);
+    };
+#ifdef DARWIN
+    // the read filter with a low-water mark fires once the receive buffer holds that many bytes, or at the end of the
+    // connection
+    int kq = kqueue();
+    if (kq < 0) {
+        return;
+    }
+    ON_BLOCK_EXIT([kq] () { ::close(kq); });
+    struct kevent kev;
+    EV_SET(&kev, fd, EVFILT_READ, EV_ADD | EV_CLEAR, NOTE_LOWAT, static_cast<intptr_t>(size), nullptr);
+    if (kevent(kq, &kev, 1, nullptr, 0, nullptr) < 0) {
+        return;
+    }
+    while (received() < size) {
+        struct kevent out;
+        int rc = kevent(kq, nullptr, 0, &out, 1, nullptr);
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        if (rc <= 0 || (out.flags & (EV_EOF | EV_ERROR))) {
+            return;
+        }
+    }
+#else
+    // loopback delivers what send() wrote before it returns, so the data is normally there already
+    while (received() < size) {
+        pollfd pfd = {fd, POLLIN, 0};
+        int rc = ::poll(&pfd, 1, -1);
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        if (rc < 0 || (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))) {
+            return;
+        }
+        if (received() < size) {
+            sched_yield();
+        }
+    }
+#endif
+}
+
 //! writes \a response on the peer's descriptor \a pfd and resets the connection, with system calls only
 /** The connection is reset by closing its last descriptor with \c SO_LINGER and a zero timeout; the descriptor
     number is first taken over by a new, unconnected socket (dup2()), so the peer's Socket object keeps a valid
     descriptor, which it closes later without touching the connection or another socket.
+
+    A reset discards the data in the peer's send buffer that has not been sent, so the reset is made once the
+    response is in the receive buffer of the client's descriptor \a fd: loopback delivery is not synchronous with
+    send() on macOS, where a reset made at once could discard the response before it was sent (issue #6320).
 */
-void dbg_http1_answer_and_reset(int pfd, const std::string& response) {
+void dbg_http1_answer_and_reset(int pfd, const std::string& response, int fd) {
     size_t off = 0;
     while (off < response.size()) {
         ssize_t rc = ::send(pfd, response.data() + off, response.size() - off,
@@ -23307,6 +23585,9 @@ void dbg_http1_answer_and_reset(int pfd, const std::string& response) {
             continue;
         }
         break;
+    }
+    if (fd >= 0 && off == response.size()) {
+        dbg_http1_wait_received(fd, response.size());
     }
     struct linger l;
     l.l_onoff = 1;
@@ -23477,7 +23758,7 @@ void dbg_http1_send_hook(QoreDbgHttp1SendEvent event, int fd, const char* err) {
     }
     // the peer answers and resets the connection now, after the receive side found nothing, so the next write fails
     if (pfd >= 0) {
-        dbg_http1_answer_and_reset(pfd, response);
+        dbg_http1_answer_and_reset(pfd, response, fd);
     }
     dbg_http1_wait_hangup(fd);
     dbg_http1_send_failure_dec(c);
@@ -23505,7 +23786,7 @@ void dbg_http1_socket_send_hook(int fd) {
     }
     if (pfd >= 0) {
         // the peer answers and resets the connection before the write is made
-        dbg_http1_answer_and_reset(pfd, response);
+        dbg_http1_answer_and_reset(pfd, response, fd);
     }
     dbg_http1_send_failure_dec(c);
     // without a peer, the test cancels the request, which shuts the connection down
@@ -23746,6 +24027,79 @@ void qore_dbg_http_hold(QoreDbgHttpHoldPoint point) {
 bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point) {
     std::lock_guard<std::mutex> l(dbg_http_hold_m);
     return dbg_http_holds[static_cast<int>(point)].reached != nullptr;
+}
+
+namespace {
+//! the hold armed by dbg_hold_child_program_create(): the Counters are referenced
+std::mutex dbg_child_program_hold_m;
+Counter* dbg_child_program_reached = nullptr;
+Counter* dbg_child_program_release = nullptr;
+}
+
+void qore_dbg_child_program_create_hold() {
+    Counter* reached;
+    Counter* release;
+    {
+        std::lock_guard<std::mutex> l(dbg_child_program_hold_m);
+        if (!dbg_child_program_reached) {
+            return;
+        }
+        // one-shot: the hold is taken over by this thread
+        reached = dbg_child_program_reached;
+        release = dbg_child_program_release;
+        dbg_child_program_reached = dbg_child_program_release = nullptr;
+    }
+    ExceptionSink xsink;
+    reached->dec(&xsink);
+    // a hang guard only: the test releases the hold
+    release->waitForZero(&xsink, 60000);
+    reached->deref(&xsink);
+    release->deref(&xsink);
+    xsink.clear();
+}
+
+//! holds the next creation of a child Program after its options were checked and before it is created (one-shot)
+/** @param reached decremented when a thread reaches the hold
+    @param release the thread waits until it reaches zero
+
+    @throw DBG-ARGUMENT-ERROR the hold is already armed
+*/
+static QoreValue f_dbg_hold_child_program_create(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<Counter> reached(get_counter_arg(params, 0, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> l(dbg_child_program_hold_m);
+    if (dbg_child_program_reached) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_hold_child_program_create() is already armed");
+        return QoreValue();
+    }
+    dbg_child_program_reached = reached.release();
+    dbg_child_program_release = release.release();
+    return QoreValue();
+}
+
+//! disarms dbg_hold_child_program_create() if no creation reached it
+static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    Counter* reached;
+    Counter* release;
+    {
+        std::lock_guard<std::mutex> l(dbg_child_program_hold_m);
+        reached = dbg_child_program_reached;
+        release = dbg_child_program_release;
+        dbg_child_program_reached = dbg_child_program_release = nullptr;
+    }
+    if (reached) {
+        reached->deref(xsink);
+        release->deref(xsink);
+    }
+    return QoreValue();
 }
 
 //! holds the next HTTP client thread that reaches the given point until \a release reaches zero (one-shot)
@@ -25228,6 +25582,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_run_in_foreign_thread", f_dbg_run_in_foreign_thread, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringOrNothingTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
+    qns.addBuiltinVariant("dbg_hold_child_program_create", f_dbg_hold_child_program_create, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+    qns.addBuiltinVariant("dbg_hold_child_program_create_clear", f_dbg_hold_child_program_create_clear,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_hold_source_program_call", f_dbg_hold_source_program_call, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_wait_source_program_call_held", f_dbg_wait_source_program_call_held, QCF_NO_FLAGS,
@@ -25309,6 +25668,15 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_program_count", f_dbg_get_live_program_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_object_external_ref", f_dbg_object_external_ref, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "obj");
+    qns.addBuiltinVariant("dbg_object_external_deref", f_dbg_object_external_deref, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
+    qns.addBuiltinVariant("dbg_class_member_index_info", f_dbg_class_member_index_info, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "path");
+    qns.addBuiltinVariant("dbg_class_member_late_add", f_dbg_class_member_late_add, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "name");
     qns.addBuiltinVariant("dbg_get_module_mask_added", f_dbg_get_module_mask_added, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         listTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "module");
     qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
@@ -25550,6 +25918,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_fork_while_thread_wait_lock_held", f_dbg_fork_while_thread_wait_lock_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_fork_while_parse_options_locked", f_dbg_fork_while_parse_options_locked, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", codeTypeInfo,
         QORE_PARAM_NO_ARG, "child");
