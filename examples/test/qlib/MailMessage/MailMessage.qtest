@@ -60,6 +60,7 @@ public class Main inherits QUnit::Test {
         addTestCase("Test quoted local part duplicates (issue #6134)", \testQuotedLocalPartDuplicates(), NOTHING);
         addTestCase("Test parsed header lines and body (issue #6139)", \testParsedHeaderLines(), NOTHING);
         addParseWorkCases();
+        addTestCase("Test parsed messages without optional headers (issue #6267)", \testMissingHeaders(), NOTHING);
 
         set_return_value(main());
     }
@@ -2386,5 +2387,83 @@ lorem ipsum\r
             check(result, n);
         }
         return bytes;
+    }
+
+    testMissingHeaders() {
+        # a parsed message without a Subject or a From header is serialized without it; getting its headers raised
+        # RUNTIME-OVERLOAD-ERROR (issue #6267)
+        hash<string, hash<auto>> cases = {
+            "no subject": {
+                "msg": "From: a@b.com\r\nTo: c@d.com\r\n\r\nbody\r\n",
+                "hdr": "From: a@b.com\r\nTo: c@d.com\r\n",
+            },
+            "no from": {
+                "msg": "To: c@d.com\r\nSubject: s\r\n\r\nbody\r\n",
+                "hdr": "To: c@d.com\r\nSubject: s\r\n",
+            },
+            "no from or subject": {
+                "msg": "To: c@d.com\r\n\r\nbody\r\n",
+                "hdr": "To: c@d.com\r\n",
+            },
+            "cc and bcc only": {
+                "msg": "CC: c@d.com\r\nBCC: e@d.com\r\n\r\nbody\r\n",
+                "hdr": "CC: c@d.com\r\nBCC: e@d.com\r\n",
+            },
+            # the receipt headers have the sender's address, so they are not written without a sender
+            "receipts without from": {
+                "msg": "To: c@d.com\r\nReturn-Receipt-To: a@b.com\r\nDisposition-Notification-To: a@b.com\r\n\r\n"
+                    "body\r\n",
+                "hdr": "To: c@d.com\r\n",
+            },
+            "receipts": {
+                "msg": "From: a@b.com\r\nTo: c@d.com\r\nReturn-Receipt-To: a@b.com\r\n"
+                    "Disposition-Notification-To: a@b.com\r\n\r\nbody\r\n",
+                "hdr": "From: a@b.com\r\nTo: c@d.com\r\nReturn-Receipt-To: a@b.com\r\n"
+                    "Disposition-Notification-To: a@b.com\r\n",
+            },
+            "other headers without from": {
+                "msg": "To: c@d.com\r\nSender: s@b.com\r\nReply-To: r@b.com\r\n\r\nbody\r\n",
+                "hdr": "To: c@d.com\r\nSender: s@b.com\r\nReply-To: r@b.com\r\n",
+            },
+            "mime headers without from or subject": {
+                "msg": "To: c@d.com\r\nContent-Type: text/plain; charset=UTF-8\r\n"
+                    "Content-Transfer-Encoding: quoted-printable\r\n\r\nb=C3=B6dy\r\n",
+                "hdr": "To: c@d.com\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n"
+                    "Content-Transfer-Encoding: quoted-printable\r\n",
+            },
+            "multipart without from or subject": {
+                "msg": "To: c@d.com\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"XX\"\r\n\r\n"
+                    "--XX\r\nContent-Type: text/plain\r\n\r\nb\r\n--XX\r\nContent-Type: application/octet-stream\r\n"
+                    "Content-Disposition: attachment; filename=\"a.bin\"\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+                    "AAEC\r\n--XX--\r\n",
+                "hdr": "To: c@d.com\r\n",
+            },
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            Message m(i.value.msg);
+            assertEq(i.value.hdr, m.getHeaderString(), i.key);
+            assertEq(replace(i.value.hdr, "\r\n", "\n"), m.getHeaderString("\n", False), i.key);
+            # the message is the same when it is serialized and parsed again
+            Message m2(m.serialize());
+            assertEq(m.getSender(), m2.getSender(), i.key);
+            assertEq(m.getFrom(), m2.getFrom(), i.key);
+            assertEq(m.getSubject(), m2.getSubject(), i.key);
+            assertEq(m.getTO(), m2.getTO(), i.key);
+            assertEq(m.getCC(), m2.getCC(), i.key);
+            assertEq(m.getBCC(), m2.getBCC(), i.key);
+            assertEq(m.getBody(), m2.getBody(), i.key);
+            assertEq(m.getAttachments().size(), m2.getAttachments().size(), i.key);
+            assertEq(m.serializeRaw(), m2.serializeRaw(), i.key);
+        }
+
+        # a message without a subject has an empty subject; this raised RUNTIME-TYPE-ERROR
+        Message m("To: c@d.com\r\n\r\nbody\r\n");
+        assertEq("", m.getSubject());
+        assertEq(NOTHING, m.getSender());
+        assertEq(NOTHING, m.getFrom());
+        hash<MailMessageInfo> info = m.getInfo();
+        assertFalse(info.hasKey("subject"));
+        assertFalse(info.hasKey("from"));
+        assertRegex("Sender: ''", m.toString());
     }
 }

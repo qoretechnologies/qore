@@ -113,6 +113,9 @@ msg.addTO("My Best Friend <you@friend.com>");
         \c Content-Type is \c text/plain (it was \c "7bit"), and an attachment with the \c 7bit, \c 8bit or
         \c binary transfer encoding no longer makes the parse fail with \c UNKNOWN-ENCODING
       - a body that ends with a line break is no longer given an empty line every time the message is serialized
+      - a message without a \c Subject or a \c From header is serialized without it; getting its headers raised
+        \c RUNTIME-OVERLOAD-ERROR, and @ref MailMessage::Message::getSubject() "Message::getSubject()" raised
+        \c RUNTIME-TYPE-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6267">issue 6267</a>)
     - The \c Disposition-Notification-To header of a parsed message sets
       @ref MailMessage::Message::receiptDelivery() "Message::receiptDelivery()", as a message created to be sent does;
       the header name was compared in the wrong case, so it was never recognized.  The header is therefore no
@@ -2541,8 +2544,14 @@ msg.addBCC(untrusted_name, "j@x.com");
     }
 
     #! returns the subject of the Message
+    /** @return the subject of the message, or an empty string if it has none (a parsed message without a \c Subject
+        header)
+
+        @since MailMessage 1.5.1 an empty string is returned for a parsed message without a \c Subject header; this
+        raised \c RUNTIME-TYPE-ERROR
+    */
     string getSubject() {
-        return subject;
+        return subject ?? "";
     }
 
     #! return all the email addresses the message will be sent to, a combination of the "To:", "CC:", and "BCC:" lists
@@ -2958,6 +2967,10 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         address that a header gives (see @ref getEmailAddress()) is the address that its value gives, so that a
         message that is parsed again is sent to the same addresses.
 
+        A header that a parsed message does not have is not written: the \c Subject header of a message without a
+        subject, and the \c From, \c Return-Receipt-To and \c Disposition-Notification-To headers, which have the
+        sender, of a message without a sender.
+
         @param eol the End-Of-Line marker for the string, also used to fold long headers
         @param encode encode non-ASCII values with RFC 2047 encoded words (http://tools.ietf.org/html/rfc2047)
 
@@ -2966,10 +2979,12 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         @since MailMessage 1.5.1 the message is not changed: a \c Content-Type header was removed or taken as the
         type of the body; the \c From header has the display name of the sender, and only the display name is
         encoded; only the text of the address headers is encoded, never their addresses, and encoded words are
-        folded with \a eol
+        folded with \a eol; the \c Subject and \c From headers of a parsed message that does not have them are not
+        written: getting the headers raised \c RUNTIME-OVERLOAD-ERROR
     */
     string getHeaderString(string eol = "\r\n", bool encode = True) {
-        string hdr = doSenderHeader("From", eol, encode);
+        # a parsed message can have no sender and no subject, and then these headers are not written (issue #6267)
+        string hdr = exists from ? doSenderHeader("From", eol, encode) : "";
 
         # To:
         foreach string l in (to)
@@ -2984,16 +2999,19 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
             hdr += Message::doAddressHeader("BCC", l, bcc_raw[$#], eol, encode);
 
         # add the subject - use "QP" encoding to ensure correct transmission & display of special characters through all SMTP servers
-        hdr += Message::doHeaderValue("Subject", subject, eol, encode);
+        if (exists subject) {
+            hdr += Message::doHeaderValue("Subject", subject, eol, encode);
+        }
 
         # importance
         if (importance)
             hdr += sprintf("Importance: high%sX-Priority: 1%sPriority: Urgent%s", eol, eol, eol);
 
-        if (deliveryReceipt)
+        # the receipt headers have the sender's address
+        if (deliveryReceipt && exists from)
             hdr += doSenderHeader("Return-Receipt-To", eol, encode);
 
-        if (readReceipt)
+        if (readReceipt && exists from)
             hdr += doSenderHeader("Disposition-Notification-To", eol, encode);
 
         # the MIME headers are generated if the message has a MIME structure (a body with a content transfer encoding,
