@@ -2262,10 +2262,11 @@ bool readModuleDomains(const QoreAOTBinaryReader& reader, int64& dom, std::strin
 
 //! Serialize the time zone that the code sets with `%set-time-zone` (the directive's argument: a region name or a UTC
 //! offset) into the TIME_ZONE section; nothing is written if \a zone is empty (qore#6270)
-void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone);
+void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header);
 
 //! Read the time zone recorded in the TIME_ZONE section; empty if there is no such section
-bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, std::string& error);
+bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, bool& after_module_header,
+        std::string& error);
 
 //! Serialize producer/build metadata into the BUILD_INFO binary section.
 /** Wire format: u32 count, then count x (StringRef key, StringRef value).

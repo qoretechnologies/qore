@@ -23,6 +23,8 @@
     output must be the one in their \c .expected files in every execution mode, on the IR tier and in programs compiled
     with qcc -O0 and -O3.  A module that sets its time zone (TzMod.qm) is used from source and compiled with qcc by a
     program that sets none (usemod.q) and by Programs with PO_NO_LOCALE_CONTROL, which ignore the directive (nlc.q).
+    Modules that declare the locale control domain set their zones after their headers (TzDomAfter.qm), where the
+    declaration has removed the restriction, and before them (TzDomBefore.qm), where it applies (domains.q).
 
     Every child runs with \c TZ=Europe/Prague, a process time zone that none of the programs sets.
 */
@@ -33,8 +35,11 @@ class SetTimeZoneCompiledTest inherits QUnit::Test {
         #! the fixture programs that set their time zones
         const Programs = ("region", "offset", "utc", "lock");
 
-        #! the fixture programs that use the TzMod module
-        const ModulePrograms = ("usemod", "nlc", "mask-add", "mask-strip");
+        #! the fixture programs that use the modules of the test (TzMod, TzDomAfter and TzDomBefore)
+        const ModulePrograms = ("usemod", "nlc", "mask-add", "mask-strip", "domains");
+
+        #! the modules of the test
+        const Modules = ("TzMod", "TzDomAfter", "TzDomBefore");
 
         #! the process time zone of the children: none of the programs sets it
         const ProcessTimeZone = "Europe/Prague";
@@ -110,18 +115,21 @@ class SetTimeZoneCompiledTest inherits QUnit::Test {
         }
     }
 
-    #! the programs that use TzMod compiled with qcc, run by qore and compiled with qcc
+    #! the programs that use the modules compiled with qcc, run by qore and compiled with qcc
     testModuleCompiled() {
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
-        copy_file(get_script_dir() + "/TzMod.qm", dir + "/TzMod.qm");
-        int rc;
-        string output = backquote(sprintf("%s%s --module --strip-source -o %s %s 2>&1", env(dir), shellQuote(qccBin()),
-            shellQuote(dir + "/TzMod.qmod"), shellQuote(dir + "/TzMod.qm")), \rc);
-        assertEq(0, rc, output);
-        assertTrue(is_file(dir + "/TzMod.qmod"), output);
-        # the programs use the compiled module only
-        unlink(dir + "/TzMod.qm");
+        foreach string mod in (Modules) {
+            copy_file(get_script_dir() + "/" + mod + ".qm", dir + "/" + mod + ".qm");
+            int rc;
+            string output = backquote(sprintf("%s%s --module --strip-source -o %s %s 2>&1", env(dir),
+                shellQuote(qccBin()), shellQuote(dir + "/" + mod + ".qmod"), shellQuote(dir + "/" + mod + ".qm")),
+                \rc);
+            assertEq(0, rc, mod + ": " + output);
+            assertTrue(is_file(dir + "/" + mod + ".qmod"), output);
+        }
+        # the programs use the compiled modules only
+        map unlink(dir + "/" + $1 + ".qm"), Modules;
         foreach string name in (ModulePrograms) {
             foreach string mode in (ExecModeHarness::ExecModes) {
                 assertEq(expected(name), ExecModeHarness::run(command(name, mode, dir)), name + " " + mode);

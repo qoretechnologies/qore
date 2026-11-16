@@ -1867,6 +1867,8 @@ void QoreUserModuleDefContextHelper::setNameInit(const char* name) {
 void QoreUserModuleDefContextHelper::close() {
     // the options in effect before the module header, without the restrictions that the header removed (domains)
     pgm->pwo.parse_options = po & ~QoreParseOptions(dom_removed);
+    // a %set-time-zone directive after the header is checked against these options (qore#6270)
+    pgm->module_header_closed = true;
     // mod_header_dom stays set: the header's closures are parse-initialized after the header with the options that
     // were in effect when they were parsed, which include the header's restrictions; no other code has them unless
     // the module sets them itself

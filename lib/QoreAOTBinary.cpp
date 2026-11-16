@@ -21840,23 +21840,27 @@ bool readFunctionalDomain(const QoreAOTBinaryReader& reader, QoreParseOptions& d
     return true;
 }
 
-void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone) {
+void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header) {
     if (zone.empty()) {
         return;
     }
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::TIME_ZONE);
     writer.writeStringRef(zone.c_str());
+    // 1 if the directive follows the header of a user module (qore#6270)
+    writer.writeU8(after_module_header ? 1 : 0);
     writer.endSection(sec_idx);
 }
 
-bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, std::string& error) {
+bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, bool& after_module_header,
+        std::string& error) {
     zone.clear();
+    after_module_header = false;
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::TIME_ZONE);
     if (!sec) {
         return true;
     }
     const uint8_t* ptr = reader.getSectionData(*sec);
-    if (!ptr || sec->size < 4) {
+    if (!ptr || sec->size < 5) {
         error = "invalid TIME_ZONE section";
         return false;
     }
@@ -21866,6 +21870,7 @@ bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, std::str
         return false;
     }
     zone = z;
+    after_module_header = QoreAOTBinaryReader::readU8(ptr) != 0;
     return true;
 }
 

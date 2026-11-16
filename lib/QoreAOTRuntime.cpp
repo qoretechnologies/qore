@@ -9408,15 +9408,16 @@ static std::string makeAOTRegistrationFailureMessage(const char* label,
 
     @param ignore true if the restrictions of the loading code disallow the directive: PO_NO_LOCALE_CONTROL inherited
     by a module's Program (the loading Program's options with the module parse option mask, before the module's own
-    domains apply; a source module whose \c domains header lifts the restriction and that sets its time zone after
-    the header gets it, as the image does not record where the directive is), or that of the host of a script
-    fragment; false for the main program of an executable
+    domains apply), or that of the host of a script fragment; false for the main program of an executable
+    @param ignore_after_header the same for a directive that the image records after the header of a module: the
+    inherited restrictions without those that the \c domains of the header remove, as for the module's source
 */
 static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReader& reader, const char* label,
-        std::string& error, bool ignore) {
+        std::string& error, bool ignore, bool ignore_after_header) {
     std::string zone;
+    bool after_module_header;
     std::string read_error;
-    if (!readTimeZone(reader, zone, read_error)) {
+    if (!readTimeZone(reader, zone, after_module_header, read_error)) {
         error = "AOT time zone metadata read error";
         if (label && *label) {
             error += " in ";
@@ -9428,7 +9429,8 @@ static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReade
     if (zone.empty()) {
         return true;
     }
-    if (ignore) {
+    // a directive after the header of a module is checked against the restrictions that the header's domains leave
+    if (after_module_header ? ignore_after_header : ignore) {
         return true;
     }
     qore_program_private* pp = qore_program_private::get(*pgm);
@@ -9458,12 +9460,16 @@ static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReade
 //! replays the directives of an AOT image on the Program it is loaded into
 /** @param ignore_time_zone true if the restrictions of the loading code disallow the time zone that the image sets
     (see applyAOTTimeZoneToProgram())
+    @param ignore_time_zone_after_header the same for a directive that follows the header of a module, with the
+    restrictions that the header's domains leave; -1 if it is the same as \a ignore_time_zone
 */
 static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
         const QoreAOTBinaryReader& reader,
-        const char* label, std::string& error, bool ignore_time_zone = false) {
+        const char* label, std::string& error, bool ignore_time_zone = false,
+        int ignore_time_zone_after_header = -1) {
     // the directives of the image also set the Program's time zone (qore#6270)
-    if (!applyAOTTimeZoneToProgram(pgm, reader, label, error, ignore_time_zone)) {
+    if (!applyAOTTimeZoneToProgram(pgm, reader, label, error, ignore_time_zone,
+            ignore_time_zone_after_header < 0 ? ignore_time_zone : static_cast<bool>(ignore_time_zone_after_header))) {
         return false;
     }
     std::vector<AOTModuleCommand> commands;
@@ -14927,8 +14933,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
     {
         std::string cmd_error;
+        // a directive after the module header has the restrictions that the header's domains leave, as in its source
         if (!applyAOTModuleCommandsToProgram(local_pgm, metadata_reader, module_context_path, cmd_error,
-                inherited_no_locale_control)) {
+                inherited_no_locale_control, static_cast<bool>(inherited_po & PO_NO_LOCALE_CONTROL))) {
             QoreStringNode* err = new QoreStringNodeMaker(
                 "AOT module-command replay error for module '%s' (%s): %s",
                 mod_name ? mod_name : "<unknown>",

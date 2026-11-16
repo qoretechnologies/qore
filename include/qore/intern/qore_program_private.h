@@ -1062,6 +1062,11 @@ public:
     /** qcc records it in the AOT image, whose loader sets the time zone of the Program with it (qore#6270)
     */
     std::string time_zone_directive;
+    //! true if the %set-time-zone directive recorded in \c time_zone_directive follows the header of a user module,
+    //! whose declared domains have then removed the restrictions they relieve (qore#6270)
+    bool time_zone_after_module_header = false;
+    //! true once the header of a user module has been parsed (QoreUserModuleDefContextHelper::close())
+    bool module_header_closed = false;
 
     // lock serializing changes to sandbox_manager with the lookups that take a reference to it
     QoreThreadLock sm_lock;
@@ -3800,7 +3805,11 @@ public:
 
         if (setTimeZoneDirective(zone, &xsink)) {
             mergeParseException(xsink);
+            return;
         }
+        // an AOT image records where the directive is, as its loader checks it against the restrictions in effect
+        // there (qore#6270)
+        time_zone_after_module_header = module_header_closed;
     }
 
     //! sets the time zone of the Program as the %set-time-zone directive with the given argument does
