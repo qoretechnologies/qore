@@ -48,6 +48,7 @@
 #include <atomic>
 #include <climits>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
 #include <unordered_set>
@@ -5292,6 +5293,15 @@ QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* 
         if (w) {
             return qore_method_private::evalGivenArgs(*w, xsink, rc, self, args, class_ctx, pgm_ctx);
         }
+        // a member that holds a closure or a call reference is called with the argument list's values, which its
+        // parameters take over (issue #5958); a call through a call reference of another Program (pgm_ctx) is made
+        // as evalMethod() makes it
+        if (!pgm_ctx) {
+            QoreValue rv;
+            if (qore_class_eval_member_code_given_args(*this, self, nme, args, class_ctx, xsink, rv)) {
+                return rv;
+            }
+        }
     }
     // anything else is called as evalMethod() calls it
     return evalMethod(self, nme, args, class_ctx, rc, xsink, nullptr, pgm_ctx);
@@ -9201,6 +9211,10 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
     if (exp) {
         printd(5, "QoreMemberInfo::parseInit() this: %p '%s' s'%s' %d\n", this, name, exp.getFullTypeName(),
             exp.getType());
+        // the initializer is code of the class, whatever code makes the class parse it: it sees self and the
+        // top-level local variables (qore#6268)
+        DeclarationParseScopeHelper declaration_scope;
+        SelfLocalVarParseHelper slvph(&selfid);
         QoreParseContext parse_context(&selfid);
         if (parse_init_value(exp, parse_context) && !err) {
             err = -1;
@@ -9255,6 +9269,8 @@ int QoreVarInfo::parseInit(const char* name) {
     val.set(typeInfo);
 
     if (exp) {
+        // the initializer is code of the class, whatever code makes the class parse it (qore#6268)
+        DeclarationParseScopeHelper declaration_scope;
         QoreParseContext parse_context;
         if (parse_init_value(exp, parse_context) && !err) {
             err = -1;
@@ -9335,6 +9351,31 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink, bool defer_pen
     // recursing
     eval_init = true;
     if (exp) {
+        // the initializer runs with the parse options of the code that declares the variable, as a constant's does
+        // (qore#6205) and as the code of a function runs with those of its declaration, not with those of the code
+        // that triggers the evaluation: the statement that parses the declaring code, or the code that reads the
+        // variable first; any override of that code is suspended, so that the value is not shaped by the code that
+        // happens to initialize it.  Both the thread's options and those of the thread-local RuntimeConfig, which the
+        // AST interpreter reads, are set
+        struct StaticVarInitRcParseOptionsHelper {
+            RuntimeConfig& rc;
+            QoreParseOptions old_po;
+
+            StaticVarInitRcParseOptionsHelper(RuntimeConfig& rc, const QoreParseOptions& po) : rc(rc),
+                    old_po(rc.getParseOptions()) {
+                rc.setParseOptions(po);
+            }
+
+            ~StaticVarInitRcParseOptionsHelper() {
+                rc.setParseOptions(old_po);
+            }
+        };
+        std::optional<LoadTimeParseOptionsHelper> init_po;
+        std::optional<StaticVarInitRcParseOptionsHelper> init_rc_po;
+        if (has_decl_po) {
+            init_po.emplace(decl_po);
+            init_rc_po.emplace(rc_get_tls_ref(), decl_po);
+        }
         // the initializer is evaluated as a statement of its own (see design/temporary-lifetime.md)
         QoreScopedEvalHolder val(exp, true, &init_xsink);
         if (!init_xsink) {

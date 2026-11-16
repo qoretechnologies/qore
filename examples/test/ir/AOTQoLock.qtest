@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires Util
 
@@ -35,7 +36,7 @@ class AOTQoLockTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("AOTQoLockTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         lock_tool = normalize_dir(get_script_dir() + "/../../../tools")
             + DirSep + "qore-qo-lock";
 

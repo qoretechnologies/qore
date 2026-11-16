@@ -1443,6 +1443,33 @@ static Http2SessionPtr qore_socket_object_get_h2_session(const QoreSocketObject*
     return sp->h2_session;
 }
 
+WebSocketCloseRecordRef qore_socket_object_get_h2_ws_close_record(QoreSocketObject* s, int32_t stream_id,
+        bool create) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(s);
+    if (h2) {
+        return h2->getWebSocketCloseRecord(stream_id, create);
+    }
+    if (create) {
+        return WebSocketCloseRecordRef();
+    }
+    // the session ended: the socket kept the records of its WebSocket streams
+    qore_socket_private* sp;
+    {
+        my_socket_priv* priv = my_socket_priv::getPriv(*s);
+        AutoLocker al(priv->m);
+        sp = qore_socket_private::get(*priv->socket);
+    }
+    std::lock_guard<std::mutex> lg(sp->h2_ws_close_records_lock);
+    auto it = sp->h2_ws_close_records.find(stream_id);
+    return it == sp->h2_ws_close_records.end() ? WebSocketCloseRecordRef() : it->second;
+}
+
+WebSocketCloseRecordRef qore_socket_object_get_quic_ws_close_record(QoreSocketObject* s, int64_t session_id,
+        int64_t stream_id) {
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(s, session_id);
+    return session ? session->getWebSocketCloseRecord(stream_id) : WebSocketCloseRecordRef();
+}
+
 //! Enqueues HTTP/2 DATA directly on the session from the async I/O execution path
 /** Called only when the caller already runs on the async I/O controller's I/O thread or in a
     controller-owned continuePoll worker; see qore_socket_object_submit_http2_request() for the
@@ -3844,26 +3871,6 @@ static BinaryNode* qore_socket_object_exec_recv_bytes(QoreSocketObject* s, size_
         return nullptr;
     }
     return bin.release();
-}
-
-static BinaryNode* qore_socket_object_exec_recv_some_binary(QoreSocketObject* s, size_t size,
-        int timeout_ms, ExceptionSink* xsink, const char* owner_name = "recvToOutputStream") {
-    s->ref();
-    ValueHolder result(qore_socket_object_exec_recv_poll(s,
-        new SocketRecvSomePollOperation(xsink, static_cast<ssize_t>(size), s, false, true),
-        timeout_ms, owner_name, xsink), xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    if (result->isNothing()) {
-        return new BinaryNode;
-    }
-    if (result->getType() != NT_BINARY) {
-        xsink->raiseException("SOCKET-RECV-ERROR", "expected binary data from async receive operation, got '%s'",
-            result->getFullTypeName());
-        return nullptr;
-    }
-    return result.release().get<BinaryNode>();
 }
 
 static QoreHashNode* qore_socket_object_exec_read_http_header(QoreSocketObject* s, QoreHashNode* info,

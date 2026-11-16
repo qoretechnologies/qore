@@ -636,4 +636,14 @@ protected:
     }
 };
 
+//! Returns the node as a VarRefNode if it is a variable reference, otherwise nullptr
+/** Only a VarRefNode (or a subclass) has the type NT_VARREF, so the type code test is equivalent to a dynamic_cast
+    and does not depend on the class hierarchy walk of the C++ runtime.
+*/
+DLLLOCAL inline const VarRefNode* qore_get_var_ref_node(const AbstractQoreNode* n) {
+    const VarRefNode* rv = (n && n->getType() == NT_VARREF) ? static_cast<const VarRefNode*>(n) : nullptr;
+    assert(rv == dynamic_cast<const VarRefNode*>(n));
+    return rv;
+}
+
 #endif

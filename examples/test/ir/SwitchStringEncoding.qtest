@@ -13,12 +13,13 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %exec-class SwitchStringEncodingTest
 
 class SwitchStringEncodingTest inherits QUnit::Test {
     private {
-        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string qore = realpath(TestInterpreter::qore_interpreter());
         string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
         string qcc = ENV.QCC ?? libdir + "/qcc";
         string source = get_script_dir() + "/SwitchStringEncoding.qr";
@@ -102,14 +103,16 @@ class SwitchStringEncodingTest inherits QUnit::Test {
         assertRegex("\n0 ISO-2022-JP !!binary GyRC/w==: try=default eq=EX ENCODING-CONVERSION-ERROR const=default\n",
             out, "invalid ISO-2022-JP");
         # the iconv of musl has no UTF-7: a UTF-7 value or case can then be compared with no case in another encoding
-        bool have_utf7;
+        *string utf7_plus;
         try {
-            convert_encoding("+", "UTF-7");
-            have_utf7 = True;
+            utf7_plus = convert_encoding("+", "UTF-7");
         } catch (hash<ExceptionInfo> ex) {
             assertEq("ENCODING-CONVERSION-ERROR", ex.err);
         }
+        bool have_utf7 = exists utf7_plus;
         if (have_utf7) {
+            # UTF-7 encodes "+" as "+-"
+            assertEq(binary("+-"), binary(utf7_plus), "UTF-7 \"+\"");
             assertRegex("\n0 UTF-7 !!binary K/8=: try=default eq=EX ENCODING-CONVERSION-ERROR const=default\n", out,
                 "invalid UTF-7");
             # a constant case in another encoding is compared with its characters: UTF-7 "+" is "+-"

@@ -1,0 +1,505 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The debugger's step event of a statement whose first instruction is a fused local int operation, such as
+# `total += 1;`, is made by the operation itself (qore_ir_fold_debug_statements()), so that such a statement is one IR
+# instruction, as in code that cannot be debugged.
+#
+# Issue #5558 emitted a DebugStatement instruction before every statement of a function that can be debugged, which
+# made `total += 1;` two IR instructions: the IR interpreter dispatched twice the instructions for it, and the size
+# budget of native compilation (QORE_JIT_MAX_IR_INSTRUCTIONS, counted in IR instructions) kept functions half the size
+# on the IR tier.  The instruction counts are those that the budget's diagnostic reports.
+#
+# The step events of the folded statements are checked as well, in a Program without PO_ALLOW_DEBUGGER, whose statements
+# are folded (with PO_ALLOW_DEBUGGER, every local is kept on the stack of local variables, and none is), stepped by a
+# debugger in another Program that attaches while the function runs as native code or with the IR interpreter: the
+# events of every statement are those of the AST interpreter, and a return or a break that the debugger requests at a
+# folded statement does what it does with the statements not folded (ut_debug_step_folded_statements() in
+# lib/ql_debug.cpp checks an exception that the debugger raises at a folded statement, which a debugger written in Qore
+# cannot raise).
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation of the debugger's step events and of the native-compilation budget
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class FoldedDebugStepDensityTest
+
+public class FoldedDebugStepDensityTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+
+        #! the instructions of the probe function besides its statements of the form tested
+        /** The function's parameter is assigned to its local (load.local, store.local), and the local is returned
+            (load.local, ref.self, uninstantiate.local, return); a function that can be debugged also has the step
+            events of these two statements
+        */
+        const ProbeOverhead = 6;
+        const DebugStatementOverhead = 2;
+
+        #! statements that lower to one fused local int operation (a post-increment or post-decrement statement,
+        #! whose value is unused, lowers as the pre form: qore#6199)
+        const FusedStatements = {
+            "add-constant": "total += 1;",
+            "subtract-constant": "total -= 1;",
+            "pre-increment": "++total;",
+            "pre-decrement": "--total;",
+            "post-increment": "total++;",
+            "post-decrement": "total--;",
+        };
+
+        #! the function of the Program that the debugger steps; the lines tagged "### <tag>" are its statements
+        const ChildScript = "%modern
+*string sub work(int n, code attach, code detach) {
+    int total = 0;
+    int step = 2;
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {                       ### if
+            attach();
+        }
+        total += 10;                        ### add_constant
+        total += step;                      ### add_local
+        total++;                            ### increment
+        ++total;                            ### pre_increment
+    }
+    detach();                               ### detach
+    return sprintf(\"%d\", total);
+}
+";
+
+        #! a function stepped like work() of ChildScript whose folded statement, `x = ++total;`, starts on the line
+        #! before its operation
+        const MultiLineChildScript = "%modern
+*string sub work(int n, code attach, code detach) {
+    int total = 0;
+    int x = 0;
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {                       ### if
+            attach();
+        }
+        x =                                 ### assign
+            ++total;                        ### assign_op
+    }
+    detach();                               ### detach
+    return sprintf(\"%d:%d\", total, x);
+}
+";
+
+        #! a function stepped like work() of ChildScript whose fused local int statements are in a try block
+        /** An operation in a try block can have the try block's handler as its exception target, for the exceptions
+            that it raises itself (qore#6197); its statement is then not folded (qore_ir_fold_debug_statements()),
+            and the step events and the flow that the debugger requests are the same either way
+        */
+        const TryChildScript = "%modern
+*string sub work(int n, code attach, code detach) {
+    int total = 0;
+    int step = 2;
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {                       ### if
+            attach();
+        }
+        try {                               ### try
+            total += 10;                    ### add_constant
+            total += step;                  ### add_local
+            total++;                        ### increment
+            ++total;                        ### pre_increment
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+    detach();                               ### detach
+    return sprintf(\"%d\", total);
+}
+";
+
+        #! the statements of work() and those of them whose step events its fused local int operations keep: total +=
+        #! 10, total += step, total++ (its value is unused, so that it lowers as ++total: qore#6199) and ++total
+        const WorkStatements = 11;
+        const WorkFoldedStatements = 4;
+
+        #! the debugger's script: it parses the target Program from a file and calls work() in it
+        /** @par Arguments
+            - the file of the target Program's source
+            - \c folded: the target Program does not have PO_ALLOW_DEBUGGER, so that the IR keeps the locals that only
+              it uses and the statements of fused local int operations keep their step events; \c reference: it has
+              PO_ALLOW_DEBUGGER, which keeps every local on the stack of local variables, so that none is folded
+            - \c steps, \c return or \c break: the flow that the debugger requests at the second step event of the line
+              given by the last argument, if any; \c count: work() is only called once
+            - the line of the flow request
+
+            work() is called once first, which compiles it to native code with JIT and tiered execution
+            (QORE_JIT_SYNC_COMPILE=1), and then with the debugger attached from the second iteration of its loop,
+            while it runs: as native code with JIT and tiered execution, with the IR interpreter with IR execution,
+            and with the AST interpreter with AST execution.  The debugger is in another Program, as the target
+            Program does not allow one (a Program can be debugged unless it has PO_NO_DEBUGGING).
+
+            Besides the line of the statement of each step event, the debugger records the line of the call of its
+            onStep() in the thread's call stack: the runtime location of the target Program at the event.
+        */
+        const ParentScript = '%allow-debugger
+
+class StepRecorder inherits DebugProgram {
+    public {
+        list<int> step_lines = ();
+        list<int> call_lines = ();
+        int flow_value;
+        int flow_line;
+        int flow_hits = 0;
+    }
+    constructor(int flow_value, int flow_line) {
+        self.flow_value = flow_value;
+        self.flow_line = flow_line;
+    }
+    onAttach(ProgramControl pgm, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onDetach(ProgramControl pgm, reference rs, reference rts) {
+        rs = DebugDetach;
+    }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+        if (sid) {
+            *hash<auto> loc = pgm.getStatementIdInfo(sid);
+            if (loc.start_line) {
+                push step_lines, loc.start_line;
+                # the line of the call of this method: the runtime location of the step event
+                foreach hash<CallStackInfo> frame in (get_thread_call_stack()) {
+                    if (frame.function == "StepRecorder::onStep") {
+                        push call_lines, frame.line;
+                        break;
+                    }
+                }
+                if (flow_value && loc.start_line == flow_line && ++flow_hits == 2) {
+                    flow = flow_value;
+                }
+            }
+        }
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {
+    }
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+    }
+}
+
+string action = ARGV[2];
+StepRecorder dbg(action == "return" ? DebugFlowReturn : (action == "break" ? DebugFlowBreak : 0), int(ARGV[3]));
+Program p(PO_NEW_STYLE | (ARGV[1] == "folded" ? 0 : PO_ALLOW_DEBUGGER));
+if (ARGV[1] == "folded") {
+    # a child Program can inherit it
+    p.disableParseOptions(PO_ALLOW_DEBUGGER);
+}
+p.parse(ReadOnlyFile::readTextFile(ARGV[0]), "child");
+code noop = sub () {};
+p.callFunction("work", 1, noop, noop);
+if (action == "count") {
+    return;
+}
+ProgramControl pc = ProgramControl::resolveProgramId(p.getProgramId());
+*string r = p.callFunction("work", 4, sub () { dbg.addProgram(pc); }, sub () { dbg.removeProgram(pc); });
+# the function does not detach the debugger if it returns at a step event
+dbg.removeProgram(pc);
+printf("ALLOW:%d\n", p.getParseOptions() & PO_ALLOW_DEBUGGER ? 1 : 0);
+printf("RESULT:<%s>\n", r ?? "none");
+printf("STEPLINES:%y\n", dbg.step_lines);
+printf("CALLLINES:%y\n", dbg.call_lines);
+';
+    }
+
+    constructor() : QUnit::Test("FoldedDebugStepDensity", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        addTestCase("a fused local int statement is one IR instruction", \testDensity());
+        addTestCase("a local int added to a local is one IR instruction", \testAddLocalDensity());
+        addTestCase("the statements of the stepped function are folded", \testFoldedTarget());
+        addTestCase("the step events of folded statements", \testStepEvents());
+        addTestCase("a debugger return at a folded statement", \testDebuggerReturn());
+        addTestCase("a debugger break at a folded statement", \testDebuggerBreak());
+        addTestCase("the step event of a folded statement of more than one line", \testMultiLineStatement());
+        addTestCase("the step events of fused local int statements in a try block", \testTryBlock());
+        set_return_value(main());
+    }
+
+    #! returns the IR instruction count of function f() of the script that the native-compilation budget reports
+    /** The budget (10) is larger than the top-level code, which is compiled to native code and so offers f() for
+        native compilation, and smaller than f(), which is then skipped with a diagnostic giving its size
+    */
+    private int irCount(string source) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(source);
+        tmp.file.close();
+        hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("%s -b --exec-mode=jit %s",
+            qore_bin, tmp.path), NOTHING, "QORE_JIT_MAX_IR_INSTRUCTIONS=10 QORE_JIT_TIMING=1");
+        assertRegex("^r=", res.stdout, "the probe ran: " + res.out);
+        *list<*string> count;
+        foreach string line in (res.trace) {
+            count = line =~ x/skipped native promotion of 'f@[^']*' \(compilation budget exceeded; ([0-9]+) IR/;
+            if (count) {
+                break;
+            }
+        }
+        if (!count) {
+            throw "PROBE-ERROR", sprintf("no budget diagnostic for f(); trace: %y; output: %s", res.trace, res.out);
+        }
+        return count[0].toInt();
+    }
+
+    #! returns a probe function with \a n copies of \a statement after the declaration of its local
+    private static string probe(string statement, int n, *string decls, *bool no_debugging) {
+        list<string> source = ("%modern\n",);
+        if (no_debugging) {
+            push source, "%no-debugging\n";
+        }
+        push source, "int sub f(int value) {\n    int total = value;\n";
+        if (decls) {
+            push source, decls;
+        }
+        for (int i = 0; i < n; ++i) {
+            push source, "    " + statement + "\n";
+        }
+        push source, "    return total;\n}\nprintf(\"r=%d\\n\", f(0));\n";
+        return source.join("");
+    }
+
+    testDensity() {
+        foreach hash<auto> i in (FusedStatements.pairIterator()) {
+            foreach int n in ((10, 20, 100)) {
+                assertEq(n + ProbeOverhead + DebugStatementOverhead, irCount(probe(i.value, n)),
+                    sprintf("%s: %d statements, the step events of the other two statements", i.key, n));
+                # code that cannot be debugged has no step events
+                assertEq(n + ProbeOverhead, irCount(probe(i.value, n, NOTHING, True)),
+                    sprintf("%s: %d statements with %%no-debugging", i.key, n));
+            }
+        }
+    }
+
+    testAddLocalDensity() {
+        # the declaration of the second local is three instructions and, in code that can be debugged, a step event
+        string decl = "    int step = 2;\n";
+        foreach int n in ((10, 20, 100)) {
+            assertEq(n + ProbeOverhead + 3 + DebugStatementOverhead + 1, irCount(probe("total += step;", n, decl)),
+                sprintf("%d statements adding a local", n));
+            assertEq(n + ProbeOverhead + 3, irCount(probe("total += step;", n, decl, True)),
+                sprintf("%d statements adding a local with %%no-debugging", n));
+        }
+    }
+
+    #! returns the 1-based line numbers of the tagged statements of work()
+    private hash<string, int> tagLines(string script = ChildScript) {
+        hash<string, int> ret = {};
+        list<string> script_lines = script.split("\n");
+        for (int i = 0; i < script_lines.size(); ++i) {
+            *list<*string> tag = script_lines[i] =~ x/### ([a-z_]+)/;
+            if (tag) {
+                ret{tag[0]} = i + 1;
+            }
+        }
+        return ret;
+    }
+
+    #! returns the IR instruction count of work() in a target Program that the native-compilation budget reports
+    private int workIrCount(string target, *bool no_debugging, string script = ChildScript) {
+        TmpFile child(NOTHING, ".q");
+        child.file.write((no_debugging ? "%no-debugging\n" : "") + script);
+        child.file.close();
+        TmpFile parent(NOTHING, ".qr");
+        parent.file.write(ParentScript);
+        parent.file.close();
+        # a budget smaller than work(), which is then skipped with a diagnostic giving its size after its first call
+        hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("%s -b --exec-mode=jit %s %s "
+            "%s count 0", qore_bin, parent.path, child.path, target), NOTHING,
+            "QORE_JIT_SYNC_COMPILE=1 QORE_JIT_MAX_IR_INSTRUCTIONS=5 QORE_JIT_TIMING=1");
+        *list<*string> count;
+        foreach string line in (res.trace) {
+            count = line =~ x/skipped native promotion of 'work@[^']*' \(compilation budget exceeded; ([0-9]+) IR/;
+            if (count) {
+                break;
+            }
+        }
+        if (!count) {
+            throw "PROBE-ERROR", sprintf("no budget diagnostic for work(); trace: %y; output: %s", res.trace, res.out);
+        }
+        return count[0].toInt();
+    }
+
+    #! runs the debugger's script on a target Program in every execution mode; returns the results by mode
+    private hash<string, hash<auto>> runSteps(string target, string action, int flow_line,
+            string script = ChildScript) {
+        TmpFile child(NOTHING, ".q");
+        child.file.write(script);
+        child.file.close();
+        TmpFile parent(NOTHING, ".qr");
+        parent.file.write(ParentScript);
+        parent.file.close();
+        hash<string, hash<auto>> ret = {};
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                "--exec-mode=%s %s %s %s %s %d", qore_bin, mode, parent.path, child.path, target, action, flow_line));
+            ExecModeHarness::check_native(r);
+            ret{mode} = parseSteps(r.out);
+            # work() is native code when the debugger attaches with JIT and tiered execution
+            ret{mode}.native = (select r.trace, ExecModeHarness::is_native_compilation($1) && $1 =~ /'work@/)
+                ? True : False;
+            assertEq(target == "folded" ? "0" : "1", ret{mode}.allow, sprintf("%s %s: the target Program allows a "
+                "debugger as requested", target, mode));
+        }
+        return ret;
+    }
+
+    private static hash<auto> parseSteps(string out) {
+        *list<*string> steps = out =~ x/STEPLINES:\[([0-9, ]*)\]/;
+        *list<*string> calls = out =~ x/CALLLINES:\[([-0-9, ]*)\]/;
+        *list<*string> result = out =~ x/RESULT:<([^>]*)>/;
+        *list<*string> allow = out =~ x/ALLOW:([01])/;
+        return {
+            "out": out,
+            "allow": allow ? allow[0] : NOTHING,
+            "result": result ? result[0] : NOTHING,
+            "step_lines": steps ? (map trim($1).toInt(), steps[0].split(","), trim($1) != "") : (),
+            "call_lines": calls ? (map trim($1).toInt(), calls[0].split(","), trim($1) != "") : (),
+        };
+    }
+
+    #! checks that a run gives the same result and step events as with the statements not folded
+    private assertSameAsReference(hash<string, hash<auto>> folded, hash<string, hash<auto>> reference,
+            string what) {
+        foreach string mode in (keys folded) {
+            assertEq(reference{mode}.result, folded{mode}.result, sprintf("%s %s: the result with the statements "
+                "not folded: %s", what, mode, folded{mode}.out));
+            assertEq(reference{mode}.step_lines, folded{mode}.step_lines, sprintf("%s %s: the step events with the "
+                "statements not folded", what, mode));
+            assertEq(reference{mode}.call_lines, folded{mode}.call_lines, sprintf("%s %s: the runtime locations of "
+                "the step events with the statements not folded", what, mode));
+        }
+    }
+
+    testFoldedTarget() {
+        int no_debugging = workIrCount("folded", True);
+        # every statement of a function that can be debugged has a step event, except the folded ones
+        assertEq(WorkStatements - WorkFoldedStatements, workIrCount("folded") - no_debugging,
+            "the fused local int statements of work() keep their step events in the target Program");
+        # with PO_ALLOW_DEBUGGER, the reference, no statement is folded
+        assertEq(WorkStatements, workIrCount("reference") - workIrCount("reference", True),
+            "no statement of work() is folded in a Program that allows a debugger");
+    }
+
+    testStepEvents() {
+        hash<string, int> tags = tagLines();
+        # the steps after the attach at i == 2: the rest of the iteration, the next one and the detach; the folded
+        # statements (+= of a constant and of a local, total++ and ++total) step as the others
+        list<int> expected = map tags{$1}, ("add_constant", "add_local", "increment", "pre_increment", "if",
+            "add_constant", "add_local", "increment", "pre_increment", "detach");
+        hash<string, hash<auto>> res = runSteps("folded", "steps", 0);
+        foreach hash<auto> i in (res.pairIterator()) {
+            # 4 * (10 + 2 + 1 + 1)
+            assertEq("56", i.value.result, i.key + ": the function's result: " + i.value.out);
+            assertEq(expected, i.value.step_lines, i.key + ": the step event of every statement");
+            # the same statements in the same order as the AST interpreter
+            assertEq(res.ast.step_lines, i.value.step_lines, i.key + ": the step events of the AST interpreter");
+            assertEq(i.key == "jit" || i.key == "tiered", i.value.native, i.key + ": work() runs as native code "
+                "when the debugger attaches with JIT and tiered execution");
+        }
+        assertSameAsReference(res, runSteps("reference", "steps", 0), "steps");
+    }
+
+    testDebuggerReturn() {
+        hash<string, int> tags = tagLines();
+        # the debugger returns from the function at the second step event of `total += 10;` (i == 3), which does not
+        # run
+        list<int> expected = map tags{$1}, ("add_constant", "add_local", "increment", "pre_increment", "if",
+            "add_constant");
+        hash<string, hash<auto>> res = runSteps("folded", "return", tags.add_constant);
+        foreach string mode in (("ast", "ir")) {
+            assertEq("none", res{mode}.result, mode + ": the function returned no value: " + res{mode}.out);
+            assertEq(expected, res{mode}.step_lines, mode + ": the step events up to the return");
+        }
+        # native code does not take the flow of a step event (issue #6200): it is the same with the statements not
+        # folded
+        assertSameAsReference(res, runSteps("reference", "return", tags.add_constant), "return");
+    }
+
+    testDebuggerBreak() {
+        hash<string, int> tags = tagLines();
+        # the debugger breaks the loop at the second step event of `total += 10;` (i == 3), which does not run, with
+        # the AST interpreter: 3 * (10 + 2 + 1 + 1)
+        hash<string, hash<auto>> res = runSteps("folded", "break", tags.add_constant);
+        assertEq("42", res.ast.result, "ast: the loop ended at the step event: " + res.ast.out);
+        assertEq((map tags{$1}, ("add_constant", "add_local", "increment", "pre_increment", "if", "add_constant",
+            "detach")), res.ast.step_lines, "ast: the step events up to the break");
+        # the IR interpreter does not take the break as AST does (issue #6201), and native code takes no flow (issue
+        # #6200): every mode is the same with the statements not folded
+        assertSameAsReference(res, runSteps("reference", "break", tags.add_constant), "break");
+    }
+
+    testMultiLineStatement() {
+        hash<string, int> tags = tagLines(MultiLineChildScript);
+        assertEq(tags.assign + 1, tags.assign_op, "the operation of the statement is on its second line");
+        # `x = ++total;` is folded: it has no step event of its own in the IR, unlike in the reference
+        int folded = workIrCount("folded", False, MultiLineChildScript)
+            - workIrCount("folded", True, MultiLineChildScript);
+        int reference = workIrCount("reference", False, MultiLineChildScript)
+            - workIrCount("reference", True, MultiLineChildScript);
+        assertEq(reference - 1, folded, "the multi-line statement of work() is folded in the target Program");
+        # the steps after the attach at i == 2
+        list<int> expected = map tags{$1}, ("assign", "if", "assign", "detach");
+        hash<string, hash<auto>> res = runSteps("folded", "steps", 0, MultiLineChildScript);
+        foreach hash<auto> i in (res.pairIterator()) {
+            assertEq("4:4", i.value.result, i.key + ": the function's result: " + i.value.out);
+            assertEq(expected, i.value.step_lines, i.key + ": the step event of every statement");
+            # the step event of the folded statement is made in the location of the statement (its first line), not
+            # in that of its operation; the AST interpreter does not set the runtime location of a statement before its
+            # event (the same with the reference, below)
+            if (i.key != "ast") {
+                assertEq(expected, i.value.call_lines, i.key + ": the runtime location of every step event");
+            }
+            assertEq(i.key == "jit" || i.key == "tiered", i.value.native, i.key + ": work() runs as native code "
+                "when the debugger attaches with JIT and tiered execution");
+        }
+        assertSameAsReference(res, runSteps("reference", "steps", 0, MultiLineChildScript), "multi-line");
+    }
+
+    testTryBlock() {
+        hash<string, int> tags = tagLines(TryChildScript);
+        # the steps after the attach at i == 2: the rest of the iteration, the next one and the detach; the statements
+        # in the try block step as the others, whether or not they are folded
+        list<int> expected = map tags{$1}, ("try", "add_constant", "add_local", "increment", "pre_increment", "if",
+            "try", "add_constant", "add_local", "increment", "pre_increment", "detach");
+        hash<string, hash<auto>> res = runSteps("folded", "steps", 0, TryChildScript);
+        foreach hash<auto> i in (res.pairIterator()) {
+            # 4 * (10 + 2 + 1 + 1)
+            assertEq("56", i.value.result, i.key + ": the function's result: " + i.value.out);
+            assertEq(expected, i.value.step_lines, i.key + ": the step event of every statement");
+            assertEq(res.ast.step_lines, i.value.step_lines, i.key + ": the step events of the AST interpreter");
+            # the step events of the statements in the try block are made in their own locations
+            if (i.key != "ast") {
+                assertEq(expected, i.value.call_lines, i.key + ": the runtime location of every step event");
+            }
+            assertEq(i.key == "jit" || i.key == "tiered", i.value.native, i.key + ": work() runs as native code "
+                "when the debugger attaches with JIT and tiered execution");
+        }
+        assertSameAsReference(res, runSteps("reference", "steps", 0, TryChildScript), "try block steps");
+
+        # the debugger returns from the function at the second step event of `total += step;` in the try block
+        # (i == 3), which does not run: the return leaves the try block, as with the statements not folded
+        res = runSteps("folded", "return", tags.add_local, TryChildScript);
+        foreach string mode in (("ast", "ir")) {
+            assertEq("none", res{mode}.result, mode + ": the function returned no value: " + res{mode}.out);
+            assertEq((map tags{$1}, ("try", "add_constant", "add_local", "increment", "pre_increment", "if", "try",
+                "add_constant", "add_local")), res{mode}.step_lines, mode + ": the step events up to the return");
+        }
+        # native code does not take the flow of a step event (issue #6200): it is the same with the statements not
+        # folded
+        assertSameAsReference(res, runSteps("reference", "return", tags.add_local, TryChildScript),
+            "try block return");
+    }
+}

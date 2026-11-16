@@ -1718,6 +1718,10 @@ protected:
     //! True when native JIT compilation is permanently unavailable for this variant
     mutable std::atomic<bool> jit_compile_failed{false};
     bool is_closure = false;  //!< true for closure variants
+    //! true for a closure parsed in a member default of a generic hashdecl, which names the type parameters of the
+    //! hashdecl and runs with an instantiation of it as the receiver; a call of it with such a receiver runs the IR
+    //! specialized for the receiver, as a call of a method of a generic class does (qore#6269)
+    bool generic_hashdecl_code = false;
     //! the functional domains declared in Qore source with \c [dom=...] (QDOM_* bits; QDOM_DEFAULT = none)
     int64 declared_domain = QDOM_DEFAULT;
     //! Deopt counter: incremented on JIT guard failure, triggers recompilation
@@ -1842,6 +1846,13 @@ public:
     //! Sets the functional domains declared on this variant; must be called before the variant is added to its function
     DLLLOCAL void setDeclaredDomain(int64 dom) {
         declared_domain = dom;
+    }
+
+    //! Marks a closure parsed in a member default of a generic hashdecl (see \a generic_hashdecl_code)
+    /** must be called at parse time, before the closure can be called
+    */
+    DLLLOCAL void setGenericHashDeclCode() {
+        generic_hashdecl_code = true;
     }
 
     /** Install serialized closure IR during single-threaded AOT registration, before publication.
@@ -2778,6 +2789,13 @@ public:
         ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
             LexicalSemanticPolicy invocation_policy) const;
 
+    //! Returns true if an accessible generic variant takes the given explicit type arguments (issue #6152)
+    /** Then the variants without type parameters are candidates of the call as well, as at run time.  Parse-time
+        only: out of line, so that the inlining of the run-time code of this unit does not change.
+    */
+    DLLLOCAL __attribute__((noinline, cold)) bool parseHasExplicitTypeArgsVariant(const qore_class_private* class_ctx,
+            const type_vec_t* explicit_type_args, const QoreTypeInfo* receiver_type_info) const;
+
     // find variant at parse time, throw parse exception if no variant can be matched
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's
     // reachable
@@ -2786,14 +2804,19 @@ public:
         assigned), so a variant whose every parameter accepts the type of its argument or no value is a possible match
         at run time; then the given variant is not committed at parse time (see parseFindVariant())
 
+        @param receiver_type_info the receiver type that the chosen variant's parameter types are substituted with
+        @param chosen_type_param_inst the type arguments of the chosen variant (explicit or inferred), with which the
+        types of its parameters of type parameters are substituted; a deleted object or no value is not accepted by a
+        parameter whose type argument is a class, as for a parameter declared with that class
         @param args_with_value if given, true for each argument whose expression always has a value of its type (see
         parse_arg_always_has_value()); such an argument cannot select another variant by having no value
         @param union_rt if given, it gives the return type of the given variant (nullptr if it has none that the call
         can have), and is set to the return type that covers it and every other variant that could be resolved at run
         time (qore_union_return_type()), or nullptr if there is no such type; all of the variants are then checked
     */
-    DLLLOCAL bool parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen, const type_vec_t& argTypeInfo,
-            const qore_class_private* class_ctx, QoreParseOptions po,
+    DLLLOCAL bool parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen,
+            const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* chosen_type_param_inst,
+            const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, QoreParseOptions po,
             const arg_value_vec_t* args_with_value = nullptr,
             const std::vector<bool>* named_positions = nullptr, const QoreTypeInfo** union_rt = nullptr) const;
 

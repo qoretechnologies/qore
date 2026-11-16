@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %include object-constant-locals-checks.qi
 
@@ -36,7 +37,7 @@ class ObjectConstantLocalsTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("ObjectConstantLocalsTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("functions calling methods on stdout and stderr compute their results", \testResults());

@@ -27,6 +27,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires json
 %requires Util
 %requires QLS
@@ -345,8 +346,25 @@ class WorkspaceIndexTest inherits QUnit::Test {
     testFindStdModulesOptions() {
         list<string> all = QLS::Files::find_std_modules();
         assertGt(0, all.size(), "standard modules are found");
-        list<string> limited = QLS::Files::find_std_modules(<QLS::Files::FileScanOptions>{"maxFileSize": 1});
-        assertEq((), limited, "the size limit applies to standard modules");
+        # a small file in a directory of the module path, as a user's own modules can hold, is not a standard module
+        # (#6230); the module path of a module is read when it is loaded, so a child process is given one with it
+        string root = makeTmpDir();
+        WorkspaceIndexTest::writeFile(root + "/other/Empty.qc", "");
+        string script = root + "/find-std-modules.q";
+        WorkspaceIndexTest::writeFile(script, sprintf("%%new-style\n%%prepend-module-path \"%s\"\n%%requires QLS\n"
+            "printf(\"%%y\\n\", QLS::Files::find_std_modules(<QLS::Files::FileScanOptions>{\"maxFileSize\": 1}));\n",
+            normalize_dir(get_script_dir() + "/../../../../qlib")));
+        string module_dir = root + "/other" + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        int rc;
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s -b %s 2>&1", shellQuote(module_dir),
+            shellQuote(TestInterpreter::qore_interpreter()), shellQuote(script)), \rc);
+        assertEq(0, rc, out);
+        assertEq("[]\n", out, "the size limit applies to standard modules");
+    }
+
+    #! Quotes a value for the shell
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
     }
 
     #

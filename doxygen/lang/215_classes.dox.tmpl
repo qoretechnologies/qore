@@ -701,6 +701,13 @@ D::p = new Program(PO_NEW_STYLE);
     @subsection member_initialization Member Initialization
     Members that have intialization expressions in the class definition are initialized before the constructor is executed (but after any base class constructors have run).  An exception raised in a member initialization expression will cause the constructor to fail and for the object to be deleted immediately.
 
+    Member initialization expressions, like those of @ref static_class_variables "static class variables", are parsed
+    in their own scope, not in the scope of the code that first uses the class: they can refer to the top-level local
+    variables of the program, whose value is that of the thread that evaluates the expression (see
+    @ref threading_and_variables), and to global variables, but not to the local variables of a function, method or
+    closure, so naming one is a parse error.  A static class variable's initializer is evaluated when the class is
+    initialized, which can be before the top-level code has assigned the variable.
+
     @note The automatic <tt>argv</tt> local variable is instantiated as usual in all class methods where there are more arguments than variables declared in the method declaration.\n\n
 
     @section object_method_calls Object Method Calls
