@@ -21260,6 +21260,48 @@ static QoreValue f_dbg_get_module_mask_added(const QoreListNode* params, Runtime
 }
 
 //! returns the number of Program objects that exist (created and not yet destroyed; qore#5822)
+//! the references to objects that dbg_object_external_ref() holds, by ID; protected by its mutex
+static struct {
+    std::mutex m;
+    int64 next = 0;
+    std::map<int64, QoreObject*> refs;
+} dbg_external_refs;
+
+//! Debug-only: holds a reference to an object from C++, as the async I/O controller holds a poll operation (#6329)
+/** The reference is not reached by the scans of the recursive references: it is a reference from outside the
+    object graph, released with dbg_object_external_deref().
+
+    @param obj the object
+
+    @return the ID of the reference
+*/
+static QoreValue f_dbg_object_external_ref(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    obj->ref();
+    std::lock_guard<std::mutex> l(dbg_external_refs.m);
+    int64 id = ++dbg_external_refs.next;
+    dbg_external_refs.refs[id] = obj;
+    return id;
+}
+
+//! Debug-only: releases a reference that dbg_object_external_ref() holds, from C++ (#6329)
+static QoreValue f_dbg_object_external_deref(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 id = get_param_value(params, 0).getAsBigInt();
+    QoreObject* obj;
+    {
+        std::lock_guard<std::mutex> l(dbg_external_refs.m);
+        auto i = dbg_external_refs.refs.find(id);
+        if (i == dbg_external_refs.refs.end()) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "no external reference with ID %lld", (long long)id);
+            return QoreValue();
+        }
+        obj = i->second;
+        dbg_external_refs.refs.erase(i);
+    }
+    obj->deref(xsink);
+    return QoreValue();
+}
+
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
 }
@@ -24704,6 +24746,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_program_count", f_dbg_get_live_program_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_object_external_ref", f_dbg_object_external_ref, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "obj");
+    qns.addBuiltinVariant("dbg_object_external_deref", f_dbg_object_external_deref, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
     qns.addBuiltinVariant("dbg_get_module_mask_added", f_dbg_get_module_mask_added, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         listTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "module");
     qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
