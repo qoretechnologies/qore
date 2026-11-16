@@ -80,22 +80,17 @@ class UnhandledExceptionReportTest inherits QUnit::Test {
         }
         hash<string, bool> seen = {};
         int i = 0;
+        # a failed assertion throws, so that the checks after it are not made
         while (i < lines.size()) {
             string label = sprintf("run %d, line %d", run, i + 1);
-            if (!assertTrue(regex(lines[i], FirstLine), label + ": the first line of a report: " + lines[i])) {
-                return;
-            }
-            if (!assertTrue(i + 4 < lines.size(), label + ": the report has five lines")) {
-                return;
-            }
+            assertTrue(regex(lines[i], FirstLine), label + ": the first line of a report: " + lines[i]);
+            assertTrue(i + 4 < lines.size(), label + ": the report has five lines");
             *list<*string> e = regex_extract(lines[i + 1], ExceptionLine);
-            if (!assertTrue(exists e && e[0] == e[1], label + ": the exception: " + lines[i + 1])) {
-                return;
-            }
+            assertTrue(exists e && e[0] == e[1], label + ": the exception: " + lines[i + 1]);
             assertEq("call stack:", lines[i + 2], label);
             assertRegex("^  2: thr\\(\\) \\([^()]*worker\\.q:[0-9]+ \\(Qore user code\\)\\)$", lines[i + 3], label);
             assertEq("  1: *thread start*", lines[i + 4], label);
-            assertFalse(seen{e[0]}, label + ": one report for each thread");
+            assertFalse(exists seen{e[0]}, label + ": one report for each thread");
             seen{e[0]} = True;
             i += 5;
         }
