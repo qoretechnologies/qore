@@ -11045,8 +11045,11 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
     // statement of a folded statement, with its column (8); the AST interpreter does not set the runtime location of
     // a statement before its event.  With PO_ALLOW_DEBUGGER, the event keeps the location that an instruction before
     // the statement's DebugStatement instruction on the same line set (lines 13-15, without columns), as the runtime
-    // location is set only when the line changes: only its line is checked
+    // location is set only when the line changes: only its line is checked.  The same holds for the statement in the
+    // Program without PO_ALLOW_DEBUGGER when it is not folded, as when its operation has an exception target of its
+    // own in the try block (qore#6197; see qore_ir_fold_debug_statements())
     {
+        bool raise_folded = mode != QEM_AST && !allow_debugger && ut_folded_debug_steps(pgm, "work", 13, 13) == 1;
         FoldedStepDebugProgram::LineColumn statement, runtime, ex;
         dbg.getRaiseLocations(statement, runtime, ex);
         FoldedStepDebugProgram::LineColumn expected_loc = {13, 8};
@@ -11062,7 +11065,7 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
                 "statement's line").c_str());
             UT_ASSERT(c, ex == runtime, (what + "the exception raised by the debugger at the step event is in the "
                 "runtime location of the event").c_str());
-            if (!allow_debugger) {
+            if (raise_folded) {
                 UT_ASSERT_EQ(c, 8, runtime.column, (what + "the runtime location of the step event of the folded "
                     "statement is at the statement's column").c_str());
                 UT_ASSERT_EQ(c, 8, ex.column, (what + "the exception raised by the debugger at the step event of "
