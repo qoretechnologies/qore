@@ -1419,14 +1419,16 @@ QoreColumnarResult* QoreDataFrame::toColumnarResult(ExceptionSink* xsink) const 
                 return nullptr;
             }
             // the schema kept from a ColumnarResult or Arrow column describes the column as it was then; a column
-            // whose values no longer match it (qore#6214) is added with the schema of its values
+            // whose values no longer match it (qore#6214), so that the schema is refused or the values cannot be
+            // stored in the buffer of its kind, is added with the schema of its values
             ExceptionSink schema_xsink;
             if (!result->addColumn(col.name.c_str(), data.release(), schema, &schema_xsink)) {
                 continue;
             }
             QoreValue err = schema_xsink.getExceptionErr();
-            if (err.getType() != NT_STRING
-                    || strcmp(err.get<const QoreStringNode>()->c_str(), "COLUMNAR-SCHEMA-ERROR")) {
+            const char* err_str = err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : nullptr;
+            if (!err_str || (strcmp(err_str, "COLUMNAR-SCHEMA-ERROR") && strcmp(err_str, "BUFFER-TYPE-ERROR")
+                    && strcmp(err_str, "BUFFER-RANGE-ERROR") && strcmp(err_str, "COLUMNAR-RESULT-ERROR"))) {
                 xsink->assimilate(schema_xsink);
                 return nullptr;
             }
