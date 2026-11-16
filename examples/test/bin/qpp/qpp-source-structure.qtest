@@ -283,6 +283,8 @@ bool TestCls::next(ExceptionSink* xsink) {
             "static int TestCls::count() [flags=CONSTANT] {",
             "private int TestCls::priv()[flags=CONSTANT] {",
             "int TestCls::conv(softint i, softstring s) {",
+            "int TestCls::dflt(int a = f(1), int b = g(h(2))) [flags=CONSTANT] {",
+            "int TestCls::fp(int (*cb)(int)) [flags=CONSTANT] {",
         );
     }
 
@@ -556,6 +558,16 @@ int t_helper(int a) /* softint */ {
 DECLARE(softint)
 static auto get_table() -> int(&)[3] {
 }
+static int (*get_row(int i))[N] {
+}
+static int (&get_ref(int i))[MAX] {
+}
+static int hex = 0x1F'FF; static double f = 1'000.5; /*
+int t_hidden(softint a) {
+*/
+static char32_t c = U'\"'; /*
+int t_hidden2(softint a) {
+*/
 int v = get(a,
 *get_ptr(a,
     b));

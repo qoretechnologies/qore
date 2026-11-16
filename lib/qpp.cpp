@@ -1161,9 +1161,6 @@ static std::string qpp_line_method_class(const std::string& orig_line) {
     return std::string(line, start, colons - start);
 }
 
-//! returns the line with its comments, string literals and character literals replaced by spaces
-/** a comment that starts in the line ends at its end; a digit separator ("1'000") is not a character literal
-*/
 //! returns true if the "'" at \a i is a digit separator ("1'000"): the word before it is a number
 static bool qpp_is_digit_separator(const std::string& line, size_t i) {
     size_t start = i;
@@ -1174,6 +1171,9 @@ static bool qpp_is_digit_separator(const std::string& line, size_t i) {
     return start < i && isdigit(static_cast<unsigned char>(line[start]));
 }
 
+//! returns the line with its comments, string literals and character literals replaced by spaces
+/** a comment that starts in the line ends at its end; a digit separator ("1'000") is not a character literal
+*/
 static std::string qpp_strip_comments_and_literals(const std::string& line) {
     std::string rv = line;
     for (size_t i = 0; i < rv.size(); ++i) {
@@ -1295,8 +1295,23 @@ static bool qpp_line_has_qpp_only_syntax(const std::string& orig_line) {
         }
     }
     // attributes after the parameters: ") [" or ")[" after the ')' that closes the parameter list of the name, with
-    // an attribute name ("[flags=...]", "[dom=...]"), not an array type ("-> int(&)[3]") or a C++ attribute ("[[")
+    // an attribute name ("[flags=...]", "[dom=...]"), not an array type ("-> int(&)[3]") or a C++ attribute ("[["); a
+    // parenthesized declarator ("int (*name(...))[N]", "int (&name(...))[N]") returns an array, which C++ accepts
+    bool declarator = false;
     {
+        size_t i = line.find_first_not_of(" \t", paren + 1);
+        if (i != std::string::npos && (line[i] == '*' || line[i] == '&')) {
+            i = line.find_first_not_of(" \t", i + 1);
+            if (i != std::string::npos && (isalpha(static_cast<unsigned char>(line[i])) || line[i] == '_')) {
+                while (i < line.size() && qpp_idchar(line[i])) {
+                    ++i;
+                }
+                i = line.find_first_not_of(" \t", i);
+                declarator = i != std::string::npos && line[i] == '(';
+            }
+        }
+    }
+    if (!declarator) {
         int depth = 0;
         size_t close = std::string::npos;
         for (size_t i = paren; i < line.size(); ++i) {
