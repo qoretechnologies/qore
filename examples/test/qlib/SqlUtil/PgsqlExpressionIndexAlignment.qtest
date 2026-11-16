@@ -1,0 +1,116 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires SqlUtil
+%requires PgsqlSqlUtil
+%requires QUnit
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class PgsqlExpressionIndexAlignmentTest
+
+#! Tests aligning PostgreSQL indexes on expressions (issue #1429)
+/** PostgreSQL returns an index key expression in another form than it is declared in (ex: with casts), so the
+    declared and the live expressions are compared as PostgreSQL parses them; an index with the same expressions is
+    not dropped and created again by each alignment
+*/
+public class PgsqlExpressionIndexAlignmentTest inherits QUnit::Test {
+    public {
+        #! the expression of the issue, in parentheses, as PostgreSQL requires for an expression that is not a call
+        const CaseExpr = "(CASE LOT_OWNER WHEN 'mvno' THEN MVNO_ID ELSE CARD_TYPE||NUMBER_TYPE END)";
+    }
+
+    private {
+        bool m_live = False;
+    }
+
+    constructor() : QUnit::Test("PgsqlExpressionIndexAlignment", "1.0", \ARGV) {
+        addTestCase("an index on expressions is unchanged by alignment", \unchanged());
+        addTestCase("a changed index expression is aligned", \changed());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (m_live) {
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    private Datasource connectOrSkip() {
+%ifdef NoPgsql
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        if (!m_live) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlExpressionIndexAlignment");
+            m_live = True;
+        }
+        return new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+    }
+
+    #! returns the description of a test table with the given index columns and options
+    private static hash<auto> getDesc(string table, hash<auto> indexes) {
+        return {
+            "columns": {
+                "id": {"native_type": "integer", "notnull": True},
+                "lot_owner": {"native_type": "varchar", "size": 10},
+                "mvno_id": {"native_type": "varchar", "size": 10},
+                "card_type": {"native_type": "varchar", "size": 10},
+                "number_type": {"native_type": "varchar", "size": 10},
+            },
+            "primary_key": {"name": table + "_pkey", "columns": "id"},
+            "indexes": indexes,
+        };
+    }
+
+    #! creates the table of the description
+    private static create(Datasource ds, string table, hash<auto> desc) {
+        Database db(ds);
+        map ds.exec($1), db.makeTable(table, desc).getCreateSql();
+        ds.commit();
+    }
+
+    unchanged() {
+        Datasource ds = connectOrSkip();
+        on_exit ds.rollback();
+        hash<auto> desc = getDesc("eia_same", {
+            "eia_same_case": {"columns": (CaseExpr,)},
+            "eia_same_lower": {
+                "columns": ("lower(mvno_id)", "id"),
+                "unique": True,
+                "order": {"lower(mvno_id)": "desc"},
+            },
+            "eia_same_col": {"columns": ("card_type",)},
+        });
+        create(ds, "eia_same", desc);
+        Database db(ds);
+        assertEq((), db.getTable("eia_same").getAlignSql(db.makeTable("eia_same", desc)));
+    }
+
+    changed() {
+        Datasource ds = connectOrSkip();
+        on_exit ds.rollback();
+        hash<auto> desc = getDesc("eia_chg", {"eia_chg_case": {"columns": (CaseExpr,)}});
+        create(ds, "eia_chg", desc);
+        Database db(ds);
+        desc.indexes.eia_chg_case.columns = (replace(CaseExpr, "'mvno'", "'mvne'"),);
+        list<auto> sql = db.getTable("eia_chg").getAlignSql(db.makeTable("eia_chg", desc));
+        assertEq(2, sql.size());
+        assertRegex("^drop index", sql[0]);
+        assertRegex("^create index eia_chg_case .*'mvne'", sql[1]);
+        map ds.exec($1), sql;
+        ds.commit();
+        assertEq((), db.getTable("eia_chg").getAlignSql(db.makeTable("eia_chg", desc)));
+    }
+}

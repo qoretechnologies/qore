@@ -437,6 +437,9 @@ $function$
     - added targeted canonical-name partition metadata lookup without loading the complete child-relation catalog
     - added portable list and explicit modulus/remainder hash partitioning, recursive subpartition creation and
       introspection, and catalog-estimated row-count / allocated-size metadata
+    - fixed schema alignment dropping and creating again each index on an expression, as PostgreSQL returns the
+      expression in another form than it is declared in; the expressions are compared as PostgreSQL parses them
+      (<a href="https://github.com/qoretechnologies/qore/issues/1429">issue 1429</a>)
     - fixed an insert-only upsert, and an upsert of a table whose columns are all key columns, sending \c BEGIN in
       an open transaction and inserting a row that already exists: PostgreSQL wrote a warning and a duplicate key
       error to its log for every such row, every time, as in each schema alignment for its reference data.  With
@@ -1059,16 +1062,22 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
         return predicate == pix.predicate && equalFeatures(pix);
     }
 
-    private bool equalFeatures(PgsqlIndex pix) {
+    #! compares the features of the index other than its name, uniqueness, keys and predicate
+    /** @param pix the other index
+        @param keymap maps each key of this index to the key of \a pix in the same position when they are written
+        differently (an expression as given and as PostgreSQL returns it)
+    */
+    private bool equalFeatures(PgsqlIndex pix, *hash<string, string> keymap) {
         if (include != pix.include || nulls_not_distinct != pix.nulls_not_distinct) {
             return False;
         }
         foreach string col in (columns.keys()) {
+            string pcol = keymap{col} ?? col;
             string direction = order{col} ?? "asc";
-            string other_direction = pix.order{col} ?? "asc";
+            string other_direction = pix.order{pcol} ?? "asc";
             if (direction != other_direction
                     || (nulls{col} ?? (direction == "desc" ? "first" : "last"))
-                    != (pix.nulls{col} ?? (other_direction == "desc" ? "first" : "last"))) {
+                    != (pix.nulls{pcol} ?? (other_direction == "desc" ? "first" : "last"))) {
                 return False;
             }
         }
@@ -1083,32 +1092,51 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
         if (!AbstractIndex::hashesEqualUnordered(with_options, pix.with_options)) {
             return False;
         }
-        if (!AbstractIndex::hashesEqualUnordered(opclass, pix.opclass)) {
+        *hash<auto> ocls = keymap && opclass
+            ? (map {keymap{$1.key} ?? $1.key: $1.value}, opclass.pairIterator())
+            : opclass;
+        if (!AbstractIndex::hashesEqualUnordered(ocls, pix.opclass)) {
             return False;
         }
         return True;
     }
 
-    #! Compares index definitions using PostgreSQL's parsed predicate representation
+    #! Compares index definitions using PostgreSQL's parsed key expression and predicate representation
     /** @param ix the index to compare
         @param ds datasource containing the indexed table
         @param table_name qualified SQL table name
         @return True if the keys, options, and parsed predicates match
-        @throw DBI-ERROR if PostgreSQL cannot plan a predicate
+        @throw DBI-ERROR if PostgreSQL cannot plan a key expression or a predicate
         @note Uses EXPLAIN without ANALYZE; no table rows are read or modified. The caller must hold
         the table lock and ensure that all referenced columns already exist.
 
         @par Example
-        Schema alignment compares a declared active-order predicate with PostgreSQL's stored expression,
-        including any casts inserted by the server.
+        Schema alignment compares a declared active-order predicate, or a declared key expression such as
+        <tt>(CASE owner WHEN 'x' THEN a ELSE b END)</tt>, with PostgreSQL's stored expression, including any casts
+        inserted by the server.
     */
     bool equalForAlignment(AbstractIndex ix, AbstractDatasource ds, string table_name) {
         if (!(ix instanceof PgsqlIndex)) {
             return False;
         }
         PgsqlIndex pix = cast<PgsqlIndex>(ix);
-        if (name != pix.name || unique != pix.unique || columns.keys() != pix.columns.keys()
-                || !equalFeatures(pix)) {
+        if (name != pix.name || unique != pix.unique || columns.size() != pix.columns.size()) {
+            return False;
+        }
+        # issue #1429: a key expression is compared in the form that PostgreSQL parses it to, as PostgreSQL returns
+        # it in another form than it is declared in (ex: with casts)
+        *hash<string, string> keymap;
+        list<string> pkeys = pix.columns.keys();
+        foreach string key in (columns.keys()) {
+            string pkey = pkeys[$#];
+            if (key != pkey) {
+                if (predicateOutput(ds, table_name, key) != predicateOutput(ds, table_name, pkey)) {
+                    return False;
+                }
+                keymap{key} = pkey;
+            }
+        }
+        if (!equalFeatures(pix, keymap)) {
             return False;
         }
         if (predicate == pix.predicate) {
@@ -1120,6 +1148,7 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
         return predicateOutput(ds, table_name, predicate) == predicateOutput(ds, table_name, pix.predicate);
     }
 
+    #! returns an index predicate or key expression as PostgreSQL parses it
     private static string predicateOutput(AbstractDatasource ds, string table_name, string predicate) {
         hash<auto> row = ds.selectRow("explain (verbose, costs off, format json) select (" + predicate
             + ") from " + table_name);
@@ -1129,7 +1158,8 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
         }
         *string output = plan[0].Plan.Output[0];
         if (!output) {
-            throw "INDEX-DEFINITION-ERROR", "PostgreSQL did not return a parsed index predicate";
+            throw "INDEX-DEFINITION-ERROR", sprintf("PostgreSQL did not return a parsed index expression for %y",
+                predicate);
         }
         return output;
     }
