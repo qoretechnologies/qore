@@ -1238,10 +1238,11 @@ protected:
     //! substitutes the type parameters of the code making the call in the call's explicit receiver
     /** The receiver of a static method call in generic code can have the type parameters of the code making the call
         (B<U>::m() in sub f<U>(), G<T>::m() or m() in a method of G<T>), which are those of the running instantiation of
-        that code, current when the call starts (qore#6308); out of line, so that the calls without an explicit
-        receiver keep their code
+        that code, current when the call starts (qore#6308); code running without an instantiation binds the type
+        parameters of the method's class to the types of the arguments (qore#6186); out of line, so that the calls
+        without an explicit receiver keep their code
     */
-    DLLLOCAL QORE_INTERN_NOINLINE void substituteCallerReceiverTypeParams();
+    DLLLOCAL QORE_INTERN_NOINLINE void substituteCallerReceiverTypeParams(const QoreFunction* func);
 
     //! the call entry; LexicalInvocation: a legacy AST call with a non-default semantic policy; NAMED: a named call
     //! whose variant is resolved at run time by parameter name (arg_names is set)
@@ -2907,8 +2908,11 @@ public:
         variant search then raises the error
 
         @param args the arguments of the call
+        @param bound a receiver of the method's class whose type arguments without type parameters are kept: only
+        the others are inferred
     */
-    DLLLOCAL const QoreTypeInfo* runtimeInferClassReceiverTypeInfo(const QoreListNode* args) const;
+    DLLLOCAL const QoreTypeInfo* runtimeInferClassReceiverTypeInfo(const QoreListNode* args,
+            const QoreTypeInfo* bound = nullptr) const;
 
     // returns true if there are no uncommitted parse variants in the function
     DLLLOCAL bool pendingEmpty() const {

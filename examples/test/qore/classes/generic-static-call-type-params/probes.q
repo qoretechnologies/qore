@@ -12,12 +12,16 @@ class G<T> {
     static list<T> wrap(T v) { return (v,); }
     # implicit and explicit calls in the class: the type parameters are those of the running instantiation
     static T implicitId(auto v) { return id(v); }
+    static auto implicitAny(auto v) { return id(v); }
+    static auto explicitAny(auto v) { return G::id(v); }
     static T explicitId(auto v) { return G::id(v); }
     static string implicitType() { return type(); }
     T instId(auto v) { return id(v); }
     # static generic methods with type parameters of their own, with and without a bound
     static string gen<X>(X v, T t) { return sprintf("%y %y %s", v, t, (new list<T>()).fullType()); }
     static string bnd<X: number>(X v, T t) { return sprintf("%y %y %s", v, t, (new list<X>()).fullType()); }
+    # a static generic method whose type parameter has the class's as its bound (qore#6155)
+    static string tbnd<X: T>(X v) { return sprintf("%y %s", v, (new list<T>()).fullType()); }
     # call references and dynamic calls made in the class
     static auto refId(auto v) { code c = \G::id(); return c(v); }
     static code makeRef() { return \G::id(); }
@@ -48,6 +52,66 @@ class H2 inherits G<string> {}
 class H4 inherits G<string> {
     static string id(int i) { return "H4::id(int)"; }
     static auto refBase(auto v) { code c = \G::id(); return c(v); }
+    static auto direct(auto v) { return G::id(v); }
+}
+
+#! a class whose type parameter has a default of a user class, called through a raw reference from another Program
+#! that imports it and declares a class of the same name: the default is the class's own
+namespace GsNs {
+    public class Foo {}
+}
+class GU<T = GsNs::Foo> {
+    static string ty() { return (new list<T>()).fullType() + (((new GsNs::Foo()) instanceof T) ? " own" : " other"); }
+}
+
+#! a default named relative to the namespace of the class, with a class of the same name in the root namespace: the
+#! default is the one that the class's declaration names, for direct calls, references and dynamic calls alike
+class Foo {}
+namespace GsRel {
+    public class Foo {}
+    public class GR<T = Foo> {
+        static string ty() {
+            return (new list<T>()).fullType() + (((new GsRel::Foo()) instanceof T) ? " own" : " other");
+        }
+    }
+}
+
+#! calls in the code of a generic class without an instantiation infer only the type arguments that the class does not
+#! bind
+class G2<A, B> {
+    static string m(A a, B b) { return sprintf("%y %y %s", a, b, (new list<B>()).fullType()); }
+}
+class K2<X> inherits G2<X, int> {
+    static auto k(auto a, auto b) { return m(a, b); }
+    static auto kExplicit(auto a, auto b) { return G2::m(a, b); }
+}
+class G3<A, B> {
+    static string m(A a) { return sprintf("%y %s", a, (new list<B>()).fullType()); }
+}
+class K3<X> inherits G3<X, int> {
+    static auto k(auto a) { return m(a); }
+}
+
+#! defaults of generic classes in a namespace naming a builtin type and a class of the root namespace
+namespace GsNsd {
+    public class GB<T = int> {
+        static string ty() { return (new list<T>()).fullType(); }
+    }
+    public class GF<T = Foo> {
+        static string ty() { return (new list<T>()).fullType() + (((new ::Foo()) instanceof T) ? " root" : " other"); }
+    }
+}
+
+class KX<X> inherits G<list<X>> {
+    static auto kAny(auto v) { return id(v); }
+}
+
+string sub other_program_default() {
+    Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    p.importClass("GU");
+    p.parse("namespace GsNs { public class Foo { public { int x; } } } public string sub f() { code c = \\GU::ty(); "
+        "return c(); }", "other-program-default");
+    return p.callFunction("f");
 }
 
 #! a dynamic call in a function called from the code of a class binds nothing of the class's
@@ -186,6 +250,9 @@ list<string> sub probes() {
         probe("G<float>::gen", auto sub () { return G<float>::gen("a", 1); }),
         probe("H::gen<string>", auto sub () { return H::gen<string>("a", 1); }),
         probe("H::bnd", auto sub () { return H::bnd(2, 1); }),
+        probe("G<float>::tbnd", auto sub () { return G<float>::tbnd(1.5); }),
+        probe("H::tbnd", auto sub () { return H::tbnd(1.5); }),
+        probe("ref H::tbnd", auto sub () { code c = \H::tbnd(); return c(1.5); }),
         probe("ref H::gen", auto sub () { code c = \H::gen(); return c("a", 1); }),
         # subclass chains and a generic class between
         probe("HK::id", auto sub () { return HK::id(1); }),
@@ -215,7 +282,27 @@ list<string> sub probes() {
         probe("G<float>.dynId", auto sub () { return G<float>::dynId(1); }),
         probe("H.refBase", auto sub () { return H::refBase(1); }),
         probe("H.makeBaseRef", auto sub () { code c = H::makeBaseRef(); return c(1); }),
-        probe("H4.refBase", auto sub () { return H4::refBase("s"); }),
+        probe("H4.refBase", auto sub () { return H4::refBase(1); }),
+        probe("H4.direct", auto sub () { return H4::direct(1); }),
+        probe("ref GU::ty", auto sub () { code c = \GU::ty(); return c(); }),
+        probe("ref GU::ty in another Program", \other_program_default()),
+        probe("GsRel::GR::ty", auto sub () { return GsRel::GR::ty(); }),
+        probe("ref GsRel::GR::ty", auto sub () { code c = \GsRel::GR::ty(); return c(); }),
+        probe("call_static_method GsRel::GR", auto sub () { return call_static_method("GsRel::GR", "ty"); }),
+        probe("K2::k", auto sub () { return K2::k(1.5, 2); }),
+        probe("K2::k bound", auto sub () { return K2::k(1.5, "s"); }),
+        probe("K2::kExplicit", auto sub () { return K2::kExplicit(1.5, 2); }),
+        probe("K2<float>::k", auto sub () { return K2<float>::k(1.5, 2); }),
+        probe("KX::kAny", auto sub () { return KX::kAny(1); }),
+        probe("K3::k", auto sub () { return K3::k(1.5); }),
+        probe("ref GsNsd::GB::ty", auto sub () { code c = \GsNsd::GB::ty(); return c(); }),
+        probe("ref GsNsd::GF::ty", auto sub () { code c = \GsNsd::GF::ty(); return c(); }),
+        probe("GsNsd::GF::ty", auto sub () { return GsNsd::GF::ty(); }),
+        # in the class's code without an instantiation: inferred from the arguments, as G::refId(1) and G::dynId(1)
+        probe("G::implicitAny", auto sub () { return G::implicitAny(1); }),
+        probe("G::explicitAny", auto sub () { return G::explicitAny(1); }),
+        probe("G::refId", auto sub () { return G::refId(1); }),
+        probe("G::dynId", auto sub () { return G::dynId(1); }),
         probe("dyn_helper", auto sub () { return dyn_helper(); }),
         probe("GO<string>.dynHelper", auto sub () { return GO<string>::dynHelper(); }),
         probe("GO::f", auto sub () { return GO::f("x", cast<list<int>>((1,))); }),

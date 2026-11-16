@@ -34,6 +34,7 @@
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/qore_program_private.h"
@@ -1017,6 +1018,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         raw_construction_defaults_to_auto(old.raw_construction_defaults_to_auto),
         type_params(old.type_params),
         type_param_bound_types(old.type_param_bound_types),
+        type_param_default_types(old.type_param_default_types),
         parameterized_vparents(old.parameterized_vparents),
         domain(old.domain),
         num_methods(old.num_methods),
@@ -1514,6 +1516,23 @@ int qore_class_private::initializeIntern() {
                 continue;
             }
             type_param_bound_types[i] = QoreParseTypeInfo::resolveAny(pti.get(), loc, bound_err);
+        }
+        // the defaults, which a call made at run time without type arguments binds the type parameters that its
+        // arguments do not bind to (QoreFunction::runtimeInferClassReceiverTypeInfo())
+        type_param_default_types.assign(type_params.size(), nullptr);
+        for (size_t i = 0, e = type_params.size(); i < e; ++i) {
+            if (!type_params[i].hasDefault()) {
+                continue;
+            }
+            std::unique_ptr<QoreParseTypeInfo> pti(qore_parse_type_string_to_pti(type_params[i].getDefaultType()));
+            if (!pti) {
+                parseException(*loc, "PARSE-TYPE-ERROR", "cannot parse default type '%s' for generic class '%s' "
+                    "type parameter '%s'", type_params[i].getDefaultType(), name.c_str(),
+                    type_params[i].name.c_str());
+                bound_err = -1;
+                continue;
+            }
+            type_param_default_types[i] = QoreParseTypeInfo::resolveAny(pti.get(), loc, bound_err);
         }
     }
 
@@ -4038,6 +4057,59 @@ const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(con
     }
 
     return raw_target_fallback;
+}
+
+const QoreTypeInfo* qore_class_private::runtimeResolveTypeParamDefault(size_t index) const {
+    const char* default_type = index < type_params.size() ? type_params[index].getDefaultType() : nullptr;
+    if (!default_type) {
+        return nullptr;
+    }
+    {
+        std::lock_guard<std::mutex> lock(runtime_default_lock);
+        if (index < runtime_default_types.size() && runtime_default_types[index]) {
+            return runtime_default_types[index];
+        }
+    }
+    QoreProgram* pgm = spgm.load();
+    QoreAOTTypeResolver resolver(pgm ? pgm : getProgram());
+    // the name is resolved as in the class's declaration: in the namespace of the class first, then in the ones that
+    // enclose it
+    std::vector<std::string> candidates;
+    if (*default_type != ':') {
+        std::string ns_path = cls->getNamespacePath(false);
+        size_t pos = ns_path.rfind("::");
+        ns_path = pos == std::string::npos ? std::string() : ns_path.substr(0, pos);
+        while (!ns_path.empty()) {
+            candidates.push_back(ns_path + "::" + default_type);
+            pos = ns_path.rfind("::");
+            ns_path = pos == std::string::npos ? std::string() : ns_path.substr(0, pos);
+        }
+    }
+    candidates.push_back(default_type);
+    const QoreTypeInfo* rv = nullptr;
+    for (const std::string& candidate : candidates) {
+        // a class type is written as object<path> in compiled code
+        for (const std::string& path : {candidate, "object<" + candidate + ">"}) {
+            std::string error;
+            const QoreTypeInfo* ti = resolver.resolve(path.c_str(), error);
+            // object<X> of a class that does not exist gives a placeholder for a class to be loaded, not a type
+            if (ti && error.empty() && !qore_type_info_is_aot_deferred(ti)) {
+                rv = ti;
+                break;
+            }
+        }
+        if (rv) {
+            break;
+        }
+    }
+    if (rv) {
+        std::lock_guard<std::mutex> lock(runtime_default_lock);
+        if (runtime_default_types.size() < type_params.size()) {
+            runtime_default_types.resize(type_params.size(), nullptr);
+        }
+        runtime_default_types[index] = rv;
+    }
+    return rv;
 }
 
 const QoreTypeInfo* qore_class_private::getStaticCallReceiverTypeInfo(const QoreMethod& m) const {

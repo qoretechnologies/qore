@@ -33,6 +33,7 @@
 
 #define _QORE_QORECLASSINTERN_H
 
+#include <mutex>
 #include "qore/safe_dslist"
 #include "qore/intern/QoreTypeOwner.h"
 #include "qore/intern/ConstantList.h"
@@ -2811,6 +2812,12 @@ public:
     //! initialized (see initializeIntern()); a value of a bounded type parameter has its bound in the class's code
     //! (qore#5774)
     type_vec_t type_param_bound_types;
+    //! the resolved defaults of the type parameters (nullptr for a parameter without one), resolved with the bounds
+    //! in the class's own Program, so that a copy imported into another Program keeps them (qore#6285)
+    type_vec_t type_param_default_types;
+    //! the defaults resolved at run time for a class loaded from compiled code (runtimeResolveTypeParamDefault())
+    mutable type_vec_t runtime_default_types;
+    mutable std::mutex runtime_default_lock;
     std::vector<const QoreTypeInfo*> parameterized_vparents;
 
     int64 domain;                    // capabilities of builtin class to use in the context of parse restrictions
@@ -3295,6 +3302,15 @@ public:
     DLLLOCAL const QoreTypeInfo* getTypeParamBoundTypeInfo(size_t index) const {
         return index < type_param_bound_types.size() ? type_param_bound_types[index] : nullptr;
     }
+
+    //! Returns the resolved default of a type parameter (see initializeIntern()), or nullptr if it has none
+    DLLLOCAL const QoreTypeInfo* getTypeParamDefaultTypeInfo(size_t index) const {
+        return index < type_param_default_types.size() ? type_param_default_types[index] : nullptr;
+    }
+
+    //! Resolves the default of a type parameter of a class that was not initialized from source (a class loaded
+    //! from compiled code) in the class's own Program, or returns nullptr if it has none or it cannot be resolved
+    DLLLOCAL const QoreTypeInfo* runtimeResolveTypeParamDefault(size_t index) const;
 
     DLLLOCAL size_t getTypeParamRequiredCount() const {
         for (size_t i = 0, e = type_params.size(); i < e; ++i) {

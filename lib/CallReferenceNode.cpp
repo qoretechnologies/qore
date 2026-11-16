@@ -1253,6 +1253,11 @@ const QoreTypeInfo* LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeIn
     if (!code_class || !code_class->getClass(*qore_class_private::get(*mcls), access)) {
         return nullptr;
     }
+    // the code of a class without type parameters binds them to the specialization that it inherits, also when it
+    // declares a method of the same name, which the reference does not name then
+    if (!code_class->hasTypeParams()) {
+        return code_class->getStaticCallReceiverTypeInfo(m);
+    }
     const QoreTypeInfo* current = runtime_get_receiver_type_info();
     if (!current) {
         return nullptr;

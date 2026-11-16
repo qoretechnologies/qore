@@ -24,11 +24,12 @@
     The probes (generic-static-call-type-params/probes.q) call static methods through specializations, subclasses of
     them, subclass chains (HH inherits HK inherits K<float>), a generic class between (KLI inherits KL<int> inherits
     G<list<int>>), with a bounded type parameter, in the class and its subclasses (implicit, G::m() and through
-    objects), static generic methods with type parameters of their own (with a bound), call references and dynamic
-    calls through each, from generic functions and closures in them, in background threads and in four threads at
-    the same time, with non-generic controls.  They run in each execution mode in a child process, with tiered
-    execution at the IR tier and promoted to native code, as qcc-compiled executables (-O0, -O3) with top-level calls,
-    and in a qcc-compiled module (-O0, -O3) loaded by a child in each execution mode.
+    objects), static generic methods with type parameters of their own (with a bound), call references and dynamic calls
+    through each (also in a subclass declaring a method of the same name, and of a class whose type parameter has a user
+    class as its default from another Program importing it), from generic functions and closures in them, in background
+    threads and in four threads at the same time, with non-generic controls. They run in each execution mode in a child
+    process, with tiered execution at the IR tier and promoted to native code, as qcc-compiled executables (-O0, -O3)
+    with top-level calls, and in a qcc-compiled module (-O0, -O3) loaded by a child in each execution mode.
 */
 class GenericStaticCallTypeParamsTest inherits QUnit::Test {
     public {
@@ -59,6 +60,9 @@ class GenericStaticCallTypeParamsTest inherits QUnit::Test {
             "G<float>::gen: \"\\\"a\\\" 1.0 list<float>\" string",
             "H::gen<string>: \"\\\"a\\\" 1.0 list<float>\" string",
             "H::bnd: \"2 1.0 list<int>\" string",
+            "G<float>::tbnd: \"1.5 list<float>\" string",
+            "H::tbnd: \"1.5 list<float>\" string",
+            "ref H::tbnd: \"1.5 list<float>\" string",
             "ref H::gen: \"\\\"a\\\" 1.0 list<float>\" string",
             "HK::id: 1.0 float",
             "HH::id: 1.0 float",
@@ -85,7 +89,26 @@ class GenericStaticCallTypeParamsTest inherits QUnit::Test {
             "G<float>.dynId: 1.0 float",
             "H.refBase: 1.0 float",
             "H.makeBaseRef: 1.0 float",
-            "H4.refBase: \"s\" string",
+            "H4.refBase: RUNTIME-OVERLOAD-ERROR",
+            "H4.direct: RUNTIME-OVERLOAD-ERROR",
+            "ref GU::ty: \"list<object<Foo>> own\" string",
+            "ref GU::ty in another Program: \"list<object<Foo>> own\" string",
+            "GsRel::GR::ty: \"list<object<Foo>> own\" string",
+            "ref GsRel::GR::ty: \"list<object<Foo>> own\" string",
+            "call_static_method GsRel::GR: \"list<object<Foo>> own\" string",
+            "K2::k: \"1.5 2 list<int>\" string",
+            "K2::k bound: RUNTIME-OVERLOAD-ERROR",
+            "K2::kExplicit: \"1.5 2 list<int>\" string",
+            "K2<float>::k: \"1.5 2 list<int>\" string",
+            "KX::kAny: RUNTIME-OVERLOAD-ERROR",
+            "K3::k: \"1.5 list<int>\" string",
+            "ref GsNsd::GB::ty: \"list<int>\" string",
+            "ref GsNsd::GF::ty: \"list<object<Foo>> root\" string",
+            "GsNsd::GF::ty: \"list<object<Foo>> root\" string",
+            "G::implicitAny: 1 integer",
+            "G::explicitAny: 1 integer",
+            "G::refId: 1 integer",
+            "G::dynId: 1 integer",
             "dyn_helper: 1 integer",
             "GO<string>.dynHelper: \"integer\" string",
             "GO::f: \"v2 list<int>\" string",
