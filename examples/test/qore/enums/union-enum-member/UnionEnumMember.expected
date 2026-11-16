@@ -23,6 +23,18 @@ union<softstring, Color>: 1 enum<Color>
 union<softint, Name>: "a" enum<Name>
 value typed at run time: 2 enum<Color>
 int typed at run time: 7 integer
-another enum: RUNTIME-TYPE-ERROR: <lvalue> expects type 'union<int, enum<Color>>', but got type 'enum<Name>' instead
+another enum: RUNTIME-TYPE-ERROR: <lvalue> expects type 'union<int, enum<Color>>', but got type 'string' instead
 union<list<int>, nothing, int, Color>: 1 enum<Color>
 union<hash<string, int>, nothing, int, Color>: 1 enum<Color>
+member union<softstring, Color>: 1 enum<Color>
+member union<softint, Name>: "a" enum<Name>
+hashdecl member union<softint, Name>: "a" enum<Name>
+hash literal value union<softint, Name>: "a" enum<Name>
+hash key assignment union<softint, Name>: "a" enum<Name>
+hash value typed at run time union<softstring, Color>: 2 enum<Color>
+union<softlist<string>, Name>: "a" enum<Name>
+union<softlist, Color> typed at run time: 1 enum<Color>
+union<int, softlist<int>, Color> typed at run time: 1 enum<Color>
+union<softlist<int>, nothing, Color>: 1 enum<Color>
+softlist: [1] list
+*softlist: [1] list

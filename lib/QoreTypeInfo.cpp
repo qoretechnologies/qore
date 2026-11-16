@@ -4979,6 +4979,12 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     return true;
                 }
             } else if (typespec == QTS_COMPLEXSOFTLIST) {
+                // an enum value is left to an enum type of the union, which keeps it as an enum value, and not
+                // wrapped in a list (qore#6277)
+                if (n.isEnum() && typeInfo.getAcceptSpecs().size() > 1
+                        && qore_type_info_has_enum_spec_for(typeInfo, n)) {
+                    break;
+                }
                 // see if value matches
                 if (policy.value(u.ti, n, true) > 0) {
                     ok = true;
@@ -5092,31 +5098,32 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
         }
         case QTS_TYPE: {
             qore_type_t t = n.getType();
+            if (n.isEnum()) {
+                // a union with an enum type of the value's enum keeps the value as an enum value: a base type, or a
+                // type that converts any value (softlist), does not accept it, and the enum type does (union<int, E>
+                // takes an E value as an E value, wherever E is in the union, also in an optional type, and for
+                // hash keys and members too; qore#6277); checked only for an enum value, so that the acceptance of
+                // other values does not change
+                if ((u.t != NT_ALL || accept.map) && typeInfo.getAcceptSpecs().size() > 1
+                        && qore_type_info_has_enum_spec_for(typeInfo, n)) {
+                    break;
+                }
+                // Unwrap TAG_ENUM to base type only for direct lvalue/parameter assignments
+                // (e.g. "string s = EnumVal"), NOT for hash key or member assignments where
+                // the TAG_ENUM must be preserved through containers for later typed retrieval
+                if (u.t != NT_ALL && strcmp(arg_type, "key") && strcmp(arg_type, "member")) {
+                    QoreValue base_val = n.getEnumMember()->getValue();
+                    base_val.ref();
+                    n.discard(xsink);
+                    n = base_val;
+                }
+            }
             // special handling for objects; check for object validity; if it's already been deleted,
             // then we use NT_NOTHING
             if (t == NT_OBJECT && !n.get<QoreObject>()->isValid()) {
                 t = NT_NOTHING;
             }
             if (u.t == NT_ALL || u.t == t) {
-                // Unwrap TAG_ENUM to base type only for direct lvalue/parameter assignments
-                // (e.g. "string s = EnumVal"), NOT for hash key or member assignments where
-                // the TAG_ENUM must be preserved through containers for later typed retrieval; only when this type
-                // accepts the value: a type that does not leaves it for the other types of a union, such as an enum
-                // type (qore#6277)
-                if (n.isEnum() && u.t != NT_ALL
-                    && strcmp(arg_type, "key") && strcmp(arg_type, "member")) {
-                    // a union with an enum type of the value's enum keeps the value: this type does not accept it,
-                    // and the enum type does (union<int, E> takes an E value as an E value, wherever E is in the
-                    // union, also in an optional type; qore#6277); checked only for an enum value, so that the
-                    // acceptance of other values does not change
-                    if (typeInfo.getAcceptSpecs().size() > 1 && qore_type_info_has_enum_spec_for(typeInfo, n)) {
-                        break;
-                    }
-                    QoreValue base_val = n.getEnumMember()->getValue();
-                    base_val.ref();
-                    n.discard(xsink);
-                    n = base_val;
-                }
                 ok = true;
             }
             break;

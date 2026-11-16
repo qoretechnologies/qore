@@ -19,6 +19,24 @@ hashdecl H {
     union<string, Color> m;
 }
 
+#! members of soft types before the enum: the values keep their enum type
+class CM {
+    public {
+        union<softstring, Color> m = Color::Red;
+        union<softint, Name> n = Name::A;
+    }
+}
+
+hashdecl HM {
+    union<softint, Name> n;
+}
+
+#! a softlist value typed at run time
+auto sub softlistTyped(auto v) {
+    union<int, softlist<int>, Color> u = v;
+    return u;
+}
+
 union<string, Color> sub ret(Color c) {
     return c;
 }
@@ -75,6 +93,43 @@ sub main() {
         union<hash<string, int>, nothing, int, Color> u = Color::Red;
         return u;
     });
+
+    # hash keys and members of soft types before the enum
+    Name n = Name::A;
+    show("member union<softstring, Color>", auto sub () { CM c(); return c.m; });
+    show("member union<softint, Name>", auto sub () { CM c(); return c.n; });
+    show("hashdecl member union<softint, Name>", auto sub () { hash<HM> h = <HM>{"n": Name::A}; return h.n; });
+    show("hash literal value union<softint, Name>", auto sub () {
+        hash<string, union<softint, Name>> h = {"a": n};
+        return h.a;
+    });
+    show("hash key assignment union<softint, Name>", auto sub () {
+        hash<string, union<softint, Name>> h();
+        h.a = n;
+        return h.a;
+    });
+    show("hash value typed at run time union<softstring, Color>", auto sub () {
+        auto v = Color::Green;
+        hash<string, union<softstring, Color>> h = {"a": v};
+        return h.a;
+    });
+
+    # soft lists before the enum
+    show("union<softlist<string>, Name>", auto sub () { union<softlist<string>, Name> u = Name::A; return u; });
+    show("union<softlist, Color> typed at run time", auto sub () {
+        auto v = Color::Red;
+        union<softlist, Color> u = v;
+        return u;
+    });
+    show("union<int, softlist<int>, Color> typed at run time", auto sub () { return softlistTyped(Color::Red); });
+    show("union<softlist<int>, nothing, Color>", auto sub () {
+        union<softlist<int>, nothing, Color> u = Color::Red;
+        return u;
+    });
+
+    # a softlist with no enum type takes the base value, as before (qore#6277 review)
+    show("softlist", auto sub () { softlist l = Color::Red; return l; });
+    show("*softlist", auto sub () { *softlist l = Color::Red; return l; });
 }
 
 main();
