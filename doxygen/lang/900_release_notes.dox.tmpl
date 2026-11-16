@@ -801,6 +801,11 @@
     negative position as an offset from the end, or from the start before it, as @ref Qore::index() "index()" does;
     it gave -1 for every negative position (ex: <tt>bindex("abc", "c", -1)</tt> is 2, not -1) (issue #6271).
 
+    @par <binary>::find() Searches From the Start for a Negative Offset Before It
+    @ref <binary>::find() "<binary>::find()" searches from the start of the binary object for a negative offset
+    before the start, as @ref <string>::find() "<string>::find()" and @ref Qore::bindex() "bindex()" do; it gave -1
+    (ex: <tt>binary("abcab").find(binary("b"), -6)</tt> is 1, not -1) (issue #6281).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Module Commands Know the Restrictions of the Code That Issues Them
     A binary module's command handler gets the effective restrictions of the issuing code, not those of the target
@@ -1902,6 +1907,8 @@
       @ref Qore::bindex() "bindex()" with a negative position searches from that offset from the end (or from the
       start) instead of giving -1; in the C++ API, \c QoreString::findAny() finds any of the given bytes, as
       documented, instead of the whole string (issue #6271)
+    - @ref <binary>::find() "<binary>::find()" with a negative offset before the start searches from the start
+      instead of giving -1, as the string search functions do (issue #6281)
     - @ref Qore::rindex() "rindex()" and @ref <string>::rfind() "<string>::rfind()" also find a match at the search
       position when its character is not one byte, so results change for valid UTF-8 text (ex:
       <tt>rindex("aézaéb", "é", 4)</tt> is 4, not 1), and a negative position before the start gives the results of

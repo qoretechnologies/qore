@@ -7,8 +7,10 @@
 # ones that a reference implementation over the text's bytes (or characters) gives, at every position from before
 # the start to after the end.  brindex() finds a match that lies within the bytes up to and including the position,
 # as rindex() does with characters, and a negative position before the start is the start for bindex() and index()
-# and gives no match for brindex() and rindex().  Prints one line per text and encoding with the number of checks,
-# followed by any mismatch.
+# and gives no match for brindex() and rindex().  <binary>::find() and <binary>::rfind() on the same bytes give the
+# results of bindex() and brindex() at any byte offset (issue #6281), and <string>::find() and <string>::rfind() the
+# results of index() and rindex().  Prints one line per text and encoding with the number of checks, followed by any
+# mismatch.
 
 %modern
 
@@ -147,6 +149,11 @@ foreach hash<auto> t in (Texts.pairIterator()) {
         string str = convert_encoding(t.value, enc);
         binary hay = binary(str);
         list<int> starts = boundaries(cs, enc);
+        # a binary object has no characters: a match can start at any byte
+        list<int> all_offsets = ();
+        for (int i = 0; i < hay.size(); ++i) {
+            all_offsets += i;
+        }
         int bytes = hay.size();
         int n = cs.size();
         int checks = 0;
@@ -168,6 +175,18 @@ foreach hash<auto> t in (Texts.pairIterator()) {
                 if (got != exp) {
                     mismatches += sprintf("brindex(%y, %d): %d expected %d", needle, pos, got, exp);
                 }
+                exp = ref_bindex(hay, all_offsets, nb, pos);
+                got = hay.find(nb, pos);
+                ++checks;
+                if (got != exp) {
+                    mismatches += sprintf("<binary>::find(%y, %d): %d expected %d", needle, pos, got, exp);
+                }
+                exp = ref_brindex(hay, all_offsets, nb, pos);
+                got = hay.rfind(nb, pos);
+                ++checks;
+                if (got != exp) {
+                    mismatches += sprintf("<binary>::rfind(%y, %d): %d expected %d", needle, pos, got, exp);
+                }
             }
             for (int pos = -n - 2; pos <= n + 2; ++pos) {
                 int exp = ref_index(cs, ncs, pos);
@@ -181,6 +200,18 @@ foreach hash<auto> t in (Texts.pairIterator()) {
                 ++checks;
                 if (got != exp) {
                     mismatches += sprintf("rindex(%y, %d): %d expected %d", needle, pos, got, exp);
+                }
+                exp = ref_index(cs, ncs, pos);
+                got = str.find(ns, pos);
+                ++checks;
+                if (got != exp) {
+                    mismatches += sprintf("<string>::find(%y, %d): %d expected %d", needle, pos, got, exp);
+                }
+                exp = ref_rindex(cs, ncs, pos);
+                got = str.rfind(ns, pos);
+                ++checks;
+                if (got != exp) {
+                    mismatches += sprintf("<string>::rfind(%y, %d): %d expected %d", needle, pos, got, exp);
                 }
             }
         }
