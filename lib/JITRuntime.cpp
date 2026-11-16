@@ -590,6 +590,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_pop_native_function_context_v1", reinterpret_cast<void*>(&qore_rt_pop_native_function_context_v1) },
     { "qore_rt_call_fast_with_target", reinterpret_cast<void*>(&qore_rt_call_fast_with_target) },
     { "qore_rt_call_with_args", reinterpret_cast<void*>(&qore_rt_call_with_args) },
+    { "qore_rt_call_with_args_consume_args", reinterpret_cast<void*>(&qore_rt_call_with_args_consume_args) },
     { "qore_rt_call_function_with_base",
         reinterpret_cast<void*>(&qore_rt_call_function_with_base) },
     { "qore_rt_call_function_with_base_aot",
@@ -11526,6 +11527,11 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
 extern "C" DLLEXPORT uint64_t qore_rt_call_with_args(uint64_t expr_bits,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
     return qore_rt_call_with_args_impl(expr_bits, args, nullptr, nargs, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_consume_args(uint64_t expr_bits,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    return qore_rt_call_with_args_impl(expr_bits, args, arg_cleanups, nargs, xsink);
 }
 
 // --- Phase 5: Fast-call builtin variants (skip QoreListNode allocation) ---

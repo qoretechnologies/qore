@@ -19,7 +19,7 @@
     is still on the call stack; the IR interpreter, JIT, tiered and AOT code released it in the caller once the callee's
     frame had been popped, so a destructor that raised an exception or read the call stack saw another call stack.
     Issue #6063: the call kinds that #5882 did not convert (a call dispatched to the method of the object's class,
-    an abstract method, a receiver typed auto or object, a closure held by a member).
+    an abstract method, a receiver typed auto or object, a closure held by a member; an implicit self call).
 
     The script next to the test runs in every execution mode (its functions compiled before they run, with
     QORE_JIT_SYNC_COMPILE), on the IR tier and as AOT executables, and its output, which shows the call stack of each
@@ -54,7 +54,7 @@ class TempArgReleaseFrameTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(46, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
+        assertEq(48, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
         hash<string, string> exp = {
             "function": "rel a [\"Rec::destructor\", \"nocall\", \"case_function\"]",
             "function two": "rel b [\"Rec::destructor\", \"two\", \"case_function_two\"]; "
@@ -89,6 +89,7 @@ class TempArgReleaseFrameTest inherits QUnit::Test {
             "throw method": "catch DTOR [\"Dtor::destructor\", \"C::m\", \"case_throw_method\"]",
             "throw closure": "catch DTOR [\"Dtor::destructor\", \"<anonymous closure>\", \"case_throw_closure\"]",
             # qore#6063
+            "self call": "rel a [\"Rec::destructor\", \"S::m\", \"S::callSelf\", \"case_self_call\"]",
             "virtual": "rel a [\"Rec::destructor\", \"D::v\", \"case_virtual\"]",
             "abstract": "rel a [\"Rec::destructor\", \"AbsD::am\", \"case_abstract\"]",
             "auto receiver": "rel a [\"Rec::destructor\", \"C::m\", \"case_auto_receiver\"]",
@@ -98,6 +99,8 @@ class TempArgReleaseFrameTest inherits QUnit::Test {
                 "rel a2 [\"Rec::destructor\", \"B::v\", \"case_polymorphic_loop\"]; "
                 "rel a3 [\"Rec::destructor\", \"D::v\", \"case_polymorphic_loop\"]",
             "member closure": "rel a [\"Rec::destructor\", \"M::<anonymous closure>\", \"case_member_closure\"]",
+            "throw self call": "catch DTOR [\"Dtor::destructor\", \"S::m\", \"S::throwSelf\", "
+                "\"case_throw_self_call\"]",
             "throw virtual": "catch DTOR [\"Dtor::destructor\", \"D::v\", \"case_throw_virtual\"]",
             "throw member closure": "catch DTOR [\"Dtor::destructor\", \"M::<anonymous closure>\", "
                 "\"case_throw_member_closure\"]",

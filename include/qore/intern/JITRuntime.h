@@ -1880,6 +1880,14 @@ uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx, int32_t slot, uint6
 //! Returns the NaN-boxed result; sets xsink on exception.
 uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! qore_rt_call_with_args() with the cleanup slots of the arguments, whose references are given to the call
+/** The argument list of the call holds the references of the arguments whose slots are set, which the callee's
+    parameters take over, so that the last reference of a temporary argument is released in the callee's frame, as
+    the AST interpreter's call releases it (issue #6063)
+*/
+uint64_t qore_rt_call_with_args_consume_args(uint64_t expr_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+        ExceptionSink* xsink);
+
 //! AOT variant: resolve expression from context slot, then delegate to qore_rt_call_with_args
 uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
     ExceptionSink* xsink);

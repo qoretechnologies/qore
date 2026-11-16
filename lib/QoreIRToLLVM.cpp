@@ -21503,11 +21503,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 } else {
                     llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
-                            llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {expr_const, args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    if (has_arg_cleanups) {
+                        // the call takes the references of the temporary arguments over, as the AST interpreter's
+                        // call does (issue #6063)
+                        auto helper = module.getOrInsertFunction("qore_rt_call_with_args_consume_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {expr_const, args_array, arg_cleanups,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    } else {
+                        auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {expr_const, args_array,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    }
                 }
 
                 // Calls with reference-capable arguments can mutate locals that
@@ -23098,11 +23108,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 } else {
                     llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
-                            llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, i32_type, ptr_type}, false));
-                    call_result = builder->CreateCall(helper, {expr_const, args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    if (has_arg_cleanups) {
+                        // the call takes the references of the temporary arguments over, as the AST interpreter's
+                        // call does (issue #6063)
+                        auto helper = module.getOrInsertFunction("qore_rt_call_with_args_consume_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        call_result = builder->CreateCall(helper, {expr_const, args_array, arg_cleanups,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    } else {
+                        auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, i32_type, ptr_type}, false));
+                        call_result = builder->CreateCall(helper, {expr_const, args_array,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    }
                 }
             } else {
                 if (aot_mode) {
@@ -25678,10 +25698,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 QoreValue expr_val = direct_inst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
-                auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
-                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false));
-                call_result = builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, expr_bits),
-                        args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                if (has_arg_cleanups) {
+                    // the call takes the references of the temporary arguments over (issue #6063)
+                    auto helper = module.getOrInsertFunction("qore_rt_call_with_args_consume_args",
+                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                false));
+                    call_result = builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, expr_bits),
+                            args_array, arg_cleanups, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                } else {
+                    auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
+                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, expr_bits),
+                            args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
             } else {
                 llvm::Value* method_ptr = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type,
