@@ -262,6 +262,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   a debug hook in them
         # - JITFinalizeCancellation (#6305, #6313): its checks run in child processes that set their own --exec-mode
         #   and arm a debug hook in them
+        # - deleted-program-own-generic-cycle (#6419): its checks run in child processes that set their own
+        #   --exec-mode and in qcc executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
@@ -272,6 +274,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTMemberInitNegativeOffsets.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/classes/deleted-program-types.qtest",
+                                 "examples/test/qore/classes/deleted-program-own-generic-cycle.qtest",
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
                                  "examples/test/qore/classes/explicit-type-param-method-call.qtest",
                                  "examples/test/qore/classes/deleted-object-generic-variant.qtest",
