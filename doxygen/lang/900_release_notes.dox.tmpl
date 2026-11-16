@@ -2498,8 +2498,14 @@
     - writes of 2 GiB or more with @ref Qore::File "File" and @ref Qore::FileOutputStream "FileOutputStream" returned
       wrong counts or failed, also on macOS
     - empty binary values were stored as SQL \c NULL by the \c pgsql and \c sqlite3 drivers
+    - aligning a PostgreSQL column to a serial pseudo-type, also one that already was one, generated SQL that
+      PostgreSQL rejects (see @ref pgsqlsqlutilbasev119 "PgsqlSqlUtilBase v1.19")
+      (<a href="https://github.com/qoretechnologies/qore/issues/853">issue 853</a>)
     - the files of a separated user module other than its <tt>.qm</tt> file were parsed with the warnings of the code
       loading the module (see @ref user_modules)
+    - schema alignment dropped and created again each PostgreSQL index on an expression (see
+      @ref pgsqlsqlutilbasev119 "PgsqlSqlUtilBase v1.19")
+      (<a href="https://github.com/qoretechnologies/qore/issues/1429">issue 1429</a>)
     - fixed a memory leak when a binary module could not be loaded because a namespace it declares already exists
     - @ref Qore::sprintf() "sprintf()" and related functions are no longer constant functions, as they can raise
       exceptions
