@@ -35,6 +35,7 @@ module CMakeBuildHelpersTestBase {
 %requires(reexport) QUnit
 %requires Util
 %requires FsUtil
+%requires ../TestInterpreter.qm
 
 /** The tests of the exported CMake build helpers build CMake projects with the cmake in the PATH and the Qore under
     test:
@@ -96,7 +97,7 @@ public class CMakeBuildTest inherits QUnit::Test {
 
     #! Finds the Qore under test and the cmake in the PATH
     constructor(string name, string version, reference<list<string>> p_argv) : QUnit::Test(name, version, \p_argv) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         qore_build_dir = realpath(ENV.QORE_BUILD_DIR ?? ENV.QORE_LIBDIR
             ?? (ENV.LIBQORE_BINARY ? dirname(ENV.LIBQORE_BINARY) : dirname(qore_bin)));
         qore_dir = qore_build_dir + "/cmake";

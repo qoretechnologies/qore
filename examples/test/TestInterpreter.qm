@@ -109,13 +109,23 @@ public namespace TestInterpreter {
     */
     public string sub qore_interpreter() {
         guard_recursion();
-        foreach *string candidate in ((ENV.QORE_BINARY, ENV.QORE_BIN, ENV.QORE_EXECUTABLE)) {
+        # QORE_BIN first: a developer sets it to choose a build, while run_tests.sh always exports QORE_BINARY
+        foreach *string candidate in ((ENV.QORE_BIN, ENV.QORE_BINARY, ENV.QORE_EXECUTABLE)) {
             if (candidate && !is_own_executable(candidate)) {
                 return candidate;
             }
         }
         if (!running_compiled()) {
-            return QORE_ARGV[0];
+            # the running interpreter; a name found in the PATH is given as the path that the PATH names, so that it
+            # also runs from another directory
+            string path = QORE_ARGV[0];
+            if (path !~ /\//) {
+                *string found = trim(backquote(sprintf("command -v '%s' 2>/dev/null", replace(path, "'", "'\\''"))));
+                if (found) {
+                    return found;
+                }
+            }
+            return path;
         }
         *string found = trim(`command -v qore 2>/dev/null`);
         if (found && !is_own_executable(found)) {
@@ -156,11 +166,33 @@ public namespace TestInterpreter {
             return;
         }
         string own = own_executable();
-        # the process environment itself: a compiled executable initializes its modules before it sets ENV
-        if (getenv(ParentExecutableVar) == own) {
+        if (TestInterpreterState::inherited(own) == own) {
             throw "TEST-RECURSION-ERROR", sprintf("the compiled test %y was run by itself as a child process (it took "
                 "its own executable for the qore interpreter); use TestInterpreter::qore_interpreter()", own);
         }
-        setenv(ParentExecutableVar, own);
+    }
+}
+
+#! the executable that the parent process recorded, read once, before this process records its own
+/** The process records its executable in the environment for its child processes the first time that it checks: what
+    it reads later is its own record, not its parent's, so the check compares the value read the first time
+*/
+class TestInterpreterState {
+    private:internal {
+        static Mutex lck();
+        static bool read;
+        static *string parent_executable;
+    }
+
+    #! returns the executable that the parent process recorded, if any, and records \a own for child processes
+    static *string inherited(string own) {
+        AutoLock al(lck);
+        if (!read) {
+            # the process environment itself: a compiled executable initializes its modules before it sets ENV
+            parent_executable = getenv(TestInterpreter::ParentExecutableVar);
+            setenv(TestInterpreter::ParentExecutableVar, own);
+            read = True;
+        }
+        return parent_executable;
     }
 }

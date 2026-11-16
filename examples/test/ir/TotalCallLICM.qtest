@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class TotalCallLICMTest
@@ -29,7 +30,7 @@ public class TotalCallLICMTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("TotalCallLICMTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("hoisted calls produce the unhoisted values", \testHoistedValuesMatch());
