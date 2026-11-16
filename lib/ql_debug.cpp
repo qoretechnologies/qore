@@ -23750,6 +23750,50 @@ static QoreValue f_dbg_http_submit_after_close_clear(const QoreListNode* params,
     return QoreValue();
 }
 
+//! set by dbg_http_new_connection_wait(): the next connection that a connection manager creates waits in
+//! qore_http_manager_new_connection_hook until it is ready or its connect failed
+static std::atomic<bool> dbg_new_connection_wait_armed{false};
+
+//! the hook of dbg_http_new_connection_wait(): one-shot; it removes itself once it has run
+static void dbg_new_connection_wait_hook(HttpClientConnectionBase* conn) {
+    if (!dbg_new_connection_wait_armed.exchange(false)) {
+        return;
+    }
+    void (*self)(HttpClientConnectionBase*) = dbg_new_connection_wait_hook;
+    qore_http_manager_new_connection_hook.compare_exchange_strong(self, nullptr);
+    ExceptionSink xs;
+    // a hang guard only: the connect of the test's connection ends at once
+    conn->waitForReadyOrError(60000, &xs);
+    xs.clear();
+}
+
+//! the next connection that an HTTP client connection manager creates waits until it is ready or its connect failed,
+//! before the manager reserves its first stream (one-shot)
+/** Orders a connect that fails before the reservation of the new connection deterministically: the manager then
+    raises the connection's error from the acquire.
+
+    @throw DBG-ARGUMENT-ERROR another hook for new connections is set
+*/
+static QoreValue f_dbg_http_new_connection_wait(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    void (*expected)(HttpClientConnectionBase*) = nullptr;
+    if (!qore_http_manager_new_connection_hook.compare_exchange_strong(expected, dbg_new_connection_wait_hook)
+            && expected != dbg_new_connection_wait_hook) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_new_connection_wait(): another hook is set");
+        return QoreValue();
+    }
+    dbg_new_connection_wait_armed = true;
+    return QoreValue();
+}
+
+//! disarms dbg_http_new_connection_wait() if no connection was created
+static QoreValue f_dbg_http_new_connection_wait_clear(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    dbg_new_connection_wait_armed = false;
+    void (*self)(HttpClientConnectionBase*) = dbg_new_connection_wait_hook;
+    qore_http_manager_new_connection_hook.compare_exchange_strong(self, nullptr);
+    return QoreValue();
+}
+
 //! has the peer of the next HTTP/1 client request answer and close its side (FIN) at a point of the request
 /** @param point \c "idle-check": before the check for data from the server that precedes the send of a request;
     \c "after-sent": after a request on a reused connection was sent, before the check for the server's close
@@ -25115,6 +25159,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 2, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "closed");
     qns.addBuiltinVariant("dbg_http_submit_after_close_clear", f_dbg_http_submit_after_close_clear, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_new_connection_wait", f_dbg_http_new_connection_wait, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_new_connection_wait_clear", f_dbg_http_new_connection_wait_clear, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http2_default_connection_window", f_dbg_http2_default_connection_window, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
