@@ -1,17 +1,8 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
-# test-exec-mode: children - its checks run in child processes that set their own execution modes
 
-%modern
-%no-child-restrictions
-
-%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires ../../../ExecModeHarness.qm
-
-%exec-class CompoundAssignmentOrNothingPlainTest
+# the cases of the CompoundAssignmentOrNothingPlain-<n>.qtest tests (qore#6226): each runs one part of them, so that
+# each takes a short time, and together they run every case (see addPartCase())
 
 #! Tests compound assignments on or-nothing lvalues (*T) against the plain type T, and on soft-typed lvalues
 /** - an or-nothing lvalue with no value gives exactly the result of an lvalue of the plain type with no value, or
@@ -24,8 +15,14 @@
     class members of these types with operands of many types that are not known at parse time.  The AST
     interpreter's output is checked against the rules above, and every other execution mode and a qcc-compiled
     executable must give the same output.
+
+    The cases are in four parts (see addPartCase()), CompoundAssignmentOrNothingPlain-<n>.qtest, so that each runs for
+    a short time (about a minute in a debug build; the whole matrix took 200 s, close to the 300 s limit of a test, and
+    exceeded it when the machine was busy, qore#6226): every part generates the program and checks the AST
+    interpreter's output, and part 1 also runs the ir mode and the qcc-compiled executable, part 2 the jit mode, part 3
+    the tiered mode and part 4 the default mode.  The AST interpreter is the reference of every part.
 */
-class CompoundAssignmentOrNothingPlainTest inherits QUnit::Test {
+class CompoundAssignmentOrNothingPlainBase inherits QUnit::Test {
     public {
         #! the operators
         const Operators = ("=", "+=", "-=", "*=", "/=", "%=", "|=", "&=", "^=", "<<=", ">>=");
@@ -87,22 +84,49 @@ class CompoundAssignmentOrNothingPlainTest inherits QUnit::Test {
     }
 
     private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+
         string qore_bin;
         string libqore_dir;
         string qcc_bin;
     }
 
-    constructor() : QUnit::Test("CompoundAssignmentOrNothingPlain", "1.0", \ARGV) {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 
-        addTestCase("or-nothing lvalues give the plain type's results", \testMatrix());
+        # the AST interpreter is the reference of every part; each other mode is checked by one part
+        addPartCase(1, "or-nothing lvalues give the plain type's results: ir and the executable", \testMatrix(),
+            (("ir",), False, True));
+        addPartCase(1, "the parts check every execution mode", \testPartsCoverModes());
+        addPartCase(2, "or-nothing lvalues give the plain type's results: jit", \testMatrix(),
+            (("jit",), False, False));
+        addPartCase(3, "or-nothing lvalues give the plain type's results: tiered", \testMatrix(),
+            (("tiered",), False, False));
+        addPartCase(4, "or-nothing lvalues give the plain type's results: the default mode", \testMatrix(),
+            ((), True, False));
 
         set_return_value(main());
     }
 
-    testMatrix() {
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
+    }
+
+    #! checks that the modes that the parts run are the execution modes of the harness (but ast, the reference)
+    testPartsCoverModes() {
+        assertEq(sort(ExecModeHarness::ExecModes), sort(("ast", "ir", "jit", "tiered")),
+            "the execution modes that the parts check: update the parts when the harness has another mode");
+    }
+
+    #! runs the program in the modes given (and in the default mode, and as a qcc-compiled executable) and checks the
+    #! output against the AST interpreter's, which is checked against the rules
+    testMatrix(list<string> modes, bool default_mode, bool executable) {
         TmpDir tmp("qore-compound-or-nothing-plain-");
         string file = tmp.path + DirSep + "plain.q";
         int pairs = writeProgram(file);
@@ -110,22 +134,23 @@ class CompoundAssignmentOrNothingPlainTest inherits QUnit::Test {
         list<string> expected = runMode("ast", file);
         checkAst(expected, pairs);
 
-        foreach string mode in (ExecModeHarness::ExecModes) {
-            if (mode == "ast") {
-                continue;
-            }
+        foreach string mode in (modes) {
             compare(mode, expected, runMode(mode, file));
         }
 
-        # the default execution mode
-        compare("default", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s",
-            libqore_dir, libqore_dir, qore_bin, file)).split("\n"));
+        if (default_mode) {
+            # the default execution mode
+            compare("default", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s %s", libqore_dir, libqore_dir, qore_bin, file)).split("\n"));
+        }
 
-        string exe = tmp.path + DirSep + "plain";
-        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
-        assertTrue(is_file(exe), "compiled the executable: " + out);
-        compare("executable", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
-            "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)).split("\n"));
+        if (executable) {
+            string exe = tmp.path + DirSep + "plain";
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
+            assertTrue(is_file(exe), "compiled the executable: " + out);
+            compare("executable", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)).split("\n"));
+        }
     }
 
     #! checks the AST interpreter's results against the rules

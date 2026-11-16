@@ -1,8 +1,9 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# the compound-assignment parity matrix shared by the compound-assignment-ast-parity-*.qtest tests; each checks one
-# family of operators
+# the cases of the CompoundAssignmentAstParity-<n>.qtest tests: the compound-assignment parity matrix, split by
+# operator family and by execution mode; each test runs one part of them, so that each takes a short time, and together
+# they run every case (see addPartCase())
 
 #! Tests that every compound assignment gives the AST interpreter's result in every execution mode
 /** The AST interpreter is the reference: a compound assignment operates on the lvalue's current value by its type,
@@ -10,8 +11,12 @@
     operand as a string, a hash lvalue merges a hash or removes keys, and so on.  The other execution modes and
     compiled code must give the same value or raise the same exception.
 
-    The matrix is split by operator family (see OperatorFamilies), and each family is checked by its own test, so
-    that each runs in a short time; together they cover every operator.
+    The matrix is split by operator family (see OperatorFamilies), and each family is checked in four parts (the
+    CompoundAssignmentAstParity-<n>.qtest tests, qore#6226): every part generates the family's program and runs it
+    with the AST interpreter, whose output is the expected result, and checks one group of the other modes against
+    it: the ir mode and the qcc-compiled executable, the jit mode, the tiered mode, or the default mode.  The tests
+    of a family used to run every mode in one test, which took 160 s and more in a debug build (more than 300 s,
+    the limit of a test, when the machine was busy); each part takes about a minute.
 
     The test generates a program that applies each compound operator to lvalues of many declared types and values:
     - with operands of many types whose type is not known at parse time, looping over the values at runtime, in
@@ -89,7 +94,10 @@ class CompoundAssignmentAstParityBase inherits QUnit::Test {
     }
 
     private {
-        #! the operators that this test checks
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+
+        #! the operators of the family that the case being run checks
         list<string> Operators;
 
         string qore_bin;
@@ -97,19 +105,67 @@ class CompoundAssignmentAstParityBase inherits QUnit::Test {
         string qcc_bin;
     }
 
-    #! checks the operators given; the matrix is split into families so that each test runs in a short time
-    constructor(string name, list<string> operators) : QUnit::Test(name, "1.0", \ARGV) {
-        Operators = operators;
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 
-        addTestCase("every execution mode gives the AST result", \testParity());
+        # the AST interpreter is the reference of every part; each other mode is checked by one part of each family
+        addPartCase(1, "the parts check every execution mode", \testPartsCoverModes());
+        addPartCase(1, familyName(0) + ": ir and the executable", \testParity(), (0, ("ir",), False, True));
+        addPartCase(2, familyName(0) + ": jit", \testParity(), (0, ("jit",), False, False));
+        addPartCase(3, familyName(0) + ": tiered", \testParity(), (0, ("tiered",), False, False));
+        addPartCase(4, familyName(0) + ": the default mode", \testParity(), (0, (), True, False));
+        addPartCase(5, familyName(1) + ": ir and the executable", \testParity(), (1, ("ir",), False, True));
+        addPartCase(6, familyName(1) + ": jit", \testParity(), (1, ("jit",), False, False));
+        addPartCase(7, familyName(1) + ": tiered", \testParity(), (1, ("tiered",), False, False));
+        addPartCase(8, familyName(1) + ": the default mode", \testParity(), (1, (), True, False));
+        addPartCase(9, familyName(2) + ": ir and the executable", \testParity(), (2, ("ir",), False, True));
+        addPartCase(10, familyName(2) + ": jit", \testParity(), (2, ("jit",), False, False));
+        addPartCase(11, familyName(2) + ": tiered", \testParity(), (2, ("tiered",), False, False));
+        addPartCase(12, familyName(2) + ": the default mode", \testParity(), (2, (), True, False));
+        addPartCase(13, familyName(3) + ": ir and the executable", \testParity(), (3, ("ir",), False, True));
+        addPartCase(14, familyName(3) + ": jit", \testParity(), (3, ("jit",), False, False));
+        addPartCase(15, familyName(3) + ": tiered", \testParity(), (3, ("tiered",), False, False));
+        addPartCase(16, familyName(3) + ": the default mode", \testParity(), (3, (), True, False));
+        addPartCase(17, familyName(4) + ": ir and the executable", \testParity(), (4, ("ir",), False, True));
+        addPartCase(18, familyName(4) + ": jit", \testParity(), (4, ("jit",), False, False));
+        addPartCase(19, familyName(4) + ": tiered", \testParity(), (4, ("tiered",), False, False));
+        addPartCase(20, familyName(4) + ": the default mode", \testParity(), (4, (), True, False));
+        addPartCase(21, familyName(5) + ": ir and the executable", \testParity(), (5, ("ir",), False, True));
+        addPartCase(22, familyName(5) + ": jit", \testParity(), (5, ("jit",), False, False));
+        addPartCase(23, familyName(5) + ": tiered", \testParity(), (5, ("tiered",), False, False));
+        addPartCase(24, familyName(5) + ": the default mode", \testParity(), (5, (), True, False));
+        addPartCase(25, familyName(6) + ": ir and the executable", \testParity(), (6, ("ir",), False, True));
+        addPartCase(26, familyName(6) + ": jit", \testParity(), (6, ("jit",), False, False));
+        addPartCase(27, familyName(6) + ": tiered", \testParity(), (6, ("tiered",), False, False));
+        addPartCase(28, familyName(6) + ": the default mode", \testParity(), (6, (), True, False));
 
         set_return_value(main());
     }
 
-    testParity() {
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
+    }
+
+    #! returns the name of an operator family, for the names of the cases
+    private static string familyName(int family) {
+        return OperatorFamilies[family].join(" ");
+    }
+
+    #! checks that the modes that the parts run are the execution modes of the harness (but ast, the reference)
+    testPartsCoverModes() {
+        assertEq(sort(ExecModeHarness::ExecModes), sort(("ast", "ir", "jit", "tiered")),
+            "the execution modes that the parts check: update the parts when the harness has another mode");
+    }
+
+    #! runs the program of an operator family in the modes given (and in the default mode, and as a qcc-compiled
+    #! executable) and checks the output against the AST interpreter's
+    testParity(int family, list<string> modes, bool default_mode, bool executable) {
+        Operators = OperatorFamilies[family];
         TmpDir tmp("qore-compound-ast-parity-");
         string file = tmp.path + DirSep + "parity.q";
         int combinations = writeProgram(file);
@@ -120,22 +176,23 @@ class CompoundAssignmentAstParityBase inherits QUnit::Test {
         assertEq(combinations, (select expected, $1 =~ /^rt /).size(), "runtime combinations");
         assertTrue((select expected, $1 =~ /^lit /).size() > 50, "literal statements");
 
-        foreach string mode in (ExecModeHarness::ExecModes) {
-            if (mode == "ast") {
-                continue;
-            }
+        foreach string mode in (modes) {
             compare(mode, expected, runMode(mode, file));
         }
 
-        # the default execution mode
-        compare("default", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s",
-            libqore_dir, libqore_dir, qore_bin, file)).split("\n"));
+        if (default_mode) {
+            # the default execution mode
+            compare("default", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s %s", libqore_dir, libqore_dir, qore_bin, file)).split("\n"));
+        }
 
-        string exe = tmp.path + DirSep + "parity";
-        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
-        assertTrue(is_file(exe), "compiled the executable: " + out);
-        compare("executable", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
-            "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)).split("\n"));
+        if (executable) {
+            string exe = tmp.path + DirSep + "parity";
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
+            assertTrue(is_file(exe), "compiled the executable: " + out);
+            compare("executable", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)).split("\n"));
+        }
     }
 
     #! compares the lines of a mode with the AST lines, reporting the first differences
