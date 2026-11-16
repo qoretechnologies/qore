@@ -11123,7 +11123,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
     // enum value, which does not own the string node of its member's base value, whose reference count does not show
     // the enum values that share it (see qore_enum_value_copy_for_write()); a string is never held opaquely
     QoreStringNode* left_node = left.isPlainPointer() ? left.get<QoreStringNode>() : nullptr;
-    QoreStringNode* right_node = right.isShortString() ? nullptr : right.get<QoreStringNode>();
+    // the base value of an enum value on the right is its member's, which holds a reference of its own (qore#6254)
+    QoreStringNode* right_node = right.isShortString() || right.isEnum() ? nullptr : right.get<QoreStringNode>();
     if (left_node && left_node != right_node && left_node->reference_count() == 1) {
         left_node->concat(*right_string, xsink);
         if (xsink && *xsink) {
@@ -11178,7 +11179,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
     // enum value, which does not own the string node of its member's base value, whose reference count does not show
     // the enum values that share it (see qore_enum_value_copy_for_write()); a string is never held opaquely
     QoreStringNode* left_node = left.isPlainPointer() ? left.get<QoreStringNode>() : nullptr;
-    QoreStringNode* right_node = right.isShortString() ? nullptr : right.get<QoreStringNode>();
+    // the base value of an enum value on the right is its member's, which holds a reference of its own (qore#6254)
+    QoreStringNode* right_node = right.isShortString() || right.isEnum() ? nullptr : right.get<QoreStringNode>();
     if (left_node && left_node != right_node && left_node->reference_count() == 1) {
         left_node->concat(*right_string, xsink);
         return xsink && *xsink ? toBits(QoreValue()) : left_bits;
@@ -11214,7 +11216,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_in_place(
     }
 
     QoreStringNode* left_string = left.get<QoreStringNode>();
-    QoreStringNode* right_node = right.isShortString() ? nullptr : right.get<QoreStringNode>();
+    // the base value of an enum value on the right is its member's, which holds a reference of its own (qore#6254)
+    QoreStringNode* right_node = right.isShortString() || right.isEnum() ? nullptr : right.get<QoreStringNode>();
     QoreStringValueHelper right_string(right);
     if (left_string == right_node) {
         ReferenceHolder<QoreStringNode> right_copy(new QoreStringNode(*right_string), xsink);
@@ -11277,6 +11280,10 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
     if (direct) {
         for (int i = 0; i < nargs; ++i) {
             QoreValue value = fromBits(args[i]);
+            // the value of a string enum is its member, whose base value is the string (qore#6254)
+            if (value.isEnum()) {
+                value = value.getEnumBaseValue();
+            }
             const QoreEncoding* current;
             if (value.isShortString()) {
                 current = QCS_DEFAULT;
@@ -11325,6 +11332,10 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_search(
         same_encoding = nargs > 0;
         for (int i = 0; i < nargs; ++i) {
             QoreValue value = fromBits(args[i]);
+            // the value of a string enum is its member, whose base value is the string (qore#6254)
+            if (value.isEnum()) {
+                value = value.getEnumBaseValue();
+            }
             const QoreEncoding* current;
             if (value.isShortString()) {
                 current = QCS_DEFAULT;
@@ -23330,6 +23341,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_empty_noguard(uint64_t val_b
     if (v.isShortString()) {
         return toBits(QoreValue(v.shortStringLen() == 0));
     }
+    // the value of a string enum is its member, whose base value is the string (a value typed string is one in a hash
+    // value or a hashdecl member, qore#6254)
+    if (v.isEnum()) {
+        return qore_rt_pseudo_string_empty_noguard(toBits(v.getEnumBaseValue()));
+    }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
         return toBits(QoreValue(!str || str->empty()));
@@ -23343,6 +23359,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_val_noguard(uint64_t val_bit
     if (v.isShortString()) {
         return toBits(QoreValue(v.shortStringLen() != 0));
     }
+    // the value of a string enum is its member, whose base value is the string (a value typed string is one in a hash
+    // value or a hashdecl member, qore#6254)
+    if (v.isEnum()) {
+        return qore_rt_pseudo_string_val_noguard(toBits(v.getEnumBaseValue()));
+    }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
         return toBits(QoreValue(str && !str->empty()));
@@ -23350,16 +23371,29 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_val_noguard(uint64_t val_bit
     return qore_rt_pseudo_val(val_bits);
 }
 
+static int64_t qore_rt_pseudo_string_size_enum(QoreValue v);
+
 static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_size_native_impl(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
     if (v.isShortString()) {
         return static_cast<int64_t>(v.shortStringLen());
+    }
+    // the value of a string enum is its member, whose base value is the string (a value typed string is one in a hash
+    // value or a hashdecl member, qore#6254)
+    if (v.isEnum()) {
+        return qore_rt_pseudo_string_size_enum(v);
     }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
         return static_cast<int64_t>(str ? str->strlen() : 0);
     }
     return fromBits(qore_rt_pseudo_size(val_bits)).getAsBigInt();
+}
+
+//! returns the size of the base value of a string enum value (out of line: the inline size helper calls itself)
+static int64_t qore_rt_pseudo_string_size_enum(QoreValue v) {
+    assert(v.isEnum());
+    return qore_rt_pseudo_string_size_native_impl(toBits(v.getEnumBaseValue()));
 }
 
 //! Native scalar <string>::size()/strlen() for bases proven to be assigned strings.
@@ -23397,16 +23431,29 @@ static size_t qore_short_string_utf8_length(QoreValue v) {
     return len;
 }
 
+static int64_t qore_rt_pseudo_string_length_enum(QoreValue v);
+
 static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_length_native_impl(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
     if (v.isShortString()) {
         return static_cast<int64_t>(qore_short_string_utf8_length(v));
+    }
+    // the value of a string enum is its member, whose base value is the string (see
+    // qore_rt_pseudo_string_size_native_impl(), qore#6254)
+    if (v.isEnum()) {
+        return qore_rt_pseudo_string_length_enum(v);
     }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
         return static_cast<int64_t>(str ? str->length() : 0);
     }
     return fromBits(qore_rt_pseudo_length(val_bits)).getAsBigInt();
+}
+
+//! returns the length of the base value of a string enum value (out of line: the inline length helper calls itself)
+static int64_t qore_rt_pseudo_string_length_enum(QoreValue v) {
+    assert(v.isEnum());
+    return qore_rt_pseudo_string_length_native_impl(toBits(v.getEnumBaseValue()));
 }
 
 //! Native scalar <string>::length() for bases proven to be assigned strings.

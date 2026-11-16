@@ -7462,7 +7462,8 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                     break;
                 }
                 AOTStringExpressionNodeInfo node;
-                if (QoreTypeInfo::isType(ti, NT_STRING)) {
+                // a value of a string enum type is the enum's member, not a string (qore#6254)
+                if (QoreTypeInfo::isType(ti, NT_STRING) && !QoreTypeInfo::getReturnEnum(ti)) {
                     node.kind = AOTStringExpressionNodeKind::StringParam;
                 } else if (QoreTypeInfo::isType(ti, NT_INT)) {
                     node.kind = AOTStringExpressionNodeKind::IntParam;
@@ -10337,7 +10338,9 @@ static bool qore_aot_get_composed_int(const QoreIRFunction& func,
             return false;
         }
         const QoreTypeInfo* type = param->second->getTypeInfo();
-        if (QoreTypeInfo::isListType(type) || QoreTypeInfo::isType(type, NT_STRING)) {
+        // a value of a string enum type is the enum's member, not a string (qore#6254)
+        if (QoreTypeInfo::isListType(type)
+                || (QoreTypeInfo::isType(type, NT_STRING) && !QoreTypeInfo::getReturnEnum(type))) {
             if (base_param >= 0) {
                 return false;
             }
@@ -11345,7 +11348,8 @@ static bool qore_aot_collect_int_expression_summaries(
                 }
             } else if (QoreTypeInfo::getBaseType(type) == NT_LIST) {
                 param_info.boxed_kind = BoxedSourceParamKind::List;
-            } else if (QoreTypeInfo::getBaseType(type) == NT_STRING) {
+            } else if (QoreTypeInfo::getBaseType(type) == NT_STRING && !QoreTypeInfo::getReturnEnum(type)) {
+                // a value of a string enum type is the enum's member, not a string (qore#6254)
                 param_info.boxed_kind = BoxedSourceParamKind::String;
             } else if (QoreTypeInfo::getBaseType(type) == NT_HASH) {
                 param_info.boxed_kind =
@@ -13484,7 +13488,8 @@ bool qore_ir_resolve_batch_function_summaries(
                         type, NT_NOTHING)) {
                 return BatchCalleeBoxedReturnKind::Unknown;
             }
-            if (QoreTypeInfo::isType(type, NT_STRING)) {
+            // a value of a string enum type is the enum's member, not a string (qore#6254)
+            if (QoreTypeInfo::isType(type, NT_STRING) && !QoreTypeInfo::getReturnEnum(type)) {
                 return BatchCalleeBoxedReturnKind::String;
             }
             if (QoreTypeInfo::isType(type, NT_LIST)) {
@@ -13502,7 +13507,7 @@ bool qore_ir_resolve_batch_function_summaries(
             if (QoreTypeInfo::isType(type, NT_OBJECT)) {
                 return BatchCalleeBoxedReturnKind::Object;
             }
-            if (QoreTypeInfo::isType(type, NT_NUMBER)) {
+            if (QoreTypeInfo::isType(type, NT_NUMBER) && !QoreTypeInfo::getReturnEnum(type)) {
                 return BatchCalleeBoxedReturnKind::Number;
             }
             return BatchCalleeBoxedReturnKind::Unknown;
@@ -13637,7 +13642,8 @@ bool qore_ir_resolve_batch_function_summaries(
                         BatchCalleeBoxedReturnKind return_kind =
                             BatchCalleeBoxedReturnKind::Unknown;
                         if (QoreTypeInfo::isType(
-                                facts->type_info, NT_STRING)) {
+                                facts->type_info, NT_STRING)
+                                && !QoreTypeInfo::getReturnEnum(facts->type_info)) {
                             return_kind =
                                 BatchCalleeBoxedReturnKind::String;
                         } else if (QoreTypeInfo::isType(
@@ -13658,7 +13664,8 @@ bool qore_ir_resolve_batch_function_summaries(
                             return_kind =
                                 BatchCalleeBoxedReturnKind::Object;
                         } else if (QoreTypeInfo::isType(
-                                facts->type_info, NT_NUMBER)) {
+                                facts->type_info, NT_NUMBER)
+                                && !QoreTypeInfo::getReturnEnum(facts->type_info)) {
                             return_kind =
                                 BatchCalleeBoxedReturnKind::Number;
                         }

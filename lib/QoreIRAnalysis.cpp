@@ -15608,7 +15608,9 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
             : exact_type == dateTypeInfo ? NT_DATE
             : exact_type == objectTypeInfo ? NT_OBJECT
             : exact_type == numberTypeInfo ? NT_NUMBER : NT_ALL;
-        return kind != NT_ALL && QoreTypeInfo::isType(declared, kind);
+        // the value of an enum type is the enum's member (a TAG_ENUM value), not a value of its base type, which
+        // QoreTypeInfo::isType() gives for it (qore#6254)
+        return kind != NT_ALL && QoreTypeInfo::isType(declared, kind) && !QoreTypeInfo::getReturnEnum(declared);
     };
     auto exact_local_type = [&](const LocalVar* local)
             -> const QoreTypeInfo* {

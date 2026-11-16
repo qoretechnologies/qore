@@ -1487,6 +1487,14 @@ bool qore_ir_return_value_needs_conversion(
             value_type = nonoptional_value_type;
         }
     }
+    // the value of an enum type is the enum's member: a type that is not the enum's own type converts it to the
+    // enum's base type (string sub f(ES e) { return e; } returns a string), although the enum's type spec matches its
+    // base type without a filter (qore#6254)
+    if (const QoreEnumDecl* value_enum = QoreTypeInfo::getReturnEnum(value_type)) {
+        if (value_enum != QoreTypeInfo::getReturnEnum(return_type)) {
+            return true;
+        }
+    }
 
     bool may_not_match = false;
     bool may_need_filter = false;
