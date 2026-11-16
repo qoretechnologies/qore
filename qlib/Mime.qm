@@ -1381,6 +1381,12 @@ public namespace Mime {
             str = replace(str, "_", " ");
         }
 
+        # the bytes are counted for tests (issue #6139): the copies and replacements above, the copy returned, and
+        # each search, piece and code below
+        if (scan_counting) {
+            MimeScanCounter::bytes += 5 * str.size();
+        }
+
         int i = str.find("=");
         if (i == -1) {
             return force_encoding(str, encoding);
@@ -1392,6 +1398,10 @@ public namespace Mime {
         # the offset of the text that is not decoded yet
         int start = 0;
         while (True) {
+            if (scan_counting) {
+                # the search for the code and the text before it
+                MimeScanCounter::bytes += 2 * (i - start) + 3;
+            }
             if (i > start) {
                 rv += str.substr(start, i - start);
             }
@@ -1413,6 +1423,10 @@ public namespace Mime {
             if (i == -1) {
                 if (start < str.size()) {
                     rv += str.substr(start);
+                }
+                if (scan_counting) {
+                    # the search to the end, the rest, and the decoded text joined
+                    MimeScanCounter::bytes += 2 * (str.size() - start) + str.size();
                 }
                 break;
             }
@@ -1509,6 +1523,10 @@ public namespace Mime {
         before every encoded word after the first, and an encoded word was decoded wherever the same word appeared
     */
     public string sub mime_decode_header(string hdr) {
+        # the bytes are counted for tests (issue #6139): each match, copy and decoding
+        if (scan_counting) {
+            MimeScanCounter::bytes += hdr.size();
+        }
         # one match converts the text to UTF-8 and checks it, and finds out if there is an encoded word at all
         if (hdr !~ /=\?[^?]+\?(Q|B)\?[^?]+\?=/is) {
             return "" + hdr;
@@ -1519,6 +1537,10 @@ public namespace Mime {
         # match continues after the last group that it captures), and the last one the text after the last word, if
         # any
         *list<*string> l = (hdr =~ x/(.*?)(?:=\?([^?]+)\?([QqBb])\?([^?]+)(\?=)|\z)/gs);
+        if (scan_counting) {
+            # the match, the text captured, and the decoded text joined
+            MimeScanCounter::bytes += 3 * hdr.size();
+        }
         # the pieces of the decoded text, which are joined at the end, as appending to a string can copy it
         list<string> rv = ();
         # True if the text decoded last was an encoded word, so that white space before the next one is dropped
@@ -1530,6 +1552,10 @@ public namespace Mime {
                 # the text after the last word
                 rv += pre;
                 break;
+            }
+            if (scan_counting) {
+                # the match of the text before the word, and the decoding of the word
+                MimeScanCounter::bytes += pre.size() + l[i + 3].size();
             }
             # the text before the word; white space between two encoded words is dropped
             if (!pre.empty() && (!after_word || pre !~ /^[ \t\r\n]*$/)) {
@@ -1978,6 +2004,43 @@ hash<MimeHeaderValueInfo> h = mime_parse_header_value("attachment; filename=\"a 
         # the length of the part in bytes
         int len;
     }
+
+    #! @cond nodoc
+    #! internal: counts the bytes that the parsers of this module and of the MailMessage module scan or copy
+    /** For tests only: tests check that the work grows linearly with the size of the input by counting it instead
+        of timing it (issue #6139).  When \c on is @ref True "True", a parser adds the number of bytes of each
+        operation that takes time proportional to its size (a search, a copy, a conversion, a regular expression
+        match) to \c bytes; such an operation that is repeated for each line, encoded word or code of an input on
+        the rest of the input makes the count grow with the square of the input size.  Counting is off by default,
+        and then each place that counts only checks \c on.
+    */
+    # True if the bytes are counted (see MimeScanCounter); a module variable, which is faster to read than a static
+    # class member
+    our *bool scan_counting;
+
+    public class MimeScanCounter {
+        public {
+            #! True if the bytes are counted
+            static bool on = False;
+            #! the number of bytes counted
+            static int bytes = 0;
+        }
+
+        #! turns counting on and resets the count
+        static start() {
+            MimeScanCounter::bytes = 0;
+            MimeScanCounter::on = True;
+            scan_counting = True;
+        }
+
+        #! turns counting off and returns the count
+        static int stop() {
+            MimeScanCounter::on = False;
+            scan_counting = False;
+            return MimeScanCounter::bytes;
+        }
+    }
+    #! @endcond
 
     #! MultiPartMessage class implementation
     public class MultiPartMessage {
