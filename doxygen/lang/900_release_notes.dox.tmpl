@@ -1913,6 +1913,10 @@
       (issue #6253)
     - the initializer of a class static variable runs with the parse options of its declaration; it ran with those of
       the code that triggered it, such as a script with other options that parses the declaring code (issue #6273)
+    - reading a character of a UTF-8 string by its offset with the @ref list_element_operator "[] operator" took time
+      linear in the offset, so a loop over the characters of a string was quadratic; a character in the ASCII text at
+      the start of a string is found in constant time, and @ref <string>::length() "<string>::length()" of ASCII text
+      is computed once (issue #6138)
     - the negative of an absolute date with microseconds (ex: <tt>-1970-01-01T00:00:01.5Z</tt>) is
       \c 1969-12-31T23:59:58.5Z; the microseconds were negated as an unsigned value and gave another date (issue #6103)
     - the decimal fraction of an ISO 8601 duration component (ex: \c P0.0000001Y for

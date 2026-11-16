@@ -569,6 +569,9 @@ public:
     DLLEXPORT bool endsWith(const QoreString& str) const;
 
     //! terminates the string at byte position "size", the string is reallocated if necessary
+    /** The bytes before \a size are the content of the string after the call, including bytes written to its buffer
+        before the call (ex: after reserve())
+    */
     DLLEXPORT void terminate(size_t size);
 
     //! ensures that at least the given size is available in the string; the string's contents are not affected

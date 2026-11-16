@@ -236,6 +236,7 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     Retrieves given list element(s), given character(s) of a string, the integer value of a byte for a binary object or a binary object composed of given bytes, or a typed element from a buffer.
     If the index value is neither a list nor an integer it is converted to an integer. If the index is an integer and out of range, @ref nothing is returned.
     If the index is a list and completely out of range, empty list/string/binary is returned. A single integer index on a string returns a @ref char value; string ranges and list indexes return strings.
+    A character of a string in a single-byte @ref character_encoding "character encoding" is found in constant time; in UTF-8, a character in the ASCII text at the start of the string is also found in constant time (the string remembers the length of that text, so a loop over the characters of an ASCII string is linear), and a character after that text in time linear in its distance from the end of that text; in other multi-byte encodings, a character is found in time linear in its offset.
     With @ref negative-offsets "%negative-offsets" (implied by @ref modern "%modern"), negative list, string, binary, and buffer indexes and range endpoints are interpreted from the end of the value, so \c value[-1] is the last element and \c value[-2..] is the last two elements.
     Note that this operator is not supported with multiple values and/or ranges between the square brackets on the left-hand side of an assignment expression.
 

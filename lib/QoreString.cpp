@@ -1458,6 +1458,7 @@ int qore_string_private::trimLeading(ExceptionSink* xsink, const intvec_t& cvec)
 
     memmove(ownedBuffer(), ownedBuffer() + i, len + 1 - i);
     len -= i;
+    resetOwnedAsciiPrefix();
     return 0;
 }
 
@@ -1487,7 +1488,7 @@ int qore_string_private::trimTrailing(ExceptionSink* xsink, const intvec_t& cvec
         materialize();
     }
     // get length of string in characters
-    size_t i = getEncoding()->getLength(ownedBuffer(), ownedBuffer() + len, xsink);
+    size_t i = getLengthFrom(ownedBuffer(), 0, xsink);
     if (*xsink)
         return -1;
     assert(i);
@@ -1495,7 +1496,7 @@ int qore_string_private::trimTrailing(ExceptionSink* xsink, const intvec_t& cvec
     while (i) {
         --i;
         // get byte offset for the last character
-        size_t bpos = getEncoding()->getByteLen(ownedBuffer(), ownedBuffer() + len, i, xsink);
+        size_t bpos = getByteLenFrom(ownedBuffer(), 0, i, xsink);
         if (*xsink)
             return -1;
         unsigned clen;
@@ -1506,7 +1507,10 @@ int qore_string_private::trimTrailing(ExceptionSink* xsink, const intvec_t& cvec
         // see if the character is in the character vector
         if (c && !inVector(c, cvec))
             break;
-        terminate(bpos);
+        // the bytes before the new end do not change, so the ASCII prefix is only lowered
+        len = bpos;
+        ownedBuffer()[bpos] = '\0';
+        lowerOwnedAsciiPrefix(bpos);
     }
 
     return 0;
@@ -1533,6 +1537,9 @@ void qore_string_private::terminate(size_t size) {
         check_char(size);
     len = size;
     ownedBuffer()[size] = '\0';
+    // callers can write the bytes through the buffer pointer before they set the length (ex: reserve(),
+    // getBuffer() and terminate()), so no byte is known to be ASCII
+    resetOwnedAsciiPrefix();
 }
 
 int qore_string_private::substr_simple(QoreString* ns, qore_offset_t offset, qore_offset_t length) const {
@@ -1590,9 +1597,8 @@ int qore_string_private::substr_complex(QoreString* ns, qore_offset_t offset, qo
     printd(5, "qore_string_private::substr_complex(offset=" QLLD ", length=" QLLD ") string=\"%s\" (this=%p len="
         QLLD ")\n", (int64)offset, (int64)length, data, this, (int64)len);
 
-    const char* pend = data + len;
     if (offset < 0) {
-        int clength = getEncoding()->getLength(data, pend, xsink);
+        int clength = getLengthFrom(data, 0, xsink);
         if (*xsink)
             return -1;
 
@@ -1602,7 +1608,7 @@ int qore_string_private::substr_complex(QoreString* ns, qore_offset_t offset, qo
             return -1;
     }
 
-    size_t start = getEncoding()->getByteLen(data, pend, offset, xsink);
+    size_t start = getByteLenFrom(data, 0, offset, xsink);
     if (*xsink)
         return -1;
 
@@ -1610,14 +1616,14 @@ int qore_string_private::substr_complex(QoreString* ns, qore_offset_t offset, qo
         return -1;
 
     if (length < 0) {
-        length = getEncoding()->getLength(data + start, pend, xsink) + length;
+        length = getLengthFrom(data, start, xsink) + length;
         if (*xsink)
             return -1;
 
         if (length < 0)
             length = 0;
     }
-    size_t end = getEncoding()->getByteLen(data + start, pend, length, xsink);
+    size_t end = getByteLenFrom(data, start, length, xsink);
     if (*xsink)
         return -1;
 
@@ -1629,9 +1635,8 @@ int qore_string_private::substr_complex(QoreString* ns, qore_offset_t offset, Ex
     const char* data = effective_buf();
     assert(xsink);
     //printd(5, "qore_string_private::substr_complex(offset=" QSD ") string=\"%s\" (this=%p len=" QSD ")\n", offset, data, this, len);
-    const char* pend = data + len;
     if (offset < 0) {
-        size_t clength = getEncoding()->getLength(data, pend, xsink);
+        size_t clength = getLengthFrom(data, 0, xsink);
         if (*xsink)
             return -1;
 
@@ -1643,7 +1648,7 @@ int qore_string_private::substr_complex(QoreString* ns, qore_offset_t offset, Ex
         }
     }
 
-    size_t start = getEncoding()->getByteLen(data, pend, offset, xsink);
+    size_t start = getByteLenFrom(data, 0, offset, xsink);
     if (*xsink)
         return -1;
 
@@ -1662,6 +1667,8 @@ void qore_string_private::splice_simple(size_t offset, size_t num, QoreString* e
     mutableBuffer();
     // the callers give an offset within the string; see QoreString::replace()
     assert(offset <= len);
+    // the bytes before the offset do not change
+    lowerOwnedAsciiPrefix(offset);
     //printd(5, "splice_intern(offset=" QSD ", num=" QSD ", len=" QSD ")\n", offset, num, len);
     size_t end;
     if (num > (len - offset)) {
@@ -1692,6 +1699,8 @@ void qore_string_private::splice_simple(size_t offset, size_t num, const char* s
     mutableBuffer();
     // the callers give an offset within the string; see QoreString::replace()
     assert(offset <= len);
+    // the bytes before the offset do not change
+    lowerOwnedAsciiPrefix(offset);
     //printd(5, "splice_intern(offset=" QSD ", num=" QSD ", len=" QSD ")\n", offset, num, len);
 
     size_t end;
@@ -1837,7 +1846,7 @@ void qore_string_private::splice_complex(qore_offset_t offset, ExceptionSink* xs
     mutableBuffer();
     assert(xsink);
     // get length in chars
-    size_t clen = getEncoding()->getLength(ownedBuffer(), ownedBuffer() + len, xsink);
+    size_t clen = getLengthFrom(ownedBuffer(), 0, xsink);
     if (*xsink)
         return;
 
@@ -1850,7 +1859,7 @@ void qore_string_private::splice_complex(qore_offset_t offset, ExceptionSink* xs
         return;
 
     // calculate byte offset
-    size_t n_offset = offset ? getEncoding()->getByteLen(ownedBuffer(), ownedBuffer() + len, offset, xsink) : 0;
+    size_t n_offset = offset ? getByteLenFrom(ownedBuffer(), 0, offset, xsink) : 0;
     if (*xsink)
         return;
 
@@ -1861,6 +1870,7 @@ void qore_string_private::splice_complex(qore_offset_t offset, ExceptionSink* xs
     // truncate string at offset
     len = n_offset;
     ownedBuffer()[len] = '\0';
+    lowerOwnedAsciiPrefix(n_offset);
 }
 
 void qore_string_private::splice_complex(qore_offset_t offset, qore_offset_t num, ExceptionSink* xsink,
@@ -1870,7 +1880,7 @@ void qore_string_private::splice_complex(qore_offset_t offset, qore_offset_t num
     //printd(5, "splice_complex(offset=" QSD ", num=" QSD ", len=" QSD ")\n", offset, num, len);
 
     // get length in chars
-    size_t clen = getEncoding()->getLength(ownedBuffer(), ownedBuffer() + len, xsink);
+    size_t clen = getLengthFrom(ownedBuffer(), 0, xsink);
     if (*xsink)
         return;
 
@@ -1895,17 +1905,20 @@ void qore_string_private::splice_complex(qore_offset_t offset, qore_offset_t num
         end = offset + num;
 
     // get character positions
-    offset = getEncoding()->getByteLen(ownedBuffer(), ownedBuffer() + len, offset, xsink);
+    offset = getByteLenFrom(ownedBuffer(), 0, offset, xsink);
     if (*xsink)
         return;
 
-    end = getEncoding()->getByteLen(ownedBuffer(), ownedBuffer() + len, end, xsink);
+    end = getByteLenFrom(ownedBuffer(), 0, end, xsink);
     if (*xsink)
         return;
 
-    num = getEncoding()->getByteLen(ownedBuffer() + offset, ownedBuffer() + len, num, xsink);
+    num = getByteLenFrom(ownedBuffer(), offset, num, xsink);
     if (*xsink)
         return;
+
+    // the bytes before the offset do not change
+    lowerOwnedAsciiPrefix(offset);
 
     // add to extract string if any
     if (extract && num)
@@ -1927,7 +1940,7 @@ void qore_string_private::splice_complex(qore_offset_t offset, qore_offset_t num
     mutableBuffer();
     assert(xsink);
     // get length in chars
-    size_t clen = getEncoding()->getLength(ownedBuffer(), ownedBuffer() + len, xsink);
+    size_t clen = getLengthFrom(ownedBuffer(), 0, xsink);
     if (*xsink)
         return;
 
@@ -1956,18 +1969,20 @@ void qore_string_private::splice_complex(qore_offset_t offset, qore_offset_t num
         end = offset + num;
 
     // get character positions
-    char* endp = ownedBuffer() + len;
-    offset = getEncoding()->getByteLen(ownedBuffer(), endp, offset, xsink);
+    offset = getByteLenFrom(ownedBuffer(), 0, offset, xsink);
     if (*xsink)
         return;
 
-    end = getEncoding()->getByteLen(ownedBuffer(), endp, end, xsink);
+    end = getByteLenFrom(ownedBuffer(), 0, end, xsink);
     if (*xsink)
         return;
 
-    num = getEncoding()->getByteLen(ownedBuffer() + offset, endp, num, xsink);
+    num = getByteLenFrom(ownedBuffer(), offset, num, xsink);
     if (*xsink)
         return;
+
+    // the bytes before the offset do not change
+    lowerOwnedAsciiPrefix(offset);
 
     // add to extract string if any
     if (extract && num)
@@ -2548,6 +2563,7 @@ void QoreString::take(char* str) {
         priv->allocated = 0;
         priv->len = 0;
     }
+    priv->resetOwnedAsciiPrefix();
     priv->sb.sync(priv->allocated);
 }
 
@@ -2567,6 +2583,7 @@ void QoreString::take(char* str, size_t size) {
     priv->ownedBuffer() = str;
     priv->len = size;
     priv->allocated = size + 1;
+    priv->resetOwnedAsciiPrefix();
     priv->sb.sync(priv->allocated);
 }
 
@@ -2580,6 +2597,7 @@ void QoreString::take(char* str, size_t size, const QoreEncoding* enc) {
     priv->ownedBuffer() = str;
     priv->len = size;
     priv->allocated = size + 1;
+    priv->resetOwnedAsciiPrefix();
     priv->sb.sync(priv->allocated);
 
     priv->encoding = enc;
@@ -2595,6 +2613,7 @@ void QoreString::takeAndTerminate(char* str, size_t size) {
     priv->ownedBuffer() = str;
     priv->len = size;
     priv->allocated = size + 1;
+    priv->resetOwnedAsciiPrefix();
     priv->sb.sync(priv->allocated);
     priv->check_char(size);
     priv->ownedBuffer()[size] = '\0';
@@ -2622,6 +2641,7 @@ char* QoreString::giveBuffer() {
     priv->ownedBuffer() = 0;
     priv->len = 0;
     priv->allocated = 0;
+    priv->resetOwnedAsciiPrefix();
     // reset character set, just in case the string will be reused
     // (normally not after this call)
     priv->encoding = QCS_DEFAULT;
@@ -2648,6 +2668,7 @@ void QoreString::set(const char* str, const QoreEncoding* new_qore_encoding) {
         priv->abandon_view();
     }
     priv->len = 0;
+    priv->resetOwnedAsciiPrefix();
     priv->encoding = new_qore_encoding;
     if (!str) {
         if (priv->ownedBuffer())
@@ -2662,6 +2683,7 @@ void QoreString::set(const char* str, size_t len) {
         priv->abandon_view();
     }
     priv->len = 0;
+    priv->resetOwnedAsciiPrefix();
     if (!str) {
         if (priv->ownedBuffer()) {
             priv->ownedBuffer()[0] = '\0';
@@ -2677,6 +2699,7 @@ void QoreString::set(const QoreString* str) {
         priv->abandon_view();
     }
     priv->len = str->priv->len;
+    priv->resetOwnedAsciiPrefix();
     priv->encoding = str->priv->getEncoding();
     allocate(str->priv->len + 1);
     // copy string and trailing null (source may be a view)
@@ -2697,6 +2720,7 @@ void QoreString::set(const std::string& str, const QoreEncoding* ne) {
         priv->abandon_view();
     }
     priv->len = str.size();
+    priv->resetOwnedAsciiPrefix();
     priv->encoding = ne;
     allocate(priv->len + 1);
     // copy string and trailing null
@@ -2715,6 +2739,7 @@ void QoreString::set(char* nbuf, size_t nlen, size_t nallocated, const QoreEncod
     priv->ownedBuffer() = nbuf;
     priv->len = nlen;
     priv->allocated = nallocated;
+    priv->resetOwnedAsciiPrefix();
     priv->sb.sync(priv->allocated);
     if (nallocated == nlen) {
         priv->check_char(nlen);
@@ -2786,6 +2811,8 @@ void QoreString::replaceChar(size_t offset, char c) {
         return;
 
     priv->mutableBuffer()[offset] = c;
+    // the bytes before the offset do not change
+    priv->lowerOwnedAsciiPrefix(offset);
 }
 
 void QoreString::splice(qore_offset_t offset, ExceptionSink* xsink) {
@@ -3453,7 +3480,7 @@ void QoreString::concat(const QoreString* str, size_t size, ExceptionSink* xsink
         // adjust size for number of characters if this is a multi-byte character set
         const char* src = cstr->priv->effective_buf();
         if (priv->getEncoding()->isMultiByte()) {
-            size = priv->getEncoding()->getByteLen(src, src + cstr->priv->len, size, xsink);
+            size = cstr->priv->getByteLenFrom(src, 0, size, xsink);
             if (*xsink)
                 return;
         } else if (size > cstr->priv->len) {
@@ -3678,7 +3705,7 @@ size_t QoreString::length() const {
     if (priv->getEncoding()->isMultiByte() && priv->len) {
         bool invalid;
         const char* b = priv->effective_buf();
-        return priv->getEncoding()->getLength(b, b + priv->len, invalid);
+        return priv->getLengthFrom(b, 0, invalid);
     }
     return priv->len;
 }
@@ -3777,7 +3804,67 @@ const char* qore_string_private::effective_buf_view_path() const {
 void qore_string_private::dec_view_parent() {
     view_parent->deref();
     view_parent = nullptr;
+    // in an owned string, view_offset is the ASCII prefix cache
     view_offset = 0;
+}
+
+#ifdef DEBUG
+thread_local int64 qore_dbg_string_scan_bytes = 0;
+std::atomic<bool> qore_dbg_ascii_prefix_disabled{false};
+#endif
+
+size_t qore_string_private::extendAsciiPrefix(const char* b, size_t prefix, size_t need) const {
+    assert(prefix < len);
+    assert(prefix < need);
+    // the scan goes past the bytes needed by up to the length of the known prefix, so a loop over the characters of a
+    // string scans each byte about once (and publishes about log n times), while the first character offset in a long
+    // string costs no more than the walk that it replaces
+    size_t end = std::max(need, prefix * 2 + 64);
+    if (end > len) {
+        end = len;
+    }
+    constexpr size_t ascii_high_bit_mask = (~static_cast<size_t>(0) / 0xff) * 0x80;
+    size_t i = prefix;
+    while (end - i >= sizeof(size_t)) {
+        size_t word;
+        memcpy(&word, b + i, sizeof(word));
+        if (word & ascii_high_bit_mask) {
+            break;
+        }
+        i += sizeof(size_t);
+    }
+    while (i < end && static_cast<unsigned char>(b[i]) < 0x80) {
+        ++i;
+    }
+    QORE_DBG_STRING_SCAN(i - prefix);
+    if (i > prefix) {
+        // the string can be shared with other threads that read it, and that publish the same value
+        std::atomic_ref<size_t>(asciiPrefixStorage()).store(i, std::memory_order_relaxed);
+    }
+    return i;
+}
+
+#ifndef NDEBUG
+void qore_string_private::checkAsciiPrefix(const char* b, size_t prefix) const {
+    assert(prefix <= len);
+    // a debug build checks the whole prefix of a short string and the ends of a long one, which keeps character
+    // offsets O(1)
+    constexpr size_t full_len = 256;
+    constexpr size_t check_len = 16;
+    size_t i = 0;
+    size_t head_end = prefix > full_len ? check_len : prefix;
+    for (; i < head_end; ++i) {
+        assert(static_cast<unsigned char>(b[i]) < 0x80);
+    }
+    for (i = prefix - (prefix - head_end > check_len ? check_len : prefix - head_end); i < prefix; ++i) {
+        assert(static_cast<unsigned char>(b[i]) < 0x80);
+    }
+}
+#endif
+
+void qore_string_private::raiseInvalidEncoding(ExceptionSink* xsink) const {
+    // the exception that QoreEncoding raises for text that is not valid in a multi-byte encoding
+    xsink->raiseException("INVALID-ENCODING", "invalid %s encoding encountered in string", getEncoding()->getCode());
 }
 
 void qore_string_private::prepareMutableBuffer() {
@@ -3794,7 +3881,8 @@ void qore_string_private::prepareMutableBuffer() {
 void qore_string_private::materialize() {
     assert(view_parent);
     assert(buffer == nullptr);
-    assert(allocated == 0);
+    // the ASCII prefix cache of the view; the bytes of the copy are the same
+    size_t ascii_prefix = allocated;
     const qore_string_private* parent = qore_string_private::get(view_parent);
     size_t new_alloc = len + STR_CLASS_EXTRA;
     new_alloc = (new_alloc / 0x10 + 1) * 0x10;
@@ -3806,13 +3894,16 @@ void qore_string_private::materialize() {
     allocated = new_alloc;
     sb.sync(allocated);
     dec_view_parent();
+    view_offset = ascii_prefix;
 }
 
 void qore_string_private::abandon_view() {
     assert(view_parent);
     assert(buffer == nullptr);
-    assert(allocated == 0);
+    // the ASCII prefix cache of the view; an owned string without storage has a capacity of 0
+    allocated = 0;
     len = 0;
+    // also resets the ASCII prefix cache of the owned string, which is view_offset
     dec_view_parent();
 }
 
@@ -3830,14 +3921,14 @@ int qore_string_private::compute_substr_range(qore_offset_t offset, size_t& byte
     }
     // multibyte: resolve offset via character count
     if (offset < 0) {
-        int clength = getEncoding()->getLength(b, b + len, xsink);
+        int clength = getLengthFrom(b, 0, xsink);
         if (xsink && *xsink)
             return -1;
         offset = clength + offset;
         if ((offset < 0) || (offset >= clength))
             return -1;
     }
-    size_t start = getEncoding()->getByteLen(b, b + len, offset, xsink);
+    size_t start = getByteLenFrom(b, 0, offset, xsink);
     if (xsink && *xsink)
         return -1;
     if (start >= len)
@@ -3870,27 +3961,27 @@ int qore_string_private::compute_substr_range(qore_offset_t offset, qore_offset_
     }
     // multibyte
     if (offset < 0) {
-        int clength = getEncoding()->getLength(b, b + len, xsink);
+        int clength = getLengthFrom(b, 0, xsink);
         if (xsink && *xsink)
             return -1;
         offset = clength + offset;
         if ((offset < 0) || (offset >= clength))
             return -1;
     }
-    size_t start = getEncoding()->getByteLen(b, b + len, offset, xsink);
+    size_t start = getByteLenFrom(b, 0, offset, xsink);
     if (xsink && *xsink)
         return -1;
     if (start >= len)
         return -1;
     if (length < 0) {
-        qore_offset_t chars_after = getEncoding()->getLength(b + start, b + len, xsink) + length;
+        qore_offset_t chars_after = getLengthFrom(b, start, xsink) + length;
         if (xsink && *xsink)
             return -1;
         if (chars_after < 0)
             chars_after = 0;
         length = chars_after;
     }
-    size_t end_bytes = getEncoding()->getByteLen(b + start, b + len, length, xsink);
+    size_t end_bytes = getByteLenFrom(b, start, length, xsink);
     if (xsink && *xsink)
         return -1;
     byte_offset = start;
@@ -3939,7 +4030,8 @@ size_t QoreString::size() const {
 }
 
 size_t QoreString::capacity() const {
-    return priv->allocated;
+    // a view has no storage of its own; its allocated field holds its ASCII prefix cache
+    return priv->view_parent ? 0 : priv->allocated;
 }
 
 const char* QoreString::getBuffer() const {
@@ -3967,6 +4059,8 @@ int QoreString::insertch(char c, size_t pos, unsigned times) {
         return -1;
 
     priv->check_char(priv->len + times); // more data will follow the padding
+    // the bytes before the position do not change
+    priv->lowerOwnedAsciiPrefix(pos);
     if (pos < priv->len)
         memmove(priv->ownedBuffer() + pos + times, priv->ownedBuffer() + pos, priv->len - pos);
     memset(priv->ownedBuffer() + pos, c, times);
@@ -3984,6 +4078,8 @@ int QoreString::insert(const char* str, size_t pos) {
     size_t sl = ::strlen(str);
 
     priv->check_char(priv->len + sl); // more data will follow the padding
+    // the bytes before the position do not change
+    priv->lowerOwnedAsciiPrefix(pos);
     if (pos < priv->len)
         memmove(priv->ownedBuffer() + pos + sl, priv->ownedBuffer() + pos, priv->len - pos);
     strncpy(priv->ownedBuffer() + pos, str, sl);
@@ -4011,8 +4107,7 @@ unsigned int QoreString::getUnicodePointFromUTF8(qore_offset_t offset) const {
     // get length in chars (source may be a view)
     bool invalid;
     const char* b = priv->effective_buf();
-    const char* endp = b + priv->len;
-    size_t clen = priv->getEncoding()->getLength(b, endp, invalid);
+    size_t clen = priv->getLengthFrom(b, 0, invalid);
     if (invalid)
         return -1;
 
@@ -4026,12 +4121,12 @@ unsigned int QoreString::getUnicodePointFromUTF8(qore_offset_t offset) const {
 
     // calculate byte offset
     if (offset) {
-        offset = priv->getEncoding()->getByteLen(b, endp, offset, invalid);
+        offset = priv->getByteLenFrom(b, 0, offset, invalid);
         if (invalid)
             return -1;
     }
 
-    size_t bl = priv->getEncoding()->getByteLen(b + offset, endp, 1, invalid);
+    size_t bl = priv->getByteLenFrom(b, offset, 1, invalid);
     if (invalid)
         return -1;
 
@@ -4049,14 +4144,14 @@ unsigned int QoreString::getUnicodePoint(qore_offset_t offset, ExceptionSink* xs
     const char* b = priv->effective_buf();
     if (offset < 0) {
         // get string length in characters
-        qore_offset_t clen = (qore_offset_t)priv->getEncoding()->getLength(b, b + priv->len, xsink);
+        qore_offset_t clen = (qore_offset_t)priv->getLengthFrom(b, 0, xsink);
         if (*xsink)
             return -1;
         offset = clen + offset;
         if (offset < 0)
             offset = 0;
     }
-    size_t bl = priv->getEncoding()->getByteLen(b, b + priv->len, offset, xsink);
+    size_t bl = priv->getByteLenFrom(b, 0, offset, xsink);
     if (*xsink)
         return -1;
 
@@ -4141,6 +4236,7 @@ void QoreString::trim_leading(char c) {
 
     memmove(priv->ownedBuffer(), priv->ownedBuffer() + i, priv->len + 1 - i);
     priv->len -= i;
+    priv->resetOwnedAsciiPrefix();
 }
 
 // remove single leading char
@@ -4153,6 +4249,7 @@ void QoreString::trim_single_leading(char c) {
         if (priv->ownedBuffer()[0] == c) {
             memmove(priv->ownedBuffer(), priv->ownedBuffer() + 1, priv->len);
             priv->len -= 1;
+            priv->resetOwnedAsciiPrefix();
         }
     }
 }
@@ -4221,6 +4318,7 @@ void QoreString::trim_leading(const char* chars) {
 
     memmove(priv->ownedBuffer(), priv->ownedBuffer() + i, priv->len + 1 - i);
     priv->len -= i;
+    priv->resetOwnedAsciiPrefix();
 }
 
 // remove leading and trailing blanks
@@ -4309,6 +4407,7 @@ void QoreString::prepend(const char* str, size_t size) {
    // copy new memory to beginning
    memcpy((char*)priv->ownedBuffer(), str, size);
    priv->len += size;
+   priv->resetOwnedAsciiPrefix();
 }
 
 qore_offset_t QoreString::index(const QoreString& needle, qore_offset_t pos, ExceptionSink* xsink) const {

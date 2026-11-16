@@ -37,6 +37,7 @@
 #include "qore/intern/QoreSandboxMemory.h"
 #include "qore/intern/qore_encoding_private.h"
 
+#include <atomic>
 #include <utility>
 #include <vector>
 
@@ -77,9 +78,27 @@ struct qore_char_boundary {
     }
 };
 
+#ifdef DEBUG
+//! the number of bytes that the character offset functions of UTF-8 strings have walked or scanned in this thread
+//! (debug builds)
+/** For tests that check that a character offset in the ASCII text at the start of a string is O(1) (issue #6138); see
+    dbg_get_string_scan_bytes(); counted per thread, so that the walks of other threads do not change a measurement
+*/
+DLLLOCAL extern thread_local int64 qore_dbg_string_scan_bytes;
+//! disables the ASCII prefix cache of UTF-8 strings: every character offset is walked from the start (debug builds)
+/** see dbg_set_ascii_prefix_cache()
+*/
+DLLLOCAL extern std::atomic<bool> qore_dbg_ascii_prefix_disabled;
+//! adds to qore_dbg_string_scan_bytes
+#define QORE_DBG_STRING_SCAN(n) (qore_dbg_string_scan_bytes += static_cast<int64>(n))
+#else
+#define QORE_DBG_STRING_SCAN(n)
+#endif
+
 struct qore_string_private {
 public:
     size_t len = 0;
+    //! the capacity of the owned buffer; in a view, the ASCII prefix cache (see asciiPrefixStorage())
     size_t allocated = 0;
 private:
     char* buffer = nullptr;
@@ -89,11 +108,13 @@ public:
 
     // View support: when `view_parent` is non-null, this string is a read-only
     // view onto `view_parent`'s buffer starting at byte `view_offset`. The `len`
-    // field is still authoritative for the view's byte length; `buffer` and
-    // `allocated` are unused in the view state (set to nullptr/0). On any
+    // field is still authoritative for the view's byte length; `buffer` is
+    // unused in the view state (nullptr), and `allocated` holds the ASCII prefix
+    // cache instead of a capacity (see asciiPrefixStorage()). On any
     // mutation the view is materialised (bytes copied out, parent deref'd,
-    // view_parent/view_offset cleared) before writing.
+    // view_parent cleared) before writing.
     QoreStringNode* view_parent = nullptr;
+    //! the offset of a view in its parent; in a string that owns its storage, the ASCII prefix cache
     size_t view_offset = 0;
 
     // Back-pointer to the embedding QoreStringNode, if any.  Populated by
@@ -131,6 +152,192 @@ public:
         return buffer;
     }
 
+    // ASCII prefix cache (issue #6138)
+    //
+    // A character offset in UTF-8 is found by walking the characters before it, so indexing every character of a
+    // string costs O(n^2).  The cache holds the byte length of a known ASCII prefix of the string, under the invariant
+    // that it is not greater than len and that all bytes before it are < 0x80.  In UTF-8 such a byte is always a whole
+    // and valid character, so a character offset in the prefix is its byte offset, and a walk can start at the end of
+    // the prefix with the same result and the same validation of the bytes that follow.  The value depends only on the
+    // bytes, not on the encoding: it is used only in UTF-8 (in other multi-byte encodings, such as Shift_JIS, a byte
+    // < 0x80 can be the second byte of a character), but is kept, like the bytes, when the encoding changes.
+    //
+    // There is no field of its own, so the size of the private data is unchanged: an owned string keeps it in
+    // view_offset, a view in allocated, the field that is not used in each state.  Readers extend it (an ASCII prefix
+    // can only grow while the bytes do not change) and publish it with relaxed atomic stores, as a string that is
+    // shared read-only between threads is read concurrently; all threads compute the same value from the same bytes.
+    // A mutation only happens on a string that no other thread reads (see QORE_ASSERT_MUTABLE), and must lower or
+    // reset the cache if it changes a byte in the prefix or makes the string shorter than it; appending bytes needs
+    // nothing, so appends do no work for it.
+
+    //! Returns the storage of the ASCII prefix cache: allocated in a view, view_offset otherwise
+    DLLLOCAL size_t& asciiPrefixStorage() const {
+        return const_cast<size_t&>(view_parent ? allocated : view_offset);
+    }
+
+    //! Returns the cached ASCII prefix length
+    DLLLOCAL size_t getAsciiPrefix() const {
+        size_t prefix = std::atomic_ref<size_t>(asciiPrefixStorage()).load(std::memory_order_relaxed);
+        assert(prefix <= len);
+        return prefix;
+    }
+
+    //! Resets the ASCII prefix cache of a string that owns its storage, for a mutation that can change any byte
+    DLLLOCAL void resetOwnedAsciiPrefix() {
+        assert(!view_parent);
+        view_offset = 0;
+    }
+
+    //! Lowers the ASCII prefix cache of a string that owns its storage to at most the given byte offset
+    /** For a mutation that keeps the bytes before \a offset
+    */
+    DLLLOCAL void lowerOwnedAsciiPrefix(size_t offset) {
+        assert(!view_parent);
+        if (view_offset > offset) {
+            view_offset = offset;
+        }
+    }
+
+    //! Returns the length of an ASCII prefix of the string that is at least \a need bytes long unless the string has
+    //! a byte >= 0x80 before it or is shorter
+    /** @param b the bytes of the string: effective_buf(), or ownedBuffer() in a mutator
+
+        The result is the first offset with a byte >= 0x80, the length of the string, or a value >= \a need
+    */
+    DLLLOCAL size_t getAsciiPrefix(const char* b, size_t need) const {
+#ifdef DEBUG
+        if (qore_dbg_ascii_prefix_disabled.load(std::memory_order_relaxed)) {
+            return 0;
+        }
+#endif
+        size_t prefix = getAsciiPrefix();
+#ifndef NDEBUG
+        checkAsciiPrefix(b, prefix);
+#endif
+        if (prefix >= need || prefix == len) {
+            return prefix;
+        }
+        return extendAsciiPrefix(b, prefix, need);
+    }
+
+    //! Scans the bytes after the cached ASCII prefix and publishes the longer prefix found
+    DLLLOCAL QORE_INTERN_NOINLINE size_t extendAsciiPrefix(const char* b, size_t prefix, size_t need) const;
+
+#ifndef NDEBUG
+    //! Asserts the invariant of the ASCII prefix cache
+    /** The whole prefix is checked if it is short, its start and end otherwise, so that a debug build stays O(1) per
+        character offset
+    */
+    DLLLOCAL void checkAsciiPrefix(const char* b, size_t prefix) const;
+#endif
+
+    //! Returns the number of bytes of \a chars characters from byte offset \a start
+    /** As getEncoding()->getByteLen(b + start, b + len, chars, invalid); \a start must be the offset of a character
+
+        @param b the bytes of the string: effective_buf(), or ownedBuffer() in a mutator
+    */
+    DLLLOCAL size_t getByteLenFrom(const char* b, size_t start, size_t chars, bool& invalid) const {
+        if (getEncoding() != QCS_UTF8) {
+            return getEncoding()->getByteLen(b + start, b + len, chars, invalid);
+        }
+        assert(start <= len);
+        // the first byte that does not have to be scanned; the character count can exceed the byte count
+        size_t need = chars < len - start ? start + chars : len;
+        size_t prefix = getAsciiPrefix(b, need);
+        if (start > prefix) {
+            size_t rc = QCS_UTF8->getByteLen(b + start, b + len, chars, invalid);
+            QORE_DBG_STRING_SCAN(rc);
+            return rc;
+        }
+        // the characters from start to the end of the prefix are single bytes
+        size_t ascii = prefix - start;
+        if (chars <= ascii) {
+            invalid = false;
+            return chars;
+        }
+        size_t rc = QCS_UTF8->getByteLen(b + prefix, b + len, chars - ascii, invalid);
+        QORE_DBG_STRING_SCAN(rc);
+        return ascii + rc;
+    }
+
+    //! As getByteLenFrom(), raising an \c INVALID-ENCODING exception and returning 0 if the string is not valid
+    DLLLOCAL size_t getByteLenFrom(const char* b, size_t start, size_t chars, ExceptionSink* xsink) const {
+        if (getEncoding() != QCS_UTF8) {
+            return getEncoding()->getByteLen(b + start, b + len, chars, xsink);
+        }
+        bool invalid;
+        size_t rc = getByteLenFrom(b, start, chars, invalid);
+        if (invalid) {
+            raiseInvalidEncoding(xsink);
+            return 0;
+        }
+        return rc;
+    }
+
+    //! Returns the number of characters from byte offset \a start to the end of the string
+    /** As getEncoding()->getLength(b + start, b + len, invalid); \a start must be the offset of a character
+
+        @param b the bytes of the string: effective_buf(), or ownedBuffer() in a mutator
+    */
+    DLLLOCAL size_t getLengthFrom(const char* b, size_t start, bool& invalid) const {
+        if (getEncoding() != QCS_UTF8) {
+            return getEncoding()->getLength(b + start, b + len, invalid);
+        }
+        assert(start <= len);
+        size_t prefix = getAsciiPrefix(b, len);
+        if (start > prefix) {
+            QORE_DBG_STRING_SCAN(len - start);
+            return QCS_UTF8->getLength(b + start, b + len, invalid);
+        }
+        if (prefix == len) {
+            invalid = false;
+            return len - start;
+        }
+        QORE_DBG_STRING_SCAN(len - prefix);
+        return (prefix - start) + QCS_UTF8->getLength(b + prefix, b + len, invalid);
+    }
+
+    //! As getLengthFrom(), raising an \c INVALID-ENCODING exception and returning 0 if the string is not valid
+    DLLLOCAL size_t getLengthFrom(const char* b, size_t start, ExceptionSink* xsink) const {
+        if (getEncoding() != QCS_UTF8) {
+            return getEncoding()->getLength(b + start, b + len, xsink);
+        }
+        bool invalid;
+        size_t rc = getLengthFrom(b, start, invalid);
+        if (invalid) {
+            raiseInvalidEncoding(xsink);
+            return 0;
+        }
+        return rc;
+    }
+
+    //! Returns the character offset of byte offset \a end
+    /** As getEncoding()->getCharPos(b, b + end, xsink)
+
+        @param b the bytes of the string: effective_buf(), or ownedBuffer() in a mutator
+    */
+    DLLLOCAL size_t getCharPosTo(const char* b, size_t end, ExceptionSink* xsink) const {
+        if (getEncoding() != QCS_UTF8) {
+            return getEncoding()->getCharPos(b, b + end, xsink);
+        }
+        assert(end <= len);
+        size_t prefix = getAsciiPrefix(b, end);
+        if (end <= prefix) {
+            return end;
+        }
+        bool invalid;
+        QORE_DBG_STRING_SCAN(end - prefix);
+        size_t rc = QCS_UTF8->getCharPos(b + prefix, b + end, invalid);
+        if (invalid) {
+            raiseInvalidEncoding(xsink);
+            return 0;
+        }
+        return prefix + rc;
+    }
+
+    //! Raises the exception that QoreEncoding raises for text that is not valid in the encoding of the string
+    DLLLOCAL void raiseInvalidEncoding(ExceptionSink* xsink) const;
+
     DLLLOCAL qore_string_private() {
     }
 
@@ -167,7 +374,9 @@ public:
     // Out-of-line slow path for views. Guaranteed to return a null-terminated
     // buffer: end-slice views return parent buffer + offset (terminator is the
     // parent's own); mid-slice views materialise lazily and return the owned buffer.
-    DLLLOCAL const char* effective_buf_view_path() const;
+    // Never inlined: the view path is cold, and a reader that inlines it needs a register for view_parent on its
+    // hot path for strings that are not views as well.
+    DLLLOCAL QORE_INTERN_NOINLINE const char* effective_buf_view_path() const;
 
     // Drops the strong reference held on view_parent. Out-of-line because
     // QoreStringNode::deref() is a complete-type call.
@@ -584,6 +793,7 @@ public:
         memmove(ownedBuffer(), ownedBuffer() + prefix.size(), len - prefix.size());
         len -= prefix.size();
         ownedBuffer()[len] = '\0';
+        resetOwnedAsciiPrefix();
     }
 
     //! returns true if the string contains the given text, which must be in the encoding of the string
@@ -637,6 +847,8 @@ public:
         std::swap(ownedBuffer(), other.ownedBuffer());
         std::swap(len, other.len);
         std::swap(allocated, other.allocated);
+        // the ASCII prefix caches of owned strings go with their bytes
+        std::swap(view_offset, other.view_offset);
         sb.swap(other.sb);
     }
 
@@ -654,7 +866,7 @@ public:
             return 0;
         }
         const char* b = effective_buf();
-        clen = getEncoding()->getLength(b, b + len, xsink);
+        clen = getLengthFrom(b, 0, xsink);
         return *xsink ? -1 : 0;
     }
 
@@ -706,7 +918,7 @@ public:
         qore_offset_t ind = index_simple(b + pos, len - pos, needle->c_str(), needle->size(), 0,
             getCharAlignment(), pos);
         if (ind != -1) {
-            ind = getEncoding()->getCharPos(b, b + pos + ind, xsink);
+            ind = getCharPosTo(b, pos + ind, xsink);
             if (*xsink)
                 return -1;
         }
@@ -786,7 +998,7 @@ public:
         // get positive character offset if negative
         if (pos < 0) {
             // get the length of the string in characters
-            size_t clen = getEncoding()->getLength(b + start, b + len, xsink);
+            size_t clen = getLengthFrom(b, start, xsink);
             if (*xsink)
                 return -1;
             pos = clen + pos;
@@ -796,7 +1008,7 @@ public:
             }
         }
         // now get the byte position from this character offset
-        pos = getEncoding()->getByteLen(b + start, b + len, pos, xsink);
+        pos = getByteLenFrom(b, start, pos, xsink);
         return *xsink ? -1 : 0;
     }
 
@@ -862,7 +1074,7 @@ public:
 
         // calculate character position from byte position
         if (ind && ind != -1) {
-            ind = getEncoding()->getCharPos(b, b + ind, xsink);
+            ind = getCharPosTo(b, ind, xsink);
             if (*xsink)
                 return 0;
         }
@@ -1054,7 +1266,7 @@ public:
         size_t rc;
         if (i) {
             const char* b = effective_buf();
-            rc = getEncoding()->getByteLen(b, b + len, i, xsink);
+            rc = getByteLenFrom(b, 0, i, xsink);
             if (*xsink)
                 return -1;
         } else
@@ -1072,6 +1284,7 @@ public:
         }
         memmove(ownedBuffer(), ownedBuffer() + num, len - num);
         len -= num;
+        resetOwnedAsciiPrefix();
         return num;
     }
 
@@ -1083,6 +1296,7 @@ public:
         if (allocated) {
             len = 0;
             ownedBuffer()[0] = '\0';
+            resetOwnedAsciiPrefix();
         }
     }
 
