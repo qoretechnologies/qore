@@ -8313,7 +8313,7 @@ public:
 
     //! Morphs @ref pending_conn once it reports ready, if it needs morphing.
     /** An ALPN-negotiating connection acquired through
-        @ref HttpClientConnectionManagerBase::acquireConnectionAsync is transitional
+        @ref HttpClientConnectionManagerBase::acquireConnectionAsyncRef is transitional
         and cannot carry a request; once ready it must be handed over to a concrete
         H1/H2 connection.  Replaces @ref pending_conn with the concrete connection,
         transferring this operation's reference.
@@ -9400,7 +9400,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
 
     // An ALPN-negotiating connection is transitional and cannot carry a request.
     // When ALPN is already decided — the controller can finish the handshake
-    // while this thread is still inside acquireConnectionAsync, which on loopback
+    // while this thread is still inside acquireConnectionAsyncRef, which on loopback
     // is the common case — morph it now, so every path below (the fast-path
     // submit in particular) works with a connection that can accept a request.
     // A connection that is still CONNECTING is morphed by the poll op instead,
@@ -9597,7 +9597,7 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
         return nullptr;
     }
     HttpClientConnectionManagerBase& mgr = *mgr_holder;
-    // acquireConnectionAsync can still fail synchronously before a controller
+    // acquireConnectionAsyncRef can still fail synchronously before a controller
     // operation is submitted, for example on invalid setup.  Capture the error
     // and return a poll op that defers it to the continuePoll loop, matching
     // legacy startPollConnect behavior.
@@ -9797,7 +9797,7 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
         // Surface the error as a DEFERRED error on the returned poll op rather
         // than raising synchronously — callers expect the error to arrive
         // through drivePoll(), not from startPollConnect() itself.  Mirrors the
-        // acquireConnectionAsync() fast-fail path above and the isClosed() path
+        // acquireConnectionAsyncRef() fast-fail path above and the isClosed() path
         // in startPollSendRecvConnMgr().  Raising here made the connect-to-dead-
         // port test case fail intermittently whenever the connection was decided
         // in the window between the isReady() check above and

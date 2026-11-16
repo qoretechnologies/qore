@@ -11984,7 +11984,7 @@ public:
 
     //! Pools a connection under the key a real checkout for this origin uses.
     /** addPooled() above uses a fixed key, which is enough for tests that reach
-        into the pool directly; a test that goes through acquireConnection()
+        into the pool directly; a test that goes through acquireConnectionRef()
         needs the key that poolKey() derives from the origin.
     */
     DLLLOCAL void addPooledForOrigin(HttpClientConnectionBase* conn, const char* host,
@@ -13208,7 +13208,7 @@ static void ut_wait_for_connect_failure(HttpClientConnectionBase* conn) {
 }
 
 // A non-blocking connect can fail before the manager adds the new connection to its pool and reserves its first stream:
-// the reservation is refused on the closed connection.  acquireConnectionAsync() reported that as
+// the reservation is refused on the closed connection.  acquireConnectionAsyncRef() reported that as
 // "HTTPCLIENT-CAPACITY-ERROR: freshly-created connection unexpectedly at capacity", which hid the error of the connect,
 // and left the closed connection in the pool.  The caller gets the error of the connection, and the pool does not
 // keep it.
@@ -14628,11 +14628,11 @@ static void ut_manager_close_all(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "closeAll succeeds");
     UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "pool empty after closeAll");
 
-    // Subsequent acquireConnection raises HTTPCLIENT-SHUTDOWN
+    // Subsequent acquireConnectionRef raises HTTPCLIENT-SHUTDOWN
     HttpClientConnectionBase* dead_conn = mgr->acquireConnectionRef(
         "http", "127.0.0.1", server_port, &xsink);
-    UT_ASSERT(c, !dead_conn, "acquireConnection returns nullptr after closeAll");
-    UT_ASSERT(c, xsink.isException(), "acquireConnection raises after closeAll");
+    UT_ASSERT(c, !dead_conn, "acquireConnectionRef returns nullptr after closeAll");
+    UT_ASSERT(c, xsink.isException(), "acquireConnectionRef raises after closeAll");
     QoreStringValueHelper err(xsink.getExceptionErr());
     UT_ASSERT(c, err && !strcmp(err->c_str(), "HTTPCLIENT-SHUTDOWN"),
         "exception code is HTTPCLIENT-SHUTDOWN");

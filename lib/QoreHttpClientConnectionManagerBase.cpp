@@ -397,32 +397,6 @@ void HttpClientConnectionManagerBase::detachAndDeref(HttpClientConnectionBase* c
     conn->deref(xsink);
 }
 
-// the deprecated acquire methods return the connection borrowed from the pool: the reference of the caller is
-// released before it gets the connection
-static HttpClientConnectionBase* borrow_acquired(HttpClientConnectionBase* conn) {
-    if (conn) {
-        ExceptionSink rel_xsink;
-        conn->deref(&rel_xsink);
-        rel_xsink.clear();
-    }
-    return conn;
-}
-
-HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
-        const char* scheme, const char* host, int port, ExceptionSink* xsink) {
-    return borrow_acquired(acquireConnectionRef(scheme, host, port, xsink));
-}
-
-HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionForStreamingSend(
-        const char* scheme, const char* host, int port, ExceptionSink* xsink) {
-    return borrow_acquired(acquireConnectionForStreamingSendRef(scheme, host, port, xsink));
-}
-
-HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionAsync(
-        const char* scheme, const char* host, int port, ExceptionSink* xsink) {
-    return borrow_acquired(acquireConnectionAsyncRef(scheme, host, port, xsink));
-}
-
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionRef(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
     SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase", "acquireConnection", xsink);
@@ -644,7 +618,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         // in case closeAll raced with us.
         //
         // A connection that is not ready when it is created
-        // (acquireConnectionAsync()) can have closed already: its
+        // (acquireConnectionAsyncRef()) can have closed already: its
         // non-blocking connect runs on the I/O thread and can fail
         // before this point, as a connect to a UNIX socket that does
         // not exist or to a port with no listener does.  The
@@ -1002,7 +976,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             // reports ready, which morphs it into the concrete H1/H2 connection.
             //
             // Blocking here instead — as this path used to — makes
-            // acquireConnectionAsync() synchronous for the whole connect_timeout:
+            // acquireConnectionAsyncRef() synchronous for the whole connect_timeout:
             // the caller's thread sits in waitForReadyOrError() before any poll
             // operation exists, so there is nothing registered with the I/O
             // controller for cancelByOwner() to cancel.  A PollingConnectionMonitor

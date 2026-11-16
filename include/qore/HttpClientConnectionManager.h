@@ -236,134 +236,40 @@ public:
 
     DLLEXPORT virtual ~HttpClientConnectionManagerBase();
 
-    //! Acquires a connection for the given URL.
-    /** May reuse a pooled connection or create a new one.  Reservation
-        of a stream slot is atomic (no TOCTOU race with concurrent
-        acquires).  The returned pointer is borrowed — the pool retains
-        ownership.  Callers MUST call @ref releaseConnection when done
-        with the stream slot.
+    //! Acquires a connection for the given URL and returns a reference of the caller
+    /** May reuse a pooled connection or create a new one.  Reservation of a stream slot is atomic (no TOCTOU race with
+        concurrent acquires).  The reference is taken while the pool holds the connection, so the connection stays
+        valid for the caller even if a close of the connections by another thread releases the pool's reference right
+        after.  The caller gives back the reserved stream slot with @ref releaseConnection() and releases the
+        reference with @c deref().  A connection is returned only when no exception was raised.
 
         A pooled connection is reused only if the network sandbox of the calling code allows where it leads (see
         HttpClientConnectionBase::checkSandboxUse()); otherwise a new connection is made, which the sandbox decides
         on.
 
-        @param scheme URL scheme ("http" or "https"); used to determine
-            SSL requirement
+        @param scheme URL scheme ("http" or "https"); used to determine SSL requirement
         @param host target hostname (used for the Host header and pool key)
         @param port target TCP port (used for the pool key)
         @param xsink exception sink
 
-        @return a borrowed connection pointer (do NOT @c deref); @c nullptr
-            on error (@a xsink set)
+        @return a referenced connection, or @c nullptr on error (@a xsink set)
 
-        @throw HTTPCLIENT-CAPACITY-ERROR if all connections to @a host:@a port
-            are at the per-connection stream limit
-        @throw HTTPCLIENT-CONNECT-ERROR if a new connection cannot be
-            established
+        @throw HTTPCLIENT-CAPACITY-ERROR if all connections to @a host:@a port are at the per-connection stream limit
+        @throw HTTPCLIENT-CONNECT-ERROR if a new connection cannot be established
         @throw HTTPCLIENT-SHUTDOWN if the manager is shutting down
         @throw NETWORK-ACCESS-DENIED if the network sandbox of the calling code denies a new connection, or denies
             the pooled connections and no further connection can be opened (@c max_connections_per_host)
-        @throw PROTOCOL-NOT-IMPLEMENTED if @c opts.protocol is H2 or H3
-            (P3 limitation)
-
-        @deprecated the returned pointer is borrowed from the pool, whose reference a close of the connections by
-        another thread can release at any time, also before the caller takes a reference of its own; use
-        @ref acquireConnectionRef(), which returns a reference taken while the pool holds the connection
-        @note the library calls the reference-returning variant itself, not this virtual method, so an override in a
-        subclass is not called by the library
-    */
-    DLLEXPORT virtual HttpClientConnectionBase* acquireConnection(
-        const char* scheme, const char* host, int port,
-        ExceptionSink* xsink);
-
-    //! Acquires a connection for incremental request-body streaming.
-    /** Like @ref acquireConnection, but reserves the connection's
-        per-connection streaming-send slot in addition to a stream slot.
-        This prevents concurrent H2/H3 streaming-send callers from
-        overwriting the single active body-push stream id stored on the
-        connection object.
-
-        @param scheme URL scheme ("http" or "https")
-        @param host target hostname
-        @param port target TCP port
-        @param xsink exception sink
-
-        @return a borrowed connection pointer (do NOT @c deref);
-            @c nullptr on error (@a xsink set)
-
-        @since %Qore 3.0
-
-        @deprecated the returned pointer is borrowed from the pool, whose reference a close of the connections by
-        another thread can release at any time, also before the caller takes a reference of its own; use
-        @ref acquireConnectionForStreamingSendRef(), which returns a reference taken while the pool holds the connection
-        @note the library calls the reference-returning variant itself, not this virtual method, so an override in a
-        subclass is not called by the library
-    */
-    DLLEXPORT virtual HttpClientConnectionBase* acquireConnectionForStreamingSend(
-        const char* scheme, const char* host, int port,
-        ExceptionSink* xsink);
-
-    //! Acquires a connection without blocking for it to become READY.
-    /** Like @ref acquireConnection but, on a pool miss, returns the newly
-        created connection while it is still in CONNECTING state.  The
-        caller must wait asynchronously for the connection to become
-        READY (typically via
-        @ref AbstractHttpPollConnectionPriv::registerReadyNotifier) before
-        submitting a request.
-
-        On a pool hit, behaves identically to @ref acquireConnection — the
-        returned connection is already READY.
-
-        @param scheme URL scheme ("http" or "https")
-        @param host target hostname
-        @param port target TCP port
-        @param xsink exception sink
-
-        @return a borrowed connection pointer (do NOT @c deref); the
-            connection may be in CONNECTING or READY state.  @c nullptr
-            on error (@a xsink set).
-
-        @since %Qore 3.0
-
-        @deprecated the returned pointer is borrowed from the pool, whose reference a close of the connections by
-        another thread can release at any time, also before the caller takes a reference of its own; use
-        @ref acquireConnectionAsyncRef(), which returns a reference taken while the pool holds the connection
-        @note the library calls the reference-returning variant itself, not this virtual method, so an override in a
-        subclass is not called by the library
-    */
-    DLLEXPORT virtual HttpClientConnectionBase* acquireConnectionAsync(
-        const char* scheme, const char* host, int port,
-        ExceptionSink* xsink);
-
-    //! Acquires a connection, as @ref acquireConnection does, and returns a reference of the caller
-    /** The reference is taken while the pool holds the connection, so the connection stays valid for the caller even
-        if a close of the connections by another thread releases the pool's reference right after; the caller
-        releases the reference with @c deref() and gives back the reserved stream slot with
-        @ref releaseConnection() as for @ref acquireConnection.  A connection is returned only when no exception was
-        raised.
-
-        Does not call the virtual @ref acquireConnection, which a subclass may override.
-
-        @param scheme URL scheme ("http" or "https")
-        @param host target hostname
-        @param port target TCP port
-        @param xsink exception sink
-
-        @return a referenced connection, or @c nullptr on error (@a xsink set)
-
-        @throw HTTPCLIENT-CAPACITY-ERROR, HTTPCLIENT-CONNECT-ERROR, HTTPCLIENT-SHUTDOWN, NETWORK-ACCESS-DENIED as for
-        @ref acquireConnection
+        @throw PROTOCOL-NOT-IMPLEMENTED if @c opts.protocol is H2 or H3 (P3 limitation)
 
         @since %Qore 3.0
     */
     DLLEXPORT HttpClientConnectionBase* acquireConnectionRef(const char* scheme, const char* host, int port,
         ExceptionSink* xsink);
 
-    //! Acquires a connection for incremental request-body streaming, as @ref acquireConnectionForStreamingSend
-    //! does, and returns a reference of the caller
-    /** The reference is taken while the pool holds the connection; see @ref acquireConnectionRef.
-
-        Does not call the virtual @ref acquireConnectionForStreamingSend, which a subclass may override.
+    //! Acquires a connection for incremental request-body streaming and returns a reference of the caller
+    /** Like @ref acquireConnectionRef, but reserves the connection's per-connection streaming-send slot in addition to
+        a stream slot.  This prevents concurrent H2/H3 streaming-send callers from overwriting the single active
+        body-push stream id stored on the connection object.
 
         @param scheme URL scheme ("http" or "https")
         @param host target hostname
@@ -377,19 +283,20 @@ public:
     DLLEXPORT HttpClientConnectionBase* acquireConnectionForStreamingSendRef(const char* scheme, const char* host,
         int port, ExceptionSink* xsink);
 
-    //! Acquires a connection without blocking for it to become READY, as @ref acquireConnectionAsync does, and
-    //! returns a reference of the caller
-    /** The reference is taken while the pool holds the connection; see @ref acquireConnectionRef.  The connection
-        may be in CONNECTING or READY state.
+    //! Acquires a connection without blocking for it to become READY and returns a reference of the caller
+    /** Like @ref acquireConnectionRef but, on a pool miss, returns the newly created connection while it is still in
+        CONNECTING state.  The caller must wait asynchronously for the connection to become READY (typically via
+        @ref AbstractHttpPollConnectionPriv::registerReadyNotifier) before submitting a request.
 
-        Does not call the virtual @ref acquireConnectionAsync, which a subclass may override.
+        On a pool hit, behaves identically to @ref acquireConnectionRef — the returned connection is already READY.
 
         @param scheme URL scheme ("http" or "https")
         @param host target hostname
         @param port target TCP port
         @param xsink exception sink
 
-        @return a referenced connection, or @c nullptr on error (@a xsink set)
+        @return a referenced connection, which may be in CONNECTING or READY state, or @c nullptr on error (@a xsink
+        set)
 
         @since %Qore 3.0
     */
@@ -397,7 +304,7 @@ public:
         ExceptionSink* xsink);
 
     //! Completes an asynchronous acquisition once the connection reports ready.
-    /** For an ALPN-negotiating manager, @ref acquireConnectionAsync returns a
+    /** For an ALPN-negotiating manager, @ref acquireConnectionAsyncRef returns a
         transitional connection that is still deciding between HTTP/1.1 and
         HTTP/2.  That connection cannot carry a request: once it reports ready,
         the caller must morph it into its concrete H1/H2 form with this method,
@@ -411,10 +318,10 @@ public:
         May be called from an I/O thread: the concrete connection's submission to
         the I/O controller takes the controller's direct-insertion path there.
 
-        @param conn the connection returned by @ref acquireConnectionAsync, which
+        @param conn the connection returned by @ref acquireConnectionAsyncRef, which
             must have reached ready state
         @param reserve_stream reserve a stream slot on the concrete connection for
-            the caller, as @ref acquireConnection would; pass @c false when the
+            the caller, as @ref acquireConnectionRef would; pass @c false when the
             caller only needed to establish the connection
         @param xsink for exception handling
 
@@ -432,7 +339,7 @@ public:
     /** Decrements the connection's pending stream count.  Does NOT close
         the connection — the connection stays in the pool for reuse.
 
-        @param conn the connection previously returned by @ref acquireConnection
+        @param conn the connection previously returned by @ref acquireConnectionRef
     */
     DLLEXPORT virtual void releaseConnection(HttpClientConnectionBase* conn);
 
@@ -482,7 +389,7 @@ public:
 
     //! Closes all pooled connections and clears the pool.
     /** Called by the destructor; can be called explicitly to drain the
-        manager without destroying it.  After this call, @ref acquireConnection
+        manager without destroying it.  After this call, @ref acquireConnectionRef
         creates fresh connections (the pool is empty, not poisoned).
 
         Implements the lifetime contract from section 7.3 of the design
@@ -532,7 +439,7 @@ public:
     /** Unlike @ref getPoolSize, this excludes connections that have already
         been closed (typically by the remote peer) but have not yet been
         evicted by the asynchronous @c onConnectionClosed hook or the next
-        @c acquireConnection-time @c evictDeadLocked sweep.
+        @c acquireConnectionRef-time @c evictDeadLocked sweep.
 
         @since %Qore 3.0
     */
@@ -571,7 +478,7 @@ public:
         @return the response hash (caller owns), or @c nullptr on error
 
         @throw HTTPCLIENT-CONNECT-ERROR / HTTPCLIENT-REQUEST-ERROR /
-            FUTURE-TIMEOUT — see @ref acquireConnection /
+            FUTURE-TIMEOUT — see @ref acquireConnectionRef /
             @ref HttpClientConnectionBase::submitRequest
     */
     DLLEXPORT virtual QoreHashNode* request(const char* method,
@@ -766,13 +673,13 @@ protected:
     */
     std::unordered_map<std::string, std::vector<HttpClientConnectionBase*>> pool_;
 
-    //! RWLock-equivalent for the pool.  Reads (acquireConnection scan
+    //! RWLock-equivalent for the pool.  Reads (acquire scan
     //! path) take a shared lock; writes (createConnection success path,
     //! eviction, closeAll) take a unique lock.
     mutable std::shared_mutex pool_lock_;
 
     //! Set when @ref closeAll has been called; subsequent
-    //! @ref acquireConnection raises @c HTTPCLIENT-SHUTDOWN.
+    //! @ref acquireConnectionRef raises @c HTTPCLIENT-SHUTDOWN.
     bool shutdown_ = false;
 
     //! Per-key creation serialization (mirrors @c create_mutex /
