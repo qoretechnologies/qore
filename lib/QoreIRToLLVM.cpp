@@ -459,6 +459,7 @@ static bool isFastMethodCallEligible(
 #include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/QoreCastOperatorNode.h"
 #include "qore/intern/QoreInstanceOfOperatorNode.h"
+#include "qore/intern/QoreValueEncoding.h"
 #include <qore/QoreStringNode.h>
 #include <atomic>
 #include <llvm/IR/BasicBlock.h>
@@ -1474,24 +1475,7 @@ static const char* qore_llvm_get_single_arg_fast_builtin_helper(
     return nullptr;
 }
 
-// NaN-boxing constants matching QoreValue.h
-static constexpr uint64_t TAG_INT48          = 0xFFF9000000000000ULL;
-static constexpr uint64_t PAYLOAD_MASK       = 0x0000FFFFFFFFFFFFULL;
-static constexpr uint64_t TAG_MASK           = 0xFFFF000000000000ULL;  // Phase 4: NaN-boxing tag extraction
-static constexpr uint64_t TAG_POINTER        = 0xFFFA000000000000ULL;  // Phase 4: Tag for pointer type
-static constexpr uint64_t TAG_CHAR           = 0xFFFC000000000000ULL;
-// the top 12 bits of an opaque reference (QoreValue::TAG12_OPAQUE)
-static constexpr uint64_t TAG12_OPAQUE       = 0xFFD;
-// the top 16 bits of an opaque reference to an object (QoreValue::TAG_OPAQUE_OBJECT: OPAQUE_KIND_OBJECT is 0)
-static constexpr uint64_t TAG16_OPAQUE_OBJECT = TAG12_OPAQUE << 4;
-static constexpr uint64_t DOUBLE_ENCODE_OFFSET = 0x0001000000000000ULL;
-static constexpr uint64_t VAL_NOTHING        = 0;
-static constexpr uint64_t VAL_NULL           = 0xFFFB000000000001ULL;
-static constexpr uint64_t VAL_FALSE          = 0xFFFB000000000002ULL;
-static constexpr uint64_t VAL_TRUE           = 0xFFFB000000000003ULL;
-// 48-bit signed integer range
-static constexpr int64_t INT48_MIN           = -(1LL << 47);
-static constexpr int64_t INT48_MAX           = (1LL << 47) - 1;
+// the NaN-boxing constants matching QoreValue.h are in QoreValueEncoding.h, shared with QoreIRFrameCheck.cpp
 
 static std::string formatLLVMDateOffset(int utc_offset) {
     char buf[16];

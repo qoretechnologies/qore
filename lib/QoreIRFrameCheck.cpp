@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreIRFrameCheck.h"
+#include "qore/intern/QoreValueEncoding.h"
 
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DataLayout.h>
