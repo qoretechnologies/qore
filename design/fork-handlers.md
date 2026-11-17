@@ -279,10 +279,12 @@ Besides the locks:
   adds); its breakpoints and their statements and thread IDs.  A record and the references that go with it are one
   change (a thread's entry into a Program and its references to the Program and to the thread's data, a breakpoint
   and the Program's reference to it, a saved object and its reference), and a record leaves its container before
-  what it refers to is deleted or released (the data of another thread in a Program being cleared, which runs
+  what it refers to is deleted or released (the data of a thread in a Program being cleared, which runs
   destructors; the breakpoints of a Program; the value of a define), so that neither the child nor another thread
-  finds a record without its reference or one that refers to deleted data.  The clearing thread's own entry stays,
-  without data, and the thread gets new data if it enters the Program again while destructors run.
+  finds a record without its reference or one that refers to deleted data.  The entry of a thread in a Program
+  being cleared stays, without data, while its data is deleted, and leaves the Program right before the references
+  that it records are released; the clearing thread gets new data if it enters the Program again while destructors
+  run.
 - **Debug programs**: each debug program's lock is initialized again, its count of calls in progress keeps only the
   forking thread's, and its Programs are consistent (they and each Program's debug program are changed together
   under its stripe lock).
@@ -319,7 +321,8 @@ Besides the locks:
   as before.  The locks of the DBI objects are the exception (see "What the child repairs").
 - The data of a Program that changes only while it is parsed or torn down (its namespaces and code, the statement
   index of the debugger): it is not consistent in a child created while another thread parsed or tore down that
-  Program.
+  Program.  The teardown of such a Program does not finish in the child, so the Program, and the references that
+  the records of its threads hold, stay allocated there; the records themselves are consistent.
 - Locks of third-party libraries (OpenSSL, LLVM, PCRE2, c-ares) and of the C++ runtime (the guard of a function-local
   static that another thread was initializing, for the statics that do not read the environment, and the per-object
   once flags of IR lowering).

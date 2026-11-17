@@ -18688,6 +18688,32 @@ static QoreValue f_dbg_fork_while_program_record_held(const QoreListNode* params
     return rv.release();
 }
 
+//! Debug-only: returns the state of the entry of a thread in the data of a Program's threads
+/** @param pgm the Program
+    @param tid the thread
+
+    @return -1 if the Program has no entry for the thread, 0 if it has one without data (its data is being deleted
+    while the Program is cleared), 1 if it has one with data
+*/
+static QoreValue f_dbg_get_program_thread_data_state(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAMCONTROL,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    int tid = static_cast<int>(get_param_value(params, 1).getAsBigInt());
+    qore_program_private* pp = qore_program_private::get(**pgm);
+    AutoLocker al(pp->tlock);
+    for (auto& i : pp->pgm_data_map) {
+        if (i.first->gettid() == tid) {
+            return i.second ? 1 : 0;
+        }
+    }
+    return -1;
+}
+
 //! Debug-only: creates a child process with fork() that runs the code given and exits with the value it returns
 /** As dbg_fork_child(), but the child exits with 98 at once if one of the stripe locks of the records of Programs is
     not free, and it is ended by SIGALRM if it does not exit within 120 seconds, so that a child that would wait
@@ -25806,6 +25832,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_fork_while_program_record_held", f_dbg_fork_while_program_record_held,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "handler",
         codeOrNothingTypeInfo, QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_get_program_thread_data_state", f_dbg_get_program_thread_data_state, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, QC_PROGRAMCONTROL->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "tid");
     qns.addBuiltinVariant("dbg_fork_child_bounded", f_dbg_fork_child_bounded, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_ref_set_unique_remove_key", f_dbg_ref_set_unique_remove_key, QCF_NO_FLAGS,

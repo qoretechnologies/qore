@@ -305,6 +305,9 @@ int sub add(int a, int b) {
             delete p;
         }();
         assertTrue(call_function("dbg_wait_program_record_held"), "the deletion deleted the data of the thread");
+        # the entry of the thread stays, without its deleted data, until the Program releases its references to the
+        # thread's Program data
+        assertEq(0, call_function("dbg_get_program_thread_data_state", pc, tid));
 
         # marks the data of every thread in the Program
         dp.addProgram(pc);
@@ -312,6 +315,10 @@ int sub add(int a, int b) {
         dp.removeProgram(pc);
 
         hash<auto> r = call_function("dbg_fork_while_program_record_held", NOTHING, int sub () {
+            # the child finds the entry with the references that go with it, without the deleted data
+            if (call_function("dbg_get_program_thread_data_state", pc, tid)) {
+                return 2;
+            }
             Program p2(PO_NEW_STYLE);
             p2.parse(ProgramCode, "cleared-thread-data-child");
             if (p2.callFunction("add", 1, 1) != 2) {
@@ -325,7 +332,9 @@ int sub add(int a, int b) {
         go.dec();
         ended.waitForZero();
 
-        assertEq(0, r.status, "the child created and deleted a Program");
+        assertEq(0, r.status, "the child found the entry without data and created and deleted a Program");
+        # the entry left the Program with the references
+        assertEq(-1, call_function("dbg_get_program_thread_data_state", pc, tid));
     }
 
     #! returns the debugger's handle of the given Program

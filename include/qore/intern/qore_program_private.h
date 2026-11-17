@@ -2167,13 +2167,15 @@ public:
     /** No other thread changes pgm_data_map while tclear is set; the clearing thread can enter the Program again
         while destructors run (issue #4299), which gives it new data.
 
-        The entry of another thread leaves the map before its data is deleted, which runs destructors, and before the
-        Program's reference to the thread's data is released, which can free it: the threads that look at the
+        The data of an entry leaves it before it is deleted, which runs destructors: the threads that look at the
         entries (attaching a debugger, breaking threads) and a child process created with fork() (see
-        fixupAfterFork()) never find an entry whose data was deleted.  The clearing thread's own entry stays, with no
-        data, so that it is recorded as cleared; setThreadVarData() gives it new data if the thread enters the
-        Program again, which is then deleted as well.  The map is walked again after each entry, so that data added
-        meanwhile is deleted too.
+        fixupAfterFork()) never find data that was deleted.  The entry of another thread stays, without data, while
+        its data is deleted, as it still records the Program's references to the thread's Program data; it leaves the
+        map right before the references are released, which can free the thread's Program data.  The clearing
+        thread's own entry stays, without data; setThreadVarData() gives it new data if the thread enters the Program
+        again, which is then deleted as well.  The map is walked again after each entry, so that data added meanwhile
+        is deleted too.  A child process created with fork() while another thread clears a Program does not finish
+        the clear (see design/fork-handlers.md, "What is not covered").
     */
     DLLLOCAL void clearProgramThreadData(ExceptionSink* xsink) {
         QORE_DBG_RECORD_CHANGE(QPRS_THREAD_DATA_CLEAR_START, this);
@@ -2189,19 +2191,23 @@ public:
                     }
                     tpd = i->first;
                     tlpd = i->second;
+                    // the entry stays, without data, while the data is deleted, so that it still records the thread
+                    // and the references that go with it (see below)
                     std::lock_guard<std::mutex> rl(threadContainerLock());
-                    if (tpd == own) {
-                        i->second = nullptr;
-                    } else {
-                        pgm_data_map.erase(i);
-                    }
+                    i->second = nullptr;
                     break;
                 }
             }
+            // The loop ends when no entry has data: an entry of another thread is removed below, and no other thread
+            // adds one while tclear is set; only the clearing thread's own entry can get data again, when the thread
+            // enters the Program again from a destructor run while its data is deleted.  It runs forever only if
+            // destructors enter the Program again forever, whose data was left behind before.
             if (!tpd) {
                 break;
             }
             if (tpd == own) {
+                // the cached data of a Program with module lifetime is deleted below
+                own->forgetModuleProgramData(pgm);
                 // the Program leaves the thread's records first, so that the thread can enter it again as on a
                 // first entry while destructors run
                 tpd->delProgram(pgm);
@@ -2214,6 +2220,16 @@ public:
 #endif
             tlpd->del(xsink);
             QORE_DBG_RECORD_CHANGE_TID(QPRS_THREAD_DATA_DELETED, this, tid);
+            // the entry leaves the map right before the Program releases its references to the thread's Program data,
+            // which can free it: no code runs in between, and a child process created with fork() never finds an
+            // entry whose Program data was freed (see fixupAfterFork())
+            {
+                AutoLocker al(tlock);
+                pgm_data_map_t::iterator mi = pgm_data_map.find(tpd);
+                assert(mi != pgm_data_map.end() && !mi->second);
+                std::lock_guard<std::mutex> rl(threadContainerLock());
+                pgm_data_map.erase(mi);
+            }
             tpd->delProgram(pgm);
             QORE_DBG_RECORD_CHANGE_TID(QPRS_THREAD_DATA_CLEARED, this, tid);
         }
