@@ -294,10 +294,9 @@ public:
     DLLLOCAL void setOpenState(H3State s, const char* site);
 
 
-    //! Can be called from any thread: the error is set by the I/O thread under the stream lock
+    //! Can be called from any thread: reads @ref has_error, which is set when the error is stored under the stream lock
     DLLLOCAL bool hasError() const {
-        AutoLocker al(stream_lock);
-        return error_info != nullptr;
+        return has_error.load(std::memory_order_acquire);
     }
 
     //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
@@ -614,6 +613,9 @@ private:
 
     //! Error info (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
+    //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
+    //! by hasError()
+    std::atomic<bool> has_error{false};
 
     //! Connection C++ priv pointer guarded by @ref stream_lock.
     /** The constructor takes an explicit C++ ref for this pointer so the

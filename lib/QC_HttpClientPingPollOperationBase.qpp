@@ -104,6 +104,7 @@ void HttpClientPingPollOperationPriv::cleanup(ExceptionSink* xsink) {
         output = nullptr;
         old_error_info = error_info;
         error_info = nullptr;
+        has_error.store(false, std::memory_order_release);
     }
     if (old_output) {
         old_output->deref(xsink);
@@ -158,7 +159,7 @@ QoreHashNode* HttpClientPingPollOperationPriv::continuePoll(ExceptionSink* xsink
             AutoLocker al(error_lock);
 #ifdef DEBUG
             // a test holds the thread here, in the critical section, to read the output from another thread
-            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ValueRecord);
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ValueRecord, *self);
 #endif
             old_output = output;
             output = new_output.release();
@@ -292,30 +293,33 @@ void HttpClientPingPollOperationPriv::validateResponse(ExceptionSink* xsink) {
 }
 
 void HttpClientPingPollOperationPriv::setError(const char* desc, ExceptionSink* xsink) {
-    completed.store(true, std::memory_order_release);
-    closed.store(true, std::memory_order_release);
     // the hash is complete before it is recorded
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
     info->setKeyValue("err", new QoreStringNode(err_code), xsink);
     info->setKeyValue("desc", new QoreStringNode(desc), xsink);
-    AutoLocker al(error_lock);
-    if (!error_info) {
+    {
+        AutoLocker al(error_lock);
+        if (!error_info) {
 #ifdef DEBUG
-        // a test holds the thread here, in the critical section, to read the error from another thread
-        qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord);
+            // a test holds the thread here, in the critical section, to read the error from another thread
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord, *self);
 #endif
-        error_info = info.release();
+            error_info = info.release();
+            has_error.store(true, std::memory_order_release);
+        }
     }
+    // the flags are set after the error, so that a thread that sees the operation closed also sees its error
+    completed.store(true, std::memory_order_release);
+    closed.store(true, std::memory_order_release);
 }
 
 bool HttpClientPingPollOperationPriv::hasError() const {
-    AutoLocker al(error_lock);
-    return error_info != nullptr;
+    return has_error.load(std::memory_order_acquire);
 }
 
 QoreHashNode* HttpClientPingPollOperationPriv::getErrorInfo() const {
     // a read that finds the lock taken releases a thread that a test holds while it records the error
-    QoreErrorReadLocker al(error_lock);
+    QoreRecordedValueReadLocker al(error_lock, *self);
     if (error_info) {
         error_info->ref();
     }
@@ -334,7 +338,7 @@ void HttpClientPingPollOperationPriv::abort(ExceptionSink* xsink) {
 
 QoreValue HttpClientPingPollOperationPriv::getOutput() const {
     // a read that finds the lock taken releases a thread that a test holds while it stores the output
-    QoreErrorReadLocker al(error_lock, true);
+    QoreRecordedValueReadLocker al(error_lock, *self, true);
     if (output) {
         output->ref();
         return output;

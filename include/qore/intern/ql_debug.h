@@ -45,17 +45,19 @@ DLLLOCAL void init_debug_functions(QoreNamespace& qns);
 /** In debug builds, a read that finds the lock taken calls the "error-read" hold point
     (QoreDbgHttpHoldPoint::ErrorRead), or "value-read" (QoreDbgHttpHoldPoint::ValueRead) for another value, before
     it waits for the lock: a test that holds the thread recording it in its critical section ("error-record" or
-    "value-record") is then released only by a read that waits for it (issue #6428)
+    "value-record") is then released only by a read that waits for it (issue #6428); the hold points can be armed
+    for one operation, which is identified by its Qore object
 */
-class QoreErrorReadLocker {
+class QoreRecordedValueReadLocker {
 public:
     //! takes the lock
     /** @param lck the lock
+        @param target the Qore object of the operation, which identifies it for the hold points
         @param value false for a read of the error, true for a read of another value
     */
-    DLLLOCAL QoreErrorReadLocker(QoreThreadLock& lck, bool value = false);
+    DLLLOCAL QoreRecordedValueReadLocker(QoreThreadLock& lck, const void* target, bool value = false);
 
-    DLLLOCAL ~QoreErrorReadLocker() {
+    DLLLOCAL ~QoreRecordedValueReadLocker() {
         lck.unlock();
     }
 
@@ -299,20 +301,24 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! records its first error: the thread holds the lock that protects the error and has not stored the error yet
     ErrorRecord,
     //! a read of the error of one of the poll operations of @ref ErrorRecord (getErrorInfo()) found the lock that
-    //! protects it taken, and is about to wait for it (see QoreErrorReadLocker)
+    //! protects it taken, and is about to wait for it (see QoreRecordedValueReadLocker)
     ErrorRead,
     //! an HTTP client ping poll operation stores its output, or a WebSocket server poll operation its close reason:
     //! the thread holds the lock that protects the value and has not stored it yet
     ValueRecord,
     //! a read of a value of @ref ValueRecord found the lock that protects it taken, and is about to wait for it (see
-    //! QoreErrorReadLocker)
+    //! QoreRecordedValueReadLocker)
     ValueRead,
     //! the number of hold points
     Count,
 };
 
 //! holds the calling thread at the given point if dbg_http_hold_at() armed it (one-shot)
-DLLLOCAL void qore_dbg_http_hold(QoreDbgHttpHoldPoint point);
+/** @param point the hold point
+    @param target the object that reaches the point (the Qore object of a poll operation), if any: a point armed for
+    an object holds only the thread that reaches it for that object
+*/
+DLLLOCAL void qore_dbg_http_hold(QoreDbgHttpHoldPoint point, const void* target = nullptr);
 
 //! holds the creation of a child Program after its options were checked and before the Program is created, if
 //! dbg_hold_child_program_create() armed it (one-shot)
@@ -408,13 +414,16 @@ typedef void (*qore_dbg_queue_push_locked_hook_t)(const QoreObject* self);
 DLLLOCAL extern std::atomic<qore_dbg_queue_push_locked_hook_t> qore_dbg_queue_push_locked_hook;
 #endif
 
-inline QoreErrorReadLocker::QoreErrorReadLocker(QoreThreadLock& lck, bool value) : lck(lck) {
+inline QoreRecordedValueReadLocker::QoreRecordedValueReadLocker(QoreThreadLock& lck, const void* target, bool value)
+        : lck(lck) {
 #ifdef DEBUG
     if (lck.trylock()) {
-        qore_dbg_http_hold(value ? QoreDbgHttpHoldPoint::ValueRead : QoreDbgHttpHoldPoint::ErrorRead);
+        qore_dbg_http_hold(value ? QoreDbgHttpHoldPoint::ValueRead : QoreDbgHttpHoldPoint::ErrorRead, target);
         lck.lock();
     }
 #else
+    (void)target;
+    (void)value;
     lck.lock();
 #endif
 }

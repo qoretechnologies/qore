@@ -1004,10 +1004,11 @@ void WebSocketClientPollOperationPriv::releaseRecvOp(ExceptionSink* xsink) {
 void WebSocketClientPollOperationPriv::setError(ExceptionSink* xsink) {
     // an operation that ended already (e.g. abort() closed the socket under the operation in progress) reports no
     // error after its end: the error is a consequence of the end, and is not raised either
-    if (!setWsStateValue(WsState::ERROR)) {
+    if (goalReached()) {
         xsink->clear();
         return;
     }
+    // the error is stored before the state is set, so that a thread that sees the error state also sees the error
     if (!hasError()) {
         ExceptionSink save_xsink;
         // the hash is complete before it is recorded
@@ -1027,14 +1028,36 @@ void WebSocketClientPollOperationPriv::setError(ExceptionSink* xsink) {
         {
             AutoLocker al(error_lock);
             if (error_info) {
+                if (!setWsStateValue(WsState::ERROR)) {
+                    xsink->clear();
+                }
                 return;
             }
 #ifdef DEBUG
             // a test holds the thread here, in the critical section, to read the error from another thread
-            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord);
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord, *self);
 #endif
             info->ref();
             error_info = *info;
+            has_error.store(true, std::memory_order_release);
+        }
+        if (!setWsStateValue(WsState::ERROR)) {
+            // the operation ended after the check above (abort() on another thread): the end stands, and the error
+            // is withdrawn
+            QoreHashNode* withdrawn = nullptr;
+            {
+                AutoLocker al(error_lock);
+                if (error_info == *info) {
+                    withdrawn = error_info;
+                    error_info = nullptr;
+                    has_error.store(false, std::memory_order_release);
+                }
+            }
+            if (withdrawn) {
+                withdrawn->deref(&save_xsink);
+            }
+            xsink->clear();
+            return;
         }
         // Push error notification to recv_queue
         ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &save_xsink);
@@ -1042,17 +1065,18 @@ void WebSocketClientPollOperationPriv::setError(ExceptionSink* xsink) {
         h->setKeyValue("error", info.release(), &save_xsink);
         recv_queue->push(&save_xsink, h.release());
         ++frames_pushed_in_cycle;
+    } else if (!setWsStateValue(WsState::ERROR)) {
+        xsink->clear();
     }
 }
 
 bool WebSocketClientPollOperationPriv::hasError() const {
-    AutoLocker al(error_lock);
-    return error_info != nullptr;
+    return has_error.load(std::memory_order_acquire);
 }
 
 QoreHashNode* WebSocketClientPollOperationPriv::getErrorInfo() const {
     // a read that finds the lock taken releases a thread that a test holds while it records the error
-    QoreErrorReadLocker al(error_lock);
+    QoreRecordedValueReadLocker al(error_lock, *self);
     if (error_info) {
         error_info->ref();
     }
@@ -1122,6 +1146,7 @@ void WebSocketClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         AutoLocker al(error_lock);
         old_error_info = error_info;
         error_info = nullptr;
+        has_error.store(false, std::memory_order_release);
     }
     if (old_error_info) {
         old_error_info->deref(xsink);

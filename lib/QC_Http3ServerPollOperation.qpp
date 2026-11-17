@@ -117,6 +117,7 @@ void Http3ServerPollOperationPriv::cleanup(ExceptionSink* xsink) {
         AutoLocker al(error_lock);
         old_error_info = error_info;
         error_info = nullptr;
+        has_error.store(false, std::memory_order_release);
     }
     if (old_error_info) {
         old_error_info->deref(xsink);
@@ -479,22 +480,22 @@ void Http3ServerPollOperationPriv::setError(const char* err, const char* desc,
             info->setKeyValue("desc", new QoreStringNode(desc), xsink);
 #ifdef DEBUG
             // a test holds the thread here, in the critical section, to read the error from another thread
-            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord);
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord, *self);
 #endif
             error_info = info.release();
+            has_error.store(true, std::memory_order_release);
         }
     }
     h3_state.store(H3State::CLOSED, std::memory_order_release);
 }
 
 bool Http3ServerPollOperationPriv::hasError() const {
-    AutoLocker al(error_lock);
-    return error_info != nullptr;
+    return has_error.load(std::memory_order_acquire);
 }
 
 QoreHashNode* Http3ServerPollOperationPriv::getErrorInfo() const {
     // a read that finds the lock taken releases a thread that a test holds while it records the error
-    QoreErrorReadLocker al(error_lock);
+    QoreRecordedValueReadLocker al(error_lock, *self);
     if (error_info) {
         error_info->ref();
     }

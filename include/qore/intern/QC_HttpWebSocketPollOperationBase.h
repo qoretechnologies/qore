@@ -235,7 +235,7 @@ public:
         }
     }
 
-    //! Returns true if an error was recorded; can be called from any thread (reads under @ref error_lock)
+    //! Returns true if an error was recorded; can be called from any thread (reads @ref has_error, without a lock)
     DLLLOCAL bool hasError() const;
 
     //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
@@ -441,7 +441,9 @@ private:
         the connection before the server's close frame is written (issue #5878)
     */
     //! Sets the close reason; the caller holds @ref m
-    DLLLOCAL void setCloseReason(const char* reason);
+    /** @param reason the reason, which can contain NUL characters (from a close frame)
+    */
+    DLLLOCAL void setCloseReason(const std::string& reason);
 
     DLLLOCAL void setConnectionLost() {
         if (protocol_failed) {
@@ -501,6 +503,9 @@ private:
 
     //! Error information (ref'd or nullptr); protected by @ref error_lock
     QoreHashNode* error_info = nullptr;
+    //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
+    //! by hasError()
+    std::atomic<bool> has_error{false};
 
     //! Frame callback — invoked from onPollComplete() after frames are pushed to recv_queue
     ResolvedCallReferenceNode* frame_callback = nullptr;
@@ -614,6 +619,9 @@ private:
     DLLLOCAL void setError(ExceptionSink* xsink);
 
     //! Transitions to CLOSED state with the given code and reason
+    /** @param code the close code
+        @param reason the close reason, or nullptr to keep the stored one
+    */
     DLLLOCAL void setClosed(uint16_t code, const char* reason);
 
     //! Sets the state of the operation; every change of the state is made with this method

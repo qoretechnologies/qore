@@ -350,7 +350,7 @@ public:
         return h3_state.load(std::memory_order_acquire) == H3State::CLOSED;
     }
 
-    //! Returns true if an error was recorded; can be called from any thread (reads under @ref error_lock)
+    //! Returns true if an error was recorded; can be called from any thread (reads @ref has_error, without a lock)
     DLLLOCAL bool hasError() const;
 
     //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
@@ -457,6 +457,9 @@ private:
 
     //! Error info hash (ref'd, or nullptr); protected by @ref error_lock
     QoreHashNode* error_info = nullptr;
+    //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
+    //! by hasError()
+    std::atomic<bool> has_error{false};
 
     //! Keep-alive flag (QUIC connections are persistent)
     bool keep_alive = true;

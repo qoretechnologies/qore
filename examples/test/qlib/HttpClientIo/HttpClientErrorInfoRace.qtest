@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-platform: macos - HTTP/1.1 and HTTP/3 (QUIC) client connection errors recorded on the I/O thread and read on another thread
+# test-platform: macos - HTTP/1.1 and HTTP/3 (QUIC) client connection errors recorded and read on other threads
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -80,7 +80,8 @@ class HttpClientErrorInfoRaceTest inherits QUnit::Test {
         Counter release(1);
         on_exit if (release.getCount()) { release.dec(); }
         on_exit call_function("dbg_http_hold_clear");
-        call_function("dbg_http_hold_at", "error-record", reached, release);
+        # armed for this operation: the server's operations record errors too, as the server is stopped
+        call_function("dbg_http_hold_at", "error-record", reached, release, op);
         *hash<ExceptionInfo> submit_ex;
         # a submitting thread records the error of a submission refused by the QUIC layer
         background sub () {
@@ -119,7 +120,8 @@ class HttpClientErrorInfoRaceTest inherits QUnit::Test {
         Counter release(1);
         on_exit if (release.getCount()) { release.dec(); }
         on_exit call_function("dbg_http_hold_clear");
-        call_function("dbg_http_hold_at", "error-record", reached, release);
+        # armed for this operation: the server's operations record errors too, as the server is stopped
+        call_function("dbg_http_hold_at", "error-record", reached, release, op);
         # the server closes the connection: the client's I/O thread records the error and is held there; the server
         # is stopped in another thread, as its stop can need the async I/O threads
         background sub () {
@@ -142,7 +144,7 @@ class HttpClientErrorInfoRaceTest inherits QUnit::Test {
             throw "TEST-ERROR", "no thread recorded an error";
         }
         # a read that finds the operation's lock taken releases the recording thread, as it then waits for it
-        call_function("dbg_http_hold_at", "error-read", release, new Counter(0));
+        call_function("dbg_http_hold_at", "error-read", release, new Counter(0), op);
         *hash<auto> info = op.getError();
         int held = release.getCount();
         # a read that did not wait for the lock leaves the recording thread held

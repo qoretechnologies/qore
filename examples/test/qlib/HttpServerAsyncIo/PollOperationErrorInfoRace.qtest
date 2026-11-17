@@ -91,6 +91,8 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
         addTestCase("HTTP client ping: the output stored by the driving thread is read complete", \pingOutputTest());
         addTestCase("WebSocket server: the close reason stored by the driving thread is read complete",
             \wsServerCloseReasonTest());
+        addTestCase("WebSocket server: a close reason with a NUL character is kept whole",
+            \wsServerCloseReasonNulTest());
         set_return_value(main());
     }
 
@@ -141,7 +143,8 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
         checkDebug();
         DelegatingPollOperation inner(new ReachedPollOperation());
         HttpClientPingPollOperationBase op(inner, 200, 299, "PING-RACE-ERROR");
-        hash<auto> r = holdAndRead("value", sub () { op.continuePoll(); }, auto sub () { return op.getOutput(); });
+        hash<auto> r = holdAndRead(op, "value", sub () { op.continuePoll(); },
+            auto sub () { return op.getOutput(); });
         assertEq(0, r.held, "the read waited for the thread that stores the output");
         assertEq(200, r.value.code, "the output is read once it is stored");
         assertEq("ok", r.value.body);
@@ -153,25 +156,54 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
 
     wsServerCloseReasonTest() {
         checkDebug();
+        string reason = closeReason(binary("bye"));
+        assertEq("bye", reason);
+    }
+
+    wsServerCloseReasonNulTest() {
+        checkDebug();
+        # a close reason with a NUL character is kept whole
+        binary expected = parse_hex_string("610062");
+        string reason = closeReason(expected);
+        assertEq(3, reason.size(), "the close reason is not cut at the NUL character");
+        assertEq(expected, binary(reason));
+    }
+
+    #! returns the close reason of a client close frame with the given reason, read as the server stores it
+    /** The reason is also checked with getCloseReason() and getOutput() once the close handshake is complete
+    */
+    private string closeReason(binary reason) {
         hash<auto> pair = createSocketPair();
         on_exit pair.client.close();
         on_exit pair.server.close();
         HttpWebSocketPollOperationBase op(pair.server);
-        # the client's close frame (masked with a zero key): code 1000 and a reason
-        binary payload = parse_hex_string("03e8") + binary("bye");
+        # the client's close frame (masked with a zero key): code 1000 and the reason
+        binary payload = parse_hex_string("03e8") + reason;
         binary frame = parse_hex_string(sprintf("88%02x00000000", 0x80 | payload.size())) + payload;
         pair.client.send(frame);
-        # the driving thread stores the reason of the client's close frame
-        hash<auto> r = holdAndRead("value", sub () {
-            for (int i = 0; i < MaxCycles; ++i) {
-                if (!op.continuePoll()) {
-                    break;
-                }
+        # the driving thread stores the reason of the client's close frame as it processes the frame
+        hash<auto> r = holdAndRead(op, "value", sub () {
+            for (int i = 0; i < MaxCycles && op.getState() == "connected"; ++i) {
+                op.continuePoll();
             }
         }, auto sub () { return op.getCloseReason(); });
         assertEq(0, r.held, "the read waited for the thread that stores the close reason");
-        assertEq("bye", r.value, "the close reason is read once it is stored");
+        assertEq(binary(reason), binary(r.value), "the close reason is read once it is stored");
         assertEq(1000, op.getCloseCode());
+        # the server answers with its close frame, as a handler does, which ends the close handshake
+        op.sendClose(1000);
+        bool ended;
+        for (int i = 0; i < MaxCycles; ++i) {
+            if (!op.continuePoll()) {
+                ended = True;
+                break;
+            }
+        }
+        assertTrue(ended, "the close handshake ended");
+        assertTrue(op.isClosed(), "the operation is closed");
+        assertEq(binary(reason), binary(op.getCloseReason()), "the close reason is kept at the end of the handshake");
+        assertEq(binary(reason), binary(op.getOutput().close_reason), "the output has the close reason");
+        return r.value;
     }
 
     #! a WebSocket operation's send that is in progress fails, as the peer resets the connection
@@ -194,7 +226,7 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
         @return the error read
     */
     private *hash<auto> recordAndRead(object op, code record, *string expected_ex) {
-        hash<auto> r = holdAndRead("error", record, auto sub () { return op.getError(); }, expected_ex);
+        hash<auto> r = holdAndRead(op, "error", record, auto sub () { return op.getError(); }, expected_ex);
         *hash<auto> info = r.value;
         assertEq(0, r.held, "the read waited for the thread that records the error");
         assertEq(Type::Hash, info.type(), "the error is read once it is recorded");
@@ -205,7 +237,8 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
     }
 
     #! stores a value in another thread, which is held while it stores it, and reads the value
-    /** @param kind \c "error" or \c "value": the hold points used are \c "<kind>-record" and \c "<kind>-read"
+    /** @param op the operation, for which the hold points are armed
+        @param kind \c "error" or \c "value": the hold points used are \c "<kind>-record" and \c "<kind>-read"
         @param record stores the value in the other thread
         @param read reads the value
         @param expected_ex the exception that \a record raises, if any
@@ -213,7 +246,7 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
         @return a hash with \c value: the value read, and \c held: 1 if the recording thread was still held after
         the read (it did not wait for it), 0 if not
     */
-    private hash<auto> holdAndRead(string kind, code record, code read, *string expected_ex) {
+    private hash<auto> holdAndRead(object op, string kind, code record, code read, *string expected_ex) {
         Counter reached(1);
         Counter release(1);
         Counter done(1);
@@ -222,7 +255,8 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
         on_exit if (started) { done.waitForZero(); }
         on_exit if (release.getCount()) { release.dec(); }
         on_exit call_function("dbg_http_hold_clear");
-        call_function("dbg_http_hold_at", kind + "-record", reached, release);
+        # armed for this operation only: other operations of the process can reach the point
+        call_function("dbg_http_hold_at", kind + "-record", reached, release, op);
         *hash<ExceptionInfo> record_ex;
         background sub () {
             on_exit done.dec();
@@ -241,7 +275,7 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
             throw "TEST-ERROR", sprintf("no thread reached the %y hold point", kind + "-record");
         }
         # a read that finds the lock taken releases the recording thread, as it then waits for it
-        call_function("dbg_http_hold_at", kind + "-read", release, new Counter(0));
+        call_function("dbg_http_hold_at", kind + "-read", release, new Counter(0), op);
         auto value = read();
         int held = release.getCount();
         # a read that did not wait for the lock leaves the recording thread held

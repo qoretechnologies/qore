@@ -101,7 +101,7 @@ public:
         return closed.load(std::memory_order_acquire);
     }
 
-    //! Returns true if an error was recorded; can be called from any thread (reads under @ref error_lock)
+    //! Returns true if an error was recorded; can be called from any thread (reads @ref has_error, without a lock)
     DLLLOCAL bool hasError() const;
 
     //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
@@ -125,7 +125,8 @@ private:
     //! Whether the operation has completed (success or failure)
     /** The flags are set by the thread that drives the operation (or by abort()) and read by any thread: they are
         stored with release and loaded with acquire ordering, so a thread that sees a flag set also sees what was
-        written before it
+        written before it: setError() stores the error before it sets @ref completed and @ref closed, and
+        continuePoll() stores the output before it sets @ref goal_reached and @ref completed
     */
     std::atomic<bool> completed{false};
 
@@ -167,6 +168,9 @@ private:
 
     //! Error info hash (ref'd or nullptr); protected by @ref error_lock
     QoreHashNode* error_info = nullptr;
+    //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
+    //! by hasError()
+    std::atomic<bool> has_error{false};
 
     //! Validates the HTTP response and sets goal_reached or error
     DLLLOCAL void validateResponse(ExceptionSink* xsink);

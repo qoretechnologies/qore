@@ -159,6 +159,7 @@ void Http3ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         AutoLocker al(stream_lock);
         old_error_info = error_info;
         error_info = nullptr;
+        has_error.store(false, std::memory_order_release);
         for (auto& [sid, action] : stream_actions) {
             if (action) {
                 action->executeError("HTTP3-ABORT",
@@ -710,9 +711,10 @@ void Http3ClientPollOperationPriv::setError(const char* err, const char* desc, E
             }
 #ifdef DEBUG
             // a test holds the thread here, in the critical section, to read the error from another thread
-            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord);
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord, *self);
 #endif
             error_info = info.release();
+            has_error.store(true, std::memory_order_release);
         }
     }
     h3_state.store(H3State::CLOSED, std::memory_order_release);
@@ -1434,7 +1436,7 @@ void Http3ClientPollOperationPriv::setOpenState(H3State s, const char* site) {
 
 QoreHashNode* Http3ClientPollOperationPriv::getErrorInfo() const {
     // a read that finds the lock taken releases a thread that a test holds while it records the error
-    QoreErrorReadLocker al(stream_lock);
+    QoreRecordedValueReadLocker al(stream_lock, *self);
     if (error_info) {
         error_info->ref();
     }
@@ -1465,9 +1467,10 @@ void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* d
             info->setKeyValue("desc", new QoreStringNode(desc), &xsink);
 #ifdef DEBUG
             // a test holds the thread here, in the critical section, to read the error from another thread
-            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord);
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord, *self);
 #endif
             error_info = info.release();
+            has_error.store(true, std::memory_order_release);
         }
         h3_state.store(H3State::CLOSED, std::memory_order_release);
         if (stream_blocked_waiters > 0) {
