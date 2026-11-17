@@ -121,6 +121,17 @@ bool VarRefNode::parseIsReadOnly() const {
     }
 }
 
+int VarRefNode::checkTopLevelStorage() const {
+    const LocalVar* lv = ref.id;
+    if (!lv->isTopLevelCommitted() || lv->closureUse()) {
+        return 0;
+    }
+    parse_error(*loc, "local variable '%s' cannot be captured by a closure or referenced: it is a top-level local "
+        "variable of an earlier parse of a Program that did not have PO_ALLOW_REPARSE when it was declared, so it can "
+        "have been instantiated as a plain local variable already", lv->getName());
+    return -1;
+}
+
 // get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks
 // the ExceptionSink is only needed for QoreObject where a method may be executed
 // use the QoreNodeAsStringHelper class (defined in QoreStringNode.h) instead of using these functions directly
