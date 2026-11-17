@@ -262,8 +262,10 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   a debug hook in them
         # - JITFinalizeCancellation (#6305, #6313): its checks run in child processes that set their own --exec-mode
         #   and arm a debug hook in them
+        # - ir-guard-profile-types (#6421): its checks run in child processes that set their own --exec-mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
+                                 "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",

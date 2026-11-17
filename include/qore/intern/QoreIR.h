@@ -1924,6 +1924,26 @@ struct QoreIRPluginTypeProfileIdHash {
     }
 };
 
+//! The identity of a type counted by a guard type profile: its address and its identity serial
+/** The type of a class, hashdecl or enum is freed with its declaration, and a later type can have its address: the
+    serial (qore_get_type_identity_serial()) tells them apart, as in the other caches keyed by types, and the entries
+    of a destroyed type are evicted (QoreIRGuardProfileTypes) before its memory can be reused (issue #6421)
+*/
+struct TypeProfileTypeKey {
+    const QoreTypeInfo* type_info = nullptr;
+    uint64_t serial = 0;
+
+    bool operator==(const TypeProfileTypeKey& other) const {
+        return type_info == other.type_info && serial == other.serial;
+    }
+};
+
+struct TypeProfileTypeKeyHash {
+    size_t operator()(const TypeProfileTypeKey& k) const {
+        return std::hash<const void*>()(k.type_info) ^ (std::hash<uint64_t>()(k.serial) * 0x9e3779b97f4a7c15ULL);
+    }
+};
+
 //! Type profile for a single guard point: tracks observed runtime types
 struct TypeProfile {
     std::atomic<uint32_t> int_count{0};
@@ -1933,7 +1953,10 @@ struct TypeProfile {
     std::atomic<uint32_t> nothing_count{0};
     std::atomic<uint32_t> other_count{0};
     mutable std::mutex extended_mutex;
-    std::unique_ptr<std::unordered_map<const QoreTypeInfo*, uint32_t>> extended_type_counts;
+    //! the counts of the types of the values that are not of a builtin type, by type identity
+    std::unique_ptr<std::unordered_map<TypeProfileTypeKey, uint32_t, TypeProfileTypeKeyHash>> extended_type_counts;
+    //! the cache that evicts the types of this profile when they are destroyed (owned by the function), if any
+    QoreGenericTypeCache* type_cache = nullptr;
     std::unique_ptr<std::unordered_map<QoreIRPluginTypeProfileId, uint32_t,
         QoreIRPluginTypeProfileIdHash>> plugin_type_counts;
 
@@ -1946,18 +1969,45 @@ struct TypeProfile {
             + other_count.load(std::memory_order_relaxed);
     }
 
+    //! counts a value of a type that is not builtin
+    /** A type that can be freed (one with an identity serial) is registered with the function's cache when it is first
+        counted, so that its entry is evicted when the type is destroyed (issue #6421); the registration does not keep
+        the type's declaration alive (qore_generic_cache_insert_weak())
+    */
     void recordTypeInfo(const QoreTypeInfo* type_info) {
         if (!type_info) {
             other_count.fetch_add(1, std::memory_order_relaxed);
             return;
         }
 
+        TypeProfileTypeKey key{type_info, qore_get_type_identity_serial(type_info)};
+        bool counted = false;
         {
             std::lock_guard<std::mutex> lock(extended_mutex);
-            if (!extended_type_counts) {
-                extended_type_counts = std::make_unique<std::unordered_map<const QoreTypeInfo*, uint32_t>>();
+            if (extended_type_counts) {
+                auto i = extended_type_counts->find(key);
+                if (i != extended_type_counts->end()) {
+                    ++i->second;
+                    counted = true;
+                }
             }
-            ++(*extended_type_counts)[type_info];
+        }
+        if (!counted) {
+            auto add = [this, &key] () {
+                std::lock_guard<std::mutex> lock(extended_mutex);
+                if (!extended_type_counts) {
+                    extended_type_counts = std::make_unique<std::unordered_map<TypeProfileTypeKey, uint32_t,
+                        TypeProfileTypeKeyHash>>();
+                }
+                ++(*extended_type_counts)[key];
+            };
+            if (key.serial && type_cache) {
+                // the entry is added with the registry locked, so the eviction of the type cannot run in between
+                qore_generic_cache_insert_weak(type_cache, {type_info}, add);
+            } else {
+                // a type that is never freed while the library is initialized
+                add();
+            }
         }
         other_count.fetch_add(1, std::memory_order_relaxed);
     }
@@ -1967,8 +2017,29 @@ struct TypeProfile {
         if (!extended_type_counts) {
             return 0;
         }
-        auto i = extended_type_counts->find(type_info);
+        auto i = extended_type_counts->find(TypeProfileTypeKey{type_info, qore_get_type_identity_serial(type_info)});
         return i == extended_type_counts->end() ? 0 : i->second;
+    }
+
+    //! removes the counts of the dead types; called by the function's cache with the registry locked
+    void evictDeadTypes(const std::set<const QoreTypeInfo*>& dead) {
+        std::lock_guard<std::mutex> lock(extended_mutex);
+        if (!extended_type_counts) {
+            return;
+        }
+        for (auto i = extended_type_counts->begin(); i != extended_type_counts->end();) {
+            if (dead.count(i->first.type_info)) {
+                i = extended_type_counts->erase(i);
+            } else {
+                ++i;
+            }
+        }
+    }
+
+    //! returns the number of types counted, for debug checks
+    size_t getTypeCount() const {
+        std::lock_guard<std::mutex> lock(extended_mutex);
+        return extended_type_counts ? extended_type_counts->size() : 0;
     }
 
     void recordPluginTypeInfo(std::string module_name, uint16_t local_type_id, const QoreTypeInfo* type_info) {
@@ -2023,7 +2094,7 @@ struct TypeProfile {
             if (extended_type_counts) {
                 for (const auto& i : *extended_type_counts) {
                     if (i.second > dominant_count) {
-                        dominant_type_info = i.first;
+                        dominant_type_info = i.first.type_info;
                         dominant_count = i.second;
                     }
                 }
@@ -4283,6 +4354,10 @@ public:
     }
 
     ~QoreIRFunction() {
+        // no eviction may run on the guard profiles once they are being freed
+        if (guard_profile_types) {
+            qore_generic_cache_unregister(guard_profile_types.get());
+        }
         delete cached_pre_instantiated;
         for (auto* loc : owned_locations) {
             delete loc;
@@ -4957,12 +5032,50 @@ public:
     //! Number of guards in this function
     uint32_t num_guards = 0;
 
+    //! Evicts the types that are destroyed from the function's guard type profiles (issue #6421)
+    class QoreIRGuardProfileTypes : public QoreGenericTypeCache {
+    public:
+        DLLLOCAL QoreIRGuardProfileTypes(const QoreIRFunction& f) : f(f) {
+        }
+
+        DLLLOCAL virtual void evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
+                qore_generic_cache_release_list_t& release) {
+            for (uint32_t i = 0; i < f.guard_profile_count; ++i) {
+                f.guard_profiles[i].evictDeadTypes(dead);
+            }
+        }
+
+    private:
+        const QoreIRFunction& f;
+    };
+
+    //! the cache that evicts destroyed types from the guard profiles; unregistered before they are freed
+    mutable std::unique_ptr<QoreIRGuardProfileTypes> guard_profile_types;
+
     //! Allocate guard profiles array to match num_guards
     void initGuardProfiles() {
         if (guard_profile_count < num_guards) {
+            if (!guard_profile_types) {
+                guard_profile_types = std::make_unique<QoreIRGuardProfileTypes>(*this);
+            } else {
+                // no eviction may run on the profiles that are replaced
+                qore_generic_cache_unregister(guard_profile_types.get());
+            }
             guard_profiles.reset(new TypeProfile[num_guards]());
+            for (uint32_t i = 0; i < num_guards; ++i) {
+                guard_profiles[i].type_cache = guard_profile_types.get();
+            }
             guard_profile_count = num_guards;
         }
+    }
+
+    //! Returns the number of types counted by the guard type profiles, for debug checks
+    size_t getGuardProfileTypeCount() const {
+        size_t rv = 0;
+        for (uint32_t i = 0; i < guard_profile_count; ++i) {
+            rv += guard_profiles[i].getTypeCount();
+        }
+        return rv;
     }
 
     //! OSR flag: set by the IR interpreter when a hot loop is detected.
