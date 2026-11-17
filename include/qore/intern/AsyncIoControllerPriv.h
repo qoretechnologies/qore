@@ -921,6 +921,17 @@ public:
     */
     DLLLOCAL static void opObjectDeleted(SocketPollOperationBase* op);
 
+    //! Wakes the I/O thread of the controller that holds the given C++ poll operation; never raises an exception
+    /** See SocketPollOperationBase::wakeIoThread()
+    */
+    DLLLOCAL static void wakeOpIoThread(SocketPollOperationBase* op);
+
+    //! Releases the given (last) reference of a C++ poll operation on a callback worker of the global controller
+    /** Used where releasing the last reference would run the operation's cleanup in a thread that must not run it;
+        released in the calling thread if there is no controller (in a child process created with fork())
+    */
+    DLLLOCAL static void releaseOpOnWorker(SocketPollOperationBase* op);
+
     //! Returns true if the Qore object of the given C++ poll operation was deleted (see opObjectDeleted())
     /** Called by an I/O thread before each step of an operation; a single atomic load
     */
@@ -1280,6 +1291,8 @@ private:
         //! True once the last state event (\c done) has been pushed; it is pushed exactly once
         bool state_end_delivered = false;
         SocketPollOperationBase* spop_base; //!< C++ poll operation (referenced, or nullptr)
+        //! True if this entry attached spop_base to the controller (see attachOp()); only such an entry detaches it
+        bool spop_attached = false;
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
         //! True once a terminal completion (goal/timeout/cancel/error) has been
@@ -2122,7 +2135,7 @@ private:
     DLLLOCAL bool attachOp(SocketPollOperationBase* op, QoreObject* sock_obj);
 
     //! Records that the given C++ poll operation is no longer held in a cache of this controller
-    DLLLOCAL static void detachOp(SocketPollOperationBase* op);
+    DLLLOCAL static void detachOp(SocketPollOperationBase* op, AsyncIoControllerPriv* ctrl);
 
     //! Sends a CancelDeletedOp command for the given C++ poll operation to the running I/O threads
     /** @param op the operation, referenced by each command

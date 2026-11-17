@@ -325,7 +325,15 @@ public:
             delete this;
         }
     }
-    using SocketPollOperationBase::deref;
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
 
 protected:
     DLLLOCAL const char* getStateImpl() const override;

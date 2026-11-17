@@ -486,7 +486,11 @@ public:
         @since %Qore 3.0
     */
     DLLEXPORT void deref(ExceptionSink* xsink) override;
-    using SocketPollOperationBase::deref;
+
+    //! Releases the pipeline's state (cleanup()) with its last reference, without a caller's exception sink
+    /** @since %Qore 3.0
+    */
+    DLLEXPORT void deref() override;
 
 protected:
     DLLEXPORT const char* getStateImpl() const override;

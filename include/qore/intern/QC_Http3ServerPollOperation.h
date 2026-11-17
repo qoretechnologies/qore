@@ -377,7 +377,15 @@ public:
             delete this;
         }
     }
-    using SocketPollOperationBase::deref;
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
 
     //! Close all registered stream queues and reject future registrations
     /** Sets @c stream_queues_closed=true under op_lock and pushes a NOTHING

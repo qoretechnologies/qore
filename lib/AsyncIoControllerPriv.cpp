@@ -421,11 +421,23 @@ char qore_spop_deleted_mark;
 AsyncIoControllerPriv* const qore_spop_deleted = reinterpret_cast<AsyncIoControllerPriv*>(&qore_spop_deleted_mark);
 }
 
-void SocketPollOperationBase::wakeIoThread(ExceptionSink* xsink) {
-    AsyncIoControllerPriv* ctrl = __atomic_load_n(&io_controller, __ATOMIC_ACQUIRE);
-    if (ctrl && ctrl != qore_spop_deleted && io_sock_obj) {
-        ctrl->wakeSocketByObject(io_sock_obj, xsink);
+void SocketPollOperationBase::wakeIoThread(ExceptionSink*) {
+    AsyncIoControllerPriv::wakeOpIoThread(this);
+}
+
+void AsyncIoControllerPriv::wakeOpIoThread(SocketPollOperationBase* op) {
+    // the lock keeps the controller and the socket object (which the cache entry that attached the operation
+    // references) until the wake has been sent; see opObjectDeleted()
+    AutoLocker al(qore_spop_lock(op));
+    AsyncIoControllerPriv* ctrl = __atomic_load_n(&op->io_controller, __ATOMIC_RELAXED);
+    if (!ctrl || ctrl == qore_spop_deleted || !op->io_sock_obj) {
+        return;
     }
+    // a wake is only a hint (the operation runs again at its next event in any case): an error, such as a socket
+    // object without private data any more, is not raised to the caller, which can be a step of an operation
+    ExceptionSink wake_xsink;
+    ctrl->wakeSocketByObject(op->io_sock_obj, &wake_xsink);
+    wake_xsink.clear();
 }
 
 void AsyncIoControllerPriv::opObjectDeleted(SocketPollOperationBase* op) {
@@ -457,13 +469,13 @@ bool AsyncIoControllerPriv::attachOp(SocketPollOperationBase* op, QoreObject* so
     return false;
 }
 
-void AsyncIoControllerPriv::detachOp(SocketPollOperationBase* op) {
+void AsyncIoControllerPriv::detachOp(SocketPollOperationBase* op, AsyncIoControllerPriv* ctrl) {
     AutoLocker al(qore_spop_lock(op));
-    // the mark of a deleted object stays
-    if (__atomic_load_n(&op->io_controller, __ATOMIC_RELAXED) != qore_spop_deleted) {
+    // the mark of a deleted object stays, and an attachment to another controller is not cleared
+    if (__atomic_load_n(&op->io_controller, __ATOMIC_RELAXED) == ctrl) {
         __atomic_store_n(&op->io_controller, nullptr, __ATOMIC_RELEASE);
+        op->io_sock_obj = nullptr;
     }
-    op->io_sock_obj = nullptr;
 }
 
 void AsyncIoControllerPriv::postDeletedOpCancel(SocketPollOperationBase* op, int only_idx) {
@@ -494,6 +506,39 @@ void AsyncIoControllerPriv::postDeletedOpCancel(SocketPollOperationBase* op, int
         // notify() does not block; notifying under m keeps the context alive until it returns
         tp.notifier->notify();
     }
+}
+
+void AsyncIoControllerPriv::releaseOpOnWorker(SocketPollOperationBase* op) {
+    ExceptionSink xsink;
+    {
+        ReferenceHolder<QoreObject> ctrl_obj(qore_get_async_io_controller_obj(&xsink), &xsink);
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(ctrl_obj
+            ? static_cast<AsyncIoControllerPriv*>(ctrl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, &xsink))
+            : nullptr, &xsink);
+        if (ctrl && !ctrl->forked()) {
+            ctrl->ensureCallDispatcher();
+            // the release runs in the Program of the operation's object; see AsyncIoDeferredRelease::getProgram()
+            std::unique_ptr<AsyncIoDeferredRelease> refs(new AsyncIoDeferredRelease);
+            refs->spop_base = op;
+            ctrl->call_dispatcher.load(std::memory_order_acquire)->dispatchReleaseAsync(refs.release());
+            xsink.clear();
+            return;
+        }
+    }
+    // no controller: the reference is released here
+    xsink.clear();
+    op->deref(&xsink);
+    xsink.clear();
+}
+
+void qore_socket_poll_op_deref_off_thread(SocketPollOperationBase* op) {
+    if (!op->ROdereference()) {
+        return;
+    }
+    // the last reference: no other holder can take a new one, so it is taken again here and handed over to a callback
+    // worker, whose release runs the operation's cleanup() (see the deref() of the operation classes)
+    op->ROreference();
+    AsyncIoControllerPriv::releaseOpOnWorker(op);
 }
 
 void qore_socket_poll_op_object_deleted(SocketPollOperationBase* op) {
@@ -594,14 +639,22 @@ static void reset_socket_poll_info(QoreHashNode* info, int events, QoreObject* s
 }
 
 QoreHashNode* SocketPollOperationBase::getSocketPollInfoHash(ExceptionSink* xsink, int events) const {
+    // no hash is returned with an exception (the socket member of an operation whose object was deleted, for
+    // example): a caller that returns nothing on an exception would leak it
+    ExceptionSink sock_xsink;
+    ReferenceHolder<QoreObject> sock(getReferencedSocketObject(&sock_xsink), xsink);
+    if (sock_xsink) {
+        xsink->assimilate(sock_xsink);
+        return nullptr;
+    }
     QoreHashNode* info = SocketPollInfoLender::take();
     if (info) {
-        reset_socket_poll_info(info, events, getReferencedSocketObject(xsink), nullptr, xsink);
+        reset_socket_poll_info(info, events, sock.release(), nullptr, xsink);
         return info;
     }
     ReferenceHolder<QoreHashNode> new_info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
     new_info->setKeyValue("events", events, xsink);
-    new_info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+    new_info->setKeyValue("socket", sock.release(), xsink);
     return new_info.release();
 }
 
@@ -617,14 +670,21 @@ QoreHashNode* SocketPollOperationBase::getSocketPollInfoHash(ExceptionSink* xsin
             list->push(h.release(), xsink);
         }
     }
+    // no hash is returned with an exception; see above
+    ExceptionSink sock_xsink;
+    ReferenceHolder<QoreObject> sock(getReferencedSocketObject(&sock_xsink), xsink);
+    if (sock_xsink) {
+        xsink->assimilate(sock_xsink);
+        return nullptr;
+    }
     QoreHashNode* info = SocketPollInfoLender::take();
     if (info) {
-        reset_socket_poll_info(info, events, getReferencedSocketObject(xsink), list.release(), xsink);
+        reset_socket_poll_info(info, events, sock.release(), list.release(), xsink);
         return info;
     }
     ReferenceHolder<QoreHashNode> new_info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
     new_info->setKeyValue("events", events, xsink);
-    new_info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+    new_info->setKeyValue("socket", sock.release(), xsink);
     if (list) {
         new_info->setKeyValue("extra_fds", list.release(), xsink);
     }
@@ -650,9 +710,10 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     if (controller && queue && !completion_delivered) {
         controller->deliverBackstopCompletionIfUndelivered(*this, xsink);
     }
-    // Clear controller back-reference before dereffing
-    if (spop_base) {
-        AsyncIoControllerPriv::detachOp(spop_base);
+    // Clear controller back-reference before dereffing; only an entry that attached the operation detaches it
+    if (spop_base && spop_attached) {
+        AsyncIoControllerPriv::detachOp(spop_base, controller);
+        spop_attached = false;
     }
     if (controller && submit_route_thread_idx >= 0 && !submit_route_sock_hash.empty()) {
         controller->clearProvisionalSocketRoute(submit_route_sock_hash, sock_obj,
@@ -719,7 +780,16 @@ QoreProgram* AsyncIoDeferredRelease::getProgram() const {
     if (spop_obj) {
         return spop_obj->getProgram();
     }
-    return sock_obj ? sock_obj->getProgram() : nullptr;
+    if (sock_obj) {
+        return sock_obj->getProgram();
+    }
+    // a C++ poll operation released without its object (the reference of a CancelDeletedOp command, or the one taken
+    // for the release of a step's result) can run its cleanup with the release: it runs in the Program of the
+    // operation's object, which the operation references weakly (the object references its Program)
+    if (spop_base && *spop_base->self) {
+        return (*spop_base->self)->getProgram();
+    }
+    return nullptr;
 }
 
 void AsyncIoDeferredRelease::release(ExceptionSink* xsink) {
@@ -3605,8 +3675,12 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
 
         // the controller back-reference (see wakeIoThread()); an operation whose object was deleted meanwhile is
         // canceled at the next command pass of this thread
-        if (pinfo.spop_base && attachOp(pinfo.spop_base, pinfo.sock_obj)) {
-            postDeletedOpCancel(pinfo.spop_base, t.thread_idx);
+        if (pinfo.spop_base) {
+            if (attachOp(pinfo.spop_base, pinfo.sock_obj)) {
+                postDeletedOpCancel(pinfo.spop_base, t.thread_idx);
+            } else {
+                pinfo.spop_attached = true;
+            }
         }
 
         // Queue for first continuePoll + timeout arming in Phase 1 Step A.
@@ -6623,15 +6697,28 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     SocketPollInfoLender lender(node->second.poll_info, xsink);
                     new_info = op.spop_base->continuePoll(&poll_xsink);
                 }
-                if (isOpDeleted(op.spop_base)) {
-                    // the operation's object was deleted while the step ran: the step's result is dropped, and the
-                    // operation is canceled by the CancelDeletedOp command that the deletion sent; the result is
-                    // released off the I/O thread, as it can hold the last references to objects
+                // the step can have removed or replaced its own operation (a direct submit with its key), which may
+                // have been released: nothing of the operation is read before its entry is found again
+                node = find_queued(op);
+                // the poll info of a step that is not used is released off the I/O thread, as it can hold the last
+                // references to objects; with a reference to the operation, whose Program the release runs in
+                auto release_step_info = [&](QoreHashNode* info) {
                     AsyncIoDeferredRelease refs;
-                    refs.poll_info = new_info;
-                    refs.module_cleanup_delegate = async_io_module_cleanup_delegate(node->second.sandbox_ctx);
+                    refs.poll_info = info;
+                    if (node) {
+                        node->second.spop_base->ref();
+                        refs.spop_base = node->second.spop_base;
+                        refs.module_cleanup_delegate = async_io_module_cleanup_delegate(node->second.sandbox_ctx);
+                    }
                     releaseOffIoThread(refs, xsink);
+                };
+                if (!node || isOpDeleted(node->second.spop_base)) {
+                    // the result is dropped, as Phase 3 would drop it; an operation whose object was deleted while
+                    // the step ran is canceled by the CancelDeletedOp command that the deletion sent
                     poll_xsink.clear();
+                    if (new_info) {
+                        release_step_info(new_info);
+                    }
                     continue;
                 }
                 ASYNC_IO_TRACE("Phase2 C++ continuePoll op=%llu -> %s goal=%d\n",
@@ -6647,13 +6734,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     }
                     poll_xsink.clear();
                     if (new_info) {
-                        // a step can return its poll info with an exception; the exception ends the operation, and
-                        // the poll info, which can hold the last reference to an object, is released off the I/O
-                        // thread
-                        AsyncIoDeferredRelease refs;
-                        refs.poll_info = new_info;
-                        refs.module_cleanup_delegate = async_io_module_cleanup_delegate(node->second.sandbox_ctx);
-                        releaseOffIoThread(refs, xsink);
+                        // a step can return its poll info with an exception; the exception ends the operation
+                        release_step_info(new_info);
                     }
                 } else if (!new_info) {
                     result.completed = true;
@@ -6666,25 +6748,9 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         result.ex_hash = ex_obj->makeExceptionObject();
                     }
                     poll_xsink.clear();
-                    AsyncIoDeferredRelease refs;
-                    refs.poll_info = new_info;
-                    refs.module_cleanup_delegate = async_io_module_cleanup_delegate(node->second.sandbox_ctx);
-                    releaseOffIoThread(refs, xsink);
+                    release_step_info(new_info);
                 } else {
                     result.new_poll_info = new_info;
-                }
-
-                // the call can have removed or replaced its own operation (a direct submit with its key); its result
-                // is then dropped, as Phase 3 would drop it, and its poll operation may have been released
-                node = find_queued(op);
-                if (!node) {
-                    if (result.new_poll_info) {
-                        result.new_poll_info->deref(xsink);
-                    }
-                    if (result.ex_hash) {
-                        result.ex_hash->deref(xsink);
-                    }
-                    continue;
                 }
                 const std::string& op_owner = node->second.owner;
                 const AsyncIoSandboxContext& op_sandbox_ctx = node->second.sandbox_ctx;
@@ -8139,7 +8205,13 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             break;
                         }
                     }
+                    // the command's reference can be the last one, whose release runs the operation's cleanup: it is
+                    // released off the I/O thread in the Program of the operation's object (see
+                    // AsyncIoDeferredRelease::getProgram()), and under the sandbox of its submission, if found
+                    AsyncIoDeferredRelease refs;
+                    refs.spop_base = spop_base;
                     if (found) {
+                        refs.module_cleanup_delegate = async_io_module_cleanup_delegate(pinfo_copy.sandbox_ctx);
                         if (pinfo_copy.continue_poll_in_flight) {
                             // a step runs on a worker: the cancellation waits for its result, as for a Cancel
                             uint64_t op_id = pinfo_copy.op_id;
@@ -8149,9 +8221,6 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             pinfo_copy.cleanup(xsink);
                         }
                     }
-                    // the command's reference can be the last one, whose release runs the operation's cleanup
-                    AsyncIoDeferredRelease refs;
-                    refs.spop_base = spop_base;
                     releaseOffIoThread(refs, xsink);
                     break;
                 }
@@ -8650,8 +8719,12 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 
                     // Set controller back-reference so wakeIoThread() works; an operation whose object was deleted
                     // before the submission was processed is canceled at its next command pass
-                    if (pinfo.spop_base && attachOp(pinfo.spop_base, pinfo.sock_obj)) {
-                        postDeletedOpCancel(pinfo.spop_base, t.thread_idx);
+                    if (pinfo.spop_base) {
+                        if (attachOp(pinfo.spop_base, pinfo.sock_obj)) {
+                            postDeletedOpCancel(pinfo.spop_base, t.thread_idx);
+                        } else {
+                            pinfo.spop_attached = true;
+                        }
                     }
 
                     // Queue for first continuePoll in Phase 1

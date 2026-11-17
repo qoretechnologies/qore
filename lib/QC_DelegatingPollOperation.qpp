@@ -89,7 +89,15 @@ public:
             delete this;
         }
     }
-    using SocketPollOperationBase::deref;
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
 
     DLLLOCAL void cleanup(ExceptionSink* xsink) {
         if (inner_obj) {
@@ -259,8 +267,10 @@ bool qore_delegating_poll_op_reads_state_natively(const SocketPollOperationBase*
 // DGC dispatch entry point — see QC_DelegatingPollOperation.h.
 bool qore_delegating_poll_op_scan_members(AbstractPrivateData* priv_data, RObject& obj,
         RSetHelper& rsh, ExceptionSink* xsink) {
-    ReferenceHolder<DelegatingPollOperationPriv> priv(
-        reinterpret_cast<DelegatingPollOperationPriv*>(priv_data), xsink);
+    // the reference can be the last one if the object is deleted meanwhile: its release, which runs the operation's
+    // cleanup, is not made in the scan
+    QorePollOpOffThreadRef<DelegatingPollOperationPriv> priv(
+        reinterpret_cast<DelegatingPollOperationPriv*>(priv_data));
     if (!*priv) {
         return false;
     }

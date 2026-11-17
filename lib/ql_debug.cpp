@@ -24248,6 +24248,30 @@ static QoreValue f_dbg_async_action_locks_held(const QoreListNode* params, Runti
     return static_cast<int64>(qore_dbg_async_action_locks_held);
 }
 
+//! returns True if a deferred release of only the C++ poll operation of the given object runs in the object's Program
+/** The async I/O controller releases such a reference (the one of a CancelDeletedOp command, or the one taken for the
+    release of a step's result) on a callback worker, whose Program is the one that the release reports; the
+    release can run the operation's cleanup (issue #6464).  The reference released here is not the last one.
+*/
+static QoreValue f_dbg_poll_op_release_program(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreValue v = get_param_value(params, 0);
+    QoreObject* obj = const_cast<QoreObject*>(v.get<const QoreObject>());
+    SocketPollOperationBase* op = static_cast<SocketPollOperationBase*>(
+        obj->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+    if (!op) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_poll_op_release_program(): the object of class '%s' is "
+                "not a C++ poll operation", obj->getClassName());
+        }
+        return QoreValue();
+    }
+    AsyncIoDeferredRelease refs;
+    refs.spop_base = op;
+    bool rv = refs.getProgram() == obj->getProgram() && obj->getProgram();
+    refs.release(xsink);
+    return rv;
+}
+
 //! disarms the points armed by dbg_http_hold_at() that were not reached
 static QoreValue f_dbg_http_hold_clear(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     std::lock_guard<std::mutex> l(dbg_http_hold_m);
@@ -25993,6 +26017,8 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo);
     qns.addBuiltinVariant("dbg_async_action_locks_held", f_dbg_async_action_locks_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_poll_op_release_program", f_dbg_poll_op_release_program, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "op");
     qns.addBuiltinVariant("dbg_http_concurrent_closes", f_dbg_http_concurrent_closes, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_http_stream_credit_stats", f_dbg_http_stream_credit_stats, QCF_NO_FLAGS,

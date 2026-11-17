@@ -48,4 +48,57 @@ DLLLOCAL QoreClass* initSocketPollOperationBaseClass(QoreNamespace& qorens);
 */
 DLLLOCAL void qore_socket_poll_op_object_deleted(SocketPollOperationBase* op);
 
+//! Releases a reference to a C++ poll operation; the last one is released by a callback worker
+/** The release of the last reference runs the operation's cleanup(), which completes requests and releases objects,
+    and so can run user code; a thread that holds a temporary reference in a method of the operation's connection
+    (under its method guard, or a lock of the caller) or in a scan of the garbage collector must not run it.
+
+    @param op the operation; the reference is released
+*/
+DLLLOCAL void qore_socket_poll_op_deref_off_thread(SocketPollOperationBase* op);
+
+//! Holds a temporary reference to a C++ poll operation whose release must not run the operation's cleanup()
+/** See qore_socket_poll_op_deref_off_thread()
+*/
+template <class T>
+class QorePollOpOffThreadRef {
+public:
+    DLLLOCAL QorePollOpOffThreadRef() = default;
+
+    //! Takes over the given reference
+    DLLLOCAL explicit QorePollOpOffThreadRef(T* op) : op(op) {
+    }
+
+    DLLLOCAL ~QorePollOpOffThreadRef() {
+        if (op) {
+            qore_socket_poll_op_deref_off_thread(op);
+        }
+    }
+
+    //! Takes over the given reference; the holder must be empty
+    DLLLOCAL QorePollOpOffThreadRef& operator=(T* new_op) {
+        assert(!op);
+        op = new_op;
+        return *this;
+    }
+
+    DLLLOCAL T* operator->() const {
+        return op;
+    }
+
+    DLLLOCAL T* operator*() const {
+        return op;
+    }
+
+    DLLLOCAL explicit operator bool() const {
+        return op != nullptr;
+    }
+
+    DLLLOCAL QorePollOpOffThreadRef(const QorePollOpOffThreadRef&) = delete;
+    DLLLOCAL QorePollOpOffThreadRef& operator=(const QorePollOpOffThreadRef&) = delete;
+
+private:
+    T* op = nullptr;
+};
+
 #endif // _QORE_CLASS_SOCKETPOLLOPERATIONBASE_H

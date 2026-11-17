@@ -512,7 +512,15 @@ public:
             delete this;
         }
     }
-    using SocketPollOperationBase::deref;
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
 
     //! Custom cycle scanner for stream_queues / pending_stream_registrations
     //! QoreObject refs that live in C++ containers invisible to the normal
