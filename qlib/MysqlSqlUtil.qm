@@ -200,6 +200,9 @@ hash<auto> desc = {
 
 
     @section mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - the \c "intersect" and \c "except" @ref select_option_set_operators "set operators" of a select need MySQL
+      8.0.31 or MariaDB 10.3 or later; with an older server they raise \c SET-OPERATOR-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>)
     - documented that a server with binary logging enabled, as MySQL 8.0 and later by default, creates the function
       that emulates sequences only when \c log_bin_trust_function_creators is 1 (see @ref mysql_sequences), and
       a refusal to create it with @ref SqlUtil::AbstractDatabase::tryExecRaw() "AbstractDatabase::tryExecRaw()", as
@@ -3907,6 +3910,25 @@ string str = table.getSqlValue(date);
                 sql += " offset %v";
                 info.args += info.query_hash.offset.toInt();
             }
+        }
+
+        #! Returns the SQL keyword of a set operator
+        /** \c INTERSECT and \c EXCEPT need MySQL 8.0.31 or MariaDB 10.3 or later
+
+            @throw SET-OPERATOR-ERROR the server does not support the set operator
+
+            @since MysqlSqlUtil 1.6
+        */
+        private string getSetOperatorSql(string op) {
+            if (op == "intersect" || op == "except") {
+                int version = ds.getServerVersion();
+                # MariaDB's versions are 10.0 and later; MySQL's are before 10.0
+                if (version >= 100000 ? version < 100300 : version < 80031) {
+                    throw "SET-OPERATOR-ERROR", sprintf("%s: the %y set operator needs MySQL 8.0.31 or MariaDB 10.3 "
+                        "or later; the server's version is %d", getDesc(), op, version);
+                }
+            }
+            return AbstractTable::getSetOperatorSql(op);
         }
 
         #! returns @ref True if the database requires a wildcard \c "*" to be prefixed with the table name when it appears with other column arguments in a select statement

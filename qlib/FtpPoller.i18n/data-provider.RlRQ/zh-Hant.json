@@ -96,8 +96,8 @@
           "message": "發生 FTP 錯誤後重試前的延遲秒數"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.desc": {
-          "source": "The number of seconds to wait before polling again after an FTP error; the error is logged at error level, and then polling continues after this delay.\n\nTransient problems such as a network interruption or a server restart are common with FTP; a low value recovers from such problems quickly, while a high value reduces the load on a server that is failing persistently.\n\n**NOTE**: files are not polled while this delay is in effect",
-          "message": "發生 FTP 錯誤後重新輪詢前要等待的秒數；錯誤會以錯誤層級記錄，然後在此延遲後繼續輪詢。\n\n網路中斷或伺服器重新啟動等暫時性問題在 FTP 中很常見；較小的值可快速從此類問題中復原，而較大的值可減少持續失敗之伺服器的負載。\n\n**注意**：在此延遲生效期間不會輪詢檔案"
+          "source": "The number of seconds to wait before polling again after an FTP error and after a refused file; the error is logged at error level, and then polling continues after this delay.\n\nTransient problems such as a network interruption or a server restart are common with FTP; a low value recovers from such problems quickly, while a high value reduces the load on a server that is failing persistently.\n\n**NOTE**: files are not polled while this delay is in effect",
+          "message": "發生 FTP 錯誤及檔案遭拒絕後重新輪詢前要等待的秒數；錯誤會以錯誤層級記錄，然後在此延遲後繼續輪詢。\n\n網路中斷或伺服器重新啟動等暫時性問題在 FTP 中很常見；較小的值可快速從此類問題中復原，而較大的值可減少持續失敗之伺服器的負載。\n\n**注意**：在此延遲生效期間不會輪詢檔案"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.display_name": {
           "source": "Regular Expression Match",

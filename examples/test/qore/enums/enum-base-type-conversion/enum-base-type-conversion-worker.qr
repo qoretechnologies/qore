@@ -1,0 +1,280 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks the conversions between an enum and its base type; run by enum-base-type-conversion.qtest
+
+/** An enum value converts implicitly to its base type, but a value of the base type converts to the enum type only
+    with cast<enum<X>>(), which checks that the value is a member (qore#6237).  Each check prints "name=result",
+    where the result is "<type>:<value>" for a value or the error code of the exception raised.
+*/
+
+%modern
+
+enum Color : int {
+    Red = 1,
+    Green = 2,
+    Blue = 3,
+}
+
+enum Status : string {
+    Active = "active",
+    Inactive = "inactive",
+}
+
+enum Other : int {
+    One = 1,
+    Five = 5,
+}
+
+const Decls = "%modern\nenum PColor : int { Red = 1, Green = 2 }\nenum PStatus : string { Active = \"active\" }\n"
+    "sub ptake(PColor c) {}\n";
+
+#! code parsed in a Program of its own; the parse must raise the error given or succeed ("ok")
+/** The Program inherits this Program's enums and functions, so its declarations have names of their own
+*/
+const ParseChecks = {
+    "parse-int-literal-to-enum": "sub t() { PColor c = 2; }",
+    "parse-int-var-to-enum": "sub t() { int raw = 2; PColor c = raw; }",
+    "parse-int-var-assign-to-enum": "sub t() { PColor c = PColor::Red; int raw = 2; c = raw; }",
+    "parse-softint-to-enum": "sub t() { softint raw = 2; PColor c = raw; }",
+    "parse-string-to-int-enum": "sub t() { PColor c = \"1\"; }",
+    "parse-int-literal-to-enum-param": "sub t() { ptake(3); }",
+    "parse-int-var-to-enum-param": "sub t() { int raw = 2; ptake(raw); }",
+    "parse-or-nothing-int-to-or-nothing-enum": "sub t() { *int raw = 2; *PColor c = raw; }",
+    "parse-enum-to-int": "sub t() { int i = PColor::Red; }",
+    "parse-cast-int-var": "sub t() { int raw = 2; PColor c = cast<enum<PColor>>(raw); }",
+    "parse-cast-literal-not-member": "sub t() { PColor c = cast<enum<PColor>>(99); }",
+    "parse-cast-int-to-string-enum": "sub t() { int i = 1; PStatus s = cast<enum<PStatus>>(i); }",
+    "parse-cast-float-to-int-enum": "sub t() { PColor c = cast<enum<PColor>>(2.0); }",
+    "parse-cast-nothing-literal": "sub t() { PColor c = cast<enum<PColor>>(NOTHING); }",
+    "parse-cast-or-nothing-string-to-int-enum": "sub t() { *string s; PColor c = cast<enum<PColor>>(s); }",
+    "parse-cast-or-nothing-int": "sub t() { *int ni; PColor c = cast<enum<PColor>>(ni); }",
+    "parse-or-nothing-cast-nothing-literal": "sub t() { *PColor c = cast<*enum<PColor>>(NOTHING); }",
+};
+
+sub take(Color c) {
+}
+
+string sub show(auto v) {
+    return sprintf("%s:%y", v.fullType(), v);
+}
+
+string sub enum_to_int() {
+    int i = Color::Red;
+    return show(i);
+}
+
+string sub enum_to_float() {
+    float f = Color::Green;
+    return show(f);
+}
+
+string sub enum_to_string() {
+    string s = Status::Active;
+    return show(s);
+}
+
+string sub enum_to_auto() {
+    auto v = Color::Blue;
+    return show(v);
+}
+
+int sub int_param(int i) {
+    return i;
+}
+
+string sub enum_to_int_param() {
+    return show(int_param(Color::Green));
+}
+
+string sub auto_int_to_enum_init() {
+    auto x = 2;
+    Color c = x;
+    return show(c);
+}
+
+string sub auto_int_to_enum_assign() {
+    Color c = Color::Red;
+    auto x = 2;
+    c = x;
+    return show(c);
+}
+
+string sub auto_int_to_enum_param() {
+    auto x = 3;
+    take(x);
+    return "called";
+}
+
+string sub or_nothing_int_to_or_nothing_enum() {
+    *int raw = 2;
+    *Color c = raw;
+    return show(c);
+}
+
+string sub or_nothing_nothing_to_or_nothing_enum() {
+    *int raw;
+    *Color c = raw;
+    return show(c);
+}
+
+string sub other_enum_to_enum() {
+    auto x = Other::One;
+    Color c = x;
+    return show(c);
+}
+
+string sub auto_enum_to_enum() {
+    auto x = Color::Blue;
+    Color c = x;
+    return show(c);
+}
+
+string sub cast_int_var() {
+    int raw = 2;
+    Color c = cast<enum<Color>>(raw);
+    return show(c);
+}
+
+string sub cast_auto() {
+    auto x = 3;
+    Color c = cast<enum<Color>>(x);
+    take(c);
+    return show(c);
+}
+
+string sub cast_literal_not_member() {
+    return show(cast<enum<Color>>(99));
+}
+
+string sub cast_auto_not_member() {
+    auto x = 99;
+    return show(cast<enum<Color>>(x));
+}
+
+string sub cast_string() {
+    auto x = "active";
+    return show(cast<enum<Status>>(x));
+}
+
+string sub cast_string_not_member() {
+    auto x = "unknown";
+    return show(cast<enum<Status>>(x));
+}
+
+string sub cast_wrong_type() {
+    auto x = 123;
+    return show(cast<enum<Status>>(x));
+}
+
+string sub cast_float_to_int_enum() {
+    auto x = 2.0;
+    return show(cast<enum<Color>>(x));
+}
+
+string sub cast_string_to_int_enum() {
+    auto x = "2";
+    return show(cast<enum<Color>>(x));
+}
+
+string sub cast_nothing() {
+    auto x;
+    return show(cast<enum<Color>>(x));
+}
+
+string sub cast_or_nothing_int_nothing() {
+    *int ni;
+    return show(cast<enum<Color>>(ni));
+}
+
+string sub cast_or_nothing_nothing() {
+    auto x;
+    return show(cast<*enum<Color>>(x));
+}
+
+string sub cast_or_nothing_value() {
+    auto x = "active";
+    return show(cast<*enum<Status>>(x));
+}
+
+string sub cast_other_enum() {
+    auto x = Other::One;
+    return show(cast<enum<Color>>(x));
+}
+
+string sub cast_other_enum_not_member() {
+    auto x = Other::Five;
+    return show(cast<enum<Color>>(x));
+}
+
+string sub enum_back_to_int() {
+    int raw = 2;
+    Color c = cast<enum<Color>>(raw);
+    int back = c;
+    return show(back);
+}
+
+string sub equals_base() {
+    return show(Color::Red == 1);
+}
+
+string sub absolute_equals_base() {
+    return show(Color::Red === 1);
+}
+
+sub check(string name, code c) {
+    string result;
+    try {
+        result = c();
+    } catch (hash<ExceptionInfo> ex) {
+        result = ex.err;
+    }
+    printf("%s=%s\n", name, result);
+}
+
+sub parse_check(string name, string code) {
+    Program p(PO_NEW_STYLE);
+    string result;
+    try {
+        p.parse(Decls + code, name);
+        result = "ok";
+    } catch (hash<ExceptionInfo> ex) {
+        result = ex.err;
+    }
+    printf("%s=%s\n", name, result);
+}
+
+check("enum-to-int", \enum_to_int());
+check("enum-to-float", \enum_to_float());
+check("enum-to-string", \enum_to_string());
+check("enum-to-auto", \enum_to_auto());
+check("enum-to-int-param", \enum_to_int_param());
+check("auto-int-to-enum-init", \auto_int_to_enum_init());
+check("auto-int-to-enum-assign", \auto_int_to_enum_assign());
+check("auto-int-to-enum-param", \auto_int_to_enum_param());
+check("or-nothing-int-to-or-nothing-enum", \or_nothing_int_to_or_nothing_enum());
+check("or-nothing-nothing-to-or-nothing-enum", \or_nothing_nothing_to_or_nothing_enum());
+check("other-enum-to-enum", \other_enum_to_enum());
+check("auto-enum-to-enum", \auto_enum_to_enum());
+check("cast-int-var", \cast_int_var());
+check("cast-auto", \cast_auto());
+check("cast-literal-not-member", \cast_literal_not_member());
+check("cast-auto-not-member", \cast_auto_not_member());
+check("cast-string", \cast_string());
+check("cast-string-not-member", \cast_string_not_member());
+check("cast-wrong-type", \cast_wrong_type());
+check("cast-float-to-int-enum", \cast_float_to_int_enum());
+check("cast-string-to-int-enum", \cast_string_to_int_enum());
+check("cast-nothing", \cast_nothing());
+check("cast-or-nothing-int-nothing", \cast_or_nothing_int_nothing());
+check("cast-or-nothing-nothing", \cast_or_nothing_nothing());
+check("cast-or-nothing-value", \cast_or_nothing_value());
+check("cast-other-enum", \cast_other_enum());
+check("cast-other-enum-not-member", \cast_other_enum_not_member());
+check("enum-back-to-int", \enum_back_to_int());
+check("equals-base", \equals_base());
+check("absolute-equals-base", \absolute_equals_base());
+
+foreach hash<auto> i in (ParseChecks.pairIterator()) {
+    parse_check(i.key, i.value);
+}

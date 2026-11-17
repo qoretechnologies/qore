@@ -261,11 +261,22 @@ public:
         QUIC session dies.  @ref closeSessionStreams() can only walk C++ state;
         the QoreObject member hash is not reachable from there.
 
+        A session that closed before the listener registered left no trace for the stream: its close is a one-shot
+        event that @ref closeSessionStreams() reported only to the streams registered then, and a closed session
+        sends no further events.  The stream is then recorded as peer-closed here, under the lock that
+        @ref closeSessionStreams() runs under, so that the registration's replay check (@ref isStreamPeerClosed())
+        reports it; a session that closes later finds the registered stream (qore#6202).
+
+        @param session_id the QUIC session of the stream
         @param stream_key composite key "session_id:stream_id"
     */
-    DLLLOCAL void registerStreamCloseNotify(const std::string& stream_key) {
+    DLLLOCAL void registerStreamCloseNotify(int64_t session_id, const std::string& stream_key) {
         AutoLocker al(op_lock);
         close_notify_streams.insert(stream_key);
+        // lock order: op_lock, then the socket's locks, as in deliverSessionLifecycleEvents()
+        if (sock_obj && sock_obj->isQuicSessionClosedOrGone(session_id)) {
+            peer_closed_streams.insert(stream_key);
+        }
     }
 
     //! Drops a stream key registered with @ref registerStreamCloseNotify()
@@ -275,6 +286,8 @@ public:
         AutoLocker al(op_lock);
         close_notify_streams.erase(stream_key);
         peer_closed_streams.erase(stream_key);
+        // a wakeup that arrives after the listener is gone records pending data that nothing reads any more
+        pending_stream_data.erase(stream_key);
     }
 
     //! Returns true if the given stream can no longer carry data to the peer
@@ -337,20 +350,18 @@ public:
         return h3_state.load(std::memory_order_acquire) == H3State::CLOSED;
     }
 
-    DLLLOCAL bool hasError() const {
-        return error_info != nullptr;
-    }
+    //! Returns true if an error was recorded; can be called from any thread (reads @ref has_error, without a lock)
+    DLLLOCAL bool hasError() const;
 
-    DLLLOCAL QoreHashNode* getErrorInfo() const {
-        if (error_info) {
-            error_info->ref();
-        }
-        return error_info;
-    }
+    //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
+    /** Read under @ref error_lock, which the writer holds while it stores the complete error hash, so the hash is
+        returned complete and safely published to the calling thread
+    */
+    DLLLOCAL QoreHashNode* getErrorInfo() const;
 
     DLLLOCAL bool shouldKeepAlive() const {
         H3State s = h3_state.load(std::memory_order_acquire);
-        return keep_alive && s != H3State::CLOSED && s != H3State::DRAINING && !error_info;
+        return keep_alive && s != H3State::CLOSED && s != H3State::DRAINING && !hasError();
     }
 
     //! Cleanup all referenced objects (must be called before destructor)
@@ -439,8 +450,16 @@ private:
     //! Cached completed request hash (ref'd, or nullptr)
     mutable QoreHashNode* cached_request = nullptr;
 
-    //! Error info hash (ref'd, or nullptr)
+    //! Protects @ref error_info, which the thread driving the operation records and any thread reads
+    /** A leaf lock: no other lock is taken and no Qore code runs while it is held
+    */
+    mutable QoreThreadLock error_lock;
+
+    //! Error info hash (ref'd, or nullptr); protected by @ref error_lock
     QoreHashNode* error_info = nullptr;
+    //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
+    //! by hasError()
+    std::atomic<bool> has_error{false};
 
     //! Keep-alive flag (QUIC connections are persistent)
     bool keep_alive = true;

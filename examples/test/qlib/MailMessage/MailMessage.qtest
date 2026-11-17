@@ -51,13 +51,17 @@ public class Main inherits QUnit::Test {
         addTestCase("Test addresses in quoted strings (issue #6066)", \testQuotedStringAddresses(), NOTHING);
         addTestCase("Test recipients of entries with several addresses (issue #6134)", \testListRecipients(),
             NOTHING);
-        addTestCase("Test the time to get the recipients of long entries (issue #6134)", \testListRecipientsTime(),
+        addTestCase("Test the work to get the recipients of long entries (issue #6134)", \testListRecipientsTime(),
             NOTHING);
         addTestCase("Test sender round trips (issue #6134)", \testSenderRoundTrips(), NOTHING);
         addTestCase("Test encoded word lookalikes (issue #6134)", \testEncodedWordLookalikes(), NOTHING);
         addTestCase("Test recipients with a separate display name (issue #6134)", \testNameAddressRecipients(),
             NOTHING);
         addTestCase("Test quoted local part duplicates (issue #6134)", \testQuotedLocalPartDuplicates(), NOTHING);
+        addTestCase("Test parsed header lines and body (issue #6139)", \testParsedHeaderLines(), NOTHING);
+        addParseWorkCases();
+        addTestCase("Test parsed messages without optional headers (issue #6267)", \testMissingHeaders(), NOTHING);
+        addTestCase("Test multipart boundary (issue #6307)", \testBoundary(), NOTHING);
 
         set_return_value(main());
     }
@@ -1906,39 +1910,56 @@ lorem ipsum\r
 
     # issue #6066: an address header is parsed and written in a time linear in its length
     testLongAddressHeaders() {
+        # the bytes that the parsers scan (see Mime::MimeScanCounter) for a header twice as long are at most twice
+        # as many; an algorithm that scans the rest of the header for each character or address does four times as
+        # much work
+        hash<string, code> values = {
+            "tabs in angle brackets": string sub (int n) { return "<" + strmul("\t", n) + ">x"; },
+            "spaces in angle brackets": string sub (int n) { return "<" + strmul(" ", n) + "x<"; },
+            "angle brackets": string sub (int n) { return strmul("<a", n / 2); },
+            "quotes": string sub (int n) { return strmul(" \"a", n / 2); },
+            "commas": string sub (int n) { return strmul("a,", n / 2); },
+            # unterminated domain literals
+            "domain literals": string sub (int n) { return " " + strmul("a@[", n / 3); },
+            "terminated domain literals": string sub (int n) { return strmul("a@[", n / 3) + "]"; },
+        };
         foreach string prefix in ("a", "ö") {
-            foreach string val in (prefix + "<" + strmul("\t", 20000) + ">x", prefix + "<" + strmul(" ", 20000) + "x<",
-                    prefix + strmul("<a", 10000), prefix + strmul(" \"a", 10000), prefix + strmul("a,", 10000),
-                    # unterminated domain literals
-                    prefix + " " + strmul("a@[", 7000), prefix + strmul("a@[", 7000) + "]") {
-                date start = now_us();
-                Message parsed("From: a@x.com\r\nTo: " + val + "\r\nSubject: s\r\n\r\nbody\r\n");
-                string hdr = parsed.getHeaderString();
-                parsed.getRecipients();
-                Message reparsed(parsed.serializeRaw());
-                date elapsed = now_us() - start;
-                # a quadratic time would take minutes
-                assertLt(5s, elapsed, sprintf("%y...: %y", val.substr(0, 10), elapsed));
-                assertEq(1, getHeaderLines(hdr, "To").size());
-                assertEq(parsed.getRecipients(), reparsed.getRecipients());
+            foreach hash<auto> i in (values.pairIterator()) {
+                string name = sprintf("%s: %s", prefix, i.key);
+                checkLinearWork(name, 2000,
+                    string sub (int n) {
+                        return "From: a@x.com\r\nTo: " + prefix + i.value(n) + "\r\nSubject: s\r\n\r\nbody\r\n";
+                    },
+                    hash<auto> sub (string msg) {
+                        Message parsed(msg);
+                        return {
+                            "hdr": parsed.getHeaderString(),
+                            "recipients": parsed.getRecipients(),
+                            "reparsed": new Message(parsed.serializeRaw()),
+                        };
+                    },
+                    sub (hash<auto> h, int n) {
+                        assertEq(1, getHeaderLines(h.hdr, "To").size(), name);
+                        assertEq(h.recipients, h.reparsed.getRecipients(), name);
+                    });
             }
         }
         # a created message with unterminated domain literals
-        {
-            date start = now_us();
-            Message msg(Sender, Subject);
-            msg.addTO("b@x.com ö " + strmul("a@[", 7000));
-            msg.setBody("body");
-            Message parsed(msg.serializeRaw());
-            assertEq(("b@x.com",), parsed.getRecipients());
-            assertLt(5s, now_us() - start);
-        }
+        checkLinearWork("created", 2000, string sub (int n) { return "b@x.com ö " + strmul("a@[", n / 3); },
+            Message sub (string to) {
+                Message msg(Sender, Subject);
+                msg.addTO(to);
+                msg.setBody("body");
+                return new Message(msg.serializeRaw());
+            },
+            sub (Message parsed, int n) { assertEq(("b@x.com",), parsed.getRecipients()); });
         # several such headers
-        string val = "a<" + strmul("\t", 20000) + ">x";
-        date start = now_us();
-        Message parsed("From: a@x.com\r\n" + strmul("To: " + val + "\r\n", 10) + "Subject: s\r\n\r\nbody\r\n");
-        parsed.serializeRaw();
-        assertLt(20s, now_us() - start);
+        checkLinearWork("several", 2000,
+            string sub (int n) {
+                return "From: a@x.com\r\n" + strmul("To: a<" + strmul("\t", n) + ">x\r\n", 10)
+                    + "Subject: s\r\n\r\nbody\r\n";
+            },
+            string sub (string msg) { return new Message(msg).serializeRaw(); });
     }
 
     # issue #6066: encoded words are folded with the line ending of the header, and a header value that is not
@@ -2174,27 +2195,374 @@ lorem ipsum\r
 
     # issue #6134: the time to get the recipients is linear in the length of an entry
     testListRecipientsTime() {
-        int size = 100000;
-        hash<string, string> inputs = {
-            "commas": strmul(",", size),
-            "addresses": strmul("a@x.com,", size / 8),
-            "groups": strmul("g:", size / 2) + "a@x.com" + strmul(";", size / 2),
-            "quotes": strmul("\"a,\" ", size / 5) + "<a@x.com>",
-            "unterminated quotes": strmul("\"a, ", size / 4) + "<a@x.com>",
-            "comments": strmul("(", size / 2) + strmul(")", size / 2) + " a@x.com",
-            "unterminated": "\"(<[" + strmul("a@x.com, ", size / 9),
-            "non-ascii": strmul("Jörg <j@x.com>, ", size / 16),
+        # the bytes that the parsers scan (see Mime::MimeScanCounter) for an entry twice as long are at most twice as
+        # many; an algorithm that scans the rest of the entry for each character or address does four times as much
+        # work
+        hash<string, code> inputs = {
+            "commas": string sub (int n) { return strmul(",", n); },
+            "addresses": string sub (int n) { return strmul("a@x.com,", n / 8); },
+            "groups": string sub (int n) { return strmul("g:", n / 2) + "a@x.com" + strmul(";", n / 2); },
+            "quotes": string sub (int n) { return strmul("\"a,\" ", n / 5) + "<a@x.com>"; },
+            "unterminated quotes": string sub (int n) { return strmul("\"a, ", n / 4) + "<a@x.com>"; },
+            "comments": string sub (int n) { return strmul("(", n / 2) + strmul(")", n / 2) + " a@x.com"; },
+            "unterminated": string sub (int n) { return "\"(<[" + strmul("a@x.com, ", n / 9); },
+            "non-ascii": string sub (int n) { return strmul("Jörg <j@x.com>, ", n / 16); },
         };
         foreach hash<auto> i in (inputs.pairIterator()) {
-            date start = now_us();
-            list<string> l = Message::getEmailAddresses(i.value);
-            date elapsed = now_us() - start;
-            assertGe(i.key == "commas" ? 0 : 1, l.size(), i.key);
-            # well under a second for 100KB; a quadratic algorithm takes minutes
-            assertLt(10s, elapsed, i.key);
-            if (m_options.verbose) {
-                printf("%s: %d addresses in %y\n", i.key, l.size(), elapsed);
-            }
+            string name = i.key;
+            checkLinearWork(name, 8000, i.value,
+                list<string> sub (string str) { return Message::getEmailAddresses(str); },
+                sub (list<string> l, int n) { assertGe(name == "commas" ? 0 : 1, l.size(), name); });
         }
+    }
+
+    testParsedHeaderLines() {
+        # folded lines (with a space, a tab, and only white space), separate headers, encoded words over folded
+        # lines, non-ASCII text, and a body that starts with white space and has an empty line
+        string msg = "From: \"Jörg\" <j@x.com>\r\n"
+            "To: a@x.com,\r\n b@x.com,\r\n\tö <c@x.com>\r\n"
+            "CC: d@x.com\r\n"
+            "Subject: =?UTF-8?Q?a_b?=\r\n =?UTF-8?B?w7Y=?= c\r\n"
+            "X-A:   ä  \r\n"
+            "X-B: one\r\n \r\n two\r\n"
+            "X-C: =?UTF-8?Q?x?= y =?ISO-8859-1?Q?=F6?=\r\n"
+            "\r\n"
+            "  body ö\r\n\r\nX-D: not a header\r\n";
+        Message m(msg);
+        assertEq("j@x.com", m.getFrom());
+        assertEq("\"Jörg\" <j@x.com>", m.getSender());
+        assertEq(("a@x.com, b@x.com, ö <c@x.com>",), m.getTO());
+        assertEq(("d@x.com",), m.getCC());
+        assertEq("a bö c", m.getSubject());
+        assertEq({"X-A": "ä", "X-B": "one  two", "X-C": "x y ö"}, m.getHeaders());
+        assertEq("  body ö\r\n\r\nX-D: not a header\r\n", m.getBody());
+        assertEq("UTF-8", m.getBody().encoding());
+        # the message is the same when it is serialized and parsed again
+        Message m2(m.serialize());
+        assertEq(m.getTO(), m2.getTO());
+        assertEq(m.getSubject(), m2.getSubject());
+        assertEq(m.getHeaders(), m2.getHeaders());
+        assertEq(m.getBody(), m2.getBody());
+
+        # an empty line ends the header, even if it is the first line
+        m = new Message("\r\nX-A: b\r\n");
+        assertEq(NOTHING, m.getHeaders());
+        assertEq("X-A: b\r\n", m.getBody());
+        # a header without a body
+        m = new Message("X-A: b\r\n\r\n");
+        assertEq({"X-A": "b"}, m.getHeaders());
+        assertEq(NOTHING, m.getBody());
+        # a line that has only white space other than a space or a tab ends the header
+        m = new Message("X-A: b\r\n\v\r\nX-B: c\r\n");
+        assertEq({"X-A": "b"}, m.getHeaders());
+        assertEq("X-B: c\r\n", m.getBody());
+
+        # a header line that does not end with CRLF; the position is the byte offset of the line
+        assertThrows("MESSAGE-PARSE-ERROR", "byte position 13$",
+            sub () { new Message("X-A: ö\r\n b\r\nX-B: c"); });
+        assertThrows("MESSAGE-PARSE-ERROR", "byte position 0$",
+            sub () { new Message("X-A: b\nX-B: c\n\nbody\n"); });
+        assertThrows("HEADER-ERROR", sub () { new Message("X-A b\r\n\r\nbody"); });
+
+        # a message in another encoding keeps its encoding in the body
+        string iso = convert_encoding("Subject: Jörg\r\n ä\r\nX-A: ü\r\n\r\nbödy\r\n", "ISO-8859-1");
+        m = new Message(iso);
+        assertEq("Jörg ä", m.getSubject());
+        assertEq({"X-A": "ü"}, m.getHeaders());
+        assertEq("bödy\r\n", m.getBody());
+        assertEq("ISO-8859-1", m.getBody().encoding());
+        # messages in encodings with characters of more than one byte, read by bytes (Shift_JIS, EUC-JP) or in UTF-8
+        # (UTF-16, ISO-2022-JP)
+        foreach string e in ("SHIFT_JIS", "EUC-JP", "UTF-16", "UTF-16LE", "ISO-2022-JP") {
+            string text = "From: ポ <a@x.com>\r\nTo: b@x.com,\r\n ポ <c@x.com>\r\nSubject: ポ\r\n\tポ\r\n"
+                "X-A: ポ\r\n\r\nポ\r\n";
+            m = new Message(convert_encoding(text, e));
+            assertEq("a@x.com", m.getFrom(), e);
+            assertEq(("b@x.com, ポ <c@x.com>",), m.getTO(), e);
+            assertEq("ポ ポ", m.getSubject(), e);
+            assertEq({"X-A": "ポ"}, m.getHeaders(), e);
+            assertEq("ポ\r\n", m.getBody(), e);
+            assertEq(e, m.getBody().encoding(), e);
+            # the position is the byte offset of the line in the message
+            text = "X-A: ポ\r\n b\r\nX-B: c";
+            assertThrows("MESSAGE-PARSE-ERROR", sprintf("byte position %d$", convert_encoding(text, e).size()
+                - convert_encoding("X-B: c", e).size()), sub () { new Message(convert_encoding(text, e)); }, NOTHING,
+                e);
+        }
+
+        # a body that is not valid UTF-8 is read as it is; matching the rest of the message for each header line
+        # raised INVALID-ENCODING
+        string bad_body = force_encoding(binary_to_string(<5375626a6563743a20780d0a0d0a62ff>, "ISO-8859-1"), "UTF-8");
+        m = new Message(bad_body);
+        assertEq("x", m.getSubject());
+        assertEq(<62ff>, binary(m.getBody()));
+
+        # a quoted-printable body
+        m = new Message("Content-Transfer-Encoding: quoted-printable\r\nContent-Type: text/plain; charset=UTF-8\r\n"
+            "\r\nJ=C3=B6rg=3D=\r\nx =c3=a4\r\n");
+        # CRLF line breaks are decoded as LF on Unix
+        assertEq(PlatformOS == "Windows" ? "Jörg=x ä\r\n" : "Jörg=x ä\n", m.getBody());
+        assertThrows("QUOTED-PRINTABLE-DECODE-ERROR", "\"4\"",
+            sub () { new Message("Content-Transfer-Encoding: quoted-printable\r\n\r\nends with =4"); });
+    }
+
+    # adds a test case of the work to parse each kind of header
+    private addParseWorkCases() {
+        # parsing took time that grew with the square of the number of header lines, folded and separate, ASCII and
+        # not, in UTF-8 and in other encodings, and of encoded words (issue #6139): the bytes that the parsers scan
+        # are counted (see Mime::MimeScanCounter), so that the work for twice as many lines is checked to be at most
+        # twice as large; a parser that scans the rest of the message for each line does four times as much work.
+        # The counts are added by hand in the parsers: every operation whose cost grows with the input size must add
+        # its size to the count; otherwise a quadratic regression in it goes unseen.
+        addParseWorkCase("folded", 1000,
+            string sub (int n) { return sprintf("To: z@y.com%s\r\n\r\nbody\r\n", strmul(",\r\n a@b.com", n)); },
+            sub (Message m, int n) { assertEq(n + 1, m.getTO()[0].split(",").size()); });
+        addParseWorkCase("folded non-ascii", 1000,
+            string sub (int n) { return sprintf("To: z@y.com%s\r\n\r\nbody\r\n", strmul(",\r\n ö", n)); },
+            sub (Message m, int n) { assertEq(n + 1, m.getTO()[0].split(",").size()); });
+        # a header that is given again replaces the value
+        addParseWorkCase("separate", 1000,
+            string sub (int n) { return sprintf("%s\r\nbody\r\n", strmul("X-H: o\r\n", n)); },
+            sub (Message m, int n) { assertEq({"X-H": "o"}, m.getHeaders()); });
+        addParseWorkCase("separate non-ascii", 1000,
+            string sub (int n) { return sprintf("%s\r\nbody\r\n", strmul("X-H: ö\r\n", n)); },
+            sub (Message m, int n) { assertEq({"X-H": "ö"}, m.getHeaders()); });
+        addParseWorkCase("separate shift_jis", 1000,
+            string sub (int n) {
+                return convert_encoding(sprintf("%s\r\nbody ポ\r\n", strmul("X-H: ポ\r\n", n)), "SHIFT_JIS");
+            },
+            sub (Message m, int n) {
+                assertEq({"X-H": "ポ"}, m.getHeaders());
+                assertEq("body ポ\r\n", m.getBody());
+            });
+        addParseWorkCase("separate utf-16", 1000,
+            string sub (int n) {
+                return convert_encoding(sprintf("%s\r\nbody ポ\r\n", strmul("X-H: ポ\r\n", n)), "UTF-16");
+            },
+            sub (Message m, int n) {
+                assertEq({"X-H": "ポ"}, m.getHeaders());
+                assertEq("body ポ\r\n", m.getBody());
+            });
+        # raw 8-bit Latin-1 header lines in text tagged UTF-8, which are not valid UTF-8 (issue #6326)
+        addParseWorkCase("separate raw latin-1", 1000,
+            string sub (int n) {
+                binary b;
+                map b += binary("X-H: ") + <e9> + binary("\r\n"), xrange(n);
+                return binary_to_string(b + binary("Content-Type: text/plain; charset=ISO-8859-1\r\n\r\nbody\r\n"),
+                    "UTF-8");
+            },
+            sub (Message m, int n) { assertEq({"X-H": "é", "Content-Type": "text/plain; charset=ISO-8859-1"},
+                m.getHeaders()); });
+        addParseWorkCase("folded raw latin-1", 1000,
+            string sub (int n) {
+                binary b = binary("Subject: s");
+                map b += binary("\r\n ") + <e9>, xrange(n);
+                return binary_to_string(b + binary("\r\n\r\nbody\r\n"), "UTF-8");
+            },
+            sub (Message m, int n) { assertEq("s" + strmul(" é", n), m.getSubject()); });
+        addParseWorkCase("encoded words", 1000,
+            string sub (int n) {
+                return sprintf("Subject: s%s\r\n\r\nbody\r\n", strmul("\r\n =?UTF-8?Q?=C3=B6?=", n));
+            },
+            sub (Message m, int n) { assertEq("s " + strmul("ö", n), m.getSubject()); });
+    }
+
+    # adds a test case that checks the work to parse a message with the given kind of header
+    private addParseWorkCase(string name, int n, code make, code check) {
+        addTestCase(sprintf("Test the work to parse %s header lines (issue #6139)", name),
+            sub () {
+                checkLinearWork(name, n, make, Message sub (string msg) { return new Message(msg); }, check);
+            });
+    }
+
+    # checks that the bytes that the parsers scan (see Mime::MimeScanCounter) for an input twice the size are at most
+    # about twice the bytes for the input, as for work that grows linearly with the size of the input; the work of a
+    # quadratic algorithm grows by 4 times (issues #6066, #6134, #6139).  The counts are added by hand in the
+    # parsers: every operation whose cost grows with the input size must add its size to the count; otherwise a
+    # quadratic regression in it goes unseen.
+    private checkLinearWork(string name, int n, code make, code run, *code check) {
+        list<int> work = map countWork(make, run, check, $1), (n, n * 2);
+        if (m_options.verbose) {
+            printf("%s: %d: %d bytes, %d: %d bytes: ratio %.3f\n", name, n, work[0], n * 2, work[1],
+                work[1] / float(max(work[0], 1)));
+        }
+        assertGt(0, work[0], name);
+        # 2% more for the parts of an input that do not grow with it, and for sizes rounded down
+        assertLe(2 * work[0] + work[0] / 50, work[1], name);
+    }
+
+    # returns the bytes that the parsers of the MailMessage and Mime modules scan (see Mime::MimeScanCounter and
+    # Message::setScanCounting(), which turns counting on and off for both) to run the code with an input of the given
+    # size; counting is process-wide, which is fine for this test, which runs one case at a time
+    private int countWork(code make, code run, *code check, int n) {
+        auto input = make(n);
+        Message::setScanCounting(True);
+        on_error Message::setScanCounting(False);
+        auto result = run(input);
+        Message::setScanCounting(False);
+        int bytes = MimeScanCounter::bytes;
+        if (check) {
+            check(result, n);
+        }
+        return bytes;
+    }
+
+    #! returns the message with its multipart boundary, if any, replaced by \c BOUNDARY
+    private static string normalizeBoundary(string msg) {
+        *string boundary = (msg =~ x/[Bb]oundary="?([^"\r\n;]+)"?/)[0];
+        return boundary ? replace(msg, boundary, "BOUNDARY") : msg;
+    }
+
+    testMissingHeaders() {
+        # a parsed message without a Subject or a From header is serialized without it; getting its headers raised
+        # RUNTIME-OVERLOAD-ERROR (issue #6267)
+        hash<string, hash<auto>> cases = {
+            "no subject": {
+                "msg": "From: a@b.com\r\nTo: c@d.com\r\n\r\nbody\r\n",
+                "hdr": "From: a@b.com\r\nTo: c@d.com\r\n",
+            },
+            "no from": {
+                "msg": "To: c@d.com\r\nSubject: s\r\n\r\nbody\r\n",
+                "hdr": "To: c@d.com\r\nSubject: s\r\n",
+            },
+            "no from or subject": {
+                "msg": "To: c@d.com\r\n\r\nbody\r\n",
+                "hdr": "To: c@d.com\r\n",
+            },
+            "cc and bcc only": {
+                "msg": "CC: c@d.com\r\nBCC: e@d.com\r\n\r\nbody\r\n",
+                "hdr": "CC: c@d.com\r\nBCC: e@d.com\r\n",
+            },
+            # the receipt headers have the sender's address, so they are not written without a sender
+            "receipts without from": {
+                "msg": "To: c@d.com\r\nReturn-Receipt-To: a@b.com\r\nDisposition-Notification-To: a@b.com\r\n\r\n"
+                    "body\r\n",
+                "hdr": "To: c@d.com\r\n",
+            },
+            "receipts": {
+                "msg": "From: a@b.com\r\nTo: c@d.com\r\nReturn-Receipt-To: a@b.com\r\n"
+                    "Disposition-Notification-To: a@b.com\r\n\r\nbody\r\n",
+                "hdr": "From: a@b.com\r\nTo: c@d.com\r\nReturn-Receipt-To: a@b.com\r\n"
+                    "Disposition-Notification-To: a@b.com\r\n",
+            },
+            "other headers without from": {
+                "msg": "To: c@d.com\r\nSender: s@b.com\r\nReply-To: r@b.com\r\n\r\nbody\r\n",
+                "hdr": "To: c@d.com\r\nSender: s@b.com\r\nReply-To: r@b.com\r\n",
+            },
+            "mime headers without from or subject": {
+                "msg": "To: c@d.com\r\nContent-Type: text/plain; charset=UTF-8\r\n"
+                    "Content-Transfer-Encoding: quoted-printable\r\n\r\nb=C3=B6dy\r\n",
+                "hdr": "To: c@d.com\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n"
+                    "Content-Transfer-Encoding: quoted-printable\r\n",
+            },
+            "multipart without from or subject": {
+                "msg": "To: c@d.com\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"XX\"\r\n\r\n"
+                    "--XX\r\nContent-Type: text/plain\r\n\r\nb\r\n--XX\r\nContent-Type: application/octet-stream\r\n"
+                    "Content-Disposition: attachment; filename=\"a.bin\"\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+                    "AAEC\r\n--XX--\r\n",
+                "hdr": "To: c@d.com\r\n",
+            },
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            Message m(i.value.msg);
+            assertEq(i.value.hdr, m.getHeaderString(), i.key);
+            assertEq(replace(i.value.hdr, "\r\n", "\n"), m.getHeaderString("\n", False), i.key);
+            # the message is the same when it is serialized and parsed again
+            Message m2(m.serialize());
+            assertEq(m.getSender(), m2.getSender(), i.key);
+            assertEq(m.getFrom(), m2.getFrom(), i.key);
+            assertEq(m.getSubject(), m2.getSubject(), i.key);
+            assertEq(m.getTO(), m2.getTO(), i.key);
+            assertEq(m.getCC(), m2.getCC(), i.key);
+            assertEq(m.getBCC(), m2.getBCC(), i.key);
+            assertEq(m.getBody(), m2.getBody(), i.key);
+            assertEq(m.getAttachments().size(), m2.getAttachments().size(), i.key);
+            # the two messages can have different multipart boundaries (a boundary is random: issue #6307)
+            assertEq(normalizeBoundary(m.serializeRaw()), normalizeBoundary(m2.serializeRaw()), i.key);
+        }
+
+        # a message without a subject has an empty subject; this raised RUNTIME-TYPE-ERROR
+        Message m("To: c@d.com\r\n\r\nbody\r\n");
+        assertEq("", m.getSubject());
+        assertEq(NOTHING, m.getSender());
+        assertEq(NOTHING, m.getFrom());
+        hash<MailMessageInfo> info = m.getInfo();
+        assertFalse(info.hasKey("subject"));
+        assertFalse(info.hasKey("from"));
+        assertRegex("Sender: ''", m.toString());
+    }
+
+    # issue #6307: the multipart boundary of a message is random, and another one is used when a part of the message
+    # contains it (RFC 2046 section 5.1.1)
+    testBoundary() {
+        # a message attached to another one with the same boundary (as messages created in the same second had)
+        Message m1(Sender, Subject);
+        Message m2(Sender, Subject);
+        m1.addTO(To);
+        m1.setBody("body one");
+        m1.attach("one.txt", MimeTypeText, "attachment one");
+        string fwd = m1.serialize();
+        m2.mpboundary = m1.mpboundary;
+        m2.addTO(To);
+        m2.setBody("body two");
+        m2.attach("fwd.eml", "message/rfc822", fwd, ContentEncoding::QuotedPrintable);
+        m2.attach("two.txt", MimeTypeText, "attachment two");
+        Message p(m2.serialize());
+        assertEq("body two", p.getBody());
+        list<Attachment> atts = p.getAttachments();
+        assertEq(("fwd.eml", "two.txt"), (map $1.getName(), atts));
+        # the quoted-printable attachment is decoded with LF line breaks
+        assertEq(replace(fwd, "\r\n", "\n"), replace(atts[0].getData(), "\r\n", "\n"));
+        assertEq("attachment two", atts[1].getData());
+
+        # a message body that contains the boundary
+        Message m3(Sender, Subject);
+        m3.addTO(To);
+        m3.setBody("text\r\n--" + m3.mpboundary + "\r\nContent-Type: text/plain\r\n\r\nsplit",
+            ContentEncoding::QuotedPrintable);
+        m3.attach("three.txt", MimeTypeText, "attachment three");
+        p = new Message(m3.serialize());
+        assertEq(replace(m3.getBody(), "\r\n", "\n"), replace(p.getBody(), "\r\n", "\n"));
+        assertEq(("three.txt",), (map $1.getName(), p.getAttachments()));
+
+        # mpboundary is the boundary written when it is replaced because a part contains it, with attachments
+        Message m4(Sender, Subject);
+        m4.addTO(To);
+        m4.mpboundary = "fixed-boundary";
+        m4.setBody("text\r\n--fixed-boundary\r\nsplit", ContentEncoding::QuotedPrintable);
+        m4.attach("four.txt", MimeTypeText, "attachment four");
+        checkWrittenBoundary(m4, "fixed-boundary", "mixed");
+
+        # and with alternative parts and no attachments
+        string raw = "From: " + Sender + "\r\nTo: " + To + "\r\nSubject: alt\r\nMIME-Version: 1.0\r\n"
+            "Content-Type: multipart/alternative; boundary=\"b1\"\r\n\r\n"
+            "--b1\r\nContent-Type: text/plain\r\n\r\ntext\r\n--fixed-boundary\r\nsplit\r\n"
+            "--b1\r\nContent-Type: text/html\r\n\r\n<p>html</p>\r\n--b1--\r\n";
+        Message m5(raw);
+        m5.mpboundary = "fixed-boundary";
+        checkWrittenBoundary(m5, "fixed-boundary", "alternative");
+        # a boundary that does not occur in the parts is kept and written
+        m5.mpboundary = "other-boundary";
+        checkWrittenBoundary(m5, NOTHING, "alternative");
+        assertEq("other-boundary", m5.mpboundary);
+
+        # messages created at the same time have different boundaries
+        assertNeq((new Message(Sender, Subject)).mpboundary, (new Message(Sender, Subject)).mpboundary);
+    }
+
+    # serializes the message and checks that Message::mpboundary is the boundary of its Content-Type header and of
+    # its delimiter lines
+    private checkWrittenBoundary(Message msg, *string replaced, string type) {
+        string str = msg.serialize();
+        if (replaced) {
+            assertNeq(replaced, msg.mpboundary);
+        }
+        *string ct_boundary = (str =~ x/\r\nContent-Type: multipart\/([a-z]+); boundary="([^"]+)"\r\n/)[1];
+        assertEq(type, (str =~ x/\r\nContent-Type: multipart\/([a-z]+);/)[0]);
+        assertEq(msg.mpboundary, ct_boundary);
+        assertGt(0, str.find("\r\n--" + msg.mpboundary + "\r\n"));
+        assertGt(0, str.find("\r\n--" + msg.mpboundary + "--"));
+        hash<MessageInfo> mh = MultiPartMessage::parseBody(msg.mpboundary, str);
+        assertEq(2, mh.part.size());
     }
 }

@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class AOTDefaultArgExprTreeTest
@@ -33,7 +34,7 @@ class AOTDefaultArgExprTreeTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("AOTDefaultArgExprTreeTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("function default argument expression tree", \testFunctionDefaultArg());
@@ -41,6 +42,9 @@ class AOTDefaultArgExprTreeTest inherits QUnit::Test {
         addTestCase("base class constructor argument expression tree", \testBaseConstructorArg());
         addTestCase("default argument expression tree with a caller-defined-first callee",
             \testCalleeDeclaredLast());
+        addTestCase("unary plus, binary not, comparison, list assignment and backquote default argument "
+            "expression trees",
+            \testUnaryPlusDefaultArg());
 
         set_return_value(main());
     }
@@ -99,6 +103,81 @@ public date sub getDelay() {
 
         assertEq("60\n", runModule(src_dir, script_path), mod_name + ": source module");
         assertEq("60\n", runModule(qmod_dir, script_path), mod_name + ": AOT module");
+    }
+
+    #! default arguments with a unary plus, a binary not, a comparison or a list assignment that are not folded at
+    #! parse time (qore#6229), or a backquote (qore#6302)
+    testUnaryPlusDefaultArg() {
+        checkModule("AOTDefArgUnaryPlus", "public class C {
+    int mdefault(auto v = +getDelay().durationSeconds()) {
+        return v;
+    }
+
+    string mbq(string v = `printf mbq`) {
+        return v;
+    }
+}
+
+public int sub fdefault(auto d = +getDelay().durationSeconds()) {
+    return d;
+}
+
+public int sub fnested(auto d = -(+(-getDelay().durationSeconds()))) {
+    return d;
+}
+
+# an int too large for an immediate value is a node: the unary plus must not return it borrowed from the scope of
+# the call's default arguments (qore#5712)
+auto sub bigi(int i) {
+    return (1 << 62) + i;
+}
+
+public int sub fbig(auto x = +bigi(7)) {
+    return x;
+}
+
+# binary not, comparison and list assignment defaults (qore#6229)
+public int sub fbitnot(auto d = ~getDelay().durationSeconds()) {
+    return d;
+}
+
+public int sub fcmp(auto d = (getDelay().durationSeconds() <=> 5)) {
+    return d;
+}
+
+public class S {
+    public {
+        static int a;
+        static int b;
+        static hash<auto> h = {};
+        static S o;
+        int m;
+    }
+}
+
+# a backquote (shell command) default (qore#6302)
+public string sub fbq(string d = `printf bq`) {
+    return d;
+}
+
+# a static variable, a hash member and an object member as lvalues
+public int sub flist(auto d = ((S::a, S::b, S::h.c, S::o.m) = (getDelay().durationSeconds(), 2, 3, 4))) {
+    return S::a + S::b + S::h.c + S::o.m + d.size();
+}
+
+public string sub verify() {
+    S::o = new S();
+    C c();
+    string rv = sprintf(\"%d\", fdefault());
+    if (c.mdefault() != fdefault() || fnested() != fdefault() || fbig() != 4611686018427387911
+            || fbitnot() != -61 || fcmp() != 1 || flist() != 73 || fbq() != \"bq\" || c.mbq() != \"mbq\") {
+        rv = sprintf(\"%d %d %d %d %d %d %d %s %s\", fdefault(), c.mdefault(), fnested(), fbig(), fbitnot(), fcmp(),
+            flist(), fbq(), c.mbq());
+    }
+    return rv;
+}
+}
+");
     }
 
     testFunctionDefaultArg() {

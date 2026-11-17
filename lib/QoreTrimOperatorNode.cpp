@@ -47,25 +47,20 @@ int QoreTrimOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* 
    return 0;
 }
 
-QoreValue QoreTrimOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper val(exp, xsink);
-    if (!val)
-        return QoreValue();
-
-    qore_type_t vtype = val.getType();
-    if (vtype != NT_LIST && vtype != NT_STRING && vtype != NT_HASH)
-        return QoreValue();
-
+//! Trims the string elements of the list or hash that \a val holds; returns -1 if an exception was raised
+/** Out of line, so that the string case of QoreTrimOperatorNode::evalImpl() stays as it is
+*/
+static QORE_INTERN_NOINLINE int qore_trim_container(LValueHelper& val, qore_type_t vtype, ExceptionSink* xsink) {
+    // a container whose type refuses a plain string in the place of an enum element refuses the plain strings that
+    // the operation leaves: no element is changed (qore#6195)
+    if (qore_check_in_place_container_strings(val.getValue(), "<trim operator>", xsink)) {
+        return -1;
+    }
     // note that no exception can happen here
     val.ensureUnique();
     assert(!*xsink);
 
-    if (vtype == NT_STRING) {
-        QoreStringNode* vs = val.getValue().get<QoreStringNode>();
-        if (vs->trim(xsink))
-            return QoreValue();
-    } else if (vtype == NT_LIST) {
+    if (vtype == NT_LIST) {
         QoreListNode* l = val.getValue().get<QoreListNode>();
         qore_list_private* ll = qore_list_private::get(*l);
         ListIterator li(l);
@@ -76,23 +71,48 @@ QoreValue QoreTrimOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
                 ensure_unique(v, xsink);
                 QoreStringNode* vs = v.get<QoreStringNode>();
                 if (vs->trim(xsink)) {
-                    return QoreValue();
+                    return -1;
                 }
             }
         }
-    } else { // is a hash
-        QoreHashNode* vh = val.getValue().get<QoreHashNode>();
-        HashIterator hi(vh);
-        while (hi.next()) {
-            if (hi.get().getType() == NT_STRING) {
-                QoreValue& v = (*qhi_priv::get(hi)->i)->val;
-                ensure_unique(v, xsink);
-                QoreStringNode* vs = v.get<QoreStringNode>();
-                if (vs->trim(xsink)) {
-                    return QoreValue();
-                }
+        return 0;
+    }
+    // is a hash
+    QoreHashNode* vh = val.getValue().get<QoreHashNode>();
+    HashIterator hi(vh);
+    while (hi.next()) {
+        if (hi.get().getType() == NT_STRING) {
+            QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+            ensure_unique(v, xsink);
+            QoreStringNode* vs = v.get<QoreStringNode>();
+            if (vs->trim(xsink)) {
+                return -1;
             }
         }
+    }
+    return 0;
+}
+
+QoreValue QoreTrimOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
+    LValueHelper val(exp, xsink);
+    if (!val)
+        return QoreValue();
+
+    qore_type_t vtype = val.getType();
+    if (vtype != NT_LIST && vtype != NT_STRING && vtype != NT_HASH)
+        return QoreValue();
+
+    if (vtype == NT_STRING) {
+        // a string enum lvalue refuses the plain string that the operation leaves (qore#6195)
+        if (val.ensureUnique("<trim operator>")) {
+            return QoreValue();
+        }
+        QoreStringNode* vs = val.getValue().get<QoreStringNode>();
+        if (vs->trim(xsink))
+            return QoreValue();
+    } else if (qore_trim_container(val, vtype, xsink)) {
+        return QoreValue();
     }
 
     // reference for return value

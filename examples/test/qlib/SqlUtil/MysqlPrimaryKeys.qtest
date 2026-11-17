@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MysqlSqlUtil
+%requires ./MysqlTestIsolation.qm
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%exec-class MysqlPrimaryKeysTest
+
+#! Tests reading the primary keys and unique constraints of tables on MySQL and MariaDB (issue #2825)
+/** The tables are created in the run's own database.  The connection string is taken from the \c -c / \c --conn
+    option or the \c QORE_DB_CONNSTR_MYSQL environment variable; all tests are skipped if no MySQL connection can be
+    made.
+*/
+class MysqlPrimaryKeysTest inherits QUnit::Test {
+    private {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        #! the test connection; NOTHING if no MySQL connection is available
+        *Datasource ds;
+
+        #! the reason the tests are skipped, if they are
+        string skip_reason = "no MySQL connection";
+    }
+
+    constructor() : Test("MysqlPrimaryKeysTest", "1.0", \ARGV, MyOpts) {
+%ifndef NoMysql
+        try {
+            *string connstr = MysqlRunDatabase::getConnectionString(m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL,
+                "MysqlPrimaryKeys");
+            if (connstr) {
+                Datasource nds(connstr);
+                if (nds.getDriverName() != "mysql") {
+                    skip_reason = sprintf("connection uses driver %y, not mysql", nds.getDriverName());
+                } else {
+                    nds.open();
+                    ds = nds;
+                }
+            } else {
+                skip_reason = "no MySQL connection configured (use -c or QORE_DB_CONNSTR_MYSQL)";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            skip_reason = sprintf("cannot connect to MySQL: %s: %s", ex.err, ex.desc);
+        }
+%else
+        skip_reason = "no mysql module";
+%endif
+
+        addTestCase("primary keys declared in each form", \declaredKeys());
+        addTestCase("a table created from a description", \describedTable());
+        set_return_value(main());
+        if (ds) {
+            ds.rollback();
+            delete ds;
+        }
+        MysqlRunDatabase::teardown();
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(22);
+        printOption("-c,--conn=ARG", "set DB connection argument (ex: \"mysql:user/pass@db\")", 22);
+    }
+
+    private Datasource getDs() {
+        if (!ds) {
+            testSkip(skip_reason);
+        }
+        return ds;
+    }
+
+    declaredKeys() {
+        Datasource ds = getDs();
+        on_exit {
+            ds.exec("drop table if exists pkt");
+            ds.commit();
+        }
+        # DDL -> the primary key columns
+        foreach hash<auto> c in (
+            {"ddl": "create table pkt (id int not null, n int, primary key (id))", "pk": ("id",)},
+            {"ddl": "create table pkt (id int not null, constraint pk_pkt primary key (id))", "pk": ("id",)},
+            {"ddl": "create table pkt (id int not null auto_increment primary key, n int)", "pk": ("id",)},
+            {"ddl": "create table pkt (ID int not null, n int not null, primary key (n, id))", "pk": ("n", "ID")},
+            {"ddl": "create table pkt (id int not null, n int, primary key (id)) engine=myisam", "pk": ("id",)},
+            {"ddl": "create table pkt (id int not null, n int, unique key uk_pkt (id))", "pk": ()},
+            ) {
+            ds.exec("drop table if exists pkt");
+            ds.exec(c.ddl);
+            ds.commit();
+            # through a Table and through the AbstractTable that a Database gives
+            Table t(ds, "pkt");
+            AbstractPrimaryKey pk = t.getPrimaryKey();
+            assertEq(c.pk, pk.keys(), c.ddl);
+            assertEq(c.pk ? "PRIMARY" : "", pk.getName(), c.ddl);
+            assertEq(c.pk, (new Database(ds)).getTable("pkt").getPrimaryKey().keys(), c.ddl);
+            # qualified with the database
+            assertEq(c.pk, (new Table(ds, ds.getDBName() + ".pkt")).getPrimaryKey().keys(), c.ddl);
+        }
+    }
+
+    describedTable() {
+        Datasource ds = getDs();
+        on_exit {
+            ds.exec("drop table if exists pkd");
+            ds.commit();
+        }
+        hash<auto> desc = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "code": {"qore_type": "string", "size": 10, "notnull": True},
+                "name": {"qore_type": "string", "size": 10},
+            },
+            "primary_key": {"name": "pk_pkd", "columns": "id"},
+            "indexes": {"uk_pkd": {"columns": "code", "unique": True}},
+        };
+        Database db(ds);
+        map ds.exec($1), db.makeTable("pkd", desc).getCreateSql();
+        ds.commit();
+        Table t(ds, "pkd");
+        assertEq(("id",), t.getPrimaryKey().keys());
+        assertEq(("uk_pkd",), t.getConstraints().keys());
+        assertEq({"name": "PRIMARY", "columns": ("id",)}, t.getDescriptionHash().primary_key);
+        # nothing to align
+        assertEq((), db.getTable("pkd").getAlignSql(db.makeTable("pkd", desc)));
+        # an upsert finds the key
+        t.upsert({"id": 1, "code": "a", "name": "x"});
+        t.upsert({"id": 1, "code": "a", "name": "y"});
+        ds.commit();
+        assertEq(({"id": 1, "code": "a", "name": "y"},), ds.selectRows("select * from pkd"));
+    }
+}

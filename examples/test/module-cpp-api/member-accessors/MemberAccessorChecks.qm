@@ -68,6 +68,32 @@ public namespace MemberAccessorChecks {
         }
     }
 
+    #! a plain class with enough members for an index of its member map (#6272)
+    class Plain {
+        public {
+            int p0 = 0; int p1 = 1; int p2 = 2; int p3 = 3; int p4 = 4;
+            int p5 = 5; int p6 = 6; int p7 = 7; int p8 = 8; int p9 = 9;
+        }
+
+        int readPlain() {
+            return p9 + self.p0 + p5;
+        }
+
+        writePlain(int v) {
+            p9 = v;
+            self.p0 = v + 1;
+        }
+    }
+
+    #! an object whose class has accessor members, read and written by the code of a parent class that has none: the
+    #! storage context of the member is resolved without a lookup only when no class involved has private:internal
+    #! members, and debug builds check the result against the full resolution (#6272)
+    class Fold inherits Plain, CppApiTest::MemberAccessorProbe {
+        int readBoth() {
+            return readPlain() + count;
+        }
+    }
+
     class Tracked {
         public {
             static int live = 0;
@@ -256,6 +282,17 @@ public namespace MemberAccessorChecks {
         return s.raw("secret") == 9 && s.readSecret() == 9 ? 1 : 0;
     }
 
+    #! the code of a parent class without accessor members reads and writes its members on an object whose class has
+    #! accessor members (#6272)
+    int sub check_fold() {
+        Fold f();
+        if (f.readPlain() != 14) { return 0; }
+        f.writePlain(20);
+        if (f.p9 != 20 || f.p0 != 21 || f.readPlain() != 46) { return 0; }
+        f.count = 3;
+        return f.readBoth() == 49 && f.raw("count") == 3 ? 1 : 0;
+    }
+
     #! a Qore subclass reads and writes the members through self and as bare member names
     int sub check_self() {
         Sub s();
@@ -383,6 +420,7 @@ public namespace MemberAccessorChecks {
             "type-error": \check_type_error(),
             "private": \check_private(),
             "self": \check_self(),
+            "fold": \check_fold(),
             "declaration": \check_declaration(),
             "cpp-api": \check_cpp_api(),
             "slice-merge": \check_slice_merge(),

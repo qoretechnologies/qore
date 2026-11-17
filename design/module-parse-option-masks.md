@@ -89,6 +89,11 @@ own restrictions refuse it (since 899a44f110, Qore 0.8.12; before, every use was
 import check of `QoreUserModule::addToProgramImpl()`, which therefore never refused a module; that inert check has been
 removed rather than restored, because restoring it refused imports that Qore relies on (see Rules).
 
+With nothing reading it, the Program's functional domain (`dom`, and `pend_dom`, the domains of a parse that its
+commit added to it) and its accessors (`getDomain()`, `runtimeAddDomain()`) were removed (issue #6178): they were not
+synchronized, so a runtime user would have raced with the commits.  `parseAddDomain()` now only returns the domains
+that the Program's restrictions refuse, and records every domain that the code uses in `aot_used_dom` for AOT images.
+
 ## Module parse option masks
 
 A mask (`QoreModuleParseOptionMask`, `include/qore/intern/ModuleInfo.h`) has `strip` and `add` sets of restrictions:

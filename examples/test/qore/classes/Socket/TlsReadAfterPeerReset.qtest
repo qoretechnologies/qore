@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - TLS header reads that find the peer's data and its reset (POLLIN with POLLHUP/POLLERR)
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A TLS header read (Socket::recvUntilBytes(), as used by readHTTPHeader()) whose SSL_read() found no record, and
+    which then finds the peer's data and the peer's reset on the descriptor at once (POLLIN with POLLHUP or POLLERR),
+    reads the data before it reports the end of the connection (issue #6315).  The read is held by a debug hook right
+    after SSL_read() found no record, until the peer has written its answer and reset the connection, so the
+    interleaving is forced and no timing is involved.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestCertificates.qm
+
+%exec-class TlsReadAfterPeerResetTest
+
+class TlsReadAfterPeerResetTest inherits QUnit::Test {
+    public {
+        #! upper bound on any blocking operation; reaching it fails the test
+        const Timeout = 60s;
+
+        #! the peer's answer
+        const Answer = "HTTP/1.1 413 Early\r\nContent-Length: 0\r\nX-Test: early\r\n\r\n";
+    }
+
+    constructor() : Test("TlsReadAfterPeerResetTest", "1.0") {
+        addTestCase("TLS: a header read reads the data that arrived with the peer's reset", \tlsResetTest());
+        set_return_value(main());
+    }
+
+    tlsResetTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that forces the interleaving is only in debug builds");
+        }
+        Socket listener();
+        listener.setCertificate(TestCertificates::CertPem);
+        listener.setPrivateKey(TestCertificates::KeyPem);
+        listener.bind("localhost:0", True);
+        listener.listen();
+        on_exit listener.close();
+        int port = listener.getPort();
+
+        Queue accepted();
+        background sub () {
+            try {
+                Socket conn = listener.accept(Timeout);
+                conn.upgradeServerToSSL(Timeout);
+                accepted.push(conn);
+            } catch (hash<ExceptionInfo> ex) {
+                accepted.push(ex.err);
+            }
+        }();
+        Socket client();
+        client.connectSSL(sprintf("localhost:%d", port), Timeout);
+        on_exit client.close();
+        auto conn = accepted.get(Timeout);
+        assertEq(NT_OBJECT, conn.typeCode(), sprintf("the peer accepted the connection: %y", conn));
+
+        # the client's header read is held once SSL_read() has found no record, until the connection is reset
+        Counter reached(1);
+        call_function("dbg_hold_tls_read_until_hangup", port, reached);
+        Queue result();
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                result.push(client.readHTTPHeader(Timeout));
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+        on_exit done.waitForZero(Timeout);
+        assertEq(0, reached.waitForZero(Timeout), "the read is held after SSL_read() found no record");
+
+        # the peer answers and resets the connection: the answer and the reset are both in the client's receive
+        # buffer when the read continues
+        conn.send(Answer, Timeout);
+        call_function("dbg_reset_socket", conn);
+
+        auto rv = result.get(Timeout);
+        assertEq(NT_HASH, rv.typeCode(), sprintf("the answer is read, not the end of the connection: %y", rv));
+        assertEq(413, rv.status_code, "the status of the answer");
+        assertEq("early", rv."x-test", "the header of the answer");
+    }
+}

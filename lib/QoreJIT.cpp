@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <unistd.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/Error.h>
@@ -50,6 +51,13 @@
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/Triple.h>
+#include <llvm/ExecutionEngine/Orc/CompileUtils.h>
+#include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
+#include <llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/MC/MCContext.h>
+#include <llvm/Support/SmallVectorMemoryBuffer.h>
+#include "qore/intern/QoreIRFrameCheck.h"
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/JITRuntime.h"
 
@@ -765,11 +773,11 @@ std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
         }
 
         const QoreTypeInfo* ti = ir_func.specializeType(lv->getTypeInfo());
-        if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+        if (QoreTypeInfo::isPlainType(ti, NT_INT)) {
             kinds[i] = BatchCalleeParamKind::NativeInt;
-        } else if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_FLOAT)) {
             kinds[i] = BatchCalleeParamKind::NativeFloat;
-        } else if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_BOOLEAN)) {
             kinds[i] = BatchCalleeParamKind::NativeBool;
         }
     }
@@ -801,8 +809,12 @@ bool qore_ir_fast_entry_param_is_private(
     // A safe local referenced by lowered IR would be in ir_only_locals.
     // Therefore absence from both local inventories proves that the parameter
     // is unused. Object locals are excluded because their lifetime still
-    // requires the runtime stack even when their value is not loaded.
+    // requires the runtime stack even when their value is not loaded.  A written
+    // parameter is not unused, whatever kept it off the IR-only path: its store
+    // goes to the runtime stack, where the fast entry would not have instantiated
+    // it (an optional object, *T, which has no unique class; issue #6148)
     return !ir_func.has_opaque_ast_local_access
+        && !qore_ir_local_is_written(ir_func, local)
         && !ir_func.isAstVisibleLocal(key)
         && !local->isTopLevel()
         && !QoreTypeInfo::getUniqueReturnClass(local->getTypeInfo());
@@ -821,11 +833,11 @@ std::vector<BatchCalleeParamKind> qore_ir_get_signature_param_kinds(
         }
         const LocalVar* lv = sig->lv[i];
         const QoreTypeInfo* ti = lv ? lv->getTypeInfo() : nullptr;
-        if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+        if (QoreTypeInfo::isPlainType(ti, NT_INT)) {
             kinds[i] = BatchCalleeParamKind::NativeInt;
-        } else if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_FLOAT)) {
             kinds[i] = BatchCalleeParamKind::NativeFloat;
-        } else if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_BOOLEAN)) {
             kinds[i] = BatchCalleeParamKind::NativeBool;
         }
     }
@@ -838,13 +850,13 @@ BatchCalleeParamKind qore_ir_get_scalar_local_kind(const LocalVar* local) {
             || QoreTypeInfo::parseAcceptsReturns(type, NT_NOTHING)) {
         return BatchCalleeParamKind::Boxed;
     }
-    if (QoreTypeInfo::isType(type, NT_INT) && !QoreTypeInfo::getReturnEnum(type)) {
+    if (QoreTypeInfo::isPlainType(type, NT_INT)) {
         return BatchCalleeParamKind::NativeInt;
     }
-    if (QoreTypeInfo::isType(type, NT_FLOAT)) {
+    if (QoreTypeInfo::isPlainType(type, NT_FLOAT)) {
         return BatchCalleeParamKind::NativeFloat;
     }
-    if (QoreTypeInfo::isType(type, NT_BOOLEAN)) {
+    if (QoreTypeInfo::isPlainType(type, NT_BOOLEAN)) {
         return BatchCalleeParamKind::NativeBool;
     }
     return BatchCalleeParamKind::Boxed;
@@ -889,13 +901,13 @@ BatchCalleeReturnKind qore_ir_get_fast_entry_return_kind(
     const QoreTypeInfo* ti = ir_func
         ? ir_func->specializeType(sig->getReturnTypeInfo())
         : sig->getReturnTypeInfo();
-    if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+    if (QoreTypeInfo::isPlainType(ti, NT_INT)) {
         return BatchCalleeReturnKind::NativeInt;
     }
-    if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+    if (QoreTypeInfo::isPlainType(ti, NT_FLOAT)) {
         return BatchCalleeReturnKind::NativeFloat;
     }
-    if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+    if (QoreTypeInfo::isPlainType(ti, NT_BOOLEAN)) {
         return BatchCalleeReturnKind::NativeBool;
     }
     return BatchCalleeReturnKind::Boxed;
@@ -1057,9 +1069,9 @@ static void qore_jit_shutdown_at_exit() {
     // a compile still running in LLVM is waited for here, so that the static objects of LLVM that are destroyed after
     // this handler runs (those registered before it, as LLVM's global options are when the library is loaded) are not
     // destroyed under it; function-local statics that LLVM creates later, during its first compile, are destroyed
-    // before this handler runs, so a process should not rely on this: the qore and qr programs, qore_exit_process()
-    // and the executables compiled with qcc end the process with _exit() instead (see QoreJIT::exitQuickly()), and an
-    // embedding program calls qore_fork_child_quick_exit() after qore_cleanup() for the same.
+    // before this handler runs, so a process should not rely on this: qore_cleanup() waits for the compile (see
+    // QoreJIT::shutdown()), and qore_exit_process() ends the process with _exit() if it still runs (see
+    // QoreJIT::exitQuickly()).
     jit.joinAbandonedCompileThread();
 }
 
@@ -1121,6 +1133,51 @@ void __jit_debug_register_code();
 }
 
 namespace {
+//! Compiles a module of the JIT to an object; a function whose frame is larger than the stack guard allows gets a
+//! thunk that checks the stack for its frame (see QoreIRFrameCheck, qore#6414)
+class QoreFrameCheckCompiler : public llvm::orc::IRCompileLayer::IRCompiler {
+public:
+    QoreFrameCheckCompiler(std::unique_ptr<llvm::TargetMachine> tm)
+            : llvm::orc::IRCompileLayer::IRCompiler(llvm::orc::irManglingOptionsFromTargetOptions(tm->Options)),
+            tm(std::move(tm)) {
+    }
+
+    llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>> operator()(llvm::Module& m) override {
+        llvm::SmallVector<char, 0> obj;
+        std::string error;
+        bool ok = QoreIRFrameCheck::emit(m, [&](llvm::Module& mod, std::string& err) {
+            obj.clear();
+            llvm::raw_svector_ostream os(obj);
+            llvm::legacy::PassManager pm;
+            llvm::MCContext* mc_ctx;
+            if (tm->addPassesToEmitMC(pm, mc_ctx, os)) {
+                err = "the target machine cannot emit machine code";
+                return false;
+            }
+            pm.run(mod);
+            return true;
+        }, error);
+        if (!ok) {
+            return llvm::make_error<llvm::StringError>(error, llvm::inconvertibleErrorCode());
+        }
+        return std::make_unique<llvm::SmallVectorMemoryBuffer>(std::move(obj),
+            m.getModuleIdentifier() + "-jitted-objectbuffer", false);
+    }
+
+private:
+    std::unique_ptr<llvm::TargetMachine> tm;
+};
+
+//! creates the compiler of the JIT's modules (QoreFrameCheckCompiler)
+static llvm::Expected<std::unique_ptr<llvm::orc::IRCompileLayer::IRCompiler>> qore_jit_create_compiler(
+        llvm::orc::JITTargetMachineBuilder jtmb) {
+    auto tm = jtmb.createTargetMachine();
+    if (!tm) {
+        return tm.takeError();
+    }
+    return std::make_unique<QoreFrameCheckCompiler>(std::move(*tm));
+}
+
 //! Deregisters the debug objects of removed JIT code from the GDB JIT interface (qore#5772)
 /** LLVM's debugger support (ELFDebugObjectPlugin, installed by enableDebuggerSupport()) registers a copy of each
     linked object with the GDB JIT interface (__jit_debug_descriptor), but ORC never deregisters it: when the code is
@@ -1263,9 +1320,12 @@ bool QoreJIT::initialize(std::string& error) {
     jtmb->setCodeGenOptLevel(llvm::CodeGenOptLevel::None);
     auto jit_or_err = llvm::orc::LLJITBuilder()
         .setJITTargetMachineBuilder(std::move(*jtmb))
+        .setCompileFunctionCreator(qore_jit_create_compiler)
         .create();
 #else
-    auto jit_or_err = llvm::orc::LLJITBuilder().create();
+    auto jit_or_err = llvm::orc::LLJITBuilder()
+        .setCompileFunctionCreator(qore_jit_create_compiler)
+        .create();
 #endif
     if (!jit_or_err) {
         error = llvm::toString(jit_or_err.takeError());
@@ -1308,7 +1368,6 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     }
 
     auto& es = jit->getExecutionSession();
-    auto& dl = jit->getDataLayout();
     auto& jd = jit->getMainJITDylib();
 
     // Build symbol map for all C ABI runtime helpers
@@ -1730,8 +1789,8 @@ void QoreJIT::releaseCodeOwner(const void* owner) noexcept {
 }
 
 bool QoreJIT::processPendingCodeReleasesLocked() noexcept {
-    // the compile thread abandoned at process exit can be in LLVM: nothing is removed then, as the engine is left to
-    // the operating system (see shutdown())
+    // the compile thread abandoned when the compiler stopped can be in LLVM: nothing is removed then; the code units go
+    // with the engine (see releaseEngine(), after shutdown() has waited for the thread)
     if (bg_thread_abandoned.load(std::memory_order_acquire)) {
         return false;
     }
@@ -1905,6 +1964,8 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
     // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
     QoreIRToLLVM::expandFloatToIntForTarget(*module, llvm::Triple(llvm::sys::getProcessTriple()));
+    // the addresses of the slots of the cleanup frames in the blocks that use them (qore#6299)
+    QoreIRToLLVM::sinkFrameSlotAddresses(*module);
 
     // Dump LLVM IR if requested (after optimization)
     if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
@@ -2366,6 +2427,10 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 // If a callee fails to lower, fall back to compiling root alone
                 printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lowering failed: %s\n",
                     callee.ir_func->name.c_str(), error.c_str());
+                if (q_env_is_set("QORE_JIT_TIMING")) {
+                    fprintf(stderr, "[BG-JIT] batch member '%s' failed to lower (%s); compiling '%s' alone\n",
+                        callee.ir_func->name.c_str(), error.c_str(), root_func_name.c_str());
+                }
                 error.clear();
                 return compileFunctionInternal(root_func, error, root_deopt_counter);
             }
@@ -2423,15 +2488,17 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             fast_lowering.setFastEntryMode(fast_name, &param_map, &param_kind_map,
                 nullptr, callee_info.return_kind, sig->getReturnTypeInfo());
             if (!fast_lowering.lowerFunction(*callee.ir_func, *module, error)) {
-                // Fast entry failure is non-fatal: fall back to standard entry
+                // the fast entry was declared before the batch was lowered, and the code of the other members (and
+                // the callee's own standard entry) may call it already: the module is not compiled with an entry
+                // that has no body, and the root is compiled alone instead, as when a callee fails (qore#6313)
                 printd(2, "QoreJIT::compileFunctionBatch() fast entry '%s' lowering failed: %s\n",
                     fast_name.c_str(), error.c_str());
-                error.clear();
-                // Remove the fast entry from the batch map so callers don't try to use it
-                auto map_it = batch_callee_map.find(callee.variant);
-                if (map_it != batch_callee_map.end()) {
-                    map_it->second.approach_b_eligible = false;
+                if (q_env_is_set("QORE_JIT_TIMING")) {
+                    fprintf(stderr, "[BG-JIT] batch member '%s' failed to lower (%s); compiling '%s' alone\n",
+                        fast_name.c_str(), error.c_str(), root_func_name.c_str());
                 }
+                error.clear();
+                return compileFunctionInternal(root_func, error, root_deopt_counter);
             } else {
                 // the ABI is recorded with the symbol only once the entry is actually defined: a later batch that
                 // finds the name skips lowering the body, so recording a failed entry would bind its callers to a
@@ -2471,6 +2538,8 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
     // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
     QoreIRToLLVM::expandFloatToIntForTarget(*module, llvm::Triple(llvm::sys::getProcessTriple()));
+    // the addresses of the slots of the cleanup frames in the blocks that use them (qore#6299)
+    QoreIRToLLVM::sinkFrameSlotAddresses(*module);
 
     // Dump LLVM IR if requested (after optimization)
     if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
@@ -2867,9 +2936,10 @@ void QoreJIT::bgDiscardModule(llvm::orc::ResourceTracker* rt, const std::string&
     if (!rt) {
         return;
     }
-    // the module of a compile abandoned at process exit is left in place, as the engine is left to the operating
-    // system (see stopBackgroundCompiler()); the tracker, when it is released, only moves the module to the default
-    // tracker of its JITDylib.  The process does not run exit() while this thread is in LLVM (see exitQuickly()).
+    // the module of a compile abandoned when the compiler stopped is left in place: it is removed with the engine (see
+    // releaseEngine(), after shutdown() has waited for this thread), or left to the operating system in a process that
+    // ends without qore_cleanup(); the tracker, when it is released, only moves the module to the default tracker of
+    // its JITDylib.
     if (bg_thread_abandoned.load(std::memory_order_acquire)) {
         return;
     }
@@ -2993,7 +3063,8 @@ void QoreJIT::dbgBgHoldLocked(std::unique_lock<std::mutex>& lock, BgCompileHoldP
     dbg_bg_held = static_cast<int>(point);
     dbg_bg_hold_release = false;
     bg_queue_empty_cv.notify_all();
-    // a thread held at process exit stays here: the process ends without it (see stopBackgroundCompiler())
+    // a thread held at process exit stays here, and the process ends without it (see exitQuickly()), unless
+    // qore_cleanup() lets it go (see dbgReleaseBgCompileHolds())
     bg_queue_empty_cv.wait(lock, [this]() { return dbg_bg_hold_release; });
     dbg_bg_hold_release = false;
     dbg_bg_held = -1;
@@ -3019,9 +3090,13 @@ bool QoreJIT::dbgWaitBgCompileHeld(BgCompileHoldPoint point, int64_t timeout_ms)
     });
 }
 
-void QoreJIT::dbgFinishAbandonedCompile(DbgFinishAbandoned where) {
+void QoreJIT::dbgReleaseBgCompileHolds() {
     std::lock_guard<std::mutex> lock(bg_queue_mutex);
-    dbg_finish_abandoned = where;
+    dbg_bg_hold_armed = 0;
+    if (dbg_bg_held >= 0) {
+        dbg_bg_hold_release = true;
+    }
+    bg_queue_empty_cv.notify_all();
 }
 
 bool QoreJIT::dbgBgCompileHeld() {
@@ -3615,25 +3690,19 @@ void QoreJIT::stopBackgroundCompiler() {
         }
         if (abandon) {
             bg_thread_abandoned.store(true, std::memory_order_release);
-#ifdef DEBUG
-            // a test lets the held compile go on, so that its thread ends before shutdown() releases the engine
-            if (dbg_finish_abandoned == DbgFinishAbandoned::Shutdown && dbg_bg_held >= 0) {
-                dbg_bg_hold_release = true;
-                bg_queue_empty_cv.notify_all();
-            }
-#endif
         }
     }
     if (was_running) {
         // Signal the thread to wake up and exit
         bg_queue_cv.notify_one();
         // The thread of an abandoned compile is in LLVM, which cannot be interrupted, for a compile whose result is
-        // discarded.  It is not joined here, so that stopping the compiler does not wait for LLVM: when LLVM returns,
-        // the thread finishes the work without touching the JIT (see bgDiscardModule()) and ends.  It stays joinable:
-        // exit() must not destroy LLVM's static objects while it runs, so the process either ends with _exit() if it
-        // still runs at the end (see exitQuickly()), or the atexit() handler of the library joins it (see
-        // joinAbandonedCompileThread()).  The JIT is not destroyed under it: shutdown() or, at the end of the process,
-        // exitQuickly() releases it once the thread has ended (qore#5842).
+        // discarded.  It is not joined here, so that the teardown of qore_cleanup() goes on while LLVM finishes: the
+        // detached compile skips the optional passes and ends before its code generation (see bgCheckDetached()), and
+        // the thread finishes the work without touching the JIT (see bgDiscardModule()) and ends.  shutdown(), at the
+        // end of qore_cleanup(), joins it before it releases the JIT (issue #6296).  A process that ends without
+        // qore_cleanup() must not destroy LLVM's static objects while it runs: it ends with _exit() if it still runs at
+        // the end (see exitQuickly()), or the atexit() handler of the library joins it (see
+        // joinAbandonedCompileThread()).
         if (!abandon && bg_compile_thread.joinable()) {
             // Join the background thread (it should exit quickly since bg_thread_running is false)
             bg_compile_thread.join();
@@ -3682,109 +3751,83 @@ bool QoreJIT::exitQuickly() {
     if (!jit || !jit->bg_thread_abandoned.load(std::memory_order_acquire)) {
         return false;
     }
-#ifdef DEBUG
-    // a test lets the held compile go on now and waits for it, as when it ends before the process
-    // (see dbgFinishAbandonedCompile())
-    bool finish;
-    {
-        std::lock_guard<std::mutex> lock(jit->bg_queue_mutex);
-        finish = jit->dbg_finish_abandoned == DbgFinishAbandoned::Exit;
-        if (finish && jit->dbg_bg_held >= 0) {
-            jit->dbg_bg_hold_release = true;
-            jit->bg_queue_empty_cv.notify_all();
-        }
-    }
-    if (finish) {
-        jit->joinAbandonedCompileThread();
-        jit->releaseDeferredEngineNoThrow();
-        return false;
-    }
-#endif
     if (!jit->bg_thread_done.load(std::memory_order_acquire)) {
-        // the abandoned compile still runs in LLVM: exit() would destroy LLVM's static objects under it
+        // the abandoned compile still runs in LLVM (in a process that did not call qore_cleanup(), whose shutdown()
+        // waits for it): exit() would destroy LLVM's static objects under it
         return true;
     }
     // the thread has left its loop and only ends now; once it is joined, exit() can run as usual
     jit->joinAbandonedCompileThread();
-    jit->releaseDeferredEngineNoThrow();
     return false;
 }
 
 void QoreJIT::joinAbandonedCompileThread() {
     // called by the exiting thread only, after stopBackgroundCompiler(), which no longer starts or joins the thread
     if (bg_thread_abandoned.load(std::memory_order_acquire) && bg_compile_thread.joinable()) {
+#ifdef DEBUG
+        dbgExitIfAbandonedCompileHeld();
+#endif
         bg_compile_thread.join();
     }
 }
 
-void QoreJIT::releaseDeferredEngineNoThrow() noexcept {
-    // called by exitQuickly() through qore_jit_exit_quickly() from qore_fork_child_quick_exit(), an exported C
-    // function, at the end of the process: a failure to release the engine (a lock error, for example) leaves it to the
-    // operating system, as an abandoned compile does
+#ifdef DEBUG
+void QoreJIT::dbgExitIfAbandonedCompileHeld() noexcept {
+    int held_at;
     try {
-        releaseDeferredEngine();
-    } catch (const std::exception& e) {
-        if (q_env_is_set("QORE_JIT_TIMING")) {
-            fprintf(stderr, "[BG-JIT] the JIT was not released at the end of the process: %s\n", e.what());
-        }
+        std::lock_guard<std::mutex> lock(bg_queue_mutex);
+        // a thread that was let go (dbgReleaseBgCompileHolds(), dbgContinueBgCompile()) leaves the hold point
+        held_at = dbg_bg_hold_release ? -1 : dbg_bg_held;
     } catch (...) {
-        if (q_env_is_set("QORE_JIT_TIMING")) {
-            fprintf(stderr, "[BG-JIT] the JIT was not released at the end of the process\n");
-        }
+        // the state cannot be read: the join is made as without the test hook
+        return;
     }
-}
-
-void QoreJIT::releaseDeferredEngine() {
-    // shutdown() left the engine to this point, as a compile ran in it; with its thread joined, the engine is released
-    // before exit(), which also deregisters the EH frames of the compiled code: libgcc frees its table of registered
-    // frames when the process exits, after which the memory that it allocated for each frame would be lost
-    // (qore#5842).  Not in the atexit() handler: LLVM's function-local statics are destroyed before it runs.
-    if (shutdown_deferred.exchange(false, std::memory_order_acq_rel)) {
-        releaseEngine();
-        if (q_env_is_set("QORE_JIT_TIMING")) {
-            fprintf(stderr, "[BG-JIT] released the JIT at the end of the process after the abandoned compile ended\n");
-        }
+    if (held_at < 0) {
+        return;
     }
+    // the names of the hold points, as dbg_hold_bg_compile() takes them
+    static const char* const hold_point_names[] = {"lowering", "llvm", "commit", "install"};
+    static_assert(sizeof(hold_point_names) / sizeof(hold_point_names[0])
+        == static_cast<size_t>(BgCompileHoldPoint::Count), "a hold point has no name");
+    const char* point = static_cast<size_t>(held_at) < sizeof(hold_point_names) / sizeof(hold_point_names[0])
+        ? hold_point_names[held_at] : "unknown";
+    // the compile stays held, so the join would never return and the process would hang without a sign of why: a
+    // process that ends with exit() without qore_cleanup(), whose shutdown() lets a held compile go (issue #6296)
+    fprintf(stderr, "QORE-DEBUG: exit() with an abandoned compile held at debug hold point \"%s\": call "
+        "qore_cleanup() before the process exits\n", point);
+    fflush(nullptr);
+    _exit(QORE_JIT_DBG_HELD_AT_EXIT_STATUS);
 }
+#endif
 
 void QoreJIT::shutdown() {
     stopBackgroundCompiler();
 
-#ifdef DEBUG
-    {
-        // a test waits for the abandoned compile that it let go, so that the engine is released here
-        // (see dbgFinishAbandonedCompile())
-        bool wait;
-        {
-            std::lock_guard<std::mutex> lock(bg_queue_mutex);
-            wait = dbg_finish_abandoned == DbgFinishAbandoned::Shutdown;
-        }
-        if (wait) {
-            joinAbandonedCompileThread();
-        }
-    }
-#endif
-
-    if (bg_thread_abandoned.load(std::memory_order_acquire)) {
-        // A detached compile can still be running in LLVM on the abandoned compile thread, which holds compile_mutex
-        // and uses the LLJIT's ExecutionSession: the ExecutionSession cannot be destroyed under an active compile, and
-        // waiting for compile_mutex would wait for LLVM without bound.  A thread that has ended already is joined,
-        // and the engine is released now.  Otherwise it is released at the end of the process if the thread has ended
-        // by then (exitQuickly() calls releaseDeferredEngine()); if it still runs then, the process ends with _exit(),
-        // and the engine, its code and the caches are left to the operating system.
-        if (bg_thread_done.load(std::memory_order_acquire)) {
-            joinAbandonedCompileThread();
-            releaseEngine();
-            if (q_env_is_set("QORE_JIT_TIMING")) {
-                fprintf(stderr, "[BG-JIT] released the JIT in shutdown() after the abandoned compile ended\n");
-            }
-            return;
-        }
-        shutdown_deferred.store(true, std::memory_order_release);
-        return;
-    }
-
+    // A detached compile can still be running in LLVM on the abandoned compile thread, which holds compile_mutex and
+    // uses the LLJIT's ExecutionSession, which cannot be destroyed under it: it is waited for first
+    bool waited = finishDetachedCompile();
     releaseEngine();
+    if (waited && q_env_is_set("QORE_JIT_TIMING")) {
+        fprintf(stderr, "[BG-JIT] released the JIT in shutdown() after the abandoned compile ended\n");
+    }
+}
+
+bool QoreJIT::finishDetachedCompile() {
+    if (!bg_thread_abandoned.load(std::memory_order_acquire)) {
+        return false;
+    }
+    // The compile skips the optional passes and ends before its code generation (see stopBackgroundCompiler()), so it
+    // is waited for: when qore_cleanup() returns, no compile is in LLVM, and the process can exit, also by returning
+    // from main(), without exit() destroying LLVM's static objects under a compile (issue #6296).
+#ifdef DEBUG
+    // stopping the compiler is a point where a compile ends: a compile held by a test is let go
+    dbgReleaseBgCompileHolds();
+#endif
+    joinAbandonedCompileThread();
+    if (q_env_is_set("QORE_JIT_TIMING")) {
+        fprintf(stderr, "[BG-JIT] waited for the abandoned compile in qore_cleanup()\n");
+    }
+    return true;
 }
 
 void QoreJIT::releaseEngine() {
@@ -3854,7 +3897,6 @@ void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
     // and neither does a thread that waited for compile_mutex for a synchronous compile
     sync_compile_waiters = 0;
     bg_thread_abandoned.store(false, std::memory_order_relaxed);
-    shutdown_deferred.store(false, std::memory_order_relaxed);
     bg_thread_done.store(false, std::memory_order_relaxed);
     // it pointed at the stack of the compile thread, which does not exist in the child
     bg_compile_ctx = nullptr;

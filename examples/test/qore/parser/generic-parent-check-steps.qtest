@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class GenericParentCheckStepsTest
+
+#! the check of the instantiations of the generic classes that a class inherits takes steps linear in its ancestors
+/** The parser checks that a class inherits each generic class with one instantiation through all paths (qore#6027).
+    In a lattice of classes, where each class of a level inherits both classes of the level below, there are 2^depth
+    paths to the base class; a check that walks the hierarchy once per path takes time exponential in the depth, so
+    that a few dozen lines of source hang the parser (qore#6423).  Each class's check must walk each of its ancestors
+    once: the steps of the checks of a whole lattice are at most the number of its classes times the number of its
+    inheritance edges.
+
+    The steps are counted by a debug hook of the library, so the test is skipped by a library built without it.
+*/
+class GenericParentCheckStepsTest inherits QUnit::Test {
+    public {
+        #! the depths of the lattices
+        const Depths = (4, 6, 8, 10, 12);
+    }
+
+    constructor() : QUnit::Test("GenericParentCheckStepsTest", "1.0", \ARGV) {
+        addTestCase("a lattice of classes over an instantiation of a generic class", \latticeTest(), False);
+        addTestCase("a lattice of generic classes", \latticeTest(), True);
+        addTestCase("a lattice with two instantiations of a generic class", \conflictTest());
+        set_return_value(main());
+    }
+
+    #! returns the steps of the generic parent checks of the parser so far, or NOTHING without the debug hook
+    private static *int steps() {
+        # the debug hook exists in debug builds of the library only
+        try {
+            return call_function("dbg_generic_parent_check_steps");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    #! returns the source of a lattice of the given depth
+    /** Level 0 has two classes inheriting the generic class \c G, each level above it two classes inheriting both
+        classes of the level below
+
+        @param depth the number of levels above level 0
+        @param generic if the classes of the lattice are generic classes (\c L<n>a<T>), instantiated by a last class
+        (\c Top), or classes inheriting \c G<float>
+        @param args the type arguments of \c G of the two classes of level 0, for a lattice that is not generic
+    */
+    private static string lattice(int depth, bool generic, list<string> args = ("float", "float")) {
+        string tp = generic ? "<T>" : "";
+        string src = "class G<T> { }\n";
+        src += sprintf("class L0a%s inherits G%s { }\nclass L0b%s inherits G%s { }\n", tp,
+            generic ? "<T>" : "<" + args[0] + ">", tp, generic ? "<T>" : "<" + args[1] + ">");
+        for (int i = 1; i <= depth; ++i) {
+            foreach string s in (("a", "b")) {
+                src += sprintf("class L%d%s%s inherits L%da%s, L%db%s { }\n", i, s, tp, i - 1, tp, i - 1, tp);
+            }
+        }
+        if (generic) {
+            src += sprintf("class Top inherits L%da<int> { }\n", depth);
+        }
+        return src;
+    }
+
+    #! parses lattices of increasing depth and checks that the steps of the checks are bounded by the lattice's size
+    latticeTest(bool generic) {
+        if (!exists steps()) {
+            testSkip("the library has no class hierarchy step counter (a debug build is required)");
+        }
+        hash<string, int> counts;
+        foreach int depth in (Depths) {
+            # the classes: G, the two of level 0, two for each level above it, and Top
+            int classes = 3 + 2 * depth + (generic ? 1 : 0);
+            # the inheritance edges: two for level 0, four for each level above it, and one for Top
+            int edges = 2 + 4 * depth + (generic ? 1 : 0);
+            Program p(PO_NEW_STYLE);
+            int before = steps();
+            p.parse(lattice(depth, generic), "lattice");
+            int n = steps() - before;
+            counts{depth} = n;
+            assertTrue(n > 0, sprintf("depth %d: the checks were counted", depth));
+            # each class's check walks each of its ancestors once
+            assertTrue(n <= classes * edges, sprintf("depth %d: %d steps for %d classes and %d edges (at most %d)",
+                depth, n, classes, edges, classes * edges));
+        }
+        # twice the depth: about four times the steps (the classes and their ancestors double), not 2^depth times
+        assertTrue(counts{12} <= 5 * counts{6}, sprintf("steps by depth: %y", counts));
+    }
+
+    #! the first two different instantiations found are reported by the first class that inherits both
+    conflictTest() {
+        Program p(PO_NEW_STYLE);
+        string err;
+        try {
+            p.parse(lattice(8, False, ("int", "string")), "lattice");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err + ": " + ex.desc;
+        }
+        assertRegex("^PARSE-EXCEPTION: class 'L1a' inherits generic class 'G' with different type arguments: 'G<int>' "
+            "through 'L0a' and 'G<string>' through 'L0b'", err);
+    }
+}

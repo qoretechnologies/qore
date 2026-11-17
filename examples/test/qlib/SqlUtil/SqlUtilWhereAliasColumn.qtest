@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+
+# a run on PostgreSQL has its own schema
+%requires ./PgsqlTestIsolation.qm
+
+%exec-class SqlUtilWhereAliasColumnTest
+
+/** In a where clause, a name that is both a column of the table and a column alias of the query (ex:
+    <tt>cop_as(cop_distinct("ddt_number"), "ddt_number")</tt>) names the column, as in SQL; the alias's definition
+    was used instead, which gave invalid SQL such as <tt>items.distinct items.ddt_number is not null</tt>
+    (issue #1747).  An alias that is not a column name still gives its definition.
+
+    PostgreSQL is tested with the connection in \c QORE_DB_CONNSTR_PGSQL in a schema of its own; SQLite in memory.
+*/
+class SqlUtilWhereAliasColumnTest inherits QUnit::Test {
+    private {
+        hash<string, Datasource> dsh;
+        hash<string, string> skip_reasons;
+        bool pgsql_isolated;
+    }
+
+    constructor() : QUnit::Test("SqlUtilWhereAliasColumnTest", "1.0") {
+        foreach string label in ("pgsql", "sqlite3") {
+            addTestCase(label + ": an alias named like a column in a join", \testJoin(), label);
+            addTestCase(label + ": an alias named like a column", \testNoJoin(), label);
+            addTestCase(label + ": an alias that is not a column", \testAliasOnly(), label);
+        }
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        setUpConnection("pgsql");
+        setUpConnection("sqlite3");
+    }
+
+    globalTearDown() {
+        map $1.rollback(), dsh.iterator();
+        remove dsh;
+        if (pgsql_isolated) {
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    private setUpConnection(string label) {
+        string connstr;
+        if (label == "sqlite3") {
+            connstr = "sqlite3:x@:memory:";
+        } else {
+            if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+                skip_reasons{label} = "QORE_DB_CONNSTR_PGSQL is not set";
+                return;
+            }
+            connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        }
+        Datasource ds;
+        try {
+            ds = new Datasource(connstr);
+            if (ds.getDriverName() != label) {
+                skip_reasons{label} = sprintf("the connection uses driver %y, not %y", ds.getDriverName(), label);
+                return;
+            }
+            if (label == "pgsql") {
+                PgsqlRunSchema::setup(connstr, "SqlUtilWhereAliasColumn");
+                pgsql_isolated = True;
+            }
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            skip_reasons{label} = sprintf("%s: %s", ex.err, ex.desc);
+            return;
+        }
+        on_error ds.rollback();
+        on_success ds.commit();
+        ds.exec("create table items (transaction_id int, ddt_number varchar(10), name varchar(10))");
+        ds.exec("create table integ (transaction_id int, i_sepl_updated_id int)");
+        ds.exec("insert into items values (1, 'a', 'x'), (2, 'a', 'y'), (3, null, 'z'), (4, 'b', 'w')");
+        ds.exec("insert into integ values (1, 7), (2, 7), (3, 7), (4, 8)");
+        dsh{label} = ds;
+    }
+
+    private Table getTable(string label) {
+        if (*Datasource ds = dsh{label}) {
+            return new Table(ds, "items");
+        }
+        testSkip(skip_reasons{label} ?? sprintf("no %s connection", label));
+    }
+
+    testJoin(string label) {
+        Table t = getTable(label);
+        hash<auto> sh = {
+            "columns": cop_as(cop_distinct("ddt_number"), "ddt_number"),
+            "join": join_inner("integ", "h", {"transaction_id": "transaction_id"}),
+            "where": {"h.i_sepl_updated_id": 7, "ddt_number": op_ne(NULL)},
+        };
+        string sql;
+        list<auto> rows = t.selectRows(sh, \sql);
+        assertFalse(sql =~ /\.distinct /, sql);
+        assertEq(({"ddt_number": "a"},), rows, sql);
+    }
+
+    testNoJoin(string label) {
+        Table t = getTable(label);
+        hash<auto> sh = {
+            "columns": cop_as(cop_distinct("ddt_number"), "ddt_number"),
+            "where": {"ddt_number": op_ne(NULL)},
+        };
+        string sql;
+        list<auto> rows = t.selectRows(sh, \sql);
+        assertFalse(sql =~ /where distinct/, sql);
+        assertEq(("a", "b"), sort(map $1.ddt_number, rows), sql);
+    }
+
+    testAliasOnly(string label) {
+        Table t = getTable(label);
+        # an alias that is not a column name gives its definition in the where clause
+        hash<auto> sh = {
+            "columns": ("transaction_id", cop_as(cop_upper("name"), "uname")),
+            "where": {"uname": "Y"},
+        };
+        string sql;
+        list<auto> rows = t.selectRows(sh, \sql);
+        assertEq(({"transaction_id": 2, "uname": "Y"},), rows, sql);
+    }
+}

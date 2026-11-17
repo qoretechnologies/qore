@@ -10,6 +10,8 @@
 #include <qore/QoreColumnarResult.h>
 
 #include "qore/intern/QC_ColumnarResult.h"
+#include "qore/intern/qore_list_private.h"
+#include "qore/intern/qore_number_private.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 #include <algorithm>
@@ -49,6 +51,9 @@ struct ColumnarShape {
     QoreColumnarTypeKind kind = QoreColumnarTypeKind::Auto;
     std::string time_unit;
     std::string timezone;
+    //! a dense integer column whose values must be integers (not coerced as the values of a scale-0 decimal
+    //! column narrowed to int64 are)
+    bool exact_values = false;
 };
 
 static bool columnar_parse_decimal_metadata(const std::string& native_type, int32_t& precision, int32_t& scale);
@@ -599,7 +604,7 @@ static QoreValue columnar_make_column_value(const QoreListNode* source, const Co
             return new QoreBufferNode(shape.buffer_type, shape.nullable, source, xsink,
                 shape.decimal_precision > 0 ? shape.decimal_precision : 38, shape.decimal_scale);
         }
-        if (shape.column_type == QoreColumnarColumnType::Int && source) {
+        if (shape.column_type == QoreColumnarColumnType::Int && source && !shape.exact_values) {
             // a scale-0, precision<=18 numeric/decimal column narrows to int64 (see
             // columnar_decimal_narrows_to_int64()); its source list still carries the driver's
             // number/float values, so coerce each non-null element to int while building the
@@ -1172,10 +1177,514 @@ static bool columnar_parse_decimal_metadata(const std::string& native_type, int3
     return precision > 0 && scale >= 0;
 }
 
+//! The maximum nesting depth of a column schema (the top-level schema has depth 0), as for Arrow IPC data
+/** Schemas are parsed, checked, exported and serialized recursively, and a schema can come from untrusted data
+    (qore#6214).
+*/
+static constexpr unsigned COLUMNAR_MAX_SCHEMA_DEPTH = 64;
+
+//! The flags of QoreColumnarResult::addColumnIntern()
+enum : int {
+    //! a list column whose schema describes dense storage is converted to a buffer
+    COLUMNAR_ADD_CONVERT = (1 << 0),
+    //! the schema is checked against the data (columnar_check_column())
+    COLUMNAR_ADD_CHECK = (1 << 1),
+    //! a declared buffer type or decimal precision and scale that the storage does not have is an error instead of
+    //! being completed from the storage
+    COLUMNAR_ADD_STRICT = (1 << 2),
+    //! the values of a list column converted to a buffer were given by a script and are checked (see
+    //! columnar_make_column_value())
+    COLUMNAR_ADD_SCRIPT_VALUES = (1 << 3),
+};
+
+static bool columnar_kind_is_temporal(QoreColumnarTypeKind kind) {
+    return kind == QoreColumnarTypeKind::Date || kind == QoreColumnarTypeKind::Timestamp
+        || kind == QoreColumnarTypeKind::Duration;
+}
+
+//! Returns true if a column or value of the given kind can be stored in a buffer with the given element type
+/** These are the combinations that the library produces: the buffer type of each scalar kind, buffer<int64> for a
+    temporal kind (its values in microseconds), buffer<decimal128> for decimal128, and, for a dictionary, the buffer
+    type of its value kind.  A number, binary, list, struct or map column is always a list.
+*/
+static bool columnar_kind_accepts_buffer(const QoreColumnarTypeDescriptor& schema, QoreBufferElementType type) {
+    switch (schema.kind) {
+        case QoreColumnarTypeKind::Bool:
+            return type == QoreBufferElementType::Bool;
+        case QoreColumnarTypeKind::Int:
+            return qore_buffer_element_type_is_integer(type);
+        case QoreColumnarTypeKind::Float:
+            return qore_buffer_element_type_is_float(type);
+        case QoreColumnarTypeKind::String:
+            return type == QoreBufferElementType::String;
+        case QoreColumnarTypeKind::Decimal128:
+            return type == QoreBufferElementType::Decimal128;
+        case QoreColumnarTypeKind::Date:
+        case QoreColumnarTypeKind::Timestamp:
+        case QoreColumnarTypeKind::Duration:
+            return type == QoreBufferElementType::Int64;
+        case QoreColumnarTypeKind::Dictionary:
+            // the values of a dictionary column are decoded; without a value kind, any scalar buffer is accepted
+            return schema.children.empty() || columnar_kind_accepts_buffer(schema.children[0], type);
+        case QoreColumnarTypeKind::Auto:
+            // completed from the buffer type by the caller
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! Returns the names of the value types that a list value of the given kind can have, for error messages
+static const char* columnar_kind_value_types(QoreColumnarTypeKind kind) {
+    switch (kind) {
+        case QoreColumnarTypeKind::Bool:
+            return "bool";
+        case QoreColumnarTypeKind::Int:
+            return "int, or number with no fractional part";
+        case QoreColumnarTypeKind::Float:
+            return "float or int";
+        case QoreColumnarTypeKind::Number:
+            return "number, int, float or string";
+        case QoreColumnarTypeKind::Decimal128:
+            return "number, int or float";
+        case QoreColumnarTypeKind::String:
+            return "string";
+        case QoreColumnarTypeKind::Binary:
+            return "binary";
+        case QoreColumnarTypeKind::Date:
+        case QoreColumnarTypeKind::Timestamp:
+        case QoreColumnarTypeKind::Duration:
+            return "date";
+        case QoreColumnarTypeKind::List:
+        case QoreColumnarTypeKind::LargeList:
+        case QoreColumnarTypeKind::FixedSizeList:
+            return "list";
+        case QoreColumnarTypeKind::Struct:
+        case QoreColumnarTypeKind::Map:
+            return "hash";
+        default:
+            return "any type";
+    }
+}
+
+//! Returns true if a value that is not NOTHING or NULL can be a value of the given kind in a list
+/** The value types are the ones that the library produces for each kind: the values of the drivers and of an
+    Arrow import (an unsigned 64-bit integer too big for an int is a number, a numeric value can be a string) and of
+    fromColumnHash() inference.
+*/
+static bool columnar_value_type_matches_kind(qore_type_t type, QoreColumnarTypeKind kind) {
+    switch (kind) {
+        case QoreColumnarTypeKind::Bool:
+            return type == NT_BOOLEAN;
+        case QoreColumnarTypeKind::Int:
+            return type == NT_INT || type == NT_NUMBER;
+        case QoreColumnarTypeKind::Float:
+            return type == NT_FLOAT || type == NT_INT;
+        case QoreColumnarTypeKind::Number:
+            return type == NT_NUMBER || type == NT_INT || type == NT_FLOAT || type == NT_STRING;
+        case QoreColumnarTypeKind::Decimal128:
+            return type == NT_NUMBER || type == NT_INT || type == NT_FLOAT;
+        case QoreColumnarTypeKind::String:
+            return type == NT_STRING;
+        case QoreColumnarTypeKind::Binary:
+            return type == NT_BINARY;
+        case QoreColumnarTypeKind::Date:
+        case QoreColumnarTypeKind::Timestamp:
+        case QoreColumnarTypeKind::Duration:
+            return type == NT_DATE;
+        case QoreColumnarTypeKind::List:
+        case QoreColumnarTypeKind::LargeList:
+        case QoreColumnarTypeKind::FixedSizeList:
+            return type == NT_LIST;
+        case QoreColumnarTypeKind::Struct:
+        case QoreColumnarTypeKind::Map:
+            return type == NT_HASH;
+        default:
+            return true;
+    }
+}
+
+//! Returns the type of a value, reading the type of a node inline
+static inline qore_type_t columnar_value_type(const QoreValue& value) {
+    if (value.isPointer()) {
+        const AbstractQoreNode* n = value.getPtr();
+        if (n) {
+            return n->getType();
+        }
+    }
+    return value.getType();
+}
+
+//! Checks the parts of a schema that do not depend on the data: time units, decimal parameters and sizes
+static int columnar_check_descriptor(const char* name, const QoreColumnarTypeDescriptor& schema, const char* err,
+        ExceptionSink* xsink, unsigned depth = 0) {
+    if (depth > COLUMNAR_MAX_SCHEMA_DEPTH) {
+        xsink->raiseException(err, "column '%s' schema is nested more than %u levels deep", name,
+            COLUMNAR_MAX_SCHEMA_DEPTH);
+        return -1;
+    }
+    // a date column can also be in days, as an Arrow date32 column
+    if (columnar_kind_is_temporal(schema.kind) && !schema.time_unit.empty() && schema.time_unit != "s"
+            && schema.time_unit != "ms" && schema.time_unit != "us" && schema.time_unit != "ns"
+            && (schema.kind != QoreColumnarTypeKind::Date || schema.time_unit != "day")) {
+        xsink->raiseException(err, "column '%s' %s schema has time unit '%s'; expected s, ms, us or ns%s", name,
+            qore_columnar_type_kind_name(schema.kind), schema.time_unit.c_str(),
+            schema.kind == QoreColumnarTypeKind::Date ? " (or day)" : "");
+        return -1;
+    }
+    if (schema.kind == QoreColumnarTypeKind::Decimal128
+            && !columnar_decimal_metadata_is_supported(schema.precision, schema.scale)) {
+        xsink->raiseException(err, "column '%s' decimal128 schema requires precision 1..38 and scale 0..precision; "
+            "got precision %d, scale %d", name, schema.precision, schema.scale);
+        return -1;
+    }
+    if (schema.kind == QoreColumnarTypeKind::FixedSizeList && schema.fixed_size <= 0) {
+        xsink->raiseException(err, "column '%s' fixed_size_list schema requires a positive fixed_size; got %d", name,
+            schema.fixed_size);
+        return -1;
+    }
+    if (schema.fixed_size < 0) {
+        xsink->raiseException(err, "column '%s' %s schema has negative fixed_size %d", name,
+            qore_columnar_type_kind_name(schema.kind), schema.fixed_size);
+        return -1;
+    }
+    for (size_t i = 0; i < schema.children.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking columnar schema children")) {
+            return -1;
+        }
+        if (columnar_check_descriptor(name, schema.children[i], err, xsink, depth + 1)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+//! The maximum number of padding elements of the null values of a column with a fixed size beyond the number of
+//! elements of its other values
+static constexpr size_t COLUMNAR_MAX_FIXED_SIZE_NULL_PADDING = 1 << 24;
+
+//! The state of the check of the values of a column
+struct ColumnarCheckState {
+    //! the number of null and other values of a child or column schema with a fixed size
+    struct FixedSizeCount {
+        const QoreColumnarTypeDescriptor* schema;
+        size_t nulls;
+        size_t values;
+    };
+    std::vector<FixedSizeCount> fixed_size_counts;
+
+    DLLLOCAL void count(const QoreColumnarTypeDescriptor& schema, bool is_null) {
+        for (FixedSizeCount& c : fixed_size_counts) {
+            if (c.schema == &schema) {
+                ++(is_null ? c.nulls : c.values);
+                return;
+            }
+        }
+        fixed_size_counts.push_back({&schema, is_null ? (size_t)1 : 0, is_null ? 0 : (size_t)1});
+    }
+
+    //! raises an exception if the null values of a schema with a fixed size need more padding than the data holds
+    /** Every value of a fixed-size list or binary column, null or not, has \c fixed_size elements in Arrow storage;
+        the padding of the null values is bounded by the size of the other values.
+    */
+    DLLLOCAL int checkFixedSizes(const char* name, const char* err, ExceptionSink* xsink) const {
+        for (const FixedSizeCount& c : fixed_size_counts) {
+            size_t fixed_size = static_cast<size_t>(c.schema->fixed_size);
+            if (c.nulls > c.values && c.nulls > COLUMNAR_MAX_FIXED_SIZE_NULL_PADDING / fixed_size) {
+                xsink->raiseException(err, "column '%s' %s schema with fixed_size %d has " QLLD " null values and "
+                    QLLD " other values; the null values of a column with a fixed size can have at most as many "
+                    "elements as the other values or " QLLD, name, qore_columnar_type_kind_name(c.schema->kind),
+                    c.schema->fixed_size, (int64)c.nulls, (int64)c.values,
+                    (int64)COLUMNAR_MAX_FIXED_SIZE_NULL_PADDING);
+                return -1;
+            }
+        }
+        return 0;
+    }
+};
+
+//! Returns true if a number value has no fractional part
+static bool columnar_number_is_integral(const QoreValue& value) {
+    return mpfr_integer_p(qore_number_private::get(*value.get<const QoreNumberNode>())->num);
+}
+
+static int columnar_check_value(const char* name, QoreColumnarTypeDescriptor& schema, QoreValue value, size_t row,
+        bool nested, ColumnarCheckState& st, const char* err, ExceptionSink* xsink);
+
+//! Checks the values of a list against a schema; a NOTHING or NULL value makes the schema nullable
+static int columnar_check_list_values(const char* name, QoreColumnarTypeDescriptor& schema, const QoreListNode* list,
+        size_t row, bool top_level, ColumnarCheckState& st, const char* err,
+        ExceptionSink* xsink) {
+    // the values are read directly, as this is the only part of the check whose cost depends on the size of the data
+    const qore_list_private* lp = qore_list_private::get(list);
+    const QoreValue* entry = lp->entry;
+    size_t length = lp->length;
+
+    // the kind of the values, without children to check them against: only the value type is checked
+    const QoreColumnarTypeDescriptor* value_schema = &schema;
+    while (value_schema->kind == QoreColumnarTypeKind::Dictionary && !value_schema->children.empty()) {
+        value_schema = &value_schema->children[0];
+    }
+    QoreColumnarTypeKind kind = value_schema->kind;
+    bool scalar;
+    switch (kind) {
+        case QoreColumnarTypeKind::Auto:
+        case QoreColumnarTypeKind::Dictionary:
+            scalar = value_schema->children.empty();
+            break;
+        case QoreColumnarTypeKind::Binary:
+            scalar = value_schema->fixed_size <= 0;
+            break;
+        case QoreColumnarTypeKind::List:
+        case QoreColumnarTypeKind::LargeList:
+        case QoreColumnarTypeKind::FixedSizeList:
+        case QoreColumnarTypeKind::Struct:
+        case QoreColumnarTypeKind::Map:
+            scalar = false;
+            break;
+        default:
+            scalar = true;
+            break;
+    }
+
+    if (scalar) {
+        bool any = kind == QoreColumnarTypeKind::Auto || kind == QoreColumnarTypeKind::Dictionary;
+        bool nullable = false;
+        for (size_t i = 0; i < length; ++i) {
+            if (i && !(i % 1024) && qore_check_cancel(xsink, "checking columnar values")) {
+                return -1;
+            }
+            qore_type_t type = columnar_value_type(entry[i]);
+            if (type == NT_NOTHING || type == NT_NULL) {
+                nullable = true;
+                continue;
+            }
+            if (!any && (!columnar_value_type_matches_kind(type, kind)
+                    || (type == NT_NUMBER && kind == QoreColumnarTypeKind::Int
+                        && !columnar_number_is_integral(entry[i])))) {
+                // raises the exception
+                return columnar_check_value(name, schema, entry[i], top_level ? i : row, !top_level, st, err, xsink);
+            }
+        }
+        if (nullable) {
+            schema.nullable = true;
+        }
+        return 0;
+    }
+
+    for (size_t i = 0; i < length; ++i) {
+        if (i && !(i % 1024) && qore_check_cancel(xsink, "checking columnar values")) {
+            return -1;
+        }
+        if (columnar_check_value(name, schema, entry[i], top_level ? i : row, !top_level, st, err, xsink)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+//! Checks one value against a schema, and the values in it against the child schemas
+static int columnar_check_value(const char* name, QoreColumnarTypeDescriptor& schema, QoreValue value, size_t row,
+        bool nested, ColumnarCheckState& st, const char* err, ExceptionSink* xsink) {
+    qore_type_t type = columnar_value_type(value);
+    bool is_null = type == NT_NOTHING || type == NT_NULL;
+    // the values of a column with a fixed size are counted to bound the padding of its null values
+    if (schema.fixed_size > 0 && (schema.kind == QoreColumnarTypeKind::FixedSizeList
+            || schema.kind == QoreColumnarTypeKind::Binary)) {
+        st.count(schema, is_null);
+    }
+    if (is_null) {
+        schema.nullable = true;
+        return 0;
+    }
+    QoreColumnarTypeKind kind = schema.kind;
+    if (kind == QoreColumnarTypeKind::Dictionary) {
+        // a dictionary value is a value of its value kind
+        return schema.children.empty() ? 0
+            : columnar_check_value(name, schema.children[0], value, row, nested, st, err, xsink);
+    }
+    if (type == NT_NUMBER && kind == QoreColumnarTypeKind::Int && !columnar_number_is_integral(value)) {
+        xsink->raiseException(err, "column '%s' row " QLLD " has a number with a fractional part in an int %s", name,
+            (int64)row, nested ? "child" : "column");
+        return -1;
+    }
+    if (!columnar_value_type_matches_kind(type, kind)) {
+        if (!nested) {
+            xsink->raiseException(err, "column '%s' row " QLLD " has a value of type '%s'; a %s value must be %s",
+                name, (int64)row, value.getTypeName(), qore_columnar_type_kind_name(kind),
+                columnar_kind_value_types(kind));
+        } else {
+            xsink->raiseException(err, "column '%s' row " QLLD " child '%s' has a value of type '%s'; "
+                "a %s value must be %s", name, (int64)row, schema.name.empty() ? "item" : schema.name.c_str(),
+                value.getTypeName(),
+                qore_columnar_type_kind_name(kind), columnar_kind_value_types(kind));
+        }
+        return -1;
+    }
+    switch (kind) {
+        case QoreColumnarTypeKind::Binary:
+            if (schema.fixed_size > 0 && value.get<const BinaryNode>()->size() != (size_t)schema.fixed_size) {
+                xsink->raiseException(err, "column '%s' row " QLLD " has a binary value of " QLLD " bytes; the "
+                    "schema has fixed_size %d", name, (int64)row, (int64)value.get<const BinaryNode>()->size(),
+                    schema.fixed_size);
+                return -1;
+            }
+            return 0;
+        case QoreColumnarTypeKind::List:
+        case QoreColumnarTypeKind::LargeList:
+        case QoreColumnarTypeKind::FixedSizeList: {
+            const QoreListNode* l = value.get<const QoreListNode>();
+            if (kind == QoreColumnarTypeKind::FixedSizeList && l->size() != (size_t)schema.fixed_size) {
+                xsink->raiseException(err, "column '%s' row " QLLD " has a list of " QLLD " elements; the "
+                    "fixed_size_list schema has fixed_size %d", name, (int64)row, (int64)l->size(),
+                    schema.fixed_size);
+                return -1;
+            }
+            return schema.children.empty() ? 0
+                : columnar_check_list_values(name, schema.children[0], l, row, false, st, err, xsink);
+        }
+        case QoreColumnarTypeKind::Struct: {
+            const QoreHashNode* h = value.get<const QoreHashNode>();
+            for (QoreColumnarTypeDescriptor& child : schema.children) {
+                if (child.name.empty()) {
+                    continue;
+                }
+                if (columnar_check_value(name, child, h->getKeyValue(child.name.c_str()), row, true, st, err, xsink)) {
+                    return -1;
+                }
+            }
+            return 0;
+        }
+        case QoreColumnarTypeKind::Map: {
+            if (schema.children.size() < 2) {
+                return 0;
+            }
+            ConstHashIterator hi(value.get<const QoreHashNode>());
+            size_t n = 0;
+            while (hi.next()) {
+                if (n && !(n % 100) && qore_check_cancel(xsink, "checking columnar map values")) {
+                    return -1;
+                }
+                ++n;
+                if (columnar_check_value(name, schema.children[1], hi.get(), row, true, st, err, xsink)) {
+                    return -1;
+                }
+            }
+            return 0;
+        }
+        default:
+            return 0;
+    }
+}
+
+//! Checks a column schema against the column data and completes it from the data
+/** Every entry point that accepts a schema calls this, so that no result has a schema that its data contradicts:
+    the kind must be one that the storage can hold (columnar_kind_accepts_buffer() for a buffer, and for a list the
+    kind of each value: columnar_value_type_matches_kind(), checked recursively against the child schemas).
+
+    The schema is completed from the data: a NOTHING or NULL value or a buffer with nullable elements makes it
+    nullable, a buffer column gets the buffer type of its buffer (and the precision and scale of a decimal buffer),
+    and a buffer column with no kind gets the kind of its buffer type.  With \a strict, a declared buffer type,
+    precision or scale that differs from the storage is an error instead.
+
+    The cost is constant for a buffer column; a list column is scanned once.
+*/
+static int columnar_check_column(const char* name, QoreColumnarTypeDescriptor& schema, QoreValue data, bool strict,
+        const char* err, ExceptionSink* xsink) {
+    // the decimal parameters of a decimal buffer column are completed from the buffer before the schema is checked
+    if (!strict && data.getType() == NT_BUFFER && schema.kind == QoreColumnarTypeKind::Decimal128) {
+        const QoreBufferNode* buffer = data.get<const QoreBufferNode>();
+        if (buffer->getElementType() == QoreBufferElementType::Decimal128) {
+            schema.precision = buffer->getDecimalPrecision();
+            schema.scale = buffer->getDecimalScale();
+        }
+    }
+    if (columnar_check_descriptor(name, schema, err, xsink)) {
+        return -1;
+    }
+
+    if (data.getType() == NT_BUFFER) {
+        const QoreBufferNode* buffer = data.get<const QoreBufferNode>();
+        QoreBufferElementType type = buffer->getElementType();
+        if (schema.buffer_type != QoreBufferElementType::Invalid && schema.buffer_type != type) {
+            if (strict) {
+                xsink->raiseException(err, "column '%s' schema has buffer type '%s', but its data is a buffer<%s>",
+                    name, qore_buffer_element_type_name(schema.buffer_type), qore_buffer_element_type_name(type));
+                return -1;
+            }
+        }
+        if (!columnar_kind_accepts_buffer(schema, type)) {
+            xsink->raiseException(err, "column '%s' has kind '%s', which cannot be stored in its buffer<%s> data",
+                name, qore_columnar_type_kind_name(schema.kind), qore_buffer_element_type_name(type));
+            return -1;
+        }
+        schema.buffer_type = type;
+        if (schema.kind == QoreColumnarTypeKind::Auto) {
+            schema.kind = columnar_kind_from_flat_type(columnar_type_from_buffer(type));
+            if (type == QoreBufferElementType::Decimal128) {
+                schema.kind = QoreColumnarTypeKind::Decimal128;
+            }
+        }
+        if (type == QoreBufferElementType::Decimal128) {
+            int32_t precision = buffer->getDecimalPrecision();
+            int32_t scale = buffer->getDecimalScale();
+            if (strict && (schema.precision != precision || schema.scale != scale)) {
+                xsink->raiseException(err, "column '%s' schema has decimal precision %d and scale %d, but its data "
+                    "is a buffer<decimal128> with precision %d and scale %d", name, schema.precision, schema.scale,
+                    precision, scale);
+                return -1;
+            }
+            schema.precision = precision;
+            schema.scale = scale;
+        }
+        if (columnar_kind_is_temporal(schema.kind) && schema.time_unit.empty()) {
+            schema.time_unit = "us";
+        }
+        if (buffer->hasNullableElements()) {
+            schema.nullable = true;
+        }
+        schema.column_type = columnar_flat_type_from_kind(schema.kind);
+        return 0;
+    }
+
+    if (data.getType() != NT_LIST) {
+        xsink->raiseException(err, "column '%s' has type '%s'; expected list or buffer", name, data.getTypeName());
+        return -1;
+    }
+
+    // date, timestamp, duration and decimal128 columns are always stored in a buffer
+    if (columnar_kind_is_temporal(schema.kind) || schema.kind == QoreColumnarTypeKind::Decimal128) {
+        xsink->raiseException(err, "column '%s' has kind '%s', which requires buffer storage, but its data is a list",
+            name, qore_columnar_type_kind_name(schema.kind));
+        return -1;
+    }
+    if (schema.buffer_type != QoreBufferElementType::Invalid) {
+        if (strict) {
+            xsink->raiseException(err, "column '%s' schema has buffer type '%s', but its data is a list", name,
+                qore_buffer_element_type_name(schema.buffer_type));
+            return -1;
+        }
+        schema.buffer_type = QoreBufferElementType::Invalid;
+    }
+    ColumnarCheckState st;
+    if (columnar_check_list_values(name, schema, data.get<const QoreListNode>(), 0, true, st, err, xsink)
+            || st.checkFixedSizes(name, err, xsink)) {
+        return -1;
+    }
+    schema.column_type = columnar_flat_type_from_kind(schema.kind);
+    return 0;
+}
+
 static QoreColumnarTypeDescriptor columnar_descriptor_from_desc(const QoreHashNode* desc,
         const QoreColumnarTypeDescriptor& fallback, ExceptionSink* xsink);
 
-static QoreHashNode* columnar_descriptor_to_hash(const QoreColumnarTypeDescriptor& schema, ExceptionSink* xsink) {
+static QoreHashNode* columnar_descriptor_to_hash(const QoreColumnarTypeDescriptor& schema, ExceptionSink* xsink,
+        unsigned depth = 0) {
+    if (depth > COLUMNAR_MAX_SCHEMA_DEPTH) {
+        xsink->raiseException("SERIALIZATION-ERROR", "column schema is nested more than %u levels deep",
+            COLUMNAR_MAX_SCHEMA_DEPTH);
+        return nullptr;
+    }
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     if (!schema.name.empty()) {
         h->setKeyValue("name", new QoreStringNode(schema.name), xsink);
@@ -1249,7 +1758,7 @@ static QoreHashNode* columnar_descriptor_to_hash(const QoreColumnarTypeDescripto
             if (i && !(i % 100) && qore_check_cancel(xsink, "building columnar schema children")) {
                 return nullptr;
             }
-            children->push(columnar_descriptor_to_hash(schema.children[i], xsink), xsink);
+            children->push(columnar_descriptor_to_hash(schema.children[i], xsink, depth + 1), xsink);
             if (*xsink) {
                 return nullptr;
             }
@@ -1263,9 +1772,14 @@ static QoreHashNode* columnar_descriptor_to_hash(const QoreColumnarTypeDescripto
 }
 
 static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreHashNode* desc,
-        const QoreColumnarTypeDescriptor& fallback, ExceptionSink* xsink) {
+        const QoreColumnarTypeDescriptor& fallback, ExceptionSink* xsink, const char* err = "COLUMNAR-SCHEMA-ERROR",
+        unsigned depth = 0) {
     QoreColumnarTypeDescriptor schema = fallback;
     if (!desc) {
+        return schema;
+    }
+    if (depth > COLUMNAR_MAX_SCHEMA_DEPTH) {
+        xsink->raiseException(err, "column schema is nested more than %u levels deep", COLUMNAR_MAX_SCHEMA_DEPTH);
         return schema;
     }
 
@@ -1304,16 +1818,18 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
     // and name another value, is refused
     std::string native_type = columnar_get_desc_string(desc, "native_type");
     if (q_check_no_nul(native_type.data(), native_type.size(), "native type", "native types",
-            "COLUMNAR-SCHEMA-ERROR", xsink)) {
+            err, xsink)) {
         return schema;
     }
     if (!native_type.empty()) {
         schema.native_type = native_type;
     }
 
+    // set if an explicit kind is given with a buffer type, which are checked against each other below
+    bool check_kind_buffer = false;
     std::string buffer_type = columnar_get_desc_string(desc, "buffer_type");
     if (q_check_no_nul(buffer_type.data(), buffer_type.size(), "buffer type", "buffer types",
-            "COLUMNAR-SCHEMA-ERROR", xsink)) {
+            err, xsink)) {
         return schema;
     }
     if (!buffer_type.empty()) {
@@ -1324,10 +1840,13 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
                 schema.column_type = columnar_type_from_buffer(parsed);
                 schema.kind = columnar_kind_from_flat_type(schema.column_type);
             }
-            if (parsed == QoreBufferElementType::Decimal128) {
+            // a number column in a buffer<decimal128> is a decimal128 column
+            if (parsed == QoreBufferElementType::Decimal128
+                    && (!has_kind || schema.kind == QoreColumnarTypeKind::Number)) {
                 schema.kind = QoreColumnarTypeKind::Decimal128;
                 schema.column_type = QoreColumnarColumnType::Number;
             }
+            check_kind_buffer = has_kind;
         }
     }
 
@@ -1336,7 +1855,7 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
     schema.fixed_size = static_cast<int32_t>(columnar_get_desc_int(desc, "fixed_size", schema.fixed_size));
 
     std::string time_unit = columnar_get_desc_string(desc, "time_unit");
-    if (q_check_no_nul(time_unit.data(), time_unit.size(), "time unit", "time units", "COLUMNAR-SCHEMA-ERROR",
+    if (q_check_no_nul(time_unit.data(), time_unit.size(), "time unit", "time units", err,
             xsink)) {
         return schema;
     }
@@ -1344,7 +1863,7 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
         schema.time_unit = std::move(time_unit);
     }
     std::string timezone = columnar_get_desc_string(desc, "timezone");
-    if (q_check_no_nul(timezone.data(), timezone.size(), "time zone", "time zones", "COLUMNAR-SCHEMA-ERROR",
+    if (q_check_no_nul(timezone.data(), timezone.size(), "time zone", "time zones", err,
             xsink)) {
         return schema;
     }
@@ -1371,11 +1890,20 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
             }
             QoreColumnarTypeDescriptor child_fallback;
             schema.children.push_back(
-                columnar_descriptor_from_desc_hash(child_value.get<const QoreHashNode>(), child_fallback, xsink));
+                columnar_descriptor_from_desc_hash(child_value.get<const QoreHashNode>(), child_fallback, xsink, err,
+                    depth + 1));
             if (*xsink) {
                 return schema;
             }
         }
+    }
+
+    // an explicit kind is checked against an explicit buffer type here, as the child schemas of a nested column have
+    // no storage of their own to be checked against (qore#6214)
+    if (check_kind_buffer && !columnar_kind_accepts_buffer(schema, schema.buffer_type)) {
+        xsink->raiseException(err, "a column schema of kind '%s' cannot have buffer type '%s'",
+            qore_columnar_type_kind_name(schema.kind), qore_buffer_element_type_name(schema.buffer_type));
+        return schema;
     }
 
     if (schema.kind == QoreColumnarTypeKind::Number && columnar_parse_decimal_metadata(schema.native_type,
@@ -1393,7 +1921,7 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
             schema.scale = 0;
         }
         if (!columnar_decimal_metadata_is_supported(schema.precision, schema.scale)) {
-            xsink->raiseException("COLUMNAR-SCHEMA-ERROR",
+            xsink->raiseException(err,
                 "decimal128 column schema requires precision 1..38 and scale 0..precision; got precision %d, "
                 "scale %d", schema.precision, schema.scale);
         }
@@ -3344,8 +3872,14 @@ static std::string qore_arrow_decimal_to_string(const uint8_t* data, int64_t ind
     return digits;
 }
 
-static QoreColumnarTypeDescriptor qore_arrow_schema_to_descriptor(const ArrowSchema* schema, ExceptionSink* xsink) {
+static QoreColumnarTypeDescriptor qore_arrow_schema_to_descriptor(const ArrowSchema* schema, ExceptionSink* xsink,
+        unsigned depth = 0) {
     QoreColumnarTypeDescriptor desc;
+    if (depth > COLUMNAR_MAX_SCHEMA_DEPTH) {
+        xsink->raiseException("ARROW-C-DATA-ERROR", "Arrow schema is nested more than %u levels deep",
+            COLUMNAR_MAX_SCHEMA_DEPTH);
+        return desc;
+    }
     desc.name = schema && schema->name ? schema->name : "";
     desc.nullable = schema && (schema->flags & ARROW_FLAG_NULLABLE);
     if (!schema || !schema->format) {
@@ -3357,7 +3891,7 @@ static QoreColumnarTypeDescriptor qore_arrow_schema_to_descriptor(const ArrowSch
         desc.kind = QoreColumnarTypeKind::Dictionary;
         desc.column_type = QoreColumnarColumnType::Auto;
         desc.dictionary_index_type = schema->format;
-        QoreColumnarTypeDescriptor dictionary = qore_arrow_schema_to_descriptor(schema->dictionary, xsink);
+        QoreColumnarTypeDescriptor dictionary = qore_arrow_schema_to_descriptor(schema->dictionary, xsink, depth + 1);
         if (*xsink) {
             return desc;
         }
@@ -3440,14 +3974,16 @@ static QoreColumnarTypeDescriptor qore_arrow_schema_to_descriptor(const ArrowSch
         if (schema->n_children == 1 && schema->children && schema->children[0] && schema->children[0]->children
                 && schema->children[0]->n_children >= 2 && schema->children[0]->children[0]
                 && schema->children[0]->children[1]) {
-            QoreColumnarTypeDescriptor key = qore_arrow_schema_to_descriptor(schema->children[0]->children[0], xsink);
+            QoreColumnarTypeDescriptor key = qore_arrow_schema_to_descriptor(schema->children[0]->children[0], xsink,
+                depth + 1);
             if (*xsink) {
                 return desc;
             }
             key.name = "key";
             key.nullable = false;
             desc.children.push_back(std::move(key));
-            QoreColumnarTypeDescriptor item = qore_arrow_schema_to_descriptor(schema->children[0]->children[1], xsink);
+            QoreColumnarTypeDescriptor item = qore_arrow_schema_to_descriptor(schema->children[0]->children[1], xsink,
+                depth + 1);
             if (*xsink) {
                 return desc;
             }
@@ -3464,7 +4000,7 @@ static QoreColumnarTypeDescriptor qore_arrow_schema_to_descriptor(const ArrowSch
         if (i && !(i % 100) && qore_check_cancel(xsink, "importing Arrow schema children")) {
             return desc;
         }
-        desc.children.push_back(qore_arrow_schema_to_descriptor(schema->children[i], xsink));
+        desc.children.push_back(qore_arrow_schema_to_descriptor(schema->children[i], xsink, depth + 1));
         if (*xsink) {
             return desc;
         }
@@ -4164,11 +4700,13 @@ int QoreColumnarResult::addColumn(const char* name, QoreValue data, QoreColumnar
 
 int QoreColumnarResult::addColumn(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
         ExceptionSink* xsink) {
-    return addColumnIntern(name, data, schema, false, xsink);
+    return addColumnIntern(name, data, schema, COLUMNAR_ADD_CONVERT | COLUMNAR_ADD_CHECK, "COLUMNAR-SCHEMA-ERROR",
+        xsink);
 }
 
 int QoreColumnarResult::addColumnIntern(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
-        bool script_values, ExceptionSink* xsink) {
+        int flags, const char* err, ExceptionSink* xsink) {
+    bool script_values = flags & COLUMNAR_ADD_SCRIPT_VALUES;
     ValueHolder data_holder(data, xsink);
     size_t size = columnar_value_size(data);
     if (data.getType() != NT_LIST && data.getType() != NT_BUFFER) {
@@ -4180,7 +4718,7 @@ int QoreColumnarResult::addColumnIntern(const char* name, QoreValue data, const 
         return -1;
     }
 
-    if (data.getType() == NT_LIST) {
+    if ((flags & COLUMNAR_ADD_CONVERT) && data.getType() == NT_LIST) {
         const QoreListNode* source = data.get<const QoreListNode>();
         ColumnarShape shape;
         if (columnar_dense_shape_from_schema(schema, shape)) {
@@ -4199,14 +4737,114 @@ int QoreColumnarResult::addColumnIntern(const char* name, QoreValue data, const 
                 columnar_add_column_to_buffer_error(name, xsink);
                 return -1;
             }
+            if ((flags & COLUMNAR_ADD_CHECK) && columnar_check_column(name, column_schema, *column_value,
+                    flags & COLUMNAR_ADD_STRICT, err, xsink)) {
+                return -1;
+            }
 
             columns.emplace_back(name, column_schema, column_value.release());
             return 0;
         }
     }
 
+    if (flags & COLUMNAR_ADD_CHECK) {
+        QoreColumnarTypeDescriptor column_schema = schema;
+        if (columnar_check_column(name, column_schema, data, flags & COLUMNAR_ADD_STRICT, err, xsink)) {
+            return -1;
+        }
+        columns.emplace_back(name, column_schema, data_holder.release());
+        return 0;
+    }
+
     columns.emplace_back(name, schema, data_holder.release());
     return 0;
+}
+
+//! Sets the shape of a list column given to fromColumnHash() from a kind or buffer type given in its description
+/** The kind of the schema gives the storage of the column: a scalar kind a buffer of its type (or of the buffer type
+    given), whose element type the values must have, and a number, binary, list, struct or map kind a list, whose
+    values are checked against the kind when the column is added.  A dictionary column is stored as its value kind.
+    A temporal or decimal128 column was set up by columnar_shape_apply_schema(); an auto column keeps the inferred
+    shape.  An int column with number values and no buffer type given is a list, whose numbers must have no
+    fractional part.
+*/
+static int columnar_shape_from_explicit_schema(const char* name, QoreColumnarTypeDescriptor& schema,
+        const QoreColumnarTypeDescriptor& base, const QoreListNode* source, ColumnarShape& shape,
+        ExceptionSink* xsink) {
+    const QoreColumnarTypeDescriptor* storage = &schema;
+    if (schema.kind == QoreColumnarTypeKind::Dictionary && !schema.children.empty()) {
+        storage = &schema.children[0];
+    }
+    // the buffer type of the inferred shape is not one given with another kind
+    QoreBufferElementType buffer_type = schema.kind != base.kind && schema.buffer_type == base.buffer_type
+        ? QoreBufferElementType::Invalid : schema.buffer_type;
+    switch (storage->kind) {
+        case QoreColumnarTypeKind::Bool:
+        case QoreColumnarTypeKind::Int:
+        case QoreColumnarTypeKind::Float:
+        case QoreColumnarTypeKind::String: {
+            // an int column with number values, which an int buffer cannot hold, is a list, as when it is imported
+            // from Arrow data with unsigned 64-bit integers; its values are checked when the column is added
+            if (storage->kind == QoreColumnarTypeKind::Int && buffer_type == QoreBufferElementType::Invalid
+                    && source) {
+                const qore_list_private* lp = qore_list_private::get(source);
+                for (size_t i = 0; i < lp->length; ++i) {
+                    if (columnar_value_type(lp->entry[i]) == NT_NUMBER) {
+                        shape.column_type = QoreColumnarColumnType::Int;
+                        shape.buffer_type = QoreBufferElementType::Invalid;
+                        shape.kind = storage->kind;
+                        shape.element_type = autoTypeInfo;
+                        shape.dense = false;
+                        schema.buffer_type = QoreBufferElementType::Invalid;
+                        return 0;
+                    }
+                }
+            }
+            if (buffer_type == QoreBufferElementType::Invalid) {
+                buffer_type = storage->kind == QoreColumnarTypeKind::Bool ? QoreBufferElementType::Bool
+                    : storage->kind == QoreColumnarTypeKind::Int ? QoreBufferElementType::Int64
+                    : storage->kind == QoreColumnarTypeKind::Float ? QoreBufferElementType::Float64
+                    : QoreBufferElementType::String;
+            }
+            if (!columnar_kind_accepts_buffer(*storage, buffer_type)) {
+                xsink->raiseException("COLUMNAR-SCHEMA-ERROR", "column '%s' has kind '%s', which cannot be stored "
+                    "in a buffer<%s>", name, qore_columnar_type_kind_name(schema.kind),
+                    qore_buffer_element_type_name(buffer_type));
+                return -1;
+            }
+            shape.column_type = columnar_flat_type_from_kind(storage->kind);
+            shape.buffer_type = buffer_type;
+            shape.kind = storage->kind;
+            shape.element_type = autoTypeInfo;
+            shape.dense = true;
+            shape.exact_values = true;
+            schema.buffer_type = buffer_type;
+            return 0;
+        }
+        case QoreColumnarTypeKind::Number:
+        case QoreColumnarTypeKind::Binary:
+        case QoreColumnarTypeKind::List:
+        case QoreColumnarTypeKind::LargeList:
+        case QoreColumnarTypeKind::FixedSizeList:
+        case QoreColumnarTypeKind::Struct:
+        case QoreColumnarTypeKind::Map:
+            if (buffer_type != QoreBufferElementType::Invalid) {
+                xsink->raiseException("COLUMNAR-SCHEMA-ERROR", "column '%s' has kind '%s', which is stored in a "
+                    "list and cannot have buffer type '%s'", name, qore_columnar_type_kind_name(schema.kind),
+                    qore_buffer_element_type_name(buffer_type));
+                return -1;
+            }
+            shape.column_type = columnar_flat_type_from_kind(storage->kind);
+            shape.buffer_type = QoreBufferElementType::Invalid;
+            shape.kind = storage->kind;
+            // the values are checked against the kind when the column is added
+            shape.element_type = autoTypeInfo;
+            shape.dense = false;
+            schema.buffer_type = QoreBufferElementType::Invalid;
+            return 0;
+        default:
+            return 0;
+    }
 }
 
 QoreColumnarResult* QoreColumnarResult::fromColumnHash(const QoreHashNode* columns, const QoreHashNode* desc,
@@ -4261,13 +4899,19 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHashIntern(const QoreHashNode*
                 return nullptr;
             }
             if (buffer->getElementType() == QoreBufferElementType::Decimal128) {
-                schema.kind = QoreColumnarTypeKind::Decimal128;
-                schema.column_type = QoreColumnarColumnType::Number;
-                schema.buffer_type = QoreBufferElementType::Decimal128;
+                // the precision and scale of a decimal buffer column are those of the buffer; a number column
+                // in a buffer<decimal128> is a decimal128 column, and any other kind is checked below
+                if (schema.kind == QoreColumnarTypeKind::Number || schema.kind == QoreColumnarTypeKind::Auto) {
+                    schema.kind = QoreColumnarTypeKind::Decimal128;
+                    schema.column_type = QoreColumnarColumnType::Number;
+                }
                 schema.precision = buffer->getDecimalPrecision();
                 schema.scale = buffer->getDecimalScale();
             }
-            if (rv->addColumnIntern(i.getKey(), value.refSelf(), schema, script_values, xsink)) {
+            // the buffer is the column data as given, so the schema is checked against it strictly
+            if (rv->addColumnIntern(i.getKey(), value.refSelf(), schema, COLUMNAR_ADD_CHECK | COLUMNAR_ADD_STRICT
+                | (script_values ? COLUMNAR_ADD_SCRIPT_VALUES : 0),
+                    "COLUMNAR-SCHEMA-ERROR", xsink)) {
                 return nullptr;
             }
             continue;
@@ -4292,12 +4936,17 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHashIntern(const QoreHashNode*
             return nullptr;
         }
 
-        QoreColumnarTypeDescriptor schema = columnar_descriptor_from_shape(shape, native_type.c_str());
-        schema = columnar_descriptor_from_desc(column_desc, schema, xsink);
+        QoreColumnarTypeDescriptor base = columnar_descriptor_from_shape(shape, native_type.c_str());
+        QoreColumnarTypeDescriptor schema = columnar_descriptor_from_desc(column_desc, base, xsink);
         if (*xsink) {
             return nullptr;
         }
         columnar_shape_apply_schema(shape, schema);
+        // a kind or buffer type given in the description gives the storage of the column (qore#6214)
+        if ((schema.kind != base.kind || schema.buffer_type != base.buffer_type)
+                && columnar_shape_from_explicit_schema(i.getKey(), schema, base, source, shape, xsink)) {
+            return nullptr;
+        }
 
         ValueHolder column_value(columnar_make_column_value(source, shape, i.getKey(), script_values, xsink),
             xsink);
@@ -4305,9 +4954,12 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHashIntern(const QoreHashNode*
             columnar_add_column_to_buffer_error(i.getKey(), xsink);
             return nullptr;
         }
-        // the schema can come from a "schema" sub-hash of the description, which can make a list column that the
-        // shape left as a list a dense column there, so the values are checked there too
-        if (rv->addColumnIntern(i.getKey(), column_value.release(), schema, script_values, xsink)) {
+        // the schema can come from a "schema" sub-hash of the description, whose native type can make a list column
+        // that the shape left as a list a dense column, so its values are converted and checked there; the schema
+        // is then checked against the storage strictly
+        if (rv->addColumnIntern(i.getKey(), column_value.release(), schema, COLUMNAR_ADD_CONVERT | COLUMNAR_ADD_CHECK
+                | COLUMNAR_ADD_STRICT | (script_values ? COLUMNAR_ADD_SCRIPT_VALUES : 0),
+                "COLUMNAR-SCHEMA-ERROR", xsink)) {
             return nullptr;
         }
     }
@@ -4511,7 +5163,8 @@ QoreColumnarResult* QoreColumnarResult::deserialize(const QoreHashNode* sdata, E
 
         QoreColumnarTypeDescriptor fallback;
         fallback.name = name;
-        QoreColumnarTypeDescriptor schema = columnar_descriptor_from_desc_hash(schema_hash, fallback, xsink);
+        QoreColumnarTypeDescriptor schema = columnar_descriptor_from_desc_hash(schema_hash, fallback, xsink,
+            "DESERIALIZATION-ERROR");
         if (*xsink) {
             return nullptr;
         }
@@ -4519,8 +5172,11 @@ QoreColumnarResult* QoreColumnarResult::deserialize(const QoreHashNode* sdata, E
         if (*xsink) {
             return nullptr;
         }
-        // serialized data can be given by a script, so its values are checked as by fromScriptColumnHash()
-        if (rv->addColumnIntern(name.c_str(), data.release(), schema, true, xsink)) {
+        // serialized data can come from an untrusted source: its schema is checked strictly against the data, which
+        // is not converted (qore#6214)
+        if (rv->addColumnIntern(name.c_str(), data.release(), schema, COLUMNAR_ADD_CHECK | COLUMNAR_ADD_STRICT
+                | COLUMNAR_ADD_SCRIPT_VALUES,
+                "DESERIALIZATION-ERROR", xsink)) {
             return nullptr;
         }
     }
@@ -4638,13 +5294,15 @@ QoreHashNode* QoreColumnarResult::toColumnHash(ExceptionSink* xsink) const {
 /** Only called from the temporal branch of toMaterializedColumnHash() — caller
     has already verified \c column.schema is temporal and \c column.data is a
     \c buffer<int64>.  Null entries (returned by getReferencedEntry() when the
-    underlying buffer slot is NULL) round-trip as NOTHING.
+    underlying buffer slot is NULL) round-trip as NOTHING, in a \c list<*date> for a nullable column.
 */
 static QoreListNode* columnar_buffer_int64_to_date_list(
         const QoreColumnarResult::Column& column, ExceptionSink* xsink) {
     const QoreBufferNode* buffer = column.data.get<const QoreBufferNode>();
     const size_t n = buffer->size();
-    ReferenceHolder<QoreListNode> out(new QoreListNode(dateTypeInfo), xsink);
+    // a column with nullable elements can hold nulls, which a list<date> cannot (qore#6218)
+    ReferenceHolder<QoreListNode> out(new QoreListNode(buffer->hasNullableElements() || column.schema.nullable
+        ? qore_get_or_nothing_type(dateTypeInfo) : dateTypeInfo), xsink);
     const AbstractQoreZoneInfo* zone = currentTZ();
     const bool is_relative = (column.schema.kind == QoreColumnarTypeKind::Duration);
     for (size_t r = 0; r < n; ++r) {
@@ -4758,7 +5416,8 @@ QoreColumnarResult* QoreColumnarResult::filter(QoreValue mask, ExceptionSink* xs
         if (*xsink) {
             return nullptr;
         }
-        if (rv->addColumn(column.name.c_str(), data.release(), column.schema, xsink)) {
+        // the data is made from the data of a column whose schema was checked when it was added
+        if (rv->addColumnIntern(column.name.c_str(), data.release(), column.schema, 0, nullptr, xsink)) {
             return nullptr;
         }
     }
@@ -4782,7 +5441,8 @@ QoreColumnarResult* QoreColumnarResult::take(const QoreListNode* row_indices, Ex
         if (*xsink) {
             return nullptr;
         }
-        if (rv->addColumn(column.name.c_str(), data.release(), column.schema, xsink)) {
+        // the data is made from the data of a column whose schema was checked when it was added
+        if (rv->addColumnIntern(column.name.c_str(), data.release(), column.schema, 0, nullptr, xsink)) {
             return nullptr;
         }
     }
@@ -4808,7 +5468,8 @@ QoreColumnarResult* QoreColumnarResult::slice(size_t offset, size_t count, Excep
         if (*xsink) {
             return nullptr;
         }
-        if (rv->addColumn(column.name.c_str(), data.release(), column.schema, xsink)) {
+        // the data is made from the data of a column whose schema was checked when it was added
+        if (rv->addColumnIntern(column.name.c_str(), data.release(), column.schema, 0, nullptr, xsink)) {
             return nullptr;
         }
     }

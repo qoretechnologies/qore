@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../../TestInterpreter.qm
 %requires ../../../../ExecModeHarness.qm
 
 %exec-class ChildExecModeTest
@@ -62,7 +63,7 @@ class ChildExecModeTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("child Program execution modes", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
         path = get_script_dir() + "/child-exec-mode.q";

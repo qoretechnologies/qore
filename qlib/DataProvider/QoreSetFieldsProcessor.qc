@@ -126,7 +126,11 @@ public class QoreSetFieldsProcessor inherits AbstractDataProvider {
                 return setColumnBlockFields(records, record_count);
             case DataProviderShape::BufferColumns:
                 if (AbstractDataProcessor::isColumnarResult(records)) {
-                    return ColumnarResult::fromColumnHash(setColumnBlockFields(records.toColumnHash(), record_count));
+                    hash<auto> columns = records.toColumnHash();
+                    # the columns that are not set keep their schema (qore#6219)
+                    hash<auto> sources = (map {$1: $1}, keys columns, !fields.hasKey($1)) ?? {};
+                    return AbstractDataProcessor::columnarResultWithSchemas(records,
+                        setColumnBlockFields(columns, record_count), sources);
                 }
                 return setColumnBlockFields(records, record_count);
             case DataProviderShape::DataFrameBlock:

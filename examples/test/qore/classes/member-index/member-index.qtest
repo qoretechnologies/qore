@@ -1,0 +1,312 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The members of a class are found through an index once the class is committed or published (#6272), and a read
+    of a member whose class and class context have no private:internal member resolves its storage without a lookup.
+    The reads are checked in each shape of class: few and many members, inheritance, private inheritance,
+    private:internal members of the class and of a parent, a subclass that declares a private:internal member of the
+    name of a parent's member, and a member gate of the subclass only.  Debug builds check the index of every class of
+    the Program against its list, and compare each read that skips the lookup with the full resolution; a member added
+    after the freeze publishes a new index while other threads read the members.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+
+%requires QUnit
+%requires reflection
+
+%exec-class MemberIndexTest
+
+#! fewer members than the index threshold
+class Small {
+    public {
+        int a = 1;
+        int b = 2;
+    }
+
+    int sum() {
+        return a + b;
+    }
+}
+
+#! enough members for an index
+class Big {
+    public {
+        int m0 = 0; int m1 = 1; int m2 = 2; int m3 = 3; int m4 = 4;
+        int m5 = 5; int m6 = 6; int m7 = 7; int m8 = 8; int m9 = 9;
+    }
+
+    int readLast() {
+        return m9;
+    }
+
+    int readFirst() {
+        return self.m0;
+    }
+
+    writeLast(int v) {
+        m9 = v;
+    }
+}
+
+#! a subclass: the code of the parent reads its members on an object of the subclass
+class BigSub inherits Big {
+    public {
+        int s = 100;
+    }
+
+    int sum() {
+        return readLast() + m9 + s;
+    }
+}
+
+#! private inheritance: a method of the parent reads a member of self on an object of the subclass
+class PrivSub inherits private Big {
+    public {
+        int p = 50;
+    }
+
+    int viaParent() {
+        return readLast() + readFirst();
+    }
+
+    int direct() {
+        return m9 + p;
+    }
+}
+
+#! a class with a private:internal member
+class Intern {
+    private:internal {
+        int x = 5;
+    }
+
+    public {
+        int y = 6;
+    }
+
+    int getX() {
+        return x;
+    }
+
+    int getY() {
+        return y;
+    }
+}
+
+#! a subclass that declares a private:internal member of the name of the parent's private:internal member
+class InternSub inherits Intern {
+    private:internal {
+        int x = 7;
+    }
+
+    int getSubX() {
+        return x;
+    }
+}
+
+#! a parent with a private:internal member, and a subclass that declares a public member of the same name
+class InternParent {
+    private:internal {
+        int z = 8;
+    }
+
+    int getParentZ() {
+        return z;
+    }
+}
+
+class RedeclSub inherits InternParent {
+    public {
+        int z = 80;
+    }
+
+    int getSubZ() {
+        return z;
+    }
+}
+
+#! a parent without a member gate, read on an object of a subclass that has one
+class GateBase {
+    public {
+        int g = 1;
+    }
+
+    int readG() {
+        return g;
+    }
+}
+
+class GateSub inherits GateBase {
+    auto memberGate(string m) {
+        return "gate:" + m;
+    }
+}
+
+#! a class that a member is added to after its freeze (debug builds)
+class LateAdd {
+    public {
+        int l0 = 0; int l1 = 1; int l2 = 2; int l3 = 3; int l4 = 4;
+        int l5 = 5; int l6 = 6; int l7 = 7; int l8 = 8; int l9 = 9;
+    }
+
+    int sum() {
+        return l0 + l5 + l9;
+    }
+}
+
+class MemberIndexTest inherits QUnit::Test {
+    constructor() : QUnit::Test("MemberIndexTest", "1.0") {
+        addTestCase("reads of members in each shape of class", \readsTest());
+        addTestCase("the index and the flags of each class", \indexTest());
+        addTestCase("the index of every class of the Program agrees with its list", \allClassesTest());
+        addTestCase("a member added after the freeze publishes a new index while threads read", \lateAddTest());
+        set_return_value(main());
+    }
+
+    readsTest() {
+        Small sm();
+        assertEq(3, sm.sum());
+
+        Big b();
+        assertEq(9, b.readLast());
+        b.writeLast(19);
+        assertEq(19, b.m9);
+        assertEq(0, b.readFirst());
+
+        BigSub bs();
+        assertEq(9 + 9 + 100, bs.sum(), "the parent's code reads on an object of the subclass");
+        bs.writeLast(11);
+        assertEq(11, bs.m9);
+
+        PrivSub ps();
+        assertEq(9, ps.viaParent(), "private inheritance: the parent's code reads its members");
+        assertEq(59, ps.direct());
+
+        Intern i();
+        assertEq(5, i.getX());
+        InternSub is();
+        assertEq(5, is.getX(), "the parent's code reads the parent's private:internal member");
+        assertEq(7, is.getSubX(), "the subclass's code reads its own private:internal member");
+        assertEq(6, is.getY());
+
+        RedeclSub rs();
+        assertEq(8, rs.getParentZ(), "the parent's code reads the parent's private:internal member");
+        assertEq(80, rs.getSubZ(), "the subclass's code reads its public member of the same name");
+        assertEq(80, rs.z, "code outside the classes reads the public member");
+
+        GateSub gs();
+        assertEq(1, gs.readG(), "a declared member is not read through the subclass's member gate");
+        auto obj = gs;
+        assertEq("gate:undeclared", obj.undeclared, "an undeclared member is read through the member gate");
+    }
+
+    indexTest() {
+        requireDebug();
+        checkClass("Small", False, False);
+        checkClass("Big", True, False);
+        checkClass("BigSub", True, False);
+        checkClass("PrivSub", True, False);
+        checkClass("Intern", False, True);
+        checkClass("InternSub", False, True);
+        checkClass("InternParent", False, True);
+        checkClass("RedeclSub", False, True);
+        checkClass("GateSub", False, False);
+    }
+
+    allClassesTest() {
+        requireDebug();
+        int count = 0;
+        list<string> errors = ();
+        checkNamespace(Namespace::forName("::"), \count, \errors);
+        assertEq((), errors);
+        assertGt(100, count, "the classes of the Program were checked");
+    }
+
+    lateAddTest() {
+        requireDebug();
+        LateAdd la();
+        assertTrue(call_function("dbg_class_member_index_info", "LateAdd").indexed);
+        # threads read the members while new indexes are published
+        Counter stop(1);
+        Counter done(4);
+        Queue errors();
+        for (int t = 0; t < 4; ++t) {
+            background sub () {
+                on_exit done.dec();
+                LateAdd o();
+                while (stop.getCount()) {
+                    if (o.sum() != 14 || la.sum() != 14) {
+                        errors.push("wrong sum");
+                        return;
+                    }
+                }
+            }();
+        }
+        int replaced;
+        for (int n = 0; n < 50; ++n) {
+            replaced = call_function("dbg_class_member_late_add", "LateAdd", sprintf("late%d", n));
+        }
+        stop.dec();
+        assertEq(0, done.waitForZero(60s));
+        assertEq(0, errors.size(), errors.size() ? errors.get() : "");
+        assertEq(50, replaced, "each late change replaced the index");
+        hash<auto> info = call_function("dbg_class_member_index_info", "LateAdd");
+        assertEq("", info.error);
+        assertEq(60, info.members);
+        assertEq(14, la.sum());
+    }
+
+    private requireDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the state of the member maps is only reported by debug builds");
+        }
+    }
+
+    private checkClass(string name, bool indexed, bool internal) {
+        hash<auto> info = call_function("dbg_class_member_index_info", name);
+        assertTrue(info.frozen, name + ": frozen");
+        assertEq(indexed, info.indexed, name + ": indexed");
+        assertEq(internal, info.has_internal_entries, name + ": private:internal entries");
+        assertEq("", info.error, name);
+    }
+
+    private checkNamespace(Namespace ns, reference<int> count, reference<list<string>> errors) {
+        foreach Class c in (ns.getClasses()) {
+            string path = c.getPathName();
+            hash<auto> info = call_function("dbg_class_member_index_info", path);
+            ++count;
+            if (!info.frozen) {
+                errors += path + ": not frozen";
+            } else if (info.error) {
+                errors += path + ": " + info.error;
+            }
+        }
+        foreach Namespace child in (ns.getNamespaces()) {
+            checkNamespace(child, \count, \errors);
+        }
+    }
+}

@@ -27,6 +27,7 @@
 %no-child-restrictions
 
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires FsUtil
 %requires ../../ExecModeHarness.qm
@@ -175,9 +176,9 @@ our code cb = sub () { p.callFunction(\"r\", cb); };",
     p.callFunction(\"f\", \\r());
 }",
                 "op": "r()",
-                # parsing the child Program with little stack left raises a parse exception instead (see
+                # parsing the child Program with little stack left raises the parse stack error instead (see
                 # parse_check_stack())
-                "error": "STACK-LIMIT-EXCEEDED|PARSE-EXCEPTION",
+                "error": "STACK-LIMIT-EXCEEDED|PARSE-STACK-LIMIT-EXCEEDED",
             },
             "destructor": <StackCase>{
                 "setup": "class C { destructor() { C c(); } } sub del() { C c(); delete c; }",

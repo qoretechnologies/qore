@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires cppapiuser
+
+%exec-class LateMemberTest
+
+#! A module can add a builtin member to a class that it has already published (#6272)
+/** module-jni adds the fields of a Java class to its QoreClass (QoreClass::addBuiltinMemberWithAccessors()) when the
+    class is first used, after the class is published, which freezes its members.  Debug builds asserted that a frozen
+    map does not change, and aborted when module-jni was loaded; a change now publishes a new index of the members,
+    which readers load atomically.  MemberAccessorProbe::addLateMember() adds a member to the published probe class
+    in the same way: the first addition makes the class's 8th member, which builds its index, and the next ones
+    replace it while threads read the class's members.
+*/
+class LateMemberTest inherits QUnit::Test {
+    public {
+        const ClassPath = "Qore::CppApiTest::MemberAccessorProbe";
+    }
+
+    constructor() : QUnit::Test("LateMemberTest", "1.0") {
+        addTestCase("a builtin member added to a published class", \lateMemberTest());
+        set_return_value(main());
+    }
+
+    lateMemberTest() {
+        bool debug = Option::HAVE_LIBRARY_DEBUGGING;
+        # untyped: the members added below are not known when the test is parsed
+        auto probe = CppApiTest::MemberAccessorProbe::create();
+        CppApiTest::MemberAccessorProbe::addLateMember("late0");
+        if (debug) {
+            hash<auto> info = call_function("dbg_class_member_index_info", ClassPath);
+            assertTrue(info.frozen, "the class is published");
+            assertTrue(info.indexed, "the 8th member builds an index");
+            assertEq("", info.error, "the index agrees with the member list");
+        }
+        # the new member is held in external storage, through the accessors, in an object created before and after
+        probe.late0 = 5;
+        assertEq(5, probe.late0);
+        assertEq(5, CppApiTest::MemberAccessorProbe::cppRead(probe, "late0", "getReferencedMemberNoMethod"));
+        auto other = CppApiTest::MemberAccessorProbe::create();
+        other.late0 = "x";
+        assertEq("x", other.late0);
+        # declared members are found as before
+        probe.count = 3;
+        assertEq(3, probe.count);
+
+        # more members are added while threads read the members of the class through its index
+        Counter stop(1);
+        Counter done(4);
+        Queue errors();
+        for (int t = 0; t < 4; ++t) {
+            background sub () {
+                on_exit done.dec();
+                while (stop.getCount()) {
+                    if (probe.late0 != 5 || probe.count != 3) {
+                        errors.push("wrong value");
+                        return;
+                    }
+                }
+            }();
+        }
+        for (int i = 1; i <= 4; ++i) {
+            string name = sprintf("late%d", i);
+            CppApiTest::MemberAccessorProbe::addLateMember(name);
+            probe{name} = i;
+            if (debug) {
+                assertEq("", call_function("dbg_class_member_index_info", ClassPath).error, name);
+            }
+        }
+        stop.dec();
+        assertEq(0, done.waitForZero(60s));
+        assertEq(0, errors.size(), errors.size() ? errors.get() : "");
+        for (int i = 1; i <= 4; ++i) {
+            assertEq(i, probe{sprintf("late%d", i)});
+        }
+    }
+}

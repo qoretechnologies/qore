@@ -96,6 +96,8 @@ Evaluate a Qore expression and display the result.
 Set the time zone.
 \fIzone\fP is either a region name (e.g., \fBEurope/Prague\fP)
 or a UTC offset like \fB+02:00\fP.
+With \fB\-\-compile\fP, the time zone is recorded in the compiled program,
+which sets it when it runs, as the \fB%set\-time\-zone\fP directive does.
 .TP
 .BR \-b ", " \-\-disable\-signals
 Disable signal handling (required for running under valgrind).

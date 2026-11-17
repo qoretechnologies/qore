@@ -1,0 +1,62 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child interpreters started with options of their own
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+
+%exec-class TestInterpreterOptionsTest
+
+#! Tests TestInterpreter::interpreter_options() and TestInterpreter::exec_mode() (issue #6250)
+/** A child interpreter runs a script that prints what these functions return in it: the interpreter options are the
+    arguments between the interpreter and the script, never the script's own arguments after it (such as the \c -v
+    that <tt>run_tests.sh -v</tt> gives a test), and an option and its value given as two arguments stay together
+*/
+class TestInterpreterOptionsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("TestInterpreterOptions", "1.0", \ARGV) {
+        addTestCase("the interpreter options are the arguments before the script", \optionsTest());
+        set_return_value(main());
+    }
+
+    optionsTest() {
+        TmpDir tmp("qore-test-interpreter-options-");
+        string script = tmp.path + "/probe.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%modern\n%%requires %s\n"
+            "printf(\"options: %%s\\n\", TestInterpreter::interpreter_options(get_script_path()).join(\"|\"));\n"
+            "printf(\"mode: %%s\\n\", TestInterpreter::exec_mode(get_script_path()) ?? \"none\");\n",
+            realpath(get_script_dir() + "../../../TestInterpreter.qm")));
+        f.close();
+
+        # the option and its value as two arguments, and the script's own arguments that look like options
+        assertEq("options: --exec-mode|ir\nmode: ir\n", run("--exec-mode ir", script, "-v --exec-mode=jit"));
+        # the option as one argument
+        assertEq("options: --exec-mode=ast\nmode: ast\n", run("--exec-mode=ast", script, "-v"));
+        # no interpreter option: the script's arguments are not interpreter options
+        assertEq("options: \nmode: none\n", run("", script, "--exec-mode=jit -v"));
+        # the script given by its name alone, in its directory
+        assertEq("options: --exec-mode|jit\nmode: jit\n", run("--exec-mode jit", "probe.q", "-v", tmp.path));
+    }
+
+    #! runs the script with the interpreter options and the script arguments given; returns its output
+    /** @param dir the directory to run it in, if any
+    */
+    private string run(string opts, string script, string args, *string dir) {
+        int rc;
+        string out = backquote(sprintf("%s%s %s %s %s 2>&1", dir ? "cd " + quote(dir) + " && " : "",
+            quote(TestInterpreter::qore_interpreter()), opts, quote(script), args), \rc);
+        assertEq(0, rc, out);
+        return out;
+    }
+
+    private static string quote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+}

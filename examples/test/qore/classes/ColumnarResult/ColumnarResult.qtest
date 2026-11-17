@@ -238,7 +238,8 @@ class ColumnarResultTest inherits QUnit::Test {
             {"i": {"schema": {"native_type": "bigint"}}});
         assertEq((1, 12, 2), sr.toColumnHash().i.toList(), "a schema sub-hash with accepted values");
 
-        # serialized data with a list column of a dense integer type is checked in the same way
+        # serialized data with a list column of a dense integer type is checked against its schema, and the list is not
+        # converted (qore#6214)
         hash<SerializationInfo> data = ColumnarResult::fromColumnHash({"a": (1, "x")}).serializeToData();
         bool found;
         foreach hash<auto> i in (data._index.pairIterator()) {
@@ -249,8 +250,8 @@ class ColumnarResultTest inherits QUnit::Test {
             }
         }
         assertTrue(found, "serialized schema found");
-        assertThrows("COLUMNAR-RESULT-ERROR", "integer column 'a' row 1 has a string", \Serializable::deserialize(),
-            (data,), "deserialization refuses a non-numeric string");
+        assertThrows("DESERIALIZATION-ERROR", "column 'a' row 1 has a value of type 'string'",
+            \Serializable::deserialize(), (data,), "deserialization refuses a non-numeric string");
     }
 
     private ColumnarResult makeMixedResult() {

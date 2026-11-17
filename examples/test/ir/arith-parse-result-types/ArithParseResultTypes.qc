@@ -77,9 +77,10 @@ class ArithParseResultTypesBase inherits QUnit::Test {
             "list<*int> + int (literal)": "[[1, 2]] list<list<*int>> list<*int>",
             "int + list<int> (literal)": "[[2, 1]] list<list<int>> list<int>",
             "int + list<int>": "[[4, 1, 2], [4, 3]] list<list<int>> list<int>",
-            # an int or string member initialized with an enum value keeps the enum type, which the runtime takes
-            "int member (enum value) + list<Pr>": "[[10, 0]] list<list<enum<Pr>>> list<enum<Pr>>",
-            "string member (enum value) + list<St>": "[[\"a\", \"a\"]] list<list<enum<St>>> list<enum<St>>",
+            # an int or string member initialized with an enum value holds the enum's base value, which has no common
+            # type with the enum (qore#6274)
+            "int member (enum value) + list<Pr>": "[[10, 0]] list<list<auto>> list<auto>",
+            "string member (enum value) + list<St>": "[[\"a\", \"a\"]] list<list<auto>> list<auto>",
             "int member (enum value) + list<int>": "[[10, 1]] list<list<int>> list<int>",
             # a result type that depends on the values is not known at parse time: an error at runtime
             "list<softint> + int assigned to int": "RUNTIME-TYPE-ERROR",
@@ -151,7 +152,7 @@ class ArithParseResultTypesBase inherits QUnit::Test {
 
     constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
         self.part = part;
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");

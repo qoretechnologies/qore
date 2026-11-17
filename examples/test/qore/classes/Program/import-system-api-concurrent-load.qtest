@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class ImportSystemApiConcurrentLoadTest
@@ -52,7 +53,7 @@ class ImportSystemApiConcurrentLoadTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("ImportSystemApiConcurrentLoadTest", "1.0") {
-        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         addTestCase("importing the system API while a module is loaded into its source",
             \importDuringModuleLoad());
         set_return_value(main());

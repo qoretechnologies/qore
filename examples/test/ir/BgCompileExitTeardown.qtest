@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 # the process module runs the children and bounds the time they can run
@@ -18,8 +19,8 @@
 %exec-class BgCompileExitTeardownTest
 
 #! Module-owned Qore state is released by module teardown in qore_cleanup(), not by C++ static destructors
-/** A process that exits while a detached background compile is still in LLVM ends with \c _exit() after
-    qore_cleanup(), so no C++ static destructor runs (see QoreJIT::exitQuickly()).  The namespaces of binary modules
+/** A process that exits while a detached background compile is still in LLVM waits for it in qore_cleanup() (issue
+    #6296), so the module state must be released there, not by a C++ static destructor.  The namespaces of binary modules
     with static storage duration are registered with QoreModuleInfo::ns and purged when the modules are deleted in
     qore_cleanup(), before the types are freed, so nothing of them is left to a static destructor.
 
@@ -65,7 +66,7 @@ printf(\"sum=%d held=%y type=%s yaml=%s json=%s\\n\", sum, held, (new Reflection
     }
 
     constructor() : QUnit::Test("BgCompileExitTeardownTest", "1.0") {
-        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         addTestCase("normal exit releases module namespaces in qore_cleanup()", \normalExit());
         addTestCase("exit with a detached compile releases module namespaces", \detachedExit());
         addTestCase("valgrind: no module state is lost at exit with a detached compile", \valgrindDetachedExit());
@@ -83,7 +84,7 @@ printf(\"sum=%d held=%y type=%s yaml=%s json=%s\\n\", sum, held, (new Reflection
         checkReleased(r.output);
     }
 
-    #! a process that ends with _exit() because a detached compile is still in LLVM has released the module state
+    #! a process that ends while a detached compile is still in LLVM has released the module state in qore_cleanup()
     detachedExit() {
         checkDebug();
         hash<auto> r = runChild(header() + DetachedCompile);

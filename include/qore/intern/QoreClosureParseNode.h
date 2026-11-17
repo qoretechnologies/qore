@@ -107,9 +107,10 @@ public:
 
     DLLLOCAL bool isInMethod() const { return in_method; }
 
-    //! returns true if the closure is in generic code: a function with type parameters or a method of a generic class
+    //! returns true if the closure is in generic code: a function with type parameters, a method of a generic class
+    //! or a member default of a generic hashdecl
     /** Only such a closure is created with the type arguments and the receiver type of the code that creates it
-        (qore#5733)
+        (qore#5733, qore#6269)
     */
     DLLLOCAL bool needsTypeContext() const { return needs_type_context; }
 

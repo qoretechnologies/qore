@@ -66,6 +66,56 @@ public namespace TestInterpreter {
         return (QORE_ARGV.size() - (ARGV.size() ?? 0)) < 2;
     }
 
+    #! returns the interpreter options of this process: the arguments between the interpreter and the script
+    /** The interpreter's \c QORE_ARGV is <tt>[\<qore\>, \<interpreter options\>..., \<script\>, \<script
+        arguments\>...]</tt>.  The arguments after the script are the test's own (such as the \c -v that
+        <tt>run_tests.sh -v</tt> gives QUnit), not interpreter options: a test that starts a child interpreter with
+        the options of its own process takes them from here, never from all of \c QORE_ARGV (issue #6250), and
+        keeps an option and its value given as two arguments (<tt>--exec-mode ir</tt>) together.
+
+        @param script the path of the test's script as the test's code gets it: \c get_script_path() called in the
+        test, not in this module, where it returns the path of the module (module code runs in the module's Program);
+        for a script given by its name alone, it is the name with \c "./" before it
+
+        @return the interpreter options; an empty list for a compiled test, which has none, and for a script whose
+        path is not on the command line (read from stdin)
+    */
+    public list<string> sub interpreter_options(*string script) {
+        if (!QORE_ARGV || running_compiled() || !script) {
+            return ();
+        }
+        list<string> opts = ();
+        for (int i = 1; i < QORE_ARGV.size(); ++i) {
+            # a script given by its name alone has "./" before it in its path
+            if (QORE_ARGV[i] == script || "./" + QORE_ARGV[i] == script) {
+                return opts;
+            }
+            opts += QORE_ARGV[i];
+        }
+        # the script is not on the command line
+        return ();
+    }
+
+    #! returns the execution mode given to the interpreter of this process (\c --exec-mode), if any
+    /** Only the interpreter options are read (see interpreter_options()): an argument of the test that looks like
+        the option is not the interpreter's execution mode
+
+        @param script the path of the test's script: \c get_script_path() called in the test (see
+        interpreter_options())
+    */
+    public *string sub exec_mode(*string script) {
+        list<string> opts = interpreter_options(script);
+        for (int i = 0; i < opts.size(); ++i) {
+            *string mode = (opts[i] =~ x/^--exec-mode=(.+)$/)[0];
+            if (mode) {
+                return mode;
+            }
+            if (opts[i] == "--exec-mode" && i + 1 < opts.size()) {
+                return opts[i + 1];
+            }
+        }
+    }
+
     #! returns the canonical path of the running executable (\c QORE_ARGV[0])
     public string sub own_executable() {
         string path = QORE_ARGV[0];
@@ -109,13 +159,23 @@ public namespace TestInterpreter {
     */
     public string sub qore_interpreter() {
         guard_recursion();
-        foreach *string candidate in ((ENV.QORE_BINARY, ENV.QORE_BIN, ENV.QORE_EXECUTABLE)) {
+        # QORE_BIN first: a developer sets it to choose a build, while run_tests.sh always exports QORE_BINARY
+        foreach *string candidate in ((ENV.QORE_BIN, ENV.QORE_BINARY, ENV.QORE_EXECUTABLE)) {
             if (candidate && !is_own_executable(candidate)) {
-                return candidate;
+                return absolute_command_path(candidate);
             }
         }
         if (!running_compiled()) {
-            return QORE_ARGV[0];
+            # the running interpreter; a name found in the PATH is given as the path that the PATH names, so that it
+            # also runs from another directory
+            string path = QORE_ARGV[0];
+            if (path !~ /\//) {
+                *string found = trim(backquote(sprintf("command -v '%s' 2>/dev/null", replace(path, "'", "'\\''"))));
+                if (found) {
+                    return found;
+                }
+            }
+            return absolute_command_path(path);
         }
         *string found = trim(`command -v qore 2>/dev/null`);
         if (found && !is_own_executable(found)) {
@@ -125,6 +185,19 @@ public namespace TestInterpreter {
             "is configured (QORE_BINARY) or found in the PATH", QORE_ARGV[0]);
     }
 
+    #! returns a path that names the same file from any directory
+    /** A relative path with a directory (\c build/qcc, as run_tests.sh finds the build directory when QORE_BINARY is
+        not set) is made absolute, so that a test that runs a command in another directory (<tt>cd \<dir\> && ...</tt>)
+        still finds it; a bare name is left to the PATH
+    */
+    public string sub absolute_command_path(string path) {
+        if (path !~ /\// || path =~ /^\//) {
+            return path;
+        }
+        *string cwd = getcwd();
+        return cwd ? cwd + "/" + path : path;
+    }
+
     #! returns qcc: the one configured in the environment, the one next to the interpreter, or the one in the PATH
     /** @return the path of qcc, or NOTHING if none is found
     */
@@ -132,7 +205,7 @@ public namespace TestInterpreter {
         guard_recursion();
         foreach *string candidate in ((ENV.QCC, ENV.QORE_QCC, ENV.QORE_QCC_EXECUTABLE)) {
             if (candidate && !is_own_executable(candidate)) {
-                return candidate;
+                return absolute_command_path(candidate);
             }
         }
         string qore = qore_interpreter();
@@ -156,11 +229,33 @@ public namespace TestInterpreter {
             return;
         }
         string own = own_executable();
-        # the process environment itself: a compiled executable initializes its modules before it sets ENV
-        if (getenv(ParentExecutableVar) == own) {
+        if (TestInterpreterState::inherited(own) == own) {
             throw "TEST-RECURSION-ERROR", sprintf("the compiled test %y was run by itself as a child process (it took "
                 "its own executable for the qore interpreter); use TestInterpreter::qore_interpreter()", own);
         }
-        setenv(ParentExecutableVar, own);
+    }
+}
+
+#! the executable that the parent process recorded, read once, before this process records its own
+/** The process records its executable in the environment for its child processes the first time that it checks: what
+    it reads later is its own record, not its parent's, so the check compares the value read the first time
+*/
+class TestInterpreterState {
+    private:internal {
+        static Mutex lck();
+        static bool read;
+        static *string parent_executable;
+    }
+
+    #! returns the executable that the parent process recorded, if any, and records \a own for child processes
+    static *string inherited(string own) {
+        AutoLock al(lck);
+        if (!read) {
+            # the process environment itself: a compiled executable initializes its modules before it sets ENV
+            parent_executable = getenv(TestInterpreter::ParentExecutableVar);
+            setenv(TestInterpreter::ParentExecutableVar, own);
+            read = True;
+        }
+        return parent_executable;
     }
 }

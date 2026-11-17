@@ -265,6 +265,8 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
         addTestCase("body_type=form serializes hash to form-urlencoded", \testBodyTypeForm());
         addTestCase("body_type=text sends string verbatim", \testBodyTypeText());
         addTestCase("body_type=multipart builds a multipart envelope", \testBodyTypeMultipart());
+        addTestCase("body_type=multipart with a caller Content-Type gets the body's boundary (issue #6307)",
+            \testBodyTypeMultipartCallerContentType());
         addTestCase("path_vars substitutes {name} placeholders", \testPathVars());
         addTestCase("expected_status accepts whitelisted code", \testExpectedStatusOk());
         addTestCase("expected_status throws for mismatched code", \testExpectedStatusMismatch());
@@ -836,6 +838,37 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
             "multipart body should contain the file content");
         assertTrue(echoed.body =~ /filename="test.txt"/,
             "multipart body should include the filename");
+    }
+
+    # issue #6307: a multipart Content-Type given by the caller gets the boundary of the body; a boundary parameter
+    # in it is replaced and the other parameters are kept
+    testBodyTypeMultipartCallerContentType() {
+        foreach hash<auto> c in ((
+                {"ct": "multipart/form-data", "params": ()},
+                {"ct": "multipart/form-data; boundary=\"o;ther\"; x-param=1", "params": ("x-param=1",)},
+                {"ct": "Multipart/Form-Data;Boundary=other", "params": ()},
+            )) {
+            hash<auto> resp = getCallChild().doRequest({
+                "method": "POST",
+                "path": "/echo",
+                "hdr": {"content-type": c.ct},
+                "body_type": "multipart",
+                "body": {
+                    "name": "test.txt",
+                    "content": make_base64_string("hello multipart contents"),
+                    "mime_type": "text/plain",
+                },
+            });
+            assertEq(200, resp.status);
+            hash<auto> echoed = resp.body;
+            *string body_boundary = (echoed.body =~ x/^--([^\r\n]+)\r\n/)[0];
+            assertTrue(exists body_boundary, "the body must start with a delimiter");
+            list<string> params = map trim($1), echoed.content_type.split(";");
+            assertEq(c.ct.split(";")[0], shift params);
+            list<string> boundaries = select params, $1 =~ /^boundary=/i;
+            assertEq(("boundary=" + body_boundary,), boundaries, c.ct);
+            assertEq(c.params, (select params, $1 !~ /^boundary=/i), c.ct);
+        }
     }
 
     testPathVars() {

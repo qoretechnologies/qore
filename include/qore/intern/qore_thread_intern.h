@@ -42,6 +42,7 @@ class RuntimeConfig;
 #include <utility>
 #include <set>
 #include <map>
+#include <optional>
 #include <memory>
 #include <new>
 
@@ -232,12 +233,6 @@ public:
     DLLLOCAL virtual const QoreProgram* getDefinitionProgram() const {
         return nullptr;
     }
-
-protected:
-    //! the restrictions that the module's \c domains key removed from its Program (see setDomains())
-    int64 dom_removed = QDOM_DEFAULT;
-
-public:
 
     //! Records a child module declared with %try-child-module in this module
     /** @param loc the location of the directive
@@ -502,7 +497,20 @@ DLLLOCAL void swap_runtime_parse_options(const QoreParseOptions& po, const Abstr
 DLLLOCAL void swap_runtime_location(const QoreProgramLocation*loc, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc);
 DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc, const QoreParseOptions& po);
+
 DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc);
+
+//! Sets the runtime parse options of the thread for lowered top-level code (TopLevelStatementBlock::execIR())
+/** As swap_runtime_parse_options(), in a function of its own: the per-statement path of the AST interpreter inlines
+    update_runtime_statement_location(), and a caller added to the functions of that path changes the compiler's
+    inlining decisions for it; restored with restore_toplevel_code_parse_options()
+*/
+DLLLOCAL void swap_toplevel_code_parse_options(const QoreParseOptions& po, const AbstractStatement*& old_stmt,
+    const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
+
+//! Restores the runtime statement, location and parse options saved by swap_toplevel_code_parse_options()
+DLLLOCAL void restore_toplevel_code_parse_options(const AbstractStatement* stmt, const QoreProgramLocation* loc,
+    const QoreParseOptions& po);
 
 //! Cached runtime location pointers for hot-loop optimization.
 //! Avoids repeated TLS lookups (pthread_getspecific + std::map::find) per instruction.
@@ -911,6 +919,14 @@ enum qore_dbg_program_entry_site_e : int {
 //! Makes the next step of an entry into another Program at \a site throw std::bad_alloc; several sites can be armed,
 //! each fails once; -1 disarms all of them
 DLLLOCAL void qore_dbg_fail_next_program_entry(int site);
+//! Holds the next background thread that releases its TID for up to \a ms milliseconds before it leaves
+//! thread_counter, or until the static objects are destroyed (issue #6405)
+DLLLOCAL void qore_dbg_hold_next_thread_finish(int ms);
+//! Holds the next background thread that ends for up to \a ms milliseconds in a thread-local destructor, after it
+//! has returned from its thread function, or until the static objects are destroyed (issue #6412)
+DLLLOCAL void qore_dbg_hold_next_thread_tls_exit(int ms);
+//! Waits until a finishing background thread is held; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_thread_finish_held(int timeout_ms);
 
 //! Returns true, and disarms the site, if the next step at \a site is armed to fail
 DLLLOCAL bool qore_dbg_program_entry_fails(int site);
@@ -954,6 +970,28 @@ DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);
 */
 DLLLOCAL bool parse_check_restriction(const QoreParseOptions& o);
 DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
+
+//! Returns true: the code that runs as compiled code (IR, JIT, AOT) always has negative offsets
+/** Only %modern code is compiled (IR lowering and AOT refuse code with legacy tokens), %modern implies
+    PO_NEGATIVE_OFFSETS and refuses %no-negative-offsets, a module parse option mask cannot strip it, and compiled code
+    runs with its own parse options, also when legacy code calls it; so where compiled code checks the option it
+    always holds, and the run-time lookup is not made.  A debug build asserts it, so that a change that breaks the
+    guarantee fails in the debug tests (compatibility options refused under %modern: qore#5682)
+*/
+static inline bool qore_compiled_code_negative_offsets() {
+    assert(runtime_check_parse_option(PO_NEGATIVE_OFFSETS));
+    return true;
+}
+
+//! Returns true: the code that runs as compiled code (IR, JIT, AOT) always has strict arguments
+/** %modern implies PO_STRICT_ARGS; code after %loose-args is not %modern and is not compiled, and compiled code runs
+    with its own parse options, also when legacy %loose-args code calls it (see
+    qore_compiled_code_negative_offsets()).  A debug build asserts it
+*/
+static inline bool qore_compiled_code_strict_args() {
+    assert(runtime_check_parse_option(PO_STRICT_ARGS));
+    return true;
+}
 
 //! Sets the runtime parse options to those of AOT-compiled code while the code is loaded
 /** When code is parsed from source, the parser binds calls to their variants and checks each builtin variant's
@@ -1122,6 +1160,35 @@ DLLLOCAL bool runtime_module_call_override_in_effect(const QoreProgram* module_p
 //! runtime_module_call_override_in_effect() for the data of the current thread, \a td
 DLLLOCAL bool runtime_module_call_override_in_effect(ThreadData* td, const QoreProgram* module_pgm);
 
+//! The run-time parse options of a thread and the override that they were computed with (ThreadData)
+/** Declared here, so that RuntimeParseOptionsOverrideHelper restores it inline in every build: it runs on every call
+    of a user variant (qore#6446).  The members other than the parse options have no initializers, so that the copy
+    that the helper saves is not initialized on every call: a value-initialized struct (\c QoreRuntimePoState()) has
+    them zero
+*/
+struct QoreRuntimePoState {
+    //! the run-time parse options of the thread, with the override applied
+    QoreParseOptions po;
+    QoreParseOptions override_mask;
+    QoreParseOptions override_value;
+    //! the options of override_mask whose value is that of the override, not also that of the code
+    /** see QoreCallParseOptionsOverride::replace
+    */
+    QoreParseOptions override_replace;
+    //! the restrictions that the code of module_pgm inherits from its caller
+    /** see runtime_get_own_program_state_parse_options()
+    */
+    QoreParseOptions caller_restrictions;
+    //! the Program of the module whose code runs with caller_restrictions, or nullptr
+    const QoreProgram* module_pgm;
+    //! the ID of the application Program that the code of module_pgm runs for
+    qore_program_id_t app_pgm_id;
+    //! true while module code runs for a sandboxed caller; see QoreCallParseOptionsOverride::sandboxed
+    bool sandboxed;
+    //! the module Program whose code the override was set for; see QoreCallParseOptionsOverride::override_pgm
+    const QoreProgram* override_pgm;
+};
+
 class RuntimeParseOptionsOverrideHelper {
 public:
     //! sets no override; see set()
@@ -1166,20 +1233,110 @@ public:
 
 private:
     //! true if the override has been set; the state saved below is valid only then (it is written by set() and read
-    //! by restore() only), so it takes no initialization: the helper is created on every call of a user variant
+    //! by restore() only), so it takes no initialization beyond that of its parse options: the helper is created on
+    //! every call of a user variant
     bool active = false;
-    bool old_sandboxed;
-    ThreadData* td;
-    QoreParseOptions old_mask;
-    QoreParseOptions old_value;
-    QoreParseOptions old_replace;
-    QoreParseOptions old_po;
-    QoreParseOptions old_caller_restrictions;
-    const QoreProgram* old_module_pgm;
-    qore_program_id_t old_app_pgm_id;
-    const QoreProgram* old_override_pgm;
+    //! the state of the thread (ThreadData::runtime_po_state)
+    QoreRuntimePoState* state;
+    //! the state that set() replaced
+    QoreRuntimePoState old;
 
-    DLLLOCAL void restore();
+    //! restores the state that set() replaced; inline, as it runs on every call of a user variant (qore#6446)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE void restore() {
+        assert(active);
+        *state = old;
+    }
+};
+
+//! The run-time parse options in effect on a thread: its options and the override that they were computed with
+/** Taken in the thread that starts a new thread for code (the \c background operator, q_start_thread()), so that the
+    new thread runs with the options of the code that started it, including the restrictions that apply to that code
+    (qore#6208)
+*/
+struct QoreThreadRuntimeParseOptions {
+    //! the run-time parse options, with the override applied
+    QoreParseOptions po;
+    //! the override that \a po was computed with (its \c td is always nullptr)
+    /** The Programs that it names (\c module_pgm, \c override_pgm) are compared by identity only; each copy holds a
+        dependency reference to them (QoreProgram::depRef()), so that their memory is not reused for another Program
+        while the options can be installed, which would make an unrelated Program match them
+    */
+    QoreCallParseOptionsOverride override;
+
+    DLLLOCAL QoreThreadRuntimeParseOptions() = default;
+
+    DLLLOCAL QoreThreadRuntimeParseOptions(const QoreThreadRuntimeParseOptions& old) : po(old.po),
+            override(old.override) {
+        refPrograms();
+    }
+
+    DLLLOCAL QoreThreadRuntimeParseOptions& operator=(const QoreThreadRuntimeParseOptions& other) {
+        if (this != &other) {
+            // the other's references are taken before this object's are released, as they can be the same Programs
+            QoreThreadRuntimeParseOptions copy(other);
+            std::swap(po, copy.po);
+            std::swap(override, copy.override);
+        }
+        return *this;
+    }
+
+    DLLLOCAL ~QoreThreadRuntimeParseOptions() {
+        derefPrograms();
+    }
+
+    //! returns the run-time parse options in effect on the current thread
+    DLLLOCAL static QoreThreadRuntimeParseOptions capture();
+
+    //! returns true if the options in effect on the current thread restrict nothing
+    /** That is, no override is in effect, and no option that grants or denies access is set (no functional domain
+        restriction, \c QDOM_ALL, and no positive option).  Code that runs with no options installed (a thread started
+        without inheriting options, such as a callback worker of the AsyncIoController) is granted and denied the same
+        access: the code that it runs sets the options of its own statements, and builtin code that it calls directly
+        through a call reference sees no restriction either, so options captured from such code need not be kept;
+        options without effect on access (the style options of \c %modern, for example) are then not applied to builtin
+        code called directly, as before the options were captured.  Checked without copying the options or taking
+        references to Programs.
+    */
+    DLLLOCAL static bool currentRestrictsNothing();
+
+    //! returns the run-time parse options in effect on the current thread for a thread that it starts
+    /** The thread inherits the restrictions of the code that starts it, but not the application that a call of
+        module code runs for (\c app_pgm_id), which is attribution, not a restriction: what the thread adds later
+        (timers, for example) belongs to the call that adds it, not to the caller of the code that started the
+        thread, which a long-lived worker thread of a module does not serve only (qore#6208)
+    */
+    DLLLOCAL static QoreThreadRuntimeParseOptions captureForThread();
+
+private:
+    DLLLOCAL void refPrograms();
+    DLLLOCAL void derefPrograms();
+};
+
+//! Installs the run-time parse options taken from the thread that started the current thread for its life
+/** The thread starts with none: without them, the code that it runs would not run with the options of the code that
+    started it, nor with the restrictions that apply to that code (qore#6208).  The options in effect before are
+    restored when the helper is destroyed or reset.
+*/
+class QoreThreadRuntimeParseOptionsHelper {
+public:
+    //! installs \a o on the current thread; nothing if \a o is nullptr
+    DLLLOCAL QoreThreadRuntimeParseOptionsHelper(const QoreThreadRuntimeParseOptions* o);
+
+    //! restores the options in effect before, if they have not been restored yet
+    DLLLOCAL ~QoreThreadRuntimeParseOptionsHelper() = default;
+
+    //! restores the options in effect before the helper was created; called before the thread's data is deleted
+    DLLLOCAL void reset() {
+        override_helper.reset();
+    }
+
+    DLLLOCAL QoreThreadRuntimeParseOptionsHelper(const QoreThreadRuntimeParseOptionsHelper&) = delete;
+    DLLLOCAL QoreThreadRuntimeParseOptionsHelper& operator=(const QoreThreadRuntimeParseOptionsHelper&) = delete;
+
+private:
+    //! sets the override and the options, and restores those in effect before (RuntimeParseOptionsOverrideHelper
+    //! restores the run-time parse options too)
+    std::optional<RuntimeParseOptionsOverrideHelper> override_helper;
 };
 
 DLLLOCAL RootQoreNamespace* getRootNS();
@@ -1588,13 +1745,21 @@ private:
     @param timeout_ms the timeout in milliseconds; negative for no timeout
     @param xsink for the cancellation exception; may be nullptr
     @param operation the operation named in the cancellation exception
+    @param before_block if not nullptr, called with \a before_block_arg and the mutex held after the wait is
+    registered and the last check for a request, just before the thread blocks (also when the wait cannot be
+    registered: then nothing can wake it for what the check reads); if it returns non-zero, the thread does not
+    block and QORE_COND_RESULT_SUCCESS is returned.  A thread that sets what the check reads and then wakes the
+    waiter with QoreThreadList::wakeCondWaiter() is never lost: either the check sees it, or the wakeup sees the
+    registration
+    @param before_block_arg the argument of \a before_block
 
     @return QORE_COND_RESULT_SUCCESS if woken, QORE_COND_RESULT_TIMEOUT on timeout, or QORE_COND_RESULT_INTERRUPTED
     if the thread was cancelled or interrupted (or the condition waker thread could not be started), in which case
     an exception has been raised on \a xsink if it is not nullptr
 */
 DLLLOCAL int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms,
-        ExceptionSink* xsink, const char* operation);
+        ExceptionSink* xsink, const char* operation, int (*before_block)(void*) = nullptr,
+        void* before_block_arg = nullptr);
 
 //! Stops the condition waker thread; called when no thread can be waiting any more
 DLLLOCAL void qore_stop_cond_waker();
@@ -1602,6 +1767,8 @@ DLLLOCAL void qore_stop_cond_waker();
 #ifdef DEBUG
 //! Test hook called by qore_cond_wait_cancellable() after its final check for a request and before it blocks
 DLLLOCAL extern std::atomic<void (*)()> qore_cond_wait_window_hook;
+//! Test hook called by qore_cond_wait_cancellable() before it registers a wait that it can register for a wakeup
+DLLLOCAL extern std::atomic<void (*)()> qore_cond_wait_register_hook;
 #endif
 
 //! Sleeps for the given number of microseconds or until the current thread is cancelled or interrupted
@@ -2361,6 +2528,11 @@ public:
         return active;
     }
 
+    //! returns true if the last entry failed with a C++ exception during or after the entry handler
+    DLLLOCAL bool handlerFailedWithCppException() const {
+        return handler_cpp_exception;
+    }
+
 private:
     //! runs the entry handler of the Program, if any; see enter()
     DLLLOCAL QORE_INTERN_NOINLINE int enterHandlers(ThreadData* td, QoreProgram* pgm, ExceptionSink* xsink);
@@ -2378,6 +2550,8 @@ private:
     QoreValue token;
     //! true while the frame is entered
     bool active = false;
+    //! true if the last entry failed with a C++ exception during or after the entry handler (issue #6255)
+    bool handler_cpp_exception = false;
 };
 
 //! returns true if a call into the given Program must enter it although it is the thread's current Program
@@ -2406,7 +2580,20 @@ public:
     }
     DLLLOCAL ~ProgramThreadCountContextHelper();
 
+    //! enters the Program; a C++ exception of the entry (std::bad_alloc) is raised in \a xsink as a Qore exception
+    /** The entry leaves the thread as it was, enterFailed() is true, and the exception is \c THREAD-ENTRY-HANDLER-ERROR
+        if the entry handler failed, otherwise \c PROGRAM-ENTRY-ERROR; if \a xsink already holds an exception, as when
+        a destructor runs while an exception propagates, no other is added.  The calls that the interpreter makes into
+        other Programs have nothing above them that converts a C++ exception, which would end the process (issue
+        #6255).
+    */
     DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+
+    //! enters the Program as set() does, except that a C++ exception of the entry propagates
+    /** For the C++ API (QoreExternalProgramContextHelper): the exception propagates once the thread is as it was
+        (issue #6198); the helper's destructor then finds nothing to undo.
+    */
+    DLLLOCAL void setRethrow(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
 
     //! Returns the data of the thread in the Program of the given frame and the index of the frame there
     /** @param frame the frame, counted from the caller of the builtin function that looks it up; set to its index
@@ -2613,6 +2800,10 @@ protected:
 
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp
 DLLLOCAL int check_stack(ExceptionSink* xsink);
+
+// raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread cannot take \a reserve more bytes before its
+// stack check would fail (the frame of a compiled function, qore#6414); see thread.cpp
+DLLLOCAL int check_stack_reserve(ExceptionSink* xsink, size_t reserve);
 
 //! Keeps the Program of a reference from being deleted while the reference's lvalue is used
 /** A reference can outlive the Program whose lvalue it refers to: a function of the Program can return one, and the
@@ -3076,14 +3267,53 @@ DLLLOCAL extern QorePThreadAttr ta_default;
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 #endif
 
+//! The stack limit of the current thread (ThreadData::stack_limit), or 0 if it has none or no thread data
+/** Set with the limit (ThreadData::setStackLimit()), so that q_thread_stack_reserve_exceeded() is a TLS read and a
+    comparison inline; atomic only because the primary thread's limit can be set by another thread
+    (enforcePrimaryStackSize()), and constant-initialized, so that its reads need no TLS initialization guard.
+
+    It has the default TLS model: an initial-exec variable marks the whole library STATIC_TLS, and glibc cannot then
+    load libqore with dlopen() (as an embedding runtime such as Python or a JVM does), as its TLS is larger than the
+    static TLS that glibc keeps in reserve for such libraries (see examples/test/qore/misc/libqore-dlopen)
+*/
+DLLLOCAL extern constinit thread_local std::atomic<size_t> q_thread_stack_limit_tls;
+
+//! Returns true if the current thread's stack is smaller than the default thread stack size
+/** The default thread stack size is the size that new Qore threads are created with: STACK_SIZE unless
+    set_default_thread_stack_size() changed it, read with q_thread_get_stack_size().  The stack size of the current
+    thread is the one determined when its thread data was created (ThreadData::stack_size).  The primary thread is never
+    smaller, whatever its size: its stack is the process's, which code that runs in it cannot choose.
+
+    The total stack size is compared, not the stack that remains: a thread whose stack is at least the default size is
+    assumed to have enough stack for a module, so that a module that exceeds it (\c STACK-LIMIT-EXCEEDED) is assumed
+    to have a bug, while in a smaller thread, the error depends on the thread (see qore_find_thread_stack_error())
+*/
+DLLLOCAL bool q_thread_stack_smaller_than_default();
+
 //! Returns true if less than the given number of bytes remain above the current thread's stack limit
 /** For native code that recurses without an exception sink to report check_stack()'s exception, such as IR
-    lowering: it stops before the next recursion step could exhaust the stack.  Always false for a thread with no
-    stack limit, and where the stack is not managed.
+    lowering and parse initialization: it stops before the next recursion step could exhaust the stack.  Always false
+    for a thread with no stack limit, and where the stack is not managed.
 
     @param reserve the stack, in bytes, that the caller needs before it reaches its next check
 */
-DLLLOCAL bool q_thread_stack_reserve_exceeded(size_t reserve);
+DLLLOCAL inline bool q_thread_stack_reserve_exceeded(size_t reserve) {
+#ifdef QORE_MANAGE_STACK
+    size_t limit = q_thread_stack_limit_tls.load(std::memory_order_relaxed);
+    // a thread with no stack guard has no limit (see QTF_NO_STACK_GUARD)
+    if (!limit) {
+        return false;
+    }
+    size_t pos = get_stack_pos();
+#ifdef STACK_DIRECTION_DOWN
+    return pos < limit + reserve;
+#else
+    return pos + reserve > limit;
+#endif
+#else
+    return false;
+#endif
+}
 
 //! Accounts for the stack that the recursion replaced by a deferred deletion would have used
 /** A deletion nested too deeply is deferred to a loop that makes it from a shallower frame (see
