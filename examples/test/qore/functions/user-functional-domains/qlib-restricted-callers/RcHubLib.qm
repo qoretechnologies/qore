@@ -1,0 +1,41 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RcHubLib.qm - test library module with declared code whose initialization calls the listeners of RcHub (qore#6337)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires RcHub
+
+module RcHubLib {
+    version = "1.0";
+    desc = "test library module whose initialization calls the listeners of RcHub with an API object";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () { RcHub::hub_fire(new RcHubLib::Api()); };
+    domains = "PROCESS";
+}
+
+#! The public definitions of the test module
+public namespace RcHubLib {
+#! Code with a functional domain
+public string sub tagged() [dom=PROCESS_CONTROL] {
+    return "tagged ran";
+}
+
+#! Returns a closure that calls tagged()
+public code sub make() {
+    return auto sub () { return tagged(); };
+}
+
+#! The API object given to the listeners
+public class Api {
+    string tagged() [dom=PROCESS_CONTROL] {
+        return RcHubLib::tagged();
+    }
+
+    code make() {
+        return RcHubLib::make();
+    }
+}
+}

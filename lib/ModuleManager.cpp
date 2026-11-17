@@ -4317,6 +4317,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         // module search surface the importer established.
         if (trusted) {
             qore_program_private::get(*mpgm)->library_module = true;
+            // the closures that its initialization creates can run as deferred module initialization (qore#6337)
+            qore_module_init_set_program(mpgm);
         }
         if (p) {
             // library code loaded by code that is not trusted takes only the defines that that code's host set, and
@@ -5379,6 +5381,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         // module search surface the importer established.
         if (trusted) {
             qore_program_private::get(*mpgm)->library_module = true;
+            // the closures that its initialization creates can run as deferred module initialization (qore#6337)
+            qore_module_init_set_program(mpgm);
         }
         if (p) {
             // library code loaded by code that is not trusted takes only the defines that that code's host set, and
