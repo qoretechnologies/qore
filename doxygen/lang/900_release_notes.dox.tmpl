@@ -3213,6 +3213,8 @@
       raised \c DIVISION-BY-ZERO for a divisor that is not zero (issue #1034)
     - the @ref push "push" and @ref unshift "unshift" operators on a member or list element that is not a list report
       the same error message in every execution mode, as in the AST interpreter
+    - threads that create, run and delete @ref Qore::Expression "Expression" objects of the same Program at the same
+      time no longer crash the process (issue #6493)
 
     @section qore_2_2_1 Qore 2.2.1
 
