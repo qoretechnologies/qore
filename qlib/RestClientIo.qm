@@ -2357,7 +2357,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         HttpClientIo::HttpCancellableFuture restDoRequestCancellableAsync(string method,
                 string path, auto body, *hash<auto> hdr) {
-            log(LoggerLevel::DEBUG, "restDoRequestCancellableAsync() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "restDoRequestCancellableAsync() %s %s%s", method, get_masked_url(url), path);
 
             hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr,
                 False, False, NOTHING, NOTHING, NOTHING);
@@ -2556,8 +2556,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         private RestFuture restDoRequestAsyncWithTimeout(string method, string path, auto body, *hash<auto> hdr,
                 int timeout_ms, *hash<RestClient::RestRequestContext> request_context) {
-            log(LoggerLevel::DEBUG, "restDoRequestAsyncWithTimeout() %s %s%s (timeout: %dms)", method, url, path,
-                timeout_ms);
+            log(LoggerLevel::DEBUG, "restDoRequestAsyncWithTimeout() %s %s%s (timeout: %dms)", method,
+                get_masked_url(url), path, timeout_ms);
             hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr, False, False, NOTHING,
                 NOTHING, NOTHING, timeout_ms, request_context);
             RestClientIoAsyncRequestOperation op = async_info.operation;
@@ -2651,7 +2651,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             bool negotiate_retry = True;
 
             log(LoggerLevel::DEBUG, "%s() %s %s%s", raw ? "restDoRawRequest" : "restDoRequest",
-                method, url, path);
+                method, get_masked_url(url), path);
 
             # Snapshot the per-instance request-timeout override — passed to every
             # mgr.request() call below so setTimeout() state is honored
@@ -3028,7 +3028,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         hash<auto> submitPreparedAsyncRequestAttemptWithNotifier(string method, string path,
                 *hash<auto> hdr, hash<auto> prepared, EventNotifier notifier) {
             log(LoggerLevel::DEBUG, "submitAsyncRequestAttemptWithNotifier() %s %s%s",
-                method, url, path);
+                method, get_masked_url(url), path);
 
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
             # the body is received as octets for response_body_raw; buildResponse() decodes text
@@ -3059,7 +3059,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         */
         hash<auto> submitRedirectAttemptWithNotifier(string origin, string method, string path,
                 *hash<auto> hdr, *data body, EventNotifier notifier) {
-            log(LoggerLevel::DEBUG, "following redirect: %s %s%s", method, origin, path);
+            log(LoggerLevel::DEBUG, "following redirect: %s %s%s", method, get_masked_url(origin), path);
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(origin);
             stream.setDecodeText(False);
             return stream.submitAsyncWithNotifier(method, path,
@@ -3087,7 +3087,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             @return a RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
         */
         RestFuture restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr) {
-            log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, get_masked_url(url), path);
 
             hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr,
                 False, False, NOTHING, NOTHING, NOTHING);
@@ -3121,7 +3121,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         */
         Future restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr,
                 *bool skip_ensure_token) {
-            log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, get_masked_url(url), path);
 
             return startAsyncRequestOperation(method, path, body, hdr, False,
                 skip_ensure_token, NOTHING, NOTHING, NOTHING).future;
@@ -3212,7 +3212,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         private RestClientIoAsyncRequestOperation startPollRequestIntern(string method, string path,
                 auto body, *hash<auto> hdr, bool raw, bool skip_ensure_token,
                 *hash<RestClient::RestRequestContext> request_context) {
-            log(LoggerLevel::DEBUG, "startPollRequest() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "startPollRequest() %s %s%s", method, get_masked_url(url), path);
 
             if (!skip_ensure_token) {
                 ensureToken();
@@ -3247,7 +3247,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         */
         hash<auto> restDoRequestAsyncWithNotifier(string method, string path, auto body,
                 *hash<auto> hdr, EventNotifier notifier) {
-            log(LoggerLevel::DEBUG, "restDoRequestAsyncWithNotifier() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "restDoRequestAsyncWithNotifier() %s %s%s", method, get_masked_url(url), path);
 
             return startAsyncRequestOperation(method, path, body, hdr, False,
                 False, notifier, NOTHING, NOTHING);
@@ -3299,7 +3299,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             }
 
             log(LoggerLevel::DEBUG, "submitPingRequestWithNotifier() %s %s%s",
-                method, url, path);
+                method, get_masked_url(url), path);
 
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
             return stream.submitAsyncWithNotifier(method, path, request_headers,
@@ -3531,7 +3531,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                 "hdr": hdr - shdr});
             hdr{shdr} = sig;
 
-            log(LoggerLevel::DEBUG, "doSignedRequest() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "doSignedRequest() %s %s%s", method, get_masked_url(url), path);
 
             # 3. Make HTTP request
             hash<auto> raw = mgr.request(url, method, path, hdr, prepared.serialized_body, NOTHING, False,
@@ -3614,7 +3614,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         */
         RestFuture doSignedRequestAsync(string shdr, code signer, string method,
                 string path, auto body, *hash<auto> hdr) {
-            log(LoggerLevel::DEBUG, "doSignedRequestAsync() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "doSignedRequestAsync() %s %s%s", method, get_masked_url(url), path);
 
             hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr,
                 False, False, NOTHING, shdr, signer);
@@ -4769,7 +4769,7 @@ rest.addSensitiveHeaders("Qorus-Token");
             # Serialize body as form-urlencoded
             string body = mime_get_form_urlencoded_string(login);
 
-            log(LoggerLevel::DEBUG, "doOAuth2TokenRequest() POST %s%s", base_url, req_path);
+            log(LoggerLevel::DEBUG, "doOAuth2TokenRequest() POST %s%s", get_masked_url(base_url), req_path);
 
             # Make the token request — no locks held during network I/O
             hash<auto> raw = mgr.request(base_url, "POST", req_path, hdr, body, NOTHING, True,
@@ -5064,7 +5064,7 @@ rest.addSensitiveHeaders("Qorus-Token");
 
             # Direct HTTP request via connection manager — no restDoRequest recursion,
             # no OAuth2 auth injection, no REST schema validation
-            log(LoggerLevel::DEBUG, "customGetTokenIntern() %s %s%s", c_method, url, c_path);
+            log(LoggerLevel::DEBUG, "customGetTokenIntern() %s %s%s", c_method, get_masked_url(url), c_path);
             hash<auto> raw = mgr.request(url, c_method, c_path, req_hdr, body_str, NOTHING, True,
                 getCookieRequestOptions());
             if (raw.status_code < 200 || raw.status_code >= 300) {
@@ -5188,9 +5188,9 @@ rest.addSensitiveHeaders("Qorus-Token");
             }
             setToken(h.token_type, h.access_token, h.refresh_token,
                 h.expires_in ? (now_us() + seconds(h.expires_in)) : NOTHING);
-            log(LoggerLevel::DEBUG, "set OAuth2 auth: %s %s; refresh_token: %s; expires_in: %s",
-                h.token_type, h.access_token, h.refresh_token ?? "n/a",
-                h.expires_in ?? "n/a");
+            # the tokens are credentials and are not logged
+            log(LoggerLevel::DEBUG, "set OAuth2 auth: %s <redacted>; refresh_token: %s; expires_in: %s",
+                h.token_type, h.refresh_token ? "<redacted>" : "n/a", h.expires_in ?? "n/a");
         }
 
         #! Builds a HttpClientConnectionManager from RestClientIo client options

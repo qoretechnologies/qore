@@ -21,9 +21,43 @@
 
 %exec-class Main
 
+#! Captures every message logged
+class LogCapture inherits LoggerAppenderWithLayout {
+    public {
+        list<string> messages();
+        Mutex m();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            AutoLock al(m);
+            push messages, params;
+        }
+    }
+
+    list<string> snapshot() {
+        AutoLock al(m);
+        return messages;
+    }
+}
+
 #! A local Haltian Empathic Building server
 class FakeHaltianHandler inherits AbstractHttpRequestHandler {
     public {
+        #! a session secret that the server sends in the credential headers of a rejected login or token refresh
+        const ResponseSecret = "s3cr3t-Session-6504";
+
+        #! the credential headers of a rejected login or token refresh
+        const RejectionHeaders = {
+            "Set-Cookie": "session=" + ResponseSecret,
+            "X-Auth-Token": ResponseSecret,
+            "WWW-Authenticate": "Bearer realm=" + ResponseSecret,
+        };
+
         #! the requests received
         list<hash<auto>> requests = ();
 
@@ -74,7 +108,7 @@ class FakeHaltianHandler inherits AbstractHttpRequestHandler {
             if (args.email != "user@example.com" || args.password != "pass") {
                 return <HttpResponseInfo>{
                     "code": 403,
-                    "hdr": {"Content-Type": MimeTypeJson},
+                    "hdr": {"Content-Type": MimeTypeJson} + RejectionHeaders,
                     "body": make_json({"error": "invalid credentials"}),
                 };
             }
@@ -96,7 +130,7 @@ class FakeHaltianHandler inherits AbstractHttpRequestHandler {
             if (args.refresh_token != valid_refresh_token) {
                 return <HttpResponseInfo>{
                     "code": 401,
-                    "hdr": {"Content-Type": MimeTypeJson},
+                    "hdr": {"Content-Type": MimeTypeJson} + RejectionHeaders,
                     "body": make_json({"error": "invalid refresh token"}),
                 };
             }
@@ -204,6 +238,7 @@ public class Main inherits QUnit::Test {
         addTestCase("delayed token rejection tests", \delayedTokenRejectionTest());
         addTestCase("local connection tests", \localConnectionTest());
         addTestCase("sync client conversion tests", \syncClientConversionTest());
+        addTestCase("login debug log redaction tests", \loginLogRedactionTest());
 
         try {
             setupConnection();
@@ -657,6 +692,50 @@ public class Main inherits QUnit::Test {
         ebrc.getDataProvider();
         # ensure that pings work
         ebrc.ping();
+    }
+
+    #! The debug messages of a failed login or token refresh give no credentials of the request or the response
+    loginLogRedactionTest() {
+        HttpServer server;
+        int port;
+        FakeHaltianHandler handler = startServer(\server, \port);
+        on_exit server.stop();
+
+        LogCapture log();
+        Logger logger("test", LoggerLevel::getLevelDebug());
+        logger.addAppender(log);
+        EmpathicBuildingRestClient rest({
+            "url": "http://localhost:" + port,
+            "username": "user@example.com",
+            "password": "wrong-pass-6504",
+            "skip_login": True,
+            "logger": logger,
+        }, True);
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", sub () { rest.get("v1/organizations"); });
+
+        # a client with only a refresh token refreshes its token before its first request
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", sub () {
+            EmpathicBuildingRestClient rest2({
+                "url": "http://localhost:" + port,
+                "refresh_token": "refresh-6504-invalid",
+                "logger": logger,
+            }, True);
+            rest2.get("v1/organizations");
+        });
+
+        list<string> messages = log.snapshot();
+        list<string> failures = (select messages, $1 =~ /Haltian: POST to .* failed/) ?? ();
+        assertEq(2, failures.size(), sprintf("a failed login and a failed refresh are logged: %N", messages));
+        foreach string msg in (failures) {
+            # the response headers are logged, with the credential headers redacted
+            assertRegex("set-cookie", msg.lwr());
+            assertRegex("<redacted>", msg);
+        }
+        foreach string msg in (messages) {
+            foreach string secret in (FakeHaltianHandler::ResponseSecret, "wrong-pass-6504", "refresh-6504-invalid") {
+                assertEq(-1, msg.find(secret), sprintf("no credential in a log message: %y", msg));
+            }
+        }
     }
 }
 
