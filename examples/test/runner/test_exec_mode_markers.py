@@ -269,6 +269,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   and arm a debug hook in them
         # - generic-static-call-type-params (#6186, #6285, #6308, #6256): its probes run in child processes that set
         #   their own --exec-mode, in qcc executables and in a qcc-compiled module
+        # - generic-static-intermediate (#6447, #6448): its probes run in child processes that set their own
+        #   --exec-mode, in qcc executables and in a qcc-compiled module
         # - UndefinedArithmetic-<n> (#1034): their probes run in child processes that set their own --exec-mode, in qcc
         #   executables and in a qcc-compiled module
         # - entry-cpp-exception (#6255): its checks run in child processes that set their own --exec-mode and in qcc
@@ -325,6 +327,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/misc/declaration-initializer-scope.qtest",
                                  "examples/test/qore/classes/or-nothing-container-casts.qtest",
                                  "examples/test/qore/classes/generic-static-call-type-params.qtest",
+                                 "examples/test/qore/classes/generic-static-intermediate.qtest",
                                  "examples/test/qore/classes/private-internal-redeclared-member.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",

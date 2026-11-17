@@ -209,6 +209,9 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c triggers: a hash of trigger information keyed by trigger name; the values are the trigger source code; since triggers are driver-dependent, a driver-independent table description would include trigger hashes under the \c drivers key and the driver key name under that
             - \c foreign_constraints: (@ref fk_desc_hash "foreign constraint hashes") a hash<auto> describing the foreign constraints on the table
             - \c unique_constraints: (@ref uk_desc_hash "unique constraint hashes") a hash<auto> describing the unique constraints on the table
+            - \c comment: (@ref string_type) the comment of the table, on databases whose driver supports table
+              comments (see @ref SqlUtil::AbstractTable::supportsTableComments() "supportsTableComments()"); it is
+              ignored on others (since SqlUtil 3.11.0)
             - \c partition_strategy: (@ref SqlUtil::PartitionStrategy "partition strategy hash") a hash<auto>
               describing the table's partitioning strategy
             - \c partitions: a hash of @ref SqlUtil::PartitionSpec "partition specification hashes" keyed by
@@ -228,6 +231,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "partitions": Type::Hash,
             #"check_constraints": Type::Hash,
             "table_cache": "Tables",
+            "comment": Type::String,
         };
 
         #! partition strategy options
@@ -613,6 +617,15 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         bool inDb = False;
         #! manual edits
         bool manual = False;
+
+        #! the comment of the table, once it is known (see table_comment_known)
+        /** @since %SqlUtil 3.11.0
+        */
+        *string table_comment;
+        #! True if the comment of the table is known: given by a description, or read from the database
+        /** @since %SqlUtil 3.11.0
+        */
+        bool table_comment_known = False;
 
         #! temporary-table scope; @ref nothing "NOTHING" for a normal (non-temporary) table
         /** set to @ref SqlUtil::TT_Transaction or @ref SqlUtil::TT_Session when this object represents a
@@ -1910,6 +1923,10 @@ list<auto> changes = source_table.getAlignSql(target);
             }
             addPartitionToCacheUnlocked(normalizePartitionSpecUnlocked(ps, "DESCRIPTION-ERROR"));
         }
+
+        # issue #1483: the comment of the table
+        table_comment = desc.comment;
+        table_comment_known = True;
 
         setupTableImpl(desc, opt);
     }
@@ -10078,6 +10095,12 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
         # get column descriptions
         rv.columns = map {$1.key: $1.value.getDescriptionHash()}, columns.pairIterator();
 
+        # issue #1483: the comment of the table
+        *string table_comment_val = getCommentUnlocked();
+        if (table_comment_val) {
+            rv.comment = table_comment_val;
+        }
+
         # add pk desc if available
         if (!primaryKey.empty()) {
             rv.primary_key = {
@@ -12112,7 +12135,103 @@ list<auto> l = table.getAlignSql(table2);
             }
         }
 
+        # issue #1483: the comment of the table
+        if (supportsTableComments()) {
+            # read without locking the template, as its other attributes are read here
+            *string comment = t.getCommentUnlocked();
+            if ((comment ?? "") != (getCommentUnlocked() ?? "")) {
+                l += AbstractDatabase::doCallback(opt, getTableCommentSqlImpl(comment), AbstractDatabase::AC_Modify,
+                    "table comment", name, name);
+                table_comment = comment;
+            } else {
+                AbstractDatabase::doOkCallback(opt, AbstractDatabase::AC_Unchanged, "table comment", name, name);
+            }
+        }
+
         return l;
+    }
+
+    #! Returns the comment of the table, or @ref nothing if it has none
+    /** The comment is given by the @ref table_desc_hash "description" of a table made from one, otherwise it is read
+        from the database once; it is always @ref nothing on a database whose driver does not support table comments
+
+        @return the comment of the table, or @ref nothing if it has none
+
+        @see supportsTableComments()
+
+        @since %SqlUtil 3.11.0
+    */
+    *string getComment() {
+        l.lock();
+        on_exit l.unlock();
+        return getCommentUnlocked();
+    }
+
+    #! Returns @ref True if the driver supports table comments
+    /** A table comment is created and aligned with the table, and given by getComment() and in the description of
+        the table, only on a database whose driver supports table comments; on others the \c "comment" key of a
+        @ref table_desc_hash "table description" is ignored
+
+        @return @ref True if the driver supports table comments; the default implementation returns @ref False
+
+        @since %SqlUtil 3.11.0
+    */
+    bool supportsTableComments() {
+        return False;
+    }
+
+    #! Returns the comment of the table; reads it from the database once if it is not known
+    private *string getCommentUnlocked() {
+        if (!table_comment_known) {
+            if (supportsTableComments() && !manual) {
+                *string comment = getCommentImpl();
+                # an empty comment is no comment
+                table_comment = comment.val() ? comment : NOTHING;
+            }
+            table_comment_known = True;
+        }
+        # a driver without table comments has none, also when a description gives one
+        return supportsTableComments() ? table_comment : NOTHING;
+    }
+
+    #! Returns the SQL that sets the comment of the table when it is created, if it has a comment
+    private *list<auto> getCreateTableCommentSqlUnlocked(*hash<auto> opt) {
+        if (!supportsTableComments()) {
+            return;
+        }
+        *string comment = getCommentUnlocked();
+        if (!comment) {
+            return;
+        }
+        return AbstractDatabase::doCallback(opt, getTableCommentSqlImpl(comment), AbstractDatabase::AC_Add,
+            "table comment", name, name);
+    }
+
+    #! Reads the comment of the table from the database
+    /** Drivers that support table comments (see supportsTableComments()) override it; the default implementation
+        returns @ref nothing
+
+        @return the comment of the table, or @ref nothing or an empty string if it has none
+
+        @since %SqlUtil 3.11.0
+    */
+    private *string getCommentImpl() {
+    }
+
+    #! Returns the SQL that sets the comment of the table, or removes it
+    /** Drivers that support table comments (see supportsTableComments()) override it
+
+        @param comment the new comment; @ref nothing removes the comment
+
+        @return the SQL statements that set the comment
+
+        @throw COMMENT-ERROR the driver does not support table comments
+
+        @since %SqlUtil 3.11.0
+    */
+    private softlist<string> getTableCommentSqlImpl(*string comment) {
+        throw "COMMENT-ERROR", sprintf("%s: the %y driver does not support table comments", getDesc(),
+            ds.getDriverName());
     }
 
     #! returns @ref True "True" if the constraint is the unique constraint of an index of the table
@@ -13270,6 +13389,8 @@ on_exit printf("SQL> %s\n", sql);
         }
         tl = getCreateConstraintsSqlUnlocked(opt, cache); if (tl) l += tl;
         tl = getCreateMiscSqlUnlocked(opt, cache); if (tl) l += tl;
+        # issue #1483: the comment of the table
+        tl = getCreateTableCommentSqlUnlocked(opt); if (tl) l += tl;
         if (!opt.omit.triggers) {
             tl = getCreateTriggersSqlUnlocked(opt, cache);
             if (tl) l += tl;

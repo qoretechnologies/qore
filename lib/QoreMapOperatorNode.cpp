@@ -145,6 +145,8 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
             }
             left_analysis = parse_context.analysis;
         }
+        // qore#6288: see elementScope()
+        qore_parse_decide_element_scopes(this, decideElementScopes);
         // the values in the result are those of run-time values: a date has no subtype then (issue #5722)
         expTypeInfo = QoreTypeInfo::getRuntimeValueType(parse_context.typeInfo);
     }
@@ -207,6 +209,8 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
         ReferenceHolder<> holder(this, nullptr);
         QoreGenericMapOperatorNode* generic_map = new QoreGenericMapOperatorNode(*this);
         generic_map->setParseAnalysis(parse_context.analysis);
+        // the node that runs is decided again when the parse ends, as this one would have been (qore#6288)
+        qore_parse_decide_element_scopes(generic_map, decideElementScopes);
         val = generic_map;
     }
     return err;
@@ -349,8 +353,9 @@ bool QoreFunctionalMapListOperator::getNextImpl(ValueOptionalRefHolder& val, Exc
     SingleArgvContextHelper argv_helper(getReferencedValue(), xsink);
     // when the value of the map is not used, each element is a statement of its own, as in the other
     // execution modes
-    QoreScopedEvalHolder tval(map->left, !map->needsReturnValue(), xsink);
-    if (!*xsink && map->ref_rv) {
+    uint8_t flags = map->elementScopes();
+    QoreScopedEvalHolder tval(map->left, flags & 1, xsink);
+    if (!*xsink && (flags & QoreElementScopeFlags::ValueUsed)) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
     }
@@ -369,8 +374,9 @@ bool QoreFunctionalMapSingleValueOperator::getNextImpl(ValueOptionalRefHolder& v
     v.clear();
     // when the value of the map is not used, each element is a statement of its own, as in the other
     // execution modes
-    QoreScopedEvalHolder tval(map->left, !map->needsReturnValue(), xsink);
-    if (!*xsink && map->ref_rv) {
+    uint8_t flags = map->elementScopes();
+    QoreScopedEvalHolder tval(map->left, flags & 1, xsink);
+    if (!*xsink && (flags & QoreElementScopeFlags::ValueUsed)) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
     }
@@ -394,8 +400,9 @@ bool QoreFunctionalMapIteratorOperator::getNextImpl(ValueOptionalRefHolder& val,
     SingleArgvContextHelper argv_helper(iv.release(), xsink);
     // when the value of the map is not used, each element is a statement of its own, as in the other
     // execution modes
-    QoreScopedEvalHolder tval(map->left, !map->needsReturnValue(), xsink);
-    if (!*xsink && map->ref_rv) {
+    uint8_t flags = map->elementScopes();
+    QoreScopedEvalHolder tval(map->left, flags & 1, xsink);
+    if (!*xsink && (flags & QoreElementScopeFlags::ValueUsed)) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
     }
@@ -413,10 +420,20 @@ bool QoreFunctionalMapOperator::getNextImpl(ValueOptionalRefHolder& val, Excepti
     SingleArgvContextHelper argv_helper(iv.takeReferencedValue(), xsink);
     // when the value of the map is not used, each element is a statement of its own, as in the other
     // execution modes
-    QoreScopedEvalHolder tval(map->left, !map->needsReturnValue(), xsink);
-    if (!*xsink && map->ref_rv) {
+    uint8_t flags = map->elementScopes();
+    QoreScopedEvalHolder tval(map->left, flags & 1, xsink);
+    if (!*xsink && (flags & QoreElementScopeFlags::ValueUsed)) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
     }
     return false;
+}
+
+void QoreMapOperatorNode::decideElementScopes(AbstractQoreNode* op) {
+    QoreMapOperatorNode* self = static_cast<QoreMapOperatorNode*>(op);
+    uint8_t v = self->needsReturnValue() ? QoreElementScopeFlags::ValueUsed : 0;
+    if (!self->needsReturnValue() || qore_expr_may_create_observable_temp(self->left)) {
+        v |= 1u << 0;
+    }
+    self->element_scopes.set(v);
 }

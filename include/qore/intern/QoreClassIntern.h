@@ -3673,16 +3673,56 @@ public:
         parameterized_vparents.push_back(type_info);
     }
 
+    //! Returns the specialization of the generic class \a target_base that \a source inherits
+    /** @param source a specialization of this class
+        @param target_base a generic class
+
+        @return \a source if this class is \a target_base, else the specialization of \a target_base that this class
+        inherits, directly or through other classes (generic or not), with the type arguments of \a source substituted
+        for the type parameters of this class, or nullptr if this class does not inherit \a target_base
+    */
     DLLLOCAL const QoreTypeInfo* getParameterizedBaseTypeInfo(const QoreParameterizedClassTypeInfo* source,
             const QoreClass* target_base) const;
+
+    //! Returns the specialization of the generic class \a target_base that this class inherits
+    /** As getParameterizedBaseTypeInfo() for this class as it is: a class without type parameters, a generic class
+        that defaults to a value-erased instance for raw use as that instance (also returned for \a target_base itself
+        with \a allow_raw_self), or else a generic class with its own type parameters in the result
+    */
     DLLLOCAL const QoreTypeInfo* getConcreteParameterizedBaseTypeInfo(const QoreClass* target_base,
         bool allow_raw_self = true) const;
+
+    //! Returns the type of the specialization of the direct parent class \a parent that this class inherits
+    /** @return the type with the type parameters of this class; for a generic class that defaults to a value-erased
+        instance for raw use inherited without type arguments, that instance (\a parent with auto for each type
+        parameter); nullptr if \a parent is not generic or there is no specialization of it recorded (a parse error)
+    */
+    DLLLOCAL const QoreTypeInfo* getParameterizedParentTypeInfo(const QoreClass& parent) const;
+
+    //! Finds the specialization of \a target_base that this class inherits through its parent classes
+    /** @param source this class with type arguments, substituted in the specializations of the parent classes, or
+        nullptr for none
+        @param target_base a generic class
+    */
+    DLLLOCAL const QoreTypeInfo* findParameterizedBaseTypeInfo(const QoreParameterizedClassTypeInfo* source,
+            const QoreClass* target_base) const;
+
+    //! Returns the receiver of a call of the static method \a m of a class without type parameters
+    /** The method of a class without type parameters that declares a method of the same name as one of a generic
+        parent class (HX inherits G<float> and declares a static method id() as G<T> does) has the variants of the
+        generic class's method too, whose type parameters are those of the specialization that the class inherits
+        wherever the method is called from: the receiver is the class, which binds them (qore#6448)
+
+        @return the class's type, or nullptr if the method has no variants of a generic class
+    */
+    DLLLOCAL static const QoreTypeInfo* getInheritedStaticCallReceiverTypeInfo(const QoreMethod& m);
 
     //! Returns the receiver of a call through this class of the static method \a m of a generic parent class
     /** A class without type parameters that inherits a specialization of a generic class (H inherits G<float>) calls
         the static methods of the generic class with its type parameters bound to the type arguments of the
         specialization: H::m() is G<float>::m().  Returns nullptr if \a m is not a method of a generic class or this
-        class has type parameters of its own (qore#6186).
+        class has type parameters of its own (qore#6186); for a method of a class without type parameters that has
+        variants of a generic class, see getInheritedStaticCallReceiverTypeInfo().
     */
     DLLLOCAL const QoreTypeInfo* getStaticCallReceiverTypeInfo(const QoreMethod& m) const;
 

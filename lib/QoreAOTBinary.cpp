@@ -16625,10 +16625,10 @@ const QoreProgramLocation* QoreAOTBinaryDeserializer::getBlobLocation(int32_t st
         return &loc_builtin;
     }
 
+    // never rolled back with a failed parse, which did not add it (issue #6354)
     qore_program_private* pp = qore_program_private::get(*pgm);
-    const char* interned_label = pp->addString(label);
-    QoreProgramLocation loc(interned_label, start_line, end_line);
-    return pp->getLocation(loc, start_line, end_line);
+    QoreProgramLocation loc(label, start_line, end_line);
+    return pp->getRuntimeLocation(loc, start_line, end_line);
 }
 
 bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& error) {
@@ -20163,11 +20163,11 @@ static void attachAOTEntryStatementBlock(QoreProgram* pgm, UserVariantBase* uvb,
         if (UserSignature* sig = uvb->getUserSignature()) {
             loc = sig->getParseLocation();
             if (loc && (entry_first_line || entry_last_line)) {
-                loc = pp->getLocation(*loc, entry_first_line, entry_last_line);
+                loc = pp->getRuntimeLocation(*loc, entry_first_line, entry_last_line);
             }
         }
         if (!loc) {
-            loc = pp->getLocation(entry_first_line, entry_last_line);
+            loc = pp->getRuntimeLocation(entry_first_line, entry_last_line);
         }
 
         entry = new StatementBlock(pp, loc);
@@ -21179,10 +21179,11 @@ bool QoreAOTBinaryDeserializer::resolveBCAExpressions(std::string& error) {
                 if (UserSignature* sig = pbca.ucv->getUserSignature()) {
                     ctor_loc = sig->getParseLocation();
                 }
+                // never rolled back with a failed parse, which did not add it (issue #6354)
                 qore_program_private* pp = qore_program_private::get(*pgm);
                 bca_loc = ctor_loc
-                    ? pp->getLocation(*ctor_loc, entry.start_line, entry.end_line)
-                    : pp->getLocation(entry.start_line, entry.end_line);
+                    ? pp->getRuntimeLocation(*ctor_loc, entry.start_line, entry.end_line)
+                    : pp->getRuntimeLocation(entry.start_line, entry.end_line);
             }
 
             BCANode* bca_node = new BCANode(entry.classid, arg_list, bca_loc);

@@ -311,6 +311,11 @@ public:
     /**
         Executed from any thread to set pending attach flag
     */
+    //! offers the thread to the debugger again on its next entry (#3293)
+    DLLLOCAL void dbgClearDontAttach() {
+        dbg_dont_attach.store(false, std::memory_order_release);
+    }
+
     DLLLOCAL void dbgPendingAttach() {
         printd(5, "ThreadLocalProgramData::dbgPendingAttach(), this: %p\n", this);
         attachFlag.store(1, std::memory_order_release);
@@ -346,12 +351,24 @@ private:
 
     // thread debug types, field is read/write only in thread being debugged, no locking is needed
     DebugRunStateEnum runState = DBG_RS_DETACH;
+    //! set when the debugger does not want the thread (DBG_RS_DONT_ATTACH): it is not offered to the debugger again
+    /** Cleared when the Program's debugger changes and by DebugProgram::attachThread(), in other threads; the data
+        and the flag end with the thread, so a thread that gets the same TID later is offered again (#3293)
+    */
+    std::atomic<bool> dbg_dont_attach{false};
     // used to implement "to to statement" debugger command, reset it when program is interrupted
     const AbstractStatement* runToStatement = nullptr;
     // when stepover or until return we need calls function calls
     int functionCallLevel = 0;
 
     DLLLOCAL inline void setRunState(DebugRunStateEnum rs, const AbstractStatement* rts) {
+        // the debugger does not want the thread: it is detached and not offered again (#3293)
+        if (rs == DBG_RS_DONT_ATTACH) {
+            runState = DBG_RS_DETACH;
+            runToStatement = nullptr;
+            dbg_dont_attach.store(true, std::memory_order_release);
+            return;
+        }
         assert(rs < DBG_RS_STOPPED); // DBG_RS_STOPPED is wrong value when program is running
         if (rs == DBG_RS_UNTIL_RETURN) {
             functionCallLevel = 1;  // function called only when runState is not DBG_RS_UNTIL_RETURN
@@ -554,9 +571,11 @@ public:
     // unique program location storage
     pgmloc_vec_t pgmloc;
 
-    // high water marks for atomic rollback support (used with PO_ALLOW_REPARSE)
-    size_t str_vec_hwm = 0;   // committed size of str_vec
-    size_t pgmloc_hwm = 0;    // committed size of pgmloc
+    // high water marks for atomic rollback support (used with PO_ALLOW_REPARSE): the sizes of str_vec and pgmloc
+    // when the last commit ended or when the current parse began, whichever is later; a rollback deletes only the
+    // entries above them, which the failed parse added (issue #6354); protected by runtime_metadata_lock
+    size_t str_vec_hwm = 0;
+    size_t pgmloc_hwm = 0;
 
     // temporary while parsing: to ensure unique strings in parsing
     typedef std::set<const char*, ltstr> str_set_t;
@@ -565,6 +584,14 @@ public:
     // temporary while parsing: unique locations; must be a set for performance reasons
     typedef std::set<const QoreProgramLocation*, ltpgm> loc_set_t;
     loc_set_t loc_set;
+
+    // strings and locations that code deserialized from AOT data interns, also while the Program is parsed: they are
+    // referred to by code that is not part of a parse and are never rolled back, only deleted with the Program
+    // (issue #6354); protected by runtime_metadata_lock
+    cstr_vector_t rt_str_vec;
+    str_set_t rt_str_set;
+    pgmloc_vec_t rt_pgmloc;
+    loc_set_t rt_loc_set;
 
     typedef std::set<std::string> strset_t;
     // features present in this Program object
@@ -1330,6 +1357,14 @@ public:
 #endif
 
     DLLLOCAL const QoreProgramLocation* getLocation(int sline, int eline);
+
+    //! Interns a string for code deserialized from AOT data; it is never rolled back (issue #6354)
+    DLLLOCAL const char* addRuntimeString(const char* str);
+    //! Returns a unique location for code deserialized from AOT data; it is never rolled back (issue #6354)
+    DLLLOCAL const QoreProgramLocation* getRuntimeLocation(const QoreProgramLocation& loc, int sline, int eline);
+    //! Returns a unique location with the file of the current parse location for code deserialized from AOT data;
+    //! it is never rolled back (issue #6354)
+    DLLLOCAL const QoreProgramLocation* getRuntimeLocation(int sline, int eline);
     DLLLOCAL const QoreProgramLocation* getLocation(int sline, int eline, int scol, int ecol);
     DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline);
     DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline,
@@ -6056,6 +6091,8 @@ public:
         printd(5, "qore_program_private::attachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {
+            // a new debugger is offered every thread (#3293)
+            i.second->dbgClearDontAttach();
             if (!i.first->canRunDebugCallbacks()) {
                 continue;
             }
@@ -6076,6 +6113,8 @@ public:
         printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {
+            // the debugger's wish ends with it (#3293)
+            i.second->dbgClearDontAttach();
             if (!i.first->canRunDebugCallbacks()) {
                 continue;
             }
@@ -6093,6 +6132,15 @@ public:
     DLLLOCAL void onException(const AbstractStatement* statement, DebugRunStateEnum& rs, const AbstractStatement*& rts, ExceptionSink* xsink);
     DLLLOCAL void onExit(const StatementBlock* statement, QoreValue& returnValue, DebugRunStateEnum& rs, const AbstractStatement*& rts, ExceptionSink* xsink);
 
+    //! raises the debugger's exit event of Program::run() with the value it returns, which the debugger can replace;
+    //! called in the Program's context, after its top-level code or exec class has run (#3401)
+    DLLLOCAL void dbgRunExit(QoreValue& rv, ExceptionSink* xsink);
+
+    //! true if the statement is the Program's top-level block: the statement of the exit event of its run (#3401)
+    DLLLOCAL static bool isTopLevelBlock(const QoreProgram* pgm, const AbstractStatement* statement) {
+        return statement && statement == &pgm->priv->sb;
+    }
+
     //! Returns the threads that run the code of the Program, also those that run other code that its code called, as
     //! the code of a module or of a debugger callback
     DLLLOCAL std::set<int> getThreadsInProgram() const {
@@ -6102,6 +6150,19 @@ public:
             rv.insert(i.first);
         }
         return rv;
+    }
+
+    //! offers a thread that the debugger did not want to the debugger again; returns false if the thread has no data
+    //! in the Program (#3293)
+    DLLLOCAL bool attachThread(int tid) {
+        AutoLocker al(tlock);
+        for (auto& i : pgm_data_map) {
+            if (i.first->gettid() == tid) {
+                i.second->dbgClearDontAttach();
+                return true;
+            }
+        }
+        return false;
     }
 
     DLLLOCAL int breakProgramThread(int tid) {
@@ -6873,6 +6934,14 @@ public:
         CallbackRef cr(dpgm, xsink);
         AutoQoreCounterDec ad(&debug_program_counter);
         dpgm->onExit(pgm, statement, returnValue, rs, rts, xsink);
+    }
+
+    DLLLOCAL bool attachThread(QoreProgram* pgm, int tid) {
+        QoreAutoRWReadLocker al(&tlock);
+        if (qore_program_map.find(pgm) == qore_program_map.end()) {
+            return false;
+        }
+        return pgm->priv->attachThread(tid);
     }
 
     DLLLOCAL int breakProgramThread(QoreProgram* pgm, int tid) {

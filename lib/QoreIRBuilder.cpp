@@ -1794,6 +1794,25 @@ QoreIRInstruction* QoreIRBuilder::createHandlerReturn(QoreIRValue value, const Q
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createSetCodeParseOptions(const QoreParseOptions& po,
+        const QoreProgramLocation* loc) {
+    // four 32-bit words, each an integer that every tier holds inline (an int of 64 bits can be a node)
+    uint64_t lo = static_cast<uint64_t>(po.getLo());
+    uint64_t hi = static_cast<uint64_t>(po.getHi());
+    QoreIRValue words[4] = {
+        createConstInt(static_cast<int64_t>(lo & 0xffffffffu), loc)->result,
+        createConstInt(static_cast<int64_t>(lo >> 32), loc)->result,
+        createConstInt(static_cast<int64_t>(hi & 0xffffffffu), loc)->result,
+        createConstInt(static_cast<int64_t>(hi >> 32), loc)->result,
+    };
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::SetCodeParseOptions);
+    for (const QoreIRValue& word : words) {
+        inst->operands.push_back(word);
+    }
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createReleaseStageInput(QoreIRValue input, QoreIRValue kept,
         const QoreProgramLocation* loc) {
     QoreIRInstruction* inst = createReleaseOwnedTemp(input, loc);
