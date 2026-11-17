@@ -16541,6 +16541,13 @@ load_local_done:
                                 ip = 0;
                                 break;
                             }
+                            // code without the paths of the requests (code lowered from the parse tree, run by a frame
+                            // that was running when the debugger attached): a break or a continue is ignored, as in
+                            // native code, and a return ends the frame (#6201)
+                            if (dbg_rc != RC_RETURN && !qore_ir_debug_flow_targets(inst)) {
+                                ++ip;
+                                break;
+                            }
                             // the block of a handler lowered inline: the frame returns
                             dbg_rc = RC_RETURN;
                         }
@@ -16647,10 +16654,15 @@ load_local_done:
                                 ip = 0;
                                 break;
                             }
-                            // the statement of a handler lowered inline: the frame returns
-                            unwindForException();
-                            cleanupLocalCaches();
-                            return true;
+                            // the statement of a handler lowered inline, or a return in code without the paths of
+                            // the requests: the frame returns; code without the paths ignores a break or a continue,
+                            // as native code does (code lowered from the parse tree, run by a frame that was running
+                            // when the debugger attached, #6201)
+                            if (dbg_rc == RC_RETURN || qore_ir_debug_flow_targets(inst)) {
+                                unwindForException();
+                                cleanupLocalCaches();
+                                return true;
+                            }
                         }
                     }
                 }
@@ -17023,6 +17035,9 @@ load_local_done:
                         // the request becomes that of the block, as with the AST interpreter
                         // (StatementBlock::execIntern()): its path, after the handlers (#6201); an exception that a
                         // handler raised takes precedence
+                        // a request reaches here only from a handler with paths, whose scope has them too: the
+                        // IR of a handler has the paths of its function (QoreIRFunction::hasDebugFlowPaths()); a
+                        // request without a path is ignored
                         if (handler_flow && !(xsink && *xsink)) [[unlikely]] {
                             if (QoreIRBasicBlock* flow_target = qore_ir_debug_flow_target(inst, handler_flow)) {
                                 if (handler_frame && scope_inst->flow->leavesFunction(handler_flow)) {

@@ -406,11 +406,12 @@ class DebugTest inherits QUnit::Test {
         break would have stopped it at its next statement.  The timeouts only end a test whose break or loop does not
         behave as expected.
     */
-    debugBreakThread(int tid, bool expect_break, Counter done) {
+    debugBreakThread(int tid, bool expect_break, Counter attached, Counter done) {
         # the thread has ended when the program has been removed from the debugger
         on_exit done.dec();
         debugProgram.addProgram(thisProgram);
         on_exit debugProgram.removeProgram(thisProgram);
+        attached.dec();
         # the loop runs when the break is requested
         counter.inc();
         if (counter.waitForZero(BreakFailureTimeout)) {
@@ -447,7 +448,12 @@ class DebugTest inherits QUnit::Test {
         semaphore.lock();
         counter.inc();
         Counter done(1);
-        background debugBreakThread(tid, breakRes, done);
+        Counter attached(1);
+        background debugBreakThread(tid, breakRes, attached, done);
+        # the loop's call starts with the debugger attached, and so runs on the AST interpreter in every execution
+        # mode: a frame that was already running when the debugger attached does not take a break with the IR, JIT
+        # and tiered execution modes (see debugger_running_code in the documentation)
+        attached.waitForZero();
         auto res = tstBreakProgram();
         semaphore.unlock();
         done.waitForZero();

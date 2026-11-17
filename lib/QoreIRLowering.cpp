@@ -4549,7 +4549,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         }
         // a flow request at the event of the block leaves the block before its first statement, with its locals and
         // its scope already entered, as with the AST interpreter (StatementBlock::execIntern())
-        if ((builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements)
+        if (builder.getFunction()->hasDebugFlowPaths()
                 && !setDebugFlowTargets(dbg_block, debug_flow_segment, block->loc, error)) {
             abandon_block();
             return false;
@@ -4595,8 +4595,9 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
                 | (dynamic_cast<const TryStatement*>(*it) ? QORE_IR_DEBUG_NEST_TRY : 0)
                 | (static_cast<int>(statement_depth) == debug_catch_child_depth ? QORE_IR_DEBUG_NEST_IN_CATCH : 0);
             // a break or a continue that the debugger requests at the event is a break or a continue statement placed
-            // before the statement, as with the AST interpreter (#6201)
-            if (!setDebugFlowTargets(dbg, debug_flow_segment, (*it)->loc, error)) {
+            // before the statement, as with the AST interpreter, in code with the paths of the requests (#6201)
+            if (builder.getFunction()->hasDebugFlowPaths()
+                    && !setDebugFlowTargets(dbg, debug_flow_segment, (*it)->loc, error)) {
                 abandon_block();
                 return false;
             }
@@ -5033,6 +5034,7 @@ QoreIRBasicBlock* QoreIRLowering::lowerDebugFlowPath(int rc, const LoopJumpTarge
 bool QoreIRLowering::setDebugFlowTargets(QoreIRDebugStatementInstruction* dbg, DebugFlowSegment& segment,
         const QoreProgramLocation* loc, std::string& error) {
     assert(dbg && !dbg->flow);
+    assert(builder.getFunction()->hasDebugFlowPaths());
     // the events of the statements of a handler lowered inline in the code of an exit: a request that the body does
     // not take ends the handler (see InlineHandlerFlow)
     if (inline_handler_body_depth) {
@@ -5246,7 +5248,7 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
 bool QoreIRLowering::setScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry, std::string& error) {
     assert(se && !se->flow && scope_entry < cleanup_stack.size());
     QoreIRFunction* func = builder.getFunction();
-    if (!(func->source_dpgm_addr || func->emit_debug_statements) || inline_handler_body_depth || se->is_error) {
+    if (!func->hasDebugFlowPaths() || inline_handler_body_depth || se->is_error) {
         return true;
     }
     const DebugFlowSegment* paths = getScopeFlowPaths(scope_entry, error);
@@ -6178,8 +6180,10 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
 
     // Lower the handler code block inline using the current parse context
     // This gives the handler natural access to parent block's scope
-    // where a debugger's request in the body that the body does not take goes (#6201)
-    {
+    // where a debugger's request in the body that the body does not take goes, in code with the paths of the
+    // requests (#6201)
+    const bool handler_flow_paths = builder.getFunction()->hasDebugFlowPaths();
+    if (handler_flow_paths) {
         InlineHandlerFlow hf;
         hf.cleanup_depth = cleanup_stack.size();
         hf.temp_depth = builder.getTempScopeDepth();
@@ -6200,10 +6204,13 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
     }
     struct InlineHandlerFlowPop {
         std::vector<InlineHandlerFlow>& stack;
+        bool pushed;
         ~InlineHandlerFlowPop() {
-            stack.pop_back();
+            if (pushed) {
+                stack.pop_back();
+            }
         }
-    } inline_handler_flow_pop{inline_handler_flow_stack};
+    } inline_handler_flow_pop{inline_handler_flow_stack, handler_flow_paths};
 
     bool ok;
     // the statements of the handler have the debugger's nesting of the statement that declares it, in its place, not
@@ -6274,7 +6281,7 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
         return false;
     }
     // a debugger's request that ended the handler: the exit goes on after it (#6201)
-    if (QoreIRBasicBlock* join = inline_handler_flow_stack.back().join) {
+    if (QoreIRBasicBlock* join = handler_flow_paths ? inline_handler_flow_stack.back().join : nullptr) {
         if (!blockHasTerminator(builder.getBlock())) {
             builder.createBranch(join, scope_loc);
         }

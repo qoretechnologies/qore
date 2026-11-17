@@ -13,22 +13,19 @@
 %requires ../ExecModeHarness.qm
 %exec-class DebugFlowPathCodeTest
 
-#! the code after the paths of a debugger's requests has the lowering state that the code before them left (#6201)
-/** Code with step events, the default, has the paths of a debugger's return, break and continue requests at every
-    step event, which release the temporaries, the locals and the handlers of the blocks that they leave.  The paths
-    run only on a request, and the native code of the blocks after them is lowered with the state that the code before
-    them left: the temp scopes still open and the cleanups of the locals of the blocks still open.  The return paths
-    share the release of the locals of the bottom blocks of the function, and the paths of the step events of handler
-    bodies lowered inline are shared as those of other code, so that the code of the paths grows with the function.
+#! code with step events runs as with the AST interpreter, and code lowered from the parse tree has no paths (#6201)
+/** Only the debug IR of AOT code has the paths of a debugger's return, break and continue requests at its step events
+    (QoreIRFunction::hasDebugFlowPaths()), which release the temporaries, the locals and the handlers of the blocks
+    that they leave; the native code of the AOT executables erases them, and the code after them has the lowering
+    state that the code before them left.  The probe runs as with the AST interpreter in every execution mode and as
+    qcc executables, whose debug IR has the paths; code lowered from the parse tree has none.
 */
 class DebugFlowPathCodeTest inherits QUnit::Test {
     public {
-        #! the blocks of the function with step events of handlerPathSize(), for each block without them
-        const MaxPathBlockRatio = 2.0;
-        #! the size of the function with step events, for each instruction without them, with inline handler code
-        const MaxPathInlineRatio = 1.3;
-        #! the growth of the code of the paths when the catch blocks double
-        const MaxPathGrowth = 2.3;
+        #! the blocks of the function with step events of sourceCodeHasNoPaths(), for each block without them
+        const MaxBlockRatio = 1.6;
+        #! the size of the function with step events, for each instruction without them
+        const MaxInstRatio = 1.25;
     }
 
     private {
@@ -43,8 +40,8 @@ class DebugFlowPathCodeTest inherits QUnit::Test {
         addTestCase("AST reference", \astReference());
         addTestCase("compiled modes match AST", \sourceModes());
         addTestCase("qcc executables match AST", \compiled());
-        addTestCase("the paths of a function with many catch blocks with handlers grow with the function",
-            \handlerPathSize());
+        addTestCase("code lowered from the parse tree has no paths of a debugger's requests",
+            \sourceCodeHasNoPaths());
         set_return_value(main());
     }
 
@@ -83,42 +80,35 @@ class DebugFlowPathCodeTest inherits QUnit::Test {
         }
     }
 
-    #! the code of the paths of a function with many catch blocks with handlers grows with the function (#6201)
-    /** Before, each path that left a scope ran its handlers with code that publishes and reloads each local of the
-        function, also where no handler of the scope is registered yet, and each request of a step event had an entry
-        block of its own even where the requests share their path (a break or a continue that no loop takes is a
-        return): the function with step events was 1.84 times the size of the same function without them with the
-        handlers' code inline (QORE_JIT_OBE_TABLE_BUDGET), and had 2.38 times its blocks; it is 1.11 and 1.81 times
-        now (develop, without the paths: 1.05 and 1.50)
+    #! code lowered from the parse tree has no paths of a debugger's requests (#6201)
+    /** Only the debug IR of AOT code has them (QoreIRFunction::hasDebugFlowPaths()): a call that starts while a
+        debugger is attached runs on the AST interpreter.  The function with step events (the default) has no blocks
+        of the paths, and is the size of the same function without step events plus its step hooks, with the code of
+        the handlers out of line and inline (QORE_JIT_OBE_TABLE_BUDGET): 1.52 times the blocks and 1.04 to 1.18 times
+        the instructions of the function without step events with 25 and 50 catch blocks; with the paths, it had 1.81
+        times the blocks and 1.11 times the instructions (inline handler code)
     */
-    handlerPathSize() {
-        hash<auto> small_dbg = compileHandlers(25, True, False);
-        hash<auto> small_nd = compileHandlers(25, False, False);
-        hash<auto> large_dbg = compileHandlers(50, True, False);
-        hash<auto> large_nd = compileHandlers(50, False, False);
-        foreach hash<auto> i in (({"n": 25, "dbg": small_dbg, "nd": small_nd}, {"n": 50, "dbg": large_dbg,
-                "nd": large_nd})) {
-            float ratio = float(i.dbg.blocks) / i.nd.blocks;
-            assertTrue(ratio <= MaxPathBlockRatio, sprintf("%d catch blocks: the function has %0.2f times the blocks "
-                "of the same function without step events (at most %0.2f): %d and %d", i.n, ratio, MaxPathBlockRatio,
-                i.dbg.blocks, i.nd.blocks));
+    sourceCodeHasNoPaths() {
+        foreach int n in (25, 50) {
+            foreach bool inline_handlers in (False, True) {
+                hash<auto> dbg = compileHandlers(n, True, inline_handlers);
+                hash<auto> nd = compileHandlers(n, False, inline_handlers);
+                string what = sprintf("%d catch blocks%s", n, inline_handlers ? ", inline handler code" : "");
+                assertEq(0, dbg.path_blocks, what + ": path blocks");
+                float block_ratio = float(dbg.blocks) / nd.blocks;
+                assertTrue(block_ratio <= MaxBlockRatio, sprintf("%s: the function has %0.2f times the blocks of the "
+                    "same function without step events (at most %0.2f): %d and %d", what, block_ratio, MaxBlockRatio,
+                    dbg.blocks, nd.blocks));
+                float inst_ratio = float(dbg.insts) / nd.insts;
+                assertTrue(inst_ratio <= MaxInstRatio, sprintf("%s: the function is %0.2f times the size of the same "
+                    "function without step events (at most %0.2f): %d and %d", what, inst_ratio, MaxInstRatio,
+                    dbg.insts, nd.insts));
+                if (ENV.DEBUG_FLOW_PATH_CODE_SIZES) {
+                    printf("%s: blocks %d/%d (%0.3f) insts %d/%d (%0.3f)\n", what, dbg.blocks, nd.blocks, block_ratio,
+                        dbg.insts, nd.insts, inst_ratio);
+                }
+            }
         }
-        # the inline code of the handlers (qore#6110)
-        hash<auto> small_inline = compileHandlers(25, True, True);
-        hash<auto> large_inline = compileHandlers(50, True, True);
-        hash<auto> small_inline_nd = compileHandlers(25, False, True);
-        hash<auto> large_inline_nd = compileHandlers(50, False, True);
-        foreach hash<auto> i in (({"n": 25, "dbg": small_inline, "nd": small_inline_nd}, {"n": 50, "dbg": large_inline,
-                "nd": large_inline_nd})) {
-            float ratio = float(i.dbg.insts) / i.nd.insts;
-            assertTrue(ratio <= MaxPathInlineRatio, sprintf("%d catch blocks, inline handler code: the function is "
-                "%0.2f times the size of the same function without step events (at most %0.2f): %d and %d", i.n, ratio,
-                MaxPathInlineRatio, i.dbg.insts, i.nd.insts));
-        }
-        # the code of the paths grows with the function, not with the product of its handlers and its locals
-        float growth = float(large_inline.insts - large_inline_nd.insts) / (small_inline.insts - small_inline_nd.insts);
-        assertTrue(growth <= MaxPathGrowth, sprintf("the code of the paths grows by %0.2f when the catch blocks double "
-            "(at most %0.2f)", growth, MaxPathGrowth));
     }
 
     #! the function with \a n try statements whose catch blocks have a local and an on_exit handler
@@ -164,7 +154,7 @@ printf(\"rv:%d\\n\", big(1) + big(2) + big(3));
         string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
             + (map quote($1), args).join(" ") + " 2>&1";
         string out = backquote(command);
-        hash<auto> sizes = {"insts": 0, "blocks": 0};
+        hash<auto> sizes = {"insts": 0, "blocks": 0, "path_blocks": 0};
         bool in_big = False;
         foreach string line in (out.split("\n")) {
             if (!in_big) {
@@ -176,6 +166,10 @@ printf(\"rv:%d\\n\", big(1) + big(2) + big(3));
             }
             if (line =~ /^[A-Za-z0-9_.$"-]+:/) {
                 ++sizes.blocks;
+                # the blocks of the paths of a debugger's requests (QoreIRBasicBlock::debug_flow)
+                if (line =~ /^"?debug\.flow/) {
+                    ++sizes.path_blocks;
+                }
             } else if (line =~ /^  [^ ;]/) {
                 ++sizes.insts;
             }

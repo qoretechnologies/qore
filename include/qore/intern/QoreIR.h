@@ -4447,6 +4447,17 @@ public:
         Program's statement index at runtime.
     */
     bool emit_debug_statements = false;
+    //! Returns true if the step events of the function get the paths of a debugger's flow requests (#6201)
+    /** Only the debug IR of AOT code has them (QoreIRDebugFlowTargets): new calls of it run that IR in the IR
+        interpreter while a debugger is attached (UserVariantBase::materializeAOTDebugIR()).  Code lowered from the
+        parse tree has step events without paths: its new calls run on the AST interpreter while a debugger is
+        attached (UserVariantBase::evalTiered()), so only frames that were already running when the debugger
+        attached run it under a debugger; the IR interpreter takes a return request there through the runtime unwind
+        and ignores a break or a continue, and native code ignores all three (see design/debug-flow-edges.md)
+    */
+    bool hasDebugFlowPaths() const {
+        return emit_debug_statements;
+    }
     //! true for the body of an on_exit, on_success or on_error handler lowered to an IR function of its own
     /** A debugger's request at a step event of the handler whose path leaves the function ends the handler and is
         reported to the frame that runs it (QoreIRDebugFlowTargets::leavesFunction(), qore_ir_set_handler_flow()), as

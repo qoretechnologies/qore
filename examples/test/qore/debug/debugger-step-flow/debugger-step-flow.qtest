@@ -12,13 +12,24 @@
 
 %exec-class DebuggerStepFlowTest
 
-#! A debugger that requests a flow at a step event gets the flow of the AST interpreter in every execution mode
+#! A debugger that requests a flow at a step event gets the flow of the AST interpreter in a call that starts while it
+#! is attached, in every execution mode, and in a frame that was running when it attached, the flow documented for the
+#! tier of the frame (debugger_running_code)
 /** StepFlowDebugger.q calls a function of StepFlowTarget.q in a Program that does not allow a debugger, once to compile
     it to native code with JIT and tiered execution, and then with a debugger in its own Program that the function
     attaches while it runs (through ProgramControl::resolveProgramId()): the function then runs as native code with
     JIT and tiered execution, with the IR interpreter with IR execution and on the IR tier of tiered execution, and
     with the AST interpreter with AST execution.  The debugger steps, and requests a flow at a step event of a
     statement or of a block.
+
+    The expectations below are those of the AST interpreter.  Code lowered from the parse tree has no paths for the
+    requests (#6201, design/debug-flow-edges.md "Which code has paths"): a frame that was running when the debugger
+    attached ignores them as native code, and the IR interpreter takes a return (the frame returns without a value)
+    and ignores a break or a continue; the step events are still reported, so that an ignored request gives the run
+    without the request.  A call that starts while the debugger is attached runs on the AST interpreter in every
+    execution mode, and takes every request.
+
+    The rest of this description is the behaviour of the AST interpreter.
 
     With the AST interpreter, a return (DebugFlowReturn) at a step event returns from the function at once, without a
     value: the statement does not run, and the handlers of the blocks that the return leaves run as for a return.  A
@@ -66,6 +77,10 @@ class DebuggerStepFlowTest inherits QUnit::Test {
             - \c calls: the function calls code of StepFlowTarget.q while the debugger is attached, which runs on the
               AST tier then, as every call with a debugger attached does (UserVariantBase::evalTiered()), so that it
               is not run on the IR tier only (ExecModeHarness::run_ir_tier())
+            - \c native, \c ir: the result, log and steps of a frame that was running when the debugger attached as
+              native code (JIT and tiered execution) or in the IR interpreter (IR execution and the IR tier of tiered
+              execution), where they are not those of an ignored request (the run without the request) or, for a
+              return in the IR interpreter, of the AST interpreter (#6201)
         */
         const Cases = (
             {"function": "for_loop", "flow": "return", "tag": "for_first", "hit": 2, "block": False,
@@ -282,6 +297,8 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "steps": (300, 301, 305, 306, "b302", 302, 303, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302",
                     302, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302", 302, 303, "b300", 300, 308),
             },
+            # the IR interpreter: the return in a handler lowered inline returns from the function, also when the
+            # handler that runs after it would replace the request
             {"function": "handler_two", "flow": "return", "tag": "handler_two_body", "hit": 2, "block": False,
                 "handler": True,
                 "result": "55",
@@ -289,6 +306,13 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                     "first2", "first3", "second4", "second2-4", "first4"),
                 "steps": (300, 301, 305, 306, "b302", 302, 303, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302",
                     302, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302", 302, 303, "b300", 300, 308),
+                "ir": {
+                    "result": "null",
+                    "log": ("second0", "second2-0", "first0", "second1", "second2-1", "first1", "second2",
+                    "second2-2", "first2", "first3"),
+                    "steps": (300, 301, 305, 306, "b302", 302, 303, "b300", 300, "b297", 297, 300, 301, 305, 306,
+                    "b302", 302, "b300", 300),
+                },
             },
             {"function": "handler_mixed", "flow": "break", "tag": "handler_mixed_body", "hit": 2, "block": False,
                 "handler": True,
@@ -303,11 +327,18 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "steps": (320, 321, 325, 326, "b322", 322, 323, "b317", 317, 320, 321, 325, 326, "b322", 322, "b317",
                     317, 320, 321, 325, 326, "b322", 322, 323, 328),
             },
+            # the IR interpreter: the return in a handler that runs in a frame of its own ends the handler
             {"function": "handler_mixed", "flow": "return", "tag": "handler_mixed_body", "hit": 2, "block": False,
                 "handler": True,
                 "result": "null",
                 "log": ("mixed0", "mixed2-0", "mixed1", "mixed2-1", "mixed2", "mixed2-2"),
                 "steps": (320, 321, 325, 326, "b322", 322, 323, "b317", 317, 320, 321, 325, 326, "b322", 322),
+                "ir": {
+                    "result": "55",
+                    "log": ("mixed0", "mixed2-0", "mixed1", "mixed2-1", "mixed2", "mixed2-2", "mixed4", "mixed2-4"),
+                    "steps": (320, 321, 325, 326, "b322", 322, 323, "b317", 317, 320, 321, 325, 326, "b322", 322,
+                    "b317", 317, 320, 321, 325, 326, "b322", 322, 323, 328),
+                },
             },
             {"function": "return_twice", "flow": "return", "tag": "return_twice_first", "hit": 2, "block": False,
                 "flow2": "return", "tag2": "return_twice_handler", "hit2": 1,
@@ -330,12 +361,20 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "log": ("destroy",),
                 "steps": (397, 398, 399, "b394", 394, 397, "b379", 379, 398, "b382", 382, 383),
             },
+            # the IR interpreter: the return unwinds the frame, and the exception that the handler raises then leaves
+            # the function instead of going to the catch block of the try statement that the return leaves
             {"function": "return_throw_in_try", "flow": "return", "tag": "return_throw_first", "hit": 2, "block": False,
                 "handler": True,
                 "result": "44",
                 "log": ("caught HANDLER-ERR",),
                 "steps": (412, "b413", 413, 418, 419, "b414", 414, "b409", 409, 412, "b413", 413, 418, "b414", 414,
                     "b415", 415, "b421", 421, "b409", 409, 412, "b413", 413, 418, 419, "b414", 414, 424),
+                "ir": {
+                    "result": "HANDLER-ERR: x",
+                    "log": (),
+                    "steps": (412, "b413", 413, 418, 419, "b414", 414, "b409", 409, 412, "b413", 413, 418, "b414",
+                    414, "b415", 415),
+                },
             },
             {"function": "promoted_float", "flow": "break", "tag": "promoted_float_total", "hit": 2, "block": False,
                 "promoted": True,
@@ -356,19 +395,33 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "log": ("\"abcd\"", "\"abcd\"", "null", "\"abcd\"", "\"abcd\""),
                 "steps": (451, 508, 509, 510, "b511", 511),
             },
+            # native code: the caller calls the callee directly as native code (a callee of its JIT batch), which
+            # ignores the request and makes no event for the callee's block on its next calls (#6289)
             {"function": "facts_typed_caller", "flow": "return", "tag": "facts_typed_first", "hit": 1, "block": False,
                 "facts": True,
                 "result": "RUNTIME-TYPE-ERROR: <block return> expects type 'string', but got no value instead: "
                     + "block missing return statement",
                 "log": (),
                 "steps": (460, "b519", 519),
+                "native": {
+                    "result": "20",
+                    "log": (),
+                    "steps": (460, 461, "b522", 522, 457, 460, 461, "b522", 522, 457, 460, 461, 524, "b519", 519),
+                },
             },
+            # native code: the caller calls the callee directly as native code (a callee of its JIT batch), which
+            # ignores the request and makes no event for the callee's block on its next calls (#6289)
             {"function": "facts_int_caller", "flow": "return", "tag": "facts_int_first", "hit": 1, "block": False,
                 "facts": True,
                 "result": "RUNTIME-TYPE-ERROR: <block return> expects type 'int', but got no value instead: "
                     + "block missing return statement",
                 "log": (),
                 "steps": (469, "b529", 529),
+                "native": {
+                    "result": "210",
+                    "log": (),
+                    "steps": (469, 470, "b532", 532, 466, 469, 470, "b532", 532, 466, 469, 470, 534, "b529", 529),
+                },
             },
             {"function": "facts_projection", "flow": "return", "tag": "facts_hash_first", "hit": 1, "block": False,
                 "facts": True,
@@ -376,8 +429,9 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "log": (),
                 "steps": (478, 542, "b543", 543),
             },
+            # the IR interpreter ignores the break, and the function then calls code of StepFlowTarget.q
             {"function": "facts_argument", "flow": "break", "tag": "facts_string_first", "hit": 1, "block": False,
-                "facts": True,
+                "facts": True, "calls": True,
                 "result": "16",
                 "log": ("RUNTIME-OVERLOAD-ERROR",),
                 "steps": (451, "b494", 494, 496, "b497", 497),
@@ -411,6 +465,8 @@ class DebuggerStepFlowTest inherits QUnit::Test {
         string qore_bin;
         #! the lines of the tags of StepFlowTarget.q
         hash<string, int> tags;
+        #! the output line of StepFlowDebugger.q of each function without a request (see getNoRequest())
+        hash<string, string> no_request;
     }
 
     constructor() : QUnit::Test("DebuggerStepFlow", "1.0", \ARGV) {
@@ -449,7 +505,36 @@ class DebuggerStepFlowTest inherits QUnit::Test {
         return line ? line[0] : out;
     }
 
-    #! runs a case in every execution mode and compares the results with those of the AST interpreter
+    #! returns the output line of StepFlowDebugger.q expected for a case in a frame that was running when the
+    #! debugger attached, as native code (\a tier "native") or in the IR interpreter (\a tier "ir") (#6201)
+    private string getRunningExpected(hash<auto> c, string tier) {
+        # a pinned result
+        if (c{tier}) {
+            return getExpected(c + c{tier});
+        }
+        # the IR interpreter's return takes the request as the AST interpreter does
+        if (c.flow == "none" || (tier == "ir" && c.flow == "return")) {
+            return getExpected(c);
+        }
+        # an ignored request: the run without it
+        return getNoRequest(c);
+    }
+
+    #! returns the output line of StepFlowDebugger.q of the function of a case without a request, with the AST
+    #! interpreter
+    private string getNoRequest(hash<auto> c) {
+        if (!no_request{c.function}) {
+            string dir = get_script_dir();
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                "--exec-mode=ast %s/StepFlowDebugger.q %s/StepFlowTarget.q %s none %d 1 -", qore_bin, dir, dir,
+                c.function, tags{c.tag}));
+            no_request{c.function} = getOutput(r.out);
+        }
+        return no_request{c.function};
+    }
+
+    #! runs a case in every execution mode and compares the results with those of the AST interpreter, or with those
+    #! documented for a frame that was running when the debugger attached (#6201)
     private checkCase(hash<auto> c) {
         string dir = get_script_dir();
         string args = sprintf("%s/StepFlowDebugger.q %s/StepFlowTarget.q %s %s %d %d %s", dir, dir, c.function,
@@ -460,15 +545,16 @@ class DebuggerStepFlowTest inherits QUnit::Test {
             args += sprintf(" %s %d %d", c.flow2, tags{c.tag2}, c.hit2);
             what += sprintf(", %s at %s#%d", c.flow2, c.tag2, c.hit2);
         }
-        string expected = getExpected(c);
         foreach string mode in (ExecModeHarness::ExecModes) {
+            string expected = mode == "ast"
+                ? getExpected(c)
+                : getRunningExpected(c, mode == "ir" ? "ir" : "native");
             hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
                 "--exec-mode=%s %s", qore_bin, mode, args), NOTHING, c.promoted
                 ? ExecModeHarness::TraceEnv + " QORE_IR_OPT_STATS=1" : NOTHING);
             ExecModeHarness::check_native(r);
             assertEq(expected, getOutput(r.out), sprintf("%s: %s", what, mode));
-            # the locals that the IR keeps in native registers in the function (SSA promotion), which the path of the
-            # request has to take with their values at the step event
+            # the locals that the IR keeps in native registers in the function (SSA promotion)
             if (c.promoted && mode != "ast") {
                 *list<*string> stats = regex_extract(r.stderr, "IR-OPT: " + c.function
                     + ": .* native-local-loads=([0-9]+)");
@@ -485,8 +571,8 @@ class DebuggerStepFlowTest inherits QUnit::Test {
         if (c.calls) {
             return;
         }
-        assertEq(expected, getOutput(ExecModeHarness::run_ir_tier(sprintf("%s --enable-debug --exec-mode=tiered %s",
-            qore_bin, args))), sprintf("%s: %s", what, ExecModeHarness::IRTierName));
+        assertEq(getRunningExpected(c, "ir"), getOutput(ExecModeHarness::run_ir_tier(sprintf("%s --enable-debug "
+            "--exec-mode=tiered %s", qore_bin, args))), sprintf("%s: %s", what, ExecModeHarness::IRTierName));
     }
 
     testReturn() {
