@@ -36,6 +36,7 @@
 #include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreIRPointerSlot.h"
+#include "qore/intern/QoreValueEncoding.h"
 #include "qore/intern/QoreJITException.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreRegexSubst.h"
@@ -2979,15 +2980,17 @@ static __attribute__((noinline)) uint64_t qore_rt_read_element_local_held_refere
 */
 extern "C" DLLEXPORT uint64_t qore_rt_read_element_local_held(uint64_t val, uint64_t* current, uint64_t* previous,
         uint8_t* held, ExceptionSink* xsink) {
-    QoreValue v = fromBits(val);
-    if (!v.hasNode()) {
-        return val;
+    // the fast path decodes the value itself, with no QoreValue on the stack: a reference is a plain pointer to a node
+    // (an opaque reference refers to an object); any other value that qore_rt_read_element_local() reads (a weak
+    // reference) is given to it, and every other value is read as it is
+    if ((val & TAG_MASK) != TAG_POINTER || !(val & PAYLOAD_MASK)) {
+        return qore_rt_read_element_local(val, xsink);
     }
-    qore_type_t type = v.getInternalNode()->getType();
-    if (type != NT_REFERENCE) {
-        return qore_rt_is_weak_reference_type(type) ? toBits(qore_rt_get_weak_reference_target(v)) : val;
+    qore_type_t type = reinterpret_cast<const AbstractQoreNode*>(val & PAYLOAD_MASK)->getType();
+    if (type == NT_REFERENCE) {
+        return qore_rt_read_element_local_held_reference(val, current, previous, held, xsink);
     }
-    return qore_rt_read_element_local_held_reference(val, current, previous, held, xsink);
+    return qore_rt_is_weak_reference_type(type) ? qore_rt_read_element_local(val, xsink) : val;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_deref_if_reference(uint64_t val, ExceptionSink* xsink) {
