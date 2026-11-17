@@ -13,6 +13,7 @@
 %requires HttpServerUtil
 %requires HttpServer
 %requires HttpClientIo
+%requires ../../RefusedQuicPort.qm
 
 %exec-class Http3FamilyFallbackTest
 
@@ -94,8 +95,11 @@ public class Http3FamilyFallbackTest inherits QUnit::Test {
     }
 
     unreachableTest() {
-        # nothing listens on this port in either family: the error of an attempt is reported
-        int free_port = get_free_port();
+        # every connection attempt fails on this port in both families: the error of an attempt is reported; the port
+        # is held by the test, so no other test's server can answer on it (issue #6461)
+        QuicVersionRefuser refuser();
+        on_exit refuser.stop();
+        int free_port = refuser.port;
         HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h3",
             "accept_all_certs": True,

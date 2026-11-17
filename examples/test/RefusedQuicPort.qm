@@ -1,0 +1,231 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file RefusedQuicPort.qm holds UDP ports where an HTTP/3 connection fails, for the tests of failed connections
+
+/*  RefusedQuicPort.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module RefusedQuicPort {
+    version = "1.0";
+    desc    = "holds UDP ports where an HTTP/3 connection fails, for the tests of failed connections";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+}
+
+/** A test of a failed HTTP/3 connection needs a port where the connection fails.  A port found free and released
+    (@ref Util::get_free_port() "get_free_port()") can be taken by another test of a parallel run before the
+    connection is made, whose server then answers (issue #6461), so these classes hold the port while the test runs.
+
+    - @ref RefusedQuicPort::RefusedUdpPort "RefusedUdpPort": the system refuses the datagrams (ICMP port
+      unreachable), as for a port where nothing is bound, for the tests of that failure
+    - @ref RefusedQuicPort::QuicVersionRefuser "QuicVersionRefuser": every QUIC connection attempt is answered with a
+      Version Negotiation packet that offers no version the client supports, which ends it at once (RFC 9000 section
+      6.2), on the same port number in IPv4 and IPv6, for the tests of a host name that resolves to both families
+
+    @par Example:
+    @code{.py}
+%requires ../../RefusedQuicPort.qm
+
+RefusedUdpPort refused();
+on_exit refused.close();
+string url = sprintf("https://127.0.0.1:%d", refused.port);
+    @endcode
+*/
+public namespace RefusedQuicPort {
+#! A UDP port where the system refuses every datagram of the test, held while the object exists
+/** The port is the local port of a UDP socket connected to another UDP socket of the object: a connected UDP socket
+    receives only the datagrams of its peer, so a datagram from the client finds no socket and is refused (ICMP port
+    unreachable), exactly as for a port where nothing is bound, while the port stays bound:
+    - on Linux, no other socket can be bound to the port on the same address, 0.0.0.0 or the IPv6 wildcard address,
+      and the system does not assign it to another socket
+    - on macOS, the same holds for a socket that does not set \c SO_REUSEADDR or \c SO_REUSEPORT, and the system does
+      not assign the port to another socket either; a program that sets one of these options and binds the port
+      explicitly can share it
+
+    The same technique holds the UDP port of the token endpoint of \c RestClientIoPingOAuth2Race.qtest.
+*/
+public class RefusedUdpPort {
+    public {
+        #! the port, on the address given to the constructor
+        int port;
+    }
+
+    private {
+        #! the peer of the guard; it never sends a datagram
+        Socket peer();
+
+        #! the socket that holds the port, connected to the peer
+        Socket guard();
+    }
+
+    #! holds a port on the given address
+    /** @param address the address, \c "127.0.0.1" or \c "::1"
+        @param family the address family of the address
+    */
+    constructor(string address = "127.0.0.1", int family = AF_INET) {
+        peer.bindINET(address, "0", False, family, SOCK_DGRAM);
+        # connecting a socket binds it to a port that the system assigns
+        guard.connectINET(address, peer.getSocketInfo().port, 20s, family, SOCK_DGRAM);
+        port = guard.getSocketInfo().port;
+    }
+
+    destructor() {
+        close();
+    }
+
+    #! releases the port
+    close() {
+        guard.close();
+        peer.close();
+    }
+}
+
+#! A UDP port where every QUIC connection attempt is answered with a Version Negotiation packet, held while the
+#! object exists
+/** The port number is held on 127.0.0.1 and, if the system has IPv6 on its loopback interface, on ::1 too, by
+    sockets that answer each QUIC long header packet with a Version Negotiation packet offering only a reserved
+    version (RFC 9000 section 17.2.1); the client then abandons the connection attempt at once (RFC 9000 section
+    6.2).  Unlike @ref RefusedUdpPort, the port number is the same in both families.
+*/
+public class QuicVersionRefuser {
+    public {
+        #! the port number, on 127.0.0.1 and on ::1 if @ref hasIpv6() is @ref True
+        int port;
+
+        #! the number of tries to find a port number that is free on both addresses
+        const MaxAttempts = 20;
+    }
+
+    private {
+        #! the sockets that hold the port number, keyed by address
+        hash<string, Socket> socks();
+
+        #! decremented by each responder when it ends
+        Counter running();
+    }
+
+    #! holds a port number on 127.0.0.1 and, if possible, on ::1, and answers the QUIC connection attempts
+    constructor() {
+        for (int attempt = 1; ; ++attempt) {
+            Socket v4();
+            v4.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+            int p = v4.getSocketInfo().port;
+            Socket v6();
+            try {
+                v6.bindINET("::1", p, False, AF_INET6, SOCK_DGRAM);
+            } catch (hash<ExceptionInfo> ex) {
+                v6.close();
+                # without IPv6 on the loopback interface, IPv4 is enough; a port number that another socket uses on
+                # ::1 is tried again with another one
+                if (ex.desc !~ /in use/i) {
+                    socks{"127.0.0.1"} = v4;
+                    port = p;
+                    break;
+                }
+                v4.close();
+                if (attempt == MaxAttempts) {
+                    rethrow;
+                }
+                continue;
+            }
+            socks = {"127.0.0.1": v4, "::1": v6};
+            port = p;
+            break;
+        }
+        foreach hash<auto> i in (socks.pairIterator()) {
+            running.inc();
+            background respond(i.value);
+        }
+    }
+
+    destructor() {
+        stop();
+    }
+
+    #! returns @ref True if the port number is held on ::1 too
+    bool hasIpv6() {
+        return exists socks{"::1"};
+    }
+
+    #! stops the responders and releases the port number
+    /** A datagram of one byte, which no QUIC packet is, ends each responder
+    */
+    stop() {
+        if (!running.getCount()) {
+            return;
+        }
+        foreach hash<auto> i in (socks.pairIterator()) {
+            Socket s();
+            on_exit s.close();
+            int family = i.key == "::1" ? AF_INET6 : AF_INET;
+            s.bindINET(i.key, "0", False, family, SOCK_DGRAM);
+            drive(s.startPollSendTo(i.key, port, <00>));
+        }
+        running.waitForZero();
+        map $1.close(), socks.iterator();
+    }
+
+    #! completes a poll operation
+    private static drive(AbstractPollOperation op) {
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (pi) {
+                Socket::poll((pi,), -1);
+            }
+        }
+    }
+
+    #! answers the QUIC long header packets received on a socket until it receives a datagram of one byte
+    private respond(Socket sock) {
+        on_exit running.dec();
+        while (True) {
+            AbstractPollOperation op = sock.startPollRecvFrom();
+            drive(op);
+            hash<auto> dgram = op.getOutput();
+            binary data = dgram.data;
+            if (data.size() < 7) {
+                return;
+            }
+            # a long header packet with a version, which is not itself a Version Negotiation packet
+            string hex = data.toHex();
+            if (!(data[0] & 0x80) || hex.substr(2, 8) == "00000000") {
+                continue;
+            }
+            int dcil = data[5];
+            if (data.size() < 7 + dcil) {
+                continue;
+            }
+            int scil = data[6 + dcil];
+            if (data.size() < 7 + dcil + scil) {
+                continue;
+            }
+            string dcid = hex.substr(12, dcil * 2);
+            string scid = hex.substr(14 + dcil * 2, scil * 2);
+            # the client's source connection ID as the destination, its destination connection ID as the source, and
+            # a reserved version (of the form 0x?a?a?a?a) only
+            binary vn = parse_hex_string(sprintf("c000000000%02x%s%02x%s0a0a0a0a", scil, scid, dcil, dcid));
+            drive(sock.startPollSendTo(dgram.address, dgram.port, vn));
+        }
+    }
+}
+}
