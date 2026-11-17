@@ -79,7 +79,8 @@ class DataFramePluginOrNothingDispatchTest inherits QUnit::Test {
         string expected = run(sprintf("%s -b --exec-mode=ast %s", quote(qore_bin), quote(probe)));
         assertRegex("(?m)^\\*ColumnRef >: RowMask$", expected, expected);
         assertRegex("(?m)^closure \\*ColumnRef: RowMask$", expected, expected);
-        assertRegex("(?m)^closure case ColumnRef: \"no\"$", expected, expected);
+        # a case with an operator matches as "if (value OP x)" does (qore#6252): the plugin's RowMask is true
+        assertRegex("(?m)^closure case ColumnRef: \"gt\"$", expected, expected);
         foreach string level in ("-O0", "-O3") {
             TmpDir dir("qore-dataframe-plugin-dispatch-");
             string exe = dir.path + "/probe";

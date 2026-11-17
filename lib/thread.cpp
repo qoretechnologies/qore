@@ -134,6 +134,40 @@
 #define IA64_64
 #endif
 
+#ifdef DEBUG
+//! The state of the debug hold of a finishing background thread (issue #6405); never freed, so that it outlives the
+//! static objects that exit() destroys
+struct QoreDbgFinishHold {
+    std::mutex m;
+    std::condition_variable cv;
+    //! the time the next finishing thread is held, if positive
+    int hold_ms = 0;
+    //! a thread is held
+    bool held = false;
+    //! the held thread is to continue
+    bool released = false;
+};
+static QoreDbgFinishHold* dbg_finish_hold = new QoreDbgFinishHold;
+
+//! Releases a held finishing thread when the static objects of this file are destroyed (issue #6405)
+/** Declared before thread_counter, so that it is destroyed after it: a thread that exit() left finishing then uses
+    the destroyed counter, as it did when exit() ran the static destructors under it.  It waits a moment for the
+    released thread, which aborts the process on the destroyed counter's lock in a debug build.
+*/
+struct QoreDbgFinishHoldReleaser {
+    ~QoreDbgFinishHoldReleaser() {
+        std::unique_lock<std::mutex> l(dbg_finish_hold->m);
+        if (!dbg_finish_hold->held) {
+            return;
+        }
+        dbg_finish_hold->released = true;
+        dbg_finish_hold->cv.notify_all();
+        dbg_finish_hold->cv.wait_for(l, std::chrono::seconds(5), [] () { return !dbg_finish_hold->held; });
+    }
+};
+static QoreDbgFinishHoldReleaser dbg_finish_hold_releaser;
+#endif
+
 // global background thread counter
 QoreCounter thread_counter;
 
@@ -376,12 +410,108 @@ public:
     void* parseState;
     ParseConditionalStack* pcs;
     ProgramParseContext* next;
+    //! the scoped options of the file that this context was saved for, if it has %push-parse-options (issue #6207)
+    /** Linked by %push-parse-options and unlinked when the file ends (endParsing()), or by
+        qore_program_private::ParseOverlayScope if the parse ends before
+    */
+    ParseOptionsOverlayFrame push_frame{ParseOptionsOverlayFrame::PUSHED_FILE};
 
     DLLLOCAL ProgramParseContext(const char* fname, const char* source, int offset, void* ps,
             ParseConditionalStack* ppcs, ProgramParseContext* n) : file(fname), source(source), offset(offset),
             parseState(ps), pcs(ppcs), next(n) {
     }
 };
+
+namespace {
+//! the innermost scoped parse option frame of the thread (see ParseOptionsOverlayFrame)
+constinit thread_local ParseOptionsOverlayFrame* q_parse_overlay_head = nullptr;
+//! the serial of the next frame that the thread links
+constinit thread_local uint64_t q_parse_overlay_serial = 0;
+//! the number of PUSHED_FILE frames that the thread has unlinked
+constinit thread_local uint64_t q_parse_overlay_pushed_end_count = 0;
+}
+
+#ifdef DEBUG
+constinit thread_local int q_shared_parse_options_write = 0;
+#endif
+
+void ParseOptionsOverlayFrame::link(const SyncParseOptions& options) noexcept {
+    assert(!key);
+    key = &options;
+    prev = q_parse_overlay_head;
+    serial = q_parse_overlay_serial++;
+    q_parse_overlay_head = this;
+    options.overlays.fetch_add(1, std::memory_order_relaxed);
+}
+
+void ParseOptionsOverlayFrame::unlink() noexcept {
+    if (!key) {
+        return;
+    }
+    // frames are unlinked by the thread that linked them, not always in the reverse order (a module header's frame)
+    [[maybe_unused]] bool found = false;
+    for (ParseOptionsOverlayFrame** p = &q_parse_overlay_head; *p; p = &(*p)->prev) {
+        if (*p == this) {
+            *p = prev;
+            found = true;
+            break;
+        }
+    }
+    assert(found);
+    if (kind == PUSHED_FILE) {
+        ++q_parse_overlay_pushed_end_count;
+    }
+    key->overlays.fetch_sub(1, std::memory_order_relaxed);
+    key = nullptr;
+    prev = nullptr;
+}
+
+ParseOptionsOverlayFrame* q_parse_overlay_find(const SyncParseOptions* key) {
+    for (ParseOptionsOverlayFrame* f = q_parse_overlay_head; f; f = f->prev) {
+        if (f->key == key) {
+            return f;
+        }
+    }
+    return nullptr;
+}
+
+ParseOptionsOverlayFrame* q_parse_overlay_find_delta(const SyncParseOptions* key) {
+    for (ParseOptionsOverlayFrame* f = q_parse_overlay_head; f; f = f->prev) {
+        if (f->key == key && f->kind != ParseOptionsOverlayFrame::STATEMENT) {
+            return f;
+        }
+    }
+    return nullptr;
+}
+
+uint64_t q_parse_overlay_next_serial() {
+    return q_parse_overlay_serial;
+}
+
+void q_parse_overlay_unlink_since(const SyncParseOptions* key, uint64_t serial) {
+    ParseOptionsOverlayFrame* f = q_parse_overlay_head;
+    while (f) {
+        ParseOptionsOverlayFrame* prev = f->prev;
+        if (f->key == key && f->serial >= serial) {
+            f->unlink();
+        }
+        f = prev;
+    }
+}
+
+uint64_t q_parse_overlay_pushed_ends() {
+    return q_parse_overlay_pushed_end_count;
+}
+
+unsigned q_parse_overlay_count(const SyncParseOptions* key) {
+    unsigned rv = 0;
+    for (ParseOptionsOverlayFrame* f = q_parse_overlay_head; f; f = f->prev) {
+        if (f->key == key) {
+            ++rv;
+        }
+    }
+    return rv;
+}
 
 // for detecting circular references at runtime
 typedef std::set<const lvalue_ref*> ref_set_t;
@@ -3260,7 +3390,9 @@ bool parse_cond_test(const QoreProgramLocation* loc) {
 
 void push_parse_options(const QoreProgramLocation* loc) {
     ThreadData* td = thread_data.get();
-    qore_program_private::get(*td->current_pgm)->pushParseOptions(loc, td->parse_file);
+    // the context saved when the current file began is the file's
+    assert(td->plStack);
+    qore_program_private::get(*td->current_pgm)->pushParseOptions(loc, td->plStack->push_frame);
 }
 
 // called when a StatementBlock has "on_exit" blocks
@@ -3305,7 +3437,11 @@ void beginParsing(const char* file, void* ps, const char* src, int offset) {
 void* endParsing(bool report_open_blocks) {
     ThreadData* td = thread_data.get();
     //printd(5, "endParsing() td: %p restoreParseOptions pgm: %p parse_file: %p '%s' src: %s:%d\n", td, td->current_pgm, td->parse_loc.getFile(), td->parse_loc.getFile(), td->parse_loc.getSource() ? td->parse_loc.getSource() : "(null)", td->parse_loc.offset);
-    qore_program_private::get(*td->current_pgm)->restoreParseOptions(td->parse_file);
+    // the options of a file with %push-parse-options end with it; the restrictions that it locked are kept once the
+    // parse state has been restored below
+    assert(td->plStack);
+    qore_program_private* pp = qore_program_private::get(*td->current_pgm);
+    bool pushed = pp->endPushedFile(td->plStack->push_frame);
 
     void* rv = td->parseState;
 
@@ -3325,6 +3461,11 @@ void* endParsing(bool report_open_blocks) {
     td->pcs              = td->plStack->pcs;
     delete td->plStack;
     td->plStack = pl;
+
+    if (pushed) {
+        // if this fails, the parse state is consistent, and qore_program_private::ParseOverlayScope tries again
+        pp->keepLockedRestrictions();
+    }
 
     return rv;
 }
@@ -7166,6 +7307,19 @@ QoreException* catch_get_exception() {
     return td->catchException;
 }
 
+//! Waits for the background threads that have released their TID and are finishing; returns -1 if they do not finish
+/** A background thread releases its TID (thread_list.deleteDataRelease()) before it runs the thread cleanup functions
+    and leaves thread_counter, so thread_list does not count it then; exit() must not run the static destructors
+    under it, or it uses the destroyed thread_counter (issue #6405).  Such a thread runs no Qore code any more, so it
+    finishes at once, unless a module's thread cleanup function blocks: the wait is bounded, and the process then
+    ends with _Exit().  The calling thread's own share of thread_counter (a background thread that calls exit()) is
+    not waited for.
+*/
+static int qore_exit_wait_finishing_threads() {
+    // a condition wait on thread_counter, which wakes it when a thread leaves it
+    return thread_counter.waitForCountAtMost(qore_thread_counter_share, 10 * 1000) ? -1 : 0;
+}
+
 void qore_exit_process(int rc) {
     qore_exiting.store(true, std::memory_order_relaxed);
 
@@ -7182,6 +7336,7 @@ void qore_exit_process(int rc) {
         && q_gettid() > 0
 #endif
         && !tp_thread_counter.getCount()
+        && !qore_exit_wait_finishing_threads()
     ) {
 #ifdef HAVE_SIGNAL_HANDLING
         // TID 0 is not included in the application-thread count. Its signal wait can wake during
@@ -7217,6 +7372,35 @@ void qore_exit_process(int rc) {
     // in multithreaded programs; call _Exit() instead
     _Exit(rc);
 }
+
+#ifdef DEBUG
+void qore_dbg_hold_next_thread_finish(int ms) {
+    std::lock_guard<std::mutex> l(dbg_finish_hold->m);
+    dbg_finish_hold->hold_ms = ms;
+    dbg_finish_hold->released = false;
+}
+
+bool qore_dbg_wait_thread_finish_held(int timeout_ms) {
+    std::unique_lock<std::mutex> l(dbg_finish_hold->m);
+    return dbg_finish_hold->cv.wait_for(l, std::chrono::milliseconds(timeout_ms),
+        [] () { return dbg_finish_hold->held; });
+}
+
+//! Holds a background thread that has released its TID, before it leaves thread_counter, if a hold is armed
+static void qore_dbg_hold_thread_finish() {
+    std::unique_lock<std::mutex> l(dbg_finish_hold->m);
+    int ms = dbg_finish_hold->hold_ms;
+    if (ms <= 0) {
+        return;
+    }
+    dbg_finish_hold->hold_ms = 0;
+    dbg_finish_hold->held = true;
+    dbg_finish_hold->cv.notify_all();
+    dbg_finish_hold->cv.wait_for(l, std::chrono::milliseconds(ms), [] () { return dbg_finish_hold->released; });
+    dbg_finish_hold->held = false;
+    dbg_finish_hold->cv.notify_all();
+}
+#endif
 
 // sets up the signal thread entry in the thread list
 int get_signal_thread_entry() {
@@ -7813,7 +7997,29 @@ namespace {
             // Program's thread entry handler, and then the Program's thread initialization code; if the entry handler
             // fails, the thread runs none of the Program's code
             ThreadEntryHandlerFrame entry_frame;
-            bool entered = !entry_frame.enter(btp->pgm, &xsink);
+            bool entered;
+            try {
+                entered = !entry_frame.enter(btp->pgm, &xsink);
+            } catch (std::exception& e) {
+                // a C++ exception (std::bad_alloc) fails the start as a Qore exception of the entry handler does: the
+                // frame has been left without the exit handler, and the thread runs none of the Program's code; it
+                // is reported as ProgramThreadCountContextHelper::set() reports it (issues #6233, #6255)
+                entered = false;
+                if (!xsink) {
+                    try {
+                        if (entry_frame.handlerFailedWithCppException()) {
+                            xsink.raiseException("THREAD-ENTRY-HANDLER-ERROR", "the Program's thread entry handler "
+                                "could not be completed: out of memory or an internal error (%s)", e.what());
+                        } else {
+                            xsink.raiseException("PROGRAM-ENTRY-ERROR", "the thread could not enter Program " QLLD
+                                ": out of memory or an internal error (%s)", (int64)btp->pgm->getProgramId(),
+                                e.what());
+                        }
+                    } catch (...) {
+                        // nothing more can be recorded
+                    }
+                }
+            }
             if (entered) {
                 // the code's exceptions do not end the thread; they are handled here, as they always were
                 qore_program_private::doThreadInit(*btp->pgm, nullptr);
@@ -7935,6 +8141,10 @@ namespace {
         }
 
         thread_cleanup.run();
+#ifdef DEBUG
+        // the thread has released its TID and is not counted by thread_list any more (issue #6405)
+        qore_dbg_hold_thread_finish();
+#endif
         // NOTE: do not call OPENSSL_thread_stop() here — returning from the
         // thread function triggers TLS destructors automatically (see above).
         qore_thread_counter_share = 0;

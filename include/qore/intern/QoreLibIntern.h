@@ -1257,6 +1257,17 @@ DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_char_int_operand(const Qore
 //! string is (\c "5" gives 5.0, \c "a" 0.0); out of line, as qore_plus_equals_char_string()
 DLLLOCAL QORE_INTERN_NOINLINE double qore_plus_equals_char_float_operand(const QoreValue v);
 
+//! returns true if a divisor of an arbitrary-precision division is zero: the divisor as the division converts it
+/** A number is tested itself, and any other value as the number that it converts to, so that a divisor that is not
+    zero but converts to the float \c 0.0 (ex: \c 1e-400n) is not taken for zero (qore#6387); an int, a float, a
+    boolean, NOTHING and NULL are tested by their float, which is zero exactly when their number is
+*/
+DLLLOCAL bool qore_number_divisor_is_zero(const QoreValue& v);
+
+//! returns true if a constant divisor of the \c / operator is zero for every type of the dividend: as a float and as
+//! a number (see qore_number_divisor_is_zero(); qore#6387)
+DLLLOCAL bool qore_constant_divisor_is_zero(const QoreValue& v);
+
 //! QoreValue::isNothing() with the test of an inline value made inline, for the compound assignment paths
 DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool qore_value_is_nothing(const QoreValue& v) {
     if (v.rawBits() == QoreValue::makeNothing().rawBits()) {

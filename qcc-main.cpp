@@ -11789,7 +11789,8 @@ int main(int argc, char** argv) {
             rc = 1;
         } else {
             // Compile to executable
-            QoreParseOptions po = qpgm->getParseOptions() | compile_po;
+            // the compatibility options that the code's %modern reset are not added back (issue #6382)
+            QoreParseOptions po = qore_aot_merge_parse_options(qpgm->getParseOptions(), compile_po);
             if (!QoreAOT::compile(
                     qpgm,
                     source_text.c_str(), (int)source_text.size(),

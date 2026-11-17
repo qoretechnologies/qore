@@ -27023,8 +27023,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         if (!xsink.isException()) {
             qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
         }
-        // the module's parse options are checked as they are at the end of its source; closing the module context
-        // restores the options it was opened with
+        // the module's parse options are checked as they are at the end of its source; the module header's
+        // restrictions ended with the header, and closing the module context leaves the options as they are
         parsed_po = qpgm->getParseOptions();
 
         // Capture init closure before mod_ctx destroys it
@@ -29160,7 +29160,9 @@ struct QoreAOTSiblingPreload {
 namespace {
 struct AOTBatchParseOptionGuard {
     explicit AOTBatchParseOptionGuard(QoreProgram& pgm)
-            : pgm(pgm), old(pgm.getParseOptions()) {
+            : pgm(pgm), old(qore_program_private::getSharedParseOptions(pgm)) {
+        // the guard replaces the options of the whole Program, between parses: no scoped options are in effect
+        assert(!qore_program_private::hasParseOverlay(pgm));
     }
     ~AOTBatchParseOptionGuard() {
         qore_program_private::forceReplaceParseOptions(pgm, old);
@@ -29183,10 +29185,12 @@ static int applyAOTSourceModernDefault(QoreProgram& pgm, const std::string& cano
     // the check and the change are atomic (issue #6078)
     std::lock_guard<std::recursive_mutex> lg(qore_program_private::getParseOptionsWriteLock(pgm));
     // %modern cannot be set while a compatibility option that it does not allow is in effect (issue #5682)
-    if (qore_program_private::checkModernSourceDefault(pgm.getParseOptions(), canon.c_str(), xsink)) {
+    assert(!qore_program_private::hasParseOverlay(pgm));
+    QoreParseOptions current = qore_program_private::getSharedParseOptions(pgm);
+    if (qore_program_private::checkModernSourceDefault(current, canon.c_str(), xsink)) {
         return -1;
     }
-    qore_program_private::forceReplaceParseOptions(pgm, pgm.getParseOptions() | QoreParseOptions(PO_MODERN));
+    qore_program_private::forceReplaceParseOptions(pgm, current | QoreParseOptions(PO_MODERN));
     return 0;
 }
 

@@ -388,6 +388,11 @@ public:
     // before any in-place mutation of buffer/len/allocated.
     DLLLOCAL void materialize();
 
+    //! Makes this empty string own a copy of \a n bytes at \a src, with the given known ASCII prefix
+    /** Allocates as materialize() does: the exact size, without the growth of an append (issue #6239)
+    */
+    DLLLOCAL void adoptCopy(const char* src, size_t n, size_t ascii_prefix);
+
     // Drop the view without copying bytes. Used by mutations that fully
     // replace content (set/take/clear). After return: buffer=nullptr,
     // allocated=0, len=0, view_parent=nullptr. No-op on a non-view.

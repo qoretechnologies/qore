@@ -801,7 +801,9 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     ext_copy_count = getOwnExtDataCopies();
     ext_copy_waiting = 0;
     ext_copy_cond.reinitAfterFork();
-    // the thread counts keep only the forking thread
+    // the thread counts keep only the forking thread; the containers of the Program's threads are consistent here, as
+    // fork() waited for every change of them in progress (see qore_program_private_base::thread_container_shards),
+    // and they are changed without the stripe lock, as only this thread exists
     unsigned own = 0;
     ptid_map_t::iterator i = tidmap.find(tid);
     if (i != tidmap.end()) {
@@ -913,7 +915,55 @@ public:
 };
 
 QoreProgramRegistryForkHandler program_registry_fork_handler;
+
+//! the fork handler of the stripe locks of the Programs' thread containers, which are leaf locks never held together
+//! (see qore_program_private_base::thread_container_shards and QoreForkHandlers.h)
+/** Registered after the Program registry's handler, so that its child handler runs before the registry's, which
+    makes the Programs consistent in the child (fixupAllAfterFork())
+*/
+class ProgramThreadContainersForkHandler : public QoreForkHandler {
+public:
+    static constexpr unsigned count = 1u << qore_program_private_base::ThreadContainerShardBits;
+
+    ProgramThreadContainersForkHandler() : QoreForkHandler(QFLR_LEAF, "program_thread_containers") {
+    }
+
+    void prepare() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (auto& shard : qore_program_private_base::thread_container_shards) {
+                shard.lock.lock();
+            }
+        }
+    }
+
+    void parent() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (unsigned i = count; i; --i) {
+                qore_program_private_base::thread_container_shards[i - 1].lock.unlock();
+            }
+        }
+    }
+
+    void child() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            // acquired by this thread in prepare(): plain mutexes, which this thread releases in the child
+            for (unsigned i = count; i; --i) {
+                qore_program_private_base::thread_container_shards[i - 1].lock.unlock();
+            }
+            return;
+        }
+        // not acquired before fork(): a lock can be held by a thread that does not exist in the child
+        for (auto& shard : qore_program_private_base::thread_container_shards) {
+            new (&shard.lock) std::mutex();
+        }
+    }
+};
+
+ProgramThreadContainersForkHandler program_thread_containers_fork_handler;
 }
+
+qore_program_private_base::ThreadContainerShard
+    qore_program_private_base::thread_container_shards[1u << ThreadContainerShardBits];
 
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options)
@@ -952,6 +1002,8 @@ void qore_program_private::markSandboxedParse() {
 
 #ifdef DEBUG
 std::atomic<qore_program_private_base::dbg_teardown_hook_t> qore_program_private_base::dbg_teardown_hook{nullptr};
+std::atomic<qore_program_private_base::dbg_thread_container_hook_t>
+    qore_program_private_base::dbg_thread_container_hook{nullptr};
 #endif
 
 namespace {
@@ -1600,11 +1652,17 @@ int64 qore_program_private_base::setModuleOwnDomainsIntern(int64 n_dom, bool app
         return QDOM_DEFAULT;
     }
     module_trusted_dom |= n_dom;
-    int64 removed = n_dom & pwo.parse_options.getLo();
+    // the Program's own options: the module header's restrictions are scoped options of the parsing thread, which
+    // the module's code does not have (issue #6207)
+    int64 removed = n_dom & pwo.parse_options.loadShared().getLo();
     if (!removed) {
         return QDOM_DEFAULT;
     }
-    pwo.parse_options &= ~QoreParseOptions(removed);
+    {
+        // a change for the whole Program, made while the module header's options are in effect
+        SharedParseOptionsWrite spw;
+        pwo.parse_options &= ~QoreParseOptions(removed);
+    }
     // the module's %ifdef directives see the options it has
     for (auto& i : pomaps.pomap) {
         if (i.first && (removed & i.first) == i.first) {
@@ -2270,7 +2328,7 @@ int qore_program_private::beginParse(ExceptionSink* xsink, ParseStartGuard& guar
         }
         // the threads that code of an earlier parse or of a debugger evaluation started are not this parse's
         // (issue #6243)
-        parse_tids.clear();
+        clearParseTidsIntern();
     }
 #ifdef DEBUG
     if (qore_dbg_parse_start_gate(pgm, xsink)) {
@@ -2328,9 +2386,6 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     }
     statementByLabelIndex.clear();
 
-    // roll back pending domain
-    pend_dom = 0;
-
     // with PO_ALLOW_REPARSE, the Program is back in its committed state, so it can be used at runtime again; without
     // it, it cannot be parsed again
     if (atomic_rollback) {
@@ -2338,7 +2393,7 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     }
     {
         AutoLocker al(plock);
-        parse_tids.clear();
+        clearParseTidsIntern();
     }
 }
 
@@ -2530,7 +2585,10 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // now clear the original map
         {
             AutoLocker al(tlock);
-            pgm_data_map.clear();
+            {
+                std::lock_guard<std::mutex> cl(threadContainerLock());
+                pgm_data_map.clear();
+            }
             tclear = 0;
 
             if (twaiting)
@@ -2756,7 +2814,7 @@ int qore_program_private::internParseCommit(bool standard_parse) {
                 DLLLOCAL ~CommitEntryRestrictionHelper() {
                     AutoLocker al(pp.plock);
                     pp.commit_entry_restricted = false;
-                    pp.parse_tids.clear();
+                    pp.clearParseTidsIntern();
                 }
             private:
                 qore_program_private& pp;
@@ -2785,10 +2843,6 @@ int qore_program_private::internParseCommit(bool standard_parse) {
 #endif
             initDeferredCode();
             assert(dset.empty());
-
-            // commit pending domain
-            dom |= pend_dom;
-            pend_dom = 0;
 
             {
                 // Runtime initialization can admit threads that materialize AOT metadata.
@@ -2833,7 +2887,6 @@ int qore_program_private::internParseCommit(bool standard_parse) {
     } else {
         parsing_in_progress = false;
         assert(!*parseSink);
-        pend_dom = 0;
 
         // free temporary data structures
         {
@@ -4291,7 +4344,7 @@ int QoreProgram::setWarningMask(int wm) {
     // the check and the change are atomic with a change of PO_LOCK_WARNINGS (issue #6078)
     std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     if (!(priv->pwo.parse_options & PO_LOCK_WARNINGS)) {
-        priv->pwo.warn_mask = wm;
+        priv->pwo.setWarnMask(wm);
         return 0;
     }
     return -1;
@@ -4302,7 +4355,7 @@ int QoreProgram::enableWarning(int code) {
     // the check and the change are atomic with a change of PO_LOCK_WARNINGS (issue #6078)
     std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     if (!(priv->pwo.parse_options & PO_LOCK_WARNINGS)) {
-        priv->pwo.warn_mask |= code;
+        priv->pwo.orWarnMask(code);
         return 0;
     }
     return -1;
@@ -4313,7 +4366,7 @@ int QoreProgram::disableWarning(int code) {
     // the check and the change are atomic with a change of PO_LOCK_WARNINGS (issue #6078)
     std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     if (!(priv->pwo.parse_options & PO_LOCK_WARNINGS)) {
-        priv->pwo.warn_mask &= ~code;
+        priv->pwo.andWarnMask(~code);
         return 0;
     }
     return -1;
@@ -4406,8 +4459,20 @@ void QoreProgram::lockOptions() {
     // qore_program_private_base::po_mutex); the restrictions that it has now are kept
     std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     std::lock_guard<std::mutex> po_guard(priv->po_mutex);
-    priv->locked_restrictions |= priv->pwo.parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
+    // the restrictions in effect for the caller: in a file with %push-parse-options, the file's own ones
+    QoreParseOptions current = priv->pwo.parse_options.load();
+    priv->locked_restrictions |= current & ~QoreParseOptions::POSITIVE_OPTIONS;
+    // the Program's own compatibility options are locked as well: %modern does not reset them (issue #6382); those of
+    // a file with %push-parse-options end with it
+    priv->locked_compat |= priv->pwo.parse_options.loadShared()
+        & qore_program_private_base::modernIncompatibleOptions();
     priv->po_locked = true;
+    // the restrictions that a file with %push-parse-options locks are kept after it: they are the Program's own from
+    // now on (issue #6207)
+    const ParseOptionsOverlayFrame* frame = q_parse_overlay_find_delta(&priv->pwo.parse_options);
+    if (frame && frame->kind == ParseOptionsOverlayFrame::PUSHED_FILE) {
+        priv->keepLockedRestrictionsIntern();
+    }
 }
 
 QoreParseOptions qore_program_private_base::getCreatorRestrictions(const QoreParseOptions& creator_po) {
@@ -4490,11 +4555,11 @@ void QoreProgram::depDeref() {
 }
 
 bool QoreProgram::checkWarning(int code) const {
-    return priv->warnSink && (code & priv->pwo.warn_mask);
+    return priv->warnSink && (code & priv->pwo.getWarnMask());
 }
 
 int QoreProgram::getWarningMask() const {
-    return priv->warnSink ? priv->pwo.warn_mask.load(std::memory_order_relaxed) : 0;
+    return priv->warnSink ? priv->pwo.getWarnMask() : 0;
 }
 
 bool QoreProgram::existsFunction(const char* name) {
@@ -4622,17 +4687,18 @@ int qore_program_private_base::checkModernConflict(const QoreParseOptions& curre
 }
 
 int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocation* loc, const QoreParseOptions& po,
-        bool set) {
-    QoreParseOptions conflict = getModernConflict(pwo.parse_options, po, set);
+        bool set, const QoreParseOptions& reset) {
+    QoreParseOptions current = pwo.parse_options.load() & ~reset;
+    QoreParseOptions conflict = getModernConflict(current, po, set);
     if (!conflict) {
         return 0;
     }
     QoreStringNode* desc = new QoreStringNode;
     if (set) {
-        describeModernSetConflict(pwo.parse_options, po, conflict, "used", *desc);
+        describeModernSetConflict(current, po, conflict, "used", *desc);
         // %modern is complete only with the restrictions that a module parse option mask added to the Program of the
         // module: the error names them, as the user did not write %modern (issue #5682)
-        QoreParseOptions all = pwo.parse_options | po;
+        QoreParseOptions all = current | po;
         if (module_mask_added && isModern(all) && !isModern(all & ~module_mask_added)) {
             desc->concat("; %modern is complete only with ");
             describeParseOptions(module_mask_added, *desc);
@@ -4640,7 +4706,7 @@ int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocatio
                 "load_module_masked())");
             desc->concat("; remove the option, or load the module with a mask that does not add them");
         } else {
-            desc->concat(isModern(pwo.parse_options)
+            desc->concat(isModern(current)
                 ? "; remove the directive, or parse the code without %modern (as a .q file, or after %old-style)"
                 : "; remove the option, or parse the code without %modern");
         }
@@ -4650,7 +4716,7 @@ int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocatio
         describeParseOptions(conflict, *desc);
         desc->concat(" and guarantees a consistent set of parse options");
         // %modern is complete only with the restrictions that a module parse option mask added (see above)
-        if (module_mask_added && isModern(pwo.parse_options) && !isModern(pwo.parse_options & ~module_mask_added)) {
+        if (module_mask_added && isModern(current) && !isModern(current & ~module_mask_added)) {
             desc->concat("; %modern is complete only with ");
             describeParseOptions(module_mask_added, *desc);
             desc->concat(", which the module parse option mask adds (see set_module_parse_option_mask() and "
@@ -4676,6 +4742,10 @@ int qore_program_private::checkModernSourceDefault(const QoreParseOptions& curre
     return -1;
 }
 
+QoreParseOptions qore_aot_merge_parse_options(const QoreParseOptions& final, const QoreParseOptions& base) {
+    return final | (base & ~qore_program_private_base::modernIncompatibleOptions());
+}
+
 bool qore_check_modern_parse_options(const QoreParseOptions& po, std::string& error) {
     if (!qore_program_private_base::isModern(po)) {
         return true;
@@ -4689,6 +4759,58 @@ bool qore_check_modern_parse_options(const QoreParseOptions& po, std::string& er
     qore_program_private_base::describeModernSetConflict(QoreParseOptions(), po, conflict, "set", desc);
     error = desc.c_str();
     return false;
+}
+
+QoreParseOptions ParseOptionsOverlayFrame::view(const QoreParseOptions& shared) const {
+    if (kind == STATEMENT) {
+        return po;
+    }
+    QoreParseOptions rv = (shared & ~remove) | add;
+    // a change for the whole Program made while the frame is in effect can conflict with the frame's own options
+    // (%modern with a compatibility option that %modern does not allow)
+    if (qore_program_private_base::isModern(rv)) {
+        QoreParseOptions incompatible = rv & qore_program_private_base::modernIncompatibleOptions();
+        if (incompatible) {
+            if (add & incompatible) {
+                // the frame's code is legacy code with a compatibility option of its own, and the Program got
+                // %modern after the frame began: the frame's code keeps every option of %modern and every option
+                // that %modern implies as it had them, the Program's options when the frame began with the frame's
+                // own changes
+                static const QoreParseOptions modern_related = QoreParseOptions(PO_MODERN)
+                    | qore_program_private_base::modernImpliedOptions() | QoreParseOptions::STRICT_PARSE_ERRORS;
+                rv = (rv & ~modern_related) | (((base & ~remove) | add) & modern_related);
+                // the frame's code was not %modern with its compatibility option (refused when it was set)
+                assert(!qore_program_private_base::isModern(rv));
+                if (qore_program_private_base::isModern(rv)) {
+                    rv &= ~(QoreParseOptions(PO_MODERN) & ~add);
+                }
+            } else {
+                // the frame's code set %modern itself, and the Program got a compatibility option that it does not
+                // allow after the frame began: the frame's %modern wins for its code
+                rv &= ~incompatible;
+            }
+        }
+    }
+    return qore_program_private_base::withImplications(rv);
+}
+
+QoreParseOptions SyncParseOptions::loadView() const {
+    QoreParseOptions shared = loadShared();
+    const ParseOptionsOverlayFrame* frame = q_parse_overlay_find(this);
+    return frame ? frame->view(shared) : shared;
+}
+
+ParseWarnOptions ProgramParseWarnOptions::getView() const {
+    QoreParseOptions shared = parse_options.loadShared();
+    const ParseOptionsOverlayFrame* frame = q_parse_overlay_find(&parse_options);
+    if (!frame) {
+        return ParseWarnOptions(shared, warn_mask.load(std::memory_order_relaxed));
+    }
+    // a statement has a warning mask of its own, the other frames have the Program's own
+    if (frame->kind == ParseOptionsOverlayFrame::STATEMENT) {
+        return ParseWarnOptions(frame->po, frame->warn_mask);
+    }
+    return ParseWarnOptions(frame->view(shared), warn_mask.load(std::memory_order_relaxed));
 }
 
 QoreParseOptions qore_program_private_base::readParseOptions(const QoreProgram& p) {
@@ -4746,6 +4868,7 @@ void qore_program_private_base::joinThreadDataFamily(QoreProgram* p_pgm) {
         AutoLocker al(root->tld_lock);
         member = !root->tld_final;
         if (member) {
+            std::lock_guard<std::mutex> cl(root->threadContainerLock());
             root->tld_members.insert(pgm->priv);
         }
     }
@@ -4760,6 +4883,7 @@ void qore_program_private_base::leaveThreadDataFamily() {
     tld_parent_root = nullptr;
     {
         AutoLocker al(root->tld_lock);
+        std::lock_guard<std::mutex> cl(root->threadContainerLock());
         root->tld_members.erase(pgm->priv);
     }
     root->depDeref();
@@ -4811,6 +4935,7 @@ void qore_program_private::freeFamilyThreadData(bool final, ExceptionSink* xsink
                     for (qore_program_private* member : tld_members) {
                         member->tld_root.store(member, std::memory_order_release);
                     }
+                    std::lock_guard<std::mutex> cl(threadContainerLock());
                     tld_members.clear();
                 }
                 break;
@@ -4822,6 +4947,7 @@ void qore_program_private::freeFamilyThreadData(bool final, ExceptionSink* xsink
                 tpd->ref();
                 threads.push_back(tpd);
             }
+            std::lock_guard<std::mutex> cl(threadContainerLock());
             tld_registry.clear();
         }
         for (ThreadProgramData* tpd : threads) {

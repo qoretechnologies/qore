@@ -1449,6 +1449,12 @@ foreach string key in (keys hash)
     A division by a divisor that is not zero whose result is not defined gives NaN (ex: <tt>\@inf\@ / \@inf\@</tt>);
     see @ref undefined_arithmetic.
 
+    A @ref number_type "number" division tests the divisor itself, or the number that it converts to, for zero: a
+    divisor that is not zero but converts to the float \c 0.0 (ex: \c 1e-400n) divides.  A constant divisor that is
+    zero is an error when the code is parsed; one that is zero only as a float (ex: the string \c "1e-400") is not,
+    as it divides a @ref number_type "number" dividend, and a @ref float_type "float" dividend then raises
+    \c DIVISION-BY-ZERO when the division is executed.
+
     @throw DIVISION-BY-ZERO the divisor is zero, for an @ref int_type "int", a @ref float_type "float" (also
     \c -0.0) and a @ref number_type "number" divisor alike, whatever the dividend (see @ref undefined_arithmetic)
 
@@ -2746,8 +2752,9 @@ if (x || y)
     |!Argument|!Processing
     |All|The type precedence from highest to lowest is @ref number "number", @ref float "float", and @ref integer "int", other types are converted to @ref integer "int"; the \a expression will be evaluated and used to divide the \a lvalue, and the result will be saved to the \a lvalue, as by the @ref division_operator "divide operator"; a @ref date_type "date" \a lvalue is converted to an @ref integer "int" like the other types, so the result is never a date, and \c /= on an \a lvalue whose type accepts no integer, float or number value (ex: \c date, \c *date) is a parse error (see @ref compound_assignment_parse_checks "parse-time checks")
 
-    @throw DIVISION-BY-ZERO the divisor expression is zero, as for the @ref division_operator "divide operator"; the
-    \a lvalue keeps its value (see @ref undefined_arithmetic)
+    @throw DIVISION-BY-ZERO the divisor expression is zero, as for the @ref division_operator "divide operator" (a
+    @ref number_type "number" division tests the divisor itself or the number that it converts to, so a divisor such
+    as \c 1e-400n divides); the \a lvalue keeps its value (see @ref undefined_arithmetic)
 
     <hr>
     @subsection xor_equals_operator Xor Equals Operator (^=)

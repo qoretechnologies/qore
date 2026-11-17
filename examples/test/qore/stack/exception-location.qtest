@@ -65,9 +65,14 @@ class ExceptionLocationTest inherits QUnit::Test {
             assertEq(5, ex.endline);
             assertEq("H", ex.file);
 
-            ex = getEx(\p.parse(), Code1 + "int i\n = 1;\n", "I");
-            assertEq(4, ex.line);
-            assertEq(4, ex.endline);
+            # the error of a top-level local variable declaration is located on the line of the variable, not on the
+            # lines of its initializer; a failed parse no longer counts as the first one (#678), so a declaration in
+            # this Program is not refused as such, and the error here is a second declaration of the variable
+            ex = getEx(\p.parse(), Code1 + "int i\n = 1;\nint i\n = 2;\n", "I");
+            assertEq("PARSE-ERROR", ex.err);
+            assertRegex("local variable 'i' was already declared", ex.desc);
+            assertEq(6, ex.line);
+            assertEq(6, ex.endline);
             assertEq("I", ex.file);
 
             ex = getEx(\p.parse(), Code1 + "class B {\nconstructor() {\nX::a();}\n}", "J");

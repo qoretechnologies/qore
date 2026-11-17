@@ -1,0 +1,177 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - threads, signals and process exit hooks entering a Program whose entry handler fails
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires ./SystemThreadEntry.qm
+
+%exec-class ThreadTopEntryCppExceptionTest
+
+#! The code of the Program that the threads enter
+const PgmCode = "%new-style
+%require-types
+%strict-args
+
+#! makes the next run of a Program's thread entry handler throw std::bad_alloc (QDPES_ENTRY_HANDLER)
+sub arm() {
+    call_function(\"dbg_fail_next_program_entry\", 6);
+}
+
+sub start_background() {
+    arm();
+    background sub () {}();
+}
+
+sub background_ok(Queue q) {
+    background sub () { q.push(\"background\"); }();
+}
+
+sub set_signal(int sig, Queue q) {
+    set_signal_handler(sig, sub (int s) { q.push(s); });
+}
+
+sub raise_signal(int sig, bool fail) {
+    if (fail) {
+        arm();
+    }
+    kill(getpid(), sig);
+}
+";
+
+#! A C++ exception from a Program's thread entry handler in a thread that enters the Program itself ends the thread's
+#! entry, not the process (#6233)
+/** Each case makes the next run of the entry handler throw std::bad_alloc (the debug hook
+    dbg_fail_next_program_entry(), site QDPES_ENTRY_HANDLER) just before a thread enters the Program on its own: a
+    background thread, a system thread, the signal thread, and the thread that runs the exit hooks.  (A task of
+    AsyncIoController::submitTask() enters its Program in a ThreadPool task, which qore/classes/Program/entry-cpp-exception
+    covers since #6255.)  Before the fix the exception left the thread function and the process ended (std::terminate()).
+*/
+class ThreadTopEntryCppExceptionTest inherits QUnit::Test {
+    public {
+        #! upper bound on any wait; reaching it fails the test
+        const Timeout = 60s;
+    }
+
+    constructor() : QUnit::Test("ThreadTopEntryCppExceptionTest", "1.0") {
+        addTestCase("a background thread", \backgroundTest());
+        addTestCase("a system thread", \systemThreadTest());
+        addTestCase("the signal thread", \signalTest());
+        addTestCase("the exit hooks", \exitHookTest());
+        set_return_value(main());
+    }
+
+    private requireDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build (dbg_fail_next_program_entry())");
+        }
+    }
+
+    private Program makeProgram() {
+        Program p(PO_NEW_STYLE);
+        p.parse(PgmCode, "thread-top-entry");
+        p.setThreadEntryHandler(int sub () { return 1; }, sub (auto token) {});
+        return p;
+    }
+
+    #! the thread fails its start: it runs none of the Program's code and reports the failure, and the Program can
+    #! start threads afterwards
+    backgroundTest() {
+        requireDebug();
+        Program p = makeProgram();
+        Queue events();
+        p.subscribeThreadEvents(events);
+        p.callFunction("start_background");
+        hash<auto> finished = waitFinished(events);
+        assertEq("START_FAILED", finished.outcome);
+        assertEq("THREAD-ENTRY-HANDLER-ERROR", finished.error.err);
+        # the next thread starts normally
+        Queue q();
+        p.callFunction("background_ok", q);
+        assertEq("background", q.get(Timeout));
+    }
+
+    #! the system thread runs none of the callback, and a system thread started afterwards runs it
+    /** A system thread capability can only be created while a module is loaded: SystemThreadEntry.qm creates one at
+        its initialization for a callback of a Program with an entry handler.
+    */
+    systemThreadTest() {
+        requireDebug();
+        int threads = num_threads();
+        SystemThreadEntry::start_thread(True);
+        waitThreads(threads);
+        assertEq(0, SystemThreadEntry::size(), "the callback did not run");
+        # without the failure, the callback runs
+        SystemThreadEntry::start_thread(False);
+        assertEq("system", SystemThreadEntry::get(Timeout));
+    }
+
+    #! the signal thread survives the failed entry and runs the handler for the next signal
+    signalTest() {
+        requireDebug();
+        if (!Option::HAVE_SIGNAL_HANDLING) {
+            testSkip("signal handling is disabled");
+        }
+        Program p = makeProgram();
+        Queue q();
+        p.callFunction("set_signal", SIGUSR2, q);
+        # a signal sent below can still be pending when the test ends: a handler of this Program absorbs it, as the
+        # default action of SIGUSR2 would end the process
+        on_exit set_signal_handler(SIGUSR2, sub (int sig) {});
+        p.callFunction("raise_signal", SIGUSR2, True);
+        # a signal sent before the signal thread has handled the first can be merged with it, so signals are sent
+        # until the handler runs: the signal thread survived the failed entry
+        date deadline = now_us() + Timeout;
+        while (!q.size() && now_us() < deadline) {
+            usleep(200ms);
+            p.callFunction("raise_signal", SIGUSR2, False);
+        }
+        assertEq(SIGUSR2, q.get(Timeout), "the signal thread runs the handler after the failed entry");
+    }
+
+    #! the process runs its exit hooks and ends, reporting the failed entry as an unhandled exception of the hook (exit
+    #! status 3, as for any exception that ends an exit hook)
+    exitHookTest() {
+        requireDebug();
+        string script = get_script_dir() + DirSep + "exit-hook.q";
+        int status;
+        string out = backquote(sprintf("%s %s 2>&1", TestInterpreter::qore_interpreter(), script), \status);
+        assertEq(3, status, out);
+        assertRegex("THREAD-ENTRY-HANDLER-ERROR", out);
+        assertRegex("main done", out);
+        assertRegex("other hook ran", out);
+        assertFalse(out =~ /failed hook ran/, "the hook whose entry failed did not run");
+    }
+
+    #! returns the FINISHED event of the subscription's first thread
+    private hash<auto> waitFinished(Queue events) {
+        date deadline = now_us() + Timeout;
+        while (True) {
+            auto ev = events.get(Timeout);
+            if (ev.event == "FINISHED") {
+                return ev;
+            }
+            if (now_us() > deadline) {
+                fail("no FINISHED event");
+                return {};
+            }
+        }
+    }
+
+    #! waits until the process has no more threads than \a count
+    private waitThreads(int count) {
+        date deadline = now_us() + Timeout;
+        while (num_threads() > count) {
+            if (now_us() > deadline) {
+                fail(sprintf("%d threads remain, expected %d", num_threads(), count));
+                return;
+            }
+            usleep(10ms);
+        }
+    }
+}
