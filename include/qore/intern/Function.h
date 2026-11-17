@@ -79,6 +79,10 @@ class BCAList;
 class QoreOperatorNode;
 class BarewordNode;
 class QoreFunction;
+
+//! Returns true if a variant with the given number of parameters can take a call with the given number of arguments
+//! at run time under strict arguments: it has no more arguments than parameters, or takes extra arguments (qore#6152)
+DLLLOCAL bool qore_variant_takes_call_arity(unsigned num_args, unsigned nparams, bool uses_extra_args);
 class qore_class_private;
 class qore_ns_private;
 class QoreClosureBase;
