@@ -264,21 +264,31 @@ list l = select list, !($1 % 2);
     each element.  An operator over a single value (a value that is not a list or an iterator) gives it the index
     \c 0, as for a list of one element.
 
-    <tt>$#</tt> belongs to the operator or statement whose per-element code encloses it in the same function: in a
-    function, method, closure or call reference called from that code, and anywhere else (the expression of the
-    @ref foldl "foldl" and @ref foldr "foldr" operators, which do not set it, also when they are used in the
-    per-element code of another operator or of a foreach statement, or top-level code outside any of these
-    constructs), <tt>$#</tt> is unset and gives @ref nothing, and using it where a value of another type is required
-    (<tt>int i = $#;</tt>, <tt>"s" + $#</tt>) is a parse error.  An operator in the called code gives its own elements
-    their index, and the caller's <tt>$#</tt> is the same when the call returns.
+    <tt>$#</tt> belongs to the operator or statement whose per-element code encloses it in the same function, also
+    in a statement (such as a while loop) nested in that code.  An operator in a function, method or closure called
+    from that code gives its own elements their index, and the caller's <tt>$#</tt> is the same when the call
+    returns.
+
+    <tt>$#</tt> anywhere else is a parse error (\c IMPLICIT-INDEX-NOT-ALLOWED) in every execution mode: in the body
+    of a while, for or do-while loop or of a context statement that is not itself in such per-element code; in the
+    body of a function, method or closure, also one called from or defined in per-element code; in the expression of
+    the @ref foldl "foldl" and @ref foldr "foldr" operators, which do not set it, also in per-element code; in the
+    iterated expression of an operator or foreach statement that is not itself in per-element code; in a default
+    argument value or a member, constant or global variable initializer; and in top-level code outside these
+    constructs, also after a foreach statement has ended.
 
     @par Example
     @code{.py}
 # create a list of indexes with negative values
 list l = map $#, list, ($1 < 0);
 
-auto sub get_index() { return $#; }
-# a function called from a map body does not see the map's index: gives (NOTHING, NOTHING)
-list l2 = map get_index(), (1, 2);
+# an operator in a function called from a map body gives its own elements their index: gives ((0, 1), (0, 1))
+auto sub get_indexes() { return map $#, (7, 8); }
+list l2 = map get_indexes(), (1, 2);
+
+# a parse error (IMPLICIT-INDEX-NOT-ALLOWED): a while loop does not set the implicit index
+while (stmt.next()) {
+    printf("%d\n", $#);
+}
     @endcode
 */

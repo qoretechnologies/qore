@@ -46,6 +46,15 @@ public:
 
     DLLLOCAL static bool doLessThan(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink);
 
+    //! compares the values of the operands as the operator does, with the specialization for their types that parse
+    //! initialization selected; used by a switch case with the operator, whose value is the switch value (qore#6252)
+    DLLLOCAL QoreValue evalValues(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink) const;
+
+    //! returns true if parse initialization selected a specialization of the comparison for the types of the operands
+    DLLLOCAL bool hasSpecialization() const {
+        return pfunc != nullptr;
+    }
+
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
         return typeInfo;
     }

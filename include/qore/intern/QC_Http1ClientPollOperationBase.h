@@ -321,8 +321,8 @@ public:
         That is not academic — the connection manager's checkout decides whether a
         pooled connection may be reused from two separate reads of this value:
         isConnectionAlive() skips its idle-age and max-age eviction checks when the
-        count is non-zero, and tryReserveStream() then re-reads it under the Qore
-        connection Mutex (whose acquire ordering yields the true value).  A stale
+        count is non-zero, and tryReserveStream() then re-reads it under the
+        reservation lock of the connection (whose acquire ordering yields the true value).  A stale
         non-zero read followed by a true zero read makes an idle-timeout- or
         max-age-expired connection look busy to the eviction check and free to the
         capacity check, so it is handed back out instead of evicted.

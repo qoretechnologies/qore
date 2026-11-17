@@ -268,12 +268,19 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! HttpClientConnectionManagerBase::acquireConnectionImpl() found a connection in its pool and released the pool
     //! lock, before it returns the connection
     Acquired,
+    //! HttpClientConnectionBase::tryReservePendingStream() was called to reserve a stream of a Qore-level connection,
+    //! before it takes the reservation lock
+    ReservePending,
     //! the number of hold points
     Count,
 };
 
 //! holds the calling thread at the given point if dbg_http_hold_at() armed it (one-shot)
 DLLLOCAL void qore_dbg_http_hold(QoreDbgHttpHoldPoint point);
+
+//! holds the creation of a child Program after its options were checked and before the Program is created, if
+//! dbg_hold_child_program_create() armed it (one-shot)
+DLLLOCAL void qore_dbg_child_program_create_hold();
 
 //! returns true if dbg_http_hold_at() armed the given point and no thread has reached it yet
 DLLLOCAL bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point);

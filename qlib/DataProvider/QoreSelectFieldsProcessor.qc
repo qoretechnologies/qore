@@ -230,8 +230,13 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
                 return selectDataFrame(records);
             case DataProviderShape::BufferColumns:
                 if (AbstractDataProcessor::isColumnarResult(records)) {
-                    return ColumnarResult::fromColumnHash(selectColumnBlock(records.toColumnHash(),
-                        AbstractDataProcessor::shapeRecordCount(records, shape)));
+                    # a column taken from an input column keeps its schema (qore#6219)
+                    hash<auto> columns = records.toColumnHash();
+                    hash<auto> sources = (map {$1.key: $1.value}, field_map.pairIterator(),
+                        columns.hasKey($1.value) && (columns{$1.value}.typeCode() == NT_LIST
+                            || columns{$1.value}.typeCode() == NT_BUFFER)) ?? {};
+                    return AbstractDataProcessor::columnarResultWithSchemas(records, selectColumnBlock(columns,
+                        AbstractDataProcessor::shapeRecordCount(records, shape)), sources);
                 }
                 return selectColumnBlock(records, AbstractDataProcessor::shapeRecordCount(records, shape));
             case DataProviderShape::HashOfLists:

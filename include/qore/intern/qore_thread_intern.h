@@ -234,12 +234,6 @@ public:
         return nullptr;
     }
 
-protected:
-    //! the restrictions that the module's \c domains key removed from its Program (see setDomains())
-    int64 dom_removed = QDOM_DEFAULT;
-
-public:
-
     //! Records a child module declared with %try-child-module in this module
     /** @param loc the location of the directive
         @param spec the module specification (feature name with an optional version constraint)
@@ -925,6 +919,11 @@ enum qore_dbg_program_entry_site_e : int {
 //! Makes the next step of an entry into another Program at \a site throw std::bad_alloc; several sites can be armed,
 //! each fails once; -1 disarms all of them
 DLLLOCAL void qore_dbg_fail_next_program_entry(int site);
+//! Holds the next background thread that releases its TID for up to \a ms milliseconds before it leaves
+//! thread_counter, or until the static objects are destroyed (issue #6405)
+DLLLOCAL void qore_dbg_hold_next_thread_finish(int ms);
+//! Waits until a finishing background thread is held; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_thread_finish_held(int timeout_ms);
 
 //! Returns true, and disarms the site, if the next step at \a site is armed to fail
 DLLLOCAL bool qore_dbg_program_entry_fails(int site);
@@ -1715,13 +1714,21 @@ private:
     @param timeout_ms the timeout in milliseconds; negative for no timeout
     @param xsink for the cancellation exception; may be nullptr
     @param operation the operation named in the cancellation exception
+    @param before_block if not nullptr, called with \a before_block_arg and the mutex held after the wait is
+    registered and the last check for a request, just before the thread blocks (also when the wait cannot be
+    registered: then nothing can wake it for what the check reads); if it returns non-zero, the thread does not
+    block and QORE_COND_RESULT_SUCCESS is returned.  A thread that sets what the check reads and then wakes the
+    waiter with QoreThreadList::wakeCondWaiter() is never lost: either the check sees it, or the wakeup sees the
+    registration
+    @param before_block_arg the argument of \a before_block
 
     @return QORE_COND_RESULT_SUCCESS if woken, QORE_COND_RESULT_TIMEOUT on timeout, or QORE_COND_RESULT_INTERRUPTED
     if the thread was cancelled or interrupted (or the condition waker thread could not be started), in which case
     an exception has been raised on \a xsink if it is not nullptr
 */
 DLLLOCAL int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms,
-        ExceptionSink* xsink, const char* operation);
+        ExceptionSink* xsink, const char* operation, int (*before_block)(void*) = nullptr,
+        void* before_block_arg = nullptr);
 
 //! Stops the condition waker thread; called when no thread can be waiting any more
 DLLLOCAL void qore_stop_cond_waker();
@@ -1729,6 +1736,8 @@ DLLLOCAL void qore_stop_cond_waker();
 #ifdef DEBUG
 //! Test hook called by qore_cond_wait_cancellable() after its final check for a request and before it blocks
 DLLLOCAL extern std::atomic<void (*)()> qore_cond_wait_window_hook;
+//! Test hook called by qore_cond_wait_cancellable() before it registers a wait that it can register for a wakeup
+DLLLOCAL extern std::atomic<void (*)()> qore_cond_wait_register_hook;
 #endif
 
 //! Sleeps for the given number of microseconds or until the current thread is cancelled or interrupted
@@ -2488,6 +2497,11 @@ public:
         return active;
     }
 
+    //! returns true if the last entry failed with a C++ exception during or after the entry handler
+    DLLLOCAL bool handlerFailedWithCppException() const {
+        return handler_cpp_exception;
+    }
+
 private:
     //! runs the entry handler of the Program, if any; see enter()
     DLLLOCAL QORE_INTERN_NOINLINE int enterHandlers(ThreadData* td, QoreProgram* pgm, ExceptionSink* xsink);
@@ -2505,6 +2519,8 @@ private:
     QoreValue token;
     //! true while the frame is entered
     bool active = false;
+    //! true if the last entry failed with a C++ exception during or after the entry handler (issue #6255)
+    bool handler_cpp_exception = false;
 };
 
 //! returns true if a call into the given Program must enter it although it is the thread's current Program
@@ -2533,7 +2549,20 @@ public:
     }
     DLLLOCAL ~ProgramThreadCountContextHelper();
 
+    //! enters the Program; a C++ exception of the entry (std::bad_alloc) is raised in \a xsink as a Qore exception
+    /** The entry leaves the thread as it was, enterFailed() is true, and the exception is \c THREAD-ENTRY-HANDLER-ERROR
+        if the entry handler failed, otherwise \c PROGRAM-ENTRY-ERROR; if \a xsink already holds an exception, as when
+        a destructor runs while an exception propagates, no other is added.  The calls that the interpreter makes into
+        other Programs have nothing above them that converts a C++ exception, which would end the process (issue
+        #6255).
+    */
     DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+
+    //! enters the Program as set() does, except that a C++ exception of the entry propagates
+    /** For the C++ API (QoreExternalProgramContextHelper): the exception propagates once the thread is as it was
+        (issue #6198); the helper's destructor then finds nothing to undo.
+    */
+    DLLLOCAL void setRethrow(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
 
     //! Returns the data of the thread in the Program of the given frame and the index of the frame there
     /** @param frame the frame, counted from the caller of the builtin function that looks it up; set to its index

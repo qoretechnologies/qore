@@ -225,6 +225,12 @@ struct QoreParseContext {
     //! --stub external constant. Constants with such dependencies cannot be
     //! folded at compile time; AOT must preserve their initializer expression.
     bool external_stub_constant_ref = false;
+    //! The number of implicit index references (\c $#) that read the index of an enclosing operator or foreach
+    //! statement initialized so far (qore#6341)
+    /** A context statement and a find expression compare it before and after the initialization of their
+        expressions, which run as AST at run time, to know whether they read \c $#
+    */
+    unsigned implicit_element_reads = 0;
 
     DLLLOCAL QoreParseContext(QoreProgram* pgm = getProgram()) : pgm(pgm) {
     }
@@ -418,6 +424,20 @@ private:
 */
 DLLLOCAL void qore_set_result_parse_analysis(QoreParseContext& parse_context, const QoreTypeInfo* typeInfo);
 
+#ifdef HAVE_NANOSLEEP
+//! sleeps the given number of nanoseconds with the given nanosleep() function, as qore_usleep() does with nanosleep()
+/** A sleep that a signal interrupts (\c EINTR) is continued with the time that \a sleep_func reports as left in its
+    second argument, so that a signal does not lengthen the sleep (issue #6364).  The function is a parameter so that a
+    unit test can report interruptions without signals.
+
+    @param ns the number of nanoseconds to sleep
+    @param sleep_func the function that sleeps, with the signature of nanosleep()
+
+    @return 0 if the time was slept, -1 if \a sleep_func failed with an error other than \c EINTR (in \c errno)
+*/
+DLLLOCAL int qore_nanosleep_with(int64 ns, int (*sleep_func)(const struct timespec*, struct timespec*));
+#endif
+
 class QoreParseContextLvarHelper {
 public:
     DLLLOCAL QoreParseContextLvarHelper(QoreParseContext& parse_context, LVList*& lvars)
@@ -597,6 +617,9 @@ static inline int64 qore_int_div(int64 l, int64 r) {
     assert(r);
     return r == -1 ? static_cast<int64>(0 - static_cast<uint64_t>(l)) : l / r;
 }
+
+//! Raises DIVISION-BY-ZERO for a modulo operator (\c %, \c %=) with a divisor of zero (qore#1034)
+DLLLOCAL void qore_raise_modulo_by_zero(ExceptionSink* xsink);
 
 //! Returns the remainder of an integer division by a divisor that is not zero
 /** The remainder of a division by -1 is 0, also for the smallest integer, where the CPU's division instruction
@@ -1008,6 +1031,21 @@ void ensure_unique(AbstractQoreNode** v, ExceptionSink* xsink);
 */
 void ensure_unique(QoreValue& v, ExceptionSink* xsink);
 
+//! Checks the elements of a list or hash that trim or chomp modify in place, before any of them is modified
+/** trim and chomp replace a string element that holds an enum value with a plain string (see ensure_unique()), which
+    the element type of a typed container or the type of a hashdecl member refuses if it is an enum type: then
+    RUNTIME-TYPE-ERROR is raised with \a desc for the first such element, and the caller leaves the container
+    unchanged (qore#6195).  The elements are only read if the type of the container can refuse a plain string.
+
+    @param container a list or a hash
+    @param desc the description of the operation
+    @param xsink for the exception
+
+    @return -1 if an exception was raised, 0 if not
+*/
+DLLLOCAL int qore_check_in_place_container_strings(const QoreValue& container, const char* desc,
+        ExceptionSink* xsink);
+
 //! Returns an owned copy of the base value of the enum value \a v, which the caller can modify in place
 /** An enum value (QoreValue::isEnum()) holds a reference to its enum member, not to the member's base value, which is
     shared and constant: a node reached through it with QoreValue::get() or QoreValue::getInternalNode() has a
@@ -1218,6 +1256,17 @@ DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_char_int_operand(const Qore
 //! returns the float that += adds to a float lvalue for a char operand: the char converted as its one-character
 //! string is (\c "5" gives 5.0, \c "a" 0.0); out of line, as qore_plus_equals_char_string()
 DLLLOCAL QORE_INTERN_NOINLINE double qore_plus_equals_char_float_operand(const QoreValue v);
+
+//! returns true if a divisor of an arbitrary-precision division is zero: the divisor as the division converts it
+/** A number is tested itself, and any other value as the number that it converts to, so that a divisor that is not
+    zero but converts to the float \c 0.0 (ex: \c 1e-400n) is not taken for zero (qore#6387); an int, a float, a
+    boolean, NOTHING and NULL are tested by their float, which is zero exactly when their number is
+*/
+DLLLOCAL bool qore_number_divisor_is_zero(const QoreValue& v);
+
+//! returns true if a constant divisor of the \c / operator is zero for every type of the dividend: as a float and as
+//! a number (see qore_number_divisor_is_zero(); qore#6387)
+DLLLOCAL bool qore_constant_divisor_is_zero(const QoreValue& v);
 
 //! QoreValue::isNothing() with the test of an inline value made inline, for the compound assignment paths
 DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool qore_value_is_nothing(const QoreValue& v) {

@@ -51,6 +51,8 @@ extern "C" {
 #include <mutex>
 #include <vector>
 
+#include "qore/intern/SyncParseOptions.h"
+
 // parse options set while parsing the module's header (init & del)
 #define MOD_HEADER_PO (PO_LOCKDOWN & ~(PO_NO_MODULES | PO_NO_REFLECTION))
 
@@ -377,6 +379,11 @@ public:
     DLLLOCAL void addParseOptionMask(const QoreModuleParseOptionMask& mask) {
         std::lock_guard<std::mutex> lck(po_mask_lock);
         po_mask |= mask;
+    }
+
+    //! initializes the lock of the parse option mask again in the child of fork(), where its holder may not exist
+    DLLLOCAL void reinitParseOptionMaskLockAfterFork() {
+        new (&po_mask_lock) std::mutex();
     }
 
     //! returns the Program of a user module (source or AOT), or nullptr for a binary module
@@ -1753,7 +1760,10 @@ protected:
     const char* old_path;
 
     qore_program_private* pgm;
-    QoreParseOptions po;
+    //! the restrictions that the header adds for its own code, which the code before it does not have
+    QoreParseOptions header_po;
+    //! the scoped options of the header's code, which end with the header (see close())
+    ParseOptionsOverlayFrame header_frame{ParseOptionsOverlayFrame::MODULE_HEADER};
 
     ExceptionSink& xsink;
     bool dup;

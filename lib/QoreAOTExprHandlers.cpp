@@ -48,6 +48,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/BackquoteNode.h"
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QorePlusOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
@@ -120,6 +121,10 @@
 #include "qore/intern/QorePushOperatorNode.h"
 #include "qore/intern/QoreUnshiftOperatorNode.h"
 #include "qore/intern/QoreUnaryMinusOperatorNode.h"
+#include "qore/intern/QoreUnaryPlusOperatorNode.h"
+#include "qore/intern/QoreBinaryNotOperatorNode.h"
+#include "qore/intern/QoreLogicalComparisonOperatorNode.h"
+#include "qore/intern/QoreListAssignmentOperatorNode.h"
 #include "qore/intern/QoreRangeOperatorNode.h"
 #include "qore/intern/QoreAssignmentOperatorNode.h"
 #include "qore/intern/ContextrefNode.h"
@@ -973,6 +978,7 @@ static QoreValue read_expr_static_method_call_intern(AOTExprReadCtx& ctx, const 
     if (receiver_type_path && *receiver_type_path) {
         QoreAOTTypeResolver type_resolver(ctx.pgm);
         std::string type_error;
+        // the receiver of a call in a generic function can have its type parameters (qore#6308)
         receiver_type_info = type_resolver.resolveForSignature(receiver_type_path, type_error,
             qore_aot_get_type_param_owner());
         if (!receiver_type_info || !type_error.empty()) {
@@ -2146,7 +2152,8 @@ static bool write_expr_call_ref(AOTExprWriteCtx& ctx) {
     if (auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
         const QoreMethod* method = scr->getMethod();
-        const QoreClass* qc = method ? method->getClass() : nullptr;
+        // the class that the reference names (qore#6285)
+        const QoreClass* qc = scr->getScopeClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
         ctx.writer.writeStringRef(class_ref.c_str());
         ctx.writer.writeStringRef(method ? method->getName() : "");
@@ -2370,7 +2377,7 @@ const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, const char* 
 }
 
 static const QoreMethod* read_aot_method_ref_target(AOTExprReadCtx& ctx, const char* kind,
-        bool prefer_static) {
+        bool prefer_static, const QoreClass** class_out = nullptr) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
     const char* method_name = ctx.reader.readStringRef(ctx.ptr);
     if (!class_path || !*class_path || !method_name || !*method_name) {
@@ -2400,6 +2407,9 @@ static const QoreMethod* read_aot_method_ref_target(AOTExprReadCtx& ctx, const c
     if (!method) {
         ctx.error = std::string("cannot resolve ") + kind + " method reference '"
             + class_path + "::" + method_name + "'";
+    }
+    if (class_out) {
+        *class_out = qc;
     }
     return method;
 }
@@ -2471,7 +2481,8 @@ static bool write_expr_static_method_ref(AOTExprWriteCtx& ctx) {
     }
     ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
     const QoreMethod* method = scr->getMethod();
-    const QoreClass* qc = method ? method->getClass() : nullptr;
+    // the class that the reference names (qore#6285)
+    const QoreClass* qc = scr->getScopeClass();
     std::string class_ref = qore_aot_encode_class_ref(qc);
     ctx.writer.writeStringRef(class_ref.c_str());
     ctx.writer.writeStringRef(method ? method->getName() : "");
@@ -2479,8 +2490,9 @@ static bool write_expr_static_method_ref(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_static_method_ref(AOTExprReadCtx& ctx) {
-    const QoreMethod* method = read_aot_method_ref_target(ctx, "static", true);
-    return method ? QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, method)) : QoreValue();
+    const QoreClass* qc = nullptr;
+    const QoreMethod* method = read_aot_method_ref_target(ctx, "static", true, &qc);
+    return method ? QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, method, qc)) : QoreValue();
 }
 
 static bool write_expr_deferred_static_method_ref(AOTExprWriteCtx& ctx) {
@@ -5092,6 +5104,112 @@ static QoreValue read_expr_unary_minus(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
     return QoreValue(new QoreUnaryMinusOperatorNode(&loc_builtin, operand));
+}
+
+// ============================================================================
+// UNARY_PLUS (129)
+// ============================================================================
+
+static bool write_expr_unary_plus(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreUnaryPlusOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::UNARY_PLUS));
+    return classifyAndWriteExpr(ctx.writer, op->getExp(), ctx.parent_locals,
+        ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static QoreValue read_expr_unary_plus(AOTExprReadCtx& ctx) {
+    std::string operand_err;
+    QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (!operand_err.empty()) {
+        operand.discard(nullptr);
+        ctx.error = operand_err;
+        return QoreValue();
+    }
+    return QoreValue(new QoreUnaryPlusOperatorNode(&loc_builtin, operand));
+}
+
+// ============================================================================
+// BIT_NOT (130)
+// ============================================================================
+
+static bool write_expr_bit_not(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreBinaryNotOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::BIT_NOT));
+    return classifyAndWriteExpr(ctx.writer, op->getExp(), ctx.parent_locals,
+        ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static QoreValue read_expr_bit_not(AOTExprReadCtx& ctx) {
+    std::string operand_err;
+    QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (!operand_err.empty()) {
+        operand.discard(nullptr);
+        ctx.error = operand_err;
+        return QoreValue();
+    }
+    return QoreValue(new QoreBinaryNotOperatorNode(&loc_builtin, operand));
+}
+
+// ============================================================================
+// LOG_CMP (131), LIST_ASSIGN (132)
+// ============================================================================
+
+static bool write_expr_log_cmp(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreLogicalComparisonOperatorNode>(ctx, AOTExprKind::LOG_CMP);
+}
+
+static QoreValue read_expr_log_cmp(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreLogicalComparisonOperatorNode>(ctx);
+}
+
+static bool write_expr_list_assign(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreListAssignmentOperatorNode>(ctx, AOTExprKind::LIST_ASSIGN);
+}
+
+static QoreValue read_expr_list_assign(AOTExprReadCtx& ctx) {
+    std::string left_err;
+    QoreValue left = readOneExpr(ctx.reader, ctx.ptr, ctx.end, left_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    std::string right_err;
+    QoreValue right = readOneExpr(ctx.reader, ctx.ptr, ctx.end, right_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (!left_err.empty() || !right_err.empty() || left.getType() != NT_PARSE_LIST) {
+        ctx.error = !left_err.empty() ? left_err : (!right_err.empty() ? right_err
+            : std::string("LIST_ASSIGN lvalue is not a list"));
+        left.discard(nullptr);
+        right.discard(nullptr);
+        return QoreValue();
+    }
+    return QoreValue(new QoreListAssignmentOperatorNode(&loc_builtin, left, right));
+}
+
+// ============================================================================
+// BACKQUOTE (133)
+// ============================================================================
+
+static bool write_expr_backquote(AOTExprWriteCtx& ctx) {
+    auto* bq = dynamic_cast<const BackquoteNode*>(ctx.expr.getInternalNode());
+    if (!bq) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::BACKQUOTE));
+    ctx.writer.writeStringRef(bq->str ? bq->str : "");
+    return true;
+}
+
+static QoreValue read_expr_backquote(AOTExprReadCtx& ctx) {
+    const char* cmd = ctx.reader.readStringRef(ctx.ptr);
+    return QoreValue(new BackquoteNode(&loc_builtin, strdup(cmd ? cmd : "")));
 }
 
 // ============================================================================

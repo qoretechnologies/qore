@@ -30,9 +30,11 @@
 */
 
 #include "qore/intern/QoreRuntimeDiagnostic.h"
+#include "qore/intern/AssertStatement.h"
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreHandlerRun.h"
 #include "qore/intern/JITRuntime.h"
+#include "qore/intern/QoreIRPointerSlot.h"
 #include "qore/intern/QoreJITException.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreRegexSubst.h"
@@ -443,11 +445,11 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_raise_typed_foreach_nothing",
         reinterpret_cast<void*>(&qore_rt_raise_typed_foreach_nothing) },
     { "qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot) },
-    { "qore_rt_cleanup_run_allocas", reinterpret_cast<void*>(&qore_rt_cleanup_run_allocas) },
-    { "qore_rt_cleanup_release_slots", reinterpret_cast<void*>(&qore_rt_cleanup_release_slots) },
+    { "qore_rt_cleanup_run_frame", reinterpret_cast<void*>(&qore_rt_cleanup_run_frame) },
+    { "qore_rt_cleanup_release_frame_slots", reinterpret_cast<void*>(&qore_rt_cleanup_release_frame_slots) },
     { "qore_rt_object_slot_release", reinterpret_cast<void*>(&qore_rt_object_slot_release) },
     { "qore_rt_object_slot_replace", reinterpret_cast<void*>(&qore_rt_object_slot_replace) },
-    { "qore_rt_iterator_cleanup_allocas", reinterpret_cast<void*>(&qore_rt_iterator_cleanup_allocas) },
+    { "qore_rt_iterator_cleanup_frame", reinterpret_cast<void*>(&qore_rt_iterator_cleanup_frame) },
     { "qore_rt_reload_chain_rotate", reinterpret_cast<void*>(&qore_rt_reload_chain_rotate) },
     { "qore_rt_reload_chain_clear", reinterpret_cast<void*>(&qore_rt_reload_chain_clear) },
     { "qore_rt_reload_chain_flush", reinterpret_cast<void*>(&qore_rt_reload_chain_flush) },
@@ -1235,13 +1237,18 @@ extern "C" DLLEXPORT void qore_rt_object_slot_replace(uint64_t old_value, uint64
     qore_rt_object_slot_release(old_value, xsink);
 }
 
+//! Returns the slot of the cleanup frame that the entry of a cleanup frame table gives (see QORE_FRAME_ENTRY_SHIFT)
+static inline uint64_t* qore_rt_frame_slot(uint64_t* frame, uint64_t entry) {
+    return frame + (entry >> QORE_FRAME_ENTRY_SHIFT);
+}
+
 //! Releases the temporaries of the cleanup slots given by \a order, in its order (see
 //! QoreIRToLLVM::emitTempReleaseSequence()): as the inline sequence does for each, the value is taken from the slot,
 //! which is cleared, and released
-extern "C" DLLEXPORT void qore_rt_cleanup_release_slots(uint64_t** slots, const uint32_t* order, int32_t count,
-        ExceptionSink* xsink) {
+extern "C" DLLEXPORT void qore_rt_cleanup_release_frame_slots(uint64_t* frame, const uint64_t* slots,
+        const uint32_t* order, int32_t count, ExceptionSink* xsink) {
     for (int32_t i = 0; i < count; ++i) {
-        uint64_t* slot = slots[order[i]];
+        uint64_t* slot = qore_rt_frame_slot(frame, slots[order[i]]);
         uint64_t val = *slot;
         // NOTHING (VAL_NOTHING)
         *slot = 0;
@@ -1249,38 +1256,50 @@ extern "C" DLLEXPORT void qore_rt_cleanup_release_slots(uint64_t** slots, const 
     }
 }
 
-extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink) {
+// documented in JITRuntime.h
+extern "C" DLLEXPORT void qore_rt_cleanup_run_frame(uint64_t* frame, const uint64_t* entries, int32_t count,
+        QoreAOTContext* ctx, ExceptionSink* xsink) {
     // Cleanup slots are registered in construction order.  Destruct in LIFO
     // order so dependent temporaries (for example iterators) are released
     // before the values they reference.
+    static_assert(alignof(LocalVar) >= 4, "the exit release table tags LocalVar addresses in bits 0 and 1");
     for (int32_t i = count - 1; i >= 0; --i) {
-        // a local on the runtime stack whose value is released is given by its LocalVar tagged in bit 1 (see
-        // QoreIRToLLVM::getExitReleaseSequence()); a closure-bound variable that the frame instantiated is tagged in
-        // bits 0 and 1 and popped from the closure stack; the alloca of a foreach statement's iterator is tagged in bit
-        // 2, and the cache of an object local in bit 0, whose object is released with the real reference it has from
+        // a local on the runtime stack whose value is released is given by its LocalVar (by its slot in AOT code)
+        // tagged with QORE_FRAME_ENTRY_LOCAL (see QoreIRToLLVM::getExitReleaseSequence()); a closure-bound variable
+        // that the frame instantiated is tagged with QORE_FRAME_ENTRY_OBJECT as well and popped from the closure
+        // stack; the slot of a foreach statement's iterator is tagged with QORE_FRAME_ENTRY_ITERATOR, and the cache of
+        // an object local with QORE_FRAME_ENTRY_OBJECT, whose object is released with the real reference it has from
         // the cache (see qore_rt_object_slot_release())
-        static_assert(alignof(LocalVar) >= 4, "the exit release array tags LocalVar addresses in bits 0 and 1");
-        uintptr_t tagged = reinterpret_cast<uintptr_t>(alloca_ptrs[i]);
-        if ((tagged & 3) == 3) {
-            qore_rt_pop_closure_var(reinterpret_cast<LocalVar*>(tagged & ~static_cast<uintptr_t>(3)), xsink);
+        const uint64_t entry = entries[i];
+        const uint64_t tag = entry & QORE_FRAME_ENTRY_TAG;
+        if (tag & QORE_FRAME_ENTRY_LOCAL) {
+            LocalVar* var;
+            if (ctx) {
+                const uint64_t aot_slot = entry >> QORE_FRAME_ENTRY_SHIFT;
+                assert(aot_slot < static_cast<uint64_t>(ctx->num_locals));
+                var = ctx->locals[aot_slot];
+            } else {
+                var = reinterpret_cast<LocalVar*>(static_cast<uintptr_t>(entry
+                    & ~(QORE_FRAME_ENTRY_LOCAL | QORE_FRAME_ENTRY_OBJECT)));
+            }
+            if (tag & QORE_FRAME_ENTRY_OBJECT) {
+                qore_rt_pop_closure_var(var, xsink);
+            } else {
+                qore_rt_clear_local(var, xsink);
+            }
             continue;
         }
-        if (tagged & 2) {
-            qore_rt_clear_local(reinterpret_cast<LocalVar*>(tagged & ~static_cast<uintptr_t>(2)), xsink);
-            continue;
-        }
-        // the alloca of the iterator of a foreach statement is tagged in bit 2
-        if (tagged & 4) {
-            void** iter_slot = reinterpret_cast<void**>(tagged & ~static_cast<uintptr_t>(4));
+        if (tag & QORE_FRAME_ENTRY_ITERATOR) {
+            void** iter_slot = reinterpret_cast<void**>(qore_rt_frame_slot(frame, entry));
             void* iter = *iter_slot;
             *iter_slot = nullptr;
             qore_rt_iterator_cleanup(iter);
             continue;
         }
-        uint64_t* slot = reinterpret_cast<uint64_t*>(tagged & ~static_cast<uintptr_t>(1));
+        uint64_t* slot = qore_rt_frame_slot(frame, entry);
         uint64_t bits = *slot;
         *slot = 0;
-        if (tagged & 1) {
+        if (tag & QORE_FRAME_ENTRY_OBJECT) {
             qore_rt_object_slot_release(bits, xsink);
         } else if (qore_rt_bits_may_own_reference(bits)) {
             // most slots hold no value that owns a reference at the exit of the frame: NOTHING, as the end of the
@@ -1290,18 +1309,18 @@ extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, in
     }
 }
 
-//! Release every active iterator recorded in an array of cleanup slots.
+//! Releases every active iterator of the slots of the cleanup frame that a table gives
 /** Mirrors the inline sequence QoreIRToLLVM::emitIteratorCleanup() emits per
     iterator (load the slot, release it, clear the slot), in the same order.
     emitLateExitCleanup() repeats that sequence at every return and resume in the
     function, so once SROA promotes the slots each iterator needs a PHI at the
     merged common return for every exit -- (iterators x exits) PHI operands.
-    Passing the slot addresses to this helper keeps them in memory, so the whole
+    Keeping the slots in the cleanup frame keeps them in memory, so the whole
     sequence is one call and no PHI is required.
 */
-extern "C" DLLEXPORT void qore_rt_iterator_cleanup_allocas(void*** slots, int32_t count) {
+extern "C" DLLEXPORT void qore_rt_iterator_cleanup_frame(uint64_t* frame, const uint64_t* entries, int32_t count) {
     for (int32_t i = 0; i < count; ++i) {
-        void** slot = slots[i];
+        void** slot = reinterpret_cast<void**>(qore_rt_frame_slot(frame, entries[i]));
         void* iter = *slot;
         qore_rt_iterator_cleanup(iter);
         *slot = nullptr;
@@ -1346,18 +1365,18 @@ extern "C" DLLEXPORT void qore_rt_reload_chain_clear(uint64_t* slot, ExceptionSi
 }
 
 // documented in JITRuntime.h
-extern "C" DLLEXPORT void qore_rt_reload_chain_flush(uint64_t** slots, const uint32_t* table, int32_t pairs,
+extern "C" DLLEXPORT void qore_rt_reload_chain_flush(uint64_t* frame, const uint32_t* table, int32_t pairs,
         int32_t epochs, uint64_t* epoch, ExceptionSink* xsink) {
     for (int32_t i = 0; i < pairs; ++i) {
         const uint32_t tracker = table[2 * i];
         const uint32_t deferred = table[2 * i + 1];
         if (tracker == QORE_RELOAD_CHAIN_NO_SLOT) {
             assert(deferred != QORE_RELOAD_CHAIN_NO_SLOT);
-            qore_rt_reload_chain_clear(slots[deferred], xsink);
+            qore_rt_reload_chain_clear(frame + deferred, xsink);
         } else if (deferred == QORE_RELOAD_CHAIN_NO_SLOT) {
-            qore_rt_reload_chain_clear(slots[tracker], xsink);
+            qore_rt_reload_chain_clear(frame + tracker, xsink);
         } else {
-            qore_rt_reload_chain_rotate(slots[tracker], slots[deferred], xsink);
+            qore_rt_reload_chain_rotate(frame + tracker, frame + deferred, xsink);
         }
     }
     if (!epochs) {
@@ -1370,7 +1389,7 @@ extern "C" DLLEXPORT void qore_rt_reload_chain_flush(uint64_t** slots, const uin
     *epoch = old_epoch + 1;
     const uint32_t* epoch_table = table + 2 * pairs;
     for (int32_t i = 0; i < epochs; ++i) {
-        *slots[epoch_table[i]] = old_epoch;
+        frame[epoch_table[i]] = old_epoch;
     }
 }
 
@@ -3745,6 +3764,9 @@ private:
 };
 }
 
+// the IR interpreter keeps the iterator in a value slot (see QoreIRPointerSlot.h)
+QORE_IR_POINTER_SLOT_TYPE_CHECK(QoreRtSelectorIterator);
+
 extern "C" DLLEXPORT void* qore_rt_iterator_create_selectors(uint64_t seq_bits, int64_t flags, int64_t count,
         ExceptionSink* xsink) {
     // a sequence that is not a list, a string or a binary object gives no value and no selector is evaluated: no
@@ -3836,6 +3858,9 @@ extern "C" DLLEXPORT int64_t qore_rt_selector_segment_feed(uint64_t seq_bits, in
         ? std::numeric_limits<int64_t>::max() : static_cast<int64_t>(count);
     return 0;
 }
+
+// the IR interpreter keeps the handle in a value slot (see QoreIRPointerSlot.h)
+QORE_IR_POINTER_SLOT_TYPE_CHECK(ExceptionSink);
 
 extern "C" DLLEXPORT void* qore_rt_exception_suspend(ExceptionSink* xsink) {
     std::unique_ptr<ExceptionSink> saved(new ExceptionSink);
@@ -4779,7 +4804,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_static_method_call_ref_aot(QoreAOTC
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : (current_pgm ? current_pgm : pgm);
     const qore_class_private* cls = rc.getClass() ? rc.getClass() : runtime_get_class();
     if (method->isStatic()) {
-        return toBits(QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, method, call_pgm, cls)));
+        // the reference names its class, whose specialization of a generic class of the method binds the method's
+        // type parameters (qore#6285)
+        return toBits(QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, method, call_pgm, cls,
+            LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo(*method, qc, cls))));
     }
 
     QoreObject* obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
@@ -7057,19 +7085,10 @@ extern "C" DLLEXPORT int64_t qore_rt_int_to_string_measure(int64_t value) {
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_sprintf(uint64_t val_bits, ExceptionSink* xsink) {
-    QoreValue val = fromBits(val_bits);
-    QoreStringNode* str;
-    if (val.getType() == NT_LIST) {
-        str = q_sprintf(val.get<const QoreListNode>(), 0, 0, xsink);
-        if (*xsink) {
-            return toBits(QoreValue());
-        }
-    } else {
-        // Single value: convert to string
-        QoreStringValueHelper sv(val);
-        str = new QoreStringNode(*sv);
-    }
-    return toBits(QoreValue(str));
+    // the message of a failed @assert, the only code that QoreIROpcode::Sprintf is emitted for: it is made as the AST
+    // interpreter makes it (qore#6197)
+    QoreStringNode* str = AssertStatement::makeMessage(fromBits(val_bits), xsink);
+    return str ? toBits(QoreValue(str)) : toBits(QoreValue());
 }
 
 static uint64_t qore_rt_make_hash_const_keys_impl(const char** keys, uint64_t* vals,
@@ -12823,7 +12842,8 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         ? uvb->getBodyLocals()  // AOT: use all_body_locals via getBodyLocals()
         : (has_ir ? uvb->getASTVisibleBodyLocals()  // IR: use filtered list
                   : empty_body_locals);            // AST-only: nothing to pre-inst here
-    QoreParseOptions po = uvb->getParseOptions(runtime_pgm->getParseOptions());
+    // the Program's own options: a call takes them at run time, not the scoped options of a parse (#6207)
+    QoreParseOptions po = uvb->getParseOptions(qore_program_private::getParseOptions(*runtime_pgm));
     if (!skip_body_locals) {
         for (LocalVar* lv : body_locals) {
             // Closure-use vars must not be pre-instantiated here: doing so creates
@@ -14270,8 +14290,59 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target_consume_args(uint64_
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
+//! makes a self-recursive call of a function whose native code was removed while the recursion runs
+/** UserVariantBase::attemptJITRecompilation() removes the installed native code of a function while it recompiles
+    it, so a native frame of the function that is already running can make a recursive call meanwhile.  The call is
+    made as an AST call of the function makes it: CodeEvaluationHelper binds the parameters, which take the arguments
+    over, and passes only the arguments that the signature does not declare as the implicit argument list; the body
+    then runs on the function's current tier.  The variant's body alone (UserVariantBase::evalTiered()) expects the
+    parameters to have been bound (qore#6317).
+
+    Outside of qore_rt_call_self_recursive_t(), whose frame and code are on the path of every native self-recursive
+    call.
+
+    @param arg_cleanups see qore_rt_call_fast_t()
+*/
+template <bool CONSUME>
+static QORE_INTERN_NOINLINE uint64_t qore_rt_call_self_recursive_fallback(const AbstractQoreFunctionVariant* variant,
+        const UserVariantBase* uvb, uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
+    if (nargs > 0) {
+        qore_list_private* priv = qore_list_private::get(**arg_list);
+        priv->reserve(nargs);
+        for (int i = 0; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.needsRef()) {
+                val.refSelf();
+            }
+            priv->pushIntern(val);
+        }
+    }
+    if constexpr (CONSUME) {
+        // the argument list holds the last references of the arguments that the caller gave to the call, which the
+        // parameters take over, so they are released in the callee's frame
+        if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
+            return toBits(QoreValue());
+        }
+    }
+    // a self-recursive call is a call of a function (CallDirect), whose variant knows the function since it was parsed
+    const QoreFunction* func = uvb->getSourceFunction();
+    if (!func) {
+        xsink->raiseException("JIT-ERROR", "the native code of %s() was removed during a recursive call of it, "
+            "and its function is unknown", uvb->getCallName().c_str());
+        return toBits(QoreValue());
+    }
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreProgram* call_pgm = rc.getProgram();
+    if (!call_pgm) {
+        call_pgm = getProgram();
+    }
+    return toBits(func->evalFunctionTmpArgs(variant, *arg_list, call_pgm, rc, xsink));
+}
+
 //! Self-recursive call helper: sets up params, argv, body locals, and deopt handling
-/** Falls back to evalTiered slow path if JIT function was invalidated by recompilation.
+/** Falls back to a call made as an AST call makes it if the native code of the function was removed while it is
+    recompiled (see qore_rt_call_self_recursive_fallback()).
 
     @param arg_cleanups see qore_rt_call_fast_t()
 */
@@ -14296,35 +14367,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_self_recursive_t(const Ab
 
     // Fall back to slow path if JIT function was invalidated by recompilation
     if (!uvb->hasCachedFunction()) {
-        // Build QoreListNode from NaN-boxed args and call through evalTiered
-        ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
-        if (nargs > 0) {
-            qore_list_private* priv = qore_list_private::get(**arg_list);
-            priv->reserve(nargs);
-            for (int i = 0; i < nargs; ++i) {
-                QoreValue val = fromBits(args[i]);
-                if (val.needsRef()) {
-                    val.refSelf();
-                }
-                priv->pushIntern(val);
-            }
-        }
-        if constexpr (CONSUME) {
-            // the argument list holds references of its own
-            if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
-                return toBits(QoreValue());
-            }
-        }
-        // evalTiered() pushes no call stack frame (an AST call's CodeEvaluationHelper does), so the frame of the call
-        // is pushed here
-        QoreNativeCallStackLocation frame(get_thread_data_for_native_calls(), uvb->getCallName(),
-            uvb->getStatementBlock());
-        QoreValue result = uvb->callTieredPublic(uvb->getCallName().c_str(), arg_list, nullptr, xsink);
-        if constexpr (CONSUME) {
-            // an argument list that the call did not take over is released in the frame of the call
-            arg_list = nullptr;
-        }
-        return toBits(result);
+        return qore_rt_call_self_recursive_fallback<CONSUME>(variant, uvb, args, arg_cleanups, nargs, xsink);
     }
 
     const UserSignature* sig = uvb->getUserSignature();
@@ -15456,54 +15499,71 @@ static inline LocalVar* qore_rt_obe_var(const QoreObeLocal& e, QoreAOTContext* c
     return ctx->locals[e.slot];
 }
 
-extern "C" DLLEXPORT void qore_rt_obe_publish(QoreObeLocal* locals, const uint32_t* table, int32_t count,
-        const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
+//! The slot of the cleanup frame of a field of a record of the table-driven handler code, or null if it has none
+template <typename T = uint64_t>
+static inline T* qore_rt_obe_slot(uint64_t* frame, uint32_t index) {
+    return index == QORE_OBE_NO_SLOT ? nullptr : reinterpret_cast<T*>(frame + index);
+}
+
+extern "C" DLLEXPORT void qore_rt_obe_publish(uint64_t* frame, const QoreObeLocal* locals, const uint32_t* table,
+        int32_t count, const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
     for (int32_t i = 0; i < count; ++i) {
         const QoreObeLocal& e = locals[table[i] & QORE_OBE_TABLE_INDEX];
         LocalVar* var = qore_rt_obe_var(e, ctx);
+        uint64_t* cache = qore_rt_obe_slot(frame, e.cache);
+        assert(cache);
         if (table[i] & QORE_OBE_TABLE_FRESH) {
-            if (e.ref_flag) {
-                *e.ref_flag = qore_rt_reload_local_if_stale_raw(var, e.cache, e.tracker, e.deferred, e.valid_epoch,
-                    *epoch, xsink);
+            uint64_t* tracker = qore_rt_obe_slot(frame, e.tracker);
+            uint64_t* deferred = qore_rt_obe_slot(frame, e.deferred);
+            uint64_t* valid_epoch = qore_rt_obe_slot(frame, e.valid_epoch);
+            if (uint8_t* ref_flag = qore_rt_obe_slot<uint8_t>(frame, e.ref_flag)) {
+                *ref_flag = qore_rt_reload_local_if_stale_raw(var, cache, tracker, deferred, valid_epoch, *epoch,
+                    xsink);
             } else {
-                qore_rt_reload_local_if_stale(var, e.cache, e.tracker, e.deferred, e.valid_epoch, *epoch, xsink);
+                qore_rt_reload_local_if_stale(var, cache, tracker, deferred, valid_epoch, *epoch, xsink);
             }
         }
-        qore_rt_sync_local(var, *e.cache);
+        qore_rt_sync_local(var, *cache);
     }
 }
 
 //! Loads the value of the local that the inline reload of QoreIRToLLVM::emitLocalCacheLoad() loads
-static inline uint64_t qore_rt_obe_load(const QoreObeLocal& e, LocalVar* var, ExceptionSink* xsink) {
-    if (e.ref_flag) {
+static inline uint64_t qore_rt_obe_load(uint64_t* frame, const QoreObeLocal& e, LocalVar* var,
+        ExceptionSink* xsink) {
+    if (uint8_t* ref_flag = qore_rt_obe_slot<uint8_t>(frame, e.ref_flag)) {
         uint64_t loaded = qore_rt_load_local_raw(var, xsink);
-        *e.ref_flag = qore_rt_value_is_reference(loaded);
+        *ref_flag = qore_rt_value_is_reference(loaded);
         return loaded;
     }
     return qore_rt_load_local(var, xsink);
 }
 
-extern "C" DLLEXPORT void qore_rt_obe_reload(QoreObeLocal* locals, const uint32_t* table, int32_t count,
-        const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
+extern "C" DLLEXPORT void qore_rt_obe_reload(uint64_t* frame, const QoreObeLocal* locals, const uint32_t* table,
+        int32_t count, const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
     for (int32_t i = 0; i < count; ++i) {
         const QoreObeLocal& e = locals[table[i] & QORE_OBE_TABLE_INDEX];
         LocalVar* var = qore_rt_obe_var(e, ctx);
-        assert(e.cache && e.tracker && e.deferred);
-        uint64_t old_tracker = *e.tracker;
-        uint64_t old_deferred = *e.deferred;
-        uint64_t reloaded = qore_rt_obe_load(e, var, xsink);
-        *e.cache = reloaded;
-        *e.tracker = reloaded;
-        *e.deferred = old_tracker;
+        uint64_t* cache = qore_rt_obe_slot(frame, e.cache);
+        uint64_t* tracker = qore_rt_obe_slot(frame, e.tracker);
+        uint64_t* deferred = qore_rt_obe_slot(frame, e.deferred);
+        assert(cache && tracker && deferred);
+        uint64_t old_tracker = *tracker;
+        uint64_t old_deferred = *deferred;
+        uint64_t reloaded = qore_rt_obe_load(frame, e, var, xsink);
+        *cache = reloaded;
+        *tracker = reloaded;
+        *deferred = old_tracker;
         qore_rt_decref(old_deferred, xsink);
-        if ((table[i] & QORE_OBE_TABLE_FRESH) && e.valid_epoch) {
-            *e.valid_epoch = *epoch;
+        if (table[i] & QORE_OBE_TABLE_FRESH) {
+            if (uint64_t* valid_epoch = qore_rt_obe_slot(frame, e.valid_epoch)) {
+                *valid_epoch = *epoch;
+            }
         }
     }
 }
 
-extern "C" DLLEXPORT void qore_rt_obe_release(QoreObeLocal* locals, const uint32_t* table, int32_t count,
-        ExceptionSink* xsink) {
+extern "C" DLLEXPORT void qore_rt_obe_release(uint64_t* frame, const QoreObeLocal* locals, const uint32_t* table,
+        int32_t count, ExceptionSink* xsink) {
     auto release = [xsink](uint64_t* slot) {
         if (!slot) {
             return;
@@ -15515,26 +15575,31 @@ extern "C" DLLEXPORT void qore_rt_obe_release(QoreObeLocal* locals, const uint32
     };
     for (int32_t i = 0; i < count; ++i) {
         const QoreObeLocal& e = locals[table[i] & QORE_OBE_TABLE_INDEX];
-        release(e.entry_owner);
-        release(e.deferred);
-        release(e.tracker);
+        release(qore_rt_obe_slot(frame, e.entry_owner));
+        release(qore_rt_obe_slot(frame, e.deferred));
+        release(qore_rt_obe_slot(frame, e.tracker));
     }
 }
 
-extern "C" DLLEXPORT void qore_rt_obe_reload_released(QoreObeLocal* locals, const uint32_t* table, int32_t count,
-        const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
+extern "C" DLLEXPORT void qore_rt_obe_reload_released(uint64_t* frame, const QoreObeLocal* locals,
+        const uint32_t* table, int32_t count, const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
     for (int32_t i = 0; i < count; ++i) {
         const QoreObeLocal& e = locals[table[i] & QORE_OBE_TABLE_INDEX];
-        uint64_t* owner = e.tracker ? e.tracker : e.entry_owner;
+        uint64_t* tracker = qore_rt_obe_slot(frame, e.tracker);
+        uint64_t* owner = tracker ? tracker : qore_rt_obe_slot(frame, e.entry_owner);
         if (!owner) {
             continue;
         }
         LocalVar* var = qore_rt_obe_var(e, ctx);
-        uint64_t reloaded = qore_rt_obe_load(e, var, xsink);
-        *e.cache = reloaded;
+        uint64_t* cache = qore_rt_obe_slot(frame, e.cache);
+        assert(cache);
+        uint64_t reloaded = qore_rt_obe_load(frame, e, var, xsink);
+        *cache = reloaded;
         *owner = reloaded;
-        if ((table[i] & QORE_OBE_TABLE_FRESH) && e.valid_epoch) {
-            *e.valid_epoch = *epoch;
+        if (table[i] & QORE_OBE_TABLE_FRESH) {
+            if (uint64_t* valid_epoch = qore_rt_obe_slot(frame, e.valid_epoch)) {
+                *valid_epoch = *epoch;
+            }
         }
     }
 }
@@ -16924,7 +16989,7 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                         }
                         break;
                     case LVCompoundOp::DivAssign:
-                        if (rhs.getAsFloat() == 0.0) {
+                        if (qore_number_divisor_is_zero(rhs)) {
                             xsink->raiseException("DIVISION-BY-ZERO",
                                 "division by zero in arbitrary-precision numeric expression");
                         } else {
@@ -16988,9 +17053,9 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                         }
                         break;
                     case LVCompoundOp::ModAssign:
+                        // a divisor of zero raises DIVISION-BY-ZERO, as for % (qore#1034)
                         if (!rv) {
-                            lvh.assign(0ll, "<%= operator>");
-                            res = 0ll;
+                            qore_raise_modulo_by_zero(xsink);
                         } else {
                             res = lvh.modulaEqualsBigInt(rv, "<%= operator>");
                         }
@@ -17128,8 +17193,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_compound_consume(
     return qore_rt_self_member_compound_impl(member_name, compound_op, rhs_holder, xsink);
 }
 
+// documented in JITRuntime.h
 extern "C" DLLEXPORT uint64_t qore_rt_self_member_update(
-        const char* member_name, int32_t unary_op, ExceptionSink* xsink) {
+        const char* member_name, int32_t unary_op, int32_t ref_rv, ExceptionSink* xsink) {
     if (*xsink || unary_op < static_cast<int32_t>(LVUnaryOp::PreInc)
             || unary_op > static_cast<int32_t>(LVUnaryOp::PostDec)) {
         return toBits(QoreValue());
@@ -17140,60 +17206,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_update(
     }
     QoreValue res;
     switch (static_cast<LVUnaryOp>(unary_op)) {
-        case LVUnaryOp::PreInc: {
-            qore_type_t type = lvh.getType();
-            if (type == NT_NUMBER) {
-                lvh.preIncrementNumber();
-                res = lvh.getReferencedValue();
-            } else if (type == NT_FLOAT) {
-                res = lvh.preIncrementFloat();
-            } else {
-                res = lvh.preIncrementBigInt();
-            }
+        case LVUnaryOp::PreInc:
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PreInc>(lvh, ref_rv != 0, res);
             break;
-        }
-        case LVUnaryOp::PreDec: {
-            qore_type_t type = lvh.getType();
-            if (type == NT_NUMBER) {
-                lvh.preDecrementNumber();
-                res = lvh.getReferencedValue();
-            } else if (type == NT_FLOAT) {
-                res = lvh.preDecrementFloat();
-            } else {
-                res = lvh.preDecrementBigInt();
-            }
+        case LVUnaryOp::PreDec:
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PreDec>(lvh, ref_rv != 0, res);
             break;
-        }
-        case LVUnaryOp::PostInc: {
-            qore_type_t type = lvh.getType();
-            if (type == NT_NUMBER) {
-                if (QoreNumberNode* number = lvh.postIncrementNumber(true)) {
-                    res = number;
-                }
-            } else if (type == NT_FLOAT) {
-                res = lvh.postIncrementFloat();
-            } else {
-                res = lvh.postIncrementBigInt();
-            }
+        case LVUnaryOp::PostInc:
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PostInc>(lvh, ref_rv != 0, res);
             break;
-        }
-        case LVUnaryOp::PostDec: {
-            qore_type_t type = lvh.getType();
-            if (type == NT_NUMBER) {
-                if (QoreNumberNode* number = lvh.postDecrementNumber(true)) {
-                    res = number;
-                }
-            } else if (type == NT_FLOAT) {
-                res = lvh.postDecrementFloat();
-            } else {
-                res = lvh.postDecrementBigInt();
-            }
-            break;
-        }
         default:
-            assert(false);
+            // the range of unary_op was checked above
+            assert(static_cast<LVUnaryOp>(unary_op) == LVUnaryOp::PostDec);
+            qore_rt_apply_lvalue_incdec<LVUnaryOp::PostDec>(lvh, ref_rv != 0, res);
+            break;
     }
-    return toBits(*xsink ? QoreValue() : res);
+    // no value after an exception (a number can be the value that the lvalue kept)
+    if (*xsink) {
+        res.discard(xsink);
+        return toBits(QoreValue());
+    }
+    return toBits(res);
 }
 
 // Shared helper for HashKeySlice terminal step: iterates the resolved
@@ -17430,7 +17463,11 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         return v.release();
     }
     if (ct == NT_STRING) {
-        lvh.ensureUnique();
+        // the characters are removed from the string in place, which leaves a plain string that a string enum lvalue
+        // refuses, as in the AST interpreter (LValueRemoveHelper::doRemove(), qore#6195)
+        if (lvh.ensureUnique(is_delete ? "<delete operator>" : "<remove operator>")) {
+            return QoreValue();
+        }
         QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
         if (!str) {
             return QoreValue();
@@ -17580,7 +17617,11 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
     }
 
     if (ct == NT_STRING) {
-        lvh.ensureUnique();
+        // the range is extracted from the string in place, which leaves a plain string that a string enum lvalue
+        // refuses, as in the AST interpreter (LValueRemoveHelper::doRemove(), qore#6195)
+        if (lvh.ensureUnique(is_delete ? "<delete operator>" : "<remove operator>")) {
+            return QoreValue();
+        }
         QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
         if (!str) {
             return QoreValue();
@@ -17929,58 +17970,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             return toBits(QoreValue());
         }
         switch (inst->unary_op) {
-            case LVUnaryOp::PreInc: {
-                qore_type_t t = lvh.getType();
-                if (t == NT_NUMBER) {
-                    lvh.preIncrementNumber();
-                    res = lvh.getReferencedValue();
-                } else if (t == NT_FLOAT) {
-                    res = lvh.preIncrementFloat();
-                } else {
-                    res = lvh.preIncrementBigInt();
-                }
+            case LVUnaryOp::PreInc:
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PreInc>(lvh, inst->ref_rv, res);
                 break;
-            }
-            case LVUnaryOp::PreDec: {
-                qore_type_t t = lvh.getType();
-                if (t == NT_NUMBER) {
-                    lvh.preDecrementNumber();
-                    res = lvh.getReferencedValue();
-                } else if (t == NT_FLOAT) {
-                    res = lvh.preDecrementFloat();
-                } else {
-                    res = lvh.preDecrementBigInt();
-                }
+            case LVUnaryOp::PreDec:
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PreDec>(lvh, inst->ref_rv, res);
                 break;
-            }
-            case LVUnaryOp::PostInc: {
-                qore_type_t t = lvh.getType();
-                if (t == NT_NUMBER) {
-                    QoreNumberNode* n = lvh.postIncrementNumber(true);
-                    if (n) {
-                        res = n;
-                    }
-                } else if (t == NT_FLOAT) {
-                    res = lvh.postIncrementFloat();
-                } else {
-                    res = lvh.postIncrementBigInt();
-                }
+            case LVUnaryOp::PostInc:
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PostInc>(lvh, inst->ref_rv, res);
                 break;
-            }
-            case LVUnaryOp::PostDec: {
-                qore_type_t t = lvh.getType();
-                if (t == NT_NUMBER) {
-                    QoreNumberNode* n = lvh.postDecrementNumber(true);
-                    if (n) {
-                        res = n;
-                    }
-                } else if (t == NT_FLOAT) {
-                    res = lvh.postDecrementFloat();
-                } else {
-                    res = lvh.postDecrementBigInt();
-                }
+            case LVUnaryOp::PostDec:
+                qore_rt_apply_lvalue_incdec<LVUnaryOp::PostDec>(lvh, inst->ref_rv, res);
                 break;
-            }
             case LVUnaryOp::EnsureUnique:
                 // the container of a variable that a weak reference is taken of (qore#5756)
                 if (lvh.getType() == NT_HASH || lvh.getType() == NT_LIST) {
@@ -18032,8 +18033,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 }
                 break;
             case LVUnaryOp::Trim:
+                // a string enum lvalue, and a container whose type refuses a plain string in the place of an enum
+                // element, refuse the plain strings that the operation leaves, as in the AST interpreter
+                // (QoreTrimOperatorNode::evalImpl(), qore#6195)
                 if (lvh.getType() == NT_STRING) {
-                    lvh.ensureUnique();
+                    if (lvh.ensureUnique("<trim operator>")) {
+                        break;
+                    }
                     QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
                     if (str) {
                         str->trim(xsink);
@@ -18042,6 +18048,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     // value so callers like `return trim ct;` see the result.
                     res = lvh.getReferencedValue();
                 } else if (lvh.getType() == NT_LIST) {
+                    if (qore_check_in_place_container_strings(lvh.getValue(), "<trim operator>", xsink)) {
+                        break;
+                    }
                     lvh.ensureUnique();
                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
                     if (l) {
@@ -18058,6 +18067,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     }
                     res = lvh.getReferencedValue();
                 } else if (lvh.getType() == NT_HASH) {
+                    if (qore_check_in_place_container_strings(lvh.getValue(), "<trim operator>", xsink)) {
+                        break;
+                    }
                     lvh.ensureUnique();
                     QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
                     if (h) {
@@ -18076,14 +18088,20 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 }
                 break;
             case LVUnaryOp::Chomp:
+                // see LVUnaryOp::Trim (QoreChompOperatorNode::evalImpl(), qore#6195)
                 if (lvh.getType() == NT_STRING) {
-                    lvh.ensureUnique();
+                    if (lvh.ensureUnique("<chomp operator>")) {
+                        break;
+                    }
                     QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
                     if (str) {
                         // Mirror QoreChompOperatorNode::evalImpl: return count.
                         res = QoreValue(static_cast<int64>(str->chomp()));
                     }
                 } else if (lvh.getType() == NT_LIST) {
+                    if (qore_check_in_place_container_strings(lvh.getValue(), "<chomp operator>", xsink)) {
+                        break;
+                    }
                     lvh.ensureUnique();
                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
                     if (l) {
@@ -18102,6 +18120,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                         res = QoreValue(count);
                     }
                 } else if (lvh.getType() == NT_HASH) {
+                    if (qore_check_in_place_container_strings(lvh.getValue(), "<chomp operator>", xsink)) {
+                        break;
+                    }
                     lvh.ensureUnique();
                     QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
                     if (h) {
@@ -18199,11 +18220,10 @@ static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* ins
                 if (regex_op && regex_op->getRegexSubst()) {
                     QoreStringNodeValueHelper str(lvh.getValue());
                     QoreStringNode* nv = regex_op->getRegexSubst()->exec(*str, xsink);
-                    if (!*xsink && nv) {
-                        lvh.assign(nv);
-                        if (inst->ref_rv) {
-                            res = nv->refSelf();
-                        }
+                    // the lvalue's type can refuse the plain string (ex: an enum type, qore#6196); assign() owns
+                    // the value in either case
+                    if (!*xsink && nv && !lvh.assign(nv, "<=~ s/// operator>") && inst->ref_rv) {
+                        res = nv->refSelf();
                     }
                 }
             }
@@ -18219,11 +18239,10 @@ static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* ins
                 if (trans_op && trans_op->getTransliteration()) {
                     QoreStringNodeValueHelper str(lvh.getValue());
                     QoreStringNode* nv = trans_op->getTransliteration()->exec(*str, xsink);
-                    if (!*xsink && nv) {
-                        lvh.assign(nv);
-                        if (inst->ref_rv) {
-                            res = nv->refSelf();
-                        }
+                    // the lvalue's type can refuse the plain string (ex: an enum type, qore#6196); assign() owns
+                    // the value in either case
+                    if (!*xsink && nv && !lvh.assign(nv, "<=~ tr/// operator>") && inst->ref_rv) {
+                        res = nv->refSelf();
                     }
                 }
             }
@@ -18299,8 +18318,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
         xsink->raiseException("EXTRACT-ERROR",
             "first (lvalue) argument to the extract operator is not a list, "
             "string, or binary object");
+    } else if (lvh.ensureUnique(inst->ternary_op == LVTernaryOp::Splice
+            ? "<splice operator>" : "<extract operator>")) {
+        // a string enum lvalue refuses the plain string that the operation leaves, as in the AST interpreter
+        // (qore#6195)
+        return toBits(QoreValue());
     } else {
-        lvh.ensureUnique();
         size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
         if (inst->ternary_op == LVTernaryOp::Splice) {
             if (vt == NT_LIST) {
@@ -18575,9 +18598,9 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_comp
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_update_throwing(
-        const char* member_name, int32_t unary_op, ExceptionSink* xsink) {
+        const char* member_name, int32_t unary_op, int32_t ref_rv, ExceptionSink* xsink) {
     uint64_t result = qore_rt_self_member_update(
-        member_name, unary_op, xsink);
+        member_name, unary_op, ref_rv, xsink);
     if (xsink && *xsink) {
         fromBits(result).discard(xsink);
         throw QoreJITException();
@@ -19758,7 +19781,8 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
     // marks every body local IR-only.
     bool skip_body_locals = false;
     const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
-    QoreParseOptions po = uvb->getParseOptions(uvb->pgm->getParseOptions());
+    // the Program's own options: a call takes them at run time, not the scoped options of a parse (#6207)
+    QoreParseOptions po = uvb->getParseOptions(qore_program_private::getParseOptions(*uvb->pgm));
     if (!skip_body_locals) {
         for (LocalVar* lv : body_locals) {
             if (lv->closureUse()) {
@@ -20206,6 +20230,9 @@ struct RefForeachState {
     QoreValue ln;                      // result accumulator (one ref owned)
 };
 
+// the IR interpreter keeps the state in a value slot (see QoreIRPointerSlot.h)
+QORE_IR_POINTER_SLOT_TYPE_CHECK(RefForeachState);
+
 // Initialize reference foreach state from a ParseReferenceNode expression.
 // Returns an opaque state pointer (as uint64_t), or 0 on error.
 extern "C" DLLEXPORT uint64_t qore_rt_ref_foreach_init(uint64_t parse_ref_bits, ExceptionSink* xsink) {
@@ -20365,6 +20392,9 @@ extern "C" DLLEXPORT void qore_rt_ref_foreach_cleanup(uint64_t state_ptr, Except
 // The Context ctor evaluates `where_exp` and `sort_exp` per-row internally
 // against itself (already on top of the stack) — those expressions are AST
 // trees passed through as opaque QoreValue bits.
+
+// the IR interpreter keeps the state in a value slot (see QoreIRPointerSlot.h)
+QORE_IR_POINTER_SLOT_TYPE_CHECK(Context);
 
 extern "C" DLLEXPORT uint64_t qore_rt_context_init(const char* name, uint64_t exp_bits,
         uint64_t where_bits, uint64_t sort_bits, int sort_type, ExceptionSink* xsink) {

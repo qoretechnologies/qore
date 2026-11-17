@@ -144,6 +144,11 @@ msg.addTO("My Best Friend <you@friend.com>");
       with \c INVALID-ENCODING.  The \c boundary parameter of a multipart message and the type of a text part are
       found in any case (ex: \c "BOUNDARY=", \c "TEXT/PLAIN")
       (<a href="https://github.com/qoretechnologies/qore/issues/114">issue 114</a>)
+    - A message with a raw 8-bit header line (not in an RFC 2047 encoded word, ex: a Latin-1 \c Subject) that is not
+      valid in the encoding of the message text, such as one retrieved with the @ref pop3clientintro "Pop3Client"
+      module, is parsed: the bytes are read as UTF-8 if they are valid UTF-8, otherwise in the charset declared by
+      the message or the part, else in Windows-1252 or ISO-8859-1 (see @ref Mime::mime_get_header_text()); the parse
+      failed with \c INVALID-ENCODING (<a href="https://github.com/qoretechnologies/qore/issues/6326">issue 6326</a>)
     - Enhanced attachment handling:
       - Added RFC 2231 filename encoding for non-ASCII filenames
       - Added RFC 2231 filename decoding for incoming messages
@@ -777,6 +782,9 @@ public class Message {
         int ln = 0;
         # the byte offset of the next line in the text
         int pos = 0;
+        # the charset declared by the Content-Type header, to read a header line that is not valid in the encoding of
+        # the message (issue #6326); found when a header line needs it
+        hash<auto> charset_info;
 
         # is this a MIME message?
         bool mime = False;
@@ -797,7 +805,7 @@ public class Message {
                 # the line converted, and the next line matched
                 MimeScanCounter::bytes += hdr.size() + (lines[ln] ?? "").size();
             }
-            hdr = convert ? convert_encoding(force_encoding(hdr, "UTF-8"), enc) : force_encoding(hdr, enc);
+            hdr = Message::getHeaderText(hdr, enc, convert, text, hend, \charset_info);
             trim hdr;
             if (hdr.empty())
                 break;
@@ -818,9 +826,7 @@ public class Message {
                         # the line converted and joined, and the next line matched
                         MimeScanCounter::bytes += 2 * line.size() + (lines[ln] ?? "").size();
                     }
-                    fold += " " + trim(convert
-                        ? convert_encoding(force_encoding(line, "UTF-8"), enc)
-                        : force_encoding(line, enc));
+                    fold += " " + trim(Message::getHeaderText(line, enc, convert, text, hend, \charset_info));
                 } while (lines[ln] =~ /^[ \t]/);
                 hdr = join(convert_encoding("", enc), fold);
             }
@@ -3263,6 +3269,34 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         return name !~ /^(UTF8|USASCII|ASCII|ISO8859|LATIN|WINDOWS125|CP125|KOI8|KOI7|WINDOWS874|CP874)/
             && name !~ /^(EUC|SHIFTJIS|SJIS|CP932|WINDOWS31J|MSKANJI|GBK|CP936|WINDOWS936|GB2312|GB18030|BIG5|CP950)/
             && name !~ /^(CP949|UHC)/;
+    }
+
+    # returns the text of a header line of the message text read by bytes: in the encoding of the message, or, if
+    # the line has 8-bit bytes that are not valid in it, read as UTF-8 or in a single-byte charset, preferably the one
+    # that the Content-Type of the message declares (see Mime::mime_get_header_text()); a raw 8-bit header line (ex:
+    # a Latin-1 Subject) in a message tagged UTF-8 made the parse fail with INVALID-ENCODING (issue #6326)
+    private static string getHeaderText(string line, string enc, bool convert, string text, int hend,
+            reference<hash<auto>> charset_info) {
+        if (convert) {
+            # the line was converted to UTF-8 from the encoding of the message, so it is valid
+            return convert_encoding(force_encoding(line, "UTF-8"), enc);
+        }
+        if (line.isDataAscii()) {
+            # an ASCII line is valid in every encoding that is not converted
+            return force_encoding(line, enc);
+        }
+        # 8-bit bytes are read as UTF-8 if they are valid UTF-8 (RFC 6532), otherwise in the charset declared by the
+        # message, else in the encoding of the text if it is a single-byte encoding, whatever the encoding of the text
+        if (!charset_info.done) {
+            charset_info.done = True;
+            # the Content-Type header of the message, which can be folded; the search covers the header once
+            string block = hend == -1 ? text : text.substr(0, hend);
+            if (scan_counting) {
+                MimeScanCounter::bytes += block.size();
+            }
+            charset_info.charset = mime_get_header_block_charset(block);
+        }
+        return mime_get_header_text(binary(line), charset_info.charset, enc);
     }
 
     # returns text of the message read by bytes in the encoding of the message

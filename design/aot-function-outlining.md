@@ -73,6 +73,63 @@ This generalizes the existing Phase 1.5 init-expression outliner
    `getOrInsertFunction` resolves. Helpers return Nothing (v1 regions
    produce no value); no runtime descriptor is emitted (same as init
    helpers — the coordinator drives them via direct native calls).
+
+   **Slot-keyed symbols stay the coordinator's.**  A helper runs with the
+   coordinator's slot map and context, so a symbol named after an
+   expression slot belongs to the coordinator, not to the helper.  The
+   dispatch functions of the closures that a helper creates and calls
+   (`<owner>_closure_dispatch_<slot>`,
+   `<owner>_closure_native_dispatch_<slot>`,
+   `<owner>_closure_native_guarded_dispatch_<slot>` and their `_throwing`
+   adapters) are declared at the call site and defined after lowering by
+   `compileAOTClosureBodiesForOwner()`, which walks the coordinator's
+   `CLOSURE_CREATE` slots under the coordinator's symbol.  A helper
+   therefore names them after `QoreIRFunction::getAOTSymbolOwner()` (the
+   coordinator's symbol, set in `aot_symbol_owner` when the helper is made),
+   never after its own name: a
+   helper-named dispatch was never defined, and every executable or module
+   with a closure call in an outlined region failed to link (qore#6310).
+   A function nested in the one being lowered (an `on_exit`, `on_success`
+   or `on_error` handler body, `handler_<n>@<function>`, or a background
+   helper) shares its parent's slot tables, so its lowering takes the
+   parent's owner (`QoreIRToLLVM::getAOTSymbolOwner()`); it named the
+   dispatch functions after itself, and a closure called in a handler
+   failed to link with or without outlining (qore#6339).
+   The init-expression outliner sets the owner on its helpers too, which
+   has no effect yet: init functions never get their closure dispatch
+   functions defined (`compileAOTClosureBodiesForOwner()` runs only for
+   compiled functions and methods), so a constant initializer that calls a
+   closure fails to link with or without outlining (qore#6336).
+   Helpers are lowered without the batch callee map, so a helper's call
+   site may declare a boxed result for a closure whose effect summary gives
+   the definition a native int, float or bool result; the call site records
+   its result kind on the declaration (`qore.closure.return_kind`) and the
+   definition boxes the native result of the closure body for a boxed
+   declaration, instead of returning a native value that the helper would
+   read as a boxed one.
+
+   When a helper or the coordinator fails to lower and the function is
+   lowered again un-outlined, `aotEraseOutlinedFunctions()` erases the
+   helpers with the nested functions that their lowering emitted
+   (`<helper>_obe_<n>` handler bodies and `<helper>_bg_<n>` background
+   helpers, which call the helpers' dispatch declarations; after a
+   coordinator failure also the coordinator's own nested functions,
+   which the retry emits again under the same names), and then the
+   unused dispatch declarations (`aotEraseUnusedClosureDispatchDecls()`):
+   the retry, lowered with the batch callee map, declares them with its
+   own ABI (a `double` or `i1` result for a float or bool closure), and
+   a call site whose dispatch function is already declared with another
+   ABI fails the lowering instead of emitting a mismatched call.
+   The erase of the failed coordinator's own nested functions has no
+   test: `QORE_AOT_TEST_FAIL_LOWERING` fails a function before it emits
+   any nested function, and it would fail the un-outlined retry of the
+   coordinator too, as the retry has the coordinator's name.
+
+   Closure creation is allowed in regions on purpose: generated giant
+   functions use closures (`map` with a closure, callbacks), and keeping
+   them out of regions would leave those functions unpartitioned; the
+   restriction that remains is the one on closure-use locals crossing the
+   boundary (decision 5).
 5. **Region discovery: SESE interval sweep over the block layout.**
    First, a reversible *block-split pre-pass* breaks blocks at
    statement-end markers (`DiscardTemps`/`CheckException`/
@@ -264,6 +321,17 @@ the one giant function regardless of the optimization level.
   reference args and container locals, object lifetime/destructor order,
   disabled-mode equivalence, no-safe-partition fallback (loop with
   embedded returns), and deterministic helper naming.
+- `examples/test/ir/AOTOutlinedClosure.qc` (run in parts by
+  `AOTOutlinedClosure-<n>.qtest`) — closures created and
+  called in outlined regions (qore#6310): the issue's function at the
+  default thresholds (executables and a module, -O0 and -O3), small
+  functions with forced thresholds whose regions hold closures with
+  native results and capturing, stored, returned and nested closures,
+  float/bool closures, also in a handler, in a function whose helper
+  fails to lower (`QORE_AOT_TEST_FAIL_LOWERING`), retried un-outlined,
+  and closures in handlers (qore#6339); it checks with
+  `QORE_AOT_DUMP_IR` that the helpers create the closures and compares
+  the results with the AST.
 - The full `examples/test/ir/` suite passes both normally and with
   outlining forced onto nearly every function
   (`QORE_AOT_OUTLINE_FN_MIN_INSTS=60`).

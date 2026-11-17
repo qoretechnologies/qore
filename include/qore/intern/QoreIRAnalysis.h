@@ -71,6 +71,17 @@ struct QoreIRControlFlowGraph {
     std::vector<std::vector<size_t>> predecessors;
     std::vector<std::vector<uint64_t>> dominators;
     std::vector<uint8_t> reachable;
+    //! 1 for each block that is the exception target of an instruction (or of a throw) of a block that runs: a handler
+    //! entry, which control can enter in the middle of any block that it handles, whatever the graph's edges
+    std::vector<uint8_t> exception_entry;
+    //! 1 for each block that runs only through exception edges: not in \a reachable (always 0 with exception edges)
+    /** A forward dataflow over a graph without exception edges skips the blocks that are not reachable, so it never
+        computes the state at the end of one of these blocks; at a join that one of them flows into (the block after
+        a try statement, which the end of its catch block flows into) it must either compute that state, as the
+        in-place mutation analyses do from the states at the instructions that throw to the handler, or assume
+        nothing from it (issue #6334), while a predecessor that does not run at all can be ignored.
+    */
+    std::vector<uint8_t> exception_only;
     bool cancelled = false;
 };
 
@@ -112,6 +123,22 @@ struct QoreIRNaturalLoop {
 //! @param cfg control-flow graph to analyze
 //! @return natural loops ordered from smallest to largest
 std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlowGraph& cfg);
+
+//! Decides the release checks of functional loop bodies (pending CheckExceptions, see QoreIRReleaseCheck; qore#6072)
+/** The lowering emits one after each container, at the start of each call's continuation and after the Phis of each
+    block in the body of a functional loop, with the value whose release it checks as its operand, and one at the
+    loop's back-edge.  A check is removed when its value cannot hold an object (a monotone data-flow analysis over the
+    value facts, local types, resolved variants' return types and opcodes), when a ListAppendElement with the same
+    handler follows it past instructions that cannot observe the exception, or, at a back-edge, when such an append
+    precedes it, or when no value of the back-edge's loop can hold an object.  A kept check of a container's value gives
+    the container its handler and becomes QoreIRReleaseCheck::Kept (native code emits nothing for it); one of a call's
+    or a Phi's value becomes QoreIRReleaseCheck::Native (native code checks the sink there); the operands are cleared.
+    Decided checks are left alone, so running it again changes nothing.  A loop of values that cannot hold an object
+    gets no check, and a map of objects whose elements are appended none per element.
+
+    @return the number of instructions removed
+*/
+size_t qore_ir_prune_release_checks(QoreIRFunction& func);
 
 //! Returns the values that a call takes as an argument and that a later execution of the call uses again.
 /** A call that consumes an argument releases it when the call returns (see design/temporary-lifetime.md); that is

@@ -1079,8 +1079,8 @@ enum class QoreIROpcode : uint16_t {
         LeAny, GtAny and GeAny for operands that the parser found may hold such a value only for some of their values
         (an or-nothing or a union type that includes the plugin's type, auto, or no type).  They dispatch to the
         plugin operation for such a value, as the AST operator does, and compare as the Any opcode otherwise; the
-        result need not be a boolean.  A switch case with an operator compares with the Any opcode, as the AST's
-        CaseNodeWithOperator compares without plugins.
+        result need not be a boolean.  A switch case with an operator compares as the operator does in the condition
+        of an if statement, plugins included (qore#6252).
     */
     EqPlugin = 432,
     NePlugin = 433,
@@ -1532,6 +1532,24 @@ enum class QoreIRInstClass : uint8_t {
         return c == inst_class_id; \
     }
 
+//! The kind of a check of a release in the body of a functional loop (a CheckException; qore#6072)
+/** The body of a map, select or fold expression keeps the values of an element until the next element replaces them;
+    the release of one whose type can hold an object can run a destructor that raises an exception.  The lowering puts
+    a CheckException after each container, at the start of each call's continuation, after the Phis of each block and
+    at the loop's back-edge (QoreIRLowering::LoopBodyRegion), with the value whose release it checks as its operand
+    (none at a back-edge).  qore_ir_prune_release_checks() removes those of the values that cannot hold an object and
+    those that an append with the same handler follows, and clears the operands of the others.  The IR interpreter
+    executes every CheckException alike.
+*/
+enum class QoreIRReleaseCheck : uint8_t {
+    None,       //!< not a release check
+    Pending,    //!< a release check that qore_ir_prune_release_checks() has not decided yet (it has its operand)
+    Kept,       //!< a kept check of a container's value or at a back-edge: native code checks the sink after the
+                //!< release itself (the container gets the handler) and emits nothing for it
+    Native,     //!< a kept check of a call's or a Phi's value: native code releases the previous value at the start
+                //!< of the call's continuation or of the Phi's block, where it checks the sink
+};
+
 class QoreIRInstruction {
 public:
     enum class AOTStringCaseComparisonKind : uint8_t {
@@ -1598,6 +1616,9 @@ public:
     // Transient: ReleaseOwnedTemp in the exception cleanup of a functional operator, which only runs once the loop has
     // ended (see qore_ir_is_exception_only_release())
     bool exception_cleanup_release = false;
+    //! CheckException only: whether it checks a release in the body of a functional loop (qore#6072); transient, not
+    //! serialized: the IR interpreter executes it as any CheckException
+    QoreIRReleaseCheck release_check = QoreIRReleaseCheck::None;
     // Transient: a call with an argument that the IR interpreter's analysis found it can consume, which gives the
     // references of its temporary arguments to the callee (see IRConsumedCallArgs in QoreIRInterpreter.cpp, issue
     // #5882): QORE_IR_GIVES_CALL_ARGS, with QORE_IR_GIVES_CALL_TEMPS if one of them is a value that a parameter of the
@@ -2582,7 +2603,11 @@ public:
 };
 
 //! Fused add-assign for two typed int locals: target += source
-//! Replaces LoadLocal(target) + LoadLocal(source) + AddAssignInt + StoreLocal(target)
+/** Replaces LoadLocal(target) + LoadLocal(source) + AddAssignInt + StoreLocal(target); the target's type stores the
+    integer as it is (int or softint, never an enum, which takes the lvalue path).  The instruction has the handler of
+    an enclosing try block as its exception target: the read of the source and the change of the target, made by a
+    runtime helper for a variable on the runtime stack, can raise an exception
+*/
 class QoreIRAddAssignLocalIntInstruction : public QoreIRInstruction {
 public:
     QORE_IR_INST_CLASS(AddAssignLocalInt)
@@ -2603,7 +2628,11 @@ public:
 };
 
 //! Fused increment for typed int local: local += delta (constant int)
-//! Replaces LoadLocal + ConstInt(delta) + AddAssignInt + StoreLocal
+/** Replaces LoadLocal + ConstInt(delta) + AddAssignInt + StoreLocal; the local's type stores the integer as it is
+    (int or softint, never an enum, which takes the lvalue path).  The instruction has the handler of an enclosing
+    try block as its exception target: the change, made by a runtime helper for a variable on the runtime stack or a
+    closure-bound variable, can raise an exception
+*/
 class QoreIRIncrementLocalIntInstruction : public QoreIRInstruction {
 public:
     QORE_IR_INST_CLASS(IncrementLocalInt)
@@ -3899,6 +3928,8 @@ public:
     QoreValue where_exp;     //!< optional `where` filter expression (empty = no filter)
     QoreValue sort_exp;      //!< optional sort expression (empty = no sort)
     int sort_type = -1;      //!< CM_SORT_ASCENDING, CM_SORT_DESCENDING, or -1 for none
+    //! the expressions read the implicit index (\c $#) from the thread at run time (qore#6341)
+    bool reads_implicit_element = false;
 };
 
 //! Backquote expression instruction — execute command and return stdout as string.
@@ -3956,6 +3987,8 @@ public:
     QoreValue find_exp;
     QoreValue where;
     int32_t mode = 0;
+    //! the expressions read the implicit index (\c $#) from the thread at run time (qore#6341)
+    bool reads_implicit_element = false;
 };
 
 class QoreIRSummarizeInstruction : public QoreIRInstruction {
@@ -4401,8 +4434,22 @@ public:
     //! @return true if direct parameter passing is enabled and no parameter local is closure-captured
     bool isDirectParamsRuntimeSafe() const;
 
+    //! Returns the LLVM symbol of the AOT-compiled body that owns this function's expression slots
+    /** An AOT outlined helper (function-body regions and init-expression operands, see
+        design/aot-function-outlining.md) runs with its owner's slot map and context, so the per-slot symbols that its
+        code references, such as the dispatch functions of the closures that it creates and calls, are named after
+        and defined with the owner (compileAOTClosureBodiesForOwner()), not after the helper.
+    */
+    const std::string& getAOTSymbolOwner() const {
+        return aot_symbol_owner.empty() ? name : aot_symbol_owner;
+    }
+
     std::string name;
     std::string display_name;
+    //! the LLVM symbol of the AOT body whose slot map this function uses, when it is an outlined helper
+    /** Empty for every other function; see getAOTSymbolOwner().
+    */
+    std::string aot_symbol_owner;
     //! the count of the on_block_exit handlers lowered for this function; numbers their names deterministically
     uint32_t handler_name_seq = 0;
     //! Source QoreFunction this IR was lowered from.
@@ -4430,6 +4477,10 @@ public:
         Program's statement index at runtime.
     */
     bool emit_debug_statements = false;
+    //! true while qore_ir_optimize() is still to run on the function: computeSlotIdsAndEmbed() leaves the release
+    //! checks to it, which prunes them with the facts that it refines (qore#6072, qore_ir_prune_release_checks());
+    //! the pruning gives handlers and converts checks, which a later run cannot undo
+    bool defer_release_check_prune = false;
     //! Owning program of this lowered IR function. Used by the per-Program background
     //! JIT-compile drain (QoreJIT::waitForBgCompileQueue(QoreProgram*)) to cancel/await
     //! only the compiles referencing a Program being torn down. Set unconditionally at

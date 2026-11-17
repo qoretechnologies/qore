@@ -65,6 +65,10 @@ protected:
     bool has_explicit_type_args = false;
     //! true if the call can bind named arguments at run time (set by the call node before parseArgsVariant())
     bool allow_runtime_arg_names = false;
+    //! true for a call of a method that the class does not have, of the name of a member that can hold code: a
+    //! named call keeps its names, which bind its arguments at run time to the parameters of the member's code
+    //! (AbstractMethodCallNode::execNamed(); qore#6361)
+    bool runtime_named_member_call = false;
     //! true for a call of a method resolved on the class of the object (a call through an object or an unqualified
     //! call of a normal method in the class): a named call is resolved at run time on the class of the object, as the
     //! positional call that it spells out (qore#5990)
@@ -149,6 +153,12 @@ public:
     //! of the call, or the variant that the names of a named call resolved at run time select (qore#5990)
     DLLLOCAL const AbstractQoreFunctionVariant* getParseCheckVariant() const {
         return variant ? variant : named_bound_variant;
+    }
+
+    //! marks a call of a method that the class does not have, of the name of a member that can hold code; set before
+    //! parseArgsVariant(): a named call binds its arguments at run time to the parameters of the member's code
+    DLLLOCAL void setRuntimeNamedMemberCall() {
+        runtime_named_member_call = true;
     }
 
     //! marks a call of a method dispatched on the class of the object; set before parseArgsVariant()

@@ -1515,6 +1515,21 @@ static arrow::FieldVector columnarChildrenToArrowFields(const QoreColumnarTypeDe
     return fields;
 }
 
+//! returns an Arrow decimal128 type, or raises an exception if the precision and scale are not supported by it
+/** Arrow aborts the process for a decimal128 type with a precision outside of 1..38; a number column schema can have
+    a greater precision (a decimal256 column, for example).
+*/
+static std::shared_ptr<arrow::DataType> columnarDecimalArrowType(const QoreColumnarTypeDescriptor& desc,
+        int32_t precision, int32_t scale, ExceptionSink* xsink) {
+    if (precision < 1 || precision > 38 || scale < 0 || scale > precision) {
+        xsink->raiseException("DATAFRAME-IO-ERROR", "column '%s' has decimal precision %d and scale %d, which "
+            "cannot be exported as an Arrow decimal128 (precision 1..38 and scale 0..precision)", desc.name.c_str(),
+            precision, scale);
+        return nullptr;
+    }
+    return arrow::decimal128(precision, scale);
+}
+
 static std::shared_ptr<arrow::DataType> columnarDescriptorToArrowType(
         const QoreColumnarTypeDescriptor& desc, ExceptionSink* xsink) {
     if (desc.buffer_type != QoreBufferElementType::Invalid
@@ -1536,8 +1551,8 @@ static std::shared_ptr<arrow::DataType> columnarDescriptorToArrowType(
         case QoreColumnarTypeKind::Float:
             return arrow::float64();
         case QoreColumnarTypeKind::Number:
-            return arrow::decimal128(desc.precision > 0 ? desc.precision : 38,
-                desc.precision > 0 ? desc.scale : 10);
+            return columnarDecimalArrowType(desc, desc.precision > 0 ? desc.precision : 38,
+                desc.precision > 0 ? desc.scale : 10, xsink);
         case QoreColumnarTypeKind::String:
             return arrow::utf8();
         case QoreColumnarTypeKind::Date:
@@ -1546,7 +1561,7 @@ static std::shared_ptr<arrow::DataType> columnarDescriptorToArrowType(
         case QoreColumnarTypeKind::Duration:
             return arrow::duration(arrowTimeUnitFromName(desc.time_unit));
         case QoreColumnarTypeKind::Decimal128:
-            return arrow::decimal128(desc.precision > 0 ? desc.precision : 38, desc.scale);
+            return columnarDecimalArrowType(desc, desc.precision > 0 ? desc.precision : 38, desc.scale, xsink);
         case QoreColumnarTypeKind::Binary:
             return desc.fixed_size > 0 ? arrow::fixed_size_binary(desc.fixed_size) : arrow::binary();
         case QoreColumnarTypeKind::List: {
@@ -1610,8 +1625,8 @@ static std::shared_ptr<arrow::DataType> columnarDescriptorToArrowType(
         case QoreColumnarColumnType::Float:
             return arrow::float64();
         case QoreColumnarColumnType::Number:
-            return arrow::decimal128(desc.precision > 0 ? desc.precision : 38,
-                desc.precision > 0 ? desc.scale : 10);
+            return columnarDecimalArrowType(desc, desc.precision > 0 ? desc.precision : 38,
+                desc.precision > 0 ? desc.scale : 10, xsink);
         case QoreColumnarColumnType::String:
             return arrow::utf8();
         case QoreColumnarColumnType::Date:
@@ -1968,6 +1983,21 @@ __attribute__((noinline, cold)) static arrow::Status arrowTimeOverflow(const Dat
     return arrow::Status::Invalid(desc.c_str(), " cannot be stored in ", unit, " in an int64");
 }
 
+//! raises an exception if a value that is not NOTHING or NULL is not of the Qore type of its Arrow type
+/** The Arrow type of a column can come from a schema (a ColumnarResult schema kept by the column, for example), so
+    a value is checked before it is handled as the type (qore#6214).
+*/
+static bool checkArrowValueType(QoreValue val, qore_type_t expected, const char* expected_name,
+        const std::shared_ptr<arrow::DataType>& type, ExceptionSink* xsink) {
+    // the expected types are all held in nodes; the node type is read inline
+    if (val.isPointer() && val.getPtr()->getType() == expected) {
+        return true;
+    }
+    xsink->raiseException("DATAFRAME-IO-ERROR", "expected %s for Arrow %s value, got %s", expected_name,
+        type->ToString().c_str(), val.getFullTypeName());
+    return false;
+}
+
 static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
         const std::shared_ptr<arrow::DataType>& type, QoreValue val, ExceptionSink* xsink) {
     if (val.isNullOrNothing()) {
@@ -2054,19 +2084,28 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
             break;
         }
         case arrow::Type::BINARY: {
-            const BinaryNode* bin = val.get<BinaryNode>();
+            if (!checkArrowValueType(val, NT_BINARY, "binary", type, xsink)) {
+                return false;
+            }
+            const BinaryNode* bin = val.get<const BinaryNode>();
             status = bin ? static_cast<arrow::BinaryBuilder*>(builder)->Append(
                 static_cast<const uint8_t*>(bin->getPtr()), bin->size()) : builder->AppendNull();
             break;
         }
         case arrow::Type::LARGE_BINARY: {
-            const BinaryNode* bin = val.get<BinaryNode>();
+            if (!checkArrowValueType(val, NT_BINARY, "binary", type, xsink)) {
+                return false;
+            }
+            const BinaryNode* bin = val.get<const BinaryNode>();
             status = bin ? static_cast<arrow::LargeBinaryBuilder*>(builder)->Append(
                 static_cast<const uint8_t*>(bin->getPtr()), bin->size()) : builder->AppendNull();
             break;
         }
         case arrow::Type::FIXED_SIZE_BINARY: {
-            const BinaryNode* bin = val.get<BinaryNode>();
+            if (!checkArrowValueType(val, NT_BINARY, "binary", type, xsink)) {
+                return false;
+            }
+            const BinaryNode* bin = val.get<const BinaryNode>();
             if (!bin) {
                 status = builder->AppendNull();
                 break;
@@ -2085,7 +2124,10 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
         case arrow::Type::DATE32:
         case arrow::Type::DATE64:
         case arrow::Type::TIMESTAMP: {
-            const DateTimeNode* dt = val.get<DateTimeNode>();
+            if (!checkArrowValueType(val, NT_DATE, "date", type, xsink)) {
+                return false;
+            }
+            const DateTimeNode* dt = val.get<const DateTimeNode>();
             if (!dt) {
                 status = builder->AppendNull();
                 break;
@@ -2132,7 +2174,10 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
             break;
         }
         case arrow::Type::DURATION: {
-            const DateTimeNode* dt = val.get<DateTimeNode>();
+            if (!checkArrowValueType(val, NT_DATE, "date", type, xsink)) {
+                return false;
+            }
+            const DateTimeNode* dt = val.get<const DateTimeNode>();
             if (!dt) {
                 status = builder->AppendNull();
                 break;
@@ -2197,7 +2242,8 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
         case arrow::Type::STRUCT: {
             auto struct_builder = static_cast<arrow::StructBuilder*>(builder);
             auto struct_type = std::static_pointer_cast<arrow::StructType>(type);
-            const QoreHashNode* hash = val.get<QoreHashNode>();
+            const QoreHashNode* hash = val.isPointer() && val.getPtr()->getType() == NT_HASH
+                ? val.get<const QoreHashNode>() : nullptr;
             if (!hash) {
                 xsink->raiseException("DATAFRAME-IO-ERROR",
                     "expected hash for Arrow struct value, got %s", val.getFullTypeName());
@@ -2229,7 +2275,8 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
         case arrow::Type::LIST:
         case arrow::Type::LARGE_LIST:
         case arrow::Type::FIXED_SIZE_LIST: {
-            const QoreListNode* qlist = val.get<QoreListNode>();
+            const QoreListNode* qlist = val.isPointer() && val.getPtr()->getType() == NT_LIST
+                ? val.get<const QoreListNode>() : nullptr;
             if (!qlist) {
                 xsink->raiseException("DATAFRAME-IO-ERROR",
                     "expected list for Arrow list value, got %s", val.getFullTypeName());
@@ -2276,7 +2323,8 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
         case arrow::Type::MAP: {
             auto map_builder = static_cast<arrow::MapBuilder*>(builder);
             auto map_type = std::static_pointer_cast<arrow::MapType>(type);
-            const QoreHashNode* hash = val.get<QoreHashNode>();
+            const QoreHashNode* hash = val.isPointer() && val.getPtr()->getType() == NT_HASH
+                ? val.get<const QoreHashNode>() : nullptr;
             if (!hash) {
                 xsink->raiseException("DATAFRAME-IO-ERROR",
                     "expected hash for Arrow map value, got %s", val.getFullTypeName());

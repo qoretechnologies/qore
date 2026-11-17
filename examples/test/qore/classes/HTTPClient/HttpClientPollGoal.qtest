@@ -117,6 +117,8 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         addTestCase("an aborted request has not reached its goal", \testAbort());
         addTestCase("a request that times out has not reached its goal", \testTimeout());
         addTestCase("a request that fails has not reached its goal", \testError());
+        addTestCase("a request whose new connection fails before the connection manager reserves it fails in its "
+            "poll operation", \testNewConnectionFailsBeforeReservation());
         addTestCase("an answered request has reached its goal", \testSuccess());
         addTestCase("a request whose connection the server closed before it was submitted fails in its poll operation",
             \testCloseBeforeSubmit());
@@ -178,6 +180,37 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
         assertTrue(exists result.ex, "the request fails");
         assertFalse(spop.goalReached(), sprintf("a request that failed (%s) has not reached its goal", result.ex.err));
+    }
+
+    #! A new connection fails before the connection manager reserves it: the error is reported by the poll operation
+    /** The manager refuses a new connection that closed before it reserved its first stream and raises the
+        connection's error from the acquire (a refused connect here; a server that closes the connection at once, as in
+        testError(), on a loaded host); startPollSendRecv() raised it itself instead of reporting it through its poll
+        operation (qore#6111).  The connect is ordered before the reservation with dbg_http_new_connection_wait(), and
+        the port refuses connections at once: a connection holds it and nothing listens on it.
+    */
+    testNewConnectionFailsBeforeReservation() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that orders the connect and the reservation is only in debug builds");
+        }
+        # a port that refuses connections at once: a connection holds it, and its listener is closed
+        Socket listener();
+        listener.bindINET("127.0.0.1", "0", False);
+        listener.listen(1);
+        int port = listener.getSocketInfo().port;
+        Socket client();
+        client.connect(sprintf("127.0.0.1:%d", port), HangGuard);
+        *Socket server_end = listener.accept(HangGuard);
+        assertTrue(exists server_end, "the connection that holds the port is accepted");
+        listener.close();
+
+        HTTPClient hc({"url": "http://127.0.0.1:" + port});
+        call_function("dbg_http_new_connection_wait");
+        on_exit call_function("dbg_http_new_connection_wait_clear");
+        AbstractPollOperation spop = hc.startPollSendRecv("GET", "/refused");
+        hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
+        assertEq("SOCKET-CONNECT-ERROR", result.ex.err, "the refused connect is reported by the poll operation");
+        assertFalse(spop.goalReached(), "a request whose connect was refused has not reached its goal");
     }
 
     #! The server closes a pooled keep-alive connection after startPollSendRecv() found it ready and before the request

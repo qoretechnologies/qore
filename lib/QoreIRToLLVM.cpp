@@ -854,6 +854,91 @@ size_t QoreIRToLLVM::expandFloatToIntForTarget(llvm::Module& module, const llvm:
     return calls.size();
 }
 
+//! the least number of GEPs of an alloca used outside of the entry block that sinkFrameSlotAddresses() copies
+static constexpr size_t QORE_FRAME_SINK_MIN_SLOTS = 64;
+
+// documented in QoreIRToLLVM.h
+size_t QoreIRToLLVM::sinkFrameSlotAddresses(llvm::Module& module) {
+    size_t copies = 0;
+    for (llvm::Function& function : module) {
+        if (function.isDeclaration()) {
+            continue;
+        }
+        llvm::BasicBlock& entry = function.getEntryBlock();
+        // the constant GEPs of each static alloca in the entry block that have a user in another block
+        llvm::MapVector<llvm::AllocaInst*, std::vector<llvm::GetElementPtrInst*>> geps;
+        for (llvm::Instruction& inst : entry) {
+            auto* gep = llvm::dyn_cast<llvm::GetElementPtrInst>(&inst);
+            if (!gep || !gep->hasAllConstantIndices()) {
+                continue;
+            }
+            auto* alloca = llvm::dyn_cast<llvm::AllocaInst>(gep->getPointerOperand());
+            if (!alloca || !alloca->isStaticAlloca()) {
+                continue;
+            }
+            for (llvm::User* user : gep->users()) {
+                if (llvm::cast<llvm::Instruction>(user)->getParent() != &entry) {
+                    geps[alloca].push_back(gep);
+                    break;
+                }
+            }
+        }
+        for (auto& [alloca, list] : geps) {
+            (void)alloca;
+            if (list.size() < QORE_FRAME_SINK_MIN_SLOTS) {
+                continue;
+            }
+            for (llvm::GetElementPtrInst* gep : list) {
+                // the users outside of the entry block, by the block where a copy is placed: that of the user, or
+                // the incoming block of a PHI node
+                llvm::MapVector<llvm::BasicBlock*, llvm::Instruction*> first_user;
+                std::vector<llvm::Use*> uses;
+                for (llvm::Use& use : gep->uses()) {
+                    auto* user = llvm::cast<llvm::Instruction>(use.getUser());
+                    llvm::Instruction* at = user;
+                    if (auto* phi = llvm::dyn_cast<llvm::PHINode>(user)) {
+                        at = phi->getIncomingBlock(use)->getTerminator();
+                    }
+                    if (at->getParent() == &entry) {
+                        continue;
+                    }
+                    uses.push_back(&use);
+                    auto i = first_user.find(at->getParent());
+                    if (i == first_user.end()) {
+                        first_user.insert({at->getParent(), at});
+                    } else if (at->comesBefore(i->second)) {
+                        i->second = at;
+                    }
+                }
+                std::unordered_map<llvm::BasicBlock*, llvm::Instruction*> copy;
+                copy.reserve(first_user.size());
+                for (auto& [block, at] : first_user) {
+                    llvm::Instruction* clone = gep->clone();
+#if LLVM_VERSION_MAJOR >= 19
+                    clone->insertBefore(at->getIterator());
+#else
+                    clone->insertBefore(at);
+#endif
+                    copy.emplace(block, clone);
+                    ++copies;
+                }
+                for (llvm::Use* use : uses) {
+                    auto* user = llvm::cast<llvm::Instruction>(use->getUser());
+                    llvm::BasicBlock* block = user->getParent();
+                    if (auto* phi = llvm::dyn_cast<llvm::PHINode>(user)) {
+                        block = phi->getIncomingBlock(*use);
+                    }
+                    use->set(copy[block]);
+                }
+                if (gep->use_empty()) {
+                    gep->eraseFromParent();
+                }
+            }
+        }
+    }
+    return copies;
+}
+
 size_t QoreIRToLLVM::pruneNoopDecrefs(llvm::Module& module) {
     if (q_env_is_set("QORE_DISABLE_IR_NOOP_DECREF_PRUNE")) {
         return 0;
@@ -1903,9 +1988,9 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // load_local_aot: (ptr, i32, ptr) -> i64
     auto* aot_load_local_ft = llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false);
     module.getOrInsertFunction("qore_rt_load_local_aot", aot_load_local_ft);
-    // cleanup_run_allocas: (ptr, i32, ptr) -> void
-    module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
-            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+    // cleanup_run_frame: (ptr, ptr, i32, ptr, ptr) -> void
+    module.getOrInsertFunction("qore_rt_cleanup_run_frame",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i32_type, ptr_type, ptr_type}, false));
     // reload-chain flush helpers: (ptr, ptr, ptr) -> void and (ptr, ptr) -> void
     module.getOrInsertFunction("qore_rt_reload_chain_rotate",
         llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
@@ -4115,10 +4200,8 @@ size_t QoreIRToLLVM::getCleanupPhiBudget() {
 }
 
 bool QoreIRToLLVM::prepareIteratorCleanupArray(llvm::Function* llvm_func, size_t exits) {
-    iterator_cleanup_array = nullptr;
-    iterator_cleanup_array_count = 0;
-    iterator_cleanup_unpositioned_array = nullptr;
-    iterator_cleanup_unpositioned_count = 0;
+    iterator_cleanup_table.clear();
+    iterator_cleanup_unpositioned_table.clear();
     const size_t count = iterator_cleanup_allocas.size();
     const size_t budget = getCleanupPhiBudget();
     if (!llvm_func || !budget || !count || !exits) {
@@ -4131,56 +4214,32 @@ bool QoreIRToLLVM::prepareIteratorCleanupArray(llvm::Function* llvm_func, size_t
         // overflow-safe form of (count * exits <= budget)
         return false;
     }
-    llvm::BasicBlock& entry = llvm_func->getEntryBlock();
-    llvm::Instruction* term = qoreGetTerminator(entry);
-    if (!term) {
-        return false;
-    }
-    // Emitted in the entry block, after every iterator slot it refers to.
-    llvm::IRBuilder<> ab(term);
-    llvm::AllocaInst* array = ab.CreateAlloca(ptr_type,
-            llvm::ConstantInt::get(i32_type, static_cast<unsigned>(count)),
-            "iterator_cleanup_slots");
-    // qore_rt_iterator_cleanup_allocas() walks the array forwards, matching the
-    // order of the inline sequence it replaces.
+    // qore_rt_iterator_cleanup_frame() walks the table forwards, matching the order of the inline sequence it
+    // replaces
     for (size_t i = 0; i < count; ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr, "JIT iterator cleanup slot registration")) {
-            // the stores written so far address a slot array nothing reads
-            iterator_cleanup_array = nullptr;
-            iterator_cleanup_array_count = 0;
+            // nothing reads the table yet: the inline form stays
+            iterator_cleanup_table.clear();
             return false;
         }
-        llvm::Value* gep = ab.CreateGEP(ptr_type, array,
-                llvm::ConstantInt::get(i32_type, static_cast<unsigned>(i)),
-                "iterator_cleanup_slot_ptr");
-        ab.CreateStore(iterator_cleanup_allocas[i], gep);
+        if (!isCleanupFrameSlotCandidate(iterator_cleanup_allocas[i])) {
+            iterator_cleanup_table.clear();
+            return false;
+        }
+        iterator_cleanup_table.add(iterator_cleanup_allocas[i], 0);
     }
     // the iterators that an exception exit releases with the statement temporaries: those without a place among the
     // locals, which the release of the locals releases (see positionIterators())
     if (!positioned_iterator_allocas.empty()) {
-        std::vector<llvm::Value*> unpositioned;
         for (llvm::Value* alloca_ptr : iterator_cleanup_allocas) {
             if (!positioned_iterator_alloca_set.count(alloca_ptr)) {
-                unpositioned.push_back(alloca_ptr);
+                iterator_cleanup_unpositioned_table.add(alloca_ptr, 0);
             }
         }
-        if (!unpositioned.empty()) {
-            llvm::AllocaInst* uarray = ab.CreateAlloca(ptr_type,
-                    llvm::ConstantInt::get(i32_type, static_cast<unsigned>(unpositioned.size())),
-                    "iterator_cleanup_unpositioned_slots");
-            for (size_t i = 0; i < unpositioned.size(); ++i) {
-                llvm::Value* gep = ab.CreateGEP(ptr_type, uarray,
-                        llvm::ConstantInt::get(i32_type, static_cast<unsigned>(i)),
-                        "iterator_cleanup_unpositioned_slot_ptr");
-                ab.CreateStore(unpositioned[i], gep);
-            }
-            iterator_cleanup_unpositioned_array = uarray;
-        }
-        iterator_cleanup_unpositioned_count = static_cast<unsigned>(unpositioned.size());
+        iterator_cleanup_unpositioned_table.active = true;
     }
-    iterator_cleanup_array = array;
-    iterator_cleanup_array_count = static_cast<unsigned>(count);
+    iterator_cleanup_table.active = true;
     if (q_env_is_set("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT-LLVM: array-iterator-cleanup iterators=%zu exits=%zu\n",
             count, exits);
@@ -4422,9 +4481,8 @@ std::vector<QoreIRToLLVM::ExitReleaseEntry> QoreIRToLLVM::getExitReleaseSequence
 
 bool QoreIRToLLVM::prepareBoxedExitCleanupArray(llvm::Function* llvm_func,
         size_t exit_edges) {
-    boxed_exit_cleanup_array = nullptr;
-    boxed_exit_cleanup_array_count = 0;
-    // the body locals on the runtime stack are released at their places in the array, which every exit uses: at an
+    boxed_exit_cleanup_table.clear();
+    // the body locals on the runtime stack are released at their places in the table, which every exit uses: at an
     // exit that is no exception their values were released already, and they are released again as no value
     const std::vector<ExitReleaseEntry> slots = getExitReleaseSequence(true, true);
     const size_t count = slots.size();
@@ -4443,62 +4501,47 @@ bool QoreIRToLLVM::prepareBoxedExitCleanupArray(llvm::Function* llvm_func,
         // overflow-safe form of (count * exit_edges <= budget)
         return false;
     }
-    llvm::BasicBlock& entry = llvm_func->getEntryBlock();
-    llvm::Instruction* term = qoreGetTerminator(entry);
-    if (!term) {
-        return false;
-    }
-    // Emitted in the entry block, after every local alloca it refers to, so each
-    // slot address dominates its store.
-    llvm::IRBuilder<> ab(term);
-    llvm::AllocaInst* array = ab.CreateAlloca(ptr_type,
-            llvm::ConstantInt::get(i32_type, static_cast<unsigned>(count)),
-            "local_cleanup_slots");
-    // qore_rt_cleanup_run_allocas() releases the entries in LIFO order, last local first, as the inline sequence
-    // releases them; a local on the runtime stack is given by its LocalVar tagged in bit 1 of its address
+    // qore_rt_cleanup_run_frame() releases the entries in LIFO order, last local first, as the inline sequence
+    // releases them; a local on the runtime stack is given by its LocalVar (by its slot in AOT code) tagged with
+    // QORE_FRAME_ENTRY_LOCAL
     for (size_t i = 0; i < count; ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr, "JIT local cleanup slot registration")) {
-            // the stores written so far address a slot array nothing reads, so
-            // dropping the array here leaves the inline per-local cleanup intact
-            boxed_exit_cleanup_array = nullptr;
-            boxed_exit_cleanup_array_count = 0;
+            // nothing reads the table yet, so dropping it here leaves the inline per-local cleanup intact
+            boxed_exit_cleanup_table.clear();
             return false;
         }
-        llvm::Value* gep = ab.CreateGEP(ptr_type, array,
-                llvm::ConstantInt::get(i32_type, static_cast<unsigned>(i)),
-                "local_cleanup_slot_ptr");
-        llvm::Value* entry_ptr;
-        // a closure-bound variable that is popped is tagged in bits 0 and 1 (see qore_rt_cleanup_run_allocas())
-        const uint64_t var_tag = slots[i].pop_closure ? 3 : 2;
+        // a closure-bound variable that is popped is tagged with QORE_FRAME_ENTRY_OBJECT as well (see
+        // qore_rt_cleanup_run_frame())
+        const uint64_t var_tag = slots[i].pop_closure ? (QORE_FRAME_ENTRY_LOCAL | QORE_FRAME_ENTRY_OBJECT)
+            : QORE_FRAME_ENTRY_LOCAL;
         if (slots[i].var && slots[i].aot_slot >= 0) {
-            // AOT code knows the variable only at runtime: it is read from the context, at the function's entry
-            auto var_fn = llvm_func->getParent()->getOrInsertFunction("qore_rt_aot_local_var",
-                    llvm::FunctionType::get(ptr_type, {ptr_type, i32_type}, false));
-            llvm::Value* var_ptr = ab.CreateCall(var_fn, {aot_ctx_arg,
-                llvm::ConstantInt::get(i32_type, static_cast<unsigned>(slots[i].aot_slot))});
-            entry_ptr = ab.CreateIntToPtr(ab.CreateOr(ab.CreatePtrToInt(var_ptr, i64_type),
-                llvm::ConstantInt::get(i64_type, var_tag)), ptr_type, "runtime_local_entry");
-        } else if (slots[i].var) {
-            entry_ptr = ab.CreateIntToPtr(llvm::ConstantInt::get(i64_type,
-                reinterpret_cast<uint64_t>(slots[i].var) | var_tag), ptr_type, "runtime_local_entry");
-        } else if (slots[i].iterator) {
-            // the alloca of an iterator is tagged in bit 2 (see qore_rt_cleanup_run_allocas())
-            entry_ptr = ab.CreateIntToPtr(ab.CreateOr(ab.CreatePtrToInt(slots[i].alloca, i64_type),
-                llvm::ConstantInt::get(i64_type, 4)), ptr_type, "iterator_entry");
-        } else if (isRealReferenceAlloca(slots[i].alloca)) {
-            // the cache of an object local is tagged in the lowest bit of its address (an alloca of an i64 is
-            // aligned), and qore_rt_cleanup_run_allocas() releases its object with the real reference it has from
-            // the cache
-            entry_ptr = ab.CreateIntToPtr(ab.CreateOr(ab.CreatePtrToInt(slots[i].alloca, i64_type),
-                llvm::ConstantInt::get(i64_type, 1)), ptr_type, "real_reference_slot_ptr");
-        } else {
-            entry_ptr = slots[i].alloca;
+            // AOT code knows the variable only at runtime: the helper reads it from the context by its slot
+            assert(aot_mode);
+            boxed_exit_cleanup_table.add(nullptr,
+                (static_cast<uint64_t>(slots[i].aot_slot) << QORE_FRAME_ENTRY_SHIFT) | var_tag);
+            continue;
         }
-        ab.CreateStore(entry_ptr, gep);
+        if (slots[i].var) {
+            assert(!aot_mode);
+            boxed_exit_cleanup_table.add(nullptr, reinterpret_cast<uint64_t>(slots[i].var) | var_tag);
+            continue;
+        }
+        if (!isCleanupFrameSlotCandidate(slots[i].alloca)) {
+            boxed_exit_cleanup_table.clear();
+            return false;
+        }
+        if (slots[i].iterator) {
+            boxed_exit_cleanup_table.add(slots[i].alloca, QORE_FRAME_ENTRY_ITERATOR);
+        } else if (isRealReferenceAlloca(slots[i].alloca)) {
+            // the cache of an object local: qore_rt_cleanup_run_frame() releases its object with the real reference
+            // it has from the cache
+            boxed_exit_cleanup_table.add(slots[i].alloca, QORE_FRAME_ENTRY_OBJECT);
+        } else {
+            boxed_exit_cleanup_table.add(slots[i].alloca, 0);
+        }
     }
-    boxed_exit_cleanup_array = array;
-    boxed_exit_cleanup_array_count = static_cast<unsigned>(count);
+    boxed_exit_cleanup_table.active = true;
     if (q_env_is_set("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT-LLVM: array-exit-cleanup slots=%zu exit-edges=%zu\n",
             count, exit_edges);
@@ -4607,27 +4650,27 @@ llvm::CallInst* QoreIRToLLVM::emitObeCall(llvm::Module& module, const char* name
         const std::vector<uint32_t>& entries, bool with_epoch) {
     llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
     if (!obe_entries) {
-        // the size is that of the records that the tables cover, once the function is lowered (finalizeObeEntries())
-        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
-        llvm::IRBuilder<> ab(&entry, entry.begin());
-        obe_entries = ab.CreateAlloca(llvm::Type::getInt8Ty(ctx), llvm::ConstantInt::get(i64_type, sizeof(QoreObeLocal)),
-            "obe_locals");
-        obe_entries->setAlignment(llvm::Align(8));
+        // replaced with the constant array of the records that the tables cover, once the function is lowered
+        // (finalizeObeEntries())
+        obe_entries = new llvm::GlobalVariable(module, i64_type, true, llvm::GlobalValue::PrivateLinkage,
+            llvm::ConstantInt::get(i64_type, 0), "obe_locals");
     }
+    llvm::Value* frame = getCleanupFrame(llvm_func);
     llvm::Value* table = getObeTable(module, entries);
     llvm::Value* count = llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(entries.size()));
     if (!with_epoch) {
         auto helper = module.getOrInsertFunction(name,
-            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i32_type, ptr_type}, false));
-        return builder->CreateCall(helper, {obe_entries, table, count, xsink_arg});
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+        return builder->CreateCall(helper, {frame, obe_entries, table, count, xsink_arg});
     }
     auto helper = module.getOrInsertFunction(name,
-        llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i32_type, ptr_type, ptr_type, ptr_type}, false));
+        llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type, i32_type, ptr_type, ptr_type, ptr_type},
+            false));
     llvm::Value* epoch = local_reload_epoch ? static_cast<llvm::Value*>(local_reload_epoch)
         : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
     llvm::Value* aot = aot_mode ? static_cast<llvm::Value*>(aot_ctx_arg)
         : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
-    return builder->CreateCall(helper, {obe_entries, table, count, epoch, aot, xsink_arg});
+    return builder->CreateCall(helper, {frame, obe_entries, table, count, epoch, aot, xsink_arg});
 }
 
 // documented in QoreIRToLLVM.h
@@ -4790,75 +4833,322 @@ uint32_t QoreIRToLLVM::getReloadChainSlotIndex(llvm::Value* slot) {
     return index;
 }
 
-// documented in QoreIRToLLVM.h
-bool QoreIRToLLVM::finalizeReloadChainSlots(llvm::Function* llvm_func) {
-    if (!reload_chain_slots) {
-        return true;
-    }
-    llvm::BasicBlock& entry = llvm_func->getEntryBlock();
-    llvm::Instruction* term = qoreGetTerminator(entry);
-    assert(term);
-    llvm::IRBuilder<> ab(term);
-    for (size_t i = 0; i < reload_chain_slot_allocas.size(); ++i) {
-        if (qore_finalize_cancelled(QFL_RELOAD_CHAIN_SLOTS, i, "LLVM reload chain slot table")) {
-            // the flushes read every slot of the array: a function with a slot left unwritten is refused
-            return false;
-        }
-        ab.CreateStore(reload_chain_slot_allocas[i], ab.CreateConstGEP1_64(ptr_type, reload_chain_slots, i));
-    }
-    reload_chain_slots->setOperand(0, llvm::ConstantInt::get(i64_type,
-        std::max<size_t>(reload_chain_slot_allocas.size(), 1)));
-    return true;
-}
+// the layout of the records of the table-driven handler code that finalizeObeEntries() makes
+static_assert(sizeof(QoreObeLocal) == 40 && offsetof(QoreObeLocal, var) == 0 && offsetof(QoreObeLocal, slot) == 8
+    && offsetof(QoreObeLocal, cache) == 12 && offsetof(QoreObeLocal, entry_owner) == 32,
+    "QoreObeLocal is {i64, i32 x 8}");
 
 // documented in QoreIRToLLVM.h
 bool QoreIRToLLVM::finalizeObeEntries(llvm::Function* llvm_func) {
     if (!obe_entries) {
         return true;
     }
-    llvm::BasicBlock& entry = llvm_func->getEntryBlock();
-    llvm::Instruction* term = qoreGetTerminator(entry);
-    assert(term);
-    llvm::IRBuilder<> ab(term);
-    llvm::Type* i8_type = llvm::Type::getInt8Ty(ctx);
-    auto field = [&](size_t index, size_t offset) {
-        return ab.CreateGEP(i8_type, obe_entries, llvm::ConstantInt::get(i64_type, index * sizeof(QoreObeLocal) + offset));
-    };
-    llvm::Value* null_ptr = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
-    auto store_ptr = [&](size_t index, size_t offset, llvm::Value* value) {
-        ab.CreateStore(value ? value : null_ptr, field(index, offset));
+    llvm::GlobalVariable* placeholder = obe_entries;
+    obe_entries = nullptr;
+    if (placeholder->use_empty()) {
+        placeholder->eraseFromParent();
+        return true;
+    }
+    llvm::StructType* record_type = llvm::StructType::get(ctx, {i64_type, i32_type, i32_type, i32_type, i32_type,
+        i32_type, i32_type, i32_type, i32_type});
+    std::vector<llvm::Constant*> records;
+    records.reserve(obe_entry_keys.size());
+    auto index = [&](const auto& map, const void* key) -> uint32_t {
+        auto it = map.find(key);
+        return it == map.end() || !it->second ? QORE_OBE_NO_SLOT : getCleanupFrameIndex(it->second);
     };
     for (size_t i = 0; i < obe_entry_keys.size(); ++i) {
         const void* key = obe_entry_keys[i];
         if (qore_finalize_cancelled(QFL_HANDLER_LOCAL_TABLE, i, "LLVM handler local table")) {
-            // the helpers read every record of the table: a function with a record left unwritten is refused
+            // the helpers read every record of the table: a function with a record left unmade is refused
             // (qore#6305)
             return false;
         }
         auto cache_it = local_allocas.find(key);
         assert(cache_it != local_allocas.end());
-        auto find_alloca = [&](const auto& map) -> llvm::Value* {
-            auto it = map.find(key);
-            return it == map.end() ? nullptr : static_cast<llvm::Value*>(it->second);
-        };
+        uint64_t var = 0;
+        int32_t slot = 0;
         if (aot_mode) {
-            store_ptr(i, offsetof(QoreObeLocal, var), nullptr);
-            ab.CreateStore(llvm::ConstantInt::get(i32_type,
-                static_cast<uint32_t>(const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key))),
-                field(i, offsetof(QoreObeLocal, slot)));
+            slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
         } else {
-            store_ptr(i, offsetof(QoreObeLocal, var), ab.CreateIntToPtr(
-                llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(key)), ptr_type));
-            ab.CreateStore(llvm::ConstantInt::get(i32_type, 0), field(i, offsetof(QoreObeLocal, slot)));
+            var = reinterpret_cast<uint64_t>(key);
         }
-        store_ptr(i, offsetof(QoreObeLocal, cache), cache_it->second.storage());
-        store_ptr(i, offsetof(QoreObeLocal, tracker), find_alloca(local_reload_trackers));
-        store_ptr(i, offsetof(QoreObeLocal, deferred), find_alloca(local_reload_deferred));
-        store_ptr(i, offsetof(QoreObeLocal, valid_epoch), find_alloca(local_valid_epochs));
-        store_ptr(i, offsetof(QoreObeLocal, ref_flag), find_alloca(local_reference_flags));
-        store_ptr(i, offsetof(QoreObeLocal, entry_owner), find_alloca(preinstantiated_entry_cleanup_by_local));
+        records.push_back(llvm::ConstantStruct::get(record_type, {
+            llvm::ConstantInt::get(i64_type, var),
+            llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(slot)),
+            llvm::ConstantInt::get(i32_type, getCleanupFrameIndex(cache_it->second.storage())),
+            llvm::ConstantInt::get(i32_type, index(local_reload_trackers, key)),
+            llvm::ConstantInt::get(i32_type, index(local_reload_deferred, key)),
+            llvm::ConstantInt::get(i32_type, index(local_valid_epochs, key)),
+            llvm::ConstantInt::get(i32_type, index(local_reference_flags, key)),
+            llvm::ConstantInt::get(i32_type, index(preinstantiated_entry_cleanup_by_local, key)),
+            llvm::ConstantInt::get(i32_type, 0),
+        }));
     }
-    obe_entries->setOperand(0, llvm::ConstantInt::get(i64_type, obe_entry_keys.size() * sizeof(QoreObeLocal)));
+    llvm::ArrayType* array_type = llvm::ArrayType::get(record_type, records.size());
+    auto* array = new llvm::GlobalVariable(*llvm_func->getParent(), array_type, true,
+        llvm::GlobalValue::PrivateLinkage, llvm::ConstantArray::get(array_type, records), "obe_locals");
+    array->setAlignment(llvm::Align(8));
+    array->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+    placeholder->replaceAllUsesWith(array);
+    array->takeName(placeholder);
+    placeholder->eraseFromParent();
+    return true;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::AllocaInst* QoreIRToLLVM::getCleanupFrame(llvm::Function* llvm_func) {
+    if (!cleanup_frame) {
+        // the size is that of the slots of the tables, once the function is lowered (finalizeCleanupFrame())
+        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+        llvm::IRBuilder<> ab(&entry, entry.begin());
+        cleanup_frame = ab.CreateAlloca(i64_type, llvm::ConstantInt::get(i64_type, 1), "cleanup_frame");
+        cleanup_frame->setAlignment(llvm::Align(8));
+    }
+    return cleanup_frame;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::GlobalVariable* QoreIRToLLVM::getCleanupFrameTable(llvm::Module& module, CleanupFrameTable& table,
+        const char* name) {
+    assert(table.active);
+    if (!table.placeholder) {
+        // replaced with the constant array of the entries once the function is lowered (finalizeCleanupFrameTable())
+        table.placeholder = new llvm::GlobalVariable(module, i64_type, true, llvm::GlobalValue::PrivateLinkage,
+            llvm::ConstantInt::get(i64_type, 0), name);
+    }
+    return table.placeholder;
+}
+
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::isCleanupFrameSlotCandidate(const llvm::Value* slot) const {
+    auto* alloca = llvm::dyn_cast_or_null<llvm::AllocaInst>(slot);
+    if (!alloca || !alloca->getParent() || !alloca->isStaticAlloca()
+            || alloca->getParent() != &alloca->getParent()->getParent()->getEntryBlock()) {
+        return false;
+    }
+    auto* elements = llvm::dyn_cast<llvm::ConstantInt>(alloca->getArraySize());
+    if (!elements || elements->getZExtValue() != 1 || alloca->getAlign().value() > 8) {
+        return false;
+    }
+    const llvm::DataLayout& dl = alloca->getModule()->getDataLayout();
+    llvm::TypeSize size = dl.getTypeAllocSize(alloca->getAllocatedType());
+    return !size.isScalable() && size.getFixedValue() <= 8;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::getCleanupFrameAotContext() const {
+    return aot_mode ? static_cast<llvm::Value*>(aot_ctx_arg)
+        : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+}
+
+// documented in QoreIRToLLVM.h
+uint32_t QoreIRToLLVM::getCleanupFrameIndex(llvm::Value* slot) {
+    auto it = cleanup_frame_index.find(slot);
+    if (it != cleanup_frame_index.end()) {
+        return it->second;
+    }
+    uint32_t index = static_cast<uint32_t>(cleanup_frame_slots.size());
+    assert(index < QORE_OBE_NO_SLOT);
+    cleanup_frame_slots.push_back(slot);
+    cleanup_frame_index.emplace(slot, index);
+    return index;
+}
+
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::finalizeCleanupFrameTable(llvm::Function* llvm_func, CleanupFrameTable& table, const char* name) {
+    llvm::GlobalVariable* placeholder = table.placeholder;
+    if (!placeholder) {
+        table.clear();
+        return true;
+    }
+    if (placeholder->use_empty()) {
+        placeholder->eraseFromParent();
+        table.clear();
+        return true;
+    }
+    std::vector<uint64_t> entries;
+    entries.reserve(table.size());
+    for (size_t i = 0; i < table.size(); ++i) {
+        llvm::Value* slot = table.slots[i];
+        if (!slot) {
+            if (table.bits[i] & QORE_FRAME_ENTRY_LOCAL) {
+                entries.push_back(table.bits[i]);
+                continue;
+            }
+            // the slot was deleted
+            return false;
+        }
+        if (!isCleanupFrameSlotCandidate(slot) || llvm::cast<llvm::AllocaInst>(slot)->getFunction() != llvm_func) {
+            return false;
+        }
+        assert(!(table.bits[i] & QORE_FRAME_ENTRY_LOCAL));
+        entries.push_back((static_cast<uint64_t>(getCleanupFrameIndex(slot)) << QORE_FRAME_ENTRY_SHIFT)
+            | table.bits[i]);
+    }
+    // an empty table is never read: a helper is called with its entries only
+    if (entries.empty()) {
+        entries.push_back(0);
+    }
+    llvm::Constant* data = llvm::ConstantDataArray::get(ctx, entries);
+    auto* array = new llvm::GlobalVariable(*llvm_func->getParent(), data->getType(), true,
+        llvm::GlobalValue::PrivateLinkage, data, name);
+    array->setAlignment(llvm::Align(8));
+    array->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+    placeholder->replaceAllUsesWith(array);
+    array->takeName(placeholder);
+    placeholder->eraseFromParent();
+    table.clear();
+    return true;
+}
+
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::finalizeCleanupFrame(llvm::Function* llvm_func, const std::string& fn_name, std::string& error) {
+    cleanup_frame_slots.clear();
+    cleanup_frame_index.clear();
+    // the reload chain slots are the first slots of the frame, at the indexes that the tables of the flushes give
+    for (size_t i = 0; i < reload_chain_slot_allocas.size(); ++i) {
+        if (qore_finalize_cancelled(QFL_RELOAD_CHAIN_SLOTS, i, "LLVM reload chain slot table")) {
+            // the flushes read every slot of their tables: a function with a slot left out of the frame is refused
+            error = "the finalization of the reload chain slots of '" + fn_name + "' was cancelled";
+            return false;
+        }
+        llvm::Value* slot = reload_chain_slot_allocas[i];
+        if (!slot) {
+            error = "a reload chain slot of '" + fn_name + "' was deleted";
+            return false;
+        }
+        uint32_t index = getCleanupFrameIndex(slot);
+        (void)index;
+        assert(index == i);
+    }
+    // the records of the locals that the tables of the places that run handlers cover (qore#6110); a cancelled
+    // finalization refuses the function, as its helpers would read records that were not made (qore#6305)
+    if (!finalizeObeEntries(llvm_func)) {
+        error = "the finalization of the handler local table of '" + fn_name + "' was cancelled";
+        return false;
+    }
+    struct {
+        CleanupFrameTable* table;
+        const char* name;
+    } tables[] = {
+        {&invoke_cleanup_table, "cleanup_slots"},
+        {&exit_temp_cleanup_table, "cleanup_exit_temp_slots"},
+        {&boxed_exit_cleanup_table, "local_cleanup_slots"},
+        {&iterator_cleanup_table, "iterator_cleanup_slots"},
+        {&iterator_cleanup_unpositioned_table, "iterator_cleanup_unpositioned_slots"},
+    };
+    for (auto& [table, name] : tables) {
+        if (!finalizeCleanupFrameTable(llvm_func, *table, name)) {
+            error = std::string("a slot of the cleanup frame table '") + name + "' of '" + fn_name
+                + "' cannot be a slot of the frame";
+            return false;
+        }
+    }
+    llvm::AllocaInst* frame = cleanup_frame;
+    cleanup_frame = nullptr;
+    if (!frame) {
+        assert(cleanup_frame_slots.empty());
+        return true;
+    }
+    if (cleanup_frame_slots.empty()) {
+        // no table is read: the helpers that take the frame were removed with the code that called them
+        if (frame->use_empty()) {
+            frame->eraseFromParent();
+        }
+        return true;
+    }
+    for (llvm::Value* slot : cleanup_frame_slots) {
+        if (!isCleanupFrameSlotCandidate(slot) || llvm::cast<llvm::AllocaInst>(slot)->getFunction() != llvm_func) {
+            error = "a slot of the cleanup frame of '" + fn_name + "' is not an alloca of its entry block";
+            return false;
+        }
+    }
+
+    // The slots replace their allocas, which are erased.  The frame comes first in the entry block, followed by the
+    // addresses of its slots and by the memset that clears it, so that they dominate every use of the allocas.  This
+    // loop is not cancellable: stopping part way would leave tables that give slots of allocas that were not
+    // replaced; it does constant work for each slot and each use.
+    const size_t count = cleanup_frame_slots.size();
+    llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+#if LLVM_VERSION_MAJOR >= 19
+    frame->moveBefore(entry, entry.begin());
+#else
+    frame->moveBefore(&entry.front());
+#endif
+    frame->setOperand(0, llvm::ConstantInt::get(i64_type, count));
+    llvm::IRBuilder<> ab(entry.getContext());
+    ab.SetInsertPoint(frame->getNextNode());
+    std::unordered_map<const llvm::Value*, uint32_t> replaced;
+    replaced.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        auto* alloca = llvm::cast<llvm::AllocaInst>(cleanup_frame_slots[i]);
+        llvm::Value* addr = ab.CreateConstInBoundsGEP1_64(i64_type, frame, i, alloca->getName());
+        alloca->replaceAllUsesWith(addr);
+        replaced.emplace(addr, static_cast<uint32_t>(i));
+    }
+    llvm::CallInst* clear = ab.CreateMemSet(frame, llvm::ConstantInt::get(llvm::Type::getInt8Ty(ctx), 0), count * 8,
+        llvm::Align(8));
+    // erased once nothing is inserted before them anymore (the insertion point can be one of them)
+    for (llvm::Value* slot : cleanup_frame_slots) {
+        llvm::cast<llvm::AllocaInst>(slot)->eraseFromParent();
+    }
+    cleanup_frame_slots.clear();
+    cleanup_frame_index.clear();
+    // The stores in the entry block after the memset that clear a slot before anything else uses it are those of the
+    // memset.  The scan stops at the first call that is given the frame or one of its slots, which could write any
+    // slot, and at the first use of the address of a slot by anything but a load or a store to it.
+    std::vector<bool> touched(count, false);
+    std::vector<llvm::Instruction*> dead;
+    for (auto i = std::next(clear->getIterator()), e = entry.end(); i != e; ++i) {
+        llvm::Instruction& inst = *i;
+        if (auto* store = llvm::dyn_cast<llvm::StoreInst>(&inst)) {
+            auto it = replaced.find(store->getPointerOperand());
+            if (it != replaced.end() && !touched[it->second] && !store->isVolatile()) {
+                touched[it->second] = true;
+                if (auto* value = llvm::dyn_cast<llvm::Constant>(store->getValueOperand());
+                        value && value->isNullValue()) {
+                    dead.push_back(store);
+                }
+                // the value stored can be the address of a slot too
+                auto value_it = replaced.find(store->getValueOperand());
+                if (value_it != replaced.end()) {
+                    break;
+                }
+                continue;
+            }
+        }
+        if (llvm::isa<llvm::CallBase>(&inst)) {
+            bool frame_arg = false;
+            for (llvm::Value* arg : llvm::cast<llvm::CallBase>(&inst)->args()) {
+                if (arg == frame || replaced.count(arg)) {
+                    frame_arg = true;
+                    break;
+                }
+            }
+            if (frame_arg) {
+                break;
+            }
+            continue;
+        }
+        bool stop = false;
+        for (llvm::Value* op : inst.operands()) {
+            auto it = replaced.find(op);
+            if (it != replaced.end()) {
+                touched[it->second] = true;
+                // a slot whose address is taken by anything but a load is no longer known to hold zero
+                if (!llvm::isa<llvm::LoadInst>(&inst) && !replaced.count(&inst)) {
+                    stop = true;
+                }
+            }
+        }
+        if (stop) {
+            break;
+        }
+    }
+    for (llvm::Instruction* inst : dead) {
+        inst->eraseFromParent();
+    }
     return true;
 }
 
@@ -5203,13 +5493,13 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module, bool excepti
     // shared cleanup block would need one PHI per slot for every edge into it.
     // The entry loads above stay inline: they are entry-block values, identical on
     // every edge, so they never need a PHI.
-    if (boxed_exit_cleanup_array) {
-        auto run_helper = module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
-                llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type},
-                    false));
-        builder->CreateCall(run_helper, {boxed_exit_cleanup_array,
-                llvm::ConstantInt::get(i32_type, boxed_exit_cleanup_array_count),
-                xsink_arg});
+    if (boxed_exit_cleanup_table.active) {
+        auto run_helper = module.getOrInsertFunction("qore_rt_cleanup_run_frame",
+                llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i32_type, ptr_type, ptr_type}, false));
+        builder->CreateCall(run_helper, {getCleanupFrame(builder->GetInsertBlock()->getParent()),
+                getCleanupFrameTable(module, boxed_exit_cleanup_table, "local_cleanup_slots"),
+                llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(boxed_exit_cleanup_table.size())),
+                getCleanupFrameAotContext(), xsink_arg});
         return;
     }
 
@@ -5217,8 +5507,8 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module, bool excepti
     // loads, which lvalue mutation can clear before the exit (a no-op then), fast-entry parameters, whose current
     // value is released (a reassigned parameter released its previous values when it was stored), and the IR-only
     // locals not represented on the runtime stack, which own their values.  They are released in the reverse of
-    // that order, last local first, as the AST interpreter releases the variables of a frame, and as the array form
-    // above (qore_rt_cleanup_run_allocas()) releases them: an object local's destructor runs before that of a local
+    // that order, last local first, as the AST interpreter releases the variables of a frame, and as the table form
+    // above (qore_rt_cleanup_run_frame()) releases them: an object local's destructor runs before that of a local
     // declared before it when a function is left by an exception too
     // At an exit by an exception, the values of the body locals on the runtime stack that the frame instantiated are
     // released at their places among them (see getExitReleaseSequence()); the variables are removed from the stack
@@ -5609,7 +5899,7 @@ void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_s
     // releases after the locals and not here (qore#5989); the exit releases the other slots by the array unless one
     // of them has no slot in it
     std::vector<unsigned> held_slots;
-    bool array_exit = exit_temp_cleanup_array && !exit_temp_cleanup_array_overflow
+    bool array_exit = exit_temp_cleanup_table.active && !exit_temp_cleanup_array_overflow
         && exit_temp_cleanup_array_count == exit_temp_cleanup_count && exit_temp_cleanup_array_count >= 32;
     if (array_exit && hold_returns) {
         for (uint32_t id : return_value_ids) {
@@ -5628,8 +5918,8 @@ void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_s
     if (array_exit) {
         // the same releases as the inline sequence below, in the same (reverse registration) order, in one call
         // (for each run of slots between those that are held)
-        emitCleanupArrayRunSkipping(module, exit_temp_cleanup_array, exit_temp_cleanup_array_count,
-            std::move(held_slots));
+        emitCleanupArrayRunSkipping(module, exit_temp_cleanup_table, "cleanup_exit_temp_slots",
+            exit_temp_cleanup_array_count, std::move(held_slots));
     } else if (!invoke_result_allocas.empty()) {
         auto helper = module.getOrInsertFunction("qore_rt_decref",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
@@ -5794,7 +6084,7 @@ static constexpr size_t MinTableTempRelease = 16;
 
 void QoreIRToLLVM::emitTempReleaseSequence(llvm::Module& module, const std::vector<llvm::Value*>& temps, size_t begin,
         size_t end) {
-    if (end - begin >= MinTableTempRelease && invoke_cleanup_array && !invoke_cleanup_array_overflow) {
+    if (end - begin >= MinTableTempRelease && invoke_cleanup_table.active && !invoke_cleanup_array_overflow) {
         std::vector<uint32_t> slots;
         slots.reserve(end - begin);
         for (size_t i = begin; i < end; ++i) {
@@ -5809,9 +6099,10 @@ void QoreIRToLLVM::emitTempReleaseSequence(llvm::Module& module, const std::vect
             auto* table = new llvm::GlobalVariable(module, data->getType(), true, llvm::GlobalValue::PrivateLinkage,
                 data, "temp_release_slots");
             table->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
-            auto helper = module.getOrInsertFunction("qore_rt_cleanup_release_slots",
-                    llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i32_type, ptr_type}, false));
-            builder->CreateCall(helper, {invoke_cleanup_array, table,
+            auto helper = module.getOrInsertFunction("qore_rt_cleanup_release_frame_slots",
+                    llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+            builder->CreateCall(helper, {getCleanupFrame(builder->GetInsertBlock()->getParent()),
+                getCleanupFrameTable(module, invoke_cleanup_table, "cleanup_slots"), table,
                 llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(slots.size())), xsink_arg});
             return;
         }
@@ -6131,27 +6422,30 @@ void QoreIRToLLVM::finalizeOrderedErrorReturnEdges(llvm::Module& module, llvm::F
 }
 
 // documented in QoreIRToLLVM.h
-void QoreIRToLLVM::emitCleanupArrayRunSkipping(llvm::Module& module, llvm::AllocaInst* array, unsigned count,
-        std::vector<unsigned> skip) {
-    auto helper = module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
-            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+void QoreIRToLLVM::emitCleanupArrayRunSkipping(llvm::Module& module, CleanupFrameTable& table, const char* name,
+        unsigned count, std::vector<unsigned> skip) {
+    auto helper = module.getOrInsertFunction("qore_rt_cleanup_run_frame",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i32_type, ptr_type, ptr_type}, false));
+    llvm::Value* frame = getCleanupFrame(builder->GetInsertBlock()->getParent());
+    llvm::GlobalVariable* entries = getCleanupFrameTable(module, table, name);
+    llvm::Value* aot = getCleanupFrameAotContext();
     std::sort(skip.begin(), skip.end());
     skip.erase(std::unique(skip.begin(), skip.end()), skip.end());
-    // the runs of entries between the skipped ones, from the last: qore_rt_cleanup_run_allocas() releases the entries
+    // the runs of entries between the skipped ones, from the last: qore_rt_cleanup_run_frame() releases the entries
     // of a run last to first, which is the order of the inline sequence over all of them
     unsigned end = count;
     for (auto it = skip.rbegin(); it != skip.rend(); ++it) {
         unsigned held = *it;
         assert(held < count);
         if (held < end) {
-            llvm::Value* first = builder->CreateGEP(ptr_type, array, llvm::ConstantInt::get(i32_type, held + 1),
-                "cleanup_run_from");
-            builder->CreateCall(helper, {first, llvm::ConstantInt::get(i32_type, end - (held + 1)), xsink_arg});
+            llvm::Value* first = builder->CreateConstInBoundsGEP1_32(i64_type, entries, held + 1, "cleanup_run_from");
+            builder->CreateCall(helper, {frame, first, llvm::ConstantInt::get(i32_type, end - (held + 1)), aot,
+                xsink_arg});
         }
         end = held;
     }
     if (end) {
-        builder->CreateCall(helper, {array, llvm::ConstantInt::get(i32_type, end), xsink_arg});
+        builder->CreateCall(helper, {frame, entries, llvm::ConstantInt::get(i32_type, end), aot, xsink_arg});
     }
 }
 
@@ -6159,7 +6453,7 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
     if (invoke_result_allocas.empty()) {
         return;
     }
-    if (invoke_cleanup_array && !invoke_cleanup_array_overflow
+    if (invoke_cleanup_table.active && !invoke_cleanup_array_overflow
             && invoke_cleanup_array_count == invoke_result_allocas.size()
             && invoke_cleanup_array_count >= 32) {
         // the value of an interrupted return is released after the locals (see holding_return_values), so its slot
@@ -6181,14 +6475,14 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
             }
         }
         if (held_known) {
-            emitCleanupArrayRunSkipping(module, invoke_cleanup_array, invoke_cleanup_array_count,
+            emitCleanupArrayRunSkipping(module, invoke_cleanup_table, "cleanup_slots", invoke_cleanup_array_count,
                 std::move(held_slots));
             return;
         }
     }
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    // Match qore_rt_cleanup_run_allocas(): invoke-result cleanups are
+    // Match qore_rt_cleanup_run_frame(): invoke-result cleanups are
     // registered in construction order, so destroy them in LIFO order.
     for (auto it = invoke_result_allocas.rbegin(); it != invoke_result_allocas.rend(); ++it) {
         llvm::Value* alloca_ptr = *it;
@@ -6197,6 +6491,23 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
             continue;
         }
         llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
+        llvm::BasicBlock* bb = builder->GetInsertBlock();
+        // the slot of a unary operation's slow path holds NOTHING unless the slow path ran: at the end of a block, it
+        // is released only if it holds a value, so that a function whose unary operations took their inline paths
+        // makes no call (issue #6132)
+        if (unary_result_slots.count(alloca_ptr) && builder->GetInsertPoint() == bb->end()) {
+            llvm::Value* holds = builder->CreateICmpNE(val, llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+            llvm::Function* func = bb->getParent();
+            llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "unary_result_release", func);
+            llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(ctx, "unary_result_cont", func);
+            builder->CreateCondBr(holds, release_bb, cont_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+            builder->SetInsertPoint(release_bb);
+            builder->CreateCall(helper, {val, xsink_arg});
+            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
+            builder->CreateBr(cont_bb);
+            builder->SetInsertPoint(cont_bb);
+            continue;
+        }
         builder->CreateCall(helper, {val, xsink_arg});
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
             alloca_ptr);
@@ -6336,10 +6647,24 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
     // calls of its 43499, and 21313 of its 41605 stores): the flush of a function over the threshold is one call
     // with a constant table of the slots that it rotates, clears and marks stale, in the order of the inline form
     // below (qore#6299)
-    const bool use_flush_helpers = (local_reload_trackers.size()
+    bool use_flush_helpers = (local_reload_trackers.size()
         + local_reload_deferred.size()) >= getReloadChainCallThreshold();
     if (use_flush_helpers) {
-        // pairs of the indexes of the tracker and of the deferred slot in reload_chain_slots, either one
+        // the table gives the slots in the cleanup frame
+        auto candidate = [this](const auto& map) -> bool {
+            for (auto& [key, slot] : map) {
+                (void)key;
+                if (!isCleanupFrameSlotCandidate(slot)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        use_flush_helpers = candidate(local_reload_trackers) && candidate(local_reload_deferred)
+            && (!local_reload_epoch || candidate(local_valid_epochs));
+    }
+    if (use_flush_helpers) {
+        // pairs of the indexes of the tracker and of the deferred slot in the cleanup frame, either one
         // QORE_RELOAD_CHAIN_NO_SLOT, then the indexes of the valid epochs
         std::vector<uint32_t> table;
         table.reserve(2 * (local_reload_trackers.size() + local_reload_deferred.size()) + local_valid_epochs.size());
@@ -6366,17 +6691,12 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
                 ++epochs;
             }
         }
-        if (!reload_chain_slots) {
-            // the size is that of the slots of the function, once it is lowered (finalizeReloadChainSlots())
-            llvm::BasicBlock& entry = builder->GetInsertBlock()->getParent()->getEntryBlock();
-            llvm::IRBuilder<> ab(&entry, entry.begin());
-            reload_chain_slots = ab.CreateAlloca(ptr_type, llvm::ConstantInt::get(i64_type, 1), "reload_chain_slots");
-        }
         auto flush_helper = module.getOrInsertFunction("qore_rt_reload_chain_flush",
             llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i32_type, i32_type, ptr_type, ptr_type}, false));
         llvm::Value* epoch = local_reload_epoch ? static_cast<llvm::Value*>(local_reload_epoch)
             : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
-        builder->CreateCall(flush_helper, {reload_chain_slots, getObeTable(module, table),
+        builder->CreateCall(flush_helper, {getCleanupFrame(builder->GetInsertBlock()->getParent()),
+            getObeTable(module, table),
             llvm::ConstantInt::get(i32_type, pairs), llvm::ConstantInt::get(i32_type, epochs), epoch, xsink_arg});
         return;
     }
@@ -6482,129 +6802,33 @@ unsigned QoreIRToLLVM::estimateInvokeCleanupArrayCapacity(const QoreIRFunction& 
 
 void QoreIRToLLVM::registerInvokeCleanupAlloca(llvm::Value* alloca_ptr) {
     invoke_result_allocas.push_back(alloca_ptr);
+    // the tables give their slots in the cleanup frame: from a slot that cannot be one on, the tables are not used
+    // (the calls emitted before cover only the slots registered before it)
+    const bool frame_slot = (!invoke_cleanup_table.active && !exit_temp_cleanup_table.active)
+        || isCleanupFrameSlotCandidate(alloca_ptr);
     // a persistent cleanup is marked before it is registered
     if (!persistent_cleanup_allocas.count(alloca_ptr)) {
         ++exit_temp_cleanup_count;
-        if (exit_temp_cleanup_array && !exit_temp_cleanup_array_overflow) {
-            if (exit_temp_cleanup_array_count >= invoke_cleanup_array_capacity) {
+        if (exit_temp_cleanup_table.active && !exit_temp_cleanup_array_overflow) {
+            if (exit_temp_cleanup_array_count >= invoke_cleanup_array_capacity || !frame_slot) {
                 exit_temp_cleanup_array_overflow = true;
             } else {
-                exit_temp_cleanup_slot.emplace(alloca_ptr, exit_temp_cleanup_array_count);
-                storeCleanupSlotAddress(exit_temp_cleanup_array, exit_temp_cleanup_array_count++, alloca_ptr);
+                exit_temp_cleanup_slot.emplace(alloca_ptr, exit_temp_cleanup_array_count++);
+                exit_temp_cleanup_table.add(alloca_ptr, 0);
             }
         }
     }
-    if (!invoke_cleanup_array || invoke_cleanup_array_overflow) {
+    if (!invoke_cleanup_table.active || invoke_cleanup_array_overflow) {
         return;
     }
-    if (invoke_cleanup_array_count >= invoke_cleanup_array_capacity) {
+    if (invoke_cleanup_array_count >= invoke_cleanup_array_capacity || !frame_slot) {
         invoke_cleanup_array_overflow = true;
         return;
     }
-    invoke_cleanup_slot.emplace(alloca_ptr, invoke_cleanup_array_count);
-    storeCleanupSlotAddress(invoke_cleanup_array, invoke_cleanup_array_count++, alloca_ptr);
+    invoke_cleanup_slot.emplace(alloca_ptr, invoke_cleanup_array_count++);
+    invoke_cleanup_table.add(alloca_ptr, 0);
 }
 
-void QoreIRToLLVM::storeCleanupSlotAddress(llvm::AllocaInst* array, unsigned idx, llvm::Value* alloca_ptr) {
-    llvm::BasicBlock& entry = *array->getParent();
-    llvm::Instruction* insert_after = array;
-    if (auto* inst = llvm::dyn_cast<llvm::Instruction>(alloca_ptr)) {
-        if (inst->getParent() == &entry && array->comesBefore(inst)) {
-            insert_after = inst;
-        }
-    }
-
-    llvm::IRBuilder<> reg_builder(ctx);
-    if (llvm::Instruction* next = insert_after->getNextNode()) {
-        reg_builder.SetInsertPoint(next);
-    } else {
-        reg_builder.SetInsertPoint(&entry);
-    }
-
-    llvm::Value* gep = reg_builder.CreateGEP(ptr_type, array, llvm::ConstantInt::get(i32_type, idx),
-            "cleanup_slot_ptr");
-    reg_builder.CreateStore(alloca_ptr, gep);
-}
-
-void QoreIRToLLVM::finalizeInvokeCleanupArray() {
-    llvm::AllocaInst* array = invoke_cleanup_array;
-    invoke_cleanup_array = nullptr;
-    llvm::AllocaInst* exit_array = exit_temp_cleanup_array;
-    exit_temp_cleanup_array = nullptr;
-    if (array) {
-        finalizeCleanupSlotArray(array, invoke_cleanup_array_count, invoke_cleanup_array_capacity,
-            "JIT invoke cleanup array finalization");
-    }
-    if (exit_array) {
-        finalizeCleanupSlotArray(exit_array, exit_temp_cleanup_array_count, invoke_cleanup_array_capacity,
-            "JIT exit temporary cleanup array finalization");
-    }
-}
-
-void QoreIRToLLVM::finalizeCleanupSlotArray(llvm::AllocaInst* array, unsigned count, unsigned capacity,
-        const char* what) {
-    // The array is only read through the qore_rt_cleanup_run_allocas() calls
-    // emitted by emitInvokeCleanup() or emitExitStatementCleanup(); every other user is a registration GEP
-    // whose only users are the stores written by storeCleanupSlotAddress().
-    // Anything else keeps the array alive.
-    std::vector<llvm::Instruction*> dead;
-    bool read = false;
-    size_t scanned = 0;
-    for (llvm::User* user : array->users()) {
-        if (++scanned % 100 == 0
-                && qore_check_cancel(nullptr, what)) {
-            // the array is left at its estimated capacity, which is correct but oversized
-            return;
-        }
-        auto* gep = llvm::dyn_cast<llvm::GetElementPtrInst>(user);
-        if (!gep) {
-            read = true;
-            break;
-        }
-        for (llvm::User* gep_user : gep->users()) {
-            auto* store = llvm::dyn_cast<llvm::StoreInst>(gep_user);
-            if (!store || store->getPointerOperand() != gep) {
-                read = true;
-                break;
-            }
-            dead.push_back(store);
-        }
-        if (read) {
-            break;
-        }
-        dead.push_back(gep);
-    }
-
-    if (!read) {
-        // Every exit used the inline cleanup: the array and its registration
-        // stores are dead.  Erase them here, since optnone functions would
-        // otherwise keep the whole allocation in the frame.  This loop is not
-        // cancellable: stopping part way would leave GEPs of an erased array;
-        // it is bounded by the scan above and does constant work per element.
-        for (llvm::Instruction* inst : dead) {
-            inst->eraseFromParent();
-        }
-        assert(array->use_empty());
-        array->eraseFromParent();
-        return;
-    }
-
-    // The array escapes into the runtime helper, so LLVM cannot shrink it;
-    // size it to the slots actually registered instead of the capacity
-    // estimate, which is several times larger and dominates the frame size of
-    // large functions (exhausting the stack in deep recursion).
-    assert(count <= capacity);
-    if (!count || count == capacity) {
-        return;
-    }
-    llvm::IRBuilder<> ab(array);
-    llvm::AllocaInst* exact = ab.CreateAlloca(ptr_type,
-            llvm::ConstantInt::get(i32_type, count));
-    exact->setAlignment(array->getAlign());
-    exact->takeName(array);
-    array->replaceAllUsesWith(exact);
-    array->eraseFromParent();
-}
 
 void QoreIRToLLVM::registerPersistentCleanupAlloca(llvm::Value* alloca_ptr) {
     persistent_cleanup_allocas.insert(alloca_ptr);
@@ -6635,20 +6859,26 @@ void QoreIRToLLVM::emitIteratorCleanup(llvm::Module& module, bool skip_positione
     // prepareIteratorCleanupArray() switches this to a single runtime call for
     // functions where repeating the sequence at every exit would need one PHI per
     // iterator for every one of those exits.
-    if (iterator_cleanup_array
-            && iterator_cleanup_array_count == iterator_cleanup_allocas.size()) {
-        auto run_helper = module.getOrInsertFunction("qore_rt_iterator_cleanup_allocas",
-                llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
+    if (iterator_cleanup_table.active
+            && iterator_cleanup_table.size() == iterator_cleanup_allocas.size()) {
+        auto run_helper = module.getOrInsertFunction("qore_rt_iterator_cleanup_frame",
+                llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i32_type}, false));
+        llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
         if (skip_positioned && !positioned_iterator_allocas.empty()) {
             // the positioned iterators are released with the locals
-            if (iterator_cleanup_unpositioned_count) {
-                builder->CreateCall(run_helper, {iterator_cleanup_unpositioned_array,
-                        llvm::ConstantInt::get(i32_type, iterator_cleanup_unpositioned_count)});
+            assert(iterator_cleanup_unpositioned_table.active);
+            if (iterator_cleanup_unpositioned_table.size()) {
+                builder->CreateCall(run_helper, {getCleanupFrame(llvm_func),
+                    getCleanupFrameTable(module, iterator_cleanup_unpositioned_table,
+                        "iterator_cleanup_unpositioned_slots"),
+                    llvm::ConstantInt::get(i32_type,
+                        static_cast<uint32_t>(iterator_cleanup_unpositioned_table.size()))});
             }
             return;
         }
-        builder->CreateCall(run_helper, {iterator_cleanup_array,
-                llvm::ConstantInt::get(i32_type, iterator_cleanup_array_count)});
+        builder->CreateCall(run_helper, {getCleanupFrame(llvm_func),
+            getCleanupFrameTable(module, iterator_cleanup_table, "iterator_cleanup_slots"),
+            llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(iterator_cleanup_table.size()))});
         return;
     }
     auto helper = module.getOrInsertFunction("qore_rt_iterator_cleanup",
@@ -13385,6 +13615,8 @@ llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, co
         // the nested function shares the AOT context of the function being lowered: its slot tables
         nested_lowering.setAOTMode(aot_slots);
         nested_lowering.setAOTDirectClosureFastEntry(aot_direct_closure_fast_entry);
+        // and its slot symbols, such as the dispatch functions of its closures (qore#6339)
+        nested_lowering.aot_symbol_owner = getAOTSymbolOwner();
     }
     if (active_di_builder && di_cu) {
         nested_lowering.setSharedDebugInfo(active_di_builder, di_cu);
@@ -14863,21 +15095,22 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_cleanup_slot.clear();
     exit_temp_cleanup_slot.clear();
     persistent_cleanup_allocas.clear();
+    unary_result_slots.clear();
     temp_cleanup_marks.clear();
     exception_edges.clear();
     ir_block_predecessor_counts.clear();
     ir_block_predecessor_counts_valid = false;
-    boxed_exit_cleanup_array = nullptr;
-    boxed_exit_cleanup_array_count = 0;
-    iterator_cleanup_array = nullptr;
-    iterator_cleanup_array_count = 0;
-    iterator_cleanup_unpositioned_array = nullptr;
-    iterator_cleanup_unpositioned_count = 0;
-    invoke_cleanup_array = nullptr;
+    cleanup_frame = nullptr;
+    cleanup_frame_slots.clear();
+    cleanup_frame_index.clear();
+    boxed_exit_cleanup_table.clear();
+    iterator_cleanup_table.clear();
+    iterator_cleanup_unpositioned_table.clear();
+    invoke_cleanup_table.clear();
     invoke_cleanup_array_capacity = estimateInvokeCleanupArrayCapacity(func);
     invoke_cleanup_array_count = 0;
     invoke_cleanup_array_overflow = false;
-    exit_temp_cleanup_array = nullptr;
+    exit_temp_cleanup_table.clear();
     exit_temp_cleanup_array_count = 0;
     exit_temp_cleanup_array_overflow = false;
     exit_temp_cleanup_count = 0;
@@ -14961,7 +15194,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     obe_entry_keys.clear();
     obe_entry_index.clear();
     obe_tables.clear();
-    reload_chain_slots = nullptr;
     reload_chain_slot_allocas.clear();
     reload_chain_slot_index.clear();
     jit_deopt_block = nullptr;
@@ -15033,14 +15265,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
 
     if (invoke_cleanup_array_capacity && !func.blocks.empty()) {
-        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
-        llvm::IRBuilder<> ab(&entry, entry.begin());
-        invoke_cleanup_array = ab.CreateAlloca(ptr_type,
-                llvm::ConstantInt::get(i32_type, invoke_cleanup_array_capacity),
-                "cleanup_slots");
-        exit_temp_cleanup_array = ab.CreateAlloca(ptr_type,
-                llvm::ConstantInt::get(i32_type, invoke_cleanup_array_capacity),
-                "cleanup_exit_temp_slots");
+        // the tables of the slots in the cleanup frame (finalizeCleanupFrame())
+        invoke_cleanup_table.active = true;
+        exit_temp_cleanup_table.active = true;
     }
 
     // Collect all unique LocalVar* pointers from the function and emit
@@ -17397,12 +17624,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // the release and reload of the locals' reload storage around the handlers run out of line, now that the
     // function's reload storage is known
     finalizeHandlerSites(module, llvm_func);
-    // the records of the locals that the tables of the places that run handlers cover (qore#6110); a cancelled
-    // finalization refuses the function, as its helpers would read records that were not written (qore#6305)
-    if (!finalizeObeEntries(llvm_func)) {
-        error = "the finalization of the handler local table of '" + fn_name + "' was cancelled";
-        return false;
-    }
     // the release of the values of an interrupted return that a handler's return replaced (#5992)
     finalizeHandlerReturnHoldSites(module);
 
@@ -17424,14 +17645,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
 
-    // All exits (and therefore every emitInvokeCleanup() call) are emitted.
-    finalizeInvokeCleanupArray();
-
-    // the addresses of the slots that the tables of the flushes of the reload chains cover, once all the code of the
-    // function is emitted (qore#6299); a cancelled finalization refuses the function, as its code would read slots
-    // that were not written
-    if (!finalizeReloadChainSlots(llvm_func)) {
-        error = "the finalization of the reload chain slots of '" + fn_name + "' was cancelled";
+    // All exits (and therefore every call that reads a table of slots: emitInvokeCleanup(), the flushes of the
+    // reload chains, the table-driven handler code) are emitted: the slots of the tables move to the cleanup frame,
+    // and the tables are made (qore#6299); a cancelled or failed finalization refuses the function, as its code would
+    // read tables that were not made
+    if (!finalizeCleanupFrame(llvm_func, fn_name, error)) {
         return false;
     }
 
@@ -21250,6 +21468,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {builder->CreateIntToPtr(var_ptr, ptr_type),
                          llvm::ConstantInt::get(i64_type, fused->delta, true), xsink_arg});
                 }
+                // no exception check follows: the helper changes a closure-bound int or softint variable, which
+                // accepts any int (an enum variable takes the lvalue path, see qore_ir_is_enum_lvalue_type() in
+                // QoreIRLowering.cpp, qore#6197), and a read-only variable cannot be changed by ++, --, += or -=
                 if (inst->result.isValid()) {
                     values[inst->result.id] = result;
                 }
@@ -22048,10 +22269,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     bool concrete_generic_call = invoke_explicit_inst
                         || invoke_receiver_type_info
                         || generic_specialization_matches;
+                    // a fast entry specialized for the type arguments of a generic call is called only by the calls
+                    // with them (qore#6256)
                     if (it != batch_callees->end()
                             && (!concrete_generic_call
                                 || generic_specialization_matches
                                 || it->second.context_independent_fast_entry)
+                            && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
                             && it->second.approach_b_eligible
                             && it->second.context_independent_fast_entry
                             && nargs <= static_cast<int>(it->second.num_params)
@@ -22320,10 +22544,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             it != batch_callees->end()
                             && qore_ir_generic_fast_entry_matches(
                                 it->second, inv->expr);
+                        // a fast entry specialized for the type arguments of a generic call is called only by the
+                        // calls with them (qore#6256)
                         if (it != batch_callees->end()
                                 && (!invoke_explicit_inst
                                     || generic_specialization_matches
                                     || it->second.context_independent_fast_entry)
+                                && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
                                 && it->second.approach_b_eligible
                                 && nargs <= static_cast<int>(it->second.num_params)
                                 && isFastFunctionCallEligible(
@@ -22569,11 +22796,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         const QoreTypeParamInstantiation* concrete_inst =
                             generic_specialization_matches
                             ? invoke_concrete_inst : invoke_explicit_inst;
+                        // a fast entry specialized for the type arguments of a generic call is called only by the
+                        // calls with them (qore#6256)
                         if (it != batch_callees->end()
                                 && ((!invoke_explicit_inst
                                         && !invoke_receiver_type_info)
                                     || generic_specialization_matches
                                     || it->second.context_independent_fast_entry)
+                                && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
                                 && it->second.approach_b_eligible
                                 && nargs <= static_cast<int>(it->second.num_params)
                                 && isFastMethodCallEligible(
@@ -23100,7 +23330,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     } else {
                         auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node);
                         method = scr ? scr->getMethod() : nullptr;
-                        qc = method ? method->getClass() : nullptr;
+                        // the class that the reference names (qore#6285)
+                        qc = method ? scr->getScopeClass() : nullptr;
                         if (method && method->isStatic() && qc) {
                             llvm::Value* class_path =
                                 qore_ir_create_global_string_ptr(builder,
@@ -24524,10 +24755,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ? qore_ir_get_call_type_instantiation(
                         direct_inst->expr)
                     : explicit_inst;
+                // a fast entry specialized for the type arguments of a generic call is called only by the calls with
+                // them (qore#6256)
                 if (it != batch_callees->end()
                         && (!explicit_inst
                             || generic_specialization_matches
                             || it->second.context_independent_fast_entry)
+                        && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
                         && it->second.approach_b_eligible
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastFunctionCallEligible(aot_direct_variant,
@@ -26815,10 +27049,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ? qore_ir_get_call_type_instantiation(
                         direct_inst->expr)
                     : explicit_inst;
+                // a fast entry specialized for the type arguments of a generic call is called only by the calls with
+                // them (qore#6256)
                 if (it != batch_callees->end()
                         && ((!receiver_type_info && !explicit_inst)
                             || generic_specialization_matches
                             || it->second.context_independent_fast_entry)
+                        && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
                         && it->second.approach_b_eligible
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(direct_inst->variant,
@@ -29689,6 +29926,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            // the inline paths produce inline values only; the result of the runtime helper, a new reference, is
+            // released through a cleanup slot that only the slow path writes (issue #6132)
             llvm::Value* result = emitAnyUnaryFastPath(true,
                     static_cast<int>(QoreIROpcode::UnaryMinusAny),
                     inst, val_boxed, llvm_func, module);
@@ -29701,6 +29940,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            // the inline paths produce inline values only; the result of the runtime helper, a new reference, is
+            // released through a cleanup slot that only the slow path writes (issue #6132)
             llvm::Value* result = emitAnyUnaryFastPath(false,
                     static_cast<int>(QoreIROpcode::UnaryPlusAny),
                     inst, val_boxed, llvm_func, module);
@@ -31485,13 +31726,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             ? i1_type : i64_type;
                     auto dispatch_type = llvm::FunctionType::get(
                         dispatch_return_type, param_types, false);
-                    std::string dispatch_name = current_ir_func->name
+                    // named after the owner of the slot map: an outlined helper's closure dispatch is defined
+                    // with its coordinator's closure bodies (qore#6310)
+                    std::string dispatch_name = getAOTSymbolOwner()
                         + (guarded_stored_closure
                             ? "_closure_native_guarded_dispatch_"
                             : "_closure_native_dispatch_")
                         + std::to_string(slot);
+                    std::string return_kind_value = std::to_string(
+                        static_cast<unsigned>(closure_return_kind));
+                    // one dispatch function serves one closure creation; a declaration left by another call site
+                    // (an outlined helper whose lowering failed, qore#6310) must have the same ABI, or the call and
+                    // the definition would disagree
+                    for (const std::string& existing_name : {dispatch_name, dispatch_name + "_throwing"}) {
+                        llvm::Function* existing = module.getFunction(existing_name);
+                        if (!existing) {
+                            continue;
+                        }
+                        llvm::Attribute existing_kind = existing->getFnAttribute(
+                            "qore.closure.return_kind");
+                        if (existing->getFunctionType() != dispatch_type
+                                || (!guarded_stored_closure && existing_kind.isStringAttribute()
+                                    && existing_kind.getValueAsString() != return_kind_value)) {
+                            error = "internal error: closure dispatch function '" + existing_name
+                                + "' is already declared with another ABI";
+                            return false;
+                        }
+                    }
                     auto dispatch = module.getOrInsertFunction(dispatch_name,
                         dispatch_type);
+                    if (!guarded_stored_closure) {
+                        // the definition boxes the closure's native result for a call site that declares a boxed
+                        // one; i64 does not tell a native int from a boxed value (qore#6310)
+                        if (auto* dispatch_fn = llvm::dyn_cast<llvm::Function>(
+                                dispatch.getCallee())) {
+                            dispatch_fn->addFnAttr("qore.closure.return_kind", return_kind_value);
+                        }
+                    }
                     if (capture_count) {
                         if (auto* dispatch_fn = llvm::dyn_cast<llvm::Function>(
                                 dispatch.getCallee())) {
@@ -31736,7 +32007,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 && qore_ir_fast_entry_operands_need_no_binding(call_gives_args, variant,
                                     closure_call->expr, current_ir_func, inst->operands,
                                     1, nargs)) {
-                            std::string dispatch_name = current_ir_func->name
+                            std::string dispatch_name = getAOTSymbolOwner()
                                 + "_closure_dispatch_" + std::to_string(slot);
                             helper = module.getOrInsertFunction(dispatch_name, ft);
                         }
@@ -33057,7 +33328,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 } else {
                     auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node);
                     method = scr ? scr->getMethod() : nullptr;
-                    qc = method ? method->getClass() : nullptr;
+                    // the class that the reference names (qore#6285)
+                    qc = method ? scr->getScopeClass() : nullptr;
                     if (method && method->isStatic() && qc) {
                         llvm::Value* class_path =
                             qore_ir_create_global_string_ptr(builder,
@@ -35016,20 +35288,45 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::ModAssignInt: {
-            // the modulo-equals operator assigns 0 for a divisor of 0, as AST execution does
-            // (QoreModuloEqualsOperatorNode), and the remainder of a division by -1 is 0 (qore_int_mod()); LLVM srem
-            // is undefined for both, so it divides by 1 instead and the result is selected
+            // as for ModInt: a divisor of zero raises DIVISION-BY-ZERO in the runtime helper (qore#1034), which also
+            // gives the remainder of the smallest integer divided by -1 (0, qore_int_mod()), where srem traps
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
             llvm::Value* l_int = ensureIntTypeInline(lhs, inst->operands[0].id);
             llvm::Value* r_int = ensureIntTypeInline(rhs, inst->operands[1].id);
             llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
-            llvm::Value* no_remainder = builder->CreateOr(builder->CreateICmpEQ(r_int, zero),
-                builder->CreateICmpEQ(r_int, llvm::ConstantInt::getSigned(i64_type, -1)));
-            llvm::Value* divisor = builder->CreateSelect(no_remainder, llvm::ConstantInt::get(i64_type, 1), r_int);
-            values[inst->result.id] = builder->CreateSelect(no_remainder, zero,
-                builder->CreateSRem(l_int, divisor), "moda_result");
+            llvm::Value* is_zero = builder->CreateICmpEQ(r_int, zero);
+            llvm::Value* is_min = builder->CreateICmpEQ(l_int,
+                llvm::ConstantInt::getSigned(i64_type, INT64_MIN));
+            llvm::Value* is_negative_one = builder->CreateICmpEQ(r_int,
+                llvm::ConstantInt::getSigned(i64_type, -1));
+            llvm::Value* use_helper = builder->CreateOr(is_zero,
+                builder->CreateAnd(is_min, is_negative_one));
+
+            llvm::BasicBlock* mod_zero_bb = llvm::BasicBlock::Create(ctx, "moda_zero", llvm_func);
+            llvm::BasicBlock* mod_ok_bb = llvm::BasicBlock::Create(ctx, "moda_ok", llvm_func);
+            llvm::BasicBlock* mod_merge_bb = llvm::BasicBlock::Create(ctx, "moda_merge", llvm_func);
+            builder->CreateCondBr(use_helper, mod_zero_bb, mod_ok_bb);
+
+            builder->SetInsertPoint(mod_zero_bb);
+            auto helper = module.getOrInsertFunction("qore_rt_mod_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* exc_result = builder->CreateCall(helper, {l_int, r_int, xsink_arg});
+            // as for DivAssignInt: the exception goes to the instruction's handler or out of the function
+            emitExceptionCheck(module, llvm_func, inst);
+            llvm::BasicBlock* mod_zero_end_bb = builder->GetInsertBlock();
+            builder->CreateBr(mod_merge_bb);
+
+            builder->SetInsertPoint(mod_ok_bb);
+            llvm::Value* mod_result = builder->CreateSRem(l_int, r_int);
+            builder->CreateBr(mod_merge_bb);
+
+            builder->SetInsertPoint(mod_merge_bb);
+            llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "moda_result");
+            phi->addIncoming(exc_result, mod_zero_end_bb);
+            phi->addIncoming(mod_result, mod_ok_bb);
+            values[inst->result.id] = phi;
             return true;
         }
         // === Optimized fold operations (native LLVM loops) ===
@@ -36970,6 +37267,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::CheckException: {
+            // a kept check of a release in a functional loop's body: native code checks the sink after the release
+            // itself, with the handler of the container that releases the value (qore#6072); nothing to emit.  A
+            // pending one was not decided by qore_ir_prune_release_checks(), which every pipeline runs first: it is
+            // checked here, which is correct, if not free
+            assert(inst->release_check != QoreIRReleaseCheck::Pending);
+            if (inst->release_check == QoreIRReleaseCheck::Kept) {
+                return true;
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -38542,7 +38847,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 case QoreIROpcode::LValuePathUnary: {
                     if (direct_self_mutation) {
                         auto ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, i32_type, ptr_type}, false);
+                            {ptr_type, i32_type, i32_type, ptr_type}, false);
                         auto fn = module.getOrInsertFunction(
                             "qore_rt_self_member_update", ft);
                         auto fn_throwing = module.getOrInsertFunction(
@@ -38551,6 +38856,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {direct_member_ptr,
                              llvm::ConstantInt::get(i32_type,
                                 static_cast<int32_t>(path_inst->unary_op)),
+                             llvm::ConstantInt::get(i32_type, path_inst->ref_rv ? 1 : 0),
                              xsink_arg}, module, llvm_func, inst);
                     } else if (aot_slots) {
                         auto ft = llvm::FunctionType::get(i64_type,
@@ -39496,6 +39802,11 @@ llvm::Value* QoreIRToLLVM::emitAnyBitwiseFastPath(llvm::Instruction::BinaryOps i
 
 // Emit inline LLVM fast-path for .any unary operations (UnaryMinusAny/UnaryPlusAny).
 // Type-checks operand for int or float, falls back to qore_rt_unary_op for other types.
+// The inline paths produce inline values only, which hold no reference: the identity of an inline int or float is the
+// operand itself, and a negation whose result cannot be inline (the smallest int48, or a double whose negation
+// collides with a value tag, such as a NaN) takes the slow path.  The slow path's result is a new reference, which a
+// function-lifetime slot written in the slow path only releases, so an operation on an inline value costs no release
+// (issue #6132).
 llvm::Value* QoreIRToLLVM::emitAnyUnaryFastPath(bool is_minus, int opcode_val_int,
         const QoreIRInstruction* inst,
         llvm::Value* operand, llvm::Function* llvm_func, llvm::Module& module) {
@@ -39511,28 +39822,58 @@ llvm::Value* QoreIRToLLVM::emitAnyUnaryFastPath(bool is_minus, int opcode_val_in
 
     builder->CreateCondBr(is_int, fast_int_bb, check_float_bb);
 
-    // Fast int path: unbox, negate (or identity for plus), box
+    // Fast int path: the operand itself for plus; for minus, the negation inline, except for the smallest int48,
+    // whose negation needs a heap integer
     builder->SetInsertPoint(fast_int_bb);
-    llvm::Value* int_val = unboxInt(operand);
-    llvm::Value* int_result = is_minus ? builder->CreateNeg(int_val) : int_val;
-    llvm::Value* int_boxed = boxIntInline(int_result);
+    llvm::Value* int_boxed;
+    llvm::BasicBlock* fast_int_end;
+    if (is_minus) {
+        llvm::Value* int_val = unboxInt(operand);
+        llvm::Value* overflows = builder->CreateICmpEQ(int_val, llvm::ConstantInt::get(i64_type, INT48_MIN));
+        llvm::BasicBlock* int_neg_bb = llvm::BasicBlock::Create(ctx, "unary_int_neg", llvm_func);
+        builder->CreateCondBr(overflows, slow_bb, int_neg_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+        builder->SetInsertPoint(int_neg_bb);
+        llvm::Value* masked = builder->CreateAnd(builder->CreateNeg(int_val),
+                llvm::ConstantInt::get(i64_type, PAYLOAD_MASK));
+        int_boxed = builder->CreateOr(masked, llvm::ConstantInt::get(i64_type, TAG_INT48));
+    } else {
+        int_boxed = operand;
+    }
     builder->CreateBr(merge_bb);
-    llvm::BasicBlock* fast_int_end = builder->GetInsertBlock();
+    fast_int_end = builder->GetInsertBlock();
 
     // Check float path: exclude SSO short strings from the double range.
     builder->SetInsertPoint(check_float_bb);
     llvm::Value* is_float = emitIsBoxedFloat(operand);
     builder->CreateCondBr(is_float, fast_float_bb, slow_bb);
 
-    // Fast float path: unbox, fneg (or identity for plus), box
+    // Fast float path: the operand itself for plus; for minus, the negation inline unless its encoding collides with
+    // a value tag (QoreValue::rawDoubleCollidesWithTag(): a negated NaN, or a finite double whose negation encodes
+    // into the short-string or opaque tag families), which needs a heap float
     builder->SetInsertPoint(fast_float_bb);
-    llvm::Value* float_val = unboxFloat(operand);
-    llvm::Value* float_result = is_minus ? builder->CreateFNeg(float_val) : float_val;
-    llvm::Value* float_boxed = boxFloat(float_result);
+    llvm::Value* float_boxed;
+    if (is_minus) {
+        llvm::Value* float_result = builder->CreateFNeg(unboxFloat(operand));
+        llvm::Value* raw_bits = builder->CreateBitCast(float_result, i64_type);
+        llvm::Value* high_tag = builder->CreateICmpUGE(raw_bits,
+            llvm::ConstantInt::get(i64_type, QoreValue::RAW_DOUBLE_HIGH_TAG_FIRST));
+        llvm::Value* tag_family_offset = builder->CreateSub(raw_bits,
+            llvm::ConstantInt::get(i64_type, QoreValue::RAW_DOUBLE_TAG_COLLISION_FIRST));
+        llvm::Value* tag_family = builder->CreateICmpULT(tag_family_offset,
+            llvm::ConstantInt::get(i64_type,
+                QoreValue::RAW_DOUBLE_TAG_COLLISION_END - QoreValue::RAW_DOUBLE_TAG_COLLISION_FIRST));
+        llvm::Value* collides = builder->CreateOr(high_tag, tag_family);
+        llvm::BasicBlock* float_neg_bb = llvm::BasicBlock::Create(ctx, "unary_float_neg", llvm_func);
+        builder->CreateCondBr(collides, slow_bb, float_neg_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+        builder->SetInsertPoint(float_neg_bb);
+        float_boxed = builder->CreateAdd(raw_bits, llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET));
+    } else {
+        float_boxed = operand;
+    }
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* fast_float_end = builder->GetInsertBlock();
 
-    // Slow path: call runtime helper
+    // Slow path: call runtime helper, whose result is a new reference, kept in the slot below
     builder->SetInsertPoint(slow_bb);
     llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), opcode_val_int);
     auto u_ft = llvm::FunctionType::get(i64_type,
@@ -39542,6 +39883,24 @@ llvm::Value* QoreIRToLLVM::emitAnyUnaryFastPath(bool is_minus, int opcode_val_in
             "qore_rt_unary_op_throwing", u_ft);
     llvm::Value* slow_result = emitMaybeInvoke(helper, helper_throwing,
             {opcode_val, operand, xsink_arg}, module, llvm_func, inst);
+    // the slot that holds the result for the rest of the function: a number, a date, a heap integer or a heap float,
+    // which no destructor observes; it releases the result of the previous run of the slow path, and the exits of the
+    // function release the last one (registerPersistentCleanupAlloca()), so that no statement end has a release to
+    // make for the inline paths; the result is not the slot's for the consumers (invoke_alloca_map), which take a
+    // reference of their own to keep it
+    {
+        llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
+        llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+        llvm::AllocaInst* slot = alloca_builder.CreateAlloca(i64_type, nullptr, "unary_result");
+        alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
+        registerPersistentCleanupAlloca(slot);
+        unary_result_slots.insert(slot);
+        llvm::Value* previous = builder->CreateLoad(i64_type, slot);
+        builder->CreateStore(slow_result, slot);
+        auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        builder->CreateCall(decref_fn, {previous, xsink_arg});
+    }
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();
 

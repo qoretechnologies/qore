@@ -216,12 +216,15 @@ public:
         @param lvexp the lvalue expression
         @param int_op true for the int-specialized operator (the lvalue is typed int)
         @param increment true for an increment, false for a decrement
+        @param post true for a post-increment or post-decrement whose value is unused: an error that the lvalue's type
+        raises names the post operator (<tt><++ (post) operator></tt>), as the AST interpreter's does
         @param loc the source location
         @param error set on failure
 
-        @return the new value of the lvalue, or an invalid value on failure
+        @return the new value of the lvalue (the old one for a post operator whose lvalue's type can raise an error,
+        see qore_ir_incdec_may_name_operator()), or an invalid value on failure
     */
-    QoreIRValue lowerPreIncDec(const QoreValue& expr, const QoreValue& lvexp, bool int_op, bool increment,
+    QoreIRValue lowerPreIncDec(const QoreValue& expr, const QoreValue& lvexp, bool int_op, bool increment, bool post,
         const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerPreIncrement(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPostIncrement(const QoreValue& expr, std::string& error);
@@ -409,6 +412,7 @@ public:
     void setFunctionalBaseSource(const QoreValue& base_source);
     //! The block that an exception leaving the loop of a functional operator goes to (see the definition)
     class FunctionalLoopExceptionCleanup;
+    class LoopBodyRegion;
     //! Lowers code that runs with an element as the implicit argument and its index as the implicit element, which
     //! are restored on every path, also when the code raises an exception (see the definition)
     template <typename F>
@@ -567,7 +571,7 @@ private:
         AssignmentMode mode, LVCompoundOp compound_op = LVCompoundOp::AddAssign,
         LVUnaryOp unary_op = LVUnaryOp::PreInc,
         LVBinaryMutOp binary_mut_op = LVBinaryMutOp::Push,
-        const QoreValue& pattern_expr = QoreValue());
+        const QoreValue& pattern_expr = QoreValue(), bool ref_rv = true);
     bool getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis) const;
     bool isNeverNothingInt(const QoreParseAnalysis& analysis) const;
     bool isNeverNothingFloat(const QoreParseAnalysis& analysis) const;
@@ -920,6 +924,12 @@ private:
     bool handover_try_active = false;
     //! the value of the return of handover_try_active; invalid for a return without a value
     QoreIRValue handover_try_value;
+    //! the value of the switch statement whose case with an operator is being lowered: the value of the
+    //! QoreSwitchValueOperatorNode in the case's comparison (qore#6252)
+    QoreIRValue switch_case_value;
+    //! the switch expression whose value is switch_case_value: the guaranteed type of the switch value in the case's
+    //! comparison is that of the expression (qore#6252)
+    QoreValue switch_case_expr;
     //! the handler body that lowerHandlerAtExit() lowers inline next: its block gets an exception path of its own for
     //! its locals (see lowerStatementBlock(), #6002)
     const StatementBlock* inline_handler_block = nullptr;
@@ -960,6 +970,9 @@ private:
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
         QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord
+        //! for a RefForeach entry: the exception target outside the statement, where an exception raised by the
+        //! write-back of the list goes (an enclosing try block's handler, or nullptr to leave the frame; qore#6197)
+        QoreIRBasicBlock* ref_foreach_exception_target = nullptr;
         QoreIRValue old_implicit_element;          //!< saved $# for RefForeachRecord/ForeachElement
         QoreValue var_expr;                        //!< loop variable expression for RefForeachRecord
         QoreIRValue context_state;                 //!< Context* handle for Context entries

@@ -1,0 +1,215 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 over TLS and HTTP/3 (QUIC) connections
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerContentTypeCharsetTest
+
+#! records what a handler sees of the Content-Type of a request
+class ContentTypeHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the values seen for the last request
+        hash<auto> seen;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        seen = {
+            "content-type": hdr."content-type",
+            "orig-content-type": hdr."_qore_orig_content_type",
+            "charset": cx."header-info".charset,
+            "body-content-type": cx."header-info"."body-content-type",
+            "accept-charset": cx."header-info"."accept-charset",
+            "response-encoding": cx."response-encoding",
+            # the decoded text, in UTF-8 for the comparison
+            "body": body.typeCode() == NT_STRING ? convert_encoding(body, "UTF-8") : body,
+        };
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! An HttpServer handler sees the same Content-Type and header information for a request over every HTTP version
+/** HTTP/1.x requests got the Content-Type without its charset parameter and the charset in the header information
+    (Socket::readHTTPHeader()); HTTP/2 and HTTP/3 requests got the Content-Type as received and no charset
+    (qore#6318).
+*/
+class HttpServerContentTypeCharsetTest inherits QUnit::Test {
+    public {
+        #! the text of the body, sent in ISO-8859-2
+        const Text = "Řeřicha žluťoučká";
+
+        #! the requests, and what the handler sees of them for every HTTP version
+        const Requests = (
+            {
+                "content-type": "text/plain;charset=ISO-8859-2",
+                # the first element of the value is the response encoding: UTF-8 is seen only at the start of an
+                # element directly after a comma, as for HTTP/1.x (qore#6333)
+                "accept-charset": "iso-8859-2;q=0.9, utf-8;q=0.5",
+                "body": "latin2",
+                "expected": {
+                    "content-type": "text/plain",
+                    "orig-content-type": "text/plain;charset=ISO-8859-2",
+                    "charset": "ISO-8859-2",
+                    "body-content-type": "text/plain",
+                    "accept-charset": "iso-8859-2",
+                    "response-encoding": "iso-8859-2",
+                    "body": Text,
+                },
+            },
+            {
+                # nothing but a charset parameter: the Content-Type is kept, and there is no media type
+                "content-type": ";charset=utf-8",
+                "body": "json",
+                "expected": {
+                    "content-type": ";charset=utf-8",
+                    "orig-content-type": ";charset=utf-8",
+                    "charset": "utf-8",
+                    "body-content-type": NOTHING,
+                    "accept-charset": "utf8",
+                    "response-encoding": "utf8",
+                    "body": "{\"a\":1}",
+                },
+            },
+            {
+                # JSON is UTF-8 whatever the charset parameter says (RFC 8259); without one, the charset reported is
+                # the encoding that the body is read in
+                "content-type": "application/json",
+                "body": "json",
+                "expected": {
+                    "content-type": "application/json",
+                    "orig-content-type": "application/json",
+                    "charset": "UTF-8",
+                    "body-content-type": "application/json",
+                    "accept-charset": "utf8",
+                    "response-encoding": "utf8",
+                    "body": "{\"a\":1}",
+                },
+            },
+        );
+    }
+
+    constructor() : Test("HttpServer Content-Type charset test", "1.0") {
+        addTestCase("get_http_content_type_info()", \infoTest());
+        addTestCase("HTTP/1.1", \http1Test());
+        addTestCase("HTTP/2", \http2Test());
+        addTestCase("HTTP/3", \http3Test());
+        set_return_value(main());
+    }
+
+    infoTest() {
+        assertEq(<HttpContentTypeInfo>{"charset": "utf-8", "body_content_type": "application/json"},
+            get_http_content_type_info("application/json;charset=utf-8"));
+        assertEq(<HttpContentTypeInfo>{"charset": "ISO-8859-2", "body_content_type": "text/plain; format=flowed"},
+            get_http_content_type_info("text/plain; charset=\"ISO-8859-2\"; format=flowed"));
+        # without a charset parameter: the encoding that the body is read in, else the assumed encoding
+        assertEq(<HttpContentTypeInfo>{"charset": "UTF-8", "body_content_type": "application/json"},
+            get_http_content_type_info("application/json"));
+        assertEq(<HttpContentTypeInfo>{"charset": "ISO-8859-1", "body_content_type": "text/plain"},
+            get_http_content_type_info("text/plain"));
+        assertEq(<HttpContentTypeInfo>{"charset": "ISO-8859-2", "body_content_type": "text/plain"},
+            get_http_content_type_info("text/plain", "ISO-8859-2"));
+        # a binary type is read in the assumed encoding
+        assertEq(<HttpContentTypeInfo>{"charset": "ISO-8859-1", "body_content_type": MimeTypeOctetStream},
+            get_http_content_type_info(MimeTypeOctetStream));
+        # a value in another encoding is read in UTF-8
+        assertEq(<HttpContentTypeInfo>{"charset": "utf-8", "body_content_type": "text/plain"},
+            get_http_content_type_info(convert_encoding("text/plain;charset=utf-8", "UTF-16LE")));
+        # the response encoding: UTF-8 if any character set or UTF-8 is accepted, else the first character set
+        assertEq("utf8", get_http_accept_charset());
+        assertEq("utf8", get_http_accept_charset(""));
+        assertEq("utf8", get_http_accept_charset("*"));
+        assertEq("utf8", get_http_accept_charset("utf-8"));
+        assertEq("utf8", get_http_accept_charset("iso-8859-2,utf-8"));
+        assertEq("iso-8859-2", get_http_accept_charset("iso-8859-2;q=0.9, utf-8;q=0.5"));
+        assertEq("windows-1250", get_http_accept_charset(" windows-1250 , iso-8859-2"));
+        # leading blanks are skipped, as by the header parser
+        assertEq("utf8", get_http_accept_charset("  utf-8"));
+        # only a charset parameter: no media type is left
+        hash<HttpContentTypeInfo> info = get_http_content_type_info(";charset=utf-8");
+        assertEq("utf-8", info.charset);
+        assertNothing(info.body_content_type);
+    }
+
+    http1Test() {
+        ContentTypeHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("ct", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        checkRequests(new HTTPClient({"url": sprintf("http://127.0.0.1:%d", port)}), handler, "HTTP/1.1");
+    }
+
+    http2Test() {
+        ContentTypeHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("ct", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "2.0",
+            "enable_h3": False,
+        }).port;
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": sprintf("https://127.0.0.1:%d", port), "ssl_verify_cert": False,
+            "http_version": "2.0"});
+        hc.connect();
+        assertEq("HTTP/2", hc.getHttpVersion(), "HTTP/2 is negotiated");
+        checkRequests(hc, handler, "HTTP/2");
+    }
+
+    http3Test() {
+        ContentTypeHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("ct", handler);
+        server.waitForAsyncIo();
+        int port;
+        try {
+            port = server.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("QUIC listener not available: %s: %s", ex.err, ex.desc));
+        }
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": sprintf("https://127.0.0.1:%d", port), "ssl_verify_cert": False,
+            "http_version": "3"});
+        hc.connect();
+        if (hc.getHttpVersion() != "HTTP/3") {
+            testSkip(sprintf("HTTP/3 not negotiated (got %y)", hc.getHttpVersion()));
+        }
+        checkRequests(hc, handler, "HTTP/3");
+    }
+
+    #! sends each request and checks what the handler saw
+    private checkRequests(HTTPClient hc, ContentTypeHandler handler, string proto) {
+        foreach hash<auto> req in (Requests) {
+            binary body = req.body == "latin2"
+                ? convert_encoding(Text, "ISO-8859-2").toBinary()
+                : binary("{\"a\":1}");
+            hash<auto> hdr = {"Content-Type": req."content-type"};
+            if (req."accept-charset") {
+                hdr."Accept-Charset" = req."accept-charset";
+            }
+            hash<auto> rv = hc.send(body, "POST", "/ct", hdr);
+            assertEq(200, rv.status_code, sprintf("%s %s: the request succeeded", proto, req."content-type"));
+            assertEq(req.expected, handler.seen, sprintf("%s %s: what the handler sees", proto, req."content-type"));
+        }
+    }
+}

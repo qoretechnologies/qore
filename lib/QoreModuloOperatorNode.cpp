@@ -33,6 +33,11 @@
 
 QoreString QoreModuloOperatorNode::op_str("% (modula) operator expression");
 
+// documented in QoreLibIntern.h
+void qore_raise_modulo_by_zero(ExceptionSink* xsink) {
+    xsink->raiseException("DIVISION-BY-ZERO", "modula operand cannot be zero");
+}
+
 QoreValue QoreModuloOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     QoreOperandEvalHolder lh(left, xsink);
     if (*xsink) return false;

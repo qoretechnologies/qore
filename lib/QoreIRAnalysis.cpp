@@ -12,6 +12,7 @@
 #include <qore/intern/QoreIRAnalysis.h>
 #include <qore/intern/QoreIRLowering.h>
 #include <qore/intern/LocalVar.h>
+#include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/QoreJITIncludes.h>
 #include <qore/intern/QoreBinaryLValueOperatorNode.h>
 #include <qore/intern/QoreDeleteOperatorNode.h>
@@ -34,6 +35,7 @@
 #include <cstring>
 #include <limits>
 #include <map>
+#include <optional>
 #include <unordered_set>
 
 static bool qore_ir_analysis_cancelled(size_t& count, const char* operation) {
@@ -2400,6 +2402,7 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
 
     successors.resize(blocks.size());
     predecessors.resize(blocks.size());
+    std::vector<std::vector<size_t>> exception_successors(blocks.size());
     for (size_t block_id = 0; block_id < blocks.size(); ++block_id) {
         if (qore_ir_analysis_cancelled(check_count, "IR control-flow analysis")) {
             cancelled = true;
@@ -2418,23 +2421,31 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
             predecessors[it->second].push_back(block_id);
         };
         qore_ir_visit_successors(*block->instructions.back(), add_successor);
+        // the exception edges are always collected, for exception_entry and exception_only; they are edges of the
+        // graph only with include_exception_edges
+        std::unordered_set<size_t> successor_ids;
         if (include_exception_edges) {
-            std::unordered_set<size_t> successor_ids(
-                successors[block_id].begin(), successors[block_id].end());
-            auto add_exception_successor = [&](QoreIRBasicBlock* successor) {
-                auto it = block_ids.find(successor);
-                if (it == block_ids.end()
-                        || !successor_ids.insert(it->second).second) {
-                    return;
-                }
-                successors[block_id].push_back(it->second);
-                predecessors[it->second].push_back(block_id);
-            };
-            if (!qore_ir_visit_exception_targets(*block, add_exception_successor, &check_count,
-                    "IR exceptional control-flow analysis")) {
-                cancelled = true;
+            successor_ids.insert(successors[block_id].begin(), successors[block_id].end());
+        }
+        std::vector<size_t>& block_exception_successors = exception_successors[block_id];
+        auto add_exception_successor = [&](QoreIRBasicBlock* successor) {
+            auto it = block_ids.find(successor);
+            if (it == block_ids.end()) {
                 return;
             }
+            if (std::find(block_exception_successors.begin(), block_exception_successors.end(), it->second)
+                    == block_exception_successors.end()) {
+                block_exception_successors.push_back(it->second);
+            }
+            if (include_exception_edges && successor_ids.insert(it->second).second) {
+                successors[block_id].push_back(it->second);
+                predecessors[it->second].push_back(block_id);
+            }
+        };
+        if (!qore_ir_visit_exception_targets(*block, add_exception_successor, &check_count,
+                "IR exceptional control-flow analysis")) {
+            cancelled = true;
+            return;
         }
     }
 
@@ -2458,6 +2469,52 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
         }
     }
 
+    // the blocks that run: those reachable through normal and exception edges; the exception targets of the blocks
+    // that run are the handler entries, and the blocks that run but are not in reachable run only through exception
+    // edges
+    exception_entry.assign(blocks.size(), 0);
+    exception_only.assign(blocks.size(), 0);
+    std::vector<uint8_t> runs(reachable);
+    // the exception edges into each block that runs, for the dominators
+    std::vector<std::vector<size_t>> exception_predecessors(blocks.size());
+    {
+        std::vector<size_t> worklist;
+        for (size_t block_id = 0; block_id < blocks.size(); ++block_id) {
+            if (runs[block_id]) {
+                worklist.push_back(block_id);
+            }
+        }
+        while (!worklist.empty()) {
+            if (qore_ir_analysis_cancelled(check_count, "IR exceptional reachability analysis")) {
+                cancelled = true;
+                return;
+            }
+            size_t block_id = worklist.back();
+            worklist.pop_back();
+            for (size_t successor : exception_successors[block_id]) {
+                exception_entry[successor] = 1;
+                exception_predecessors[successor].push_back(block_id);
+                if (!runs[successor]) {
+                    runs[successor] = 1;
+                    worklist.push_back(successor);
+                }
+            }
+            for (size_t successor : successors[block_id]) {
+                if (!runs[successor]) {
+                    runs[successor] = 1;
+                    worklist.push_back(successor);
+                }
+            }
+        }
+        for (size_t block_id = 0; block_id < blocks.size(); ++block_id) {
+            exception_only[block_id] = runs[block_id] && !reachable[block_id];
+        }
+    }
+
+    // the dominators are computed over the normal and the exception edges of the blocks that run, so that a block
+    // that the end of a catch block flows into (the block after a try statement) is not dominated by the blocks of
+    // the try block, which an exception can leave early (issue #6334); dominates() still answers only for the blocks
+    // in reachable
     const size_t word_count = (blocks.size() + 63) / 64;
     dominators.assign(blocks.size(), std::vector<uint64_t>(word_count, 0));
     for (size_t block_id = 0; block_id < blocks.size(); ++block_id) {
@@ -2465,7 +2522,7 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
             cancelled = true;
             return;
         }
-        if (!reachable[block_id]) {
+        if (!runs[block_id]) {
             if (word_count) {
                 dominators[block_id][block_id / 64] |= uint64_t(1) << (block_id % 64);
             }
@@ -2476,7 +2533,7 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
             continue;
         }
         for (size_t candidate = 0; candidate < blocks.size(); ++candidate) {
-            if (reachable[candidate]) {
+            if (runs[candidate]) {
                 dominators[block_id][candidate / 64] |= uint64_t(1) << (candidate % 64);
             }
         }
@@ -2490,19 +2547,25 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
                 cancelled = true;
                 return;
             }
-            if (!reachable[block_id]) {
+            if (!runs[block_id]) {
                 continue;
             }
             std::vector<uint64_t> next(word_count, std::numeric_limits<uint64_t>::max());
             bool saw_predecessor = false;
-            for (size_t predecessor : predecessors[block_id]) {
-                if (!reachable[predecessor]) {
-                    continue;
+            auto meet = [&](size_t predecessor) {
+                if (!runs[predecessor]) {
+                    return;
                 }
                 saw_predecessor = true;
                 for (size_t word = 0; word < word_count; ++word) {
                     next[word] &= dominators[predecessor][word];
                 }
+            };
+            for (size_t predecessor : predecessors[block_id]) {
+                meet(predecessor);
+            }
+            for (size_t predecessor : exception_predecessors[block_id]) {
+                meet(predecessor);
             }
             if (!saw_predecessor) {
                 std::fill(next.begin(), next.end(), 0);
@@ -8678,6 +8741,154 @@ private:
     }
 };
 
+//! The forward dataflow of the in-place mutation analyses: the candidate locals that hold a value nothing else holds
+/** A must analysis (meet: intersection) over the blocks that run, including those that run only through exception
+    edges (handlers and the code after them up to the join after the try statement), so that the join knows what a
+    handler did to each local (issue #6334).  The transfer function records the state around each instruction that
+    has exception targets with record_exception(): the entry state of a handler is the meet of the states before and
+    after every such instruction that throws to it, as an exception can leave an instruction before or after its
+    effect on the locals.  The entry block starts with nothing fresh.
+*/
+class QoreIRFreshLocalDataflow {
+public:
+    DLLLOCAL QoreIRFreshLocalDataflow(const QoreIRControlFlowGraph& cfg, size_t candidate_count)
+            : cfg(cfg), candidate_count(candidate_count),
+            fresh_in(cfg.blocks.size(), QoreIRLocalBitSet(candidate_count, true)),
+            fresh_out(cfg.blocks.size(), QoreIRLocalBitSet(candidate_count, true)),
+            handler_in(cfg.blocks.size(), QoreIRLocalBitSet(candidate_count, true)),
+            handler_seen(cfg.blocks.size(), 0), visited(cfg.blocks.size(), 0), queued(cfg.blocks.size(), 0) {
+    }
+
+    //! returns true if the instruction has an exception target, whose handler entry state it then must record
+    DLLLOCAL static bool hasExceptionTarget(const QoreIRInstruction& inst) {
+        if (inst.exception_target) {
+            return true;
+        }
+        const auto* throw_inst = qore_ir_inst_cast<const QoreIRThrowInstruction*>(&inst);
+        return throw_inst && throw_inst->exception_target;
+    }
+
+    //! records the state before and after an instruction with exception targets for its handlers
+    DLLLOCAL void recordException(const QoreIRInstruction& inst, const QoreIRLocalBitSet& before,
+            const QoreIRLocalBitSet& after) {
+        QoreIRLocalBitSet meet = before;
+        meet.intersect(after);
+        auto record = [&](const QoreIRBasicBlock* target) {
+            if (!target) {
+                return;
+            }
+            auto it = cfg.block_ids.find(target);
+            if (it == cfg.block_ids.end()) {
+                return;
+            }
+            size_t handler = it->second;
+            QoreIRLocalBitSet next = handler_in[handler];
+            next.intersect(meet);
+            if (handler_seen[handler] && next == handler_in[handler]) {
+                return;
+            }
+            handler_seen[handler] = 1;
+            handler_in[handler] = std::move(next);
+            enqueue(handler);
+        };
+        record(inst.exception_target);
+        if (const auto* throw_inst = qore_ir_inst_cast<const QoreIRThrowInstruction*>(&inst)) {
+            record(throw_inst->exception_target);
+        }
+    }
+
+    //! runs the dataflow to its fixed point; returns false if cancelled
+    /** @param transfer called as transfer(block_id, input, *this) and returns the state at the end of the block or
+        nothing if cancelled; it must call recordException() for each instruction with exception targets
+    */
+    template <typename Transfer>
+    DLLLOCAL bool solve(Transfer&& transfer, size_t& check_count, const char* operation) {
+        for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+            if (qore_ir_analysis_cancelled(check_count, operation)) {
+                return false;
+            }
+            if (cfg.reachable[block_id]) {
+                enqueue(block_id);
+            }
+        }
+        while (!worklist.empty()) {
+            if (qore_ir_analysis_cancelled(check_count, operation)) {
+                return false;
+            }
+            size_t block_id = worklist.back();
+            worklist.pop_back();
+            queued[block_id] = 0;
+            QoreIRLocalBitSet input(candidate_count, false);
+            if (block_id) {
+                bool first = true;
+                if (cfg.exception_entry[block_id]) {
+                    // nothing fresh until the instructions that throw to the handler have been seen
+                    if (handler_seen[block_id]) {
+                        input = handler_in[block_id];
+                    }
+                    first = false;
+                }
+                for (size_t predecessor : cfg.predecessors[block_id]) {
+                    if (qore_ir_analysis_cancelled(check_count, operation)) {
+                        return false;
+                    }
+                    // a predecessor that never runs contributes nothing
+                    if (!cfg.reachable[predecessor] && !cfg.exception_only[predecessor]) {
+                        continue;
+                    }
+                    if (first) {
+                        input = fresh_out[predecessor];
+                        first = false;
+                        continue;
+                    }
+                    input.intersect(fresh_out[predecessor]);
+                }
+            }
+            fresh_in[block_id] = input;
+            std::optional<QoreIRLocalBitSet> output = transfer(block_id, std::move(input), *this);
+            if (!output) {
+                return false;
+            }
+            if (visited[block_id] && *output == fresh_out[block_id]) {
+                continue;
+            }
+            visited[block_id] = 1;
+            fresh_out[block_id] = std::move(*output);
+            for (size_t successor : cfg.successors[block_id]) {
+                if (qore_ir_analysis_cancelled(check_count, operation)) {
+                    return false;
+                }
+                enqueue(successor);
+            }
+        }
+        return true;
+    }
+
+    //! the state on entry to a block after solve()
+    DLLLOCAL const QoreIRLocalBitSet& getIn(size_t block_id) const {
+        return fresh_in[block_id];
+    }
+
+private:
+    const QoreIRControlFlowGraph& cfg;
+    size_t candidate_count;
+    std::vector<QoreIRLocalBitSet> fresh_in;
+    std::vector<QoreIRLocalBitSet> fresh_out;
+    //! the meet of the states recorded for each handler entry
+    std::vector<QoreIRLocalBitSet> handler_in;
+    std::vector<uint8_t> handler_seen;
+    std::vector<uint8_t> visited;
+    std::vector<uint8_t> queued;
+    std::vector<size_t> worklist;
+
+    DLLLOCAL void enqueue(size_t block_id) {
+        if (!queued[block_id]) {
+            queued[block_id] = 1;
+            worklist.push_back(block_id);
+        }
+    }
+};
+
 static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
         const QoreIRControlFlowGraph& cfg, const QoreIRScalarUses& uses,
         size_t& check_count,
@@ -8871,8 +9082,14 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
     using FreshLocalSet = QoreIRLocalBitSet;
     bool cancelled = false;
     auto transfer_block = [&](size_t block_id, FreshLocalSet state, bool mark,
-            size_t& changed) -> FreshLocalSet {
+            size_t& changed, QoreIRFreshLocalDataflow* flow) -> FreshLocalSet {
+        FreshLocalSet before;
         for (const auto& inst_ptr : cfg.blocks[block_id]->instructions) {
+            // the state before an instruction that can throw to a handler, for the handler's entry state
+            const bool records_exception = flow && QoreIRFreshLocalDataflow::hasExceptionTarget(*inst_ptr);
+            if (records_exception) {
+                before = state;
+            }
             if (qore_ir_analysis_cancelled(check_count, "IR local list push escape analysis")) {
                 cancelled = true;
                 return state;
@@ -8951,78 +9168,34 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
                     }
                 }
             }
+            if (records_exception) {
+                flow->recordException(*inst_ptr, before, state);
+            }
         }
         return state;
     };
 
-    const FreshLocalSet all_fresh(candidate_index.size(), true);
-    std::vector<FreshLocalSet> fresh_in(cfg.blocks.size(), all_fresh);
-    std::vector<FreshLocalSet> fresh_out(cfg.blocks.size(), all_fresh);
-    std::vector<size_t> worklist;
-    std::vector<uint8_t> queued(cfg.blocks.size(), 0);
-    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
-        if (qore_ir_analysis_cancelled(check_count, "IR local list push dataflow")) {
-            return 0;
-        }
-        if (cfg.reachable[block_id]) {
-            worklist.push_back(block_id);
-            queued[block_id] = 1;
-        }
-    }
+    QoreIRFreshLocalDataflow dataflow(cfg, candidate_index.size());
     size_t ignored_changed = 0;
-    while (!worklist.empty()) {
-        if (qore_ir_analysis_cancelled(check_count, "IR local list push dataflow")) {
-            return 0;
-        }
-        size_t block_id = worklist.back();
-        worklist.pop_back();
-        queued[block_id] = 0;
-        // no reachable predecessor leaves nothing fresh on entry to the block
-        FreshLocalSet input(candidate_index.size(), false);
-        if (block_id) {
-            bool first = true;
-            for (size_t predecessor : cfg.predecessors[block_id]) {
-                if (qore_ir_analysis_cancelled(check_count, "IR local list push dataflow")) {
-                    return 0;
+    if (!dataflow.solve([&](size_t block_id, FreshLocalSet input, QoreIRFreshLocalDataflow& flow)
+            -> std::optional<FreshLocalSet> {
+                FreshLocalSet output = transfer_block(block_id, std::move(input), false, ignored_changed, &flow);
+                if (cancelled) {
+                    return std::nullopt;
                 }
-                if (!cfg.reachable[predecessor]) {
-                    continue;
-                }
-                if (first) {
-                    input = fresh_out[predecessor];
-                    first = false;
-                    continue;
-                }
-                input.intersect(fresh_out[predecessor]);
-            }
-        }
-        fresh_in[block_id] = input;
-        FreshLocalSet output = transfer_block(block_id, input, false, ignored_changed);
-        if (cancelled) {
-            return 0;
-        }
-        if (output == fresh_out[block_id]) {
-            continue;
-        }
-        fresh_out[block_id] = std::move(output);
-        for (size_t successor : cfg.successors[block_id]) {
-            if (qore_ir_analysis_cancelled(check_count, "IR local list push dataflow")) {
-                return 0;
-            }
-            if (!queued[successor]) {
-                queued[successor] = 1;
-                worklist.push_back(successor);
-            }
-        }
+                return output;
+            }, check_count, "IR local list push dataflow")) {
+        return 0;
     }
 
+    // only the blocks that the graph without exception edges reaches are marked
     size_t changed = 0;
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
         if (qore_ir_analysis_cancelled(check_count, "IR local list push escape analysis")) {
             return changed;
         }
         if (cfg.reachable[block_id]) {
-            transfer_block(block_id, fresh_in[block_id], true, changed);
+            transfer_block(block_id, dataflow.getIn(block_id), true, changed, nullptr);
             if (cancelled) {
                 return changed;
             }
@@ -9200,8 +9373,14 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
     using FreshLocalSet = QoreIRLocalBitSet;
     bool cancelled = false;
     auto transfer_block = [&](size_t block_id, FreshLocalSet state, bool mark,
-            size_t& changed) -> FreshLocalSet {
+            size_t& changed, QoreIRFreshLocalDataflow* flow) -> FreshLocalSet {
+        FreshLocalSet before;
         for (const auto& inst_ptr : cfg.blocks[block_id]->instructions) {
+            // the state before an instruction that can throw to a handler, for the handler's entry state
+            const bool records_exception = flow && QoreIRFreshLocalDataflow::hasExceptionTarget(*inst_ptr);
+            if (records_exception) {
+                before = state;
+            }
             if (qore_ir_analysis_cancelled(check_count,
                     "IR in-place string append escape analysis")) {
                 cancelled = true;
@@ -9296,74 +9475,24 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                     }
                 }
             }
+            if (records_exception) {
+                flow->recordException(*inst_ptr, before, state);
+            }
         }
         return state;
     };
 
-    const FreshLocalSet all_fresh(candidate_index.size(), true);
-    std::vector<FreshLocalSet> fresh_in(cfg.blocks.size(), all_fresh);
-    std::vector<FreshLocalSet> fresh_out(cfg.blocks.size(), all_fresh);
-    std::vector<size_t> worklist;
-    std::vector<uint8_t> queued(cfg.blocks.size(), 0);
-    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
-        if (qore_ir_analysis_cancelled(check_count,
-                "IR in-place string append dataflow")) {
-            return 0;
-        }
-        if (cfg.reachable[block_id]) {
-            worklist.push_back(block_id);
-            queued[block_id] = 1;
-        }
-    }
+    QoreIRFreshLocalDataflow dataflow(cfg, candidate_index.size());
     size_t ignored_changed = 0;
-    while (!worklist.empty()) {
-        if (qore_ir_analysis_cancelled(check_count,
-                "IR in-place string append dataflow")) {
-            return 0;
-        }
-        size_t block_id = worklist.back();
-        worklist.pop_back();
-        queued[block_id] = 0;
-        // no reachable predecessor leaves nothing fresh on entry to the block
-        FreshLocalSet input(candidate_index.size(), false);
-        if (block_id) {
-            bool first = true;
-            for (size_t predecessor : cfg.predecessors[block_id]) {
-                if (qore_ir_analysis_cancelled(check_count,
-                        "IR in-place string append dataflow")) {
-                    return 0;
+    if (!dataflow.solve([&](size_t block_id, FreshLocalSet input, QoreIRFreshLocalDataflow& flow)
+            -> std::optional<FreshLocalSet> {
+                FreshLocalSet output = transfer_block(block_id, std::move(input), false, ignored_changed, &flow);
+                if (cancelled) {
+                    return std::nullopt;
                 }
-                if (!cfg.reachable[predecessor]) {
-                    continue;
-                }
-                if (first) {
-                    input = fresh_out[predecessor];
-                    first = false;
-                    continue;
-                }
-                input.intersect(fresh_out[predecessor]);
-            }
-        }
-        fresh_in[block_id] = input;
-        FreshLocalSet output =
-            transfer_block(block_id, input, false, ignored_changed);
-        if (cancelled) {
-            return 0;
-        }
-        if (output == fresh_out[block_id]) {
-            continue;
-        }
-        fresh_out[block_id] = std::move(output);
-        for (size_t successor : cfg.successors[block_id]) {
-            if (qore_ir_analysis_cancelled(check_count,
-                    "IR in-place string append dataflow")) {
-                return 0;
-            }
-            if (!queued[successor]) {
-                queued[successor] = 1;
-                worklist.push_back(successor);
-            }
-        }
+                return output;
+            }, check_count, "IR in-place string append dataflow")) {
+        return 0;
     }
 
     size_t changed = 0;
@@ -9372,11 +9501,11 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
     // paired with the local's load and store (issue #6280)
     const FreshLocalSet none_fresh(candidate_index.size(), false);
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
-        if (qore_ir_analysis_cancelled(check_count,
-                "IR in-place string append escape analysis")) {
+        if (qore_ir_analysis_cancelled(check_count, "IR in-place string append escape analysis")) {
             return changed;
         }
-        transfer_block(block_id, cfg.reachable[block_id] ? fresh_in[block_id] : none_fresh, true, changed);
+        transfer_block(block_id, cfg.reachable[block_id] ? dataflow.getIn(block_id) : none_fresh, true, changed,
+            nullptr);
         if (cancelled) {
             return changed;
         }
@@ -9416,16 +9545,17 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
         !q_env_is_set("QORE_DISABLE_IR_NATIVE_LOCAL_STORE_ELIMINATION");
 
     // Exception handlers are not represented by normal CFG predecessors. Keep
-    // promotion on normal control flow so every PHI edge is exact.
+    // promotion on normal control flow so every PHI edge is exact: no handler
+    // entry, including the target of a throw (issue #6334)
     for (const auto& block : func.blocks) {
-        for (const auto& inst : block->instructions) {
-            if (qore_ir_analysis_cancelled(check_count,
-                    "IR native local SSA exception-flow analysis")) {
-                return {};
-            }
-            if (inst->exception_target) {
-                return {};
-            }
+        bool has_exception_target = false;
+        if (!qore_ir_visit_exception_targets(*block, [&](QoreIRBasicBlock*) {
+                    has_exception_target = true;
+                }, &check_count, "IR native local SSA exception-flow analysis")) {
+            return {};
+        }
+        if (has_exception_target) {
+            return {};
         }
     }
 
@@ -10207,7 +10337,9 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
             }
             std::unordered_set<const LocalVar*> next = block_id == 0
                 ? initially_known : std::unordered_set<const LocalVar*>();
-            if (block_id && !cfg.predecessors[block_id].empty()) {
+            // a handler entry, which an exception enters from anywhere in the blocks that it handles, starts with
+            // nothing known whatever its predecessors (issue #6334)
+            if (block_id && !cfg.exception_entry[block_id] && !cfg.predecessors[block_id].empty()) {
                 next = out[cfg.predecessors[block_id].front()];
                 for (size_t pred_index = 1;
                         pred_index < cfg.predecessors[block_id].size();
@@ -10522,7 +10654,10 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
             std::unordered_set<const LocalVar*> next = block_id == 0
                 ? initially_known : universe;
             bool have_predecessor = block_id == 0;
-            if (block_id) {
+            // a handler entry or a predecessor that runs only through exception edges, whose state this dataflow
+            // does not compute, leaves nothing known (issue #6334)
+            bool exception_only_predecessor = false;
+            if (block_id && !cfg.exception_entry[block_id]) {
                 size_t predecessor_count = 0;
                 for (size_t predecessor : cfg.predecessors[block_id]) {
                     if (++predecessor_count % 100 == 0
@@ -10531,6 +10666,10 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
                         return false;
                     }
                     if (!cfg.reachable[predecessor]) {
+                        if (cfg.exception_only[predecessor]) {
+                            exception_only_predecessor = true;
+                            break;
+                        }
                         continue;
                     }
                     if (!have_predecessor) {
@@ -10553,7 +10692,7 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
                     }
                 }
             }
-            if (!have_predecessor) {
+            if (!have_predecessor || exception_only_predecessor) {
                 next.clear();
             }
             in[block_id] = next;
@@ -10789,15 +10928,16 @@ static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
             || func.blocks.empty() || func.has_opaque_ast_local_access) {
         return stats;
     }
+    // no handler entry, including the target of a throw (issue #6334)
     for (const auto& block : func.blocks) {
-        for (const auto& inst : block->instructions) {
-            if (qore_ir_analysis_cancelled(check_count,
-                    "IR dense list exception-flow analysis")) {
-                return {};
-            }
-            if (inst->exception_target) {
-                return stats;
-            }
+        bool has_exception_target = false;
+        if (!qore_ir_visit_exception_targets(*block, [&](QoreIRBasicBlock*) {
+                    has_exception_target = true;
+                }, &check_count, "IR dense list exception-flow analysis")) {
+            return {};
+        }
+        if (has_exception_target) {
+            return stats;
         }
     }
 
@@ -10925,7 +11065,9 @@ static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
                 return {};
             }
             std::unordered_set<const LocalVar*> next;
-            if (block_id && !cfg.predecessors[block_id].empty()) {
+            // a handler entry, which an exception enters from anywhere in the blocks that it handles, starts with
+            // nothing known whatever its predecessors (issue #6334)
+            if (block_id && !cfg.exception_entry[block_id] && !cfg.predecessors[block_id].empty()) {
                 next = out[cfg.predecessors[block_id].front()];
                 for (size_t pred_index = 1;
                         pred_index < cfg.predecessors[block_id].size();
@@ -11468,7 +11610,663 @@ static size_t qore_ir_load_read_only_constant_containers(QoreIRFunction& func, s
     return replace.size();
 }
 
-void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
+//! true if a type can hold an object, whose release can run a destructor (qore#6072)
+static bool qore_ir_release_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0) {
+    if (!QoreTypeInfo::needsScan(ti)) {
+        return false;
+    }
+    if (depth >= 8) {
+        return true;
+    }
+    if (const QoreTypeInfo* element = QoreTypeInfo::getComplexListValueType(ti)) {
+        return qore_ir_release_type_may_hold_object(element, depth + 1);
+    }
+    if (const QoreTypeInfo* value = QoreTypeInfo::getComplexHashValueType(ti)) {
+        return qore_ir_release_type_may_hold_object(value, depth + 1);
+    }
+    return true;
+}
+
+namespace {
+//! decides whether the values of a function can hold an object (qore#6072)
+/** A monotone data-flow analysis over the values of the function: a value is decided by its type facts, by the type
+    of the local that it loads, or by its opcode (a scalar result); an element read, a literal container and a phi hold
+    what their sources hold, and a list that the function builds holds what is appended to it or set in it.  A value
+    that an instruction outside the read-only set takes as an operand can be changed there, and is taken to hold an
+    object; so is the value of any other instruction.  The values only change from "no object" to "can hold an
+    object", so the analysis ends.
+*/
+class QoreIRReleaseObjectFacts {
+public:
+    explicit QoreIRReleaseObjectFacts(const QoreIRFunction& func) {
+        // the values decided without the data flow
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (!inst->result.isValid()) {
+                    continue;
+                }
+                int fixed = fixedState(func, inst.get());
+                if (fixed >= 0) {
+                    fixed_values[inst->result.id] = fixed != 0;
+                } else {
+                    flow_values[inst->result.id] = false;
+                }
+            }
+        }
+        // the containers that the function builds, and the phis that carry them: an instruction can change what one of
+        // them holds after it is built (an in-place append or push), which an element or an argument of a call, which
+        // are not unique, cannot have done to them
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                switch (inst->opcode) {
+                    case QoreIROpcode::CreateSizedList:
+                    case QoreIROpcode::CreateEmptyList:
+                    case QoreIROpcode::MakeList:
+                    case QoreIROpcode::MakeHash:
+                    case QoreIROpcode::MakeHashConstKeys:
+                        if (flow_values.count(inst->result.id)) {
+                            built_values.insert(inst->result.id);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+        bool changed = true;
+        while (changed) {
+            changed = false;
+            for (const auto& block : func.blocks) {
+                for (const auto& inst : block->instructions) {
+                    if (inst->opcode != QoreIROpcode::Phi || !flow_values.count(inst->result.id)
+                            || built_values.count(inst->result.id)) {
+                        continue;
+                    }
+                    for (const QoreIRPhiIncoming& in : static_cast<const QoreIRPhiInstruction*>(inst.get())->incoming) {
+                        if (in.value.isValid() && built_values.count(in.value.id)) {
+                            built_values.insert(inst->result.id);
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        changed = true;
+        while (changed) {
+            changed = false;
+            for (const auto& block : func.blocks) {
+                for (const auto& inst : block->instructions) {
+                    if (propagate(inst.get())) {
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+
+    //! true if the value can hold an object
+    bool valueMayHoldObject(QoreIRValue value) const {
+        auto i = fixed_values.find(value.id);
+        if (i != fixed_values.end()) {
+            return i->second;
+        }
+        auto f = flow_values.find(value.id);
+        // a value without an instruction (an argument) is unknown
+        return f == flow_values.end() || f->second;
+    }
+
+    //! true if the container that a container instruction builds can hold an object
+    bool containerMayHoldObject(const QoreIRInstruction* inst) const {
+        return !inst->result.isValid() || valueMayHoldObject(inst->result);
+    }
+
+private:
+    //! the values decided without the data flow
+    std::unordered_map<uint32_t, bool> fixed_values;
+    //! the values of the data flow
+    std::unordered_map<uint32_t, bool> flow_values;
+    //! the values of the data flow that hold a container that the function builds
+    std::unordered_set<uint32_t> built_values;
+
+    //! returns 1 or 0 for a value decided without the data flow, -1 for one of the data flow
+    static int fixedState(const QoreIRFunction& func, const QoreIRInstruction* inst) {
+        QoreIROpcode opcode = effectiveOpcode(inst);
+        // each of the facts below bounds what the value can hold: one that excludes an object decides it
+        if (isScalarOpcode(opcode)) {
+            return 0;
+        }
+        const QoreIRValueFacts* facts = func.getValueFacts(inst->result);
+        if (facts) {
+            if (facts->representation == QoreIRValueRepresentation::NativeInt
+                    || facts->representation == QoreIRValueRepresentation::NativeFloat) {
+                return 0;
+            }
+            if (facts->type_info && !qore_ir_release_type_may_hold_object(facts->type_info)) {
+                return 0;
+            }
+        }
+        if (inst->intrinsic != QoreIRIntrinsic::None && inst->intrinsic != QoreIRIntrinsic::ListFirst
+                && inst->intrinsic != QoreIRIntrinsic::ListLast) {
+            // a pseudo-method that the lowering recognized: it returns a scalar (a size, a type, a string's part)
+            return 0;
+        }
+        {
+            // a method call resolved at parse time: its variant's return type, which is checked when it returns
+            // or a function call resolved at parse time: its variant's return type (a builtin's is that of its
+            // signature, a user function's is checked when it returns)
+            const AbstractQoreFunctionVariant* variant = nullptr;
+            if (inst->opcode == QoreIROpcode::CallDirect) {
+                variant = static_cast<const QoreIRCallDirectInstruction*>(inst)->variant;
+            } else if (inst->opcode == QoreIROpcode::Invoke
+                    && static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode == QoreIROpcode::CallDirect) {
+                const AbstractQoreNode* node = static_cast<const QoreIRInvokeInstruction*>(inst)->expr.getInternalNode();
+                const FunctionCallNode* call = node ? dynamic_cast<const FunctionCallNode*>(node) : nullptr;
+                variant = call ? call->getVariant() : nullptr;
+            } else if (inst->opcode == QoreIROpcode::DotEvalMethodDirect) {
+                variant = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst)->variant;
+            } else if (inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
+                variant = static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)->variant;
+            }
+            AbstractFunctionSignature* sig = variant ? variant->getSignature() : nullptr;
+            const QoreTypeInfo* rti = sig ? sig->getReturnTypeInfo() : nullptr;
+            if (rti && !qore_ir_release_type_may_hold_object(rti)) {
+                return 0;
+            }
+        }
+        if (opcode == QoreIROpcode::LoadLocal) {
+            // the type of a local holds for every value that it is given
+            const LocalVar* local = static_cast<const QoreIRLocalInstruction*>(inst)->local;
+            const QoreTypeInfo* ti = local ? local->getTypeInfo() : nullptr;
+            if (ti && !QoreTypeInfo::isReference(ti) && !qore_ir_release_type_may_hold_object(ti)) {
+                return 0;
+            }
+            return 1;
+        }
+        if (isElementOpcode(opcode) || isValueOperatorOpcode(opcode)) {
+            return -1;
+        }
+        switch (opcode) {
+            case QoreIROpcode::IteratorCreate:
+            case QoreIROpcode::IteratorNext:
+            case QoreIROpcode::Phi:
+            case QoreIROpcode::MakeList:
+            case QoreIROpcode::MakeHash:
+            case QoreIROpcode::MakeHashConstKeys:
+            case QoreIROpcode::CreateSizedList:
+            case QoreIROpcode::CreateEmptyList:
+                return -1;
+            default:
+                return isScalarOpcode(inst->opcode) ? 0 : 1;
+        }
+    }
+
+    //! true for an opcode whose result is an element of its first operand (a list's or a hash's), which holds what the
+    //! operand holds
+    static bool isElementOpcode(QoreIROpcode opcode) {
+        switch (opcode) {
+            case QoreIROpcode::ListGetInt:
+            case QoreIROpcode::ListGetValue:
+            case QoreIROpcode::ListGetValueNoRef:
+            case QoreIROpcode::ListGetValueNoRefUnchecked:
+            case QoreIROpcode::ListIndexAccess:
+            case QoreIROpcode::ListIndexDynamic:
+            case QoreIROpcode::HashKeyAccess:
+            case QoreIROpcode::HashKeyAccessInt:
+            case QoreIROpcode::HashKeyAccessHash:
+            case QoreIROpcode::HashKeyAccessHashGuarded:
+            case QoreIROpcode::HashDerefDynamic:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    //! true for an operator whose result is made of its operands' values (+, -, etc. of any type), which holds what
+    //! they hold; the operators of assignments and of code (map, fold, etc.) are not
+    static bool isValueOperatorOpcode(QoreIROpcode opcode) {
+        switch (opcode) {
+            case QoreIROpcode::AddAny:
+            case QoreIROpcode::SubAny:
+            case QoreIROpcode::MulAny:
+            case QoreIROpcode::DivAny:
+            case QoreIROpcode::ModAny:
+            case QoreIROpcode::AndAny:
+            case QoreIROpcode::OrAny:
+            case QoreIROpcode::XorAny:
+            case QoreIROpcode::ShlAny:
+            case QoreIROpcode::ShrAny:
+            case QoreIROpcode::UnaryPlusAny:
+            case QoreIROpcode::UnaryMinusAny:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    //! the operation of an instruction: an Invoke's is the one that it calls
+    static QoreIROpcode effectiveOpcode(const QoreIRInstruction* inst) {
+        if (inst->opcode == QoreIROpcode::Invoke) {
+            return static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
+        }
+        return inst->opcode;
+    }
+
+    //! true for an opcode whose result is an int, a float, a bool, a string or no value
+    static bool isScalarOpcode(QoreIROpcode opcode) {
+        switch (opcode) {
+            case QoreIROpcode::ConstInt:
+            case QoreIROpcode::ConstFloat:
+            case QoreIROpcode::ConstBool:
+            case QoreIROpcode::ConstNothing:
+            case QoreIROpcode::ConstString:
+            case QoreIROpcode::ListSize:
+            case QoreIROpcode::AddInt:
+            case QoreIROpcode::AddFloat:
+            case QoreIROpcode::SubInt:
+            case QoreIROpcode::SubFloat:
+            case QoreIROpcode::MulInt:
+            case QoreIROpcode::MulFloat:
+            case QoreIROpcode::DivInt:
+            case QoreIROpcode::DivFloat:
+            case QoreIROpcode::ModInt:
+            case QoreIROpcode::ShlInt:
+            case QoreIROpcode::ShrInt:
+            case QoreIROpcode::EqInt:
+            case QoreIROpcode::EqFloat:
+            case QoreIROpcode::NeInt:
+            case QoreIROpcode::NeFloat:
+            case QoreIROpcode::EqHard:
+            case QoreIROpcode::NeHard:
+            case QoreIROpcode::LtInt:
+            case QoreIROpcode::LtFloat:
+            case QoreIROpcode::LeInt:
+            case QoreIROpcode::LeFloat:
+            case QoreIROpcode::GtInt:
+            case QoreIROpcode::GtFloat:
+            case QoreIROpcode::GeInt:
+            case QoreIROpcode::GeFloat:
+            case QoreIROpcode::CmpInt:
+            case QoreIROpcode::CmpFloat:
+            case QoreIROpcode::Not:
+            case QoreIROpcode::ToBool:
+            case QoreIROpcode::ListGetFloat:
+            // a match is a bool, a substitution a string, an extraction a list of strings or no value
+            case QoreIROpcode::RegexMatchAny:
+            case QoreIROpcode::RegexMatchBool:
+            case QoreIROpcode::RegexNMatchBool:
+            case QoreIROpcode::RegexExtractAny:
+            case QoreIROpcode::RegexExtractList:
+            case QoreIROpcode::RegexSubstAny:
+            case QoreIROpcode::RegexSubstString:
+            case QoreIROpcode::Sprintf:
+            case QoreIROpcode::SprintfIntFixed:
+            case QoreIROpcode::ToString:
+            case QoreIROpcode::ToStringChecked:
+            case QoreIROpcode::ToInt:
+            case QoreIROpcode::ToIntChecked:
+            case QoreIROpcode::ToFloat:
+            case QoreIROpcode::ToFloatChecked:
+            case QoreIROpcode::EqAny:
+            case QoreIROpcode::NeAny:
+            case QoreIROpcode::LtAny:
+            case QoreIROpcode::LeAny:
+            case QoreIROpcode::GtAny:
+            case QoreIROpcode::GeAny:
+            case QoreIROpcode::CmpAny:
+            case QoreIROpcode::ExistsAny:
+            case QoreIROpcode::ExistsBool:
+            case QoreIROpcode::ElementsAny:
+            case QoreIROpcode::ElementsInt:
+            case QoreIROpcode::IsNullOrNothing:
+            case QoreIROpcode::IsCollectionType:
+            // the keys of a hash or the member names of an object: strings
+            case QoreIROpcode::KeysAny:
+            case QoreIROpcode::KeysList:
+            case QoreIROpcode::KeysHash:
+            case QoreIROpcode::RangeAny:
+            case QoreIROpcode::RangeInt:
+            case QoreIROpcode::RangeFloat:
+            case QoreIROpcode::RangeDate:
+            case QoreIROpcode::AddNumber:
+            case QoreIROpcode::SubNumber:
+            case QoreIROpcode::MulNumber:
+            case QoreIROpcode::DivNumber:
+            case QoreIROpcode::AndInt:
+            case QoreIROpcode::OrInt:
+            case QoreIROpcode::XorInt:
+            case QoreIROpcode::UnaryMinusInt:
+            case QoreIROpcode::UnaryMinusFloat:
+            case QoreIROpcode::AddAssignInt:
+            case QoreIROpcode::AddAssignFloat:
+            case QoreIROpcode::SubAssignInt:
+            case QoreIROpcode::SubAssignFloat:
+            case QoreIROpcode::MulAssignInt:
+            case QoreIROpcode::MulAssignFloat:
+            case QoreIROpcode::DivAssignInt:
+            case QoreIROpcode::DivAssignFloat:
+            case QoreIROpcode::ModAssignInt:
+            case QoreIROpcode::ShlAssignInt:
+            case QoreIROpcode::ShrAssignInt:
+            case QoreIROpcode::AddAssignLocalInt:
+            case QoreIROpcode::IncrementLocalInt:
+            // the index of the next element
+            case QoreIROpcode::ListAppendElement:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    //! marks a value of the data flow as one that can hold an object; returns true if it changed
+    bool mark(QoreIRValue value) {
+        auto i = flow_values.find(value.id);
+        if (i == flow_values.end() || i->second) {
+            return false;
+        }
+        i->second = true;
+        return true;
+    }
+
+    //! applies the rules of an instruction; returns true if a value changed
+    bool propagate(const QoreIRInstruction* inst) {
+        bool changed = false;
+        // the result: what its sources hold
+        QoreIROpcode opcode = effectiveOpcode(inst);
+        if (inst->result.isValid() && flow_values.count(inst->result.id)) {
+            bool rv = false;
+            switch (opcode) {
+                case QoreIROpcode::Phi:
+                    for (const QoreIRPhiIncoming& in : static_cast<const QoreIRPhiInstruction*>(inst)->incoming) {
+                        if (in.value.isValid() && valueMayHoldObject(in.value)) {
+                            rv = true;
+                            break;
+                        }
+                    }
+                    break;
+                case QoreIROpcode::MakeList:
+                case QoreIROpcode::MakeHash:
+                case QoreIROpcode::MakeHashConstKeys:
+                    for (const QoreIRValue& op : inst->operands) {
+                        if (op.isValid() && valueMayHoldObject(op)) {
+                            rv = true;
+                            break;
+                        }
+                    }
+                    break;
+                case QoreIROpcode::IteratorCreate: {
+                    // an iterator of a lazily evaluated operator gives what the operator gives
+                    const auto* ic = static_cast<const QoreIRIteratorCreateInstruction*>(inst);
+                    rv = ic->iterator_func || !ic->iterable.isValid() || valueMayHoldObject(ic->iterable);
+                    break;
+                }
+                case QoreIROpcode::IteratorNext: {
+                    const auto* in = static_cast<const QoreIRIteratorNextInstruction*>(inst);
+                    rv = !in->iterator.isValid() || valueMayHoldObject(in->iterator);
+                    break;
+                }
+                default:
+                    if (isElementOpcode(opcode)) {
+                        rv = inst->operands.empty() || !inst->operands[0].isValid()
+                            || valueMayHoldObject(inst->operands[0]);
+                    } else if (isValueOperatorOpcode(opcode)) {
+                        for (const QoreIRValue& op : inst->operands) {
+                            if (op.isValid() && valueMayHoldObject(op)) {
+                                rv = true;
+                                break;
+                            }
+                        }
+                    }
+                    break;
+            }
+            if (rv && mark(inst->result)) {
+                changed = true;
+            }
+        }
+        // a phi that can hold an object: its sources are taken to hold one too, as what is done with the phi's value
+        // is done with theirs
+        if (inst->opcode == QoreIROpcode::Phi && inst->result.isValid() && valueMayHoldObject(inst->result)) {
+            for (const QoreIRPhiIncoming& in : static_cast<const QoreIRPhiInstruction*>(inst)->incoming) {
+                if (in.value.isValid() && mark(in.value)) {
+                    changed = true;
+                }
+            }
+        }
+        // the operands: what the instruction can store in a container that the function builds
+        for (size_t i = 0, e = inst->operands.size(); i < e; ++i) {
+            QoreIRValue op = inst->operands[i];
+            if (!op.isValid() || !built_values.count(op.id)) {
+                continue;
+            }
+            bool rv;
+            switch (opcode) {
+                case QoreIROpcode::ListAppendElement:
+                    // operands: the list, the value, the index
+                    rv = !i && e > 1 && inst->operands[1].isValid() && valueMayHoldObject(inst->operands[1]);
+                    break;
+                case QoreIROpcode::ListSetValue:
+                    // operands: the list, the index, the value
+                    rv = !i && e > 2 && inst->operands[2].isValid() && valueMayHoldObject(inst->operands[2]);
+                    break;
+                // read: an instruction changes a container in place only when it is the only reference, which this
+                // value's slot is not while it holds it; a local that is given it holds another reference
+                case QoreIROpcode::StoreLocal:
+                case QoreIROpcode::Return:
+                case QoreIROpcode::Phi:
+                case QoreIROpcode::MakeList:
+                case QoreIROpcode::MakeHash:
+                case QoreIROpcode::MakeHashConstKeys:
+                case QoreIROpcode::ListSetCommonType:
+                case QoreIROpcode::ListSetLength:
+                case QoreIROpcode::ListSetScannedType:
+                case QoreIROpcode::IteratorCreate:
+                case QoreIROpcode::IteratorNext:
+                case QoreIROpcode::IteratorRelease:
+                case QoreIROpcode::ReleaseOwnedTemp:
+                case QoreIROpcode::CheckException:
+                    rv = false;
+                    break;
+                default:
+                    rv = !isScalarOpcode(opcode) && !isElementOpcode(opcode) && !isValueOperatorOpcode(opcode);
+                    break;
+            }
+            if (rv && mark(op)) {
+                changed = true;
+            }
+        }
+        return changed;
+    }
+};
+}
+
+//! true for an instruction that a pending exception cannot leave the frame from or be observed by, between the check
+//! of a release and an instruction that checks the sink with the same handler: a constant, scalar arithmetic or
+//! comparison, or the release of a temporary, whose own exception the same check takes (qore#6072)
+static bool qore_ir_release_check_transparent(const QoreIRInstruction* inst, const QoreIRBasicBlock* handler) {
+    switch (inst->opcode) {
+        case QoreIROpcode::ConstInt:
+        case QoreIROpcode::ConstFloat:
+        case QoreIROpcode::ConstBool:
+        case QoreIROpcode::ConstNothing:
+        case QoreIROpcode::ConstString:
+        case QoreIROpcode::AddInt:
+        case QoreIROpcode::AddFloat:
+        case QoreIROpcode::SubInt:
+        case QoreIROpcode::SubFloat:
+        case QoreIROpcode::MulInt:
+        case QoreIROpcode::MulFloat:
+        case QoreIROpcode::EqInt:
+        case QoreIROpcode::NeInt:
+        case QoreIROpcode::LtInt:
+        case QoreIROpcode::LeInt:
+        case QoreIROpcode::GtInt:
+        case QoreIROpcode::GeInt:
+        case QoreIROpcode::ListSize:
+            return true;
+        // the release of a fused pipeline's stage input (a second operand) checks the sink with its own handler
+        case QoreIROpcode::ReleaseOwnedTemp:
+            return inst->operands.size() < 2 || inst->exception_target == handler;
+        default:
+            return false;
+    }
+}
+
+//! true for an instruction that checks the sink after itself with the given handler, in the IR interpreter and in
+//! native code, and runs no Qore code: a check of a release before it is redundant (qore#6072)
+static bool qore_ir_release_check_covering(const QoreIRInstruction* inst, const QoreIRBasicBlock* handler) {
+    // ListSetValue is not one: native code stores some values without a check
+    return handler && inst->exception_target == handler && inst->opcode == QoreIROpcode::ListAppendElement;
+}
+
+// documented in QoreIRAnalysis.h
+size_t qore_ir_prune_release_checks(QoreIRFunction& func) {
+    bool any = false;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::CheckException && inst->release_check == QoreIRReleaseCheck::Pending) {
+                any = true;
+                break;
+            }
+        }
+        if (any) {
+            break;
+        }
+    }
+    if (!any) {
+        return 0;
+    }
+    QoreIRReleaseObjectFacts facts(func);
+    std::unordered_map<uint32_t, QoreIRInstruction*> defs;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->result.isValid()) {
+                defs[inst->result.id] = inst.get();
+            }
+        }
+    }
+    // a back-edge check is decided by the natural loop of its back-edge: the header that the block branches to and the
+    // blocks that reach the block without passing the header; one whose loop cannot be found is kept
+    QoreIRControlFlowGraph cfg(func);
+    auto backEdgeLoopHasObjects = [&](const QoreIRBasicBlock* block) -> bool {
+        auto bi = cfg.block_ids.find(block);
+        if (cfg.cancelled || bi == cfg.block_ids.end() || bi->second >= cfg.successors.size()) {
+            return true;
+        }
+        size_t b = bi->second;
+        for (size_t h : cfg.successors[b]) {
+            if (!cfg.dominates(h, b)) {
+                continue;
+            }
+            std::vector<uint8_t> in_loop(cfg.blocks.size(), 0);
+            std::vector<size_t> work;
+            in_loop[h] = 1;
+            if (!in_loop[b]) {
+                in_loop[b] = 1;
+                work.push_back(b);
+            }
+            while (!work.empty()) {
+                size_t x = work.back();
+                work.pop_back();
+                for (size_t p : cfg.predecessors[x]) {
+                    if (!in_loop[p]) {
+                        in_loop[p] = 1;
+                        work.push_back(p);
+                    }
+                }
+            }
+            for (size_t i = 0, e = cfg.blocks.size(); i < e; ++i) {
+                if (!in_loop[i]) {
+                    continue;
+                }
+                for (const auto& x : cfg.blocks[i]->instructions) {
+                    if (x->result.isValid() && facts.valueMayHoldObject(x->result)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        return true;
+    };
+    size_t removed = 0;
+    for (const auto& block : func.blocks) {
+        std::vector<std::unique_ptr<QoreIRInstruction>>& insts = block->instructions;
+        for (size_t i = 0; i < insts.size(); ) {
+            QoreIRInstruction* inst = insts[i].get();
+            if (inst->opcode != QoreIROpcode::CheckException || inst->release_check != QoreIRReleaseCheck::Pending) {
+                ++i;
+                continue;
+            }
+            bool keep = true;
+            if (!inst->operands.empty() && inst->operands[0].isValid()) {
+                // the check of the value of a container or of a call
+                QoreIRValue value = inst->operands[0];
+                keep = facts.valueMayHoldObject(value);
+                auto d = defs.find(value.id);
+                QoreIRInstruction* def = d == defs.end() ? nullptr : d->second;
+                // the next instruction that is not transparent checks the sink with the same handler: the check is
+                // redundant, at no cost in any mode
+                bool covered = false;
+                if (keep) {
+                    for (size_t j = i + 1, e = insts.size(); j < e; ++j) {
+                        if (qore_ir_release_check_covering(insts[j].get(), inst->exception_target)) {
+                            covered = true;
+                            break;
+                        }
+                        if (!qore_ir_release_check_transparent(insts[j].get(), inst->exception_target)) {
+                            break;
+                        }
+                    }
+                }
+                if (keep && def && qore_ir_takes_region_exception_target(def->opcode)) {
+                    // native code checks the sink after the release of the value that the container replaces
+                    if (!def->exception_target) {
+                        def->exception_target = inst->exception_target;
+                    }
+                }
+                if (covered) {
+                    keep = false;
+                } else if (keep) {
+                    // native code releases the previous value of a call or a Phi at the start of the call's
+                    // continuation or of the Phi's block, where this is, and checks it here; it checks that of a
+                    // container after the container, with the handler, and emits nothing here
+                    inst->release_check = def && (def->opcode == QoreIROpcode::Invoke || def->opcode == QoreIROpcode::Phi)
+                        ? QoreIRReleaseCheck::Native : QoreIRReleaseCheck::Kept;
+                }
+            } else {
+                // at a back-edge; redundant when the instructions before it, which are transparent, follow one that
+                // checks the sink with the same handler
+                keep = backEdgeLoopHasObjects(block.get());
+                if (keep) {
+                    for (size_t j = i; j-- > 0; ) {
+                        if (qore_ir_release_check_covering(insts[j].get(), inst->exception_target)) {
+                            keep = false;
+                            break;
+                        }
+                        if (!qore_ir_release_check_transparent(insts[j].get(), inst->exception_target)) {
+                            break;
+                        }
+                    }
+                }
+            }
+            if (keep) {
+                // decided: the operand only served the decision, and the image carries a CheckException as before
+                if (inst->release_check == QoreIRReleaseCheck::Pending) {
+                    inst->release_check = QoreIRReleaseCheck::Kept;
+                }
+                inst->operands.clear();
+                ++i;
+                continue;
+            }
+            insts.erase(insts.begin() + i);
+            ++removed;
+        }
+    }
+    return removed;
+}
+
+//! the passes of qore_ir_optimize(), which returns early when a pass is cancelled or disabled
+static void qore_ir_optimize_intern(QoreIRFunction& func, QoreIROptimizationStats* stats,
         bool enable_licm, const QoreIRFoldContext& fold_context) {
     QoreIROptimizationStats local_stats;
     if (q_env_is_set("QORE_DISABLE_IR_OPT")) {
@@ -11824,6 +12622,15 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
     if (stats) {
         *stats = local_stats;
     }
+}
+
+void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
+        bool enable_licm, const QoreIRFoldContext& fold_context) {
+    qore_ir_optimize_intern(func, stats, enable_licm, fold_context);
+    // last, also when a pass was cancelled or the optimization is disabled: it reads the final facts of the values
+    // (qore#6072)
+    func.defer_release_check_prune = false;
+    qore_ir_prune_release_checks(func);
 }
 
 size_t qore_ir_optimize_fresh_list_calls(QoreIRFunction& func,
@@ -15929,13 +16736,20 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
             LocalFacts next = block_id == 0
                 ? initially_known : LocalFacts{};
             bool have_predecessor = block_id == 0;
-            if (block_id) {
+            // a handler entry or a predecessor that runs only through exception edges, whose state this dataflow
+            // does not compute, leaves nothing known (issue #6334)
+            bool exception_only_predecessor = false;
+            if (block_id && !cfg.exception_entry[block_id]) {
                 for (size_t predecessor : cfg.predecessors[block_id]) {
                     if (qore_ir_analysis_cancelled(check_count,
                             "IR exact boxed local predecessor analysis")) {
                         return 0;
                     }
                     if (!cfg.reachable[predecessor]) {
+                        if (cfg.exception_only[predecessor]) {
+                            exception_only_predecessor = true;
+                            break;
+                        }
                         continue;
                     }
                     if (!have_predecessor) {
@@ -15946,7 +16760,7 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
                     }
                 }
             }
-            if (!have_predecessor) {
+            if (!have_predecessor || exception_only_predecessor) {
                 next.clear();
             }
             in[block_id] = next;
