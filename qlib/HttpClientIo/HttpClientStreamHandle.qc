@@ -460,6 +460,8 @@ public class HttpClientStreamHandle {
     setRequestDeadline(*int deadline_us, *timeout limit) {
         request_deadline = deadline_us;
         request_limit = limit;
+        # the flag belongs to the deadline
+        request_deadline_expired = False;
     }
 
     #! Returns the deadline of the whole request that the stream belongs to, if any; see @ref setRequestDeadline()
@@ -611,22 +613,29 @@ public class HttpClientStreamHandle {
 
     #! Waits for the response of a request
     /** @param f the Future of the response
-        @param end_time the overall deadline, if any
+        @param end_us the overall deadline, if any, on the monotonic clock in microseconds
         @param wait_timeout the overall timeout, for the error message
         @param submitted the time the request was submitted
+        @param deadline_bound @ref True if \a end_us is the deadline of the stream's request; its expiry then sets
+        @ref request_deadline_expired
 
         @return the response
 
         @throw HTTPCLIENT-TIMEOUT the response was not received before the deadline, or no data was received on the
         connection for the inactivity timeout; the stream is canceled
     */
-    private auto waitForResponse(Future f, *date end_time, timeout wait_timeout, date submitted) {
+    private auto waitForResponse(Future f, *int end_us, timeout wait_timeout, date submitted,
+            bool deadline_bound = False) {
         while (True) {
             # the wait is bounded by the deadline and by the inactivity timeout, if any; 0 waits indefinitely
             int wait_us = 0;
-            if (end_time) {
-                wait_us = (end_time - now_us()).durationMicroseconds();
+            if (end_us) {
+                wait_us = end_us - clock_get_monotonic_us();
                 if (wait_us <= 0) {
+                    # a response wait that ended at the request's deadline (#6429); not an inactivity timeout
+                    if (deadline_bound) {
+                        request_deadline_expired = True;
+                    }
                     cancel();
                     throw "HTTPCLIENT-TIMEOUT", sprintf("request timed out after %d ms", wait_timeout);
                 }
@@ -642,8 +651,8 @@ public class HttpClientStreamHandle {
                 }
             }
             try {
-                # at least 1ms: a timeout of 0 means an infinite wait
-                return f.get(wait_us ? max(1, wait_us / 1000) : 0);
+                # rounded up, at least 1ms: a timeout of 0 means an infinite wait
+                return f.get(wait_us ? (wait_us + 999) / 1000 : 0);
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err != "FUTURE-TIMEOUT") {
                     rethrow;
@@ -677,14 +686,15 @@ public class HttpClientStreamHandle {
         conn.checkRequestBody(method, headers, body);
         # 0 means no overall deadline
         timeout wait_timeout = timeout_ms ?? request_timeout;
-        *date end_time = wait_timeout > 0 ? now_us() + milliseconds(wait_timeout) : NOTHING;
+        # the waits of this call are on the monotonic clock, so that a step of the wall clock cannot end them early or
+        # late
+        *int end_time = wait_timeout > 0 ? clock_get_monotonic_us() + wait_timeout * 1000 : NOTHING;
         # the deadline of the whole request, if earlier, ends the waits; the error then states the request's timeout
-        # (#6429); it is on the monotonic clock, and converted to an end time of this call's waits here
+        # (#6429)
         bool deadline_bound = False;
         if (request_deadline) {
-            date request_end = now_us() + microseconds(request_deadline - clock_get_monotonic_us());
-            if (!end_time || request_end <= end_time) {
-                end_time = request_end;
+            if (!end_time || request_deadline <= end_time) {
+                end_time = request_deadline;
                 deadline_bound = True;
                 if (request_limit) {
                     wait_timeout = request_limit;
@@ -709,7 +719,7 @@ public class HttpClientStreamHandle {
             # without an overall deadline, the transport's own connect deadline ends the wait
             # rounded up to milliseconds, so that the wait does not end before the deadline
             int remaining_ms = end_time
-                ? ((end_time - now_us()).durationMicroseconds() + 999) / 1000
+                ? (end_time - clock_get_monotonic_us() + 999) / 1000
                 : connect_timeout * 2;
             ready_wait_deadline_bound = deadline_bound;
             if (remaining_ms <= 0) {
@@ -740,7 +750,7 @@ public class HttpClientStreamHandle {
         reservation_held = False;
 
         try {
-            auto rv = waitForResponse(f, end_time, wait_timeout, now_us());
+            auto rv = waitForResponse(f, end_time, wait_timeout, now_us(), deadline_bound);
             {
                 AutoLock al(lock);
                 state = HttpClientStreamState::Complete;
@@ -751,12 +761,6 @@ public class HttpClientStreamHandle {
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "HTTPCLIENT-CANCELLED") {
                 throw "HTTPCLIENT-CANCELLED", "request was cancelled";
-            }
-            # a response wait that ended at the request's deadline (#6429); not an inactivity timeout (io_timeout),
-            # which ends the wait earlier: waitForResponse() raises the deadline's timeout only once the end time has
-            # passed on this clock, so the comparison is exact
-            if (ex.err == "HTTPCLIENT-TIMEOUT" && deadline_bound && now_us() >= end_time) {
-                request_deadline_expired = True;
             }
             # Let connection errors and the errors of requests that the server refused propagate unwrapped so the
             # connection manager can detect, evict dead connections, and send the request again

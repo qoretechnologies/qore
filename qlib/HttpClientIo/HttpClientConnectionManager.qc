@@ -74,8 +74,8 @@ class AsyncRace {
         */
         *EventNotifier current_notifier;
 
-        #! True if this race set the per-key @c creating flag (clears it on teardown)
-        bool we_set_creating = False;
+        #! The claim of the creation of the key that this race took, if any (released on teardown)
+        int creating_claim = 0;
     }
 }
 
@@ -295,12 +295,21 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         #! Mutex + condition to serialize connection creation per pool key
         Mutex create_mutex();
         Condition create_cond();
-        hash<string, bool> creating;
+        #! The claims of the creation of a connection per pool key: the serial of the claim that owns it
+        /** A claim is released only by its owner (see @ref releaseCreationLocked()): a waiter can take the creation
+            over from a stalled creator, and the stalled creator must not release the new claim when it ends
+        */
+        hash<string, int> creating;
+
+        #! The serial of the last claim of @ref creating
+        int creation_serial = 0;
 
         #! Happy-eyeballs races that a request's deadline cut off and that go on in the background (#6429)
-        /** Keyed by pool key; each value has the candidates (\c h3conn, \c h2conn, \c h1conn).  The creation of a
-            connection for the key (@ref creating) stays claimed until the race ends, so later requests wait for its
-            winner.  Protected by @ref create_mutex; @ref closeAll() closes the candidates.
+        /** Keyed by the serial of the creation claim that the race took over (one entry per race, also when two
+            races for one key run at once); each value has the pool \c key and the candidates (\c h3conn,
+            \c h2conn, \c h1conn).  The race's claim of @ref creating stays held until the race ends, so later
+            requests wait for its winner.  Protected by @ref create_mutex; @ref closeAll() closes the candidates of
+            every race.
         */
         hash<string, hash<auto>> bg_races;
 
@@ -1889,8 +1898,11 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         # see the shutdown and end; the in_flight drain below waits for them
         {
             AutoLock al(create_mutex);
-            foreach string race_key in (keys bg_races) {
-                hash<auto> race = bg_races{race_key};
+            # closing a candidate signals the race's notifier (setClosed() notifies the ready notifiers at once), so
+            # each thread wakes at once, finds every candidate settled and ends: the in_flight drain below does not
+            # wait for a race's own bound, which can be longer than its ceiling once an HTTP/1.1 candidate started
+            foreach string race_claim in (keys bg_races) {
+                hash<auto> race = bg_races{race_claim};
                 heCloseLegs(race.h3conn, race.h2conn, race.h1conn);
             }
         }
@@ -2379,6 +2391,7 @@ printf("%d connection(s) migrated\n", migrated);
             # The wait is bounded by connect_timeout; on timeout, the waiting thread
             # takes over creation to prevent indefinite blocking when the creator stalls.
             # It is bounded by the caller's deadline as well, which raises HTTPCLIENT-TIMEOUT (#6429).
+            int claim;
             {
                 AutoLock al(create_mutex);
                 if (creating{key}) {
@@ -2392,6 +2405,8 @@ printf("%d connection(s) migrated\n", migrated);
                             deadline_bound = True;
                         }
                     }
+                    log(LoggerLevel::DEBUG, "waiting for the connection that another request is creating for %s",
+                        key);
                     int rc = create_cond.wait(create_mutex, wait_ms);
                     if (rc == ETIMEDOUT && deadline_bound) {
                         throwAcquireTimeout(key, "another request is creating the connection");
@@ -2404,14 +2419,16 @@ printf("%d connection(s) migrated\n", migrated);
                         continue;
                     }
                 }
-                creating{key} = True;
+                claim = claimCreationLocked(key);
             }
+            # a happy-eyeballs race that goes on in the background owns the claim from then on, and releases it when
+            # it ends; otherwise the claim is released here, if it is still this caller's (a waiter can have taken
+            # the creation over)
+            bool handed_over = False;
             on_exit {
-                AutoLock al(create_mutex);
-                # a happy-eyeballs race that goes on in the background keeps the creation claimed until it ends
-                if (!bg_races{key}) {
-                    remove creating{key};
-                    create_cond.broadcast();
+                if (!handed_over) {
+                    AutoLock al(create_mutex);
+                    releaseCreationLocked(key, claim);
                 }
             }
 
@@ -2535,7 +2552,7 @@ printf("%d connection(s) migrated\n", migrated);
                 # here is retained plumbing only and no longer alters this
                 # branch (the option-2 stopgap's single-H2 line was superseded
                 # by the real async race).
-                conn = createConnectionHappyEyeballs(url_info, key, deadline);
+                conn = createConnectionHappyEyeballs(url_info, key, deadline, claim, \handed_over);
             } else {
                 conn = createConnection(url_info, key, protocol);
             }
@@ -3078,11 +3095,15 @@ printf("%d connection(s) migrated\n", migrated);
         microseconds (#6429); when it passes first, the race goes on in the background, bounded by the candidates'
         connect timeouts, and its winner is pooled for later requests (see @ref heFinishRaceInBackground()), and
         \c HTTPCLIENT-TIMEOUT is raised
+        @param claim the caller's claim of the creation of the key (see @ref creating), which a race that goes on in
+        the background takes over
+        @param handed_over set to @ref True if the race went on in the background, which then owns \a claim
         @return the winning connection (H3, H2 or H1)
 
         @throw HTTPCLIENT-TIMEOUT \a deadline passed before a candidate connected
     */
-    private HttpClientConnection createConnectionHappyEyeballs(hash<auto> url_info, string key, *int deadline) {
+    private HttpClientConnection createConnectionHappyEyeballs(hash<auto> url_info, string key, *int deadline,
+            int claim = 0, *reference<bool> handed_over) {
         # Stagger delay: H3 gets a head start before H2 begins
         int HappyEyeballsStaggerMs = 100;
 
@@ -3117,7 +3138,7 @@ printf("%d connection(s) migrated\n", migrated);
         # the race was handed over to the background
         *Http2ClientConnection h2conn;
         *Http1ClientConnection h1conn;
-        bool handed_over = False;
+        handed_over = False;
         on_error {
             if (!handed_over) {
                 heCloseLegs(h3conn, h2conn, h1conn);
@@ -3188,7 +3209,7 @@ printf("%d connection(s) migrated\n", migrated);
         int race_deadline = clock_get_monotonic_us() + (opts.connect_timeout + AsyncQueueSafetyGraceMs) * 1000;
         bool expired = False;
         *HttpClientConnection w = heRunRace(url_info, key, h3conn, h2conn, \h1conn, race_notifier, \race_deadline,
-            deadline, \expired);
+            deadline, \expired, claim);
         if (w) {
             return w;
         }
@@ -3197,8 +3218,10 @@ printf("%d connection(s) migrated\n", migrated);
             # its winner is pooled for later requests (#6429)
             log(LoggerLevel::DEBUG, "happy eyeballs: the request's time for %s ran out in the race; the race goes on "
                 "in the background", key);
-            heHandOverRace(url_info, key, h3conn, h2conn, h1conn, race_notifier, race_deadline);
+            # the background owns the claim from here on, whether or not its thread could be started
             handed_over = True;
+            heHandOverRace(url_info, key, h3conn, h2conn, h1conn, race_notifier, race_deadline, claim);
+            log(LoggerLevel::DEBUG, "happy eyeballs: handed the race for %s over to the background", key);
             throwAcquireTimeout(key, "no protocol connected in the happy-eyeballs race");
         }
 
@@ -3217,13 +3240,15 @@ printf("%d connection(s) migrated\n", migrated);
         candidate starts
         @param deadline the caller's deadline on the monotonic clock in microseconds, if any
         @param expired set to @ref True if \a deadline passed before an outcome
+        @param claim the creation claim of the race, which identifies it in @ref bg_races if it goes on in the
+        background
 
         @return the committed winner, or @ref nothing if no candidate won (all of them settled, the race's bound
         passed, the caller's deadline passed, or the manager is shutting down)
     */
     private *HttpClientConnection heRunRace(hash<auto> url_info, string key, Http3ClientConnection h3conn,
             Http2ClientConnection h2conn, reference<*Http1ClientConnection> h1conn, EventNotifier race_notifier,
-            reference<int> race_deadline, *int deadline, reference<bool> expired) {
+            reference<int> race_deadline, *int deadline, reference<bool> expired, int claim) {
         while (True) {
             *HttpClientConnection w = hePickReady(h3conn, h2conn, h1conn);
             if (w) {
@@ -3236,7 +3261,7 @@ printf("%d connection(s) migrated\n", migrated);
             if (!h1conn && heH2RefusedViaAlpn(h2conn)) {
                 h1conn = heStartH1Leg(url_info, key);
                 h1conn.registerReadyNotifier(notifier: race_notifier);
-                heNoteBackgroundH1Leg(key, h1conn);
+                heNoteBackgroundH1Leg(claim, h1conn);
                 # the new candidate is bounded by its own connect timeout
                 race_deadline = clock_get_monotonic_us() + (opts.connect_timeout + AsyncQueueSafetyGraceMs) * 1000;
                 # its state is read before the next wait, so an outcome it reached already is not missed
@@ -3276,18 +3301,19 @@ printf("%d connection(s) migrated\n", migrated);
         is counted in @ref in_flight, so that @ref closeAll() waits for it, and @ref closeAll() closes its candidates
     */
     private heHandOverRace(hash<auto> url_info, string key, Http3ClientConnection h3conn, Http2ClientConnection h2conn,
-            *Http1ClientConnection h1conn, EventNotifier race_notifier, int race_deadline) {
+            *Http1ClientConnection h1conn, EventNotifier race_notifier, int race_deadline, int claim) {
         {
             AutoLock al(create_mutex);
-            bg_races{key} = {"h3conn": h3conn, "h2conn": h2conn, "h1conn": h1conn};
+            bg_races{claim} = {"key": key, "h3conn": h3conn, "h2conn": h2conn, "h1conn": h1conn};
         }
         in_flight.inc();
         try {
-            background heFinishRaceInBackground(url_info, key, h3conn, h2conn, h1conn, race_notifier, race_deadline);
+            background heFinishRaceInBackground(url_info, key, h3conn, h2conn, h1conn, race_notifier, race_deadline,
+                claim);
         } catch (hash<ExceptionInfo> ex) {
             # no thread: the race ends here
             in_flight.dec();
-            heEndBackgroundRace(key);
+            heEndBackgroundRace(key, claim);
             heCloseLegs(h3conn, h2conn, h1conn);
             log(LoggerLevel::DEBUG, "happy eyeballs: the race for %s could not go on in the background: %s: %s", key,
                 ex.err, ex.desc);
@@ -3295,19 +3321,40 @@ printf("%d connection(s) migrated\n", migrated);
     }
 
     #! Internal: records the HTTP/1.1 candidate of a race that goes on in the background, so that closeAll() closes it
-    private heNoteBackgroundH1Leg(string key, Http1ClientConnection h1conn) {
+    private heNoteBackgroundH1Leg(int claim, Http1ClientConnection h1conn) {
         AutoLock al(create_mutex);
-        if (bg_races{key}) {
-            bg_races{key}.h1conn = h1conn;
+        if (bg_races{claim}) {
+            bg_races{claim}.h1conn = h1conn;
         }
     }
 
-    #! Internal: ends a happy-eyeballs race that went on in the background: releases the creation of the key
-    private heEndBackgroundRace(string key) {
+    #! Internal: ends a happy-eyeballs race that went on in the background: releases its claim of the key's creation
+    /** The claim is released only if it is still the race's: a waiter can have taken the creation over
+    */
+    private heEndBackgroundRace(string key, int claim) {
         AutoLock al(create_mutex);
-        remove bg_races{key};
-        remove creating{key};
-        create_cond.broadcast();
+        remove bg_races{claim};
+        releaseCreationLocked(key, claim);
+    }
+
+    #! Internal: claims the creation of a connection for the key; @ref create_mutex must be held
+    /** @return the serial of the claim, which releases it (see @ref releaseCreationLocked())
+    */
+    private int claimCreationLocked(string key) {
+        int claim = ++creation_serial;
+        creating{key} = claim;
+        return claim;
+    }
+
+    #! Internal: releases a claim of the creation of a connection for the key; @ref create_mutex must be held
+    /** Only the owner of the current claim releases it: a claim that a waiter took over is not released by the
+        stalled creator that held the previous one
+    */
+    private releaseCreationLocked(string key, int claim) {
+        if (creating{key} == claim) {
+            remove creating{key};
+            create_cond.broadcast();
+        }
     }
 
     #! Internal: finishes a happy-eyeballs race in the background after its caller's deadline passed (#6429)
@@ -3318,17 +3365,17 @@ printf("%d connection(s) migrated\n", migrated);
     */
     private heFinishRaceInBackground(hash<auto> url_info, string key, Http3ClientConnection h3conn,
             Http2ClientConnection h2conn, *Http1ClientConnection h1conn, EventNotifier race_notifier,
-            int race_deadline) {
+            int race_deadline, int claim) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         on_exit {
-            heEndBackgroundRace(key);
+            heEndBackgroundRace(key, claim);
             in_flight.dec();
         }
         try {
             bool expired = False;
             *HttpClientConnection w = heRunRace(url_info, key, h3conn, h2conn, \h1conn, race_notifier,
-                \race_deadline, NOTHING, \expired);
+                \race_deadline, NOTHING, \expired, claim);
             if (!w) {
                 if (shutdown) {
                     heCloseLegs(h3conn, h2conn, h1conn);
@@ -3596,8 +3643,7 @@ printf("%d connection(s) migrated\n", migrated);
         {
             AutoLock cl(create_mutex);
             if (!creating{key}) {
-                creating{key} = True;
-                race.we_set_creating = True;
+                race.creating_claim = claimCreationLocked(key);
             }
         }
         async_races{key} = race;
@@ -3974,10 +4020,9 @@ printf("%d connection(s) migrated\n", migrated);
         }
         AsyncRace race = remove async_races{key};
         heAbandonTimers(race);
-        if (race.we_set_creating) {
+        if (race.creating_claim) {
             AutoLock cl(create_mutex);
-            remove creating{key};
-            create_cond.broadcast();
+            releaseCreationLocked(key, race.creating_claim);
         }
     }
 

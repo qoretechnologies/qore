@@ -41,7 +41,7 @@
 %exec-class HttpClientIoConnectWaitTest
 
 #! Captures the log messages of a connection manager, signals the first one that matches a pattern, and can hold the
-#! thread that logs a given message
+#! threads that log given messages
 class ConnectWaitLog inherits Logger {
     private {
         list<string> messages();
@@ -50,12 +50,8 @@ class ConnectWaitLog inherits Logger {
         *string signal_pattern;
         #! decremented once, when a message matches the pattern
         Counter signal(0);
-        #! the pattern of the message whose thread is held
-        *string hold_pattern;
-        #! decremented once, when a thread is held
-        Counter held(0);
-        #! the held thread waits until this counter is zero
-        Counter hold_release(0);
+        #! holds by name: pattern, occurrences to let pass, held counter, release counter
+        hash<string, hash<auto>> holds;
     }
 
     #! Sets the pattern of the message to signal; the counter is decremented when such a message is logged
@@ -66,22 +62,35 @@ class ConnectWaitLog inherits Logger {
         return signal;
     }
 
-    #! Holds the thread that logs a message that matches the pattern until @ref release() is called
-    /** @return a counter that is decremented when the thread is held
+    #! Holds the thread that logs the given occurrence of a message that matches the pattern until it is released
+    /** @param pattern the pattern of the message
+        @param name the name of the hold, for @ref release()
+        @param occurrence the occurrence of the message that is held (1: the first one logged from now on)
+
+        @return a counter that is decremented when the thread is held
     */
-    Counter holdOn(string pattern) {
+    Counter holdOn(string pattern, string name = "default", int occurrence = 1) {
         AutoLock al(m);
-        hold_pattern = pattern;
-        held = new Counter(1);
-        hold_release = new Counter(1);
-        return held;
+        holds{name} = {
+            "pattern": pattern,
+            "skip": occurrence - 1,
+            "held": new Counter(1),
+            "release": new Counter(1),
+        };
+        return holds{name}.held;
     }
 
-    #! Releases a thread held by @ref holdOn(), or one that is held later
-    release() {
+    #! Releases the thread of a hold, or one that is held later; without a name, all holds are released
+    release(*string name) {
         AutoLock al(m);
-        if (hold_release.getCount()) {
-            hold_release.dec();
+        foreach string n in (keys holds) {
+            if (name && n != name) {
+                continue;
+            }
+            Counter c = holds{n}.release;
+            if (c.getCount()) {
+                c.dec();
+            }
         }
     }
 
@@ -98,10 +107,18 @@ class ConnectWaitLog inherits Logger {
                 remove signal_pattern;
                 signal.dec();
             }
-            if (hold_pattern && regex(formatted, hold_pattern)) {
-                remove hold_pattern;
-                held.dec();
-                wait_for = hold_release;
+            foreach string n in (keys holds) {
+                if (!holds{n}.pattern || !regex(formatted, holds{n}.pattern)) {
+                    continue;
+                }
+                if (holds{n}.skip) {
+                    --holds{n}.skip;
+                    continue;
+                }
+                remove holds{n}.pattern;
+                holds{n}.held.dec();
+                wait_for = holds{n}.release;
+                break;
             }
         }
         # a bounded hold: the test releases the thread when it is done with it
@@ -175,6 +192,8 @@ class HttpClientIoConnectWaitTest inherits QUnit::Test {
             \testDeadlineOnPendingConnectionIsFinal());
         addTestCase("a happy-eyeballs race that a request's deadline cuts off still pools its winner",
             \testAbandonedRacePoolsWinner());
+        addTestCase("the caller of a race handed over to the background does not release a later creator's claim",
+            \testHandedOverClaimOwnership());
         set_return_value(main());
     }
 
@@ -644,6 +663,91 @@ class HttpClientIoConnectWaitTest inherits QUnit::Test {
         assertEq(200, resp.status_code, "the second request succeeds");
         assertEq(1, log.getMatching("reusing h3 connection").size(), "the second request reuses the winner");
         assertEq(1, log.getMatching("happy eyeballs: starting H3 \\+ H2 race").size(), "one race");
+    }
+
+    #! The caller of a race handed over to the background does not release the creation claim of a later creator
+    /** The caller of a happy-eyeballs race whose deadline passes hands the race over to the background, which owns the
+        creation claim of the key from then on.  Nothing listens on the UDP port, so the HTTP/3 candidate fails on its
+        own, and the HTTP/2 candidate waits in the TCP listener's backlog.  The caller is held after the handover (in the manager's log message
+        for it) while the background race fails (its server goes away), releases its claim, and a waiting request
+        takes the creation over and starts a race of its own (held in its log message for the start of the race).
+        The first caller then unwinds; the waiter's claim must survive it: a further request waits for the waiter's
+        creation and times out there, with no race of its own.  Before the fix, the caller's unwinding released the
+        claim of the key whoever held it, and the further request started a third race beside the waiter's.
+    */
+    testHandedOverClaimOwnership() {
+        # the HTTP/3 candidate fails on its own (nothing listens on the UDP port); the HTTP/2 candidate's TLS
+        # handshake waits in the listener's backlog until the test accepts and closes its connection
+        Socket tcp_hold();
+        tcp_hold.bind("127.0.0.1:0");
+        tcp_hold.listen();
+        int port = tcp_hold.getSocketInfo().port;
+        on_exit tcp_hold.close();
+        string url = "https://127.0.0.1:" + port;
+        string race_start = "happy eyeballs: starting H3 \\+ H2 race";
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "auto",
+            "accept_all_certs": True,
+            "connect_timeout": 30s,
+            "request_timeout": 60s,
+            "max_request_retries": 0,
+            "logger": log,
+        });
+        Counter caller_done(1);
+        Counter waiter_done(1);
+        # the held threads are released, and closing the manager ends their races at once
+        on_exit {
+            log.release();
+            mgr.closeAll();
+            caller_done.waitForZero(60s);
+            waiter_done.waitForZero(60s);
+        }
+
+        # the caller, held after it handed its race over to the background
+        Counter caller_held = log.holdOn("handed the race for .* over to the background", "caller");
+        *hash<ExceptionInfo> caller_err;
+        background sub () {
+            on_exit caller_done.dec();
+            caller_err = getError(sub () { mgr.request(url, "GET", "/", NOTHING, NOTHING, 300ms); });
+        }();
+        assertEq(0, caller_held.waitForZero(60s), "the caller hands its race over to the background");
+        if (log.getMatching("H3 creation failed")) {
+            testSkip("HTTP/3 is not available");
+        }
+
+        # a waiter for the background race's creation; it starts the second race, where it is held
+        Counter waiter_held = log.holdOn(race_start, "waiter");
+        Counter waiting = log.signalOn("waiting for the connection that another request is creating");
+        *hash<ExceptionInfo> waiter_err;
+        background sub () {
+            on_exit waiter_done.dec();
+            waiter_err = getError(sub () { mgr.request(url, "GET", "/", NOTHING, NOTHING, 60s); });
+        }();
+        assertEq(0, waiting.waitForZero(60s), "the waiter waits for the background race's creation");
+
+        # the background race fails: its server goes away; the HTTP/2 candidate's connection, which is in the
+        # listener's backlog, is accepted and closed, so that its TLS handshake fails at once
+        *Socket h2_leg = tcp_hold.accept(30s);
+        assertTrue(exists h2_leg, "the HTTP/2 candidate's connection is accepted");
+        if (h2_leg) {
+            h2_leg.close();
+        }
+        tcp_hold.close();
+        assertEq(0, waiter_held.waitForZero(60s), "the waiter takes the creation over after the background race");
+
+        # the caller unwinds while the waiter holds the creation
+        log.release("caller");
+        assertEq(0, caller_done.waitForZero(60s), "the caller ends");
+
+        # a further request waits for the waiter's creation and times out there
+        *hash<ExceptionInfo> err = getError(sub () { mgr.request(url, "GET", "/", NOTHING, NOTHING, 300ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "the further request times out; got " + describe(err));
+        assertRegex("another request is creating the connection", err.desc ?? "",
+            "the further request waits for the waiter's creation; got " + describe(err));
+        assertEq(2, log.getMatching(race_start).size(), "the caller's race and the waiter's race only");
+        assertEq("HTTPCLIENT-TIMEOUT", caller_err.err, "the caller times out; got " + describe(caller_err));
     }
 
     #! Returns a connection manager with the "auto" protocol whose connect timeout is far beyond the requests' ones
