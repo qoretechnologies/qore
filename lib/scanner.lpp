@@ -616,6 +616,19 @@ static int64 parse_get_integer(YYLTYPE* yylloc, const char* str) {
     return rv;
 }
 
+//! returns the value of an octal integer literal (a leading zero and octal digits); raises a parse exception if it
+//! cannot be represented (issue #504)
+static int64 parse_get_octal(YYLTYPE* yylloc, const char* str) {
+    errno = 0;
+    int64 rv = strtoll(str + 1, 0, 8);
+    if (errno == ERANGE) {
+        parse_error(*get_loc(yylloc), "numeric overflow in octal integer literal '%s': cannot represent in a 64-bit "
+            "signed number; integers must be in the range " QLLD " (MININT) to " QLLD " (MAXINT)", str, -LLONG_MAX,
+            LLONG_MAX);
+    }
+    return rv;
+}
+
 static inline int get_int_2(const char*& p) {
     int rv = (*p - '0') * 10;
     ++p;
@@ -3650,7 +3663,17 @@ cast<\*{WS}*({WORD}::)*{WORD}!?{WS}*(<[a-zA-Z<>:_0-9 \t,\*!=?]*>)?{WS}*> yylval-
 {DIGIT}+"."{DIGIT}+n                    yylval->num = new QoreNumberNode(yytext); return NUMBER;
 {DIGIT}+[eE][+-]?{DIGIT}+n              yylval->num = new QoreNumberNode(yytext); return NUMBER;
 {DIGIT}+"."{DIGIT}+[eE][+-]?{DIGIT}+n   yylval->num = new QoreNumberNode(yytext); return NUMBER;
-0[0-7]+                                 yylval->integer = strtoll(yytext+1, 0, 8); return INTEGER;
+0[0-7]+                                 yylval->integer = parse_get_octal(yylloc, yytext); return INTEGER;
+0{DIGIT}*[89]{DIGIT}*                   {
+                                            // an integer literal with a leading zero is octal, so 8 and 9 are not
+                                            // digits of it; such a literal was read as a decimal (issue #504)
+                                            const char* bad = strpbrk(yytext, "89");
+                                            parse_error(*get_loc(yylloc), "invalid digit '%c' in octal integer "
+                                                "literal '%s'; an integer literal with a leading zero is octal",
+                                                *bad, yytext);
+                                            yylval->integer = 0;
+                                            return INTEGER;
+                                        }
 {DIGIT}+                                yylval->integer = parse_get_integer(yylloc, yytext); return INTEGER;
 {DIGIT}+Y                               yylval->datetime = rel_literal(yylloc, yytext, RLU_YEARS); return DATETIME;
 {DIGIT}+M                               yylval->datetime = rel_literal(yylloc, yytext, RLU_MONTHS); return DATETIME;
