@@ -2927,6 +2927,10 @@ add_executable(qore-aot-ir-instruction-test examples/test/ir/aot_ir_instruction_
 target_include_directories(qore-aot-ir-instruction-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-aot-ir-instruction-test PRIVATE libqore)
+add_executable(qore-aot-metadata-checksum-test examples/test/ir/aot_metadata_checksum.cpp lib/xxhash.cpp)
+target_include_directories(qore-aot-metadata-checksum-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-metadata-checksum-test PRIVATE libqore)
 add_executable(qore-aot-ir-value-ids-test examples/test/ir/aot_ir_value_ids.cpp)
 target_include_directories(qore-aot-ir-value-ids-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
