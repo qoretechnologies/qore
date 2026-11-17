@@ -5111,7 +5111,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     break;
                 }
                 // a union with a member of the hash's own type keeps it as it is (qore#6407)
-                if (typeInfo.unionAcceptsExactly(n, t)) {
+                if (typeInfo.unionAcceptsExactly(n, NT_HASH)) {
                     return true;
                 }
                 QoreHashNode* h = n.get<QoreHashNode>();
@@ -5144,7 +5144,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     break;
                 }
                 // a union with a member of the list's own type keeps it as it is (qore#6407)
-                if (typeInfo.unionAcceptsExactly(n, t)) {
+                if (typeInfo.unionAcceptsExactly(n, NT_LIST)) {
                     return true;
                 }
                 QoreListNode* l = n.get<QoreListNode>();
@@ -5180,7 +5180,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 }
                 // a union with a member of the value's own type keeps it as it is, which a soft list would wrap in a
                 // list (qore#6407)
-                if (typeInfo.unionAcceptsExactly(n, t)) {
+                if (typeInfo.unionAcceptsExactly(n, n.getType())) {
                     return true;
                 }
                 // see if value matches
@@ -5354,7 +5354,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
         assert(!priv_error);
         if (accept.map) {
             // a union with a member of the value's own type keeps the value as it is (qore#6407)
-            if (typeInfo.unionAcceptsExactly(n, t)) {
+            if (typeInfo.unionAcceptsExactly(n, typespec == QTS_TYPE && u.t != NT_ALL ? u.t : n.getType())) {
                 return true;
             }
             policy.map(accept, n, xsink);
