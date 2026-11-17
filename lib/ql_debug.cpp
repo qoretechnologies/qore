@@ -11184,10 +11184,12 @@ static UtIncLocalIntInfo ut_inc_local_int_at(QoreProgram* pgm, const char* name,
     the step events and results must be the same.
 
     The statement where the debugger raises its exception, `b = ++a;`, is in a try block: it is folded only if the
-    lowering gives its operation no exception target of its own (qore#6197 gives it the try block's handler).  The
-    reference, which runs first, records in \a ref_inc_target whether its IncrementLocalInt of line 13 has an exception
-    target (1) or not (0), as lowered, since no fold changes it there; the Program without PO_ALLOW_DEBUGGER must then
-    fold the statement exactly when it has none.
+    lowering gives its operation no exception target of its own.  The operation on an int local cannot raise, so it
+    gets none (the try block's handler is given only to an operation on a local of another type, see
+    qore_ir_fused_int_change_may_raise() in QoreIRLowering.cpp, qore#6197, qore#6459): the statement is folded, and a
+    debugger exception at its step event takes the event's exception path to the try block's handler.  The reference,
+    which runs first, records in \a ref_inc_target whether its IncrementLocalInt of line 13 has an exception target (1)
+    or not (0), as lowered, since no fold changes it there; it must have none.
 */
 static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_mode_t mode, bool allow_debugger,
         int& ref_inc_target) {
@@ -11317,7 +11319,8 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
     // the statement's DebugStatement instruction on the same line set (lines 13-15, without columns), as the runtime
     // location is set only when the line changes: only its line is checked.  The same holds for the statement in the
     // Program without PO_ALLOW_DEBUGGER when it is not folded, as when its operation has an exception target of its
-    // own in the try block (qore#6197; see qore_ir_fold_debug_statements())
+    // own in a try block (an operation on a local of a type other than int or softint, qore#6197; see
+    // qore_ir_fold_debug_statements())
     {
         // whether `b = ++a;` must be folded, from the lowering of its operation (see above), not from the fold
         bool raise_folded = false;
@@ -11328,19 +11331,21 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
                 UT_ASSERT(c, !inc.folded, "the IncrementLocalInt instruction of line 13 of the reference is not "
                     "folded");
                 ref_inc_target = inc.exception_target ? 1 : 0;
+                // the change of an int local cannot raise: its operation gets no edge to the try block's handler
+                // (qore#6459)
+                UT_ASSERT_EQ(c, 0, ref_inc_target, "the IncrementLocalInt instruction of line 13 of an int local in "
+                    "a try block has no exception target of its own");
             } else {
-                UT_ASSERT(c, ref_inc_target >= 0, "the reference recorded the exception target of the "
-                    "IncrementLocalInt instruction of line 13");
-                raise_folded = ref_inc_target == 0;
-                UT_ASSERT_EQ(c, raise_folded ? 1 : 0, ut_folded_debug_steps(pgm, "work", 13, 13),
-                    raise_folded ? "`b = ++a;` is folded: its operation has no exception target of its own"
-                        : "`b = ++a;` is not folded: its operation has an exception target of its own");
-                UT_ASSERT_EQ(c, raise_folded, inc.folded, "the IncrementLocalInt instruction of line 13 keeps the step "
-                    "event exactly when it has no exception target of its own");
-                if (!inc.folded) {
-                    UT_ASSERT(c, inc.exception_target, "the IncrementLocalInt instruction of line 13 that is not folded "
-                        "has an exception target of its own");
-                }
+                UT_ASSERT_EQ(c, 0, ref_inc_target, "the reference's IncrementLocalInt instruction of line 13 of an "
+                    "int local in a try block has no exception target of its own");
+                // the fold gives the operation the exception path of its step event (the try block's handler),
+                // which the lowering did not give it (see the reference above)
+                UT_ASSERT(c, inc.exception_target, "the folded IncrementLocalInt instruction of line 13 takes the "
+                    "exception path of its step event");
+                raise_folded = true;
+                UT_ASSERT_EQ(c, 1, ut_folded_debug_steps(pgm, "work", 13, 13), "`b = ++a;` in the try block is "
+                    "folded: its operation has no exception target of its own");
+                UT_ASSERT(c, inc.folded, "the IncrementLocalInt instruction of line 13 keeps the step event");
             }
         }
         FoldedStepDebugProgram::LineColumn statement, runtime, ex;
@@ -11372,10 +11377,9 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
     }
     // the three statements of fused local int operations before the try block (a += 2, ++a, a += b) keep their step
     // events in the IR of the IR and JIT tiers of the Program without PO_ALLOW_DEBUGGER, and none in the other one.
-    // The statement in the try block, b = ++a, is folded only if its operation has no exception target of its own
-    // (qore_ir_fold_debug_statements()): the checks of its events and of the debugger's exception above hold either
-    // way (ut_ir_fold_debug_statements_exception_target() checks that an operation with an exception target is not
-    // folded)
+    // The statement in the try block, b = ++a, is folded, as its operation on an int local has no exception target
+    // of its own (qore_ir_fold_debug_statements(), checked above); ut_ir_fold_debug_statements_exception_target()
+    // checks that an operation with an exception target is not folded
     if (mode != QEM_AST) {
         UT_ASSERT_EQ(c, allow_debugger ? 0 : 3, ut_folded_debug_steps(pgm, "work", 9, 11),
             "the statements of the target function are folded only without PO_ALLOW_DEBUGGER");
