@@ -2529,9 +2529,11 @@ examples/test/qore/parser/module-path-env-expansion.qtest	0.0	1.0	-	0.0	0.0	-	-	
 examples/test/qore/parser/nested-callable-types.qtest	1.0	1.0	-	-	-	1.0	-	-	2.0	1.0
 examples/test/qore/parser/no-summarize.qtest	1.0	0.0	-	0.0	0.0	-	-	0.0	0.0	0.0
 examples/test/qore/parser/override-return-types.qtest	0.0	0.0	-	0.0	1.0	-	-	0.0	0.0	0.0
-examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-1.qtest	128.0	96.0	-	98.0	134.0	35.0	-	101.0	147.0	106.0
-examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-2.qtest	86.0	87.0	-	-	-	64.0	-	-	80.0	60.0
-examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-3.qtest	164.0	102.0	-	152.0	194.0	45.0	-	184.0	166.0	121.0
+examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-1.qtest	8.6	5.8	-	7.4	9.6	2.4	-	8.4	9.2	6.7
+examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-2.qtest	15.3	15.5	-	-	-	11.4	-	-	14.2	10.7
+examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-3.qtest	43.6	29.5	-	37.3	48.9	11.9	-	42.5	46.7	33.9
+examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-4.qtest	51.6	35.0	-	44.2	57.9	14.1	-	50.3	55.3	40.1
+examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-5.qtest	45.0	45.5	-	-	-	33.5	-	-	41.9	31.4
 examples/test/qore/parser/qore-namespace-priority.qtest	0.0	1.0	-	0.0	0.0	-	-	0.0	0.0	1.0
 examples/test/qore/parser/qore-namespace-shadow-warning.qtest	0.0	0.0	-	0.0	1.0	-	-	0.0	0.0	0.0
 examples/test/qore/parser/qpp_complex_code_types.qtest	0.0	0.0	-	0.0	0.0	-	-	0.0	0.0	1.0

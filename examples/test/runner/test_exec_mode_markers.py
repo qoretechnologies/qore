@@ -208,6 +208,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - relative-date-range (#6101): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
         # - ParseStackBoundary-2 (#6047): the module loads that it checks in the primary thread run in child processes
+        # - ParseStackBoundary-5 (#6420): the AOT module loads that it checks run in child processes (the fixture)
         # - parse-load-module-location (#6047): its module loads run in child processes, one for each stack size
         # - dataframe-aot-plugin-helpers (#6130): its probes run in child processes that set their own --exec-mode,
         #   in qcc executables and with a module compiled by qcc
@@ -296,6 +297,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",
                                  "examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-2.qtest",
+                                 "examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-5.qtest",
                                  "examples/test/module-cpp-api/parse-load-module-location/"
                                  "parse-load-module-location.qtest",
                                  "examples/test/qore/operators/relative-date-overflow.qtest",

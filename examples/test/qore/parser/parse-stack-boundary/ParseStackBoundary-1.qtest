@@ -15,7 +15,7 @@
 
 %exec-class ParseStackBoundaryPart1
 
-#! runs part 1 of 3 of the cases of ParseStackBoundaryBase: code nested deeply, chains of classes and of hashdecls
+#! runs part 1 of 5 of the cases of ParseStackBoundaryBase: code nested deeply, a chain of hashdecls
 class ParseStackBoundaryPart1 inherits ParseStackBoundaryBase {
     constructor() : ParseStackBoundaryBase("ParseStackBoundaryPart1", 1) {
     }

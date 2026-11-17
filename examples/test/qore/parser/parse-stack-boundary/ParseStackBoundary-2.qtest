@@ -16,7 +16,7 @@
 
 %exec-class ParseStackBoundaryPart2
 
-#! runs part 2 of 3 of the cases of ParseStackBoundaryBase: chains of modules and of AOT modules
+#! runs part 2 of 5 of the cases of ParseStackBoundaryBase: chains of modules, module initialization
 class ParseStackBoundaryPart2 inherits ParseStackBoundaryBase {
     constructor() : ParseStackBoundaryBase("ParseStackBoundaryPart2", 2) {
     }
