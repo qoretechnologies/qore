@@ -6075,6 +6075,11 @@ public:
     //! called in the Program's context, after its top-level code or exec class has run (#3401)
     DLLLOCAL void dbgRunExit(QoreValue& rv, ExceptionSink* xsink);
 
+    //! true if the statement is the Program's top-level block: the statement of the exit event of its run (#3401)
+    DLLLOCAL static bool isTopLevelBlock(const QoreProgram* pgm, const AbstractStatement* statement) {
+        return statement && statement == &pgm->priv->sb;
+    }
+
     //! Returns the threads that run the code of the Program, also those that run other code that its code called, as
     //! the code of a module or of a debugger callback
     DLLLOCAL std::set<int> getThreadsInProgram() const {

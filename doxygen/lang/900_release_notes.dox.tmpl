@@ -893,6 +893,11 @@
     @ref dc_v0_1_3 "DebugProgramControl" stops once per exception and a step after an exception stop goes to its
     handler (<a href="https://github.com/qoretechnologies/qore/issues/5906">issue 5906</a>).
 
+    @par Debuggers Get the Result of a Program Run
+    The debugger receives the value that @ref Qore::Program::run() "Program::run()" returns when the code of a program
+    run ends, in @ref Qore::DebugProgram::onRunExit() "DebugProgram::onRunExit()", and can replace it
+    (<a href="https://github.com/qoretechnologies/qore/issues/3401">issue 3401</a>).
+
     @par Functional-Domain Declarations on Functions and Methods
     Functions and methods written in %Qore declare the @ref function_domains "functional domains" they provide with an
     attribute list (<tt>sub f() [dom=PROCESS_CONTROL]</tt>), which a restricted Program cannot reference or call, and a
