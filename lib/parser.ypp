@@ -3651,7 +3651,21 @@ statement:
                     parse_error(*loc, "expression has no effect as a statement (%s)", v1.getTypeName());
                 }
             } else if (!v1.hasEffect() && (t != NT_VARREF || !v1.get<VarRefNode>()->parseIsDecl())) {
-                parse_error(*loc, "statement has no effect (%s)", v1.getTypeName());
+                // a list without parentheses whose first element is an assignment: the comma binds less tightly
+                // than the assignment, so only the first element is assigned (issue #1946)
+                // (a binary assignment operator: =, +=, |=, <<= etc., not in parentheses of its own)
+                QoreParseListNode* l = v1.getType() == NT_PARSE_LIST ? v1.get<QoreParseListNode>() : nullptr;
+                QoreValue e0 = l && !l->isFinalized() && l->size() ? l->get(0) : QoreValue();
+                const QoreOperatorNode* op0 = e0.getType() == NT_OPERATOR
+                    ? dynamic_cast<const QoreBinaryOperatorNode<LValueOperatorNode>*>(e0.getInternalNode())
+                    : nullptr;
+                if (op0 && !op0->getInParentheses()) {
+                    parse_error(*loc, "statement has no effect (list): the %s assigns only the first element of "
+                        "this list without parentheses, as the comma operator binds less tightly; put the list in "
+                        "parentheses to assign it (ex: 'x = (1, 2, 3)')", e0.getTypeName());
+                } else {
+                    parse_error(*loc, "statement has no effect (%s)", v1.getTypeName());
+                }
             }
         }
 
