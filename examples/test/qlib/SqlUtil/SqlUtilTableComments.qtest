@@ -13,27 +13,44 @@
 %requires ./PgsqlTestIsolation.qm
 %requires ./MysqlTestIsolation.qm
 %requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+%requires ./FirebirdTestIsolation.qm
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+%requires XdbcFirebirdSqlUtilBase
+%requires JdbcFirebirdSqlUtil
 
 %try-module sqlite3
 %define NoSqlite3
+%endtry
+
+%try-module freetds
+%define NO_FREETDS
+%endtry
+
+%try-module jni
+%define NoJni
 %endtry
 
 %exec-class SqlUtilTableCommentsTest
 
 #! Tests the comments of tables in descriptions, creation, alignment and SchemaReverse (issue #1483)
 /** The tests run on SQLite, whose driver has no table comments, and, each in a schema or database of its own, on
-    PostgreSQL, MySQL/MariaDB and Oracle when \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL and
-    \c QORE_DB_CONNSTR_ORACLE are set (an Oracle schema of its own needs \c QORE_DB_CONNSTR_ORACLE_SYS)
+    PostgreSQL, MySQL/MariaDB, Oracle, SQL Server and Firebird (through JDBC, whose driver has no table comments) when
+    \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL, \c QORE_DB_CONNSTR_ORACLE, \c QORE_DB_CONNSTR_FREETDS and
+    \c QORE_DB_CONNSTR_JDBC_FIREBIRD are set (an Oracle schema of its own needs \c QORE_DB_CONNSTR_ORACLE_SYS)
 */
 class SqlUtilTableCommentsTest inherits QUnit::Test {
     private {
-        #! connections by driver
+        #! connections by driver (\c "jdbc" is Firebird)
         hash<string, Datasource> dsh;
         #! why a database is skipped, by driver
         hash<string, string> skip = {
             "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
             "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
             "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+            "freetds": "QORE_DB_CONNSTR_FREETDS is not set",
+            "jdbc": "no Firebird connection; set QORE_DB_CONNSTR_JDBC_FIREBIRD",
         };
     }
 
@@ -43,6 +60,8 @@ class SqlUtilTableCommentsTest inherits QUnit::Test {
         addTestCase("PostgreSQL: table comments", sub () { checkDriver("pgsql"); });
         addTestCase("MySQL: table comments", sub () { checkDriver("mysql"); });
         addTestCase("Oracle: table comments", sub () { checkDriver("oracle"); });
+        addTestCase("SQL Server: table comments", sub () { checkDriver("freetds"); });
+        addTestCase("Firebird: table comments are ignored", \firebirdTest());
         set_return_value(main());
     }
 
@@ -57,6 +76,28 @@ class SqlUtilTableCommentsTest inherits QUnit::Test {
         connect("oracle", ENV.QORE_DB_CONNSTR_ORACLE, *string sub (string connstr) {
             return OracleRunSchema::getConnectionString(connstr, "SqlUtilTableComments");
         });
+%ifdef NO_FREETDS
+        skip.freetds = "freetds module unavailable";
+%else
+        connect("freetds", ENV.QORE_DB_CONNSTR_FREETDS, *string sub (string connstr) {
+            return MssqlRunDatabase::getConnectionString(connstr, "SqlUtilTableComments");
+        });
+        if (dsh.freetds && MssqlDatabase::isSybase(dsh.freetds)) {
+            skip.freetds = "the database is Sybase, not SQL Server";
+            remove dsh.freetds;
+        }
+%endif
+%ifdef NoJni
+        skip.jdbc = "no jni module";
+%else
+        connect("jdbc", ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD, *string sub (string connstr) {
+            return FirebirdRunDatabase::getConnectionString(connstr, "SqlUtilTableComments");
+        });
+        if (dsh.jdbc && dsh.jdbc.getDriverRealName() !~ /^firebird/i) {
+            skip.jdbc = "not a Firebird connection";
+            remove dsh.jdbc;
+        }
+%endif
     }
 
     globalTearDown() {
@@ -69,6 +110,8 @@ class SqlUtilTableCommentsTest inherits QUnit::Test {
         }
         MysqlRunDatabase::teardown();
         OracleRunSchema::teardown();
+        MssqlRunDatabase::teardown();
+        FirebirdRunDatabase::teardown();
     }
 
     #! opens the connection of a driver in the run's own schema or database, or records why it cannot be
@@ -206,5 +249,33 @@ class SqlUtilTableCommentsTest inherits QUnit::Test {
                 (new Table(ds, "tcm_t")).getTable().getAlignSql(db.makeTable("tcm_t", getDesc("a\\b")));
             });
         }
+    }
+
+    #! Firebird: the driver has no table comments, which are ignored, not refused
+    firebirdTest() {
+        if (!dsh.jdbc) {
+            testSkip(skip.jdbc);
+        }
+        Datasource ds = dsh.jdbc;
+        on_exit {
+            ds.rollback();
+            try {
+                ds.exec("drop table tcm_t");
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+                ds.rollback();
+            }
+        }
+        Database db(ds);
+        AbstractTable t = db.makeTable("tcm_t", getDesc("the table"));
+        assertFalse(t.supportsTableComments());
+        assertNothing(t.getComment());
+        map ds.exec($1), t.getCreateSql();
+        ds.commit();
+        AbstractTable live = (new Table(ds, "tcm_t")).getTable();
+        assertNothing(live.getComment());
+        assertFalse(live.getDescriptionHash().hasKey("comment"));
+        assertEq((), live.getAlignSql(db.makeTable("tcm_t", getDesc("another comment"))));
+        assertEq((), db.getAlignSql({"tables": {"tcm_t": getDesc("by the schema")}}));
     }
 }
