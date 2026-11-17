@@ -2149,9 +2149,10 @@ void RSetHelper::startNode(int id) {
             lvalue_ref::get(static_cast<ReferenceNode*>(n.ptr))->scanReference(*this);
             break;
         case NodeKind::BoundCallback: {
-            const auto* callback = qore_get_sandbox_bound_callback(static_cast<ResolvedCallReferenceNode*>(n.ptr));
-            if (callback) {
-                checkNode(const_cast<ResolvedCallReferenceNode*>(callback));
+            // a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)
+            const AbstractQoreNode* held = qore_get_call_reference_scan_node(static_cast<AbstractQoreNode*>(n.ptr));
+            if (held) {
+                checkNode(const_cast<AbstractQoreNode*>(held));
             }
             break;
         }
@@ -3247,9 +3248,10 @@ void qore_dgc_value_stored(RObject& holder, const QoreValue& v) {
             }
 
             case NT_FUNCREF: {
-                const auto* callback = qore_get_sandbox_bound_callback(n);
-                if (callback && needs_scan(callback)) {
-                    todo.push_back(callback);
+                // a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)
+                const AbstractQoreNode* held = qore_get_call_reference_scan_node(n);
+                if (held && needs_scan(held)) {
+                    todo.push_back(held);
                 }
                 break;
             }

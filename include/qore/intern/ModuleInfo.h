@@ -139,7 +139,8 @@ enum ChildModuleStatus : unsigned char {
     CMS_PENDING = 0,    //!< the attach has not been attempted yet
     CMS_ATTACHED,       //!< the child was loaded, or its load was already in progress in this thread
     CMS_ABSENT,         //!< no module with this name could be found in the module path
-    CMS_SKIPPED,        //!< not attempted; module loading is not allowed in the parent module's Program
+    CMS_SKIPPED,        //!< not attempted; the child is blacklisted, or module loading is not allowed in the parent
+                        //!< module's Program
     CMS_FAILED,         //!< the child is present but could not be loaded; the parent is loaded without it
 };
 

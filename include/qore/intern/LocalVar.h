@@ -173,6 +173,13 @@ public:
 
         finalized = true;
 
+        // a borrowed value (the self of a method frame, see instantiateSelf()) is released as uninstantiateSelf()
+        // releases it, without a dereference: a frame is finalized without being unwound when its thread does not
+        // exist any more, as a thread of the parent in a child process created with fork() (issue #6443)
+        if (val.static_assignment) {
+            val.unassignIgnore();
+            return QoreValue();
+        }
         return val.removeValue(true);
     }
 };

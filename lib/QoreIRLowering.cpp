@@ -351,6 +351,41 @@ static bool qore_ir_expr_is_temporary(const QoreValue& expr) {
         || dynamic_cast<const QoreHashMapSelectOperatorNode*>(node));
 }
 
+//! Returns true if the expression gives a value that the frame owns as a temporary or a value that needs no evaluation
+//! as every value of a conditional expression (?:, ??, ?*), whose Phi then owns its value (see
+//! qore_ir_expr_gives_owned_value())
+static bool qore_ir_expr_is_conditional_temporary(const QoreValue& expr, unsigned depth = 0);
+
+//! Returns true if the expression gives a value that the frame owns, which ReleaseOwnedTemp can release once a
+//! container or an operator holds it: a temporary (qore_ir_expr_is_temporary()), the value of a fold, which has a
+//! reference of its own when its source is released (see lowerWithSourceRelease()), or a conditional expression of such
+//! values; ReleaseOwnedTemp releases nothing that the frame does not own (issue #6262)
+static bool qore_ir_expr_gives_owned_value(const QoreValue& expr, unsigned depth = 0) {
+    const AbstractQoreNode* node = expr.hasNode() ? expr.getInternalNode() : nullptr;
+    return node && (qore_ir_expr_is_temporary(expr) || dynamic_cast<const QoreFoldlOperatorNode*>(node)
+        || qore_ir_expr_is_conditional_temporary(expr, depth));
+}
+
+static bool qore_ir_expr_is_conditional_temporary(const QoreValue& expr, unsigned depth) {
+    const AbstractQoreNode* node = expr.hasNode() ? expr.getInternalNode() : nullptr;
+    if (!node || depth > 8) {
+        return false;
+    }
+    auto operand_ok = [depth](const QoreValue& v) {
+        return !v.needsEval() || qore_ir_expr_gives_owned_value(v, depth + 1);
+    };
+    if (auto* q = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {
+        return operand_ok(q->get(1)) && operand_ok(q->get(2));
+    }
+    if (auto* nc = dynamic_cast<const QoreNullCoalescingOperatorNode*>(node)) {
+        return operand_ok(nc->getLeft()) && operand_ok(nc->getRight());
+    }
+    if (auto* vc = dynamic_cast<const QoreValueCoalescingOperatorNode*>(node)) {
+        return operand_ok(vc->getLeft()) && operand_ok(vc->getRight());
+    }
+    return false;
+}
+
 //! returns true for a type whose values hold no object: a scalar, or a list or hash of such values (recursively)
 /** Releasing such a value runs no destructor, so releasing it earlier cannot be observed and costs only instructions
 */
@@ -950,6 +985,86 @@ bool QoreIRLowering::expressionReadsWeakCapableLocal(const QoreValue& expr) cons
         }
         return expressionReadsWeakCapableLocal(operand);
     });
+}
+
+// documented in QoreIRLowering.h
+bool QoreIRLowering::expressionReadsReleasedObjectLocal(const QoreValue& expr) const {
+    return anyOperandMayCreateTemp(expr, [this](const QoreValue& operand) {
+        const AbstractQoreNode* node = operand.getInternalNode();
+        if (!node || operand.isValue()) {
+            return false;
+        }
+        if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+            const LocalVar* lv = var->ref.id;
+            if (!lv || (var->getType() != VT_LOCAL && var->getType() != VT_CLOSURE && var->getType() != VT_LOCAL_TS)
+                    || !qore_ir_type_may_hold_object(lv->getTypeInfo())) {
+                return false;
+            }
+            return localReleaseObservedByReturn(lv);
+        }
+        return expressionReadsReleasedObjectLocal(operand);
+    });
+}
+
+// documented in QoreIRLowering.h
+bool QoreIRLowering::localReleaseObservedByReturn(const LocalVar* lv) const {
+    // the entry of the local among the cleanups of the return: a local of a block that the return leaves, or the
+    // variable of a catch block that it leaves; a parameter is released after the function's handlers, by the
+    // caller, and has none
+    size_t entry_index = cleanup_stack.size();
+    size_t local_index = 0;
+    for (size_t ei = 0, ee = cleanup_stack.size(); ei < ee && entry_index == ee; ++ei) {
+        const BlockCleanupEntry& entry = cleanup_stack[ei];
+        if (entry.type == BlockCleanupEntry::CatchVar) {
+            if (entry.catch_var == lv) {
+                entry_index = ei;
+            }
+            continue;
+        }
+        if (entry.type != BlockCleanupEntry::Lvars || !entry.lvars) {
+            continue;
+        }
+        for (size_t i = 0, e = entry.lvars->size(); i < e; ++i) {
+            if (entry.lvars->lv[i] == lv) {
+                entry_index = ei;
+                local_index = i;
+                break;
+            }
+        }
+    }
+    if (entry_index == cleanup_stack.size()) {
+        return false;
+    }
+    // the cleanups that run after the local is released: the locals declared before it in its block, and the
+    // entries of the enclosing blocks (pushed before its own), released or run last pushed first
+    auto lvars_may_hold_object = [](const LVList* lvars, size_t count) {
+        for (size_t i = 0; i < count; ++i) {
+            const LocalVar* other = lvars->lv[i];
+            if (!other || qore_ir_type_may_hold_object(other->getTypeInfo())) {
+                return true;
+            }
+        }
+        return false;
+    };
+    const BlockCleanupEntry& own = cleanup_stack[entry_index];
+    if (own.type == BlockCleanupEntry::Lvars && lvars_may_hold_object(own.lvars, local_index)) {
+        return true;
+    }
+    for (size_t ei = 0; ei < entry_index; ++ei) {
+        const BlockCleanupEntry& entry = cleanup_stack[ei];
+        if (entry.type == BlockCleanupEntry::HandlerBarrier) {
+            continue;
+        }
+        // a handler, a catch variable, the write-back of a reference foreach or the release of a foreach source can
+        // destroy an object or run code that sees the order
+        if (entry.type != BlockCleanupEntry::Lvars) {
+            return true;
+        }
+        if (entry.lvars && lvars_may_hold_object(entry.lvars, entry.lvars->size())) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // documented in QoreIRLowering.h
@@ -1965,8 +2080,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // A value read from a variable or a member is a temporary too, whose release a handler that runs before the
         // Return observes when it changes what the value was read from: the temporary would keep the value that
         // the handler replaces until the Return (qore#6003).
+        // A value read from a local variable that the cleanups of the return release, and that can be or hold an
+        // object, is a temporary that the release of the variable observes when something released after the
+        // variable can see the order: it would keep the variable's object until the Return, after the locals
+        // declared before it (qore#6309).  The temps are released by the statement's temp scope, whose DiscardTempsKeep
+        // the summaries of compiled code recognize (a release of each value on its own does not keep that form)
         bool ret_temp_scope = builder.getExceptionTempScopeId()
-            && ((((expressionMayCreateIntermediateCallTemp(expr) || expressionReadsWeakCapableLocal(expr))
+            && ((((expressionMayCreateIntermediateCallTemp(expr) || expressionReadsWeakCapableLocal(expr)
+                        || expressionReadsReleasedObjectLocal(expr))
                     && returnCleanupObservesError(qore_ir_get_returned_local(expr)))
                 || (expressionMayCreateIntermediateContainerTemp(expr) && returnRunsHandlers())));
         // a return in a handler that replaces the value of the return that the handler runs after releases it also
@@ -6757,15 +6878,18 @@ public:
     DLLLOCAL FunctionalSourceRelease(QoreIRLowering& lowering, const QoreValue& source, const QoreProgramLocation* loc,
             std::string& error) : lowering(lowering), loc(loc), error(error),
             uncaught_exceptions(std::uncaught_exceptions()) {
-        lowering.functional_source_captures.push_back({sourceNode(source), QoreIRValue(), !isListSource(source)});
+        lowering.functional_source_captures.push_back({sourceNode(source), QoreIRValue(), !isListSource(source),
+            QoreIRValue()});
     }
 
 
     DLLLOCAL ~FunctionalSourceRelease() {
         QoreIRValue value = lowering.functional_source_captures.back().value;
+        QoreIRValue intermediate = lowering.functional_source_captures.back().intermediate;
         lowering.functional_source_captures.pop_back();
         // nothing is emitted while a C++ exception leaves the operator's lowering, which is abandoned
-        if (!value.isValid() || !error.empty() || std::uncaught_exceptions() > uncaught_exceptions) {
+        if ((!value.isValid() && !intermediate.isValid()) || !error.empty()
+                || std::uncaught_exceptions() > uncaught_exceptions) {
             return;
         }
         QoreIRBasicBlock* block = lowering.builder.getBlock();
@@ -6775,7 +6899,12 @@ public:
         // the release only shortens the temporary's life: if the instruction cannot be created, the statement
         // releases the temporary
         try {
-            lowering.builder.createReleaseOwnedTemp(value, loc);
+            if (intermediate.isValid()) {
+                lowering.builder.createReleaseOwnedTemp(intermediate, loc);
+            }
+            if (value.isValid()) {
+                lowering.builder.createReleaseOwnedTemp(value, loc);
+            }
         } catch (const std::bad_alloc&) {
         }
     }
@@ -6793,7 +6922,7 @@ public:
         // a temporary list (qore_ir_expr_is_temporary()) or a read of a local variable, which is released only if it
         // is a plain read (see lowerExpressionImpl()); an implicit argument's value is the element slot, which the
         // operator's expressions read again
-        if (qore_ir_expr_is_temporary(source)) {
+        if (qore_ir_expr_gives_owned_value(source)) {
             return source.getInternalNode();
         }
         const VarRefNode* var = source.hasNode() ? dynamic_cast<const VarRefNode*>(source.getInternalNode()) : nullptr;
@@ -8241,9 +8370,12 @@ void QoreIRLowering::setReferenceLoadExceptionTarget(QoreIRInstruction* load, co
             || (definitely_assigned && facts.type_info
                 && QoreTypeInfo::parseReturns(facts.type_info, NT_NOTHING) == QTI_NOT_EQUAL));
         if (facts.never_nothing && facts.type_info) {
-            if (QoreTypeInfo::isType(facts.type_info, NT_INT)) {
+            // the value of an enum-typed variable is an enum value, not a plain int or float (qore#6274): a native
+            // representation would let a consumer, such as the scalar replacement of a list<int> literal, take it as
+            // a value of the base type
+            if (QoreTypeInfo::isPlainType(facts.type_info, NT_INT)) {
                 facts.representation = QoreIRValueRepresentation::NativeInt;
-            } else if (QoreTypeInfo::isType(facts.type_info, NT_FLOAT)) {
+            } else if (QoreTypeInfo::isPlainType(facts.type_info, NT_FLOAT)) {
                 facts.representation = QoreIRValueRepresentation::NativeFloat;
             } else if (QoreTypeInfo::isType(facts.type_info, NT_BOOLEAN)) {
                 facts.representation = QoreIRValueRepresentation::NativeBool;
@@ -14049,7 +14181,7 @@ void QoreIRLowering::releaseContainerElementTemps(const std::vector<QoreIRValue>
         const QoreProgramLocation* loc) {
     for (size_t i = values.size(); i > 0; --i) {
         QoreValue element = element_expr(i - 1);
-        if (values[i - 1].isValid() && qore_ir_expr_is_temporary(element)) {
+        if (values[i - 1].isValid() && qore_ir_expr_gives_owned_value(element)) {
             const QoreTypeInfo* ti = getExprTypeInfo(element);
             if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::needsScan(ti)) {
                 continue;
@@ -17665,6 +17797,44 @@ static bool qore_ir_type_is_immediate_scalar(const QoreIRFunction* func, const Q
         || qore_ir_returns_plain(func, ti, NT_BOOLEAN));
 }
 
+// documented in QoreIRLowering.h
+/* The AST interpreter's map and hash map operators push the value of their expression into the result container, which
+   then holds it alone (QoreMapOperatorNode::evalImpl(), QoreHashMapOperatorNode::evalImpl()), so a write of the
+   parameter that a call gives the container to destroys the objects that the expression created (f(map mk($1), l);
+   issue #6262).  The compiled modes store the value with a reference of the container's own and released the
+   expression's temporary when the statement ended.  ReleaseOwnedTemp releases it once it is stored, and only if the
+   frame owns it (a call's value, a new object, a list or hash literal); a value borrowed from a variable or an element
+   is left alone.  A type that holds no object (an int, a string, list<int>) emits nothing: the release cannot be
+   observed, and the maps of such values run as before.
+*/
+void QoreIRLowering::releaseStoredOperatorValue(QoreIRValue value, const QoreTypeInfo* ti, QoreIRValue element,
+        const QoreProgramLocation* loc) {
+    if (!value.isValid() || value.id == element.id || qore_ir_type_holds_only_immediates(ti)
+            || qore_ir_type_is_immediate_scalar(builder.getFunction(), ti)) {
+        return;
+    }
+    QoreIRBasicBlock* block = builder.getBlock();
+    if (!block || (!block->instructions.empty() && isTerminator(block->instructions.back()->opcode))) {
+        return;
+    }
+    builder.createReleaseOwnedTemp(value, loc);
+}
+
+// documented in QoreIRLowering.h
+/* map, select and map-select over a single value give that value (or NOTHING), which the compiled modes read from the
+   result list that the loop filled: the list kept its reference until the statement ended, while the AST interpreter's
+   operator gives the value alone, which a parameter that a call gives it to then holds alone (f(map $1, mk() ?? x);
+   issue #6262).  The value gets a reference of its own, and the list and the read are released; a release finds
+   nothing to release in a slot that the frame does not own.
+*/
+QoreIRValue QoreIRLowering::ownUnwrappedOperatorValue(QoreIRValue unwrapped, QoreIRValue list,
+        const QoreProgramLocation* loc) {
+    QoreIRValue owned = builder.createRefSelf(unwrapped, loc)->result;
+    builder.createReleaseOwnedTemp(unwrapped, loc);
+    builder.createReleaseOwnedTemp(list, loc);
+    return owned;
+}
+
 //! Lowers a functional operator and releases its source, if it is a temporary, once the operator has run
 /** The value of the operator can be the source's value or one of its elements, which the compiled modes give without a
     reference of its own: over a single value (a source that is not a list) map gives <tt>$1</tt> and select the value
@@ -17681,7 +17851,8 @@ QoreIRValue QoreIRLowering::lowerWithSourceRelease(const QoreValue& expr, const 
     const FunctionalSourceCapture& capture = functional_source_captures.back();
     // a value of a type that is never a node (int, float, bool) holds no reference to release with the source, so it
     // needs no reference of its own; a string or a date can be the source's own node, so only those types are skipped
-    if (result.isValid() && error.empty() && capture.node && capture.value.isValid()
+    if (result.isValid() && error.empty()
+            && ((capture.node && capture.value.isValid()) || capture.intermediate.isValid())
             && (always_ref || capture.may_alias)
             && !qore_ir_type_is_immediate_scalar(builder.getFunction(), getExprTypeInfo(expr))) {
         QoreIRBasicBlock* block = builder.getBlock();
@@ -18885,6 +19056,10 @@ QoreIRValue QoreIRLowering::lowerFoldrImpl(const QoreValue& expr, std::string& e
             if (string_join) {
                 return lower_string_join(list);
             }
+            // the fold's source is the list that the stages gave, which the fold releases when it has run
+            if (!functional_source_captures.empty()) {
+                functional_source_captures.back().intermediate = list;
+            }
             return lowerFoldrNativeValue(foldr, list, root.list_element_type, error);
         }
     }
@@ -19675,6 +19850,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
                     set_inst->exception_target = exception_stack.back();
                 }
             }
+            releaseStoredOperatorValue(expr_result, expTypeInfo, element_val, map->loc);
         };
 
         QoreIRValue expr_result;
@@ -19914,6 +20090,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
             // Append result to output list
             builder.createListAppend(result_list, expr_result, map->loc);
         }
+        releaseStoredOperatorValue(expr_result, map->getMapExpType(), element_val, map->loc);
     };
 
     QoreIRValue expr_result;
@@ -20037,6 +20214,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         QoreIRValue zero_idx = builder.createConstInt(0, map->loc)->result;
         QoreIRValue unwrapped = builder.createBinaryOp(QoreIROpcode::ListGetValue,
                 result_list, zero_idx, map->loc)->result;
+        unwrapped = ownUnwrappedOperatorValue(unwrapped, result_list, map->loc);
         builder.createBranch(final_block, map->loc);
 
         builder.setBlock(unwrap_nothing_block);
@@ -20518,6 +20696,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         QoreIRValue zero_idx = builder.createConstInt(0, select->loc)->result;
         QoreIRValue unwrapped = builder.createBinaryOp(QoreIROpcode::ListGetValue,
                 result_list, zero_idx, select->loc)->result;
+        unwrapped = ownUnwrappedOperatorValue(unwrapped, result_list, select->loc);
         builder.createBranch(final_block, select->loc);
 
         // Unwrap nothing: scalar didn't match predicate → return NOTHING
@@ -21274,6 +21453,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
             } else {
                 builder.createListAppend(result_list, map_result, ms->loc);
             }
+            releaseStoredOperatorValue(map_result, map_type, element_val, ms->loc);
         };
         // lowers code that reads the implicit arguments only as the element and its index (see
         // qore_ir_body_needs_implicit_context())
@@ -21607,6 +21787,9 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         } else {
             createDiscardTemps(ms->loc);
         }
+        if (need_result) {
+            releaseStoredOperatorValue(value, map_type, element_val, ms->loc);
+        }
         return value;
     };
 
@@ -21710,6 +21893,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         QoreIRValue zero_idx = builder.createConstInt(0, ms->loc)->result;
         QoreIRValue unwrapped = builder.createBinaryOp(QoreIROpcode::ListGetValue,
                 result_list, zero_idx, ms->loc)->result;
+        unwrapped = ownUnwrappedOperatorValue(unwrapped, result_list, ms->loc);
         builder.createBranch(final_block, ms->loc);
 
         builder.setBlock(unwrap_nothing_block);
@@ -21856,6 +22040,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
             } else {
                 withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc));
             }
+            releaseStoredOperatorValue(value_result, getExprTypeInfo(hm->get(1)), element_val, hm->loc);
             return key_result;
         };
         QoreIRValue body_result;
@@ -22014,6 +22199,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         } else {
             withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc));
         }
+        releaseStoredOperatorValue(value_result, getExprTypeInfo(hm->get(1)), element_val, hm->loc);
         return key_result;
     };
     QoreIRValue body_result;
@@ -22221,6 +22407,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
             } else {
                 withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc));
             }
+            releaseStoredOperatorValue(value_result, getExprTypeInfo(hms->get(1)), element_val, hms->loc);
             return key_result;
         };
         QoreIRValue next_type_state;
@@ -22429,6 +22616,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         } else {
             withExceptionTarget(builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc));
         }
+        releaseStoredOperatorValue(value_result, getExprTypeInfo(hms->get(1)), element_val, hms->loc);
         return key_result;
     };
     QoreIRValue next_type_state;
@@ -23805,6 +23993,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         QoreIRValue zero_idx = builder.createConstInt(0, loc)->result;
         QoreIRValue unwrapped = builder.createBinaryOp(QoreIROpcode::ListGetValue, result_list, zero_idx,
             loc)->result;
+        unwrapped = ownUnwrappedOperatorValue(unwrapped, result_list, loc);
         add_final(unwrapped, loc);
 
         builder.setBlock(unwrap_nothing_block);

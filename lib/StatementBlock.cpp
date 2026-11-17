@@ -151,7 +151,54 @@ protected:
     bool bs;
 };
 
-VariableBlockHelper::VariableBlockHelper() : closure_parse_env(thread_get_closure_parse_env()) {
+//! the initialization expressions being parsed in the current variable block of the thread (qore#526)
+static thread_local QoreParseInitializerTarget* parse_initializer_targets = nullptr;
+
+QoreParseInitializerTarget::QoreParseInitializerTarget(const void* target, const char* member) : target(target),
+        member(member), cenv(thread_get_closure_parse_env()), prev(parse_initializer_targets) {
+    parse_initializer_targets = this;
+}
+
+QoreParseInitializerTarget::~QoreParseInitializerTarget() {
+    assert(parse_initializer_targets == this);
+    parse_initializer_targets = prev;
+}
+
+int QoreParseInitializerTarget::raiseUseError(const QoreProgramLocation* use_loc, const char* what,
+        const char* name) {
+    if (!use_loc) {
+        return 0;
+    }
+    qore_program_private::makeParseException(getProgram(), *use_loc, "PARSE-EXCEPTION",
+        new QoreStringNodeMaker("%s '%s' is used in its own initialization expression, where it has no value yet",
+            what, name));
+    return -1;
+}
+
+void QoreParseInitializerTarget::parseUse(const void* target, const char* member, const QoreProgramLocation* loc) {
+    if (!target) {
+        return;
+    }
+    for (QoreParseInitializerTarget* t = parse_initializer_targets; t; t = t->prev) {
+        if (t->target != target || (member ? !t->member || strcmp(member, t->member) : (bool)t->member)) {
+            continue;
+        }
+        // a use in a closure created in the expression is read when the closure is called
+        if (!t->use_loc && thread_get_closure_parse_env() == t->cenv) {
+            t->use_loc = loc;
+        }
+        return;
+    }
+}
+
+QoreParseInitializerTarget* QoreParseInitializerTarget::swapCurrent(QoreParseInitializerTarget* targets) {
+    QoreParseInitializerTarget* rv = parse_initializer_targets;
+    parse_initializer_targets = targets;
+    return rv;
+}
+
+VariableBlockHelper::VariableBlockHelper() : closure_parse_env(thread_get_closure_parse_env()),
+        initializer_targets(QoreParseInitializerTarget::swapCurrent(nullptr)) {
    new VNode(0);
    thread_set_closure_parse_env(nullptr);
    //printd(5, "VariableBlockHelper::VariableBlockHelper() this=%p pushed %p\n", this, 0);
@@ -175,6 +222,7 @@ DeclarationParseScopeHelper::~DeclarationParseScopeHelper() {
 }
 
 VariableBlockHelper::~VariableBlockHelper() {
+   QoreParseInitializerTarget::swapCurrent(initializer_targets);
    thread_set_closure_parse_env(closure_parse_env);
    std::unique_ptr<VNode> vnode(getVStack());
    assert(vnode.get());
@@ -405,15 +453,6 @@ void push_local_var(LocalVar* lv, const QoreProgramLocation* loc) {
 LocalVar* push_local_var(const char* name, const QoreProgramLocation* loc,
         const QoreTypeInfo* typeInfo, int& err, bool is_auto, int n_refs, int pflag) {
     QoreProgram* pgm = getProgram();
-
-    if ((pflag & PF_TOP_LEVEL) && (pflag & PF_NO_TOP_LEVEL_LVARS)) {
-        parseException(*loc, "ILLEGAL-TOP-LEVEL-LOCAL-VARIABLE", "cannot declare local variable '%s' in the " \
-            "top-level block; local variables in the top-level block of a Program object can only be declared in " \
-            "the very first parse transaction to the Program object", name);
-        if (!err) {
-            err = -1;
-        }
-    }
 
     LocalVar* lv = qore_program_private::get(*pgm)->createLocalVar(name, typeInfo);
 
@@ -724,10 +763,6 @@ int TopLevelStatementBlock::parseInit() {
         return -1;
     }
 
-    // Check if we're in REPL mode (allows new local vars in subsequent parse transactions)
-    const QoreParseOptions& current_parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
-    bool repl_mode = (current_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE);
-
     if (!first && lvars) {
         // push the already-registered local variables of this program on the stack; the inherited ones are not visible
         // to its code
@@ -737,10 +772,6 @@ int TopLevelStatementBlock::parseInit() {
 
     QoreParseContext parse_context;
     parse_context.setFlags(PF_TOP_LEVEL);
-    if (!first && !repl_mode) {
-        // In REPL mode, allow new local variables in subsequent parse transactions
-        parse_context.setFlags(PF_NO_TOP_LEVEL_LVARS);
-    }
     int err = parseInitIntern(parse_context, hwm);
 
     //printd(5, "TopLevelStatementBlock::parseInit(rns=%p) first=%d, lvids=%d\n", &rns, first, parse_context.lvids);
@@ -764,17 +795,11 @@ int TopLevelStatementBlock::parseInit() {
         // Save count of existing local vars that were pushed before adding new ones
         unsigned existing_lvars = lvars ? lvars->size() - inherited_lvars : 0;
 
-        if (repl_mode) {
-            // In REPL mode, save new local variables to lvars instead of discarding
-            if (parse_context.lvids) {
-                // setupLVList pops new vars from vstack and adds them to lvars
-                setupLVList(parse_context);
-            }
-        } else if (parse_context.lvids) {
-            // In non-REPL mode, discard new variables immediately
-            for (int i = 0; i < parse_context.lvids; ++i) {
-                pop_local_var();
-            }
+        // a later parse is one of a Program with PO_ALLOW_REPARSE (see qore_program_private::checkParseIntern()): its
+        // new top-level local variables are added to lvars, so that they are instantiated with the others
+        if (parse_context.lvids) {
+            // setupLVList pops new vars from vstack and adds them to lvars
+            setupLVList(parse_context);
         }
 
         // pop existing local vars off the stack
