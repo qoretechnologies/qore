@@ -282,6 +282,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - test-interpreter-options (#6250): its checks run in child interpreters started with options of their own
         # - frame-check-stack (#6124, #6414): its checks run a fixture that sets its own execution mode, in child
         #   processes and in qcc executables
+        # - param-class-check-steps (#6449): its worker runs in child processes that set their own --exec-mode and in
+        #   qcc executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
@@ -328,6 +330,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/or-nothing-container-casts.qtest",
                                  "examples/test/qore/classes/generic-static-call-type-params.qtest",
                                  "examples/test/qore/classes/generic-static-intermediate.qtest",
+                                 "examples/test/qore/classes/param-class-check-steps/param-class-check-steps.qtest",
                                  "examples/test/qore/classes/private-internal-redeclared-member.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
