@@ -2095,6 +2095,11 @@
     - @ref Qore::thread_list() "thread_list()" lists a thread from the time its TID is returned by the
       @ref background "background" operator, also before the new thread has started running, as
       @ref Qore::num_threads() "num_threads()" counts it, instead of leaving it out until it ran (issue #6469)
+    - deleting a socket, HTTP or WebSocket poll operation that was submitted to the asynchronous I/O controller
+      cancels it, and its state is released with its last reference in its %Program, so the deletion can no longer
+      crash the process (issue #6464)
+    - a channel or server-sent events completion action releases its notifier objects after its lock, so the
+      destructor of a user notifier class can no longer block on the action (issue #6465)
     - an absolute date literal without its day (<tt>2015-11-</tt>) is no longer read as a date with a day made of
       the text after it, which also ignored a UTC offset there (<tt>2015-11-+10</tt> is now the integer \c 1994), and
       a leap second in a date literal (<tt>2016-12-31T23:59:60Z</tt>) is a parse error that says so, also where
