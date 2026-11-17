@@ -3522,15 +3522,6 @@ public:
       return nullptr;
    }
 
-   //! forgets the cached local data of the thread in the given Program, which is deleted; called in the thread itself
-   DLLLOCAL void forgetModuleProgramData(const QoreProgram* pgm) {
-      for (ModuleProgramDataCacheEntry& e : module_pgm_cache) {
-         if (e.pgm == pgm) {
-            e = ModuleProgramDataCacheEntry();
-         }
-      }
-   }
-
    //! caches the thread's local data of a Program with module lifetime; see findModuleProgramData()
    DLLLOCAL void cacheModuleProgramData(const QoreProgram* pgm, ThreadLocalProgramData* tlpd) {
       if (module_pgm_cache_disabled) {

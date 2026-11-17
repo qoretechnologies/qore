@@ -13068,10 +13068,6 @@ public:
         qore_set_user_call_runtime_po_override(helper, exec_pgm, uvb, nullptr, caller_pgm);
     }
 
-    //! restores the override of the caller (the helper's restore() is inline): inline in every fast call
-    DLLLOCAL QORE_ALWAYS_INLINE ~QoreRtUserCallOverrideHelper() {
-    }
-
 private:
     RuntimeParseOptionsOverrideHelper helper;
 };

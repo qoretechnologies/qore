@@ -1830,9 +1830,6 @@ void ThreadProgramData::delProgram(QoreProgram* pgm) {
         pgm_set_t::iterator i = pgm_set.find(pgm);
         listed = i != pgm_set.end();
         if (listed) {
-            // the structure of the thread's records is changed under the stripe lock (see
-            // qore_program_private_base::recordLock()), as the thread's Programs can be torn down by other threads
-            std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
             pgm_set.erase(i);
         }
     }
@@ -1889,21 +1886,16 @@ bool ThreadProgramData::saveProgram(bool runtime, bool* first_entry) {
                 throw std::bad_alloc();
             }
 #endif
-            // fork() waits for the change (see qore_program_private_base::recordLock()); the record and the references
-            // that go with it are one change, so that a child process created with fork() releases what it finds
-            std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
-            QORE_DBG_RECORD_CHANGE(QPRS_THREAD_PROGRAMS, qore_program_private::get(*pgm));
             pgm_set.insert(pgm);
-            // the reference belongs to the Program's entry for the thread (see delProgram())
-            ref();
-            pgm->depRef();
         } catch (...) {
             qore_program_private::removeThreadVarData(pgm, this);
             td->tlpd = old_tlpd;
             throw;
         }
-        QORE_DBG_RECORD_CHANGE(QPRS_THREAD_PROGRAMS_DONE, qore_program_private::get(*pgm));
         printd(5, "ThreadProgramData::saveProgram() this: %p pgm: %p\n", this, pgm);
+        // the reference belongs to the Program's entry for the thread (see delProgram())
+        ref();
+        pgm->depRef();
         if (first_entry) {
             *first_entry = true;
         }
@@ -1947,13 +1939,7 @@ QoreHashNode* ThreadProgramData::getThreadDataRef(qore_program_private* root, bo
         return nullptr;
     }
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
-    {
-        // fork() waits for the change (see qore_program_private_base::recordLock()); the root's stripe lock is not
-        // held here
-        std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
-        QORE_DBG_RECORD_CHANGE(QPRS_THREAD_DATA, root);
-        tld_map.insert(i, tld_map_t::value_type(root, h));
-    }
+    tld_map.insert(i, tld_map_t::value_type(root, h));
     if (ref) {
         h->ref();
     }
@@ -1964,9 +1950,7 @@ QoreHashNode* ThreadProgramData::getOrphanThreadDataRef(bool ref) {
     AutoLocker al(pslock);
     tld_map_t::iterator i = tld_map.find(nullptr);
     if (i == tld_map.end()) {
-        QoreHashNode* h = new QoreHashNode(autoTypeInfo);
-        std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
-        i = tld_map.insert(tld_map_t::value_type(nullptr, h)).first;
+        i = tld_map.insert(tld_map_t::value_type(nullptr, new QoreHashNode(autoTypeInfo))).first;
     }
     if (ref) {
         i->second->ref();
@@ -1981,10 +1965,7 @@ QoreHashNode* ThreadProgramData::detachThreadData(qore_program_private* root) {
         return nullptr;
     }
     QoreHashNode* h = i->second;
-    {
-        std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
-        tld_map.erase(i);
-    }
+    tld_map.erase(i);
     return h;
 }
 
@@ -1996,11 +1977,7 @@ void ThreadProgramData::freeAllThreadData(ExceptionSink* xsink) {
             if (tld_map.empty()) {
                 break;
             }
-            {
-                // the roots' stripe locks are taken below, after this one is released
-                std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
-                m.swap(tld_map);
-            }
+            m.swap(tld_map);
             // while this thread holds its pslock and has data in a family, the family's root cannot be freed: the
             // root's teardown needs this lock to free this thread's data
             for (auto& i : m) {
@@ -2051,7 +2028,6 @@ void ThreadProgramData::del(ExceptionSink* xsink) {
                 break;
 
             pgm = (*i);
-            std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
             pgm_set.erase(i);
         }
         //printd(5, "ThreadProgramData::del() this: %p pgm: %p\n", this, pgm);

@@ -334,16 +334,6 @@ RuntimeConfigHelper::~RuntimeConfigHelper() {
     }
 }
 
-//! sets the statement and the location of the current thread, with the parse options of \a rc
-/** Out of line: the options are a temporary passed by reference, and a caller that takes the address of a local gets
-    the stack protector's check; RuntimeConfigLocationHelper, which calls this only when it is given no exception sink
-    or no parse options, runs on every AST statement
-*/
-static __attribute__((noinline, cold)) void rc_update_thread_location(const AbstractStatement* stmt,
-        const QoreProgramLocation* loc, const RuntimeConfig& rc) {
-    update_runtime_statement_location(stmt, loc, rc.getParseOptions());
-}
-
 RuntimeConfigLocationHelper::RuntimeConfigLocationHelper(RuntimeConfig& rc,
         const QoreProgramLocation* new_loc,
         const AbstractStatement* new_stmt,
@@ -367,7 +357,7 @@ RuntimeConfigLocationHelper::RuntimeConfigLocationHelper(RuntimeConfig& rc,
         swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), rc.getParseOptions(),
             tls_old_stmt, tls_old_loc, tls_old_po);
     } else {
-        rc_update_thread_location(rc.getStatement(), rc.getLocation(), rc);
+        update_runtime_statement_location(rc.getStatement(), rc.getLocation(), rc.getParseOptions());
     }
 }
 
@@ -383,7 +373,7 @@ RuntimeConfigLocationHelper::~RuntimeConfigLocationHelper() {
     } else if (used_swap) {
         update_runtime_statement_location(tls_old_stmt, tls_old_loc);
     } else {
-        rc_update_thread_location(old_stmt, old_loc, rc);
+        update_runtime_statement_location(old_stmt, old_loc, rc.getParseOptions());
     }
 }
 

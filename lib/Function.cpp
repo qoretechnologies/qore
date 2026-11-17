@@ -2913,27 +2913,24 @@ void UserSignature::setupFromAOTMetadata(
     }
 
     lv.resize(nparams);
-    // the types are found before the locks are taken
-    std::vector<const QoreTypeInfo*> local_types(nparams);
     for (size_t i = 0; i < nparams; ++i) {
-        local_types[i] = getParamLocalTypeInfo(paramTypes[i]);
+        const char* pname = i < paramNames.size() ? paramNames[i].c_str() : "";
+        lv[i] = local_pp->createLocalVar(pname, getParamLocalTypeInfo(paramTypes[i]));
+        if (paramReadOnlyList[i]) {
+            lv[i]->setReadOnly();
+        }
     }
-    const QoreTypeInfo* self_type = classTypeInfo ? classTypeInfo->getTypeInfo() : nullptr;
+
+    typeList = std::move(paramTypes);
+    names = std::move(paramNames);
+
+    // Take ownership of default-arg references (caller's vector is moved-from,
+    // so no refSelf/discard round-trip is needed).
+    defaultArgList = std::move(defaults);
+    defaultArgList.resize(nparams);
 
     {
-        // the local variables of the signature are created in one hold of the locks of the Program's metadata: the
-        // lock of its stripe is held only while the records are changed, and nothing here takes another lock (see
-        // qore_program_private_base::recordLock())
         std::lock_guard<std::recursive_mutex> lock(local_pp->runtime_metadata_lock);
-        std::lock_guard<std::mutex> rl(local_pp->threadContainerLock());
-        for (size_t i = 0; i < nparams; ++i) {
-            const char* pname = i < paramNames.size() ? paramNames[i].c_str() : "";
-            lv[i] = local_pp->createLocalVarLocked(pname, local_types[i]);
-            if (paramReadOnlyList[i]) {
-                lv[i]->setReadOnly();
-            }
-        }
-
         // selfid per class — interned across every method variant of a class
         // using the program-scoped cache.  Same safety argument as the argv
         // intern above (LocalVar* is the identity, thread-local stack holds
@@ -2941,17 +2938,12 @@ void UserSignature::setupFromAOTMetadata(
         // and LLVM lowering rely on it for the static borrowed-reference semantics
         // of constructor/method self.
         if (classTypeInfo) {
-            auto ci = local_pp->shared_aot_self.find(classTypeInfo);
-            LocalVar* cached;
-            if (ci == local_pp->shared_aot_self.end()) {
-                cached = local_pp->createLocalVarLocked("self", self_type);
+            LocalVar*& cached = local_pp->shared_aot_self[classTypeInfo];
+            if (!cached) {
+                cached = local_pp->createLocalVar("self", classTypeInfo->getTypeInfo());
                 cached->setSelf();
-                local_pp->shared_aot_self.insert(std::make_pair(classTypeInfo, cached));
-            } else {
-                cached = ci->second;
-                if (!cached->isSelf()) {
-                    cached->setSelf();
-                }
+            } else if (!cached->isSelf()) {
+                cached->setSelf();
             }
             selfid = cached;
         }
@@ -2963,18 +2955,10 @@ void UserSignature::setupFromAOTMetadata(
         // Removes ~N (one-per-variant) deque emplaces on the hot path (qwf:
         // 656 k variants).
         if (!local_pp->shared_aot_argv) {
-            local_pp->shared_aot_argv = local_pp->createLocalVarLocked("argv", autoListOrNothingTypeInfo);
+            local_pp->shared_aot_argv = local_pp->createLocalVar("argv", autoListOrNothingTypeInfo);
         }
         argvid = local_pp->shared_aot_argv;
     }
-
-    typeList = std::move(paramTypes);
-    names = std::move(paramNames);
-
-    // Take ownership of default-arg references (caller's vector is moved-from,
-    // so no refSelf/discard round-trip is needed).
-    defaultArgList = std::move(defaults);
-    defaultArgList.resize(nparams);
 
     // Set flags
     varargs = hasVarargs;
@@ -7601,9 +7585,6 @@ void UserVariantBase::setProgram(QoreProgram* p) {
 
 void qore_program_private::registerUserVariant(const UserVariantBase* v) {
     std::lock_guard<std::mutex> lock(user_variant_lock);
-    // the list is changed at run time as well (AOT closures deserialized lazily): fork() waits for the change (see
-    // recordLock())
-    std::lock_guard<std::mutex> rl(threadContainerLock());
     assert(!v->uv_prev && !v->uv_next && user_variants != v);
     v->uv_next = user_variants;
     if (user_variants) {
@@ -7617,7 +7598,6 @@ void qore_program_private::registerUserVariant(const UserVariantBase* v) {
 
 void qore_program_private::unregisterUserVariant(const UserVariantBase* v) {
     std::lock_guard<std::mutex> lock(user_variant_lock);
-    std::lock_guard<std::mutex> rl(threadContainerLock());
     // a variant that is not in the list leaves it unchanged
     if (!v->uv_prev && user_variants != v) {
         assert(false);
