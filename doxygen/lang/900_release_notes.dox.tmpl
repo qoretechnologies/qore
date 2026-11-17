@@ -2037,6 +2037,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - \c chomp, \c trim and \c splice with white space before the opening parenthesis and an argument that cannot
+      be an lvalue (<tt>trim ("x ")</tt>) call the function, as without the white space, instead of raising
+      "expecting lvalue"; with an argument that can be an lvalue, they are the operator, which changes it, as before
+      (see @ref keyword_operator_or_function "the operator or the function"; issue #1867)
     - when more than one class of a hierarchy declares a member with an initialization expression, the value that a
       later one replaces is released, so that an object that a base class stored there is destroyed (see
       @ref member_initialization; issue #6411)
