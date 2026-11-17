@@ -23,8 +23,6 @@ class D inherits B {
 }
 
 hashdecl HU {
-    union<int, EI> ie;
-    union<EI, int> ei;
     union<float, int> fi;
     union<int, float> i_f;
     union<string, float, EI> sfe;
@@ -34,24 +32,8 @@ sub show(string name, auto v) {
     printf("%s=%s\n", name, v.fullType());
 }
 
-union<int, EI> sub ret_ie(EI e) {
-    return e;
-}
-
-union<EI, int> sub ret_ei(EI e) {
-    return e;
-}
-
 union<float, int> sub ret_fi(int i) {
     return i;
-}
-
-auto sub param_ie(union<int, EI> v) {
-    return v;
-}
-
-auto sub param_ei(union<EI, int> v) {
-    return v;
 }
 
 auto sub param_fi(union<float, int> v) {
@@ -68,34 +50,10 @@ auto sub param_plus(union<float, int> v) {
 }
 
 sub run(EI e, int i, float f, string s, B o) {
-    # an enum value in a union with its base type
+    # an enum value in a union with its base type (union-enum-member.qtest checks the other enum cases)
     {
-        union<int, EI> a = e;
-        show("var-int-enum", a);
-        union<EI, int> b = e;
-        show("var-enum-int", b);
-        union<int, string, EI> c = e;
-        show("var-int-string-enum", c);
-        union<string, EI, int> d = e;
-        show("var-string-enum-int", d);
-        *union<int, EI> n = e;
-        show("var-or-nothing-int-enum", n);
-        list<union<int, EI>> l = (e,);
-        show("list-int-enum", l[0]);
-        list<union<EI, int>> l2 = (e,);
-        show("list-enum-int", l2[0]);
-        hash<string, union<int, EI>> h = {"a": e};
-        show("hash-int-enum", h.a);
-        h.b = e;
-        show("hash-key-int-enum", h.b);
-        hash<HU> hu = <HU>{"ie": e, "ei": e, "sfe": e};
-        show("hashdecl-int-enum", hu.ie);
-        show("hashdecl-enum-int", hu.ei);
+        hash<HU> hu = <HU>{"sfe": e};
         show("hashdecl-string-float-enum", hu.sfe);
-        show("return-int-enum", ret_ie(e));
-        show("return-enum-int", ret_ei(e));
-        show("param-int-enum", param_ie(e));
-        show("param-enum-int", param_ei(e));
         # a value of the base type is accepted as it is
         union<EI, int> ib = 3;
         show("var-enum-int-int", ib);
@@ -201,6 +159,19 @@ sub run(EI e, int i, float f, string s, B o) {
         v++;
         show("increment-int", v);
         show("param-plus-equals-float", param_plus(1));
+        union<int, float> fi = 1;
+        fi += 0.5;
+        show("int-first-plus-equals-float", fi);
+        union<int, float> fm = 1;
+        fm -= 0.5;
+        show("int-first-minus-equals-float", fm);
+        # a union that accepts no float is given the int result of += as before
+        union<int, string> is = 1;
+        is += 0.5;
+        show("no-float-member-plus-equals-float", is);
+        hash<HU> hu = <HU>{"i_f": 1};
+        hu.i_f += 0.5;
+        show("hashdecl-member-plus-equals-float", hu.i_f);
     }
 
     # objects are accepted as they are by a base class or their own class

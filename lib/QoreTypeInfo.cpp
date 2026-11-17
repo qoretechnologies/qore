@@ -3057,6 +3057,14 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
     // Use appropriate cache
     union_map_t& cache = (or_nothing && !has_nothing) ? union_on_map : union_map;
 
+    // the value types of the members, which a value of the union is accepted as (qore#6407), are taken before the
+    // lock, as get_value_type() takes it to make a type
+    type_vec_t value_types;
+    value_types.reserve(key.size());
+    for (const QoreTypeInfo* ti : key) {
+        value_types.push_back(get_value_type(ti));
+    }
+
     AutoLocker al(ctl);
 
     union_map_t::iterator i = cache.find(key);
@@ -3117,6 +3125,7 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
     // Create the union type
     QoreUnionTypeInfo* ti = new QoreUnionTypeInfo(std::move(accept_vec), std::move(return_vec), name, key,
         or_nothing || has_nothing);
+    ti->initExactMembers(value_types);
     noteDerivedTypeKeys(nullptr, key);
     cache[key] = ti;
     return ti;
@@ -3912,9 +3921,8 @@ bool QoreTypeInfo::unionAcceptsExactlyImpl(const QoreValue& n) const {
     return static_cast<const QoreUnionTypeInfo*>(this)->hasExactMember(n);
 }
 
-void QoreUnionTypeInfo::initExactMembers() {
-    for (const QoreTypeInfo* m : members) {
-        const QoreTypeInfo* vt = get_value_type(m);
+void QoreUnionTypeInfo::initExactMembers(const type_vec_t& value_types) {
+    for (const QoreTypeInfo* vt : value_types) {
         if (!hasType(vt) || vt == autoTypeInfo || vt == autoNoNarrowTypeInfo || vt == anyTypeInfo
                 || vt->return_vec.size() != 1) {
             continue;
@@ -3939,7 +3947,9 @@ bool QoreUnionTypeInfo::hasExactMember(const QoreValue& n) const {
     }
     const QoreTypeInfo* vt = n.getFullTypeInfo();
     for (const QoreTypeInfo* m : exact_members) {
-        if (m == vt) {
+        // a list or hash member with no element type keeps any list or hash as it is
+        if (m == vt || ((m == autoHashTypeInfo || m == hashTypeInfo) && n.getType() == NT_HASH)
+                || ((m == autoListTypeInfo || m == listTypeInfo) && n.getType() == NT_LIST)) {
             return true;
         }
     }
@@ -5078,6 +5088,11 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 if (n.isEnum() && typeInfo.getAcceptSpecs().size() > 1
                         && qore_type_info_has_enum_spec_for(typeInfo, n)) {
                     break;
+                }
+                // a union with a member of the value's own type keeps it as it is, which a soft list would wrap in a
+                // list (qore#6407)
+                if (typeInfo.unionAcceptsExactly(n)) {
+                    return true;
                 }
                 // see if value matches
                 if (policy.value(u.ti, n, true) > 0) {

@@ -4515,8 +4515,13 @@ public:
             const QoreString& name, type_vec_t members, bool or_nothing = false)
             : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing),
             members(std::move(members)) {
-        initExactMembers();
     }
+
+    //! records the member types that a value of the type is accepted as, given the value types of the members
+    /** Called when the union type is made, outside the lock of the type caches that get_value_type() takes
+        (qore#6407)
+    */
+    DLLLOCAL void initExactMembers(const type_vec_t& value_types);
 
     //! returns true if a member of the union has the value's own type (see unionAcceptsExactly())
     DLLLOCAL bool hasExactMember(const QoreValue& n) const;
@@ -4541,7 +4546,6 @@ protected:
     //! the value types of the members (without NOTHING), which a value of one of them is accepted as (qore#6407)
     type_vec_t exact_members;
 
-    DLLLOCAL void initExactMembers();
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
         qore_string_private::get(str)->concat(&tname);
