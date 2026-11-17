@@ -164,8 +164,8 @@ public class MistralDataProviderTest inherits QUnit::Test {
     constructor() : Test("MistralDataProvider Test", "1.0", \ARGV, MyOpts) {
         conn_name = m_options.conn ?? ENV.MISTRAL_CONNECTION;
 
-        addTestCase("factory + app + 161 actions registered", \registrationTest());
-        addTestCase("root provider lists 161 children",       \rootProviderTest());
+        addTestCase("factory + app + 137 actions registered", \registrationTest());
+        addTestCase("root provider lists 137 children",       \rootProviderTest());
         addTestCase("chat-completion converts created date", \chatRequestTest());
         addTestCase("create-embeddings forwards body unchanged",
             \embeddingRequestTest());
@@ -228,7 +228,7 @@ public class MistralDataProviderTest inherits QUnit::Test {
         list<hash<DataProviderActionInfo>> actions = select
             DataProvider::DataProviderActionCatalog::getActions("MistralAi"),
             $1.action != AbstractDataProvider::GenericApiCallActionName;
-        assertEq(161, actions.size());
+        assertEq(137, actions.size());
         list<string> action_names = sort(map $1.action, actions);
         assertEq(sort(map $1.action, MistralManifest::Manifest), action_names);
     }
@@ -351,9 +351,16 @@ public class MistralDataProviderTest inherits QUnit::Test {
         assertTrue(chat.tool_choice.getAllowedValues().size() > 1);
         hash<string, AbstractDataField> connector = actions.getOperationEx("create-connector").getRequestFields();
         assertTrue(connector.headers.getAttributes().sensitive);
-        assertTrue(connector.auth_data.getAttributes().sensitive);
-        assertTrue(actions.getOperationEx("update-connector").getRequestFields()
-            .connection_secrets.getAttributes().sensitive);
+        foreach string scope in ("organization", "workspace", "user") {
+            hash<string, AbstractDataField> credentials = actions.getOperationEx(
+                "create-or-update-" + scope + "-credentials-for-a-connector").getRequestFields();
+            assertTrue(credentials.credentials.getAttributes().sensitive, scope);
+            *AbstractDataField oauth = findField(credentials.credentials.getDeclaredType(), "oauth");
+            assertTrue(exists oauth, scope);
+            foreach string field in ("client_secret", "client_private_key") {
+                assertTrue(findField(oauth.getDeclaredType(), field).getAttributes().sensitive, scope + " " + field);
+            }
+        }
         hash<string, AbstractDataField> batch = actions.getOperationEx("create-batch-job").getRequestFields();
         assertEq("files", batch.input_files.getAttributes().element_ref_data);
         assertEq("conversations", actions.getOperationEx("import-dataset-from-playground").getRequestFields()
@@ -377,7 +384,10 @@ public class MistralDataProviderTest inherits QUnit::Test {
         assertEq(info.method, fake.last_method);
         string path = info.path;
         foreach string key in ((info.path =~ x/\{([^}]+)\}/g) ?? ()) {
-            path = replace(path, "{" + key + "}", encode_url(request{key}.toString()));
+            # a fixed path value (the consumer scope of a credentials action) is the overlay's default
+            auto value = request{key} ?? info.fields{key}.default_value;
+            assertTrue(exists value, key);
+            path = replace(path, "{" + key + "}", encode_url(value.toString()));
         }
         assertEq(path, fake.last_path.split("?")[0]);
     }
@@ -538,14 +548,28 @@ public class MistralDataProviderTest inherits QUnit::Test {
                 }
             }
         }
-        assertTrue(labels{"search-chat-events|#/components/schemas/FilterCondition|op"}.size() > 0,
-            "the filter condition's operator is reached");
+        assertEq(2, labels{"update-connector|#/components/schemas/ExtendedOAuthServerMetadata|x_source"}
+            .firstValue().size(), "the OAuth server metadata's source is reached at both of its paths");
         assertTrue(labels{"chat-completion|#/components/schemas/ToolCall|type"}.size() > 0,
             "the tool call's type is reached");
         foreach hash<auto> e in (labels.pairIterator()) {
             assertEq(1, e.value.size(), sprintf("%s has one set of labels; found: %y", e.key,
                 map {$1.key: $1.value[0]}, e.value.pairIterator()));
         }
+    }
+
+    #! Returns the field of a type, or of one of the alternatives of a union type, or nothing
+    private *AbstractDataField findField(AbstractDataProviderType type, string name) {
+        if (type instanceof QoreUnionDataType) {
+            foreach AbstractDataProviderType alternative in (cast<QoreUnionDataType>(type).getUnionTypes()) {
+                *AbstractDataField field = findField(alternative, name);
+                if (field) {
+                    return field;
+                }
+            }
+            return;
+        }
+        return type.getFields(){name};
     }
 
     #! Collects the labels of the enumerated fields of the types an action option reaches
@@ -581,9 +605,9 @@ public class MistralDataProviderTest inherits QUnit::Test {
 
     private schemaTest() {
         assertTrue(MistralSchema::Provenance.source_sha256 =~ /^[a-f0-9]{64}$/);
-        assertTrue(MistralSchema::Provenance.source_url =~ /platform-docs-public\/[a-f0-9]{40}\/openapi.yaml$/);
+        assertEq("https://docs.mistral.ai/openapi.yaml", MistralSchema::Provenance.source_url);
         assertTrue(MistralSchema::Provenance.source_size > 0);
-        assertEq(173, MistralSchema::Provenance.source_operations);
+        assertEq(347, MistralSchema::Provenance.source_operations);
         assertEq((), RestSchemaDrift::compare(MistralSchema::getActionSet(), MistralSchema::getSchema()),
             "the manifest and pinned operation contracts agree");
     }
@@ -630,7 +654,12 @@ public class MistralDataProviderTest inherits QUnit::Test {
                 {"action": "transcribe-audio", "request": {}},
                 {"action": "get-model", "request": {}},
                 {"action": "chat-completion", "request": {"messages": ({"role": "invalid", "content": "Hello"},)}},
-                {"action": "chat-completion", "request": {"messages": ({"role": "user", "content": "Hello"},), "temperature": -1}}) {
+                {"action": "chat-completion", "request": {"messages": ({"role": "user", "content": "Hello"},), "temperature": -1}},
+                # a credentials action manages the credentials of its own scope only
+                {"action": "create-or-update-organization-credentials-for-a-connector",
+                 "request": {"connector_id_or_name": "c", "name": "n", "consumer_scope": "user"}},
+                {"action": "delete-workspace-credentials-for-a-connector",
+                 "request": {"connector_id_or_name": "c", "credentials_name": "n", "consumer_scope": "organization"}}) {
             *hash<ExceptionInfo> error;
             try {
                 root.getChildProvider(test.action).doRequest(test.request);

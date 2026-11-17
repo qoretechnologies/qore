@@ -29,7 +29,7 @@ class MistralLiveTest inherits QUnit::Test {
             addTestCase("batch creation, retrieval and cancellation", \batchTest());
             addTestCase("document OCR and audio transcription", \mediaTest());
             addTestCase("speech generation", \speechTest());
-            foreach string action in ("list-conversations", "list-connectors", "list-judges", "list-campaigns",
+            foreach string action in ("list-conversations", "list-connectors",
                     "list-datasets", "list-workflow-runs", "list-workflow-schedules", "list-workflow-deployments",
                     "list-workflow-registrations") {
                 string name = action;
